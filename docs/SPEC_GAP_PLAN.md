@@ -22,7 +22,7 @@ It does **not** invent scoring, crisis copy, legal status, vendor, capacity, SLO
 | Implementation slices 1–11 | Built; SPEC-017 evidence in `docs/SPEC017_COMPLETION_AUDIT.md` |
 | Codified Bucket I          | P-1..P-23 in specs 0.1.4; P-12/P-13 implemented in this repo   |
 | Safety copy                | D-012 `DECIDED`; UI gated by `SUAS_SAFETY_COPY_MODE`           |
-| Production scoring         | D-011 `DECISION_PENDING`; engine registry empty                |
+| Production scoring         | D-011 `DECISION_PENDING`; fill-in home `SIGNAL_SCORING.md` (`TEMPLATE` / `NOT_RELEASED`); engine registry empty |
 | Pilot / production         | Blocked on SPEC-018 + remaining Bucket II                      |
 
 **Close shape** (repeat for every wave that needs a spec release):
@@ -119,14 +119,14 @@ Wave F  draft Rev 3 (islands)           ← defer
 
 **Already built (do not redo):** engine interface, computation identity, settlement, override rows, empty registry, `SUAS_SUPPORT_SIGNAL_MODE=disabled|fixture`, free text excluded from canonical input (`src/signals/*`, Slice 9).
 
-**Owner must supply all of the following** (see prior D-011 brief). A close that omits any row is not implementable:
+**Owner must supply all of the following** (see prior D-011 brief). A close that omits any row is not implementable. The fill-in home is `SUAS-specs` `SIGNAL_SCORING.md` (`TEMPLATE` / `NOT_RELEASED`; specs [PR #10](https://github.com/scrimshawlife-ctrl/suas-specs/pull/10)). Empty tables there are not weights. Do not invent values in this repo.
 
 | #   | Decide                                                                                                                                                  | Released home                                                                        | Bound                                                                   |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| B1  | Questionnaire content: questions, closed options, required flags, option weights for `sleep`, `connection`, `stress`, `basic_needs`, `coping`, `safety` | New artifact (e.g. `SIGNAL_SCORING.md` or a published `QuestionnaireVersion` record) | `CHECKINS.md` §3 — no invented clinical instrument / psychometric claim |
+| B1  | Questionnaire content: questions, closed options, required flags, option weights for `sleep`, `connection`, `stress`, `basic_needs`, `coping`, `safety` | `SIGNAL_SCORING.md` B1 (`TEMPLATE` / `NOT_RELEASED`; empty tables are not a close). Later: filled artifact or published `QuestionnaireVersion` | `CHECKINS.md` §3 — no invented clinical instrument / psychometric claim |
 | B2  | Deterministic scoring: canonical answers + `signal_version` + questionnaire version → `level` + inspectable `basis`                                     | Same artifact                                                                        | `SUPPORT_SIGNALS.md` §2 — no generative primary signal                  |
 | B3  | Incomplete-input rule: refuse (today) **or** a deterministic missing-input function                                                                     | Same artifact + `CHECKINS.md` §4.1                                                   | Until closed, production compute from `INCOMPLETE` stays forbidden      |
-| B4  | Golden vectors: fixed inputs → expected `level` + `basis` for that version                                                                              | `TESTING.md` §3.1 / §12                                                              | Stay `UNRELEASED_FIXTURE` until this table is released                  |
+| B4  | Golden vectors: fixed inputs → expected `level` + `basis` for that version                                                                              | `SIGNAL_SCORING.md` B4 + `TESTING.md` §3.1 / §12                                     | Stay `UNRELEASED_FIXTURE` until this table is released                  |
 | B5  | Immutable `signal_version` id (+ matching questionnaire version)                                                                                        | `VERSIONING.md` runtime-content identities; admin publish path                       | New version writes new rows; never mutates history                      |
 
 **Also decide with D-011 or immediately after (depends on scores existing):**
