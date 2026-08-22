@@ -33,6 +33,12 @@ describe('MVP_REFERENCE.md §10 — presentation floors', () => {
   it('clears the home-indicator safe area so the last action stays reachable', () => {
     expect(STYLESHEET).toContain('env(safe-area-inset-bottom');
   });
+
+  it('gives text inputs the primary 48px target and a visible label block', () => {
+    expect(STYLESHEET).toContain("input[type='text']");
+    expect(STYLESHEET).toContain(`min-height: ${String(PRIMARY_TARGET_PX)}px`);
+    expect(STYLESHEET).toMatch(/label \{[\s\S]*display: block;/);
+  });
 });
 
 describe('MVP_REFERENCE.md §10 — landing document still permits zoom', () => {

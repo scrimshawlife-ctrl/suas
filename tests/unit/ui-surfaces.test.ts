@@ -357,6 +357,7 @@ describe('MVP_REFERENCE.md §8 — resource screens', () => {
       rows: [],
     });
     expect(markup).toContain('Back');
+    expect(markup.indexOf('<h1>Food</h1>')).toBeLessThan(markup.indexOf('>Back</a>'));
   });
 });
 

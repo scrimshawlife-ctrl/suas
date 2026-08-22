@@ -95,6 +95,36 @@ h3 { font-size: 1rem; margin: 1rem 0 0.25rem; }
   border: 2px solid var(--action);
 }
 
+button.action,
+button.action-secondary {
+  appearance: none;
+  font: inherit;
+}
+
+form {
+  margin: 0;
+}
+
+label {
+  display: block;
+  margin: 0.85rem 0 0.35rem;
+  font-weight: 600;
+}
+
+input[type='text'],
+input[type='email'],
+input[type='tel'] {
+  display: block;
+  width: 100%;
+  min-height: ${String(PRIMARY_TARGET_PX)}px;
+  padding: 0.7rem 0.85rem;
+  border: 2px solid var(--line);
+  border-radius: 0.5rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+}
+
 /* 2.5.8 target size floor for every remaining interactive element. */
 a, button, input, [role="button"] {
   min-height: ${String(MIN_TARGET_PX)}px;
@@ -181,7 +211,23 @@ a, button, input, [role="button"] {
   text-decoration: none;
 }
 
-.mobile-nav a[aria-current="page"] { text-decoration: underline; }
+.mobile-nav a[aria-current='page'] {
+  text-decoration: underline;
+  box-shadow: inset 0 3px 0 var(--action);
+}
+
+dl {
+  margin: 0.5rem 0;
+}
+
+dt {
+  font-weight: 600;
+  margin-top: 0.75rem;
+}
+
+dd {
+  margin: 0.15rem 0 0;
+}
 
 .muted { color: var(--ink-muted); }
 

@@ -368,9 +368,11 @@ function contactRow(value: string, kind: ResourceRowViewModel['contactMethodKind
 
 export function renderResourceList(model: ResourceListViewModel): string {
   const markup = document(model.shell, [
-    // §8: strong category header and clear back navigation.
-    a({ class: 'action-secondary', href: model.backHref }, 'Back'),
+    // §8: strong category header first, then clear back navigation.
+    // Heading-first reading order (1.3.2) so the category is announced before
+    // the way out.
     h1({}, model.categoryLabel),
+    a({ class: 'action-secondary', href: model.backHref }, 'Back'),
     model.rows.length === 0
       ? stateBlock('No listings', 'No verified resources are configured for this category yet.')
       : ul(
