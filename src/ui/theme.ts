@@ -52,8 +52,9 @@ p, li, dd { overflow-wrap: break-word; }
 .shell {
   max-width: 34rem;
   margin: 0 auto;
-  /* Room for the fixed bottom nav so it never covers the last action. */
-  padding: 1rem 1rem 5.5rem;
+  /* Room for the fixed bottom nav so it never covers the last action.
+     Safe-area inset keeps primary actions clear of a notched home indicator. */
+  padding: 1rem 1rem calc(5.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 0.5rem; }
@@ -101,12 +102,19 @@ a, button, input, [role="button"] {
 
 .card-grid {
   display: grid;
-  /* Reflows to one column at 320 CSS px without horizontal scrolling (1.4.10). */
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  /* Mobile-first: one column so 320 CSS px never grows a second 9rem track
+     (1.4.10). Two columns only when 9rem + gap + 9rem fits the shell. */
+  grid-template-columns: 1fr;
   gap: 0.75rem;
   padding: 0;
   margin: 0;
   list-style: none;
+}
+
+@media (min-width: 22.5rem) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  }
 }
 
 .card {
@@ -154,9 +162,11 @@ a, button, input, [role="button"] {
 .mobile-nav {
   position: fixed;
   inset: auto 0 0 0;
+  z-index: 10;
   display: flex;
   border-top: 2px solid var(--line);
   background: var(--surface);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .mobile-nav a {
@@ -177,15 +187,30 @@ a, button, input, [role="button"] {
 
 .skip-link {
   position: absolute;
-  left: -9999px;
-}
-
-.skip-link:focus {
-  left: 0;
-  top: 0;
-  padding: 0.75rem;
+  left: 0.75rem;
+  top: 0.75rem;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  min-height: ${String(PRIMARY_TARGET_PX)}px;
+  padding: 0.75rem 1rem;
   background: var(--action);
   color: var(--action-ink);
+  font-weight: 600;
+  text-decoration: none;
+  /* 2.4.1: hidden until keyboard focus. clip-path (not left:-9999px) so
+     the control stays in-tab-order and :focus-visible can reveal it. */
+  clip-path: inset(50%);
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  clip: auto;
+  clip-path: none;
+  overflow: visible;
 }
 
 /* 2.3.3 animation from interactions. Nothing here animates, and this keeps it so. */
