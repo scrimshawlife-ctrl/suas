@@ -15,6 +15,21 @@ export {
   type SignalLevel,
 } from './engine.js';
 export {
+  computeSv001,
+  IMPUTED_REQUIRED_NON_SAFETY_WEIGHT,
+  MISSING_REQUIRED_SAFETY_INPUT,
+  MissingRequiredSafetyInputError,
+  QV_001_QUESTIONS,
+  QV_001_VERSION,
+  SIGNAL_RULE_IDS,
+  SignalInputError,
+  SV_001_ENGINE,
+  SV_001_VERSION,
+  type ReleasedOption,
+  type ReleasedQuestion,
+  type SignalRuleId,
+} from './sv-001.js';
+export {
   abandonCheckIn,
   canonicalInputFor,
   CHECK_IN_STATUSES,

@@ -362,13 +362,10 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
           {
             name: 'Support signal scoring',
             presence: 'MISSING',
-            note: 'D-011 pending',
+            note: 'D-011 released sv-001; SUAS_SUPPORT_SIGNAL_MODE stays fixture/disabled',
           },
         ],
-        blockingDecisions: [
-          'D-011 Support Signal scoring rules and thresholds',
-          'D-017 Production transportation adapter',
-        ],
+        blockingDecisions: ['D-017 Production transportation adapter'],
         readiness: 'SPEC-017 implementation. Not authorized for pilot or production operation.',
       }),
     { viewport: 'DESKTOP' },

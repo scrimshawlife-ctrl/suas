@@ -1,7 +1,7 @@
 # SPEC_GAP_PLAN.md — Remaining spec-gap close sequence
 
 **Status:** `PLAN` (not implementation authority)
-**Against:** released `SUAS-specs` **0.1.6** (`5074812e`) and implementation pin `src/release/pins.ts`
+**Against:** released `SUAS-specs` **0.2.0** (`4a722e69`) and implementation pin `src/release/pins.ts`
 **Companion:** `docs/SPEC_DESIGN_GAPS.md` (catalog), `docs/SPEC_GAP_PROPOSALS.md` (P-1..P-23, already ratified in 0.1.4)
 **Readiness:** `NOT_READY` (unchanged). Nothing here authorizes production, real veteran data, or SPEC-018.
 
@@ -10,6 +10,7 @@ This plan sequences the **remaining** gaps after:
 - **0.1.4** — Bucket I proposals P-1..P-23 ratified (`RELEASE_MANIFEST-0.1.4.md`).
 - **0.1.5** — D-012 / G-III-1 closed (`SAFETY_COPY.md`).
 - **0.1.6** — Wave A editorial hygiene (G-III-2 / G-III-3 / high-traffic G-III-4). Closes no D-0xx.
+- **0.2.0** — Wave B D-011 (`qv-001` + `sv-001`). G-I-28 remains open.
 
 It does **not** invent scoring, crisis copy, legal status, vendor, capacity, SLO, RTO/RPO, or reporting-threshold values (`AGENTS.md` rules 3, 14, 15).
 
@@ -22,7 +23,7 @@ It does **not** invent scoring, crisis copy, legal status, vendor, capacity, SLO
 | Implementation slices 1–11 | Built; SPEC-017 evidence in `docs/SPEC017_COMPLETION_AUDIT.md` |
 | Codified Bucket I          | P-1..P-23 in specs 0.1.4; P-12/P-13 implemented in this repo   |
 | Safety copy                | D-012 `DECIDED`; UI gated by `SUAS_SAFETY_COPY_MODE`           |
-| Production scoring         | D-011 `DECISION_PENDING`; engine registry empty                |
+| Production scoring         | D-011 `DECIDED` (`sv-001` registered); env stays `fixture`     |
 | Pilot / production         | Blocked on SPEC-018 + remaining Bucket II                      |
 
 **Close shape** (repeat for every wave that needs a spec release):
@@ -83,7 +84,7 @@ Waves are sequential for _authority_ (later waves may start in parallel once the
 ```text
 Wave A  hygiene (no new product value)
    ↓
-Wave B  D-011 scoring contract          ← load-bearing
+Wave B  D-011 scoring contract          ← DONE (0.2.0); G-I-28 still open
    ↓
 Wave C  leftover Bucket I product rules
    ↓
@@ -113,11 +114,13 @@ Wave F  draft Rev 3 (islands)           ← defer
 
 ---
 
-### Wave B — D-011 Support Signal scoring (load-bearing)
+### Wave B — D-011 Support Signal scoring — **DONE (0.2.0)**
 
-**Goal:** Released scoring contract so a Check-In can produce a production `GREEN|YELLOW|ORANGE|RED` without inventing weights.
+**Goal:** Released scoring contract so a Check-In can produce a `GREEN|YELLOW|ORANGE|RED` label without inventing weights.
 
-**Already built (do not redo):** engine interface, computation identity, settlement, override rows, empty registry, `SUAS_SUPPORT_SIGNAL_MODE=disabled|fixture`, free text excluded from canonical input (`src/signals/*`, Slice 9).
+**Released** as `SUAS-specs` `0.2.0` (`4a722e69`, [specs PR #10](https://github.com/scrimshawlife-ctrl/suas-specs/pull/10)). This repo registers `sv-001` with `released: true` and keeps TEST/CI on `SUAS_SUPPORT_SIGNAL_MODE=fixture`.
+
+**Already built before the close:** engine interface, computation identity, settlement, override rows, `SUAS_SUPPORT_SIGNAL_MODE=disabled|fixture`, free text excluded from canonical input (`src/signals/*`, Slice 9).
 
 **Owner must supply all of the following** (see prior D-011 brief). A close that omits any row is not implementable:
 
@@ -137,9 +140,9 @@ Wave F  draft Rev 3 (islands)           ← defer
 
 **Not D-011:** effective-signal _selection_ (P-21), abandoned Check-In idle timeout (`CHECKINS.md` §4.2), island/crisis numbers (D-026).
 
-**Close shape:** `RELEASE_DECISIONS-0.1.x.md` + scoring artifact + golden vectors + `DECISIONS.md` D-011 → `DECIDED`. Then implementation registers one `released: true` engine and keeps TEST default on fixture unless the owner also authorizes `approved`-style env for scoring.
+**Close shape:** `RELEASE_DECISIONS-0.2.0.md` + `SIGNAL_SCORING.md` + golden vectors + D-011 → `DECIDED`. Implementation registered one `released: true` engine and kept TEST on fixture.
 
-**Exit:** A completed synthetic Check-In can settle a Support Signal under a released version; CHECK-IN gate evidence can cite golden vectors. Still not SPEC-018.
+**Exit:** GV-001–GV-014 pass as released conformance fixtures. CHECK-IN gate does not advance. G-I-28 (signal-driven Case action) remains the leftover that rides with scores existing. Still not SPEC-018.
 
 ---
 
@@ -239,7 +242,8 @@ Smallest set that unblocks the most _product_ (not hosting):
 | Priority | Item                                                 | Why this next                                               |
 | -------- | ---------------------------------------------------- | ----------------------------------------------------------- |
 | 1        | **Wave A** (G-III-2, leftover headers)               | **Done** in specs `0.1.6`. This repo re-pins to that stack. |
-| 2        | **Wave B — D-011** (+ G-I-28 action)                 | Only remaining load-bearing SPEC-017 gap                    |
+| 2        | **Wave B — D-011**                                   | **Done** in specs `0.2.0`. This repo registers `sv-001`.    |
+| 2b       | **G-I-28 action**                                    | Still open; not decided by D-011                            |
 | 3        | **Wave C1** (G-I-6/7/8)                              | Stops fulfillment edge-case invention                       |
 | 4        | **Wave D — D-019/D-020** (or “manual through pilot”) | Completes capability-port story                             |
 | 5        | **G-I-30** if live QRF matching is the next UX goal  | Dashboard/on-duty truth                                     |
@@ -260,7 +264,7 @@ Smallest set that unblocks the most _product_ (not hosting):
 
 ## 5. Out of scope
 
-- Inventing D-011 weights, golden vectors, or questionnaire wording.
+- Inventing D-011 weights, golden vectors, or questionnaire wording. D-011 is released; transcribe only.
 - Treating `SUAS_SAFETY_COPY_MODE=approved` as the TEST/CI default.
 - Advancing any `TESTING.md` readiness gate.
 - Implementing draft Rev 3 islands or extra hotlines.

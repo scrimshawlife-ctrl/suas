@@ -286,7 +286,11 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
             presence: 'MISSING',
             note: 'no released contracts',
           },
-          { name: 'Support signal scoring', presence: 'MISSING', note: 'D-011 pending' },
+          {
+            name: 'Support signal scoring',
+            presence: 'MISSING',
+            note: 'D-011 released sv-001; SUAS_SUPPORT_SIGNAL_MODE stays fixture/disabled',
+          },
           {
             name: 'Approved safety copy',
             presence: safetyCopyMode === 'approved' ? 'CONFIGURED' : 'MISSING',
@@ -296,10 +300,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
                 : `D-012 ${D_012_APPROVED_SAFETY_COPY}; SUAS_SAFETY_COPY_MODE=${safetyCopyMode}`,
           },
         ],
-        blockingDecisions: [
-          'D-011 Support Signal scoring rules and thresholds',
-          'D-017 to D-020 production provider adapters',
-        ],
+        blockingDecisions: ['D-017 to D-020 production provider adapters'],
         readiness: 'SPEC-017 implementation. Not authorized for pilot or production operation.',
       }),
     );
