@@ -122,12 +122,12 @@ function fixtureEngine(signalVersion = 'sv-unreleased-fixture-1'): SignalEngine 
   };
 }
 
-describe('SUPPORT_SIGNALS.md §2 — no scoring is shipped', () => {
-  it('registers no engine by default', () => {
-    expect(registeredSignalVersions()).toEqual([]);
+describe('SUPPORT_SIGNALS.md §2 / SIGNAL_SCORING.md — released sv-001', () => {
+  it('registers released sv-001 by default', () => {
+    expect(registeredSignalVersions()).toEqual(['sv-001']);
   });
 
-  it('refuses to compute when no engine is registered', () => {
+  it('refuses to compute when no engine is registered for that version', () => {
     expect(() =>
       computeSignal('sv-1', {
         checkInId: 'c1',
@@ -139,7 +139,7 @@ describe('SUPPORT_SIGNALS.md §2 — no scoring is shipped', () => {
     ).toThrow(SignalScoringUnavailableError);
   });
 
-  it('names D-011 in the refusal, so the gap is legible', () => {
+  it('names D-011 and the released pair in the unknown-version refusal', () => {
     try {
       computeSignal('sv-1', {
         checkInId: 'c1',
@@ -150,6 +150,7 @@ describe('SUPPORT_SIGNALS.md §2 — no scoring is shipped', () => {
       });
     } catch (error) {
       expect((error as Error).message).toContain('D-011');
+      expect((error as Error).message).toContain('sv-001');
     }
   });
 

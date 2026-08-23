@@ -1,15 +1,15 @@
 # SPEC_DESIGN_GAPS.md — SUAS-specs design-gap triage
 
-**Released spec stack:** `0.1.6`
-**Release manifest:** `RELEASE_MANIFEST-0.1.6.md`
-**Specs merge:** `5074812eff61e22f8932de4c1460bc6d6d37f747`
+**Released spec stack:** `0.2.0`
+**Release manifest:** `RELEASE_MANIFEST-0.2.0.md`
+**Specs merge:** `4a722e69ad8f7ff45a9581ca3bdd022bdf524f8f`
 **Stage:** `SPEC-017` implementation conformance
 **Pilot / production readiness:** `NOT_READY` (unchanged by this document)
 
 ## Purpose and governance
 
 This is a **triage catalog of design gaps in the canonical `scrimshawlife-ctrl/SUAS-specs`**
-stack `0.1.6`, surfaced while implementing SUAS. It exists to satisfy `AGENTS.md`
+stack `0.2.0`, surfaced while implementing SUAS. It exists to satisfy `AGENTS.md`
 rule 3 ("semantic gaps return to specs; do not invent product/domain behavior")
 by giving those returns a single tracked home.
 
@@ -150,7 +150,7 @@ production surface is `UNAVAILABLE` / manual-only.
 | **D-008**         | Pilot partner organizations                                                                                                                                                | `DECISION_PENDING`            | pilot launch; tenant/org model realism                                                                                       |
 | **D-009**         | Responder staffing / coverage hours                                                                                                                                        | `DECISION_PENDING`            | on-duty ops; red-state coverage; OPERATIONS gate; several dashboard metrics                                                  |
 | **D-010**         | Service funding / payment architecture                                                                                                                                     | `FUTURE` / `DECISION_PENDING` | Amadeus reservation (`BLOCKED_BY_PAYMENT_ARCHITECTURE`), Uber payment auth, `who_pays`/`funding_rails` enforcement, Medi-Cal |
-| **D-011**         | Production Support Signal scoring rules/thresholds + golden vectors                                                                                                        | `DECISION_PENDING`            | all production scoring; incomplete-input semantics; SAFETY/COORDINATION gates                                                |
+| **D-011**         | Support Signal scoring rules/thresholds + golden vectors                                                                                                                   | `DECIDED` (v0.2.0)            | `qv-001` + `sv-001` implementation-authoritative; production env mode still `disabled\|fixture`; G-I-28 still open           |
 | **D-012**         | Approved production safety/crisis copy                                                                                                                                     | `DECIDED` (v0.1.5)            | `SAFETY_COPY.md`; 911/988; G-III-1 resolved; gated by `SUAS_SAFETY_COPY_MODE`                                                |
 | **D-013**         | Counsel review of compliance register                                                                                                                                      | `DECISION_PENDING`            | pilot gate                                                                                                                   |
 | **D-014**         | Production geocoding/maps                                                                                                                                                  | `DECISION_PENDING`            | proximity/"near you"; location basis                                                                                         |
@@ -191,7 +191,8 @@ break-glass/dual-control (`AUTH.md` §7), abandoned Check-In idle timeout
 ## Cross-references
 
 - Close sequence for remaining gaps: `docs/SPEC_GAP_PLAN.md`.
-- Wave A released: `SUAS-specs` `0.1.6` (`5074812e`, https://github.com/scrimshawlife-ctrl/suas-specs/pull/9). This repo re-pins in `src/release/pins.ts`.
+- Wave A released: `SUAS-specs` `0.1.6` (`5074812e`, https://github.com/scrimshawlife-ctrl/suas-specs/pull/9).
+- Wave B / D-011 released: `SUAS-specs` `0.2.0` (`4a722e69`, https://github.com/scrimshawlife-ctrl/suas-specs/pull/10). This repo re-pins in `src/release/pins.ts` and registers `sv-001`.
 - Per-slice returned-gap detail: `docs/slices/SLICE_01_FOUNDATION.md` … `docs/slices/SLICE_11_RESILIENCE_HARNESS.md` (each `## 10` section).
 - Built-implementation conformance snapshot: `docs/SPEC017_COMPLETION_AUDIT.md`.
 - Runtime spec pins this triage is filed against: `src/release/pins.ts`.

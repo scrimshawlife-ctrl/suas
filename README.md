@@ -10,9 +10,9 @@ Public site: https://scrimshawlife-ctrl.github.io/SUAS/
 
 Canonical released specs:
 
-- specification stack: `0.1.6`
-- specs merge: `5074812eff61e22f8932de4c1460bc6d6d37f747`
-- manifest: `RELEASE_MANIFEST-0.1.6.md`
+- specification stack: `0.2.0`
+- specs merge: `4a722e69ad8f7ff45a9581ca3bdd022bdf524f8f`
+- manifest: `RELEASE_MANIFEST-0.2.0.md`
 - current stage: `SPEC-017` implementation conformance
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - pilot readiness: `NOT_READY`
@@ -80,12 +80,12 @@ Logical classes are `LOCAL`, `TEST`, `STAGING`, `PRODUCTION`. LOCAL/TEST/STAGING
 
 ## Release boundary
 
-v0.1.6 authorizes implementation but not production operation.
+v0.2.0 authorizes implementation but not production operation.
 
 Production-unavailable until later decision/evidence closure:
 
 - production infrastructure and real veteran data/live pilot;
-- production Support Signal scoring;
+- production Support Signal compute (`SUAS_SUPPORT_SIGNAL_MODE` stays `disabled|fixture`);
 - real transportation/shelter/food/external peer providers;
 - production workload/SLO/RTO/RPO targets;
 - sensitive aggregate reporting.

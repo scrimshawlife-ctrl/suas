@@ -10,10 +10,10 @@ Scope is `SPEC017_PLAN.md` Slice 9: questionnaire and Check-In versioning, and a
 deterministic engine **interface**. Production scoring remains unavailable, and
 only clearly labelled unreleased fixtures exercise the interface.
 
-**No scoring rule, weight, or threshold is shipped in this slice.** D-011 is
-open, and SUPPORT_SIGNALS.md §2 states that implementation may build a pure
-function contract and unreleased fixtures but "must not ship invented weights or
-thresholds". The engine registry ships empty and every computation refuses.
+**No scoring rule, weight, or threshold shipped in this slice.** D-011 was
+open at slice time. v0.2.0 later released `qv-001` + `sv-001`; the transcribed
+engine and GV-001–GV-014 live in [SLICE_12_SIGNAL_SCORING.md](SLICE_12_SIGNAL_SCORING.md).
+This record stays the interface/settlement evidence from Slice 9.
 
 ## 1. Released spec citations
 
@@ -147,10 +147,10 @@ and TEST while D-022 is open.
 
 ## 10. Semantic gaps returned to `SUAS-specs`
 
-1. **D-011 blocks all scoring.** SUPPORT_SIGNALS.md §2 leaves exact rules and thresholds `DECISION_PENDING`, and TESTING.md §12 keeps golden vectors `UNRELEASED_FIXTURE`. The pure-function contract, versioning, determinism, and settlement are all built and tested against a labelled fixture — releasing a scoring contract and its golden vectors is the only remaining work. This is the same shape as the Slice 7 projection blocker.
+1. **D-011 blocked all scoring at slice time.** Closed in v0.2.0: `SIGNAL_SCORING.md` releases `qv-001` + `sv-001` and GV-001–GV-014. See Slice 12. This slice still shipped an empty registry.
 2. **The effective-signal selection rule is not released.** §7 requires it to be deterministic and reconciled in DATA_MODEL.md or CASES.md _before release_, and forbids insertion-order inference. Implemented as: most recent `computed_at`, ties broken by `support_signal_id` descending, with an override superseding the signal it overrides. Deterministic and total, but chosen by this implementation. It needs confirming, particularly what should happen when two overrides target the same signal.
-3. **Questionnaire content is `NOT_COMPUTABLE`.** CHECKINS.md §3 marks exact questions, option weights, and required flags unavailable until a version is published. The structures exist and hold nothing; `answer_options` deliberately has no weight column.
-4. **Incomplete-input behavior has no released definition.** §4.1 permits a signal from incomplete input only if the published signal version defines deterministic missing-input behavior. The engine interface carries a `handlesIncompleteInput` flag and refuses otherwise; what such behavior should be is unreleased.
+3. **Questionnaire content was `NOT_COMPUTABLE` at slice time.** Closed in v0.2.0 for `qv-001` (Slice 12). `answer_options` still has no weight column; weights live in the transcribed engine, not the database.
+4. **Incomplete-input behavior had no released definition at slice time.** Closed in v0.2.0: `SIGNAL_SCORING.md` B3 (refuse missing required safety; impute missing required non-safety at weight 2).
 5. **The abandonment idle timeout is `DECISION_PENDING`.** §4.2 leaves it open, so nothing abandons a Check-In automatically; abandonment is an explicit call only.
 6. **Questionnaire scoping is ambiguous.** The released text does not say whether a QuestionnaireVersion is global or tenant-scoped. Implemented as optionally tenant-scoped with a global fallback, and at most one published version per scope. Confirm.
 7. **Signal-driven Case creation is not wired.** §8 says a `YELLOW`, `ORANGE`, or `RED` signal _may_ cause a Support Case to open or update "according to CASES.md", and CASES.md §3 says a new signal may update case priority "through a documented idempotent action" that is not specified. Slice 5 built the idempotent case-open path and this slice settles signals, but nothing connects them, because the connecting rule is undefined.

@@ -5,24 +5,24 @@
  * - SUAS-specs SUPPORT_SIGNALS.md §1 (a coordination priority label, not a
  *   diagnosis or suicidality determination), §2 (computation contract:
  *   deterministic, inspectable, versioned, unit-tested, reproducible, idempotently
- *   settled; "No generative model may produce the primary signal"; exact scoring
- *   rules and thresholds remain D-011 `DECISION_PENDING` and implementation "must
- *   not ship invented weights or thresholds"), §3 (computation identity), §10
- *   (non-goals)
- * - SUAS-specs CHECKINS.md §4.1 (do not compute a production signal from
- *   incomplete input until D-011 closes; unreleased fixtures may exercise the
- *   interface but must be labeled)
- * - SUAS-specs TESTING.md §12 (D-011 golden vectors remain `UNRELEASED_FIXTURE`)
+ *   settled; "No generative model may produce the primary signal"), §3
+ *   (computation identity), §10 (non-goals)
+ * - SUAS-specs SIGNAL_SCORING.md B1–B5 (`qv-001` + `sv-001`; D-011 `DECIDED`)
+ * - SUAS-specs CHECKINS.md §4.1 (incomplete input uses the published version's
+ *   deterministic missing-input behavior)
+ * - SUAS-specs TESTING.md §12 (GV-001–GV-014 are released for `qv-001` + `sv-001`;
+ *   other version pairs remain `UNRELEASED_FIXTURE`)
  * - SUAS-specs ENVIRONMENT.md §3 (`SUAS_SUPPORT_SIGNAL_MODE` = `disabled|fixture`;
  *   "fixture ... is never production authority")
+ * - SUAS-specs RELEASE_DECISIONS-0.2.0.md (implementation-authoritative, not
+ *   production-operating; G-I-28 remains open)
  *
- * §2 permits exactly this much: a pure function contract and unreleased fixtures.
- * The registry therefore ships **empty**, and a registered engine must declare
- * whether it is released. No engine here contains a weight, a threshold, or a
- * rule — because none has been released to contain.
+ * The registry ships the released `sv-001` engine. Unreleased fixtures may still
+ * register with `released: false` and run only when a caller opts in.
  */
 
 import type { JsonObject } from '../jobs/index.js';
+import { SV_001_ENGINE } from './sv-001.js';
 
 /** SUPPORT_SIGNALS.md §1. Exactly these values. */
 export const SIGNAL_LEVELS = ['GREEN', 'YELLOW', 'ORANGE', 'RED'] as const;
@@ -67,9 +67,8 @@ export interface SignalEngine {
   /**
    * Whether this engine implements a released scoring contract.
    *
-   * False for every engine that can exist today: D-011 is open, so a fixture
-   * engine is a test instrument and never production authority
-   * (ENVIRONMENT.md §3).
+   * `sv-001` is released by D-011. A fixture engine remains a test instrument
+   * and never production authority (ENVIRONMENT.md §3).
    */
   readonly released: boolean;
   /** Whether the engine defines deterministic missing-input behavior (§4.1). */
@@ -84,9 +83,9 @@ export class SignalScoringUnavailableError extends Error {
 
   constructor(detail: string) {
     super(
-      `Support Signal scoring is unavailable: ${detail}. Exact scoring rules and thresholds ` +
-        `remain D-011 DECISION_PENDING, and implementation must not ship invented weights or ` +
-        `thresholds (SUAS-specs SUPPORT_SIGNALS.md §2).`,
+      `Support Signal scoring is unavailable: ${detail}. D-011 released sv-001 for ` +
+        `qv-001; other signal versions have no released engine (SUAS-specs ` +
+        `SIGNAL_SCORING.md; SUPPORT_SIGNALS.md §2).`,
     );
     this.name = 'SignalScoringUnavailableError';
   }
@@ -119,20 +118,23 @@ export class IncompleteInputError extends Error {
   }
 }
 
-/**
- * Registered engines by signal version.
- *
- * Deliberately empty: v0.1.1 releases no scoring rules. Tests register a clearly
- * labelled unreleased fixture, which is exactly what §2 permits.
- */
 const ENGINES = new Map<string, SignalEngine>();
+
+function restoreReleasedEngines(): void {
+  ENGINES.set(SV_001_ENGINE.signalVersion, SV_001_ENGINE);
+}
 
 export function registerSignalEngine(engine: SignalEngine): void {
   ENGINES.set(engine.signalVersion, engine);
 }
 
+/**
+ * Restore the released registry. Tests use this between cases so a fixture
+ * engine cannot leak; `sv-001` remains registered.
+ */
 export function clearSignalEngines(): void {
   ENGINES.clear();
+  restoreReleasedEngines();
 }
 
 export function findSignalEngine(signalVersion: string): SignalEngine | undefined {
@@ -155,8 +157,9 @@ export interface ComputeOptions {
 /**
  * Compute a primary signal, or refuse.
  *
- * Refusal is the expected outcome today. Every path that could produce a level
- * requires a registered engine, and no released engine exists to register.
+ * `sv-001` is registered as released. Unknown versions still refuse. Unreleased
+ * fixtures require an explicit opt-in. This function does not open or update a
+ * Support Case (G-I-28 remains open).
  */
 export function computeSignal(
   signalVersion: string,
@@ -182,3 +185,5 @@ export function computeSignal(
 
   return engine.compute(input);
 }
+
+restoreReleasedEngines();

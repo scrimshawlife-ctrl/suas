@@ -1,15 +1,15 @@
-# IMPLEMENTATION_BOOTSTRAP.md — Released v0.1.6 handoff
+# IMPLEMENTATION_BOOTSTRAP.md — Released v0.2.0 handoff
 
 **Status:** `ACTIVE`  
-**Released specification:** `0.1.6`  
+**Released specification:** `0.2.0`  
 **Implementation authority:** `RELEASED_FOR_IMPLEMENTATION`  
 **Current stage:** `SPEC-017`
 
 ## Canonical source
 
-- Specs release merge: `5074812eff61e22f8932de4c1460bc6d6d37f747`
-- Release manifest: `RELEASE_MANIFEST-0.1.6.md`
-- Release decision ledger: inherited unchanged — `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise. v0.1.6 closes no D-0xx.
+- Specs release merge: `4a722e69ad8f7ff45a9581ca3bdd022bdf524f8f`
+- Release manifest: `RELEASE_MANIFEST-0.2.0.md`
+- Release decision ledger: `RELEASE_DECISIONS-0.2.0.md` (D-011); inherited `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise
 - Handoff: `HANDOFF.md`
 - Environment contract: `ENVIRONMENT.md`
 
@@ -31,12 +31,13 @@ Do not make operational through code/config defaults:
 
 - production infrastructure or real external effects;
 - real veteran data/live pilot;
-- production Support Signal scoring;
-- official safety/crisis copy;
+- production Support Signal compute (`sv-001` is implementation-authoritative; env stays `disabled|fixture`);
+- official safety/crisis copy as the TEST/CI default;
 - real external transportation/shelter/food/peer providers;
 - production workload/SLO/RTO/RPO values;
 - legal/compliance claims;
-- sensitive aggregate reporting.
+- sensitive aggregate reporting;
+- signal-driven Support Case writes (G-I-28 remains open).
 
 LOCAL/TEST/STAGING are synthetic-only and real-external-effect forbidden under `ENVIRONMENT.md`.
 

@@ -1,9 +1,9 @@
-# SPEC-017 completion audit — released stack `0.1.3`
+# SPEC-017 completion audit — released stack `0.2.0`
 
-**Released spec stack:** `0.1.3`
-**Release manifest:** `RELEASE_MANIFEST-0.1.3.md`
-**Specs merge:** `33c6f1925a8f8eb7ea1f52e77a102b28a249430f` (`src/release/pins.ts`)
-**Decision ledgers:** `RELEASE_DECISIONS-0.1.3.md` (D-018), `RELEASE_DECISIONS-0.1.2.md` (D-017), `RELEASE_DECISIONS-0.1.0.md` (all other D-001–D-025)
+**Released spec stack:** `0.2.0`
+**Release manifest:** `RELEASE_MANIFEST-0.2.0.md`
+**Specs merge:** `4a722e69ad8f7ff45a9581ca3bdd022bdf524f8f` (`src/release/pins.ts`)
+**Decision ledgers:** `RELEASE_DECISIONS-0.2.0.md` (D-011), `RELEASE_DECISIONS-0.1.5.md` (D-012), `RELEASE_DECISIONS-0.1.3.md` (D-018), `RELEASE_DECISIONS-0.1.2.md` (D-017), `RELEASE_DECISIONS-0.1.0.md` otherwise
 **Stage:** `SPEC-017` implementation conformance
 **Pilot / production readiness:** `NOT_READY` (unchanged by this audit)
 
@@ -17,7 +17,7 @@ here.
 `SPEC017_PLAN.md` states: "SPEC-017 completes only when the built implementation
 is audited against the entire released cut and all material gaps are fixed or
 returned to specs." This audit performs that cross-check against the released
-`0.1.3` cut: it confirms every planned slice is implemented, cross-checks the
+`0.2.0` cut: it confirms every planned slice is implemented, cross-checks the
 build's provenance and availability boundaries against the released manifests and
 decision ledgers, and consolidates every gap each slice returned to specs together
 with its current disposition.
@@ -37,13 +37,11 @@ rule, or advance any gate.
 - Ran the full quality gate (`npm run verify`).
 
 The slice records are each pinned to the stack they were authored under (`0.1.1`
-for Slices 1–11). The runtime later advanced to `0.1.3` through two decision-only
-patches — D-017 (v0.1.2, Uber transportation) and D-018 (v0.1.3, Amadeus shelter)
-— neither of which changed product, domain, API, event, safety, privacy, or
-readiness semantics (`CHANGELOG.md`; `RELEASE_MANIFEST-0.1.2.md`,
-`RELEASE_MANIFEST-0.1.3.md`). `src/release/pins.ts` pins `SPEC_VERSION = 0.1.3`
-and `RELEASE_MANIFEST-0.1.3.md`; the two authored-vs-runtime stack labels are
-therefore consistent, and this audit is filed at `0.1.3`.
+for Slices 1–11; Slice 12 at `0.2.0`). The runtime later advanced through
+decision patches — D-017 (v0.1.2), D-018 (v0.1.3), D-012 (v0.1.5), editorial
+v0.1.6, and D-011 (v0.2.0). `src/release/pins.ts` pins `SPEC_VERSION = 0.2.0`
+and `RELEASE_MANIFEST-0.2.0.md`. This audit is filed at `0.2.0`. API selector
+`/api/v0` and event schema `0.1.0` are unchanged. No readiness gate advances.
 
 ## 3. Slice conformance status
 
@@ -51,19 +49,20 @@ All eleven `SPEC017_PLAN.md` slices are implemented, with conformance records an
 passing evidence. Qualifiers mark surfaces the release keeps manual-only or
 interface-only.
 
-| Slice                           | Status                         | Primary evidence                                                                                                |
-| ------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| 1 — Foundation                  | `IMPLEMENTED`                  | `config`, `build-info`, `jobs`, `fixture-boundary`, `migration-plan` (unit); `migrations`, `http` (integration) |
-| 2 — Event / idempotency kernel  | `IMPLEMENTED`                  | `event-envelope`, `fingerprint` (unit); `events`, `idempotency` (integration)                                   |
-| 3 — Identity / tenancy / authz  | `IMPLEMENTED`                  | `auth-primitives`, `authz-policy` (unit); `auth`, `identity`, `http-auth` (integration)                         |
-| 4 — Consent and privacy kernel  | `IMPLEMENTED`                  | `projection` (unit); `consent` (integration)                                                                    |
-| 5 — Coordination kernel         | `IMPLEMENTED`                  | `coordination-transitions` (unit); `coordination` (integration)                                                 |
-| 6 — Follow-Up / Settlement      | `IMPLEMENTED`                  | `settlement` (integration)                                                                                      |
-| 7 — Resources / fulfillment     | `IMPLEMENTED`                  | `fulfillment` (integration); `uber-guest-rides`, `amadeus-lodging` (unit)                                       |
-| 8 — Notifications               | `IMPLEMENTED`                  | `notifications` (integration)                                                                                   |
-| 9 — Check-In / Support Signal   | `IMPLEMENTED (interface only)` | `signals` (integration)                                                                                         |
-| 10 — MVP-reference UI           | `IMPLEMENTED`                  | `ui-contract`, `ui-surfaces` (unit); `ui` (integration)                                                         |
-| 11 — Scale / resilience harness | `IMPLEMENTED (drills only)`    | `resilience-harness` (unit); `resilience-drills` (integration)                                                  |
+| Slice                           | Status                      | Primary evidence                                                                                                |
+| ------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 1 — Foundation                  | `IMPLEMENTED`               | `config`, `build-info`, `jobs`, `fixture-boundary`, `migration-plan` (unit); `migrations`, `http` (integration) |
+| 2 — Event / idempotency kernel  | `IMPLEMENTED`               | `event-envelope`, `fingerprint` (unit); `events`, `idempotency` (integration)                                   |
+| 3 — Identity / tenancy / authz  | `IMPLEMENTED`               | `auth-primitives`, `authz-policy` (unit); `auth`, `identity`, `http-auth` (integration)                         |
+| 4 — Consent and privacy kernel  | `IMPLEMENTED`               | `projection` (unit); `consent` (integration)                                                                    |
+| 5 — Coordination kernel         | `IMPLEMENTED`               | `coordination-transitions` (unit); `coordination` (integration)                                                 |
+| 6 — Follow-Up / Settlement      | `IMPLEMENTED`               | `settlement` (integration)                                                                                      |
+| 7 — Resources / fulfillment     | `IMPLEMENTED`               | `fulfillment` (integration); `uber-guest-rides`, `amadeus-lodging` (unit)                                       |
+| 8 — Notifications               | `IMPLEMENTED`               | `notifications` (integration)                                                                                   |
+| 9 — Check-In / Support Signal   | `IMPLEMENTED`               | `signals` (integration); `signal-scoring` (unit, GV-001–014)                                                    |
+| 12 — D-011 scoring (`sv-001`)   | `IMPLEMENTED`               | `docs/slices/SLICE_12_SIGNAL_SCORING.md`; `src/signals/sv-001.ts`                                               |
+| 10 — MVP-reference UI           | `IMPLEMENTED`               | `ui-contract`, `ui-surfaces` (unit); `ui` (integration)                                                         |
+| 11 — Scale / resilience harness | `IMPLEMENTED (drills only)` | `resilience-harness` (unit); `resilience-drills` (integration)                                                  |
 
 Per-slice detail lives in `docs/slices/SLICE_01_FOUNDATION.md` through
 `docs/slices/SLICE_11_RESILIENCE_HARNESS.md`.
@@ -85,7 +84,8 @@ manifest or decision ledger marks unavailable/future (`ENVIRONMENT.md` §4;
 `config` unit tests, which name D-011, D-012, D-017–D-020, D-025 in their
 rejections). Confirmed against the released ledgers: **D-017 `DECIDED`** (v0.1.2)
 and **D-018 `DECIDED`** (v0.1.3); **D-012 `DECIDED`** (v0.1.5, `SAFETY_COPY.md`);
-**D-011** (Support Signal scoring), **D-019** (food adapter), and **D-020**
+**D-011 `DECIDED`** (v0.2.0, `SIGNAL_SCORING.md` `qv-001` + `sv-001`);
+**D-019** (food adapter) and **D-020**
 (external peer-support adapter) remain `DECISION_PENDING`. The slice records additionally
 rely on still-open D-001, D-007, D-009, D-010, D-014, D-015, D-021, D-022, D-023,
 D-024, and D-025 (§5 below).
@@ -150,9 +150,9 @@ information-only. Item numbers reference the `## 10` section of each slice recor
 
 The production surface stays unavailable/manual-only, so deferral is safe.
 
-- **D-011** — Support Signal scoring rules/thresholds and golden vectors. The
-  engine, versioning, determinism, and settlement are built and tested against a
-  labelled unreleased fixture; the registry ships empty (Slice 9 items 1, 4).
+- **D-011** — **closed in v0.2.0.** `SIGNAL_SCORING.md` releases `qv-001` +
+  `sv-001` and GV-001–GV-014. Implementation registers a `released: true` engine.
+  TEST/CI stay on `SUAS_SUPPORT_SIGNAL_MODE=fixture`. G-I-28 remains open.
 - **D-012** — **closed in v0.1.5.** Approved copy and destinations are in
   `SAFETY_COPY.md`; implementation renders them under `SUAS_SAFETY_COPY_MODE=approved`.
 - **D-019 / D-020** — food and external peer-support adapters; manual/fake only.
@@ -195,8 +195,9 @@ and in the cited slice records. Representative items:
   bands; inactive-not-assignable at the router (Slice 7 items 2, 3, 6, 7).
 - Notification template/policy/dedupe-scope vocabulary; retry/backoff bounds
   (Slice 8 items 2, 3, 4, 5).
-- Effective-signal selection rule; incomplete-input behavior; questionnaire
-  scoping; signal-driven case creation (Slice 9 items 2, 4, 6, 7).
+- Effective-signal selection rule; questionnaire scoping; signal-driven case
+  creation / G-I-28 (Slice 9 items 2, 6, 7). Incomplete-input behavior closed
+  in v0.2.0 (Slice 12).
 - `RESPONDER_NOTIFIED` linkage; structured `contact_method`; responder on-duty
   store; chat/thread domain; pinned visual baseline; metric definitions (Slice 10
   items 1–4, 6–8).
@@ -215,7 +216,7 @@ review and a pinned visual baseline; unreleased workload/SLO/recovery envelopes)
 
 ## 7. Completion determination
 
-Against the `0.1.3` cut:
+Against the `0.2.0` cut:
 
 - **Every planned slice is implemented** with conformance records and a passing
   quality gate (§3, §4.6).
@@ -235,8 +236,8 @@ remains the required go/no-go stage before any real pilot or production operatio
 
 - Confirm or correct the §5.C mechanism choices so they become released rules
   rather than implementation inferences.
-- Prioritize the decisions that unblock the most implementation: D-011 (Support
-  Signal scoring + golden vectors) and D-019/D-020 (remaining capability
+- Prioritize the decisions that unblock the most implementation: G-I-28
+  (signal-driven Support Case action) and D-019/D-020 (remaining capability
   disclosure contracts).
 - For gate movement, supply the `TESTING.md` evidence artifacts the harness cannot
   produce without released envelopes (D-021/D-023/D-024) and a pinned MVP visual

@@ -191,7 +191,7 @@ const rawConfigSchema = z.object({
   SUAS_SUPPORT_SIGNAL_MODE: requiredEnum(
     'SUAS_SUPPORT_SIGNAL_MODE',
     SUPPORT_SIGNAL_MODES,
-    'Production Support Signal scoring is unavailable while D-011 is unresolved; "fixture" is never production authority.',
+    'D-011 released sv-001 as implementation-authoritative, not production-operating. ENVIRONMENT.md §3 still allows only disabled|fixture; "fixture" is never production authority.',
   ),
   SUAS_SAFETY_COPY_MODE: requiredEnum(
     'SUAS_SAFETY_COPY_MODE',
@@ -406,13 +406,13 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   }
 
   // HANDOFF.md §2 "Production deployment: prohibited";
-  // RELEASE_MANIFEST-0.1.6.md "Readiness boundary".
+  // RELEASE_MANIFEST-0.2.0.md "Readiness boundary".
   if (environment === 'PRODUCTION' && !SPEC_018_PRODUCTION_AUTHORIZED) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message:
         'SUAS_ENV=PRODUCTION is rejected: production deployment is prohibited until SPEC-018 ' +
-        'records launch-readiness evidence (HANDOFF.md §2; RELEASE_MANIFEST-0.1.6.md "Readiness boundary").',
+        'records launch-readiness evidence (HANDOFF.md §2; RELEASE_MANIFEST-0.2.0.md "Readiness boundary").',
     });
   }
 
