@@ -30,7 +30,7 @@ rule, or advance any gate.
 
 - Consolidated the eleven per-slice conformance records in `docs/slices/`.
 - Cross-checked the runtime pins in `src/release/pins.ts` against the released
-  `RELEASE_MANIFEST-0.1.3.md`, `STATUS.md`, `CHANGELOG.md`, and the D-017/D-018
+  `RELEASE_MANIFEST-0.2.0.md`, `STATUS.md`, `CHANGELOG.md`, and the D-017/D-018
   decision ledgers in a fresh clone of `scrimshawlife-ctrl/SUAS-specs`.
 - Verified the provider-adapter and disclosure-projection surfaces exist in code
   (`src/fulfillment/*`, `src/privacy/projection.ts`).
@@ -72,7 +72,7 @@ Per-slice detail lives in `docs/slices/SLICE_01_FOUNDATION.md` through
 ### 4.1 Version identities and provenance
 
 Spec stack, application version, API version (`/api/v0`), event schema (`0.1.0`),
-and DB schema version (`9`) are kept as separate identities (`VERSIONING.md` §3;
+and DB schema version (`11`) are kept as separate identities (`VERSIONING.md` §3;
 `src/release/pins.ts`, `src/db/schema-version.ts`). Build provenance reports
 stack, manifest, specs commit, environment class, schema version, and
 `provenance_complete`, and never emits secret material (`build-info` unit tests).
