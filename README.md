@@ -2,7 +2,7 @@
 
 Shut Up and Serve (SUAS) is the implementation repository for the consent-governed veteran support coordination platform specified in [`scrimshawlife-ctrl/SUAS-specs`](https://github.com/scrimshawlife-ctrl/SUAS-specs).
 
-Public site: https://scrimshawlife-ctrl.github.io/SUAS/
+Public site: https://scrimshawlife-ctrl.github.io/suas/
 
 ## Start here
 
