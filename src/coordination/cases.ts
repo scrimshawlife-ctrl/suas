@@ -129,6 +129,40 @@ export async function findCase(
   return row === undefined ? undefined : toCase(row);
 }
 
+/** The MVP one-active-case projection (CASES.md §3). CLOSED rows are excluded. */
+export async function findNonClosedCase(
+  db: Queryable,
+  tenantId: string,
+  veteranUserId: string,
+): Promise<SupportCase | undefined> {
+  const result = await db.query<CaseRow>(
+    `SELECT ${CASE_COLUMNS} FROM support_cases
+     WHERE tenant_id = $1 AND veteran_user_id = $2 AND status <> 'CLOSED'`,
+    [tenantId, veteranUserId],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : toCase(row);
+}
+
+/** Queue-filter write for APPLY_EFFECTIVE_SIGNAL. Does not change case status. */
+export async function setCasePrioritySignalLevel(
+  tx: PoolClient,
+  tenantId: string,
+  caseId: string,
+  level: 'RED',
+): Promise<SupportCase> {
+  const result = await tx.query<CaseRow>(
+    `UPDATE support_cases
+        SET priority_signal_level = $3, updated_at = now()
+      WHERE tenant_id = $1 AND case_id = $2
+      RETURNING ${CASE_COLUMNS}`,
+    [tenantId, caseId, level],
+  );
+  const row = result.rows[0];
+  if (row === undefined) throw new CaseNotFoundError();
+  return toCase(row);
+}
+
 export async function findActiveAssignment(
   db: Queryable,
   caseId: string,

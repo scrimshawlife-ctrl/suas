@@ -47,7 +47,7 @@ Slice 1 should establish:
 - LOCAL/TEST/STAGING cannot use production data or real support effects.
 - Production operation is blocked until SPEC-018.
 - Real email/SMS/auth/service-provider vendors are not authorized by the current release; use disabled/fake/sink/manual seams.
-- D-011 released `qv-001` + `sv-001` as implementation-authoritative scoring. TEST/CI stay on `SUAS_SUPPORT_SIGNAL_MODE=fixture`. That mode is never production authority. G-I-28 remains open: do not open or update a Support Case from a settled signal. D-012 approved safety copy is gated by `SUAS_SAFETY_COPY_MODE` (`approved` renders it; TEST/CI stay on `placeholder_test_only`).
+- D-011 released `qv-001` + `sv-001` as implementation-authoritative scoring. TEST/CI stay on `SUAS_SUPPORT_SIGNAL_MODE=fixture`. That mode is never production authority. APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2 (RED opens/updates a case; non-RED is a no-op; CLOSED is not REOPEN). Real provider adapters stay out of this packet. D-012 approved safety copy is gated by `SUAS_SAFETY_COPY_MODE` (`approved` renders it; TEST/CI stay on `placeholder_test_only`).
 - No automated emergency dispatch, diagnosis, suicide prediction, or safety-critical generative AI.
 - No provider SDK types/statuses in domain modules.
 - Preserve MVP visual/interaction identity when the UI slice begins.

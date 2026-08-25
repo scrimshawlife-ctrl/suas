@@ -104,15 +104,16 @@ psychometrics, or suicide prediction.
 - All twelve readiness gates stay `NOT_READY`.
 - `UI_CONFORMANCE` is unchanged.
 - SPEC-018 is not authorized.
-- G-I-28 is not implemented.
+- APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2 (RED only).
 - `/api/v0` and event schema `0.1.0` are unchanged.
 - TEST/CI do not switch safety copy to `approved`.
 
 ## 10. Semantic gaps returned to `SUAS-specs`
 
-1. **G-I-28 remains open.** `SAFETY.md` §3.2 requires an effective `RED` to open
-   or update a Support Case. D-011 does not define the command, idempotency
-   identity, non-RED effects, or closed-Case behavior.
+1. **G-I-28 transcribed.** Command `APPLY_EFFECTIVE_SIGNAL`; identity is one
+   apply per settled `support_signal_id` in the settlement transaction; non-RED
+   is a no-op; CLOSED is not REOPEN — a new case is opened. See
+   `src/signals/case-action.ts`.
 2. **ENVIRONMENT.md §3 still lists only `disabled\|fixture`.** A production
    scoring mode is not a released env value even though `sv-001` is released.
 3. **`qv-001` is not persisted as a published questionnaire row.** Scoring uses

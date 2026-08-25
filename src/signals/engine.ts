@@ -15,7 +15,7 @@
  * - SUAS-specs ENVIRONMENT.md §3 (`SUAS_SUPPORT_SIGNAL_MODE` = `disabled|fixture`;
  *   "fixture ... is never production authority")
  * - SUAS-specs RELEASE_DECISIONS-0.2.0.md (implementation-authoritative, not
- *   production-operating; G-I-28 remains open)
+ *   production-operating; APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2)
  *
  * The registry ships the released `sv-001` engine. Unreleased fixtures may still
  * register with `released: false` and run only when a caller opts in.
@@ -158,8 +158,8 @@ export interface ComputeOptions {
  * Compute a primary signal, or refuse.
  *
  * `sv-001` is registered as released. Unknown versions still refuse. Unreleased
- * fixtures require an explicit opt-in. This function does not open or update a
- * Support Case (G-I-28 remains open).
+ * fixtures require an explicit opt-in. Case writes happen at settlement via
+ * APPLY_EFFECTIVE_SIGNAL, not here.
  */
 export function computeSignal(
   signalVersion: string,

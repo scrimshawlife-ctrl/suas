@@ -15,6 +15,10 @@ import { runMigrations } from '../src/db/index.js';
 import { RELEASE_MANIFEST, SPEC_VERSION } from '../src/release/pins.js';
 
 export default async function setup(): Promise<void> {
+  // The documented unit-only command is intentionally database-independent.
+  // Full and integration runs leave this unset and always migrate first.
+  if (process.env.SUAS_SKIP_TEST_DB_SETUP === 'true') return;
+
   const connectionString =
     process.env.TEST_DATABASE_URL ?? 'postgresql://suas:suas@localhost:5432/suas_test';
   const pool = new Pool({ connectionString, max: 2 });
