@@ -90,4 +90,3 @@ None. `EXPECTED_SCHEMA_VERSION` is unchanged. No `.env` keys. No provider adapte
 - Cancel: a missing or already-cancelled request 303s home.
 - Claim: same responder replay 303s; another responder still receives `ALREADY_CLAIMED`.
 - HTML forms do not send `Idempotency-Key`. Product-level idempotency is the Case row lock and the in-flight read, not a new kernel key that would block a legitimate deploy after cancel.
-
