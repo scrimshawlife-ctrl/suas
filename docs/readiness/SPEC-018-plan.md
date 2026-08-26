@@ -2,33 +2,35 @@
 
 Canonical specs remain in `suas-specs`. This document tracks runtime evidence toward SPEC-018 go/no-go.
 
-## Frontier (verified on main)
+## Frontier (verified on main `428c20d`)
 
 - Spec stack pin: `0.2.0`
-- Formal readiness: `NOT_READY` (all 12 gates remain `NOT_READY` / pending evidence)
-- Scoring fail-closed: absent/mismatched `qv-001` refused; `disabled` mode refuses `computeSignal` (#59)
-- JSON `/api/v0`: auth, check-ins, cases/claim, resources, immediate-resources, veterans/me, admin adapters; OpenAPI + CI drift (#60–#61)
-- Durable jobs: port + LOCAL/TEST fake; STAGING/PRODUCTION fail-closed pending D-022
+- Formal readiness: `NOT_READY` (no gate marked `READY` without TESTING.md evidence)
+- Scoring fail-closed: absent/mismatched `qv-001` refused; `disabled` refuses every exported scoring path (#59/#67)
+- JSON `/api/v0` (38 routes): auth, check-ins, cases/claim, resources, immediate-resources, veterans/me, consents grant/revoke, trusted-circle, SR create/commands, follow-ups, notifications inbox/preferences, admin adapters; OpenAPI + CI drift (#60–#71)
+- Durable jobs: port + LOCAL/TEST fake + conformance suite; STAGING/PRODUCTION fail-closed pending D-022
+- Security/privacy audit + adversarial HTTP tests; runbooks; synthetic load + migration rehearse scripts
 
 ## Classification snapshot
 
-| Item                                                                         | Class                                                                                       |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Remaining Plane A JSON (notifications, follow-ups, SR commands beyond reads) | CODE_FIXABLE                                                                                |
-| OpenAPI keep-in-sync                                                         | CODE_FIXABLE (done for current routes)                                                      |
-| Durable job vendor                                                           | OWNER_DECISION_REQUIRED (D-022)                                                             |
-| Staging topology / cloud account                                             | OWNER_DECISION_REQUIRED / EXTERNAL_DEPENDENCY                                               |
-| SLO / RTO / RPO thresholds                                                   | OWNER_DECISION_REQUIRED (D-021/D-023/D-024) → formal verdict `NOT_COMPUTABLE` until decided |
-| Real provider effects                                                        | INTENTIONALLY_UNAVAILABLE until production authorization                                    |
-| Mobile clients                                                               | INTENTIONALLY_UNAVAILABLE this sprint                                                       |
+| Item                                              | Class                                                                        |
+| ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Released sync Plane A JSON (auth → notifications) | CODE_FIXABLE — **done**                                                      |
+| OpenAPI keep-in-sync                              | CODE_FIXABLE — **done** (CI drift check)                                     |
+| Durable job vendor                                | OWNER_DECISION_REQUIRED (D-022)                                              |
+| Staging topology / cloud account                  | OWNER_DECISION_REQUIRED / EXTERNAL_DEPENDENCY (D-001/D-005)                  |
+| SLO / RTO / RPO thresholds                        | OWNER_DECISION_REQUIRED (D-021/D-023/D-024) → `NOT_COMPUTABLE` until decided |
+| Staging soak / human UI–a11y baseline             | EVIDENCE_FIXABLE (needs staging or human review)                             |
+| Real provider effects                             | INTENTIONALLY_UNAVAILABLE until production authorization                     |
+| Mobile clients                                    | INTENTIONALLY_UNAVAILABLE this sprint                                        |
 
-## Next CODE_FIXABLE slices
+## Residual work (not CODE_FIXABLE product gaps)
 
-1. Consent-visible + service-request read/command JSON where released
-2. Security/privacy adversarial test pack + dependency audit script
-3. Synthetic load/resilience harness scripts (no invented SLO pass/fail)
-4. Migration/restore rehearsal scripts + runbooks
-5. Gate evidence matrix filled from CI artifacts
+1. Owner decides D-022 (recommended: Postgres outbox first).
+2. Owner decides D-001/D-005 staging hosting.
+3. Owner decides D-021/D-023/D-024 envelopes (or keep SCALE `NOT_COMPUTABLE`).
+4. Eng runs staging soak + human UI baseline once staging exists.
+5. Optional tooling: vitest/esbuild GHSA (dev-only).
 
 ## Terminal rule
 

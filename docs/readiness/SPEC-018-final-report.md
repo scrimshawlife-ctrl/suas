@@ -7,19 +7,19 @@
 ## OBSERVED
 
 - Spec stack `0.2.0`; formal readiness remains `NOT_READY` for pilot/production.
-- Runtime main advanced through PRs `#59`–`#63` (scoring fail-closed; resources + OpenAPI; veterans/me; job conformance + D-022 packet; consents + security audit).
-- CI verify green on those PRs (see `ci-run` evidence in sprint scratch / Actions).
-- All 12 gates: none `READY`; SCALE `NOT_COMPUTABLE`; others `NOT_READY` with named blockers (gate-matrix.md).
+- Runtime main advanced through PRs `#59`–`#71` (scoring fail-closed; resources + OpenAPI; veterans/me; job conformance + D-022 packet; consents + security audit; scoring bypass close; consent grant/revoke; SR commands + follow-ups + notifications).
+- Head at settlement: `428c20d` (#71) and docs refresh that follows.
+- OpenAPI documents **38** `/api/v0` routes with CI drift check.
+- All 12 gates: none `READY`; SCALE `NOT_COMPUTABLE`; others `NOT_READY` with named owner/evidence blockers (`gate-matrix.md`).
 
 ## COMPLETED (this sprint)
 
-- Scoring: exact `qv-001`; disabled mode refuses `computeSignal`; golden vectors unchanged.
-- JSON `/api/v0`: resources, immediate-resources, veterans/me, consents grant/revoke, SR create/commands, follow-ups, notifications inbox/preferences, trusted-circle; OpenAPI + CI drift.
-- Scoring: disabled mode also refuses `computeSv001` / `SV_001_ENGINE.compute` / registered engine.compute.
+- Scoring: exact `qv-001`; `disabled` refuses `computeSignal`, `computeSv001`, and `SV_001_ENGINE.compute`; golden vectors unchanged.
+- JSON `/api/v0`: auth, check-ins, cases/claim, resources, immediate-resources, veterans/me, consents list/grant/revoke, trusted-circle, SR create/commands, follow-ups, notifications inbox/preferences, admin adapters; OpenAPI + CI drift.
 - Job port conformance suite; health dependency posture; D-022 / D-021–024 / D-001–005 decision packets.
 - Security/privacy audit + adversarial HTTP tests; npm audit residual documented (dev toolchain only).
 - Runbooks (deploy/rollback, incident); env matrix; synthetic load + migration apply rehearsal scripts.
-- Gate matrix + consistency audit + this report.
+- Gate matrix + change map + consistency audit + this report.
 
 ## READINESS MATRIX
 
@@ -27,12 +27,13 @@ See `docs/readiness/gate-matrix.md`.
 
 ## RESIDUAL BLOCKERS (launch-impact order)
 
-1. **D-022 durable job product** — blocks honest STAGING/PRODUCTION async.
-2. **D-001 / D-005 staging hosting** — blocks shared staging evidence.
-3. **D-021 / D-023 / D-024 SLO/RTO/RPO** — SCALE stays `NOT_COMPUTABLE`.
-4. Remaining CODE_FIXABLE Plane A JSON essentially closed for released sync writes; residual is staging soak + owner decisions.
-5. Human UI conformance / a11y baseline — EVIDENCE.
-6. Vitest/esbuild GHSA (dev-only) — tooling upgrade.
+1. **D-022 durable job product** — OWNER — blocks honest STAGING/PRODUCTION async.
+2. **D-001 / D-005 staging hosting** — OWNER / EXTERNAL — blocks shared staging evidence.
+3. **D-021 / D-023 / D-024 SLO/RTO/RPO** — OWNER — SCALE stays `NOT_COMPUTABLE`.
+4. **Staging soak + human UI/a11y baseline** — EVIDENCE (needs staging or human review).
+5. **Vitest/esbuild GHSA** — tooling only (runtime deps clean).
+
+No remaining CODE_FIXABLE released sync Plane A JSON gaps for this residual set.
 
 ## OWNER DECISIONS
 
@@ -42,12 +43,13 @@ See `docs/readiness/gate-matrix.md`.
 
 ## VERIFICATION
 
-- Targeted vitest suites for scoring, HTTP resources/veterans/consents/security, OpenAPI drift, jobs.
-- `npm run openapi:check`
+- Full verify on HEAD (format/lint/typecheck/build/full suite/openapi/migrate) — see sprint `full-verify.log`
+- Targeted suites including `http-api-writes`, scoring bypass, consents, OpenAPI drift
+- `npm run openapi:check` — 38 routes
 - Scripts: `scripts/synthetic-load-harness.ts`, `scripts/migration-restore-rehearsal.ts`
 - Existing: `tests/integration/resilience-drills.test.ts`
-- CI: PRs `#59`–`#63` verify jobs green
+- CI: PRs `#59`–`#71` verify green; main push CI recorded in `ci-run.txt`
 
 ## NEXT GOAL
 
-Owner decides D-022 + staging hosting; eng implements durable adapter behind the existing port and finishes remaining released Plane A JSON; re-run gate settlement.
+Send the residual set, gate matrix, decision packets, and CI/OpenAPI evidence to adversarial verification for go/no-go confirmation **before** any owner D-022 / staging work. After owner decides D-022 + staging hosting, eng implements the durable adapter behind the existing port and runs staging soak, then re-settles gates.
