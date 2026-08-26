@@ -33,3 +33,8 @@ Canonical specs remain in `suas-specs`. This document tracks runtime evidence to
 ## Terminal rule
 
 Do not mark a gate `READY` without TESTING.md evidence. Prefer `SPEC_018_BLOCKED_WITH_MINIMAL_RESIDUAL_SET` over false readiness.
+
+## Settlement
+
+Terminal outcome recorded in `SPEC-018-final-report.md`:
+`SPEC_018_BLOCKED_WITH_MINIMAL_RESIDUAL_SET`.
