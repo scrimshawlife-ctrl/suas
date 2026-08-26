@@ -311,8 +311,8 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
     section(
       { 'aria-labelledby': 'role' },
       h2({ id: 'role' }, 'Choose your role'),
-      a({ class: 'action', href: '/app/join/veteran' }, 'Veteran'),
-      a({ class: 'action', href: '/app/join/responder' }, 'Responder or Peer Counselor'),
+      a({ class: 'action', href: '/app/join?role=veteran' }, 'Veteran'),
+      a({ class: 'action', href: '/app/join?role=responder' }, 'Responder or Peer Counselor'),
     ),
     section(
       { 'aria-labelledby': 'contact' },

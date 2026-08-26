@@ -10,7 +10,8 @@
  *
  * These routes are mounted under `/app`, not `/api/v0`: API.md §2 governs the
  * JSON API's version selector, and an HTML surface is not a versioned API
- * resource. The surfaces read the same domain functions the API would.
+ * resource. The surfaces read the same domain functions the API would. HTML
+ * POSTs (deploy, cancel, claim) use the same session gate as the GET surfaces.
  *
  * Every handler resolves its own authorization. There is no "UI session" that
  * is weaker than an API session (AUTH.md §5).
@@ -25,8 +26,16 @@ import {
   ResourceNotVisibleError,
 } from '../../authz/index.js';
 import type { SafetyCopyMode } from '../../config/index.js';
-import { claimCase, findCase, readCaseQueue } from '../../coordination/index.js';
+import {
+  CaseAlreadyClaimedError,
+  claimCase,
+  findActiveAssignment,
+  findCase,
+  IllegalCaseTransitionError,
+  readCaseQueue,
+} from '../../coordination/index.js';
 import { searchResources } from '../../fulfillment/index.js';
+import { cancelQrf, deployQrf } from '../../ui/commands.js';
 import { D_012_APPROVED_SAFETY_COPY } from '../../ui/safety.js';
 import {
   CATEGORY_CARDS,
@@ -86,6 +95,9 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   });
 
   app.get('/app/join', async (_request, reply) => {
+    // Display-only. AUTH.md challenge issue/verify exist on `/api/v0/auth`, but
+    // HTML join cannot resolve tenant (Slice 3 gap), cannot enroll a new User,
+    // and cannot persist a Bearer session. See SLICE_10_UI_COMMANDS.md §4.
     await reply.type(HTML).send(
       renderEnrollment({
         shell: shell('Join the Mission', { showMobileNav: false }),
@@ -121,6 +133,26 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
             }),
       }),
     );
+  });
+
+  app.post('/app/qrf/deploy', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    await deployQrf(pool, {
+      tenantId: context.tenantId,
+      veteranUserId: context.userId,
+      correlationId: String(request.id),
+    });
+    return reply.redirect('/app/home', 303);
+  });
+
+  app.post('/app/qrf/cancel', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    await cancelQrf(pool, {
+      tenantId: context.tenantId,
+      veteranUserId: context.userId,
+      correlationId: String(request.id),
+    });
+    return reply.redirect('/app/home', 303);
   });
 
   app.get('/app/immediate-resources', async (request, reply) => {
@@ -296,12 +328,33 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       if (existing === undefined) {
         throw new ResourceNotVisibleError();
       }
-      await claimCase(pool, {
-        tenantId: context.tenantId,
-        caseId: request.params.id,
-        responderUserId: context.userId,
-        correlationId: String(request.id),
-      });
+      // CLAIM_CASE is documented from OPEN/TRIAGED only. A same-responder
+      // replay arrives when the case is already ASSIGNED, so treat "already
+      // mine" as success rather than an illegal edge.
+      const held = await findActiveAssignment(pool, request.params.id);
+      if (held !== undefined) {
+        if (held.responderUserId === context.userId) {
+          return reply.redirect('/app/responder', 303);
+        }
+        throw new CaseAlreadyClaimedError();
+      }
+      try {
+        await claimCase(pool, {
+          tenantId: context.tenantId,
+          caseId: request.params.id,
+          responderUserId: context.userId,
+          correlationId: String(request.id),
+        });
+      } catch (error) {
+        if (
+          !(error instanceof CaseAlreadyClaimedError) &&
+          !(error instanceof IllegalCaseTransitionError)
+        ) {
+          throw error;
+        }
+        const assignment = await findActiveAssignment(pool, request.params.id);
+        if (assignment?.responderUserId !== context.userId) throw error;
+      }
       return reply.redirect('/app/responder', 303);
     },
   );

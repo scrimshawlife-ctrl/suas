@@ -16,6 +16,7 @@ import {
   CRISIS_ENTRY_NOT_EMERGENCY,
   MissingRequiredElementError,
   renderChat,
+  renderEnrollment,
   renderImmediateResources,
   renderResourceList,
   renderResponderDashboard,
@@ -429,5 +430,42 @@ describe('Veteran-authored text is data, not markup', () => {
     });
     expect(markup).not.toContain('<script>');
     expect(markup).toContain('&lt;script&gt;');
+  });
+});
+
+describe('HTML command targets stay on registered /app routes', () => {
+  it('posts Deploy and Cancel to the wired QRF routes', () => {
+    const idle = renderVeteranHome({ shell, categories: CATEGORY_CARDS });
+    expect(idle).toContain('action="/app/qrf/deploy"');
+
+    const inFlight = renderVeteranHome({
+      shell,
+      categories: CATEGORY_CARDS,
+      activeQrf: {
+        facts: {
+          requestStatus: 'CREATED',
+          responderAssigned: false,
+          responderNotificationDelivered: false,
+          coordinationDegraded: false,
+          matchingExhausted: false,
+        },
+        authorizedVoicePath: false,
+        authorizedMessagePath: false,
+      },
+    });
+    expect(inFlight).toContain('action="/app/qrf/cancel"');
+    expect(inFlight).not.toContain('Deploy QRF');
+  });
+
+  it('keeps enrollment role links on /app/join instead of a dead path', () => {
+    const markup = renderEnrollment({
+      shell: { title: 'Join the Mission', viewport: 'MOBILE', showMobileNav: false },
+      contactChannelRequirement:
+        'We need an email address or mobile number to send your sign-in code.',
+    });
+    expect(markup).toContain('href="/app/join?role=veteran"');
+    expect(markup).toContain('href="/app/join?role=responder"');
+    expect(markup).not.toContain('href="/app/join/veteran"');
+    expect(markup).not.toContain('href="/app/join/responder"');
   });
 });
