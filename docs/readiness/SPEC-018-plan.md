@@ -2,7 +2,7 @@
 
 Canonical specs remain in `suas-specs`. This document tracks runtime evidence toward SPEC-018 go/no-go.
 
-## Frontier (verified on main `428c20d`)
+## Frontier (verified on main `e8d3082`)
 
 - Spec stack pin: `0.2.0`
 - Formal readiness: `NOT_READY` (no gate marked `READY` without TESTING.md evidence)

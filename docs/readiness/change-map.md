@@ -1,7 +1,7 @@
 # SPEC-018 change map
 
-**Runtime head:** `428c20d` (#71) and later.  
-**OpenAPI:** `docs/openapi/v0.json` — `/api/v0` routes with CI drift check (includes resolve + settlements).
+**Runtime head:** `e8d3082` (#79).  
+**OpenAPI:** `docs/openapi/v0.json` — **46** `/api/v0` routes with CI drift check (includes resolve + settlements).
 
 ## Gates (current honest posture)
 
