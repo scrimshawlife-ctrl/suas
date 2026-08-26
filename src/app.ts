@@ -15,7 +15,8 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { describeConfig, loadConfig, type ConfigSource, type SuasConfig } from './config/index.js';
 import { createPool, EXPECTED_SCHEMA_VERSION, runMigrations } from './db/index.js';
-import { createJobQueue, type DurableJobQueuePort } from './jobs/index.js';
+import { createJobQueue, DispatchingJobQueue, type DurableJobQueuePort } from './jobs/index.js';
+import { parseComputeJobPayload, runSupportSignalComputeJob } from './signals/index.js';
 import {
   createChallengeDelivery,
   createMfaPort,
@@ -71,8 +72,25 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     }
   }
 
-  // 3. Durable async-work seam.
-  const jobQueue = createJobQueue(config);
+  // 3. Durable async-work seam. LOCAL/TEST honour enqueued compute jobs in-process
+  // while D-022 remains open. CHECKIN_COMPLETED still commits before scoring.
+  const innerQueue = createJobQueue(config);
+  const jobQueue =
+    pool === undefined
+      ? innerQueue
+      : new DispatchingJobQueue(
+          innerQueue,
+          {
+            'support-signal.compute': async (request) => {
+              const parsed = parseComputeJobPayload(request.payload, request.tenantId);
+              if (parsed === undefined) return;
+              await runSupportSignalComputeJob(pool, config, parsed);
+            },
+          },
+          (error, request) => {
+            console.error(`[suas] job ${request.jobType} failed`, error);
+          },
+        );
 
   // 4. Authentication capability ports. Neither contacts a real provider: the
   // delivery port reports a disabled channel as unavailable rather than faking a
