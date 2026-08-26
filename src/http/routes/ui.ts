@@ -41,7 +41,11 @@ import {
   MAX_PAGE_SIZE,
   readCaseQueue,
 } from '../../coordination/index.js';
-import { searchResources } from '../../fulfillment/index.js';
+import {
+  RESOURCE_DEFAULT_PAGE_SIZE,
+  RESOURCE_MAX_PAGE_SIZE,
+  searchResources,
+} from '../../fulfillment/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
 import {
   completeCheckIn,
@@ -348,6 +352,26 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       .send(renderImmediateResources(shell('Immediate Resources'), safetyCopyMode));
   });
 
+  // API.md §5: HTML list pages accept the same cursor/limit bounds as /api/v0.
+  const resourceListQuery = z.object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(RESOURCE_MAX_PAGE_SIZE)
+      .default(RESOURCE_DEFAULT_PAGE_SIZE),
+  });
+  const responderQueueQuery = z.object({
+    unassigned_cursor: z.string().min(1).max(512).optional(),
+    active_cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  });
+  const activeNeedsQuery = z.object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  });
+
   app.get('/app/resources', async (request, reply) => {
     await authenticate(pool, sessionSecret, request);
     await reply
@@ -380,12 +404,21 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     }
 
     const category = categoryForCard(card.label);
-    const results = await searchResources(pool, context.tenantId, {
-      category,
-      activeOnly: true,
-    });
+    const query = resourceListQuery.parse(request.query);
+    const page = await searchResources(
+      pool,
+      context.tenantId,
+      {
+        category,
+        activeOnly: true,
+      },
+      {
+        limit: query.limit,
+        ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
+      },
+    );
 
-    const rows: ResourceRowViewModel[] = results.map((result) => ({
+    const rows: ResourceRowViewModel[] = page.results.map((result) => ({
       id: result.resource.resourceId,
       name: result.resource.serviceName,
       freshness: result.freshness,
@@ -409,6 +442,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         categoryLabel: card.label,
         backHref: '/app/resources',
         rows,
+        ...(page.nextCursor !== undefined ? { nextCursor: page.nextCursor } : {}),
       }),
     );
   });
@@ -453,17 +487,6 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       ...(claimable ? { claimable: true } : {}),
     };
   }
-
-  // API.md §5: HTML queue pages accept the same cursor/limit bounds as /api/v0/cases.
-  const responderQueueQuery = z.object({
-    unassigned_cursor: z.string().min(1).max(512).optional(),
-    active_cursor: z.string().min(1).max(512).optional(),
-    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
-  });
-  const activeNeedsQuery = z.object({
-    cursor: z.string().min(1).max(512).optional(),
-    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
-  });
 
   app.get('/app/responder', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);

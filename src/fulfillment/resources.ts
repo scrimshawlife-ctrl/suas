@@ -358,45 +358,158 @@ export interface ResourceSearchResult {
   readonly staleWarning: boolean;
 }
 
+/** API.md §5 bounds — shared by JSON and HTML list surfaces. */
+export const RESOURCE_DEFAULT_PAGE_SIZE = 20;
+export const RESOURCE_MAX_PAGE_SIZE = 100;
+
+export interface ResourceSearchPage {
+  readonly results: readonly ResourceSearchResult[];
+  /** Opaque keyset cursor; absent when the page is complete. */
+  readonly nextCursor: string | undefined;
+}
+
+export class InvalidResourceCursorError extends Error {
+  readonly code = 'VALIDATION_FAILED';
+  readonly httpStatus = 400;
+
+  constructor() {
+    super('The pagination cursor is not valid.');
+    this.name = 'InvalidResourceCursorError';
+  }
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Keyset over (active DESC, last_verified_at DESC NULLS LAST, resource_id ASC). */
+function encodeResourceCursor(
+  active: boolean,
+  lastVerifiedAt: Date | undefined,
+  resourceId: string,
+): string {
+  const verified = lastVerifiedAt === undefined ? '' : lastVerifiedAt.toISOString();
+  return Buffer.from(`${active ? '1' : '0'}|${verified}|${resourceId}`, 'utf8').toString(
+    'base64url',
+  );
+}
+
+function decodeResourceCursor(
+  cursor: string,
+): { active: boolean; lastVerifiedAt: string | null; resourceId: string } | undefined {
+  try {
+    const parts = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+    if (parts.length !== 3) return undefined;
+    const [activePart, verifiedPart, resourceId] = parts;
+    if (activePart !== '0' && activePart !== '1') return undefined;
+    if (resourceId === undefined || !UUID_PATTERN.test(resourceId)) return undefined;
+    if (verifiedPart === undefined) return undefined;
+    if (verifiedPart !== '' && Number.isNaN(Date.parse(verifiedPart))) return undefined;
+    return {
+      active: activePart === '1',
+      lastVerifiedAt: verifiedPart === '' ? null : verifiedPart,
+      resourceId,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Bounded, tenant-scoped catalog search.
  *
  * RESOURCES.md §8 and §10: never load the full catalog, never cross a tenant,
  * and never make an eligibility judgement — filters are recorded criteria only.
+ * API.md §5: keyset cursor + limit (default 20, maximum 100).
  */
 export async function searchResources(
   db: Queryable,
   tenantId: string,
   filters: ResourceSearchFilters = {},
-  page: { limit?: number } = {},
-): Promise<ResourceSearchResult[]> {
-  const limit = Math.min(Math.max(page.limit ?? 20, 1), 100);
+  page: { cursor?: string; limit?: number } = {},
+): Promise<ResourceSearchPage> {
+  const limit = Math.min(
+    Math.max(page.limit ?? RESOURCE_DEFAULT_PAGE_SIZE, 1),
+    RESOURCE_MAX_PAGE_SIZE,
+  );
+
+  const conditions: string[] = ['tenant_id = $1'];
+  const values: unknown[] = [tenantId];
+
+  if (filters.category !== undefined) {
+    values.push(filters.category);
+    conditions.push(`category = $${values.length}::suas_service_category`);
+  }
+  if (filters.activeOnly === true) {
+    conditions.push('active = true');
+  }
+  if (filters.county !== undefined) {
+    values.push(filters.county);
+    conditions.push(`(counties = '{}' OR $${values.length} = ANY(counties))`);
+  }
+  if (filters.integrationMode !== undefined) {
+    values.push(filters.integrationMode);
+    conditions.push(`$${values.length}::suas_integration_mode = ANY(integration_modes)`);
+  }
+
+  if (page.cursor !== undefined) {
+    const decoded = decodeResourceCursor(page.cursor);
+    if (decoded === undefined) throw new InvalidResourceCursorError();
+    values.push(decoded.active, decoded.lastVerifiedAt, decoded.resourceId);
+    const activeParam = `$${values.length - 2}`;
+    const verifiedParam = `$${values.length - 1}`;
+    const idParam = `$${values.length}`;
+    // "After" in ORDER BY active DESC, last_verified_at DESC NULLS LAST, resource_id ASC.
+    conditions.push(`(
+      active < ${activeParam}
+      OR (
+        active = ${activeParam}
+        AND (
+          (
+            ${verifiedParam}::timestamptz IS NOT NULL
+            AND (
+              last_verified_at IS NULL
+              OR last_verified_at < ${verifiedParam}::timestamptz
+              OR (
+                last_verified_at = ${verifiedParam}::timestamptz
+                AND resource_id > ${idParam}::uuid
+              )
+            )
+          )
+          OR (
+            ${verifiedParam}::timestamptz IS NULL
+            AND last_verified_at IS NULL
+            AND resource_id > ${idParam}::uuid
+          )
+        )
+      )
+    )`);
+  }
+
+  values.push(limit + 1);
 
   const result = await db.query<ResourceRow>(
     `SELECT ${RESOURCE_COLUMNS} FROM resources
-     WHERE tenant_id = $1
-       AND ($2::suas_service_category IS NULL OR category = $2)
-       AND ($3::boolean IS NOT TRUE OR active = true)
-       AND ($4::text IS NULL OR counties = '{}' OR $4 = ANY(counties))
-       AND ($5::suas_integration_mode IS NULL OR $5 = ANY(integration_modes))
+     WHERE ${conditions.join(' AND ')}
      ORDER BY active DESC, last_verified_at DESC NULLS LAST, resource_id
-     LIMIT $6`,
-    [
-      tenantId,
-      filters.category ?? null,
-      filters.activeOnly ?? null,
-      filters.county ?? null,
-      filters.integrationMode ?? null,
-      limit,
-    ],
+     LIMIT $${values.length}`,
+    values,
   );
 
+  const rows = result.rows.slice(0, limit);
+  const last = rows[rows.length - 1];
+  const hasMore = result.rows.length > limit;
   const now = new Date();
-  return result.rows.map((row) => {
-    const resource = toResource(row);
-    const band = freshnessBand(resource.lastVerifiedAt, now);
-    return { resource, freshness: band, staleWarning: requiresStaleWarning(band) };
-  });
+
+  return {
+    results: rows.map((row) => {
+      const resource = toResource(row);
+      const band = freshnessBand(resource.lastVerifiedAt, now);
+      return { resource, freshness: band, staleWarning: requiresStaleWarning(band) };
+    }),
+    nextCursor:
+      hasMore && last !== undefined
+        ? encodeResourceCursor(last.active, last.last_verified_at ?? undefined, last.resource_id)
+        : undefined,
+  };
 }
 
 /**

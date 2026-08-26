@@ -204,6 +204,83 @@ describe('API.md §4 — authenticated surfaces require a session', () => {
   });
 });
 
+describe('API.md §5 — /app/resources/:label queue cursor', () => {
+  async function activateFood(tenantId: string, serviceName: string): Promise<string> {
+    const resource = await createResource(pool(), {
+      tenantId,
+      serviceName,
+      category: 'FOOD',
+      counties: ['Example County'],
+      integrationModes: ['MANUAL_COORDINATION'],
+      contactMethod: 'Walk in during posted hours',
+    });
+    const actorId = randomUUID();
+    await verifyResource(pool(), {
+      tenantId,
+      resourceId: resource.resourceId,
+      verificationSource: 'Called the listed number during posted hours',
+      actorId,
+    });
+    await setResourceActive(pool(), {
+      tenantId,
+      resourceId: resource.resourceId,
+      active: true,
+      actorId,
+    });
+    return resource.resourceId;
+  }
+
+  it('walks every food listing across HTML pages', async () => {
+    const { credential, tenantId } = await signIn();
+    const names = Array.from({ length: 5 }, (_, index) => `HTML Pantry ${index}`);
+    for (const serviceName of names) {
+      await activateFood(tenantId, serviceName);
+    }
+
+    const seen: string[] = [];
+    let url = '/app/resources/food?limit=2';
+    let pages = 0;
+    for (;;) {
+      const response = await app.server.inject({
+        method: 'GET',
+        url,
+        headers: authorized(credential),
+      });
+      expect(response.statusCode).toBe(200);
+      for (const serviceName of names) {
+        if (response.body.includes(serviceName) && !seen.includes(serviceName)) {
+          seen.push(serviceName);
+        }
+      }
+      pages += 1;
+      const match = response.body.match(/cursor=([^"&]+)/);
+      if (match === null) break;
+      if (pages > 10) throw new Error('HTML resource cursor did not terminate');
+      url = `/app/resources/food?limit=2&cursor=${match[1]}`;
+    }
+
+    expect(pages).toBe(3);
+    expect([...seen].sort()).toEqual([...names].sort());
+  });
+
+  it('rejects a malformed catalog cursor and an oversized limit', async () => {
+    const { credential } = await signIn();
+    const badCursor = await app.server.inject({
+      method: 'GET',
+      url: '/app/resources/food?cursor=not-a-cursor',
+      headers: authorized(credential),
+    });
+    expect(badCursor.statusCode).toBe(400);
+
+    const oversized = await app.server.inject({
+      method: 'GET',
+      url: '/app/resources/food?limit=101',
+      headers: authorized(credential),
+    });
+    expect(oversized.statusCode).toBe(400);
+  });
+});
+
 describe('MVP_REFERENCE.md §8 — resource screens read the catalog', () => {
   it('renders a configured resource with its recorded contact method', async () => {
     const { credential, tenantId } = await signIn();

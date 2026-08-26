@@ -992,13 +992,14 @@ describe('RESOURCES.md — catalog', () => {
     });
 
     const results = await searchResources(pool, tenantId, { category: 'FOOD' });
-    expect(results).toHaveLength(1);
-    expect(results[0]?.freshness).toBe('STALE');
+    expect(results.results).toHaveLength(1);
+    expect(results.results[0]?.freshness).toBe('STALE');
     // RESOURCES.md §3: stale is warned about, not hidden.
-    expect(results[0]?.staleWarning).toBe(true);
+    expect(results.results[0]?.staleWarning).toBe(true);
+    expect(results.nextCursor).toBeUndefined();
 
     const capped = await searchResources(pool, tenantId, {}, { limit: 5000 });
-    expect(capped.length).toBeLessThanOrEqual(100);
+    expect(capped.results.length).toBeLessThanOrEqual(100);
   });
 
   it('excludes internal fields from the veteran-facing projection', async () => {

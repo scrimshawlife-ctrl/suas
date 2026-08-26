@@ -248,6 +248,18 @@ describe('MVP_REFERENCE.md §7.2 — the veteran home with a request in flight',
 });
 
 describe('MVP_REFERENCE.md §8 — resource screens', () => {
+  it('links Show more when the catalog page continues', () => {
+    const markup = renderResourceList({
+      shell,
+      categoryLabel: 'Food',
+      backHref: '/app/resources',
+      rows: [{ id: 'r1', name: 'Example Pantry', freshness: 'FRESH', staleWarning: false }],
+      nextCursor: 'cursor-food-2',
+    });
+    expect(markup).toContain('href="?cursor=cursor-food-2"');
+    expect(markup).toContain('Show more listings');
+  });
+
   it('says so when no contact method is recorded', () => {
     const markup = renderResourceList({
       shell,

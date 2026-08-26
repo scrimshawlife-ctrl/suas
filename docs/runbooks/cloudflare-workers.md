@@ -108,7 +108,19 @@ or schema validation fails, the fetch handler returns `503` with
 
 Topology recommendation: [D-001-005-staging-hosting.md](../decision-packets/D-001-005-staging-hosting.md).
 
-Owner checklist before first shared publish:
+### Currently blocked for eng (owner secrets first)
+
+Do not run `wrangler deploy` or claim a soak until the owner completes the
+checklist below. As of 2026-08-26:
+
+- Neon MCP OAuth is not completed on this machine (`grok mcp doctor neon` fails
+  handshake). Agents cannot create/list Neon projects until the owner authorizes.
+- No Hyperdrive id, `SUAS_SESSION_SECRET` Worker secret, or GitHub Environment
+  `synthetic-worker` tokens are assumed present.
+- Formal `SUAS_ENV=STAGING` still waits on D-022; interim soak uses
+  `SUAS_ENV=LOCAL` only.
+
+### Owner checklist before first shared publish
 
 1. Neon synthetic database created (no production data path).
 2. Hyperdrive created against the **pooled** Neon URL; id placed in an
