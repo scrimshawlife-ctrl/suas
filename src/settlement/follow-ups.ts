@@ -140,7 +140,10 @@ export interface CreateFollowUpInput {
  * fails. The disposition may be left unset here — SETTLEMENT.md §4 then refuses
  * to resolve the Case until someone classifies it.
  */
-export async function createFollowUp(pool: Pool, input: CreateFollowUpInput): Promise<FollowUp> {
+export async function createFollowUpInTx(
+  tx: Queryable,
+  input: CreateFollowUpInput,
+): Promise<FollowUp> {
   if (!(input.dueAt instanceof Date) || Number.isNaN(input.dueAt.getTime())) {
     throw new FollowUpValidationError('A Follow-Up requires a valid due_at (FOLLOWUP.md §3).');
   }
@@ -148,45 +151,47 @@ export async function createFollowUp(pool: Pool, input: CreateFollowUpInput): Pr
     throw new FollowUpValidationError('A Follow-Up requires a responsible party (FOLLOWUP.md §3).');
   }
 
-  return withTransaction(pool, async (tx) => {
-    const followUpId = randomUUID();
-    const result = await tx.query<FollowUpRow>(
-      `INSERT INTO follow_ups
-         (follow_up_id, tenant_id, case_id, service_request_id, due_at,
-          responsible_type, responsible_id, resolution_disposition)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING ${FOLLOW_UP_COLUMNS}`,
-      [
-        followUpId,
-        input.tenantId,
-        input.caseId,
-        input.serviceRequestId ?? null,
-        input.dueAt,
-        input.responsibleType,
-        input.responsibleId,
-        input.resolutionDisposition ?? null,
-      ],
-    );
-    const row = result.rows[0];
-    if (row === undefined) throw new Error('Follow-up insert returned no row.');
+  const followUpId = randomUUID();
+  const result = await tx.query<FollowUpRow>(
+    `INSERT INTO follow_ups
+       (follow_up_id, tenant_id, case_id, service_request_id, due_at,
+        responsible_type, responsible_id, resolution_disposition)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING ${FOLLOW_UP_COLUMNS}`,
+    [
+      followUpId,
+      input.tenantId,
+      input.caseId,
+      input.serviceRequestId ?? null,
+      input.dueAt,
+      input.responsibleType,
+      input.responsibleId,
+      input.resolutionDisposition ?? null,
+    ],
+  );
+  const row = result.rows[0];
+  if (row === undefined) throw new Error('Follow-up insert returned no row.');
 
-    await appendDomainEvent(tx, {
-      eventType: 'FOLLOWUP_CREATED',
-      aggregateType: 'FollowUp',
-      aggregateId: followUpId,
-      tenantId: input.tenantId,
-      actorType: input.actorType,
-      actorId: input.actorId,
-      payload: {
-        case_id: input.caseId,
-        due_at: input.dueAt.toISOString(),
-        responsible_type: input.responsibleType,
-      },
-      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
-    });
-
-    return toFollowUp(row);
+  await appendDomainEvent(tx, {
+    eventType: 'FOLLOWUP_CREATED',
+    aggregateType: 'FollowUp',
+    aggregateId: followUpId,
+    tenantId: input.tenantId,
+    actorType: input.actorType,
+    actorId: input.actorId,
+    payload: {
+      case_id: input.caseId,
+      due_at: input.dueAt.toISOString(),
+      responsible_type: input.responsibleType,
+    },
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
   });
+
+  return toFollowUp(row);
+}
+
+export async function createFollowUp(pool: Pool, input: CreateFollowUpInput): Promise<FollowUp> {
+  return withTransaction(pool, (tx) => createFollowUpInTx(tx, input));
 }
 
 export async function findFollowUp(
@@ -367,51 +372,56 @@ export interface CompleteFollowUpInput {
  * FOLLOWUP.md §6: actor and `completed_at` are required, duplicate completion is
  * idempotent, and exactly one logical `FOLLOWUP_COMPLETED` is emitted.
  */
+export async function completeFollowUpInTx(
+  tx: Queryable,
+  input: CompleteFollowUpInput,
+): Promise<{ followUp: FollowUp; alreadyCompleted: boolean }> {
+  const current = await tx.query<FollowUpRow>(
+    `SELECT ${FOLLOW_UP_COLUMNS} FROM follow_ups
+     WHERE tenant_id = $1 AND follow_up_id = $2
+     FOR UPDATE`,
+    [input.tenantId, input.followUpId],
+  );
+  const existing = current.rows[0];
+  if (existing === undefined) throw new FollowUpNotFoundError();
+
+  if (existing.status === 'COMPLETED') {
+    return { followUp: toFollowUp(existing), alreadyCompleted: true };
+  }
+  if (existing.status === 'CANCELLED') {
+    throw new FollowUpValidationError('A cancelled Follow-Up cannot be completed.');
+  }
+
+  const updated = await tx.query<FollowUpRow>(
+    `UPDATE follow_ups
+       SET status = 'COMPLETED', completed_at = now(), completed_by = $3, updated_at = now()
+     WHERE tenant_id = $1 AND follow_up_id = $2
+     RETURNING ${FOLLOW_UP_COLUMNS}`,
+    [input.tenantId, input.followUpId, input.actorId],
+  );
+  const row = updated.rows[0];
+  if (row === undefined) throw new FollowUpNotFoundError();
+
+  await appendDomainEvent(tx, {
+    eventType: 'FOLLOWUP_COMPLETED',
+    aggregateType: 'FollowUp',
+    aggregateId: input.followUpId,
+    tenantId: input.tenantId,
+    actorType: input.actorType,
+    actorId: input.actorId,
+    payload: { case_id: row.case_id },
+    idempotencyKey: `follow-up-completed:${input.followUpId}`,
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+  });
+
+  return { followUp: toFollowUp(row), alreadyCompleted: false };
+}
+
 export async function completeFollowUp(
   pool: Pool,
   input: CompleteFollowUpInput,
 ): Promise<{ followUp: FollowUp; alreadyCompleted: boolean }> {
-  return withTransaction(pool, async (tx) => {
-    const current = await tx.query<FollowUpRow>(
-      `SELECT ${FOLLOW_UP_COLUMNS} FROM follow_ups
-       WHERE tenant_id = $1 AND follow_up_id = $2
-       FOR UPDATE`,
-      [input.tenantId, input.followUpId],
-    );
-    const existing = current.rows[0];
-    if (existing === undefined) throw new FollowUpNotFoundError();
-
-    if (existing.status === 'COMPLETED') {
-      return { followUp: toFollowUp(existing), alreadyCompleted: true };
-    }
-    if (existing.status === 'CANCELLED') {
-      throw new FollowUpValidationError('A cancelled Follow-Up cannot be completed.');
-    }
-
-    const updated = await tx.query<FollowUpRow>(
-      `UPDATE follow_ups
-         SET status = 'COMPLETED', completed_at = now(), completed_by = $3, updated_at = now()
-       WHERE tenant_id = $1 AND follow_up_id = $2
-       RETURNING ${FOLLOW_UP_COLUMNS}`,
-      [input.tenantId, input.followUpId, input.actorId],
-    );
-    const row = updated.rows[0];
-    if (row === undefined) throw new FollowUpNotFoundError();
-
-    await appendDomainEvent(tx, {
-      eventType: 'FOLLOWUP_COMPLETED',
-      aggregateType: 'FollowUp',
-      aggregateId: input.followUpId,
-      tenantId: input.tenantId,
-      actorType: input.actorType,
-      actorId: input.actorId,
-      payload: { case_id: row.case_id },
-      idempotencyKey: `follow-up-completed:${input.followUpId}`,
-      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
-    });
-
-    return { followUp: toFollowUp(row), alreadyCompleted: false };
-  });
+  return withTransaction(pool, (tx) => completeFollowUpInTx(tx, input));
 }
 
 /**

@@ -14,7 +14,7 @@
 ## COMPLETED (this sprint)
 
 - Scoring: exact `qv-001`; disabled mode refuses `computeSignal`; golden vectors unchanged.
-- JSON `/api/v0`: resources, immediate-resources, veterans/me, consents, service-request reads, trusted-circle invite/list/remove; OpenAPI + CI drift.
+- JSON `/api/v0`: resources, immediate-resources, veterans/me, consents grant/revoke, SR create/commands, follow-ups, notifications inbox/preferences, trusted-circle; OpenAPI + CI drift.
 - Scoring: disabled mode also refuses `computeSv001` / `SV_001_ENGINE.compute` / registered engine.compute.
 - Job port conformance suite; health dependency posture; D-022 / D-021–024 / D-001–005 decision packets.
 - Security/privacy audit + adversarial HTTP tests; npm audit residual documented (dev toolchain only).
@@ -30,7 +30,7 @@ See `docs/readiness/gate-matrix.md`.
 1. **D-022 durable job product** — blocks honest STAGING/PRODUCTION async.
 2. **D-001 / D-005 staging hosting** — blocks shared staging evidence.
 3. **D-021 / D-023 / D-024 SLO/RTO/RPO** — SCALE stays `NOT_COMPUTABLE`.
-4. Remaining Plane A JSON (notifications, follow-ups, SR write commands) — CODE_FIXABLE follow-on.
+4. Remaining CODE_FIXABLE Plane A JSON essentially closed for released sync writes; residual is staging soak + owner decisions.
 5. Human UI conformance / a11y baseline — EVIDENCE.
 6. Vitest/esbuild GHSA (dev-only) — tooling upgrade.
 
