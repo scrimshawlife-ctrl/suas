@@ -17,6 +17,7 @@ import {
   DUTY_UNAVAILABLE_REASON,
   MissingRequiredElementError,
   presentCheckInResult,
+  renderActiveNeeds,
   renderChat,
   renderCheckInSession,
   renderCheckInStart,
@@ -412,6 +413,74 @@ describe('MVP_REFERENCE.md §9 — no fabricated responder metrics', () => {
     for (const block of ['On Duty', 'Active Needs', 'Alerts', 'Quick Resource Share']) {
       expect(markup, block).toContain(block);
     }
+  });
+});
+
+describe('API.md §5 — responder HTML queue cursors', () => {
+  it('links Show more when unassigned or active pages continue', () => {
+    const markup = renderResponderDashboard({
+      shell,
+      duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
+      unassignedNeeds: [
+        {
+          caseId: 'case-u1',
+          caseStatus: 'OPEN',
+          category: 'Support Case',
+          openedLabel: 'Opened',
+          claimable: true,
+        },
+      ],
+      unassignedNextCursor: 'cursor-unassigned-2',
+      activeNeeds: [
+        {
+          caseId: 'case-a1',
+          caseStatus: 'ASSIGNED',
+          category: 'Support Case',
+          openedLabel: 'Opened',
+        },
+      ],
+      activeNextCursor: 'cursor-active-2',
+      alerts: [],
+      quickShareCategories: [],
+      metrics: [],
+    });
+    expect(markup).toContain('href="?unassigned_cursor=cursor-unassigned-2"');
+    expect(markup).toContain('Show more unassigned');
+    expect(markup).toContain('href="?active_cursor=cursor-active-2"');
+    expect(markup).toContain('Show more active needs');
+  });
+
+  it('omits Show more when the page is complete', () => {
+    const markup = renderResponderDashboard({
+      shell,
+      duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
+      unassignedNeeds: [],
+      activeNeeds: [],
+      alerts: [],
+      quickShareCategories: [],
+      metrics: [],
+    });
+    expect(markup).not.toContain('Show more unassigned');
+    expect(markup).not.toContain('Show more active needs');
+    expect(markup).not.toContain('unassigned_cursor=');
+    expect(markup).not.toContain('active_cursor=');
+  });
+
+  it('links Show more on the dedicated Active Needs surface', () => {
+    const markup = renderActiveNeeds({
+      shell,
+      needs: [
+        {
+          caseId: 'case-a1',
+          caseStatus: 'ACTIVE',
+          category: 'Support Case',
+          openedLabel: 'Opened',
+        },
+      ],
+      nextCursor: 'cursor-needs-2',
+    });
+    expect(markup).toContain('href="?cursor=cursor-needs-2"');
+    expect(markup).toContain('Show more active needs');
   });
 });
 

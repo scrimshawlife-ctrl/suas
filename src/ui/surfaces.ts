@@ -532,6 +532,15 @@ export function renderResponderDashboard(model: ResponderDashboardViewModel): st
             { class: 'card-grid' },
             (model.unassignedNeeds ?? []).map((need) => needRow(need)),
           ),
+      model.unassignedNextCursor === undefined
+        ? undefined
+        : a(
+            {
+              class: 'action-secondary',
+              href: `?unassigned_cursor=${encodeURIComponent(model.unassignedNextCursor)}`,
+            },
+            'Show more unassigned',
+          ),
     ),
     section(
       { 'aria-labelledby': 'needs' },
@@ -541,6 +550,15 @@ export function renderResponderDashboard(model: ResponderDashboardViewModel): st
         : ul(
             { class: 'card-grid' },
             model.activeNeeds.map((need) => needRow(need)),
+          ),
+      model.activeNextCursor === undefined
+        ? undefined
+        : a(
+            {
+              class: 'action-secondary',
+              href: `?active_cursor=${encodeURIComponent(model.activeNextCursor)}`,
+            },
+            'Show more active needs',
           ),
     ),
     section(
@@ -597,6 +615,15 @@ export function renderActiveNeeds(model: ActiveNeedsViewModel): string {
       : ul(
           { class: 'card-grid' },
           model.needs.map((need) => needRow(need, 2)),
+        ),
+    model.nextCursor === undefined
+      ? undefined
+      : a(
+          {
+            class: 'action-secondary',
+            href: `?cursor=${encodeURIComponent(model.nextCursor)}`,
+          },
+          'Show more active needs',
         ),
   ]);
   return assertSurface('ACTIVE_NEEDS', markup);
