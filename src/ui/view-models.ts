@@ -151,9 +151,23 @@ export interface ActiveNeedViewModel {
   readonly claimable?: boolean;
 }
 
+/**
+ * On-duty availability. G-I-30 / MVP_REFERENCE.md §9: on-duty is not a
+ * recorded domain fact. A boolean on/off would claim a stored roster that
+ * no released table has. The only honest state is UNAVAILABLE.
+ */
+export type DutyAvailability = {
+  readonly status: 'UNAVAILABLE';
+  readonly reason: string;
+};
+
+/** Live and fixture copy. Does not claim that requests are or are not received. */
+export const DUTY_UNAVAILABLE_REASON =
+  'On-duty is not a recorded fact. This build does not store responder availability.';
+
 export interface ResponderDashboardViewModel {
   readonly shell: ShellViewModel;
-  readonly onDuty: boolean;
+  readonly duty: DutyAvailability;
   /** Same-tenant unassigned Cases. RESPONDER_WORKFLOWS.md §4. */
   readonly unassignedNeeds?: readonly ActiveNeedViewModel[];
   readonly activeNeeds: readonly ActiveNeedViewModel[];
@@ -165,7 +179,7 @@ export interface ResponderDashboardViewModel {
 
 export interface ResponderAvailabilityViewModel {
   readonly shell: ShellViewModel;
-  readonly onDuty: boolean;
+  readonly duty: DutyAvailability;
   /** Coverage hours are D-009 `DECISION_PENDING`; absent rather than invented. */
   readonly coverageWindow?: string;
 }

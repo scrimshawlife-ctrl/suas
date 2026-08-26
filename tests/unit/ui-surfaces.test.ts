@@ -14,11 +14,13 @@ import {
   containsForbiddenCrisisPhrase,
   CRISIS_ENTRY_HEADING,
   CRISIS_ENTRY_NOT_EMERGENCY,
+  DUTY_UNAVAILABLE_REASON,
   MissingRequiredElementError,
   renderChat,
   renderEnrollment,
   renderImmediateResources,
   renderResourceList,
+  renderResponderAvailability,
   renderResponderDashboard,
   renderVeteranHome,
   UnknownSurfaceStateError,
@@ -373,7 +375,7 @@ describe('MVP_REFERENCE.md §8 — resource screens', () => {
 describe('MVP_REFERENCE.md §9 — no fabricated responder metrics', () => {
   const markup = renderResponderDashboard({
     shell,
-    onDuty: false,
+    duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
     activeNeeds: [],
     alerts: [],
     quickShareCategories: [],
@@ -391,6 +393,43 @@ describe('MVP_REFERENCE.md §9 — no fabricated responder metrics', () => {
   it('keeps the §9 emphasis blocks present', () => {
     for (const block of ['On Duty', 'Active Needs', 'Alerts', 'Quick Resource Share']) {
       expect(markup, block).toContain(block);
+    }
+  });
+});
+
+describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty is not a recorded fact', () => {
+  const dashboard = renderResponderDashboard({
+    shell,
+    duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
+    activeNeeds: [],
+    alerts: [],
+    quickShareCategories: [],
+    metrics: [],
+  });
+  const availability = renderResponderAvailability({
+    shell: { title: 'On Duty', viewport: 'MOBILE', showMobileNav: true },
+    duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
+  });
+
+  it('keeps the On Duty landmark on both responder surfaces', () => {
+    expect(dashboard).toContain('On Duty');
+    expect(availability).toContain('On Duty');
+  });
+
+  it('states unavailability rather than posting a duty change', () => {
+    for (const markup of [dashboard, availability]) {
+      expect(markup).toContain(DUTY_UNAVAILABLE_REASON);
+      expect(markup).toContain('Unavailable');
+      expect(markup).not.toContain('action="/app/responder/availability"');
+      expect(markup).not.toContain('Go on duty');
+      expect(markup).not.toContain('Go off duty');
+    }
+  });
+
+  it('does not claim that the responder is or is not receiving requests', () => {
+    for (const markup of [dashboard, availability]) {
+      expect(markup).not.toContain('You are receiving requests.');
+      expect(markup).not.toContain('You are not receiving requests.');
     }
   });
 });
@@ -467,5 +506,18 @@ describe('HTML command targets stay on registered /app routes', () => {
     expect(markup).toContain('href="/app/join?role=responder"');
     expect(markup).not.toContain('href="/app/join/veteran"');
     expect(markup).not.toContain('href="/app/join/responder"');
+  });
+
+  it('does not post On Duty to /app/responder/availability', () => {
+    const dashboard = renderResponderDashboard({
+      shell,
+      duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
+      activeNeeds: [],
+      alerts: [],
+      quickShareCategories: [],
+      metrics: [],
+    });
+    expect(dashboard).not.toContain('action="/app/responder/availability"');
+    expect(dashboard).not.toContain('Go on duty');
   });
 });

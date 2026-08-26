@@ -86,6 +86,7 @@ export {
 } from './surfaces.js';
 export { MIN_TARGET_PX, PRIMARY_TARGET_PX, STYLESHEET } from './theme.js';
 export {
+  DUTY_UNAVAILABLE_REASON,
   VIEWPORT_CLASSES,
   type ActiveNeedsViewModel,
   type ActiveNeedViewModel,
@@ -94,6 +95,7 @@ export {
   type ChatAvailability,
   type ChatThreadViewModel,
   type ChatViewModel,
+  type DutyAvailability,
   type EnrollmentViewModel,
   type LandingViewModel,
   type QrfCardViewModel,
