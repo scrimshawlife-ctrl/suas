@@ -74,6 +74,7 @@ export {
   createServiceRequest,
   DisclosureGuardRequiredError,
   executeServiceRequestCommand,
+  executeServiceRequestCommandInTx,
   findServiceRequest,
   listCaseServiceRequests,
   ServiceRequestNotFoundError,

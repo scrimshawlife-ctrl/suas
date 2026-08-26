@@ -192,6 +192,84 @@ export class DisclosureGuardRequiredError extends Error {
 }
 
 /**
+ * Execute a documented Service Request transition inside an existing transaction.
+ * Prefer {@link executeServiceRequestCommand} unless the caller already owns a tx
+ * (for example HTTP idempotency wrapping).
+ */
+export async function executeServiceRequestCommandInTx(
+  tx: Queryable,
+  input: ServiceRequestCommandInput,
+  deps: { disclosureGuard?: DisclosureGuard } = {},
+): Promise<ServiceRequest> {
+  const locked = await tx.query<RequestRow>(
+    `SELECT ${REQUEST_COLUMNS} FROM service_requests
+     WHERE tenant_id = $1 AND service_request_id = $2
+     FOR UPDATE`,
+    [input.tenantId, input.serviceRequestId],
+  );
+  const row = locked.rows[0];
+  if (row === undefined) throw new ServiceRequestNotFoundError();
+  const request = toRequest(row);
+
+  if (input.expectedStatus !== undefined && request.status !== input.expectedStatus) {
+    throw new StaleRequestStateError(input.expectedStatus, request.status);
+  }
+
+  const transition = resolveRequestTransition(input.command, request.status, {
+    ...(input.to !== undefined ? { to: input.to } : {}),
+    ...(input.reason !== undefined ? { reason: input.reason } : {}),
+  });
+
+  // CONSENT.md §3.10: evaluated before the mutation commits, every time — a
+  // previous assignment never carries authority forward to a new one.
+  if (transition.mayDiscloseExternally) {
+    if (deps.disclosureGuard === undefined) {
+      throw new DisclosureGuardRequiredError();
+    }
+    await deps.disclosureGuard({
+      tenantId: input.tenantId,
+      serviceRequestId: input.serviceRequestId,
+      caseId: request.caseId,
+      granteeId: input.granteeId ?? 'unspecified',
+    });
+  }
+
+  const terminal = ['CLOSED', 'CANCELLED', 'EXPIRED', 'UNFULFILLABLE'].includes(transition.to);
+  const updated = await tx.query<RequestRow>(
+    `UPDATE service_requests
+       SET status = $3::suas_service_request_status,
+           updated_at = now(),
+           status_reason = COALESCE($4, status_reason),
+           submitted_at = CASE WHEN $3::text = 'SUBMITTED' THEN now() ELSE submitted_at END,
+           terminal_at = CASE WHEN $5::boolean THEN now() ELSE terminal_at END
+     WHERE tenant_id = $1 AND service_request_id = $2
+     RETURNING ${REQUEST_COLUMNS}`,
+    [input.tenantId, input.serviceRequestId, transition.to, input.reason ?? null, terminal],
+  );
+  const updatedRow = updated.rows[0];
+  if (updatedRow === undefined) throw new ServiceRequestNotFoundError();
+
+  if (input.command === 'ASSIGN') {
+    await appendDomainEvent(tx, {
+      eventType: 'SERVICE_REQUEST_ASSIGNED',
+      aggregateType: 'ServiceRequest',
+      aggregateId: input.serviceRequestId,
+      tenantId: input.tenantId,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      payload: {
+        case_id: request.caseId,
+        category: request.category,
+        ...(input.granteeId !== undefined ? { grantee_id: input.granteeId } : {}),
+      },
+      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    });
+  }
+
+  return toRequest(updatedRow);
+}
+
+/**
  * Execute a documented Service Request transition.
  *
  * DISPATCH.md §3.1: the expected current state is validated inside the same
@@ -203,74 +281,7 @@ export async function executeServiceRequestCommand(
   input: ServiceRequestCommandInput,
   deps: { disclosureGuard?: DisclosureGuard } = {},
 ): Promise<ServiceRequest> {
-  return withTransaction(pool, async (tx) => {
-    const locked = await tx.query<RequestRow>(
-      `SELECT ${REQUEST_COLUMNS} FROM service_requests
-       WHERE tenant_id = $1 AND service_request_id = $2
-       FOR UPDATE`,
-      [input.tenantId, input.serviceRequestId],
-    );
-    const row = locked.rows[0];
-    if (row === undefined) throw new ServiceRequestNotFoundError();
-    const request = toRequest(row);
-
-    if (input.expectedStatus !== undefined && request.status !== input.expectedStatus) {
-      throw new StaleRequestStateError(input.expectedStatus, request.status);
-    }
-
-    const transition = resolveRequestTransition(input.command, request.status, {
-      ...(input.to !== undefined ? { to: input.to } : {}),
-      ...(input.reason !== undefined ? { reason: input.reason } : {}),
-    });
-
-    // CONSENT.md §3.10: evaluated before the mutation commits, every time — a
-    // previous assignment never carries authority forward to a new one.
-    if (transition.mayDiscloseExternally) {
-      if (deps.disclosureGuard === undefined) {
-        throw new DisclosureGuardRequiredError();
-      }
-      await deps.disclosureGuard({
-        tenantId: input.tenantId,
-        serviceRequestId: input.serviceRequestId,
-        caseId: request.caseId,
-        granteeId: input.granteeId ?? 'unspecified',
-      });
-    }
-
-    const terminal = ['CLOSED', 'CANCELLED', 'EXPIRED', 'UNFULFILLABLE'].includes(transition.to);
-    const updated = await tx.query<RequestRow>(
-      `UPDATE service_requests
-         SET status = $3::suas_service_request_status,
-             updated_at = now(),
-             status_reason = COALESCE($4, status_reason),
-             submitted_at = CASE WHEN $3::text = 'SUBMITTED' THEN now() ELSE submitted_at END,
-             terminal_at = CASE WHEN $5::boolean THEN now() ELSE terminal_at END
-       WHERE tenant_id = $1 AND service_request_id = $2
-       RETURNING ${REQUEST_COLUMNS}`,
-      [input.tenantId, input.serviceRequestId, transition.to, input.reason ?? null, terminal],
-    );
-    const updatedRow = updated.rows[0];
-    if (updatedRow === undefined) throw new ServiceRequestNotFoundError();
-
-    if (input.command === 'ASSIGN') {
-      await appendDomainEvent(tx, {
-        eventType: 'SERVICE_REQUEST_ASSIGNED',
-        aggregateType: 'ServiceRequest',
-        aggregateId: input.serviceRequestId,
-        tenantId: input.tenantId,
-        actorType: input.actorType,
-        actorId: input.actorId,
-        payload: {
-          case_id: request.caseId,
-          category: request.category,
-          ...(input.granteeId !== undefined ? { grantee_id: input.granteeId } : {}),
-        },
-        ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
-      });
-    }
-
-    return toRequest(updatedRow);
-  });
+  return withTransaction(pool, (tx) => executeServiceRequestCommandInTx(tx, input, deps));
 }
 
 export async function listCaseServiceRequests(

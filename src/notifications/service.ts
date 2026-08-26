@@ -582,3 +582,23 @@ export async function listUndeliverable(
   );
   return result.rows.map(toNotification);
 }
+
+/**
+ * Recipient-visible inbox. APIS.md: recipient reads own notifications only;
+ * destinations and consent basis stay off the wire at the HTTP projection.
+ */
+export async function listNotificationsForRecipient(
+  db: Queryable,
+  tenantId: string,
+  recipientUserId: string,
+  limit = 50,
+): Promise<Notification[]> {
+  const result = await db.query<NotificationRow>(
+    `SELECT ${NOTIFICATION_COLUMNS} FROM notifications
+     WHERE tenant_id = $1 AND recipient_user_id = $2
+     ORDER BY updated_at DESC
+     LIMIT $3`,
+    [tenantId, recipientUserId, Math.min(Math.max(limit, 1), 100)],
+  );
+  return result.rows.map(toNotification);
+}
