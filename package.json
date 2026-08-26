@@ -16,7 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:unit": "vitest run tests/unit",
+    "test:unit": "SUAS_SKIP_TEST_DB_SETUP=true vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
     "dev": "tsx watch src/main.ts",

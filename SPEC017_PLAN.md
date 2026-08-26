@@ -23,14 +23,15 @@
 | 12 — D-011 scoring (`qv-001`/`sv-001`)  | `IMPLEMENTED`                | [docs/slices/SLICE_12_SIGNAL_SCORING.md](docs/slices/SLICE_12_SIGNAL_SCORING.md)               |
 
 Slices 1–12 each record conformance and returned gaps. Slice 12 registers the
-released `sv-001` engine. G-I-28 remains open. No readiness gate has advanced,
+released `sv-001` engine. APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2
+for settled `RED`. No readiness gate has advanced,
 and production remains blocked until SPEC-018.
 
 **D-011 is `DECIDED` as of v0.2.0** for questionnaire `qv-001` and rules
 `sv-001`. The released engine is registered with `released: true` and the B4
 golden vectors are conformance fixtures. TEST/CI stay on
-`SUAS_SUPPORT_SIGNAL_MODE=fixture`. G-I-28 remains open: a settled signal does
-not open or update a Support Case. D-012 (approved safety/crisis copy) is
+`SUAS_SUPPORT_SIGNAL_MODE=fixture`. APPLY_EFFECTIVE_SIGNAL opens or updates a
+Support Case from a settled effective `RED` only. D-012 (approved safety/crisis copy) is
 `DECIDED` as of v0.1.5 (`SAFETY_COPY.md`); the veteran-facing crisis slot
 renders the released 911/988 copy when `SUAS_SAFETY_COPY_MODE=approved` and a
 labelled placeholder otherwise.

@@ -53,6 +53,14 @@ export {
   type QuestionnaireVersion,
 } from './check-ins.js';
 export {
+  applyEffectiveSignal,
+  decideEffectiveSignalCaseAction,
+  type ApplyEffectiveSignalResult,
+  type EffectiveSignalCaseAction,
+  type EffectiveSignalCaseDecision,
+  type EffectiveSignalCaseReason,
+} from './case-action.js';
+export {
   computationKey,
   effectiveSignal,
   listSignals,

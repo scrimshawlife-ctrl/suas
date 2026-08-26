@@ -17,6 +17,7 @@ import type { Pool } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendDomainEvent } from '../events/index.js';
 import type { JsonObject } from '../jobs/index.js';
+import { applyEffectiveSignal } from './case-action.js';
 import type { SignalLevel } from './engine.js';
 
 export type ComputationKind = 'PRIMARY' | 'OVERRIDE';
@@ -213,7 +214,12 @@ export async function settlePrimarySignal(
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
 
-    return { signal: toSignal(row), deduplicated: false };
+    const signal = toSignal(row);
+    // SAFETY.md §3.2: effective RED must open or update a Support Case. Non-RED
+    // is a no-op. Same transaction as the signal insert, so replay cannot observe
+    // a settled RED without its case write.
+    await applyEffectiveSignal(tx, signal);
+    return { signal, deduplicated: false };
   });
 }
 
@@ -291,7 +297,9 @@ export async function overrideSignal(
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
 
-    return toSignal(row);
+    const signal = toSignal(row);
+    await applyEffectiveSignal(tx, signal);
+    return signal;
   });
 }
 
