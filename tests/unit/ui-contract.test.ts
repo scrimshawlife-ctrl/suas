@@ -45,7 +45,7 @@ function facts(overrides: Partial<QrfFacts> = {}): QrfFacts {
 
 describe('MVP_REFERENCE.md §5 — required surface inventory', () => {
   it('declares every surface the released table lists', () => {
-    expect(REQUIRED_SURFACES).toHaveLength(13);
+    expect(REQUIRED_SURFACES).toHaveLength(14);
   });
 
   it('refuses a surface that is not in the released inventory', () => {

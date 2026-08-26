@@ -410,9 +410,30 @@ function needRow(need: ActiveNeedViewModel, level: HeadingLevel = 3): Renderable
     { class: 'card' },
     cardHeading(level, need.category),
     p({}, span({ class: 'badge' }, need.caseStatus)),
+    need.prioritySignalLevel === undefined
+      ? undefined
+      : p({}, span({ class: 'badge' }, `Priority ${need.prioritySignalLevel}`)),
     p({ class: 'muted' }, need.openedLabel),
+    need.claimable === true
+      ? form(
+          { method: 'post', action: `/app/responder/cases/${need.caseId}/commands/claim` },
+          button({ class: 'action', type: 'submit' }, 'Claim'),
+        )
+      : undefined,
     a({ class: 'action-secondary', href: `/app/responder/cases/${need.caseId}` }, 'Open case'),
   );
+}
+
+export function renderResponderCase(model: {
+  readonly shell: ShellViewModel;
+  readonly need: ActiveNeedViewModel;
+}): string {
+  const markup = document(model.shell, [
+    h1({}, 'Case'),
+    a({ href: '/app/responder' }, 'Back'),
+    ul({ class: 'card-grid' }, needRow(model.need, 2)),
+  ]);
+  return assertSurface('RESPONDER_CASE', markup);
 }
 
 export function renderResponderDashboard(model: ResponderDashboardViewModel): string {
@@ -438,6 +459,16 @@ export function renderResponderDashboard(model: ResponderDashboardViewModel): st
           model.onDuty ? 'Go off duty' : 'Go on duty',
         ),
       ),
+    ),
+    section(
+      { 'aria-labelledby': 'unassigned' },
+      h2({ id: 'unassigned' }, 'Unassigned'),
+      (model.unassignedNeeds ?? []).length === 0
+        ? p({ class: 'muted' }, 'No unassigned cases in this tenant.')
+        : ul(
+            { class: 'card-grid' },
+            (model.unassignedNeeds ?? []).map((need) => needRow(need)),
+          ),
     ),
     section(
       { 'aria-labelledby': 'needs' },

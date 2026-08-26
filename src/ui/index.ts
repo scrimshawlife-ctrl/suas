@@ -79,6 +79,7 @@ export {
   renderResourceCategories,
   renderResourceList,
   renderResponderAvailability,
+  renderResponderCase,
   renderResponderDashboard,
   renderVeteranHome,
 } from './surfaces.js';

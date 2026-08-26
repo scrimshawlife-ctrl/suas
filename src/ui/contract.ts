@@ -33,6 +33,7 @@ export const SURFACE_IDS = [
   'RESOURCE_CATEGORIES',
   'RESOURCE_LIST',
   'RESPONDER_DASHBOARD',
+  'RESPONDER_CASE',
   'RESPONDER_AVAILABILITY',
   'ACTIVE_NEEDS',
   'CHAT',
@@ -143,11 +144,19 @@ export const REQUIRED_SURFACES: readonly SurfaceRequirement[] = [
     divergences: ['§8 resource-screen fidelity'],
   },
   {
+    id: 'RESPONDER_CASE',
+    referenceAnchor: 'case claim / open from the queue',
+    conformance: 'MUST_PRESERVE_BEHAVIOR',
+    audience: 'RESPONDER',
+    requiredElements: ['Case', 'Back'],
+    divergences: [],
+  },
+  {
     id: 'RESPONDER_DASHBOARD',
     referenceAnchor: 'on-duty state, active-work emphasis, Quick Resource Share',
     conformance: 'MUST_MATCH',
     audience: 'RESPONDER',
-    requiredElements: ['On Duty', 'Quick Resource Share', 'Alerts'],
+    requiredElements: ['On Duty', 'Unassigned', 'Quick Resource Share', 'Alerts'],
     divergences: ['§9 responder/QRF dashboard fidelity'],
   },
   {

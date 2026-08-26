@@ -145,11 +145,17 @@ export interface ActiveNeedViewModel {
   readonly category: string;
   /** Human-readable age, derived from a real timestamp. */
   readonly openedLabel: string;
+  /** Queue-filter fact only (CASES.md §3). Absent when unset. */
+  readonly prioritySignalLevel?: string;
+  /** Unassigned OPEN/TRIAGED cases may be claimed (RESPONDER_WORKFLOWS.md §2). */
+  readonly claimable?: boolean;
 }
 
 export interface ResponderDashboardViewModel {
   readonly shell: ShellViewModel;
   readonly onDuty: boolean;
+  /** Same-tenant unassigned Cases. RESPONDER_WORKFLOWS.md §4. */
+  readonly unassignedNeeds?: readonly ActiveNeedViewModel[];
   readonly activeNeeds: readonly ActiveNeedViewModel[];
   readonly alerts: readonly string[];
   /** §9.3 Quick Resource Share covers the released MVP capabilities only. */
