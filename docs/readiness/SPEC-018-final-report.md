@@ -30,11 +30,10 @@ See `docs/readiness/gate-matrix.md`.
 1. **D-022 durable job product** — OWNER — blocks honest STAGING/PRODUCTION async.
 2. **D-001 / D-005 staging hosting** — OWNER / EXTERNAL — blocks shared staging evidence.
 3. **D-021 / D-023 / D-024 SLO/RTO/RPO** — OWNER — SCALE stays `NOT_COMPUTABLE`.
-4. **Staging soak + human UI/a11y baseline** — EVIDENCE (needs staging or human review).
-5. **Vitest/esbuild GHSA** — tooling only (runtime deps clean).
+4. **`createSettlement` `/api/v0` write** — CODE_FIXABLE (domain exists; JSON not yet exposed).
+5. **Staging soak + human UI/a11y baseline** — EVIDENCE (needs staging or human review).
 6. **D-007 retention/deletion durations** — OWNER — synthetic deletion drill exists; formal purge/export package and staging rehearsal do not. PRIVACY stays `NOT_READY`.
-
-Remaining CODE_FIXABLE sync surface after this cut: `createSettlement` HTTP (case resolution settlement write) — named below; accept/contact-log/assignCase now shipped.
+7. **Vitest/esbuild GHSA** — tooling only (runtime deps clean).
 
 ## OWNER DECISIONS
 
