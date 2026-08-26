@@ -14,10 +14,11 @@ describe('fetchWithTimeout', () => {
 
   it('attaches a timeout AbortSignal to outbound fetch', async () => {
     let seen: RequestInit | undefined;
-    globalThis.fetch = ((_input, init) => {
+    const stub: typeof fetch = (_input, init) => {
       seen = init;
       return Promise.resolve(new Response('{}'));
-    }) as typeof fetch;
+    };
+    globalThis.fetch = stub;
 
     await fetchWithTimeout('https://example.test/token', { method: 'GET' });
     expect(seen?.signal).toBeDefined();
