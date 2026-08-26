@@ -33,10 +33,12 @@ import type { SafetyCopyMode, SupportSignalMode } from '../../config/index.js';
 import {
   CaseAlreadyClaimedError,
   claimCase,
+  DEFAULT_PAGE_SIZE,
   findActiveAssignment,
   findCase,
   findNonClosedCase,
   IllegalCaseTransitionError,
+  MAX_PAGE_SIZE,
   readCaseQueue,
 } from '../../coordination/index.js';
 import { searchResources } from '../../fulfillment/index.js';
@@ -452,20 +454,43 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     };
   }
 
+  // API.md §5: HTML queue pages accept the same cursor/limit bounds as /api/v0/cases.
+  const responderQueueQuery = z.object({
+    unassigned_cursor: z.string().min(1).max(512).optional(),
+    active_cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  });
+  const activeNeedsQuery = z.object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  });
+
   app.get('/app/responder', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    const query = responderQueueQuery.parse(request.query);
     const isResponder = context.memberships.some((membership) => membership.role === 'RESPONDER');
     const unassigned = isResponder
-      ? await readCaseQueue(pool, context.tenantId, { ownership: 'unassigned' }, { limit: 20 })
-      : { cases: [] };
+      ? await readCaseQueue(
+          pool,
+          context.tenantId,
+          { ownership: 'unassigned' },
+          {
+            limit: query.limit,
+            ...(query.unassigned_cursor !== undefined ? { cursor: query.unassigned_cursor } : {}),
+          },
+        )
+      : { cases: [], nextCursor: undefined };
     const mine = isResponder
       ? await readCaseQueue(
           pool,
           context.tenantId,
           { ownership: 'mine', responderUserId: context.userId },
-          { limit: 20 },
+          {
+            limit: query.limit,
+            ...(query.active_cursor !== undefined ? { cursor: query.active_cursor } : {}),
+          },
         )
-      : { cases: [] };
+      : { cases: [], nextCursor: undefined };
 
     await reply.type(HTML).send(
       renderResponderDashboard({
@@ -474,7 +499,11 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         // than inventing a roster or posting a no-op that would look like a write.
         duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
         unassignedNeeds: unassigned.cases.map((supportCase) => toNeed(supportCase, true)),
+        ...(unassigned.nextCursor !== undefined
+          ? { unassignedNextCursor: unassigned.nextCursor }
+          : {}),
         activeNeeds: mine.cases.map((supportCase) => toNeed(supportCase, false)),
+        ...(mine.nextCursor !== undefined ? { activeNextCursor: mine.nextCursor } : {}),
         alerts: [],
         quickShareCategories: CATEGORY_CARDS.filter((card) => card.disposition === 'OPERATIONAL'),
         // §9: no released definition for these, so no value is displayed.
@@ -544,17 +573,22 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get('/app/responder/needs', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    const query = activeNeedsQuery.parse(request.query);
     const queue = await readCaseQueue(
       pool,
       context.tenantId,
       { ownership: 'mine', responderUserId: context.userId },
-      { limit: 20 },
+      {
+        limit: query.limit,
+        ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
+      },
     );
 
     await reply.type(HTML).send(
       renderActiveNeeds({
         shell: shell('Active Needs', { viewport: 'DESKTOP' }),
         needs: queue.cases.map((supportCase) => toNeed(supportCase, false)),
+        ...(queue.nextCursor !== undefined ? { nextCursor: queue.nextCursor } : {}),
       }),
     );
   });

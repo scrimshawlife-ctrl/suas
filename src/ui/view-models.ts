@@ -218,7 +218,17 @@ export interface ResponderDashboardViewModel {
   readonly duty: DutyAvailability;
   /** Same-tenant unassigned Cases. RESPONDER_WORKFLOWS.md §4. */
   readonly unassignedNeeds?: readonly ActiveNeedViewModel[];
+  /**
+   * Keyset cursor for the unassigned list (API.md §5). Absent when the page is
+   * complete. Surfaces link it as `unassigned_cursor`.
+   */
+  readonly unassignedNextCursor?: string;
   readonly activeNeeds: readonly ActiveNeedViewModel[];
+  /**
+   * Keyset cursor for the active-needs list (API.md §5). Absent when the page
+   * is complete. Surfaces link it as `active_cursor`.
+   */
+  readonly activeNextCursor?: string;
   readonly alerts: readonly string[];
   /** §9.3 Quick Resource Share covers the released MVP capabilities only. */
   readonly quickShareCategories: readonly CategoryCard[];
@@ -235,6 +245,8 @@ export interface ResponderAvailabilityViewModel {
 export interface ActiveNeedsViewModel {
   readonly shell: ShellViewModel;
   readonly needs: readonly ActiveNeedViewModel[];
+  /** Keyset cursor for §5 progressive loading. Absent when the list is complete. */
+  readonly nextCursor?: string;
 }
 
 export interface ChatThreadViewModel {
