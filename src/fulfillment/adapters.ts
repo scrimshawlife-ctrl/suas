@@ -46,11 +46,12 @@ const ALL_CAPABILITIES: readonly ServiceCategory[] = [
 export class ManualAdapter implements FulfillmentAdapter {
   readonly adapterId: string;
   readonly integrationMode: IntegrationMode = 'MANUAL_COORDINATION';
-  readonly capabilities: readonly ServiceCategory[] = ALL_CAPABILITIES;
+  readonly capabilities: readonly ServiceCategory[];
   readonly transmitsExternally = false;
 
-  constructor(adapterId = 'manual') {
+  constructor(adapterId = 'manual', capabilities: readonly ServiceCategory[] = ALL_CAPABILITIES) {
     this.adapterId = adapterId;
+    this.capabilities = capabilities;
   }
 
   health(): Promise<AdapterHealth> {

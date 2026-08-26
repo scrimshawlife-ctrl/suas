@@ -47,6 +47,7 @@ import {
 import { createSession, elevateSession } from '../auth/index.js';
 import {
   createResource,
+  seedManualAdapterConfigurations,
   setResourceActive,
   verifyResource,
   type Resource,
@@ -471,6 +472,7 @@ async function main(): Promise<void> {
       await grantSuasAdmin(pool, admin.userId, admin.userId);
     }
     await ensureMembership(pool, responder.userId, org.organizationId);
+    await seedManualAdapterConfigurations(pool, TENANT_ID);
 
     const resourceIds: string[] = [];
     for (const spec of RESOURCE_SPECS) {

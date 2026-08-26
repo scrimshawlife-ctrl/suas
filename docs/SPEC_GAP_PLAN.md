@@ -10,7 +10,7 @@ This plan sequences the **remaining** gaps after:
 - **0.1.4** — Bucket I proposals P-1..P-23 ratified (`RELEASE_MANIFEST-0.1.4.md`).
 - **0.1.5** — D-012 / G-III-1 closed (`SAFETY_COPY.md`).
 - **0.1.6** — Wave A editorial hygiene (G-III-2 / G-III-3 / high-traffic G-III-4). Closes no D-0xx.
-- **0.2.0** — Wave B D-011 (`qv-001` + `sv-001`). G-I-28 remains open.
+- **0.2.0** — Wave B D-011 (`qv-001` + `sv-001`). G-I-28 transcribed as `APPLY_EFFECTIVE_SIGNAL` (RED only; not a D-0xx).
 
 It does **not** invent scoring, crisis copy, legal status, vendor, capacity, SLO, RTO/RPO, or reporting-threshold values (`AGENTS.md` rules 3, 14, 15).
 
@@ -84,7 +84,7 @@ Waves are sequential for _authority_ (later waves may start in parallel once the
 ```text
 Wave A  hygiene (no new product value)
    ↓
-Wave B  D-011 scoring contract          ← DONE (0.2.0); G-I-28 still open
+Wave B  D-011 scoring contract          ← DONE (0.2.0); G-I-28 transcribed (RED only)
    ↓
 Wave C  leftover Bucket I product rules
    ↓
@@ -134,15 +134,15 @@ Wave F  draft Rev 3 (islands)           ← defer
 
 **Also decide with D-011 or immediately after (depends on scores existing):**
 
-| ID                | Why it rides with D-011                                                                                                                                                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **G-I-28 action** | `SAFETY.md` §3.2 says `RED` must open/update a Support Case. P-22 modeled `priority_signal_level` but **not** the command that writes it. Need: command name, idempotency identity, which levels open vs update, what happens if a case is already `CLOSED`. |
+| ID                | Why it rides with D-011                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **G-I-28 action** | **Transcribed.** Command `APPLY_EFFECTIVE_SIGNAL`; one apply per settled `support_signal_id`; non-RED is a no-op; CLOSED opens a new case (does not REOPEN). |
 
 **Not D-011:** effective-signal _selection_ (P-21), abandoned Check-In idle timeout (`CHECKINS.md` §4.2), island/crisis numbers (D-026).
 
 **Close shape:** `RELEASE_DECISIONS-0.2.0.md` + `SIGNAL_SCORING.md` + golden vectors + D-011 → `DECIDED`. Implementation registered one `released: true` engine and kept TEST on fixture.
 
-**Exit:** GV-001–GV-014 pass as released conformance fixtures. CHECK-IN gate does not advance. G-I-28 (signal-driven Case action) remains the leftover that rides with scores existing. Still not SPEC-018.
+**Exit:** GV-001–GV-014 pass as released conformance fixtures. CHECK-IN gate does not advance. G-I-28 is transcribed as `APPLY_EFFECTIVE_SIGNAL` (RED opens/updates; non-RED is a no-op; CLOSED is not REOPEN). Still not SPEC-018. The live Check-In job still does not compute/settle on its own.
 
 ---
 
@@ -239,16 +239,16 @@ Draft files are not authority. Do not implement islands, anonymous front door, o
 
 Smallest set that unblocks the most _product_ (not hosting):
 
-| Priority | Item                                                 | Why this next                                               |
-| -------- | ---------------------------------------------------- | ----------------------------------------------------------- |
-| 1        | **Wave A** (G-III-2, leftover headers)               | **Done** in specs `0.1.6`. This repo re-pins to that stack. |
-| 2        | **Wave B — D-011**                                   | **Done** in specs `0.2.0`. This repo registers `sv-001`.    |
-| 2b       | **G-I-28 action**                                    | Still open; not decided by D-011                            |
-| 3        | **Wave C1** (G-I-6/7/8)                              | Stops fulfillment edge-case invention                       |
-| 4        | **Wave D — D-019/D-020** (or “manual through pilot”) | Completes capability-port story                             |
-| 5        | **G-I-30** if live QRF matching is the next UX goal  | Dashboard/on-duty truth                                     |
-| 6        | **D-010** when reservation/payment is in scope       | Unblocks Amadeus book + Uber pay                            |
-| 7        | **Wave E** when a real pilot date exists             | SPEC-018                                                    |
+| Priority | Item                                                 | Why this next                                                                                           |
+| -------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 1        | **Wave A** (G-III-2, leftover headers)               | **Done** in specs `0.1.6`. This repo re-pins to that stack.                                             |
+| 2        | **Wave B — D-011**                                   | **Done** in specs `0.2.0`. This repo registers `sv-001`.                                                |
+| 2b       | **G-I-28 action**                                    | **Transcribed** as `APPLY_EFFECTIVE_SIGNAL`. Live Check-In job still does not compute/settle.           |
+| 3        | **Wave C1** (G-I-6/7/8)                              | Stops fulfillment edge-case invention                                                                   |
+| 4        | **Wave D — D-019/D-020** (or “manual through pilot”) | Admin enable/disable of the accepted catalog is already the add/remove path. Food/peer APIs still wait. |
+| 5        | **G-I-30** if live QRF matching is the next UX goal  | Dashboard/on-duty truth                                                                                 |
+| 6        | **D-010** when reservation/payment is in scope       | Unblocks Amadeus book + Uber pay                                                                        |
+| 7        | **Wave E** when a real pilot date exists             | SPEC-018                                                                                                |
 
 ---
 
