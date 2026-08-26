@@ -19,8 +19,27 @@ export interface MigrationFile {
   readonly checksum: string;
 }
 
-/** Repository-root `migrations/` directory, resolved relative to this module. */
-export const MIGRATIONS_DIR = fileURLToPath(new URL('../../migrations', import.meta.url));
+/**
+ * Repository-root `migrations/` directory, resolved relative to this module.
+ *
+ * Lazily evaluated: Cloudflare Workers may import this module through the db
+ * barrel during isolate startup, and a top-level `new URL(..., import.meta.url)`
+ * fails with "Invalid URL string" under the Workers bundler. Node CLI callers
+ * still resolve the on-disk tree the first time they load migrations.
+ */
+let migrationsDirCache: string | undefined;
+
+export function resolveMigrationsDir(): string {
+  migrationsDirCache ??= fileURLToPath(new URL('../../migrations', import.meta.url));
+  return migrationsDirCache;
+}
+
+/** @deprecated Prefer `resolveMigrationsDir()`. */
+export const MIGRATIONS_DIR = {
+  [Symbol.toPrimitive]: () => resolveMigrationsDir(),
+  toString: () => resolveMigrationsDir(),
+  valueOf: () => resolveMigrationsDir(),
+} as unknown as string;
 
 const FILE_PATTERN = /^(\d{4})_([a-z0-9_]+)\.sql$/;
 
@@ -35,7 +54,9 @@ export function checksumOf(sql: string): string {
  * Throws on unparseable file names or duplicate/non-contiguous versions, so a
  * malformed migration set fails closed rather than applying a partial sequence.
  */
-export async function loadMigrationFiles(dir: string = MIGRATIONS_DIR): Promise<MigrationFile[]> {
+export async function loadMigrationFiles(
+  dir: string = resolveMigrationsDir(),
+): Promise<MigrationFile[]> {
   const entries = (await readdir(dir)).filter((entry) => entry.endsWith('.sql')).sort();
 
   const migrations: MigrationFile[] = [];

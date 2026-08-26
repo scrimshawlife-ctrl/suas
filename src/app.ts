@@ -24,7 +24,6 @@ import {
   assertExpectedSchemaVersion,
   createPool,
   EXPECTED_SCHEMA_VERSION,
-  runMigrations,
 } from './db/index.js';
 import { createJobQueue, DispatchingJobQueue, type DurableJobQueuePort } from './jobs/index.js';
 import {
@@ -62,19 +61,21 @@ export interface StartAppOptions {
   /** Skip listening; used by tests that drive the server through inject(). */
   readonly listen?: boolean;
   /**
-   * `worker` refuses TCP listen, refuses migration apply, and checks only
-   * the recorded schema version. Default `node` keeps the CLI and test path.
+   * Port for `listen: true`. On Cloudflare's `cloudflare:node` HTTP server
+   * path this is a routing key, not a real network port.
+   */
+  readonly listenPort?: number;
+  /**
+   * `worker` refuses migration apply and checks only the recorded schema
+   * version. Prefer `listen: false` + inject for Node tests; use
+   * `listen: true` with `cloudflare:node` `handleAsNodeRequest` on CF.
+   * Default `node` keeps the CLI and test path.
    */
   readonly runtime?: AppRuntime;
 }
 
 export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   const runtime = options.runtime ?? 'node';
-  if (runtime === 'worker' && options.listen === true) {
-    throw new ConfigurationError([
-      'Worker runtime cannot bind a TCP listen socket. Cloudflare Workers do not support net.Server.',
-    ]);
-  }
   if (runtime === 'worker' && options.env.SUAS_MIGRATIONS_MODE === 'apply') {
     throw new ConfigurationError([
       'Worker runtime rejects SUAS_MIGRATIONS_MODE=apply. Apply migrations with the Node CLI against the unpooled URL.',
@@ -101,6 +102,9 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
       // only; never apply, never CREATE TABLE (ENVIRONMENT.md §9).
       schemaVersion = await assertExpectedSchemaVersion(pool);
     } else {
+      // Dynamic import keeps the Workers bundle from eagerly evaluating the
+      // Node-only migration file loader at isolate startup.
+      const { runMigrations } = await import('./db/migrator.js');
       const migrationResult = await runMigrations(pool, {
         mode: config.database.migrationsMode,
         provenance: { specVersion: SPEC_VERSION, releaseManifest: RELEASE_MANIFEST },
@@ -170,12 +174,18 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     ...(runtime === 'worker' ? { logger: false } : {}),
   });
 
-  if (options.listen !== false && runtime !== 'worker') {
-    await server.listen({ host: config.http.host, port: config.http.port });
-    server.log.info(
-      { build_info: resolveBuildInfo(), configuration: describeConfig(config) },
-      'SUAS started',
-    );
+  if (options.listen !== false) {
+    const port =
+      options.listenPort ??
+      (runtime === 'worker' ? 8787 : config.http.port);
+    const host = runtime === 'worker' ? '127.0.0.1' : config.http.host;
+    await server.listen({ host, port });
+    if (runtime !== 'worker') {
+      server.log.info(
+        { build_info: resolveBuildInfo(), configuration: describeConfig(config) },
+        'SUAS started',
+      );
+    }
   }
 
   return {
