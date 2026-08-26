@@ -103,6 +103,10 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: OpenAPI route drift
+        # Fails when registered /api/v0 routes and docs/openapi/v0.json disagree.
+        run: npm run openapi:check
+
       - name: Migration harness against a fresh database
         run: npm run migrate -- apply
 
