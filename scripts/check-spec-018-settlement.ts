@@ -28,6 +28,33 @@ const STALE_PLANE_A_PATTERNS = [
   /finishes remaining released Plane A JSON/i,
 ];
 
+/**
+ * Released domain commands that must have matching OpenAPI `/api/v0` routes.
+ * Prevents settle:check from greenwashing domain-only surfaces.
+ */
+const REQUIRED_OPENAPI_ROUTES: readonly { method: string; path: string; reason: string }[] = [
+  {
+    method: 'post',
+    path: '/api/v0/trusted-contacts/{id}/commands/accept',
+    reason: 'acceptTrustedContact (TRUSTED_CIRCLE.md §3.4)',
+  },
+  {
+    method: 'post',
+    path: '/api/v0/cases/{caseId}/commands/log-contact-attempt',
+    reason: 'recordContact log-contact-attempt (RESPONDER_WORKFLOWS.md §7)',
+  },
+  {
+    method: 'post',
+    path: '/api/v0/cases/{caseId}/commands/complete-contact',
+    reason: 'recordContact complete-contact (RESPONDER_WORKFLOWS.md §7)',
+  },
+  {
+    method: 'post',
+    path: '/api/v0/cases/{id}/commands/assign',
+    reason: 'assignCase ASSIGN_CASE (CASES.md §5.7)',
+  },
+];
+
 function fail(message: string): never {
   console.error(`settle:check FAILED: ${message}`);
   process.exit(1);
@@ -39,10 +66,14 @@ function gitHead(): string {
   }).trim();
 }
 
-function openApiOperationCount(): number {
-  const document = JSON.parse(readFileSync(join(root, 'docs/openapi/v0.json'), 'utf8')) as {
-    paths?: Record<string, Record<string, unknown>>;
+function loadOpenApi(): { paths: Record<string, Record<string, unknown>> } {
+  return JSON.parse(readFileSync(join(root, 'docs/openapi/v0.json'), 'utf8')) as {
+    paths: Record<string, Record<string, unknown>>;
   };
+}
+
+function openApiOperationCount(): number {
+  const document = loadOpenApi();
   let count = 0;
   for (const methods of Object.values(document.paths ?? {})) {
     for (const method of Object.keys(methods)) {
@@ -51,6 +82,18 @@ function openApiOperationCount(): number {
     }
   }
   return count;
+}
+
+function assertRequiredOpenApiRoutes(): void {
+  const document = loadOpenApi();
+  for (const required of REQUIRED_OPENAPI_ROUTES) {
+    const methods = document.paths[required.path];
+    if (methods === undefined || methods[required.method] === undefined) {
+      fail(
+        `OpenAPI missing ${required.method.toUpperCase()} ${required.path} required for ${required.reason}`,
+      );
+    }
+  }
 }
 
 function assertReadinessDocs(): void {
@@ -169,6 +212,7 @@ function main(): void {
   const ops = openApiOperationCount();
   console.log(`settle:check HEAD=${head} openapi_operations=${ops} scratch=${scratch}`);
   assertFullVerify(head, ops);
+  assertRequiredOpenApiRoutes();
   assertReadinessDocs();
   assertCiRun(head);
   console.log('settle:check OK');

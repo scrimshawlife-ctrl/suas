@@ -28,6 +28,7 @@ import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
 import { registerCaseRoutes } from './routes/cases.js';
 import { registerCheckInRoutes } from './routes/check-ins.js';
 import { registerConsentRoutes } from './routes/consents.js';
+import { registerContactLogRoutes } from './routes/contact-log.js';
 import { registerFollowUpRoutes } from './routes/follow-ups.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerResourceRoutes } from './routes/resources.js';
@@ -245,6 +246,11 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     });
 
     registerNotificationRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerContactLogRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
     });

@@ -15,7 +15,7 @@
 ## COMPLETED (this sprint)
 
 - Scoring: exact `qv-001`; `disabled` refuses `computeSignal`, `computeSv001`, and `SV_001_ENGINE.compute`; golden vectors unchanged.
-- JSON `/api/v0`: auth, check-ins, cases/claim, resources, immediate-resources, veterans/me, consents list/grant/revoke, trusted-circle, SR create/commands, follow-ups, notifications inbox/preferences, admin adapters; OpenAPI + CI drift.
+- JSON `/api/v0`: auth, check-ins, cases/claim/assign, resources, immediate-resources, veterans/me, consents list/grant/revoke, trusted-circle invite/accept/remove, contact-log, SR create/commands, follow-ups, notifications inbox/preferences, admin adapters; OpenAPI + CI drift.
 - Job port conformance suite; health dependency posture; D-022 / D-021–024 / D-001–005 decision packets.
 - Security/privacy audit + adversarial HTTP tests; npm audit residual documented (dev toolchain only).
 - Runbooks (deploy/rollback, incident); env matrix; synthetic load + migration apply rehearsal + synthetic deletion drill scripts.
@@ -34,7 +34,7 @@ See `docs/readiness/gate-matrix.md`.
 5. **Vitest/esbuild GHSA** — tooling only (runtime deps clean).
 6. **D-007 retention/deletion durations** — OWNER — synthetic deletion drill exists; formal purge/export package and staging rehearsal do not. PRIVACY stays `NOT_READY`.
 
-No remaining CODE_FIXABLE released sync Plane A JSON gaps for this residual set.
+Remaining CODE_FIXABLE sync surface after this cut: `createSettlement` HTTP (case resolution settlement write) — named below; accept/contact-log/assignCase now shipped.
 
 ## OWNER DECISIONS
 
