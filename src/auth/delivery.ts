@@ -7,15 +7,26 @@
  *   is unavailable, that channel is unavailable. Do not fake success.")
  * - SUAS-specs ENVIRONMENT.md §3 "Notifications" (SUAS_EMAIL_MODE /
  *   SUAS_SMS_MODE = disabled|fake|sink; production external modes are not valid
- *   in v0.1.1)
+ *   on the 0.2.0 pin)
  * - SUAS-specs ARCHITECTURE.md §11 (infrastructure ports: SmsPort, EmailPort)
  *
  * The rule that matters here: a disabled channel is reported unavailable rather
  * than silently succeeding. Faking delivery would tell a veteran a code is on its
  * way when nothing was sent.
+ *
+ * Challenge EMAIL/SMS uses the same notification channel port as product
+ * notifications. There is no second Resend client. `createChallengeDelivery`
+ * stays on {@link RecordingChallengeDelivery} while ENVIRONMENT.md §3 forbids
+ * a selectable `resend` mode.
  */
 
 import type { CommunicationMode, SuasConfig } from '../config/index.js';
+import type {
+  NotificationChannel,
+  NotificationChannelPort,
+  OutboundMessage,
+} from '../notifications/channels.js';
+import { RESEND_IMPLEMENTATION } from '../notifications/resend-email.js';
 
 export type ChallengeMethod = 'MAGIC_LINK' | 'EMAIL_OTP' | 'PHONE_OTP';
 export type ChallengeChannel = 'EMAIL' | 'SMS';
@@ -54,6 +65,8 @@ export interface ChallengeDelivery {
   /** The magic-link token or OTP code being delivered. */
   readonly secret: string;
   readonly expiresAt: Date;
+  /** Stable send identity when the EMAIL/SMS port needs an idempotency key. */
+  readonly idempotencyKey?: string;
 }
 
 export interface ChallengeDeliveryPort {
@@ -124,21 +137,105 @@ export function availableChannels(config: SuasConfig): ChallengeChannel[] {
 }
 
 /**
+ * Map a challenge onto the EMAIL/SMS notification port.
+ * The secret is the rendered body. Do not log it (NOTIFICATIONS.md §10).
+ */
+export function outboundMessageFromChallenge(delivery: ChallengeDelivery): OutboundMessage {
+  const idempotencyKey =
+    delivery.idempotencyKey ??
+    `auth:${delivery.method}:${delivery.destination}:${delivery.expiresAt.toISOString()}`;
+  return {
+    channel: delivery.channel,
+    destination: delivery.destination,
+    templateVersion: `auth.${delivery.method.toLowerCase()}`,
+    body: delivery.secret,
+    idempotencyKey,
+  };
+}
+
+/**
+ * AUTH.md §9. Raised when a configured adapter does not accept the send.
+ * This is not success and does not fake delivery.
+ */
+export class ChallengeDeliveryFailedError extends Error {
+  readonly code = 'DELIVERY_FAILED';
+  readonly httpStatus = 503;
+
+  constructor(channel: ChallengeChannel) {
+    super(
+      `The ${channel} challenge was not accepted by the delivery adapter ` +
+        `(SUAS-specs AUTH.md §9).`,
+    );
+    this.name = 'ChallengeDeliveryFailedError';
+  }
+}
+
+/**
+ * Delivers challenges through the same EMAIL/SMS notification ports.
+ * Use this when the EMAIL port is the Resend adapter so magic link and
+ * EMAIL_OTP do not construct a second vendor client.
+ */
+export class ChannelBackedChallengeDelivery implements ChallengeDeliveryPort {
+  readonly implementation: string;
+
+  constructor(
+    readonly mode: CommunicationMode,
+    private readonly email: NotificationChannelPort | undefined,
+    private readonly sms: NotificationChannelPort | undefined,
+  ) {
+    this.implementation = email?.implementation ?? sms?.implementation ?? 'none';
+  }
+
+  availableChannels(): readonly ChallengeChannel[] {
+    const channels: ChallengeChannel[] = [];
+    if (this.email !== undefined) channels.push('EMAIL');
+    if (this.sms !== undefined) channels.push('SMS');
+    return channels;
+  }
+
+  async deliver(delivery: ChallengeDelivery): Promise<void> {
+    const port = delivery.channel === 'SMS' ? this.sms : this.email;
+    if (port === undefined) {
+      throw new ChannelUnavailableError(delivery.channel);
+    }
+    const acknowledgement = await port.send(outboundMessageFromChallenge(delivery));
+    if (!acknowledgement.accepted) {
+      throw new ChallengeDeliveryFailedError(delivery.channel);
+    }
+  }
+}
+
+function reportedDeliveryMode(
+  config: SuasConfig,
+  channels: readonly ChallengeChannel[],
+): CommunicationMode {
+  if (config.notifications.email === 'fake' || config.notifications.sms === 'fake') {
+    return 'fake';
+  }
+  return channels.length === 0 ? 'disabled' : 'sink';
+}
+
+/**
  * Build the delivery port for this configuration.
  *
- * Real provider adapters are not authorized by v0.1.1 (ENVIRONMENT.md §3
- * "Notifications"), so only fake/sink implementations exist. Configuration
- * cannot select a real vendor: the config schema rejects those values outright.
+ * ENVIRONMENT.md §3 still allows only disabled|fake|sink. When a caller
+ * supplies an EMAIL port whose implementation is `resend`, challenges use
+ * that same port. Configuration cannot select `resend`: the schema rejects
+ * that value.
  */
-export function createChallengeDelivery(config: SuasConfig): ChallengeDeliveryPort {
+export function createChallengeDelivery(
+  config: SuasConfig,
+  channelPorts?: ReadonlyMap<NotificationChannel, NotificationChannelPort>,
+): ChallengeDeliveryPort {
   const channels = availableChannels(config);
-  // Email and SMS modes are configured separately; the port reports the more
-  // permissive of the two for visibility, and enforces per channel on delivery.
-  const mode: CommunicationMode =
-    config.notifications.email === 'fake' || config.notifications.sms === 'fake'
-      ? 'fake'
-      : channels.length === 0
-        ? 'disabled'
-        : 'sink';
+  const mode = reportedDeliveryMode(config, channels);
+  const email = channelPorts?.get('EMAIL');
+  const sms = channelPorts?.get('SMS');
+  if (
+    email?.implementation === RESEND_IMPLEMENTATION ||
+    sms?.implementation === RESEND_IMPLEMENTATION
+  ) {
+    return new ChannelBackedChallengeDelivery(mode, email, sms);
+  }
   return new RecordingChallengeDelivery(mode, channels);
 }

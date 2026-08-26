@@ -7,12 +7,25 @@ export {
   RecordingChannel,
   RESERVED_FUTURE_CHANNELS,
   UnknownChannelError,
+  type ChannelRuntimeMode,
   type NotificationChannel,
   type NotificationChannelPort,
   type OutboundMessage,
   type RecordedMessage,
   type SendAcknowledgement,
 } from './channels.js';
+export {
+  createResendEmailChannel,
+  RESEND_EMAILS_URL,
+  RESEND_IDEMPOTENCY_KEY_MAX_LENGTH,
+  RESEND_IMPLEMENTATION,
+  ResendEmailChannel,
+  ResendEmailMisconfiguredError,
+  type FetchTransport,
+  type ResendEmailLogRecord,
+  type ResendEmailLogger,
+  type ResendSendOutcome,
+} from './resend-email.js';
 export {
   applyDeliveryCallback,
   attemptSend,

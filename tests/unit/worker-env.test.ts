@@ -91,4 +91,19 @@ describe('configSourceFromWorkerEnv', () => {
     expect(source.SUAS_MIGRATIONS_MODE).toBe('validate');
     expect(source.SUAS_ALLOW_REAL_EXTERNAL_EFFECTS).toBe('false');
   });
+
+  it('maps optional Resend bindings without selecting a real email mode', () => {
+    const source = configSourceFromWorkerEnv(
+      workerEnv({
+        RESEND_API_KEY: 'test-resend-key-not-a-secret',
+        SUAS_EMAIL_FROM: 'sender@example.invalid',
+      }),
+    );
+    expect(source.SUAS_EMAIL_MODE).toBe('sink');
+    expect(source.SUAS_ALLOW_REAL_EXTERNAL_EFFECTS).toBe('false');
+    const config = loadConfig(source);
+    expect(config.notifications.email).toBe('sink');
+    expect(config.notifications.resendApiKey).toBe('test-resend-key-not-a-secret');
+    expect(config.notifications.emailFrom).toBe('sender@example.invalid');
+  });
 });

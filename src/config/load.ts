@@ -73,6 +73,8 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     session_secret_configured: config.sessionSecret !== undefined,
     email_mode: config.notifications.email,
     sms_mode: config.notifications.sms,
+    resend_api_key_configured: config.notifications.resendApiKey !== undefined,
+    email_from_configured: config.notifications.emailFrom !== undefined,
     transportation_adapter_mode: config.adapters.transportation,
     shelter_adapter_mode: config.adapters.shelter,
     food_adapter_mode: config.adapters.food,

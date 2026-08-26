@@ -68,10 +68,17 @@ describe('VERSIONING.md §3 — version identities stay separate', () => {
 describe('ENVIRONMENT.md §6, §8 — no secrets in provenance', () => {
   it('omits secret values while reporting the availability boundary', () => {
     const serialized = JSON.stringify(
-      info({ SUAS_SESSION_SECRET: 'z'.repeat(48), SUAS_BUILD_COMMIT: 'abc1234' }),
+      info({
+        SUAS_SESSION_SECRET: 'z'.repeat(48),
+        SUAS_BUILD_COMMIT: 'abc1234',
+        RESEND_API_KEY: 'test-resend-key-not-a-secret',
+        SUAS_EMAIL_FROM: 'sender@example.invalid',
+      }),
     );
     expect(serialized).not.toContain('z'.repeat(48));
     expect(serialized).not.toContain('suas:suas');
+    expect(serialized).not.toContain('test-resend-key-not-a-secret');
+    expect(serialized).not.toContain('sender@example.invalid');
     expect(serialized).toContain('"support_signal_mode":"fixture"');
     expect(serialized).toContain('"sensitive_aggregate_reporting":"disabled"');
   });

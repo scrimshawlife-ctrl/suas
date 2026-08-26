@@ -25,7 +25,11 @@ export type EnvironmentClass = (typeof ENVIRONMENT_CLASSES)[number];
 export const MIGRATIONS_MODES = ['off', 'validate', 'apply'] as const;
 export type MigrationsMode = (typeof MIGRATIONS_MODES)[number];
 
-/** ENVIRONMENT.md §3 "Notifications". Production external modes are not valid in v0.1.1. */
+/**
+ * ENVIRONMENT.md §3 "Notifications". Production external modes are not valid
+ * on the 0.2.0 pin. `ResendEmailChannel` exists as EmailPort code; `resend`
+ * is not a released `SUAS_EMAIL_MODE` value.
+ */
 export const COMMUNICATION_MODES = ['disabled', 'fake', 'sink'] as const;
 export type CommunicationMode = (typeof COMMUNICATION_MODES)[number];
 
@@ -155,6 +159,10 @@ const rawConfigSchema = z.object({
     COMMUNICATION_MODES,
     'Production external SMS is not valid in v0.1.1; the SMS provider decision has not closed.',
   ),
+  // Optional Resend slots. Unused while SUAS_EMAIL_MODE cannot be `resend`.
+  // Secrets stay empty in committed examples (ENVIRONMENT.md §6–§7).
+  RESEND_API_KEY: optionalRaw,
+  SUAS_EMAIL_FROM: optionalRaw,
 
   // --- Fulfillment adapters. ENVIRONMENT.md §3. ---
   SUAS_TRANSPORTATION_ADAPTER_MODE: requiredEnum(
@@ -235,6 +243,8 @@ export interface SuasConfig {
   readonly notifications: {
     readonly email: CommunicationMode;
     readonly sms: CommunicationMode;
+    readonly resendApiKey: string | undefined;
+    readonly emailFrom: string | undefined;
   };
   readonly adapters: {
     readonly transportation: AdapterMode;
@@ -484,6 +494,20 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
         `(ENVIRONMENT.md §6 secret classes).`,
     });
   }
+
+  // Optional from-address slot for the Resend EmailPort. The 0.2.0 pin does
+  // not select that adapter, so absence is valid. A present value must be an
+  // address shape; this check does not choose a mailbox.
+  if (
+    raw.SUAS_EMAIL_FROM !== undefined &&
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.SUAS_EMAIL_FROM)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'SUAS_EMAIL_FROM must be an email address when set. Leave it empty in committed files.',
+    });
+  }
 });
 
 /** Shape the validated raw record into the application configuration object. */
@@ -513,6 +537,8 @@ export function shapeConfig(
     notifications: {
       email: raw.SUAS_EMAIL_MODE,
       sms: raw.SUAS_SMS_MODE,
+      resendApiKey: raw.RESEND_API_KEY,
+      emailFrom: raw.SUAS_EMAIL_FROM,
     },
     adapters: {
       transportation: raw.SUAS_TRANSPORTATION_ADAPTER_MODE,

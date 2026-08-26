@@ -9,7 +9,8 @@
  *   statuses must not leak into product contracts)
  * - SUAS-specs ARCHITECTURE.md §11 (`EmailPort`, `SmsPort`)
  * - SUAS-specs ENVIRONMENT.md §3 (`SUAS_EMAIL_MODE` / `SUAS_SMS_MODE` are
- *   `disabled|fake|sink` in v0.1.1; production external modes are not valid)
+ *   `disabled|fake|sink` on the 0.2.0 pin; production external modes are not
+ *   valid. `ResendEmailChannel` exists as EmailPort code and is not selected.)
  *
  * IN_APP is internal and always available: it writes to SUAS's own store rather
  * than contacting a provider, so no vendor decision gates it.
@@ -87,9 +88,15 @@ export interface SendAcknowledgement {
   readonly failureReason?: string;
 }
 
+/**
+ * Runtime mode on a port. `resend` is adapter identity only — it is not a
+ * released `SUAS_EMAIL_MODE` value (ENVIRONMENT.md §3).
+ */
+export type ChannelRuntimeMode = CommunicationMode | 'internal' | 'resend';
+
 export interface NotificationChannelPort {
   readonly channel: NotificationChannel;
-  readonly mode: CommunicationMode | 'internal';
+  readonly mode: ChannelRuntimeMode;
   readonly implementation: string;
   send(message: OutboundMessage): Promise<SendAcknowledgement>;
 }
@@ -110,7 +117,7 @@ export class RecordingChannel implements NotificationChannelPort {
 
   constructor(
     readonly channel: NotificationChannel,
-    readonly mode: CommunicationMode | 'internal',
+    readonly mode: ChannelRuntimeMode,
   ) {}
 
   send(message: OutboundMessage): Promise<SendAcknowledgement> {
@@ -161,6 +168,9 @@ export class FailingChannel implements NotificationChannelPort {
  * EMAIL and SMS follow their released mode variables; a `disabled` mode yields no
  * port at all, so the caller reports the channel unavailable instead of faking a
  * send. IN_APP is internal and always present.
+ *
+ * ENVIRONMENT.md §3 has not released a selectable `resend` mode, so EMAIL stays
+ * on {@link RecordingChannel} even when Resend credentials are present.
  */
 export function createChannelRegistry(
   config: SuasConfig,

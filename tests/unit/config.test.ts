@@ -38,6 +38,14 @@ describe('valid configuration', () => {
     expect(config.supportSignalMode).toBe('fixture');
   });
 
+  it('starts with the default sink email mode and unused Resend slots', () => {
+    const config = loadConfig(validEnv({ SUAS_EMAIL_MODE: 'sink' }));
+    expect(config.notifications.email).toBe('sink');
+    expect(config.notifications.resendApiKey).toBeUndefined();
+    expect(config.notifications.emailFrom).toBeUndefined();
+    expect(config.allowRealExternalEffects).toBe(false);
+  });
+
   it('accepts STAGING when a session secret is supplied', () => {
     const config = loadConfig(
       validEnv({ SUAS_ENV: 'STAGING', SUAS_SESSION_SECRET: STRONG_SECRET }),
@@ -200,10 +208,17 @@ describe('ENVIRONMENT.md §3 — unavailable vendor surfaces stay unavailable', 
 
   it.each([
     ['SUAS_EMAIL_MODE', 'sendgrid'],
+    ['SUAS_EMAIL_MODE', 'resend'],
     ['SUAS_SMS_MODE', 'twilio'],
   ])('rejects a production communications vendor in %s', (varName, value) => {
     const issues = issuesFor(validEnv({ [varName]: value }));
     expect(issues.join('\n')).toContain(`${varName}="${value}" is not a released value`);
+  });
+
+  it('rejects a malformed SUAS_EMAIL_FROM without requiring the slot', () => {
+    const issues = issuesFor(validEnv({ SUAS_EMAIL_FROM: 'not-an-address' }));
+    expect(issues.join('\n')).toContain('SUAS_EMAIL_FROM must be an email address when set');
+    expect(loadConfig(validEnv()).notifications.emailFrom).toBeUndefined();
   });
 
   it('rejects production Support Signal scoring and cites D-011', () => {
@@ -242,11 +257,21 @@ describe('ENVIRONMENT.md §6 — secret handling', () => {
   );
 
   it('never includes secret values in the redacted description', () => {
-    const config = loadConfig(validEnv({ SUAS_SESSION_SECRET: STRONG_SECRET }));
+    const config = loadConfig(
+      validEnv({
+        SUAS_SESSION_SECRET: STRONG_SECRET,
+        RESEND_API_KEY: 'test-resend-key-not-a-secret',
+        SUAS_EMAIL_FROM: 'sender@example.invalid',
+      }),
+    );
     const described = JSON.stringify(describeConfig(config));
     expect(described).not.toContain(STRONG_SECRET);
     expect(described).not.toContain('suas:suas');
+    expect(described).not.toContain('test-resend-key-not-a-secret');
+    expect(described).not.toContain('sender@example.invalid');
     expect(described).toContain('session_secret_configured');
+    expect(described).toContain('"resend_api_key_configured":true');
+    expect(described).toContain('"email_from_configured":true');
   });
 });
 
