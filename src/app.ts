@@ -20,11 +20,7 @@ import {
   type ConfigSource,
   type SuasConfig,
 } from './config/index.js';
-import {
-  assertExpectedSchemaVersion,
-  createPool,
-  EXPECTED_SCHEMA_VERSION,
-} from './db/index.js';
+import { assertExpectedSchemaVersion, createPool, EXPECTED_SCHEMA_VERSION } from './db/index.js';
 import { createJobQueue, DispatchingJobQueue, type DurableJobQueuePort } from './jobs/index.js';
 import {
   configureSupportSignalScoring,
@@ -175,9 +171,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   });
 
   if (options.listen !== false) {
-    const port =
-      options.listenPort ??
-      (runtime === 'worker' ? 8787 : config.http.port);
+    const port = options.listenPort ?? (runtime === 'worker' ? 8787 : config.http.port);
     const host = runtime === 'worker' ? '127.0.0.1' : config.http.host;
     await server.listen({ host, port });
     if (runtime !== 'worker') {

@@ -10,10 +10,7 @@ import { ConfigurationError } from '../../src/config/index.js';
 import { startApp } from '../../src/app.js';
 import { dispatchToFastify } from '../../src/http/dispatch.js';
 import type { WorkerBindings } from '../../src/worker/env.js';
-import {
-  handleWorkerFetch,
-  resetWorkerIsolateForTests,
-} from '../../src/worker/test-fetch.js';
+import { handleWorkerFetch, resetWorkerIsolateForTests } from '../../src/worker/test-fetch.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 function workerBindings(overrides: Partial<WorkerBindings> = {}): WorkerBindings {

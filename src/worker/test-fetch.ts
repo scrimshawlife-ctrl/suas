@@ -42,10 +42,7 @@ async function getIsolateApp(env: WorkerBindings): Promise<StartedApp> {
   return isolateApp;
 }
 
-export async function handleWorkerFetch(
-  request: Request,
-  env: WorkerBindings,
-): Promise<Response> {
+export async function handleWorkerFetch(request: Request, env: WorkerBindings): Promise<Response> {
   const started = Date.now();
   try {
     const app = await getIsolateApp(env);

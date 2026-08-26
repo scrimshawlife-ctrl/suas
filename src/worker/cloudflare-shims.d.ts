@@ -4,13 +4,10 @@
  */
 
 declare module 'cloudflare:node' {
-  export function handleAsNodeRequest(
-    port: number,
-    request: Request,
-  ): Response | Promise<Response>;
-  export function httpServerHandler(
-    serverOrOptions: unknown,
-  ): { fetch(request: Request): Response | Promise<Response> };
+  export function handleAsNodeRequest(port: number, request: Request): Response | Promise<Response>;
+  export function httpServerHandler(serverOrOptions: unknown): {
+    fetch(request: Request): Response | Promise<Response>;
+  };
 }
 
 declare module 'cloudflare:workers' {
