@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { executeCaseCommand, findNonClosedCase } from '../../src/coordination/index.js';
+import { findNonClosedCase } from '../../src/coordination/index.js';
 import { createMembership, createOrganization, createUser } from '../../src/identity/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -137,15 +137,14 @@ async function claimAndActivate(tenantId: string, caseId: string) {
     headers,
   });
   expect(claimed.statusCode).toBe(200);
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
-  await executeCaseCommand(pool, {
-    tenantId,
-    caseId,
-    command: 'ACTIVATE',
-    actorId: responder.userId,
-    actorType: 'RESPONDER',
+  const activated = await app.server.inject({
+    method: 'POST',
+    url: `/api/v0/cases/${caseId}/commands/activate`,
+    headers: { ...headers, 'idempotency-key': `activate-${randomUUID()}` },
+    payload: {},
   });
+  expect(activated.statusCode).toBe(200);
+  expect(activated.json().status).toBe('ACTIVE');
   return { responder, headers };
 }
 

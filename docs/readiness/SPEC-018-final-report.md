@@ -7,10 +7,10 @@
 ## OBSERVED
 
 - Spec stack `0.2.0`; formal readiness remains `NOT_READY` for pilot/production.
-- Runtime main advanced through PRs `#59`–`#79` (scoring fail-closed; resources + OpenAPI; veterans/me; job conformance + D-022 packet; consents + security audit; scoring bypass close; consent grant/revoke; SR commands + follow-ups + notifications; accept/contact-log/assign; case resolve + Settlement reads).
-- Settlement HEAD: `e8d3082` (#79). OpenAPI **46** `/api/v0` operations; `npm run settle:check` OK on that HEAD.
+- Runtime main advanced through PRs `#59`–`#80` plus case-command HTTP coverage for every `CASE_COMMANDS` verb (claim/assign/triage/activate/move-to-followup/resume-active/escalate/resolve/close/reopen) and Settlement reads.
+- OpenAPI documents all released case commands; `settle:check` derives required routes from `CASE_COMMANDS` (empty intentional-defer allowlist).
 - All 12 gates: none `READY`; SCALE `NOT_COMPUTABLE`; others `NOT_READY` with named owner/evidence blockers (`gate-matrix.md`).
-- No remaining CODE_FIXABLE Plane A JSON gaps; residual set is owner/evidence/tooling only.
+- No remaining CODE_FIXABLE Plane A JSON gaps for released case commands + Settlement; residual set is owner/evidence/tooling only.
 
 ## COMPLETED (this sprint)
 

@@ -1,12 +1,12 @@
 /**
- * Case queue, claim, assign, resolve, and Settlement reads.
+ * Case queue, released case commands, resolve, and Settlement reads.
  *
  * Spec citations:
- * - SUAS-specs API.md §3 (`/cases`), §8 claim command, §9 resolve/settlements
- * - SUAS-specs RESPONDER_WORKFLOWS.md §2 (`CLAIM_CASE`), §4 (unassigned vs mine)
- * - SUAS-specs CASES.md §5 (one contender wins; loser writes nothing), §4 RESOLVE
- * - SUAS-specs SETTLEMENT.md §1–§6 (content, cycles, veteran visibility)
- * - SUAS-specs API.md §4 (tenant is server-derived), §7 (Idempotency-Key)
+ * - SUAS-specs API.md §3 (`/cases`), §8 commands, §9 resolve/settlements
+ * - SUAS-specs RESPONDER_WORKFLOWS.md §2 / §4
+ * - SUAS-specs CASES.md §4 transition table, §5 claim/assign
+ * - SUAS-specs SETTLEMENT.md §1–§6
+ * - SUAS-specs API.md §4 / §7
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -23,9 +23,11 @@ import {
 import {
   assignCase,
   claimCase,
+  executeCaseCommand,
   findActiveAssignment,
   findCase,
   readCaseQueue,
+  type CaseCommand,
   type SupportCase,
 } from '../../coordination/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
@@ -38,6 +40,60 @@ import {
   veteranVisibleSettlement,
   type Settlement,
 } from '../../settlement/index.js';
+
+/**
+ * Released CASES.md §4 commands that share `executeCaseCommand`.
+ * CLAIM_CASE / ASSIGN_CASE / RESOLVE have dedicated handlers below.
+ */
+const EXECUTE_CASE_HTTP = [
+  {
+    kebab: 'triage',
+    command: 'TRIAGE',
+    auth: 'responder_or_admin',
+    reasonRequired: false,
+  },
+  {
+    kebab: 'activate',
+    command: 'ACTIVATE',
+    auth: 'assigned_responder',
+    reasonRequired: false,
+  },
+  {
+    kebab: 'move-to-followup',
+    command: 'MOVE_TO_FOLLOWUP',
+    auth: 'assigned_responder',
+    reasonRequired: true,
+  },
+  {
+    kebab: 'resume-active',
+    command: 'RESUME_ACTIVE',
+    auth: 'assigned_responder',
+    reasonRequired: false,
+  },
+  {
+    kebab: 'escalate',
+    command: 'ESCALATE',
+    auth: 'assigned_responder',
+    reasonRequired: true,
+  },
+  {
+    kebab: 'close',
+    command: 'CLOSE',
+    auth: 'assigned_or_admin',
+    reasonRequired: false,
+  },
+  {
+    kebab: 'reopen',
+    command: 'REOPEN',
+    auth: 'org_admin',
+    reasonRequired: true,
+  },
+] as const satisfies ReadonlyArray<{
+  kebab: string;
+  command: Exclude<CaseCommand, 'CLAIM_CASE' | 'ASSIGN_CASE' | 'RESOLVE'>;
+  auth: 'responder_or_admin' | 'assigned_responder' | 'assigned_or_admin' | 'org_admin';
+  reasonRequired: boolean;
+}>;
 
 export interface CaseRouteDeps {
   readonly pool: Pool;
@@ -97,14 +153,36 @@ function assertOrgAdmin(context: AuthContext): void {
   }
 }
 
-async function assertAssignedResponder(pool: Pool, caseId: string, userId: string): Promise<void> {
+async function assertAssignedResponder(
+  pool: Pool,
+  caseId: string,
+  userId: string,
+  action: string,
+): Promise<void> {
   const assignment = await findActiveAssignment(pool, caseId);
   if (assignment === undefined || assignment.responderUserId !== userId) {
     throw new ForbiddenError(
-      'RESOLVE requires the active assigned responder (SUAS-specs CASES.md §4).',
+      `${action} requires the active assigned responder (SUAS-specs CASES.md §4).`,
     );
   }
 }
+
+function isOrgAdmin(context: AuthContext): boolean {
+  return context.memberships.some((membership) => membership.role === 'ORG_ADMIN');
+}
+
+const optionalReasonBody = z.object({
+  reason: z.string().min(1).max(2000).optional(),
+  expected_status: z
+    .enum(['OPEN', 'TRIAGED', 'ASSIGNED', 'ACTIVE', 'FOLLOWUP', 'RESOLVED', 'CLOSED'])
+    .optional(),
+});
+const requiredReasonBody = z.object({
+  reason: z.string().min(1).max(2000),
+  expected_status: z
+    .enum(['OPEN', 'TRIAGED', 'ASSIGNED', 'ACTIVE', 'FOLLOWUP', 'RESOLVED', 'CLOSED'])
+    .optional(),
+});
 
 export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): void {
   app.get(`${API_PREFIX}/cases`, async (request) => {
@@ -210,6 +288,80 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     return { ...run.result, replayed: run.replayed };
   });
 
+  for (const entry of EXECUTE_CASE_HTTP) {
+    app.post(`${API_PREFIX}/cases/:id/commands/${entry.kebab}`, async (request) => {
+      const context = await authenticate(deps.pool, deps.sessionSecret, request);
+      const { id } = idParams.parse(request.params);
+      const body = entry.reasonRequired
+        ? requiredReasonBody.parse(request.body ?? {})
+        : optionalReasonBody.parse(request.body ?? {});
+      const existing = await findCase(deps.pool, context.tenantId, id);
+      if (existing === undefined) throw new ResourceNotVisibleError();
+
+      const admin = isOrgAdmin(context);
+      if (entry.auth === 'org_admin') {
+        assertOrgAdmin(context);
+      } else if (entry.auth === 'responder_or_admin') {
+        if (!admin) assertResponder(context);
+      } else if (entry.auth === 'assigned_or_admin') {
+        if (admin) {
+          // org admin close path
+        } else {
+          assertResponder(context);
+          await assertAssignedResponder(deps.pool, id, context.userId, entry.command);
+        }
+      } else {
+        assertResponder(context);
+        await assertAssignedResponder(deps.pool, id, context.userId, entry.command);
+      }
+
+      const actorType = admin && entry.auth !== 'assigned_responder' ? 'ORG_ADMIN' : 'RESPONDER';
+      const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
+      const fingerprint = fingerprintRequest({
+        case_id: id,
+        command: entry.command,
+        reason: 'reason' in body && body.reason !== undefined ? body.reason : null,
+        expected_status: body.expected_status ?? null,
+        actor_id: context.userId,
+      });
+      const scope = commandScope({
+        command: `POST /cases/{id}/commands/${entry.kebab}`,
+        aggregateType: 'SupportCase',
+        aggregateId: id,
+        actorId: context.userId,
+      });
+
+      const run = await runIdempotentCommand(
+        deps.pool,
+        {
+          tenantId: context.tenantId,
+          commandScope: scope,
+          idempotencyKey,
+          requestFingerprint: fingerprint,
+        },
+        async () => {
+          const supportCase = await executeCaseCommand(deps.pool, {
+            tenantId: context.tenantId,
+            caseId: id,
+            command: entry.command,
+            actorId: context.userId,
+            actorType,
+            correlationId: String(request.id),
+            ...('reason' in body && body.reason !== undefined ? { reason: body.reason } : {}),
+            ...(body.expected_status !== undefined ? { expectedStatus: body.expected_status } : {}),
+          });
+          return {
+            result: publicCase(supportCase),
+            aggregateType: 'SupportCase',
+            aggregateId: id,
+          };
+        },
+      );
+
+      return { ...run.result, replayed: run.replayed };
+    });
+  }
+
   /**
    * API.md §9 / SETTLEMENT.md — resolve creates Settlement + CASE_RESOLVED.
    * Domain `resolveCaseWithSettlement` owns the idempotency record when a key
@@ -222,7 +374,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     const body = resolveBody.parse(request.body ?? {});
     const existing = await findCase(deps.pool, context.tenantId, id);
     if (existing === undefined) throw new ResourceNotVisibleError();
-    await assertAssignedResponder(deps.pool, id, context.userId);
+    await assertAssignedResponder(deps.pool, id, context.userId, 'RESOLVE');
 
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const content = {
