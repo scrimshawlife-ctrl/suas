@@ -1,0 +1,47 @@
+# Manual publish of the Fastify Worker. Does not run on push.
+# Requires GitHub Environment `synthetic-worker` with:
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+# Hyperdrive id must already be configured (dashboard or uncommitted override).
+# Does not authorize PRODUCTION or formal STAGING class (see D-001/D-005 packet).
+
+name: worker-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type deploy to publish the synthetic Worker'
+        required: true
+        type: string
+
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event.inputs.confirm == 'deploy'
+    runs-on: ubuntu-latest
+    environment: synthetic-worker
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          STAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          npx wrangler deploy \
+            --var "SUAS_BUILD_COMMIT:${GITHUB_SHA}" \
+            --var "SUAS_BUILD_TIMESTAMP:${STAMP}"
