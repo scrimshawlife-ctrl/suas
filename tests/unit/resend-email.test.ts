@@ -17,9 +17,10 @@ import {
   RESEND_EMAILS_URL,
   RESEND_IDEMPOTENCY_KEY_MAX_LENGTH,
   RESEND_IMPLEMENTATION,
-  ResendEmailChannel,
   ResendEmailMisconfiguredError,
   type FetchTransport,
+  type OutboundMessage,
+  type ResendEmailChannel,
   type ResendEmailLogRecord,
 } from '../../src/notifications/index.js';
 import { validEnv } from '../helpers/env.js';
@@ -45,7 +46,12 @@ class ScriptedTransport implements FetchTransport {
   }
 }
 
-function message(overrides: Partial<Parameters<ResendEmailChannel['send']>[0]> = {}) {
+function requestBody(init: RequestInit): string {
+  if (typeof init.body === 'string') return init.body;
+  throw new Error('expected a string request body');
+}
+
+function message(overrides: Partial<OutboundMessage> = {}) {
   return {
     channel: 'EMAIL' as const,
     destination: DESTINATION,
@@ -56,7 +62,10 @@ function message(overrides: Partial<Parameters<ResendEmailChannel['send']>[0]> =
   };
 }
 
-function channel(transport: FetchTransport, logs: ResendEmailLogRecord[] = []): ResendEmailChannel {
+function emailChannel(
+  transport: FetchTransport,
+  logs: ResendEmailLogRecord[] = [],
+): ResendEmailChannel {
   return createResendEmailChannel({
     apiKey: API_KEY,
     fromAddress: FROM,
@@ -78,7 +87,7 @@ describe('ResendEmailChannel', () => {
     const transport = new ScriptedTransport([
       Response.json({ id: '49a3999c-0ce1-4ea6-ab68-afcd6dc2e794' }),
     ]);
-    const result = await channel(transport).send(message());
+    const result = await emailChannel(transport).send(message());
 
     expect(result).toEqual({
       accepted: true,
@@ -92,7 +101,7 @@ describe('ResendEmailChannel', () => {
       'Idempotency-Key': 'notify-1',
       'Content-Type': 'application/json',
     });
-    const body = JSON.parse(String(transport.calls[0]?.init.body)) as {
+    const body = JSON.parse(requestBody(transport.calls[0]?.init ?? {})) as {
       from: string;
       to: string[];
     };
@@ -104,7 +113,7 @@ describe('ResendEmailChannel', () => {
     const transport = new ScriptedTransport([
       Response.json({ data: { id: 'resend-wrapped-id' }, error: null }),
     ]);
-    const result = await channel(transport).send(message());
+    const result = await emailChannel(transport).send(message());
     expect(result.accepted).toBe(true);
     expect(result.providerReference).toBe('resend-wrapped-id');
   });
@@ -116,7 +125,7 @@ describe('ResendEmailChannel', () => {
         error: { name: 'validation_error', message: 'invalid from' },
       }),
     ]);
-    const result = await channel(transport).send(message());
+    const result = await emailChannel(transport).send(message());
     expect(result).toEqual({ accepted: false, failureReason: 'not_accepted' });
     expect(result.failureReason).not.toContain('validation_error');
     expect(JSON.stringify(result)).not.toContain('invalid from');
@@ -126,7 +135,7 @@ describe('ResendEmailChannel', () => {
     const transport = new ScriptedTransport([
       Response.json({ statusCode: 429, name: 'rate_limit_exceeded' }, { status: 429 }),
     ]);
-    const result = await channel(transport).send(message());
+    const result = await emailChannel(transport).send(message());
     expect(result.accepted).toBe(false);
     expect(result.failureReason).toBe('not_accepted');
     expect(JSON.stringify(result)).not.toContain('rate_limit_exceeded');
@@ -136,7 +145,7 @@ describe('ResendEmailChannel', () => {
   it('maps timeout or abort to accepted false', async () => {
     const timeout = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
     const transport = new ScriptedTransport([timeout]);
-    const result = await channel(transport).send(message());
+    const result = await emailChannel(transport).send(message());
     expect(result).toEqual({ accepted: false, failureReason: 'timeout' });
   });
 
@@ -158,7 +167,7 @@ describe('ResendEmailChannel', () => {
   it('never logs the body, Authorization header, or API key', async () => {
     const logs: ResendEmailLogRecord[] = [];
     const transport = new ScriptedTransport([Response.json({ id: 'logged-id' })]);
-    await channel(transport, logs).send(message());
+    await emailChannel(transport, logs).send(message());
 
     expect(logs).toEqual([
       {
@@ -187,7 +196,7 @@ describe('ResendEmailChannel', () => {
 
   it('rejects an idempotency key longer than 256 characters', async () => {
     const transport = new ScriptedTransport([]);
-    const result = await channel(transport).send(
+    const result = await emailChannel(transport).send(
       message({ idempotencyKey: 'k'.repeat(RESEND_IDEMPOTENCY_KEY_MAX_LENGTH + 1) }),
     );
     expect(result.accepted).toBe(false);
@@ -201,7 +210,7 @@ describe('challenge delivery uses the same EMAIL port', () => {
       Response.json({ id: 'challenge-1' }),
       Response.json({ id: 'challenge-2' }),
     ]);
-    const email = channel(transport);
+    const email = emailChannel(transport);
     const delivery = new ChannelBackedChallengeDelivery('sink', email, undefined);
 
     await delivery.deliver({
@@ -225,8 +234,8 @@ describe('challenge delivery uses the same EMAIL port', () => {
     expect(transport.calls[0]?.init.headers).toMatchObject({
       'Idempotency-Key': 'auth-otp-1',
     });
-    const first = JSON.parse(String(transport.calls[0]?.init.body)) as { text: string };
-    const second = JSON.parse(String(transport.calls[1]?.init.body)) as { text: string };
+    const first = JSON.parse(requestBody(transport.calls[0]?.init ?? {})) as { text: string };
+    const second = JSON.parse(requestBody(transport.calls[1]?.init ?? {})) as { text: string };
     expect(first.text).toBe('123456');
     expect(second.text).toBe('opaque-token');
     expect(delivery.implementation).toBe(RESEND_IMPLEMENTATION);
@@ -236,7 +245,7 @@ describe('challenge delivery uses the same EMAIL port', () => {
     const transport = new ScriptedTransport([
       Response.json({ error: { name: 'validation_error' } }),
     ]);
-    const delivery = new ChannelBackedChallengeDelivery('sink', channel(transport), undefined);
+    const delivery = new ChannelBackedChallengeDelivery('sink', emailChannel(transport), undefined);
     await expect(
       delivery.deliver({
         channel: 'EMAIL',
