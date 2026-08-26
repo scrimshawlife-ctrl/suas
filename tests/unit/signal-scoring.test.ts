@@ -9,7 +9,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   clearSignalEngines,
   computeSignal,
+  computeSv001,
   configureSupportSignalScoring,
+  findSignalEngine,
   MISSING_REQUIRED_SAFETY_INPUT,
   MissingRequiredSafetyInputError,
   QV_001_QUESTIONS,
@@ -17,6 +19,7 @@ import {
   SIGNAL_RULE_IDS,
   SignalInputError,
   SignalScoringUnavailableError,
+  SupportSignalModeDisabledError,
   SV_001_ENGINE,
   SV_001_VERSION,
   type CanonicalSignalInput,
@@ -318,8 +321,26 @@ describe('ENVIRONMENT.md §3 — disabled mode refuses scoring', () => {
     ).toThrow(SignalScoringUnavailableError);
   });
 
+  it('refuses computeSv001 when the process mode is disabled', () => {
+    configureSupportSignalScoring('disabled');
+    expect(() => computeSv001(fromAnswers(A0))).toThrow(SupportSignalModeDisabledError);
+  });
+
+  it('refuses SV_001_ENGINE.compute when the process mode is disabled', () => {
+    configureSupportSignalScoring('disabled');
+    expect(() => SV_001_ENGINE.compute(fromAnswers(A0))).toThrow(SupportSignalModeDisabledError);
+  });
+
+  it('refuses findSignalEngine(sv-001).compute when the process mode is disabled', () => {
+    configureSupportSignalScoring('disabled');
+    const engine = findSignalEngine(SV_001_VERSION);
+    expect(engine).toBeDefined();
+    expect(() => engine!.compute(fromAnswers(A0))).toThrow(SupportSignalModeDisabledError);
+  });
+
   it('still scores under fixture mode', () => {
     configureSupportSignalScoring('fixture');
     expect(compute(A0).level).toBe('GREEN');
+    expect(computeSv001(fromAnswers(A0)).level).toBe('GREEN');
   });
 });

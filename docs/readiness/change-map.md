@@ -27,4 +27,4 @@
 
 ## HTTP vs domain gaps (remaining)
 
-See `docs/openapi/v0.json` for implemented routes. Still missing vs APIS.md Plane A drafts: consent grants, service-requests, follow-ups, referrals, notifications, settlements.
+See `docs/openapi/v0.json` for implemented routes. Still missing vs APIS.md Plane A drafts: follow-ups, referrals, notifications, settlements, SR write commands.

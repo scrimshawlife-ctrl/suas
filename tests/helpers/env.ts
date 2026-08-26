@@ -15,7 +15,9 @@ export function validEnv(overrides: ConfigSource = {}): ConfigSource {
     SUAS_SPEC_VERSION: '0.2.0',
     SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.2.0.md',
     SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
-    DATABASE_URL: 'postgresql://suas:suas@localhost:5432/suas_test',
+    // Prefer TEST_DATABASE_URL when set (local non-5432 Postgres); CI leaves the
+    // default which matches the workflow service on :5432.
+    DATABASE_URL: testDatabaseUrl(),
     DATABASE_POOL_MAX: '5',
     SUAS_MIGRATIONS_MODE: 'validate',
     SUAS_EMAIL_MODE: 'fake',

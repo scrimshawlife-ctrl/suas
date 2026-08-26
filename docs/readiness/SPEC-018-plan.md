@@ -12,15 +12,15 @@ Canonical specs remain in `suas-specs`. This document tracks runtime evidence to
 
 ## Classification snapshot
 
-| Item                                                                          | Class                                                                                       |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Remaining Plane A JSON (consent, service-requests, notifications, follow-ups) | CODE_FIXABLE                                                                                |
-| OpenAPI keep-in-sync                                                          | CODE_FIXABLE (done for current routes)                                                      |
-| Durable job vendor                                                            | OWNER_DECISION_REQUIRED (D-022)                                                             |
-| Staging topology / cloud account                                              | OWNER_DECISION_REQUIRED / EXTERNAL_DEPENDENCY                                               |
-| SLO / RTO / RPO thresholds                                                    | OWNER_DECISION_REQUIRED (D-021/D-023/D-024) → formal verdict `NOT_COMPUTABLE` until decided |
-| Real provider effects                                                         | INTENTIONALLY_UNAVAILABLE until production authorization                                    |
-| Mobile clients                                                                | INTENTIONALLY_UNAVAILABLE this sprint                                                       |
+| Item                                                                         | Class                                                                                       |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Remaining Plane A JSON (notifications, follow-ups, SR commands beyond reads) | CODE_FIXABLE                                                                                |
+| OpenAPI keep-in-sync                                                         | CODE_FIXABLE (done for current routes)                                                      |
+| Durable job vendor                                                           | OWNER_DECISION_REQUIRED (D-022)                                                             |
+| Staging topology / cloud account                                             | OWNER_DECISION_REQUIRED / EXTERNAL_DEPENDENCY                                               |
+| SLO / RTO / RPO thresholds                                                   | OWNER_DECISION_REQUIRED (D-021/D-023/D-024) → formal verdict `NOT_COMPUTABLE` until decided |
+| Real provider effects                                                        | INTENTIONALLY_UNAVAILABLE until production authorization                                    |
+| Mobile clients                                                               | INTENTIONALLY_UNAVAILABLE this sprint                                                       |
 
 ## Next CODE_FIXABLE slices
 
