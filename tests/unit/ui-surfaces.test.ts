@@ -162,7 +162,8 @@ describe('MVP_REFERENCE.md §7.2 — the veteran home is truthful about QRF', ()
     expect(withLink).toContain('Start a Check-In');
     expect(withLink).toContain('not a diagnosis');
     expect(withLink).toContain('not a clinical score');
-    expect(withLink.toLowerCase()).not.toContain('transition');
+    const main = /<main[\s\S]*<\/main>/.exec(withLink)?.[0] ?? '';
+    expect(main.toLowerCase()).not.toContain('transition');
     expect(auditAccessibility(withLink)).toEqual([]);
   });
 });

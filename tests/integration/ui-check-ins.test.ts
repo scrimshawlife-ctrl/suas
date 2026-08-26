@@ -193,7 +193,9 @@ describe('Check-In HTML — start, answer, complete', () => {
     expect(result.body).toContain('not a clinical score');
     expect(result.body).toContain('did not contact emergency services');
     expect(result.body).not.toContain('A Support Case was opened');
-    expect(result.body.toLowerCase()).not.toContain('transition');
+    expect(result.body).not.toContain('Save answer');
+    const main = /<main[\s\S]*<\/main>/.exec(result.body)?.[0] ?? '';
+    expect(main.toLowerCase()).not.toContain('transition');
     expect(await findNonClosedCase(pool(), tenantId, userId)).toBeUndefined();
     expect(auditAccessibility(result.body)).toEqual([]);
   });

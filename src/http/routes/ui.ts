@@ -276,7 +276,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         status: checkIn.status,
         questionnaireVersion: checkIn.questionnaireVersion,
         canComplete: checkIn.status === 'STARTED' || checkIn.status === 'IN_PROGRESS',
-        ...(nextQuestion === undefined
+        ...(nextQuestion === undefined || settled
           ? {}
           : {
               questionIndex: nextIndex + 1,
