@@ -20,10 +20,12 @@ import type { SuasConfig } from '../config/index.js';
 import { API_PREFIX } from '../release/pins.js';
 import type { BuildInfo } from '../provenance/build-info.js';
 import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
+import type { DurableJobQueuePort } from '../jobs/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { authenticate } from './authenticate.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
+import { registerCheckInRoutes } from './routes/check-ins.js';
 import { registerUiRoutes } from './routes/ui.js';
 
 export interface ServerDependencies {
@@ -34,6 +36,7 @@ export interface ServerDependencies {
   readonly pool?: Pool;
   readonly challengeDelivery?: ChallengeDeliveryPort;
   readonly mfa?: MfaPort;
+  readonly jobQueue?: DurableJobQueuePort;
 }
 
 /** Errors that declare a released API error code and HTTP status. API.md §6. */
@@ -150,6 +153,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       pool,
       config: deps.config,
       sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerCheckInRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
     });
   }
 
