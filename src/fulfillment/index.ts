@@ -62,7 +62,10 @@ export {
   FRESHNESS_AGING_DAYS,
   FRESHNESS_STALE_DAYS,
   InactiveResourceError,
+  InvalidResourceCursorError,
   requiresStaleWarning,
+  RESOURCE_DEFAULT_PAGE_SIZE,
+  RESOURCE_MAX_PAGE_SIZE,
   ResourceValidationError,
   searchResources,
   setResourceActive,
@@ -72,6 +75,7 @@ export {
   type FreshnessBand,
   type Resource,
   type ResourceSearchFilters,
+  type ResourceSearchPage,
   type ResourceSearchResult,
 } from './resources.js';
 export {

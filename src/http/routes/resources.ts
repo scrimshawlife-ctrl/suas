@@ -22,6 +22,8 @@ import {
   findResource,
   freshnessBand,
   requiresStaleWarning,
+  RESOURCE_DEFAULT_PAGE_SIZE,
+  RESOURCE_MAX_PAGE_SIZE,
   searchResources,
   type Resource,
   type ResourceSearchResult,
@@ -40,7 +42,14 @@ const idParams = z.object({ id: z.string().uuid() });
 const listQuery = z.object({
   category: z.enum(SERVICE_CATEGORIES).optional(),
   county: z.string().min(1).max(128).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  // API.md §5: cursor + limit; bounds come from the catalog module.
+  cursor: z.string().min(1).max(512).optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(RESOURCE_MAX_PAGE_SIZE)
+    .default(RESOURCE_DEFAULT_PAGE_SIZE),
 });
 
 /** Public catalog projection — RESOURCES.md §6 + list freshness (UI parity). */
@@ -73,7 +82,7 @@ export function registerResourceRoutes(app: FastifyInstance, deps: ResourceRoute
   app.get(`${API_PREFIX}/resources`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const query = listQuery.parse(request.query);
-    const results = await searchResources(
+    const page = await searchResources(
       deps.pool,
       context.tenantId,
       {
@@ -81,11 +90,15 @@ export function registerResourceRoutes(app: FastifyInstance, deps: ResourceRoute
         ...(query.category !== undefined ? { category: query.category } : {}),
         ...(query.county !== undefined ? { county: query.county } : {}),
       },
-      { limit: query.limit },
+      {
+        limit: query.limit,
+        ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
+      },
     );
     return {
-      resources: results.map(publicCatalogResource),
+      resources: page.results.map(publicCatalogResource),
       limit: query.limit,
+      next_cursor: page.nextCursor ?? null,
     };
   });
 

@@ -157,6 +157,62 @@ describe('GET /api/v0/resources', () => {
     expect(row).not.toHaveProperty('eligibility');
     expect(row).not.toHaveProperty('verification_source');
     expect(row).not.toHaveProperty('integration_modes');
+    expect(body).toMatchObject({ next_cursor: null });
+  });
+
+  it('walks every active resource across cursor pages', async () => {
+    const { headers, tenantId, user } = await veteranInTenant();
+    const opened: string[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      const resource = await activeResource(tenantId, user.userId, {
+        serviceName: `Pantry ${index}`,
+        category: 'FOOD',
+      });
+      opened.push(resource.resourceId);
+    }
+
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    let pages = 0;
+    for (;;) {
+      const url =
+        cursor === undefined
+          ? '/api/v0/resources?category=FOOD&limit=2'
+          : `/api/v0/resources?category=FOOD&limit=2&cursor=${encodeURIComponent(cursor)}`;
+      const response = await app.server.inject({ method: 'GET', url, headers });
+      expect(response.statusCode).toBe(200);
+      const body: {
+        resources: { resource_id: string }[];
+        next_cursor: string | null;
+      } = response.json();
+      for (const row of body.resources) {
+        if (!seen.includes(row.resource_id)) seen.push(row.resource_id);
+      }
+      pages += 1;
+      if (body.next_cursor === null) break;
+      if (pages > 10) throw new Error('resource cursor did not terminate');
+      cursor = body.next_cursor;
+    }
+
+    expect(pages).toBe(3);
+    expect([...seen].sort()).toEqual([...opened].sort());
+  });
+
+  it('rejects a malformed cursor and an oversized limit', async () => {
+    const { headers } = await veteranInTenant();
+    const badCursor = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/resources?cursor=not-a-cursor',
+      headers,
+    });
+    expect(badCursor.statusCode).toBe(400);
+
+    const oversized = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/resources?limit=101',
+      headers,
+    });
+    expect(oversized.statusCode).toBe(400);
   });
 
   it('requires authentication', async () => {

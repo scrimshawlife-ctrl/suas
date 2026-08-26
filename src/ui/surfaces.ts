@@ -474,10 +474,16 @@ export function renderResourceList(model: ResourceListViewModel): string {
             ),
           ),
         ),
-    // §8: progressive loading rather than one unbounded list.
+    // §8 / API.md §5: progressive loading rather than one unbounded list.
     model.nextCursor === undefined
       ? undefined
-      : a({ class: 'action-secondary', href: `?cursor=${model.nextCursor}` }, 'Show more listings'),
+      : a(
+          {
+            class: 'action-secondary',
+            href: `?cursor=${encodeURIComponent(model.nextCursor)}`,
+          },
+          'Show more listings',
+        ),
   ]);
   return assertSurface('RESOURCE_LIST', markup);
 }

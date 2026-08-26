@@ -442,6 +442,16 @@
             }
           },
           {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque keyset cursor taken from a prior response's next_cursor.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "schema": {
@@ -454,12 +464,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Bounded active catalog page",
+            "description": "Bounded active catalog page with next_cursor",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["resources", "limit"],
+                  "required": ["resources", "limit", "next_cursor"],
                   "properties": {
                     "resources": {
                       "type": "array",
@@ -469,11 +479,17 @@
                     },
                     "limit": {
                       "type": "integer"
+                    },
+                    "next_cursor": {
+                      "type": ["string", "null"]
                     }
                   }
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
           },
           "401": {
             "$ref": "#/components/responses/Error"
