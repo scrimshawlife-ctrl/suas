@@ -152,6 +152,8 @@ Export format and deletion durations remain open, as above.
 
 Counsel owns legal classification (D-006). That decision is still pending.
 
+Classification facts for that review are in [`d006-fact-sheet.md`](d006-fact-sheet.md).
+
 We do not say that a health-privacy statute applies. We do not say that it does not apply. We treat veteran support data as highly sensitive either way (PRIVACY.md §1; SECURITY.md §1; COMPLIANCE.md §2–§3).
 
 This notice is not a health-information authorization and not a business-associate agreement.

@@ -70,6 +70,8 @@ These terms are not a HIPAA authorization. They are not a BAA.
 
 Counsel owns legal classification (D-006). That decision is still pending. We do not say that a health-privacy statute applies. We do not say that it does not apply.
 
+Classification facts for that review are in [`d006-fact-sheet.md`](d006-fact-sheet.md).
+
 COMPLIANCE.md is a register, not a certificate. This page does not certify any regime.
 
 ---

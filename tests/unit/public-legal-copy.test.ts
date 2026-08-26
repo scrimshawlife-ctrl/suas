@@ -17,9 +17,11 @@ const PUBLIC_LEGAL_FILES = [
   'docs/index.html',
   'docs/privacy.html',
   'docs/legal.html',
+  'docs/d006.html',
   'docs/legal/privacy-notice.md',
   'docs/legal/terms.md',
   'docs/legal/consent-templates.md',
+  'docs/legal/d006-fact-sheet.md',
 ] as const;
 
 const FORBIDDEN_COMPLIANCE_CLAIMS = [
@@ -28,6 +30,18 @@ const FORBIDDEN_COMPLIANCE_CLAIMS = [
   /cpra[\s-]*compliant/i,
   /tcpa[\s-]*compliant/i,
 ] as const;
+
+/**
+ * COMPLIANCE.md §1 required register banner. The negation is not a compliance
+ * claim. Strip it before the §11 substring forbid so the counsel fact sheet
+ * can carry the house banner.
+ */
+const REQUIRED_NONCOMPLIANCE_BANNER =
+  /THIS PAGE DOES NOT MAKE SUAS HIPAA-COMPLIANT,\s*CCPA-COMPLIANT,\s*TCPA-COMPLIANT,\s*OR\s*ANYTHING-COMPLIANT\./;
+
+function publicLegalText(relativePath: string): string {
+  return readRepoFile(relativePath).replace(REQUIRED_NONCOMPLIANCE_BANNER, '');
+}
 
 const CLOSED_CONSENT_PAIRS = [
   'can_receive + YELLOW',
@@ -46,9 +60,15 @@ function readRepoFile(relativePath: string): string {
 
 describe('COMPLIANCE.md §11 — public legal copy forbids compliance claims', () => {
   it.each(PUBLIC_LEGAL_FILES)('%s contains none of the forbidden claim strings', (file) => {
-    const text = readRepoFile(file);
+    const text = publicLegalText(file);
     for (const pattern of FORBIDDEN_COMPLIANCE_CLAIMS) {
       expect(text, `${file} matches ${pattern}`).not.toMatch(pattern);
+    }
+  });
+
+  it('keeps the COMPLIANCE.md §1 house banner on the D-006 fact sheet', () => {
+    for (const file of ['docs/d006.html', 'docs/legal/d006-fact-sheet.md'] as const) {
+      expect(readRepoFile(file), file).toMatch(REQUIRED_NONCOMPLIANCE_BANNER);
     }
   });
 });
@@ -62,7 +82,7 @@ describe('Public Pages footer', () => {
   });
 
   it('keeps the same footer links on the privacy and legal pages', () => {
-    for (const file of ['docs/privacy.html', 'docs/legal.html'] as const) {
+    for (const file of ['docs/privacy.html', 'docs/legal.html', 'docs/d006.html'] as const) {
       const page = readRepoFile(file);
       expect(page, file).toContain('href="privacy.html"');
       expect(page, file).toContain('href="legal.html"');
@@ -100,7 +120,12 @@ describe('CONSENT.md §6 — draft templates stay unpublished', () => {
 
 describe('PRIVACY.md §10 — public notice does not invent retention durations', () => {
   it('states D-007 is open and does not name a day or month count', () => {
-    for (const file of ['docs/privacy.html', 'docs/legal/privacy-notice.md'] as const) {
+    for (const file of [
+      'docs/privacy.html',
+      'docs/legal/privacy-notice.md',
+      'docs/d006.html',
+      'docs/legal/d006-fact-sheet.md',
+    ] as const) {
       const text = readRepoFile(file);
       expect(text, file).toMatch(/D-007/);
       expect(text, file).toMatch(/not decided/i);
