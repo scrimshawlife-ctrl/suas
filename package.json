@@ -27,7 +27,8 @@
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run openapi:check",
     "openapi:check": "tsx scripts/check-openapi-drift.ts",
     "load:synthetic": "tsx scripts/synthetic-load-harness.ts",
-    "migrate:rehearse": "tsx scripts/migration-restore-rehearsal.ts"
+    "migrate:rehearse": "tsx scripts/migration-restore-rehearsal.ts",
+    "settle:check": "tsx scripts/check-spec-018-settlement.ts"
   },
   "dependencies": {
     "fastify": "^5.2.1",
