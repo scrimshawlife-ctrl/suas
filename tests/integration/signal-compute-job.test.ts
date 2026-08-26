@@ -93,6 +93,23 @@ async function veteranOnQv001() {
 }
 
 describe('runSupportSignalComputeJob', () => {
+  it('skips settlement when SUAS_SUPPORT_SIGNAL_MODE is disabled', async () => {
+    const { tenantId, veteran, checkIn } = await veteranOnQv001();
+    await answerCheckIn(tenantId, checkIn.checkInId, A0);
+    await completeCheckIn(pool, {
+      tenantId,
+      checkInId: checkIn.checkInId,
+      actorId: veteran.userId,
+    });
+    const disabled = loadConfig(validEnv({ SUAS_SUPPORT_SIGNAL_MODE: 'disabled' }));
+    const result = await runSupportSignalComputeJob(pool, disabled, {
+      tenantId,
+      checkInId: checkIn.checkInId,
+    });
+    expect(result).toEqual({ status: 'SKIPPED', reason: 'MODE_DISABLED' });
+    expect(await findNonClosedCase(pool, tenantId, veteran.userId)).toBeUndefined();
+  });
+
   it('skips a Check-In that is not qv-001', async () => {
     const tenantId = syntheticTenantId();
     const veteran = await createUser(pool, {

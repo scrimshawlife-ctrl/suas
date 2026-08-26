@@ -21,6 +21,7 @@
  * register with `released: false` and run only when a caller opts in.
  */
 
+import type { SupportSignalMode } from '../config/index.js';
 import type { JsonObject } from '../jobs/index.js';
 import { SV_001_ENGINE } from './sv-001.js';
 
@@ -120,6 +121,13 @@ export class IncompleteInputError extends Error {
 
 const ENGINES = new Map<string, SignalEngine>();
 
+/**
+ * Process-scoped operating mode for released scoring. Unset allows pure
+ * algorithm tests (golden vectors). Application startup always configures this
+ * from `SUAS_SUPPORT_SIGNAL_MODE`; `disabled` refuses every application path.
+ */
+let configuredSupportSignalMode: SupportSignalMode | undefined;
+
 function restoreReleasedEngines(): void {
   ENGINES.set(SV_001_ENGINE.signalVersion, SV_001_ENGINE);
 }
@@ -129,11 +137,21 @@ export function registerSignalEngine(engine: SignalEngine): void {
 }
 
 /**
+ * Pin the operating mode for released Support Signal scoring.
+ * Call from application startup after config validation.
+ */
+export function configureSupportSignalScoring(mode: SupportSignalMode): void {
+  configuredSupportSignalMode = mode;
+}
+
+/**
  * Restore the released registry. Tests use this between cases so a fixture
- * engine cannot leak; `sv-001` remains registered.
+ * engine cannot leak; `sv-001` remains registered. Also clears the process
+ * scoring mode so a prior `disabled` pin cannot bleed into golden vectors.
  */
 export function clearSignalEngines(): void {
   ENGINES.clear();
+  configuredSupportSignalMode = undefined;
   restoreReleasedEngines();
 }
 
@@ -152,20 +170,33 @@ export interface ComputeOptions {
    * authority.
    */
   readonly allowUnreleasedFixture?: boolean;
+  /**
+   * Explicit mode override for this call. When omitted, the process-scoped
+   * mode from `configureSupportSignalScoring` applies. `disabled` refuses.
+   */
+  readonly supportSignalMode?: SupportSignalMode;
 }
 
 /**
  * Compute a primary signal, or refuse.
  *
  * `sv-001` is registered as released. Unknown versions still refuse. Unreleased
- * fixtures require an explicit opt-in. Case writes happen at settlement via
- * APPLY_EFFECTIVE_SIGNAL, not here.
+ * fixtures require an explicit opt-in. `SUAS_SUPPORT_SIGNAL_MODE=disabled`
+ * refuses here so callers cannot bypass the job-path skip. Case writes happen
+ * at settlement via APPLY_EFFECTIVE_SIGNAL, not here.
  */
 export function computeSignal(
   signalVersion: string,
   input: CanonicalSignalInput,
   options: ComputeOptions = {},
 ): SignalComputation {
+  const mode = options.supportSignalMode ?? configuredSupportSignalMode;
+  if (mode === 'disabled') {
+    throw new SignalScoringUnavailableError(
+      'SUAS_SUPPORT_SIGNAL_MODE=disabled (ENVIRONMENT.md §3; scoring is not available on any application path)',
+    );
+  }
+
   const engine = findSignalEngine(signalVersion);
   if (engine === undefined) {
     throw new SignalScoringUnavailableError(

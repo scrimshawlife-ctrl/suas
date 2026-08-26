@@ -60,13 +60,17 @@ export async function runSupportSignalComputeJob(
 
   const canonical = await canonicalInputFor(pool, input.tenantId, input.checkInId);
   try {
-    const computation = computeSignal(SV_001_VERSION, {
-      checkInId: canonical.checkInId,
-      sourceReference: canonical.sourceReference,
-      questionnaireVersion: canonical.questionnaireVersion,
-      answers: canonical.answers,
-      incomplete: canonical.incomplete,
-    });
+    const computation = computeSignal(
+      SV_001_VERSION,
+      {
+        checkInId: canonical.checkInId,
+        sourceReference: canonical.sourceReference,
+        questionnaireVersion: canonical.questionnaireVersion,
+        answers: canonical.answers,
+        incomplete: canonical.incomplete,
+      },
+      { supportSignalMode: config.supportSignalMode },
+    );
     const settled = await settlePrimarySignal(pool, {
       tenantId: input.tenantId,
       veteranUserId: checkIn.veteranUserId,
