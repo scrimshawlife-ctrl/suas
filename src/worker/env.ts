@@ -37,6 +37,8 @@ export interface WorkerBindings {
   readonly SUAS_SESSION_SECRET?: string | undefined;
   readonly SUAS_EMAIL_MODE?: string | undefined;
   readonly SUAS_SMS_MODE?: string | undefined;
+  readonly RESEND_API_KEY?: string | undefined;
+  readonly SUAS_EMAIL_FROM?: string | undefined;
   readonly SUAS_TRANSPORTATION_ADAPTER_MODE?: string | undefined;
   readonly SUAS_SHELTER_ADAPTER_MODE?: string | undefined;
   readonly SUAS_FOOD_ADAPTER_MODE?: string | undefined;

@@ -80,7 +80,10 @@ can start the HTTP path while D-022 (durable jobs) is open. `STAGING` and
 stays rejected until SPEC-018. Do not set
 `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=true`.
 
-Email and SMS stay `sink`. Do not add Resend or Twilio secrets.
+Email and SMS stay `sink`. The Resend EmailPort exists in code and is not
+selected. If a later released email mode can select Resend, store
+`RESEND_API_KEY` with `wrangler secret put`. Do not put that key in `vars`.
+Do not commit a from-address mailbox. Do not add Twilio.
 
 ## Local Worker
 

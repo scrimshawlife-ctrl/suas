@@ -424,9 +424,9 @@ describe('RESILIENCE.md §17.1 — notification provider unavailable', () => {
       tenantId,
       recipientUserId: userId,
       destination: syntheticEmail('drill-recipient'),
-      reason: 'drill_provider_outage',
+      reason: 'followup_due',
       channel: 'EMAIL',
-      templateVersion: 'drill@1',
+      templateVersion: 'followup@1',
       disclosure,
     });
 
@@ -436,7 +436,6 @@ describe('RESILIENCE.md §17.1 — notification provider unavailable', () => {
       tenantId,
       notificationId: enqueued.notification.notificationId,
       disclosure,
-      renderBody: () => 'Synthetic notification body.',
     });
 
     const after = await findNotification(poolA(), tenantId, enqueued.notification.notificationId);
@@ -479,9 +478,9 @@ describe('RESILIENCE.md §17.3 — duplicate provider webhook', () => {
       tenantId,
       recipientUserId: userId,
       destination: syntheticEmail('drill-webhook'),
-      reason: 'drill_duplicate_webhook',
+      reason: 'followup_due',
       channel: 'EMAIL',
-      templateVersion: 'drill@1',
+      templateVersion: 'followup@1',
       disclosure,
     });
 

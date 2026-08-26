@@ -53,6 +53,8 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
     const example = readFileSync(new URL('../../.env.example', import.meta.url), 'utf8');
     // The session secret slot must ship empty rather than with usable material.
     expect(example).toMatch(/^SUAS_SESSION_SECRET=\s*$/m);
+    expect(example).toMatch(/^RESEND_API_KEY=\s*$/m);
+    expect(example).toMatch(/^SUAS_EMAIL_FROM=\s*$/m);
   });
 
   it('does not track a .env file or key material', () => {
@@ -75,8 +77,12 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
     expect(wrangler).not.toMatch(/postgres(ql)?:\/\//);
     expect(wrangler).not.toMatch(/neon\.tech/);
     expect(wrangler).not.toMatch(/SUAS_SESSION_SECRET\s*:/);
+    expect(wrangler).not.toMatch(/RESEND_API_KEY/);
+    expect(wrangler).not.toMatch(/SUAS_EMAIL_FROM/);
     expect(wrangler).toContain('YOUR_HYPERDRIVE_ID');
     expect(wrangler).toContain('nodejs_compat');
+    expect(wrangler).toContain('"SUAS_EMAIL_MODE": "sink"');
+    expect(wrangler).toContain('"SUAS_ALLOW_REAL_EXTERNAL_EFFECTS": "false"');
   });
 });
 
