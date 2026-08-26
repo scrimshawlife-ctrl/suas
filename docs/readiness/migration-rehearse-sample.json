@@ -1,0 +1,10 @@
+{
+  "database": "migrations_test",
+  "migration_files": 11,
+  "already_applied": 0,
+  "pending": 11,
+  "status": "ok",
+  "applied": 11,
+  "rto_rpo_verdict": "NOT_COMPUTABLE",
+  "note": "D-024 envelopes absent — empty-DB apply rehearsal only"
+}

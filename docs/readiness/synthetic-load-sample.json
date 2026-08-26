@@ -1,0 +1,10 @@
+{
+  "concurrency": 5,
+  "samples": 20,
+  "failures": 0,
+  "p50_ms": 5.98,
+  "p95_ms": 28.05,
+  "max_ms": 28.97,
+  "slo_verdict": "NOT_COMPUTABLE",
+  "note": "D-021/D-023 envelopes absent — measurements only"
+}
