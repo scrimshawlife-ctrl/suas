@@ -164,11 +164,12 @@ h3 { font-size: 1rem; margin: 1rem 0 0.25rem; }
 
 .loop {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0;
+  row-gap: 0.45rem;
   margin: 1.25rem 0 0.25rem;
   padding: 0;
-  overflow-x: auto;
   list-style: none;
   color: var(--bone-dim);
   font-family: var(--font-mono);
