@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { fetchWithTimeout } from '../resilience/outbound-fetch.js';
 import type { JsonObject } from '../jobs/index.js';
 import type {
   AdapterHealth,
@@ -137,7 +138,7 @@ export interface UberTripDto {
 
 const globalFetchTransport: FetchTransport = {
   fetch(url, init) {
-    return fetch(url, init);
+    return fetchWithTimeout(url, init);
   },
 };
 

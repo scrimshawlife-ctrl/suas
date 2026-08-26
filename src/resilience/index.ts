@@ -27,6 +27,7 @@ export {
   type ProfilePlan,
   type WorkloadDimension,
 } from './envelope.js';
+export { fetchWithTimeout, OUTBOUND_FETCH_TIMEOUT_MS } from './outbound-fetch.js';
 export {
   assembleDrillReport,
   DuplicateDrillResultError,

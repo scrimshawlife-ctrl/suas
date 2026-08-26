@@ -46,6 +46,11 @@ export interface ServerDependencies {
   readonly challengeDelivery?: ChallengeDeliveryPort;
   readonly mfa?: MfaPort;
   readonly jobQueue?: DurableJobQueuePort;
+  /**
+   * Fastify logger. `false` disables pino (Worker isolates cannot use
+   * worker_threads). Default keeps the Node structured logger.
+   */
+  readonly logger?: boolean;
 }
 
 export interface RegisteredApiRoute {
@@ -79,18 +84,21 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
   registeredApiRoutes.length = 0;
 
   const app = Fastify({
-    logger: {
-      level: deps.config.logLevel,
-      // ENVIRONMENT.md §6: secret material is never written to logs.
-      redact: {
-        paths: [
-          'req.headers.authorization',
-          'req.headers.cookie',
-          'req.headers["idempotency-key"]',
-        ],
-        remove: true,
-      },
-    },
+    logger:
+      deps.logger === false
+        ? false
+        : {
+            level: deps.config.logLevel,
+            // ENVIRONMENT.md §6: secret material is never written to logs.
+            redact: {
+              paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                'req.headers["idempotency-key"]',
+              ],
+              remove: true,
+            },
+          },
     genReqId: (req) => {
       const header = req.headers['x-request-id'];
       const supplied = Array.isArray(header) ? header[0] : header;

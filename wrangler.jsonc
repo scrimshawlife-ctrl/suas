@@ -1,0 +1,42 @@
+{
+  // SUAS Fastify app on Cloudflare Workers.
+  // Replace YOUR_HYPERDRIVE_ID with the id from `npx wrangler hyperdrive create`.
+  // Never put DATABASE_URL, Neon passwords, or Hyperdrive connection strings here.
+  "name": "suas",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1,
+    },
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "YOUR_HYPERDRIVE_ID",
+    },
+  ],
+  "vars": {
+    // LOCAL is the only class that can start the HTTP+jobs path while D-022
+    // is open. PRODUCTION stays rejected until SPEC-018. STAGING still fails
+    // closed on the durable job product.
+    "SUAS_ENV": "LOCAL",
+    "SUAS_SPEC_VERSION": "0.2.0",
+    "SUAS_RELEASE_MANIFEST": "RELEASE_MANIFEST-0.2.0.md",
+    "SUAS_ALLOW_REAL_EXTERNAL_EFFECTS": "false",
+    "SUAS_MIGRATIONS_MODE": "validate",
+    "DATABASE_POOL_MAX": "5",
+    "SUAS_EMAIL_MODE": "sink",
+    "SUAS_SMS_MODE": "sink",
+    "SUAS_TRANSPORTATION_ADAPTER_MODE": "fake",
+    "SUAS_SHELTER_ADAPTER_MODE": "fake",
+    "SUAS_FOOD_ADAPTER_MODE": "fake",
+    "SUAS_PEER_SUPPORT_ADAPTER_MODE": "manual",
+    "SUAS_SUPPORT_SIGNAL_MODE": "fixture",
+    "SUAS_SAFETY_COPY_MODE": "placeholder_test_only",
+    "SUAS_SENSITIVE_AGGREGATE_REPORTING": "disabled",
+    "SUAS_LOG_LEVEL": "info",
+  },
+}

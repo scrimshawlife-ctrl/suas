@@ -49,6 +49,7 @@ Commands:
 | `npm run migrate -- validate`    | verify schema state without mutating it                |
 | `npm run provenance`             | print the build-info object                            |
 | `npm run privacy:deletion-drill` | synthetic deletion path against the TEST database      |
+| `npm run worker:dev`             | Wrangler local Worker (`src/worker.ts`, no `listen()`) |
 
 Integration tests use two databases, created once:
 
@@ -60,6 +61,35 @@ createdb suas_migrations_test
 `suas_test` is shared by the suites and is migrated automatically before the run. The
 migration-harness tests rebuild a schema from empty, so they own `suas_migrations_test`
 separately. Override either with `TEST_DATABASE_URL` and `TEST_MIGRATIONS_DATABASE_URL`.
+
+## Cloudflare Workers
+
+Compute for `/app` and `/api/v0` is a Cloudflare Worker (`wrangler.jsonc`,
+`src/worker.ts`). The Worker builds the existing Fastify app once per isolate
+with `listen: false` and answers through `inject()`. GitHub Pages `docs/`
+stays the static poster and is not the API host.
+
+Request-path Postgres uses **Cloudflare Hyperdrive** and `node-postgres`
+(`nodejs_compat`). The isolate reads `env.HYPERDRIVE.connectionString` as
+`DATABASE_URL` and forces `SUAS_MIGRATIONS_MODE=validate`. If the recorded
+schema version is not `11`, startup fails closed and the fetch handler
+returns `503`. Apply migrations with `npm run migrate` against the
+**unpooled** URL in `.env`. Never put that URL, a Neon password, or a
+Hyperdrive connection string in `wrangler.jsonc`.
+
+Store `SUAS_SESSION_SECRET` with `npx wrangler secret put SUAS_SESSION_SECRET`.
+Copy `.dev.vars.example` to `.dev.vars` for `wrangler dev`. Replace
+`YOUR_HYPERDRIVE_ID` in `wrangler.jsonc` with the id from
+`npx wrangler hyperdrive create` — do not commit connection strings.
+
+`wrangler.jsonc` sets `SUAS_ENV=LOCAL` because STAGING/PRODUCTION still fail
+closed on the durable job product (D-022) and PRODUCTION stays rejected until
+SPEC-018. Email and SMS stay `sink`. This repository does not deploy a live
+Worker and does not claim production readiness.
+
+Cloudflare published limits (not SUAS SLOs): 30 s CPU default on paid plans
+(10 ms on free), 128 MB memory, 50 subrequests per invocation on free / 10,000
+on paid. See [docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
 
 HTTP surface so far:
 

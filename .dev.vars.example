@@ -1,0 +1,8 @@
+# Local wrangler secrets — copy to .dev.vars (gitignored).
+# Never commit a filled copy. Never put a Neon or Hyperdrive URL here.
+#
+# The Worker request path reads DATABASE_URL from the Hyperdrive binding,
+# not from this file. Apply migrations with `npm run migrate` and the
+# unpooled URL in `.env`.
+
+SUAS_SESSION_SECRET=

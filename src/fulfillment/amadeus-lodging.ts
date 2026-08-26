@@ -1,4 +1,5 @@
 import type { JsonObject } from '../jobs/index.js';
+import { fetchWithTimeout } from '../resilience/outbound-fetch.js';
 import type {
   AdapterHealth,
   FulfillmentAdapter,
@@ -42,7 +43,7 @@ interface TokenCache {
 
 const globalFetchTransport: AmadeusFetchTransport = {
   fetch(url, init) {
-    return fetch(url, init);
+    return fetchWithTimeout(url, init);
   },
 };
 
