@@ -301,6 +301,21 @@ export async function listGrantsForVeteran(
   return result.rows.map(toGrant);
 }
 
+/** Tenant-scoped grant lookup for HTTP ownership checks. */
+export async function findConsentGrant(
+  db: Queryable,
+  tenantId: string,
+  consentGrantId: string,
+): Promise<ConsentGrant | undefined> {
+  const result = await db.query<GrantRow>(
+    `SELECT ${GRANT_COLUMNS} FROM consent_grants
+     WHERE tenant_id = $1 AND consent_grant_id = $2`,
+    [tenantId, consentGrantId],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : toGrant(row);
+}
+
 export async function listConsentEvents(
   db: Queryable,
   tenantId: string,

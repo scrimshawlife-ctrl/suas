@@ -43,6 +43,7 @@ export {
 export {
   expireDueGrants,
   findActiveGrant,
+  findConsentGrant,
   grantConsent,
   listConsentEvents,
   listGrantsForVeteran,
