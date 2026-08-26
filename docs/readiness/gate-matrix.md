@@ -1,7 +1,7 @@
 # Twelve-gate evidence matrix — SPEC-018
 
 **Stack:** `0.2.0`  
-**Runtime head:** `428c20d` (#71) + settlement doc refresh  
+**Runtime head:** `e8d3082` (#79) — resolve + Settlement reads; OpenAPI 46  
 **Verdict vocabulary:** `READY` | `NOT_READY` | `NOT_COMPUTABLE`
 
 | Gate                 | Verdict        | Evidence                                                                  | Remaining blockers                                 | Owner                   | Smallest next action                                           | Blocks       |
@@ -9,7 +9,7 @@
 | AUTH                 | NOT_READY      | HTTP auth + MFA; rate-limit adversarial (`http-security`); session revoke | Staging abuse SLO; inferred constants              | Eng + owner (constants) | Close AUTH constant D-0xx or accept inferred with release note | Pilot        |
 | CONSENT              | NOT_READY      | Domain + consents list/grant/revoke + trusted-circle JSON                 | Staging soak; human policy review                  | Eng                     | Staging evidence under fixture mode                            | Pilot        |
 | CHECK-IN             | NOT_READY      | HTTP start/answer/complete + scoring                                      | Staging soak                                       | Eng                     | Staging evidence under fixture mode                            | Pilot        |
-| COORDINATION         | NOT_READY      | Cases/claim; SR create+commands; follow-ups; veterans/me                  | Durable async (D-022); staging soak                | Eng + owner             | D-022 durable adapter                                          | Pilot        |
+| COORDINATION         | NOT_READY      | Cases/claim/assign/resolve; settlements; SR; follow-ups; veterans/me      | Durable async (D-022); staging soak                | Eng + owner             | D-022 durable adapter                                          | Pilot        |
 | EXTERNAL_FULFILLMENT | NOT_READY      | Ports/fakes/manual; admin adapter config                                  | Real provider effects prohibited; vendor decisions | Owner                   | Keep UNAVAILABLE until authorized                              | Production   |
 | UI_CONFORMANCE       | NOT_READY      | HTML reference surfaces + fixtures                                        | Human a11y / visual baseline                       | Eng + human             | Pinned baseline review                                         | Pilot        |
 | SAFETY               | NOT_READY      | D-012 HTML + JSON immediate-resources; no dispatch                        | Approved copy mode ops checklist                   | Eng                     | Staging `approved` mode review                                 | Pilot        |
