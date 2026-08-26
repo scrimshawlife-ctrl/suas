@@ -30,6 +30,8 @@ export function createPool(config: SuasConfig): Pool {
     max: config.database.poolMax,
     // Finite timeouts, per ARCHITECTURE.md §13. These are implementation
     // mechanism values; no production SLO is implied (RELEASE_MANIFEST-0.1.1.md).
+    // On Cloudflare Workers the URL is the Hyperdrive pooled string; Hyperdrive
+    // is the network pooler and this Pool is the per-isolate client cache.
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
   });

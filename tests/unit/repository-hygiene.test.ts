@@ -64,12 +64,26 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
     );
     expect(offenders).toEqual([]);
   });
+
+  it('does not commit Worker secrets, connection strings, or Fly compute files', () => {
+    const files = repositoryFiles();
+    expect(
+      files.filter((file) => /^(fly\.toml|Dockerfile|docker-compose\.ya?ml)$/.test(file)),
+    ).toEqual([]);
+
+    const wrangler = readFileSync(new URL('../../wrangler.jsonc', import.meta.url), 'utf8');
+    expect(wrangler).not.toMatch(/postgres(ql)?:\/\//);
+    expect(wrangler).not.toMatch(/neon\.tech/);
+    expect(wrangler).not.toMatch(/SUAS_SESSION_SECRET\s*:/);
+    expect(wrangler).toContain('YOUR_HYPERDRIVE_ID');
+    expect(wrangler).toContain('nodejs_compat');
+  });
 });
 
 describe('TESTING.md §12 — fixtures are synthetic', () => {
   it('contains no routable contact data in tracked source, fixture, or doc files', () => {
     const scannable = repositoryFiles().filter(
-      (file) => /\.(ts|js|sql|json|md|yml|yaml)$/.test(file) && file !== 'package-lock.json',
+      (file) => /\.(ts|js|sql|json|jsonc|md|yml|yaml)$/.test(file) && file !== 'package-lock.json',
     );
 
     const findings: string[] = [];

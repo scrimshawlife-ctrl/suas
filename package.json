@@ -20,6 +20,7 @@
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
     "dev": "tsx watch src/main.ts",
+    "worker:dev": "npx wrangler dev",
     "start": "node dist/main.js",
     "migrate": "tsx src/cli/migrate.ts",
     "provenance": "tsx src/cli/provenance.ts",
