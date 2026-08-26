@@ -26,11 +26,13 @@ import {
   h1,
   h2,
   h3,
+  header,
   input,
   label,
   li,
   main,
   nav,
+  ol,
   p,
   raw,
   render,
@@ -73,6 +75,48 @@ import type {
 import type { CategoryCard } from './categories.js';
 
 /**
+ * Pages typefaces. Same families as `docs/index.html`; fallbacks stay in
+ * `theme.ts` if the network request does not complete.
+ */
+const FONT_LINKS = [
+  '<link rel="preconnect" href="https://fonts.googleapis.com">',
+  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
+  '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">',
+].join('\n');
+
+/** Circle plus horizontal axis. Not a vertical strike. */
+const ZERO_MARK = raw(
+  '<svg class="zero-mark" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">' +
+    '<circle cx="16" cy="16" r="8.25" fill="none" stroke="currentColor" stroke-width="1.35"></circle>' +
+    '<line x1="3.5" y1="16" x2="28.5" y2="16" stroke="currentColor" stroke-width="1.35"></line>' +
+    '</svg>',
+);
+
+/** Canonical loop. CONTEXT.md; do not invent steps. */
+const CANONICAL_LOOP = [
+  'SIGNAL',
+  'NEED',
+  'CONSENT',
+  'COORDINATION',
+  'FULFILLMENT',
+  'FOLLOW-UP',
+  'SETTLEMENT',
+] as const;
+
+/**
+ * Shared chrome: zero-mark, wordmark, and the SPEC-017 not-ready pill.
+ *
+ * Not a surface. Sits outside `main` so the skip link still jumps to content.
+ */
+function siteChrome(): Renderable {
+  return header(
+    { class: 'site-chrome' },
+    span({ class: 'brand' }, ZERO_MARK, span({ class: 'brand-name' }, 'zer0state')),
+    p({ class: 'status-pill' }, 'SPEC-017 · NOT READY'),
+  );
+}
+
+/**
  * Wrap a surface in the document shell.
  *
  * `lang` (WCAG 3.1.1), a skip link (2.4.1), one `main` landmark, and a viewport
@@ -86,12 +130,14 @@ function document(shell: ShellViewModel, body: Renderable): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0D0C">
 <title>${render(shell.title)} — SUAS</title>
+${FONT_LINKS}
 <style>${STYLESHEET}</style>
 </head>
 <body>${render([
         a({ href: '#main', class: 'skip-link' }, 'Skip to main content'),
-        div({ class: 'shell' }, main({ id: 'main' }, body)),
+        div({ class: 'shell' }, [siteChrome(), main({ id: 'main' }, body)]),
         shell.showMobileNav ? mobileNav(shell) : undefined,
       ])}</body>
 </html>`),
@@ -244,10 +290,14 @@ export function renderLanding(model: LandingViewModel): string {
     h1({}, 'Shut Up and Serve'),
     // §7.4: mission framing without statistics or clinical efficacy claims.
     p({}, model.missionLine),
+    ol(
+      { class: 'loop', 'aria-label': 'Canonical support loop' },
+      CANONICAL_LOOP.map((step) => li({}, step)),
+    ),
     section(
       { 'aria-labelledby': 'take-action' },
       // §3.1 / §5: the action block is immediate and dominant.
-      h2({ id: 'take-action' }, 'TAKE ACTION'),
+      h2({ id: 'take-action', class: 'kicker' }, 'TAKE ACTION'),
       a({ class: 'action', href: '/app/join?role=veteran' }, 'I NEED SUPPORT'),
       a({ class: 'action', href: '/app/join?role=responder' }, 'I WANT TO SERVE'),
     ),

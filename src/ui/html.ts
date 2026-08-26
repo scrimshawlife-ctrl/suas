@@ -145,6 +145,7 @@ export const p = tagFn('p');
 export const div = tagFn('div');
 export const span = tagFn('span');
 export const ul = tagFn('ul');
+export const ol = tagFn('ol');
 export const li = tagFn('li');
 export const a = tagFn('a');
 export const button = tagFn('button');
