@@ -23,9 +23,11 @@ import {
 import {
   assignCase,
   claimCase,
+  DEFAULT_PAGE_SIZE,
   executeCaseCommand,
   findActiveAssignment,
   findCase,
+  MAX_PAGE_SIZE,
   readCaseQueue,
   type CaseCommand,
   type SupportCase,
@@ -107,6 +109,10 @@ const settlementParams = z.object({
 });
 const listQuery = z.object({
   ownership: z.enum(['unassigned', 'mine']).default('unassigned'),
+  // API.md §5: cursor + limit, default 20, maximum 100. The bounds come from the
+  // queue module so the route cannot drift from the keyset reader it calls.
+  cursor: z.string().min(1).max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });
 const assignBody = z.object({
   responder_user_id: z.string().uuid(),
@@ -195,7 +201,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
       query.ownership === 'mine'
         ? { ownership: 'mine', responderUserId: context.userId }
         : { ownership: 'unassigned' },
-      { limit: 20 },
+      { limit: query.limit, ...(query.cursor !== undefined ? { cursor: query.cursor } : {}) },
     );
     return {
       cases: page.cases.map(publicCase),
