@@ -30,6 +30,13 @@ export {
   VISUAL_FIXTURES,
   type VisualFixture,
 } from './fixtures.js';
+export {
+  presentCheckInResult,
+  startOrResumeCheckIn,
+  type PresentCheckInResultInput,
+  type StartOrResumeCheckInInput,
+  type StartOrResumeCheckInResult,
+} from './check-in.js';
 export { cancelQrf, deployQrf, VETERAN_QRF_CANCEL_REASON } from './commands.js';
 export { escapeHtml } from './html.js';
 export {
@@ -72,6 +79,8 @@ export {
   renderActiveNeeds,
   renderAdminOverview,
   renderChat,
+  renderCheckInSession,
+  renderCheckInStart,
   renderEnrollment,
   renderImmediateResources,
   renderLanding,
@@ -95,6 +104,12 @@ export {
   type ChatAvailability,
   type ChatThreadViewModel,
   type ChatViewModel,
+  type CheckInHomeLinkViewModel,
+  type CheckInOptionViewModel,
+  type CheckInQuestionViewModel,
+  type CheckInResultViewModel,
+  type CheckInSessionViewModel,
+  type CheckInStartViewModel,
   type DutyAvailability,
   type EnrollmentViewModel,
   type LandingViewModel,

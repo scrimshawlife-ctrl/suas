@@ -280,6 +280,35 @@ input[type='tel'] {
   background: var(--plate);
 }
 
+fieldset.check-in-options {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--plate);
+}
+
+fieldset.check-in-options legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+
+label.option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: ${String(PRIMARY_TARGET_PX)}px;
+  margin: 0.35rem 0;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+input[type='radio'] {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--olive);
+}
+
 /* 2.5.8 target size floor for every remaining interactive element. */
 a, button, input, [role="button"] {
   min-height: ${String(MIN_TARGET_PX)}px;

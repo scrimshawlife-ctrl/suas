@@ -25,8 +25,9 @@
 
 The Slice 10 follow-on wires released deploy / cancel / claim HTML POSTs.
 On-duty HTML now states unavailability (G-I-30) instead of posting a 404 form.
-Join, chat, and metrics stay unwired residuals. SPEC-017 and `UI_CONFORMANCE`
-do **not** advance.
+A signed-in veteran can finish `qv-001` on `/app/check-ins` using the same
+domain functions as the JSON API. Join, chat, and metrics stay unwired
+residuals. SPEC-017 and `UI_CONFORMANCE` do **not** advance.
 
 Slices 1–12 each record conformance and returned gaps. Slice 12 registers the
 released `sv-001` engine. APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2

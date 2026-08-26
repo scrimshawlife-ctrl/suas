@@ -327,11 +327,11 @@ export async function listQuestionsWithOptions(
  * in-flight Check-In does not move it.
  */
 export async function startCheckIn(
-  pool: Pool,
+  db: Queryable,
   input: { tenantId: string; veteranUserId: string },
 ): Promise<CheckIn> {
-  const published = await currentPublishedVersion(pool, input.tenantId);
-  const global = published ?? (await currentPublishedVersion(pool));
+  const published = await currentPublishedVersion(db, input.tenantId);
+  const global = published ?? (await currentPublishedVersion(db));
   if (global === undefined) {
     throw new QuestionnaireError(
       'No published questionnaire version exists, so a Check-In cannot be started ' +
@@ -339,7 +339,7 @@ export async function startCheckIn(
     );
   }
 
-  const result = await pool.query<CheckInRow>(
+  const result = await db.query<CheckInRow>(
     `INSERT INTO check_ins (check_in_id, tenant_id, veteran_user_id, questionnaire_version)
      VALUES ($1, $2, $3, $4)
      RETURNING ${CHECK_IN_COLUMNS}`,
@@ -348,6 +348,42 @@ export async function startCheckIn(
   const row = result.rows[0];
   if (row === undefined) throw new Error('Check-in insert returned no row.');
   return toCheckIn(row);
+}
+
+/**
+ * The veteran's latest in-flight Check-In, if one exists.
+ *
+ * CHECKINS.md §4: `STARTED` and `IN_PROGRESS` are the in-flight states.
+ * §4.3: a correction after completion is a new Check-In, so a completed row
+ * is not resumed.
+ */
+export async function findInProgressCheckIn(
+  db: Queryable,
+  tenantId: string,
+  veteranUserId: string,
+): Promise<CheckIn | undefined> {
+  const result = await db.query<CheckInRow>(
+    `SELECT ${CHECK_IN_COLUMNS} FROM check_ins
+     WHERE tenant_id = $1 AND veteran_user_id = $2
+       AND status IN ('STARTED', 'IN_PROGRESS')
+     ORDER BY started_at DESC, check_in_id DESC
+     LIMIT 1`,
+    [tenantId, veteranUserId],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : toCheckIn(row);
+}
+
+/** Question ids that already have a response on this Check-In. */
+export async function listAnsweredQuestionIds(
+  db: Queryable,
+  checkInId: string,
+): Promise<readonly string[]> {
+  const result = await db.query<{ question_id: string }>(
+    `SELECT question_id FROM check_in_responses WHERE check_in_id = $1`,
+    [checkInId],
+  );
+  return result.rows.map((row) => row.question_id);
 }
 
 export async function saveResponse(
