@@ -42,16 +42,49 @@
         "operationId": "getHealth",
         "responses": {
           "200": {
-            "description": "Process is up",
+            "description": "Process is up; dependency posture without secrets",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["status"],
+                  "required": ["status", "dependencies"],
                   "properties": {
                     "status": {
                       "type": "string",
                       "enum": ["ok"]
+                    },
+                    "dependencies": {
+                      "type": "object",
+                      "required": ["database", "job_queue"],
+                      "properties": {
+                        "database": {
+                          "type": "object",
+                          "required": ["status"],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": ["configured", "absent"]
+                            }
+                          }
+                        },
+                        "job_queue": {
+                          "type": "object",
+                          "required": ["status"],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": ["configured", "absent"]
+                            },
+                            "durability": {
+                              "type": "string",
+                              "enum": ["durable", "non-durable"]
+                            },
+                            "implementation": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }

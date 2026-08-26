@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
 import {
+  assertJobPortConformance,
   createJobQueue,
   DurableJobQueueUnavailableError,
   InMemoryJobQueue,
@@ -69,5 +70,17 @@ describe('InMemoryJobQueue', () => {
     });
     expect(other.deduplicated).toBe(false);
     expect(queue.enqueued()).toHaveLength(2);
+  });
+
+  it('satisfies the durable-job port conformance suite', async () => {
+    const result = await assertJobPortConformance(new InMemoryJobQueue());
+    expect(result.durability).toBe('non-durable');
+    expect(result.checks.map((check) => check.name)).toEqual([
+      'declares_implementation',
+      'declares_durability',
+      'distinct_work_gets_distinct_ids',
+      'idempotency_key_deduplicates',
+      'idempotency_is_tenant_scoped',
+    ]);
   });
 });

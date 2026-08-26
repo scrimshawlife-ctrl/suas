@@ -143,8 +143,22 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
   });
 
   app.get(`${API_PREFIX}/health`, () => {
-    // Liveness only. No provenance, configuration, or tenant data.
-    return { status: 'ok' };
+    // Liveness plus non-secret dependency posture. No provenance secrets,
+    // configuration values, or tenant data (ENVIRONMENT.md §8; API.md health).
+    return {
+      status: 'ok',
+      dependencies: {
+        database: deps.pool !== undefined ? { status: 'configured' } : { status: 'absent' },
+        job_queue:
+          deps.jobQueue !== undefined
+            ? {
+                status: 'configured',
+                durability: deps.jobQueue.durability,
+                implementation: deps.jobQueue.implementation,
+              }
+            : { status: 'absent' },
+      },
+    };
   });
 
   const pool = deps.pool;
