@@ -29,6 +29,8 @@ import { registerCaseRoutes } from './routes/cases.js';
 import { registerCheckInRoutes } from './routes/check-ins.js';
 import { registerConsentRoutes } from './routes/consents.js';
 import { registerResourceRoutes } from './routes/resources.js';
+import { registerServiceRequestRoutes } from './routes/service-requests.js';
+import { registerTrustedContactRoutes } from './routes/trusted-contacts.js';
 import { registerUiRoutes } from './routes/ui.js';
 import { registerVeteranRoutes } from './routes/veterans.js';
 
@@ -221,6 +223,16 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     });
 
     registerConsentRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerServiceRequestRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerTrustedContactRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
     });

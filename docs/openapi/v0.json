@@ -907,6 +907,137 @@
           }
         }
       }
+    },
+    "/api/v0/cases/{caseId}/service-requests": {
+      "get": {
+        "tags": ["cases"],
+        "summary": "List service requests for a visible case",
+        "operationId": "listCaseServiceRequests",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded service-request list"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/service-requests/{id}": {
+      "get": {
+        "tags": ["cases"],
+        "summary": "Read one service request visible to the actor",
+        "operationId": "getServiceRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service request projection"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/trusted-contacts": {
+      "get": {
+        "tags": ["consent"],
+        "summary": "List the veteran trusted circle",
+        "operationId": "listTrustedContacts",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trusted contacts without invite channel literals"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": ["consent"],
+        "summary": "Invite a trusted contact",
+        "operationId": "inviteTrustedContact",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Invite recorded"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/trusted-contacts/{id}/commands/remove": {
+      "post": {
+        "tags": ["consent"],
+        "summary": "Remove an owned trusted contact",
+        "operationId": "removeTrustedContact",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact removed"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

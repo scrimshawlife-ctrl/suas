@@ -17,6 +17,10 @@ export {
   type SignalLevel,
 } from './engine.js';
 export {
+  SupportSignalModeDisabledError,
+  assertSupportSignalScoringEnabled,
+} from './scoring-mode.js';
+export {
   computeSv001,
   IMPUTED_REQUIRED_NON_SAFETY_WEIGHT,
   MISSING_REQUIRED_SAFETY_INPUT,

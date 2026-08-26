@@ -23,6 +23,7 @@ import type {
   SignalEngine,
   SignalLevel,
 } from './engine.js';
+import { assertSupportSignalScoringEnabled } from './scoring-mode.js';
 
 /** SIGNAL_SCORING.md B1 / CHECKINS.md §3. Exactly these six dimensions. */
 export const QV_001_DIMENSIONS = [
@@ -292,6 +293,10 @@ function levelForRule(ruleId: SignalRuleId): SignalLevel {
  * equivalent basis. Missing required safety input throws and returns no basis.
  */
 export function computeSv001(input: CanonicalSignalInput): SignalComputation {
+  // ENVIRONMENT.md §3: disabled mode must refuse every application-exported path,
+  // including this helper and SV_001_ENGINE.compute (not only computeSignal).
+  assertSupportSignalScoringEnabled();
+
   // B5: scoring identity is exact qv-001. Absent, unknown, and mismatched versions
   // all refuse — there is no implicit default questionnaire.
   if (input.questionnaireVersion !== QV_001_VERSION) {
