@@ -8,6 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
+import { openCase } from '../../src/coordination/index.js';
+import { withTransaction } from '../../src/db/index.js';
 import { createMembership, createOrganization, createUser } from '../../src/identity/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -164,5 +166,138 @@ describe('GET /api/v0/cases', () => {
     expect(dashboard.statusCode).toBe(200);
     expect(dashboard.body).toContain('Unassigned');
     expect(dashboard.body).toContain(caseId);
+  });
+});
+
+/**
+ * Cursor pagination over the responder queue.
+ *
+ * SUAS-specs API.md §5: growing lists are cursor-paginated with `cursor` +
+ * `limit`, default 20 and maximum 100, and no unbounded sensitive list endpoint.
+ * TESTING.md §8 requires bounded page size and deterministic keyset-safe ordering.
+ */
+describe('GET /api/v0/cases pagination', () => {
+  /** Distinct veterans, because CASES.md §3.1 allows one active case each. */
+  async function openCasesFor(tenantId: string, count: number): Promise<string[]> {
+    const pool = app.pool;
+    if (pool === undefined) throw new Error('no pool');
+    const caseIds: string[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const veteran = await createUser(pool, {
+        tenantId,
+        email: syntheticEmail(`vet-page-${randomUUID().slice(0, 8)}`),
+        status: 'ACTIVE',
+      });
+      const opened = await withTransaction(pool, (tx) =>
+        openCase(tx, {
+          tenantId,
+          veteranUserId: veteran.userId,
+          actorType: 'SYSTEM',
+          actorId: veteran.userId,
+        }),
+      );
+      caseIds.push(opened.supportCase.caseId);
+    }
+    return caseIds;
+  }
+
+  it('walks every case exactly once across pages', async () => {
+    const tenantId = randomUUID();
+    const opened = await openCasesFor(tenantId, 5);
+    const responder = await responderOn(tenantId);
+
+    const seen: string[] = [];
+    let url = '/api/v0/cases?ownership=unassigned&limit=2';
+    let pages = 0;
+
+    for (;;) {
+      const response = await app.server.inject({ method: 'GET', url, headers: responder.headers });
+      expect(response.statusCode).toBe(200);
+      const page: { cases: { case_id: string }[]; next_cursor: string | null } = response.json();
+      expect(page.cases.length).toBeLessThanOrEqual(2);
+      seen.push(...page.cases.map((entry) => entry.case_id));
+      pages += 1;
+      if (page.next_cursor === null) break;
+      if (pages > 10) throw new Error('cursor did not terminate');
+      url = `/api/v0/cases?ownership=unassigned&limit=2&cursor=${encodeURIComponent(page.next_cursor)}`;
+    }
+
+    expect(pages).toBe(3);
+    expect(new Set(seen).size).toBe(seen.length);
+    expect([...seen].sort()).toEqual([...opened].sort());
+  });
+
+  it('defaults to a bounded page and caps an oversized limit', async () => {
+    const tenantId = randomUUID();
+    await openCasesFor(tenantId, 1);
+    const responder = await responderOn(tenantId);
+
+    const defaulted = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/cases?ownership=unassigned',
+      headers: responder.headers,
+    });
+    expect(defaulted.statusCode).toBe(200);
+
+    // Above MAX_PAGE_SIZE the request is rejected rather than silently widened,
+    // so a client cannot ask for an unbounded page (API.md §5).
+    const oversized = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/cases?ownership=unassigned&limit=101',
+      headers: responder.headers,
+    });
+    expect(oversized.statusCode).toBe(400);
+    expect(oversized.json().error.code).toBe('VALIDATION_FAILED');
+
+    const zero = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/cases?ownership=unassigned&limit=0',
+      headers: responder.headers,
+    });
+    expect(zero.statusCode).toBe(400);
+  });
+
+  it('rejects a malformed cursor with 400 rather than failing internally', async () => {
+    const tenantId = randomUUID();
+    await openCasesFor(tenantId, 1);
+    const responder = await responderOn(tenantId);
+
+    const response = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/cases?ownership=unassigned&cursor=not-a-real-cursor',
+      headers: responder.headers,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('keeps a cursor scoped to its tenant', async () => {
+    const tenantA = randomUUID();
+    const tenantB = randomUUID();
+    await openCasesFor(tenantA, 3);
+    const openedB = await openCasesFor(tenantB, 3);
+
+    const responderA = await responderOn(tenantA);
+    const firstA = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/cases?ownership=unassigned&limit=1',
+      headers: responderA.headers,
+    });
+    const pageA: { next_cursor: string | null } = firstA.json();
+    expect(pageA.next_cursor).not.toBeNull();
+
+    // Replaying tenant A's cursor as tenant B must not leak tenant A rows; the
+    // tenant comes from the session, never from the cursor (API.md §4).
+    const responderB = await responderOn(tenantB);
+    const replay = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/cases?ownership=unassigned&cursor=${encodeURIComponent(pageA.next_cursor ?? '')}`,
+      headers: responderB.headers,
+    });
+    expect(replay.statusCode).toBe(200);
+    const pageB: { cases: { case_id: string }[] } = replay.json();
+    for (const entry of pageB.cases) {
+      expect(openedB).toContain(entry.case_id);
+    }
   });
 });
