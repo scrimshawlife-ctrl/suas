@@ -29,6 +29,7 @@ import { registerCaseRoutes } from './routes/cases.js';
 import { registerCheckInRoutes } from './routes/check-ins.js';
 import { registerResourceRoutes } from './routes/resources.js';
 import { registerUiRoutes } from './routes/ui.js';
+import { registerVeteranRoutes } from './routes/veterans.js';
 
 export interface ServerDependencies {
   readonly config: SuasConfig;
@@ -197,6 +198,11 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       pool,
       sessionSecret: deps.config.sessionSecret,
       safetyCopyMode: deps.config.safetyCopyMode,
+    });
+
+    registerVeteranRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
     });
   }
 
