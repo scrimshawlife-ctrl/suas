@@ -22,6 +22,7 @@ import {
   div,
   dl,
   dt,
+  fieldset,
   form,
   h1,
   h2,
@@ -29,6 +30,7 @@ import {
   header,
   input,
   label,
+  legend,
   li,
   main,
   nav,
@@ -60,6 +62,8 @@ import type {
   ActiveNeedViewModel,
   AdminOverviewViewModel,
   ChatViewModel,
+  CheckInSessionViewModel,
+  CheckInStartViewModel,
   EnrollmentViewModel,
   LandingViewModel,
   QrfCardViewModel,
@@ -363,6 +367,18 @@ export function renderVeteranHome(model: VeteranHomeViewModel): string {
           )
         : qrfCard(model.activeQrf),
     ),
+    model.checkInLink === undefined
+      ? undefined
+      : section(
+          { 'aria-labelledby': 'check-in' },
+          h2({ id: 'check-in' }, 'Check-In'),
+          a({ class: 'action-secondary', href: model.checkInLink.href }, model.checkInLink.label),
+          p(
+            { class: 'muted' },
+            'Answer the published questionnaire. This is not a diagnosis. ' +
+              'Fixture Support Signal scoring is not a clinical score.',
+          ),
+        ),
     // §3.5 / §5: immediate resources sit above the broader catalog.
     immediateResources(model.safetyCopyMode),
     section(
@@ -656,6 +672,112 @@ export function renderAdminOverview(model: AdminOverviewViewModel): string {
     ),
   ]);
   return assertSurface('ADMIN_OVERVIEW', markup);
+}
+
+/**
+ * Start or resume a Check-In. Not in the MVP_REFERENCE.md §5 inventory, so this
+ * does not call `assertRequiredElementsPresent`.
+ */
+export function renderCheckInStart(model: CheckInStartViewModel): string {
+  const inProgress = model.inProgressHref !== undefined;
+  return document(model.shell, [
+    h1({}, 'Check-In'),
+    p(
+      {},
+      'Answer the published questionnaire. This is not a diagnosis and does not ' +
+        'contact emergency services.',
+    ),
+    p(
+      { class: 'muted' },
+      model.supportSignalMode === 'disabled'
+        ? 'Support Signal scoring is disabled in this environment. That is not a clinical score.'
+        : 'Support Signal scoring in this environment is fixture mode. That is not a clinical score.',
+    ),
+    inProgress
+      ? p({}, 'You have a Check-In in progress. Continue to pick up where you left off.')
+      : undefined,
+    form(
+      { method: 'post', action: '/app/check-ins' },
+      button(
+        { class: 'action', type: 'submit' },
+        inProgress ? 'Continue Check-In' : 'Start Check-In',
+      ),
+    ),
+    inProgress
+      ? a(
+          { class: 'action-secondary', href: model.inProgressHref ?? '/app/check-ins' },
+          'Open Check-In',
+        )
+      : undefined,
+    a({ class: 'action-secondary', href: '/app/home' }, 'Back to Support'),
+  ]);
+}
+
+/**
+ * One unanswered question, a complete action, or a truthful settled result.
+ *
+ * Not in the MVP_REFERENCE.md §5 inventory.
+ */
+export function renderCheckInSession(model: CheckInSessionViewModel): string {
+  const question = model.currentQuestion;
+  const result = model.result;
+  const saveAction = `/app/check-ins/${model.checkInId}/responses`;
+  const completeAction = `/app/check-ins/${model.checkInId}/commands/complete`;
+
+  return document(model.shell, [
+    h1({}, 'Check-In'),
+    p({}, span({ class: 'badge' }, model.status)),
+    p({ class: 'muted' }, `Questionnaire ${model.questionnaireVersion}`),
+    result === undefined
+      ? undefined
+      : stateBlock(result.statusLabel, result.headline, result.detail),
+    question === undefined
+      ? undefined
+      : [
+          model.questionIndex === undefined || model.questionCount === undefined
+            ? undefined
+            : p({ class: 'muted' }, `Question ${model.questionIndex} of ${model.questionCount}`),
+          form(
+            { method: 'post', action: saveAction },
+            input({ type: 'hidden', name: 'question_id', value: question.questionId }),
+            fieldset(
+              { class: 'check-in-options' },
+              legend({}, question.prompt),
+              question.required ? p({}, span({ class: 'badge' }, 'Required')) : undefined,
+              question.options.map((option) => {
+                const optionId = `option-${option.answerOptionId}`;
+                return label(
+                  { for: optionId, class: 'option' },
+                  input({
+                    id: optionId,
+                    type: 'radio',
+                    name: 'answer_option_id',
+                    value: option.answerOptionId,
+                    required: true,
+                  }),
+                  option.label,
+                );
+              }),
+            ),
+            button({ class: 'action', type: 'submit' }, 'Save answer'),
+          ),
+        ],
+    model.canComplete
+      ? [
+          h2({}, 'Finish this Check-In'),
+          form(
+            { method: 'post', action: completeAction },
+            button({ class: 'action-secondary', type: 'submit' }, 'Complete Check-In'),
+          ),
+          p(
+            { class: 'muted' },
+            'Completing without every required answer marks this Check-In incomplete. ' +
+              'No Support Signal is computed from an incomplete Check-In.',
+          ),
+        ]
+      : undefined,
+    a({ class: 'action-secondary', href: '/app/home' }, 'Back to Support'),
+  ]);
 }
 
 /** Render the persistent nav on its own, for the §11 fixture that covers it. */

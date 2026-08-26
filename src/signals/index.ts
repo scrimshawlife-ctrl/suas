@@ -44,6 +44,8 @@ export {
   createQuestionnaireVersion,
   currentPublishedVersion,
   findCheckIn,
+  findInProgressCheckIn,
+  listAnsweredQuestionIds,
   listQuestions,
   listQuestionsWithOptions,
   publishQuestionnaireVersion,

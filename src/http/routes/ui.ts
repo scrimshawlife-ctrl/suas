@@ -6,35 +6,52 @@
  * - SUAS-specs MVP_REFERENCE.md §7.5 (admin scope clearer than the prototype)
  * - SUAS-specs API.md §2 (`/api/v0` is the canonical *API* version selector)
  * - SUAS-specs API.md §4 (session required; tenant and authority are server-derived)
+ * - SUAS-specs CHECKINS.md §4 / §6 / §8 (Check-In states, complete, owner-only)
+ * - SUAS-specs SAFETY.md §3.2 (settled RED opens or updates a Support Case)
  * - SUAS-specs ADMIN.md §2 / SECURITY.md §2 (privileged surfaces need admin + MFA)
  *
  * These routes are mounted under `/app`, not `/api/v0`: API.md §2 governs the
  * JSON API's version selector, and an HTML surface is not a versioned API
  * resource. The surfaces read the same domain functions the API would. HTML
- * POSTs (deploy, cancel, claim) use the same session gate as the GET surfaces.
+ * POSTs (deploy, cancel, claim, Check-In start/response/complete) use the
+ * same session gate as the GET surfaces.
  *
  * Every handler resolves its own authorization. There is no "UI session" that
  * is weaker than an API session (AUTH.md §5).
  */
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
+import { z } from 'zod';
 import {
   assertMfaElevated,
   assertResponder,
   assertSuasAdmin,
   ResourceNotVisibleError,
 } from '../../authz/index.js';
-import type { SafetyCopyMode } from '../../config/index.js';
+import type { SafetyCopyMode, SupportSignalMode } from '../../config/index.js';
 import {
   CaseAlreadyClaimedError,
   claimCase,
   findActiveAssignment,
   findCase,
+  findNonClosedCase,
   IllegalCaseTransitionError,
   readCaseQueue,
 } from '../../coordination/index.js';
 import { searchResources } from '../../fulfillment/index.js';
+import type { DurableJobQueuePort } from '../../jobs/index.js';
+import {
+  completeCheckIn,
+  effectiveSignal,
+  findCheckIn,
+  findInProgressCheckIn,
+  listAnsweredQuestionIds,
+  listQuestionsWithOptions,
+  saveResponse,
+  type CheckIn,
+} from '../../signals/index.js';
+import { presentCheckInResult, startOrResumeCheckIn } from '../../ui/check-in.js';
 import { cancelQrf, deployQrf } from '../../ui/commands.js';
 import { D_012_APPROVED_SAFETY_COPY } from '../../ui/safety.js';
 import {
@@ -45,6 +62,8 @@ import {
   renderActiveNeeds,
   renderAdminOverview,
   renderChat,
+  renderCheckInSession,
+  renderCheckInStart,
   renderEnrollment,
   renderImmediateResources,
   renderLanding,
@@ -65,6 +84,8 @@ export interface UiRouteDependencies {
   readonly sessionSecret: string | undefined;
   /** D-012 safety-copy mode; controls the immediate-resources slot. */
   readonly safetyCopyMode: SafetyCopyMode;
+  readonly supportSignalMode: SupportSignalMode;
+  readonly jobQueue?: DurableJobQueuePort;
 }
 
 const HTML = 'text/html; charset=utf-8';
@@ -77,9 +98,51 @@ function shell(title: string, overrides: Partial<ShellViewModel> = {}): ShellVie
     ...(overrides.currentNav === undefined ? {} : { currentNav: overrides.currentNav }),
   };
 }
+const checkInIdParams = z.object({ id: z.string().uuid() });
+const checkInResponseBody = z.object({
+  question_id: z.string().uuid(),
+  answer_option_id: z.string().uuid(),
+});
+
+function parseFormBody(body: string): Record<string, string> {
+  const parsed: Record<string, string> = {};
+  for (const [key, value] of new URLSearchParams(body)) {
+    parsed[key] = value;
+  }
+  return parsed;
+}
+
+function registerHtmlFormParser(app: FastifyInstance): void {
+  if (app.hasContentTypeParser('application/x-www-form-urlencoded')) return;
+  app.addContentTypeParser(
+    'application/x-www-form-urlencoded',
+    { parseAs: 'string' },
+    (_request: FastifyRequest, body: string, done) => {
+      try {
+        done(null, parseFormBody(body));
+      } catch (error) {
+        done(error instanceof Error ? error : new Error('Invalid form body.'), undefined);
+      }
+    },
+  );
+}
+
+async function loadOwnedCheckIn(
+  pool: Pool,
+  tenantId: string,
+  userId: string,
+  checkInId: string,
+): Promise<CheckIn> {
+  const checkIn = await findCheckIn(pool, tenantId, checkInId);
+  if (checkIn === undefined || checkIn.veteranUserId !== userId) {
+    throw new ResourceNotVisibleError();
+  }
+  return checkIn;
+}
 
 export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies): void {
-  const { pool, sessionSecret, safetyCopyMode } = deps;
+  const { pool, sessionSecret, safetyCopyMode, supportSignalMode } = deps;
+  registerHtmlFormParser(app);
 
   // --- Public surfaces -------------------------------------------------------
   // §5 lists these as public: a veteran must be able to see the action surface
@@ -114,12 +177,18 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   app.get('/app/home', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     const active = await readActiveQrf(pool, context.tenantId, context.userId);
+    const inProgress = await findInProgressCheckIn(pool, context.tenantId, context.userId);
 
     await reply.type(HTML).send(
       renderVeteranHome({
         shell: shell('Support', { currentNav: 'HOME' }),
         categories: CATEGORY_CARDS,
         safetyCopyMode,
+        checkInLink: {
+          href:
+            inProgress === undefined ? '/app/check-ins' : `/app/check-ins/${inProgress.checkInId}`,
+          label: inProgress === undefined ? 'Start a Check-In' : 'Continue Check-In',
+        },
         ...(active === undefined
           ? {}
           : {
@@ -156,6 +225,119 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     });
     return reply.redirect('/app/home', 303);
   });
+
+  app.get('/app/check-ins', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    const inProgress = await findInProgressCheckIn(pool, context.tenantId, context.userId);
+    await reply.type(HTML).send(
+      renderCheckInStart({
+        shell: shell('Check-In'),
+        supportSignalMode,
+        ...(inProgress === undefined
+          ? {}
+          : { inProgressHref: `/app/check-ins/${inProgress.checkInId}` }),
+      }),
+    );
+  });
+
+  app.post('/app/check-ins', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    const started = await startOrResumeCheckIn(pool, {
+      tenantId: context.tenantId,
+      veteranUserId: context.userId,
+    });
+    return reply.redirect(`/app/check-ins/${started.checkIn.checkInId}`, 303);
+  });
+
+  app.get<{ Params: { id: string } }>('/app/check-ins/:id', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    const { id } = checkInIdParams.parse(request.params);
+    const checkIn = await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
+    const questions = await listQuestionsWithOptions(pool, checkIn.questionnaireVersion);
+    const answered = new Set(await listAnsweredQuestionIds(pool, checkIn.checkInId));
+    const nextIndex = questions.findIndex((question) => !answered.has(question.questionId));
+    const nextQuestion = nextIndex === -1 ? undefined : questions[nextIndex];
+    const settled =
+      checkIn.status === 'COMPLETED' ||
+      checkIn.status === 'INCOMPLETE' ||
+      checkIn.status === 'ABANDONED';
+    const signal = settled
+      ? await effectiveSignal(pool, context.tenantId, context.userId)
+      : undefined;
+    const supportCase =
+      signal?.level === 'RED'
+        ? await findNonClosedCase(pool, context.tenantId, context.userId)
+        : undefined;
+
+    await reply.type(HTML).send(
+      renderCheckInSession({
+        shell: shell('Check-In'),
+        checkInId: checkIn.checkInId,
+        status: checkIn.status,
+        questionnaireVersion: checkIn.questionnaireVersion,
+        canComplete: checkIn.status === 'STARTED' || checkIn.status === 'IN_PROGRESS',
+        ...(nextQuestion === undefined
+          ? {}
+          : {
+              questionIndex: nextIndex + 1,
+              questionCount: questions.length,
+              currentQuestion: {
+                questionId: nextQuestion.questionId,
+                prompt: nextQuestion.prompt,
+                required: nextQuestion.required,
+                options: nextQuestion.options.map((option) => ({
+                  answerOptionId: option.answerOptionId,
+                  label: option.label,
+                })),
+              },
+            }),
+        ...(settled
+          ? {
+              result: presentCheckInResult({
+                status: checkIn.status,
+                supportSignalMode,
+                supportCaseOpened: supportCase !== undefined,
+                ...(signal === undefined ? {} : { signalLevel: signal.level }),
+              }),
+            }
+          : {}),
+      }),
+    );
+  });
+
+  app.post<{ Params: { id: string } }>('/app/check-ins/:id/responses', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    const { id } = checkInIdParams.parse(request.params);
+    await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
+    const body = checkInResponseBody.parse(request.body);
+    await saveResponse(pool, {
+      tenantId: context.tenantId,
+      checkInId: id,
+      questionId: body.question_id,
+      answerOptionId: body.answer_option_id,
+    });
+    return reply.redirect(`/app/check-ins/${id}`, 303);
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/app/check-ins/:id/commands/complete',
+    async (request, reply) => {
+      const context = await authenticate(pool, sessionSecret, request);
+      const { id } = checkInIdParams.parse(request.params);
+      await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
+      await completeCheckIn(
+        pool,
+        {
+          tenantId: context.tenantId,
+          checkInId: id,
+          actorId: context.userId,
+          correlationId: String(request.id),
+        },
+        deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {},
+      );
+      return reply.redirect(`/app/check-ins/${id}`, 303);
+    },
+  );
 
   app.get('/app/immediate-resources', async (request, reply) => {
     await authenticate(pool, sessionSecret, request);

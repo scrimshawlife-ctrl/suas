@@ -16,7 +16,10 @@ import {
   CRISIS_ENTRY_NOT_EMERGENCY,
   DUTY_UNAVAILABLE_REASON,
   MissingRequiredElementError,
+  presentCheckInResult,
   renderChat,
+  renderCheckInSession,
+  renderCheckInStart,
   renderEnrollment,
   renderImmediateResources,
   renderResourceList,
@@ -141,12 +144,26 @@ describe('MVP_REFERENCE.md §7.2 — the veteran home is truthful about QRF', ()
     expect(markup).not.toMatch(/\b988\b/);
   });
 
-  it('shows Pages chrome without adding a Check-In surface', () => {
+  it('shows Pages chrome without adding a Check-In surface to the §11 fixture', () => {
     expect(markup).toContain('zer0state');
     expect(markup).toContain('SPEC-017 · NOT READY');
     expect(markup).toContain('Deploy QRF');
     expect(markup).not.toContain('Check-in');
     expect(markup).not.toContain('Check-In');
+  });
+
+  it('offers a truthful Check-In link when the live home supplies one', () => {
+    const withLink = renderVeteranHome({
+      shell,
+      categories: CATEGORY_CARDS,
+      checkInLink: { href: '/app/check-ins', label: 'Start a Check-In' },
+    });
+    expect(withLink).toContain('href="/app/check-ins"');
+    expect(withLink).toContain('Start a Check-In');
+    expect(withLink).toContain('not a diagnosis');
+    expect(withLink).toContain('not a clinical score');
+    expect(withLink.toLowerCase()).not.toContain('transition');
+    expect(auditAccessibility(withLink)).toEqual([]);
   });
 });
 
@@ -519,5 +536,97 @@ describe('HTML command targets stay on registered /app routes', () => {
     });
     expect(dashboard).not.toContain('action="/app/responder/availability"');
     expect(dashboard).not.toContain('Go on duty');
+  });
+});
+
+describe('Check-In HTML copy stays honest', () => {
+  const checkInShell = { title: 'Check-In', viewport: 'MOBILE', showMobileNav: true } as const;
+
+  it('renders start and session markup without a decidable a11y failure', () => {
+    const start = renderCheckInStart({
+      shell: checkInShell,
+      supportSignalMode: 'fixture',
+    });
+    const session = renderCheckInSession({
+      shell: checkInShell,
+      checkInId: '11111111-1111-4111-8111-111111111111',
+      status: 'STARTED',
+      questionnaireVersion: 'qv-001',
+      questionIndex: 1,
+      questionCount: 9,
+      canComplete: true,
+      currentQuestion: {
+        questionId: '22222222-2222-4222-8222-222222222222',
+        prompt: 'Do you feel safe right now?',
+        required: true,
+        options: [
+          { answerOptionId: '33333333-3333-4333-8333-333333333333', label: 'Yes' },
+          {
+            answerOptionId: '44444444-4444-4444-8444-444444444444',
+            label: 'No; I need immediate help',
+          },
+        ],
+      },
+    });
+    expect(auditAccessibility(start)).toEqual([]);
+    expect(auditAccessibility(session)).toEqual([]);
+    expect(session).toContain(
+      'action="/app/check-ins/11111111-1111-4111-8111-111111111111/responses"',
+    );
+    expect(session).toContain(
+      'action="/app/check-ins/11111111-1111-4111-8111-111111111111/commands/complete"',
+    );
+  });
+
+  it('states fixture mode is not a clinical score', () => {
+    const completed = presentCheckInResult({
+      status: 'COMPLETED',
+      supportSignalMode: 'fixture',
+      signalLevel: 'GREEN',
+      supportCaseOpened: false,
+    });
+    expect(completed.detail).toContain('not a clinical score');
+    expect(completed.detail).toContain('not a diagnosis');
+    expect(completed.detail).toContain('did not contact emergency services');
+    expect(completed.detail.toLowerCase()).not.toContain('transition');
+    expect(completed.detail.toLowerCase()).not.toContain('911');
+    expect(completed.detail.toLowerCase()).not.toContain('suicid');
+  });
+
+  it('mentions a Support Case only when RED opened one', () => {
+    const red = presentCheckInResult({
+      status: 'COMPLETED',
+      supportSignalMode: 'fixture',
+      signalLevel: 'RED',
+      supportCaseOpened: true,
+    });
+    expect(red.detail).toContain('A Support Case was opened');
+    expect(red.detail).toContain('did not contact emergency services');
+
+    const incomplete = presentCheckInResult({
+      status: 'INCOMPLETE',
+      supportSignalMode: 'fixture',
+      supportCaseOpened: false,
+    });
+    expect(incomplete.headline).toContain('incomplete');
+    expect(incomplete.detail).toContain('No Support Signal was computed');
+  });
+
+  it('escapes a question prompt that contains markup', () => {
+    const markup = renderCheckInSession({
+      shell: checkInShell,
+      checkInId: '11111111-1111-4111-8111-111111111111',
+      status: 'IN_PROGRESS',
+      questionnaireVersion: 'qv-001',
+      canComplete: true,
+      currentQuestion: {
+        questionId: '22222222-2222-4222-8222-222222222222',
+        prompt: '<script>alert(1)</script>',
+        required: true,
+        options: [{ answerOptionId: '33333333-3333-4333-8333-333333333333', label: 'Yes' }],
+      },
+    });
+    expect(markup).not.toContain('<script>');
+    expect(markup).toContain('&lt;script&gt;');
   });
 });

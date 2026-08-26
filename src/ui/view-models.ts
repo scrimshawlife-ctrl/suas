@@ -20,7 +20,7 @@
  */
 
 import type { ContactMethodKind, FreshnessBand } from '../fulfillment/index.js';
-import type { SafetyCopyMode } from '../config/index.js';
+import type { SafetyCopyMode, SupportSignalMode } from '../config/index.js';
 import type { CategoryCard } from './categories.js';
 import type { QrfFacts } from './qrf.js';
 
@@ -73,6 +73,54 @@ export interface VeteranHomeViewModel {
    * fail-closed placeholder; `approved` renders the released 911/988 copy.
    */
   readonly safetyCopyMode?: SafetyCopyMode;
+  /**
+   * Optional Check-In entry. Absent on the §11 home fixture so the required
+   * inventory stays Check-In-free. The live `/app/home` always supplies it.
+   */
+  readonly checkInLink?: CheckInHomeLinkViewModel;
+}
+
+/** Truthful home entry to the Check-In HTML loop. Not a scoring dashboard. */
+export interface CheckInHomeLinkViewModel {
+  readonly href: string;
+  readonly label: string;
+}
+
+export interface CheckInStartViewModel {
+  readonly shell: ShellViewModel;
+  readonly supportSignalMode: SupportSignalMode;
+  /** Present when the veteran already has a STARTED or IN_PROGRESS Check-In. */
+  readonly inProgressHref?: string;
+}
+
+export interface CheckInOptionViewModel {
+  readonly answerOptionId: string;
+  readonly label: string;
+}
+
+export interface CheckInQuestionViewModel {
+  readonly questionId: string;
+  readonly prompt: string;
+  readonly required: boolean;
+  readonly options: readonly CheckInOptionViewModel[];
+}
+
+export interface CheckInResultViewModel {
+  readonly statusLabel: string;
+  readonly headline: string;
+  readonly detail: string;
+}
+
+export interface CheckInSessionViewModel {
+  readonly shell: ShellViewModel;
+  readonly checkInId: string;
+  readonly status: string;
+  readonly questionnaireVersion: string;
+  readonly questionIndex?: number;
+  readonly questionCount?: number;
+  readonly currentQuestion?: CheckInQuestionViewModel;
+  readonly result?: CheckInResultViewModel;
+  readonly canComplete: boolean;
 }
 
 export interface QrfRequestViewModel {

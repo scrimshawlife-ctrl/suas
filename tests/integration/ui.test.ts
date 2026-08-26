@@ -101,13 +101,17 @@ describe('MVP_REFERENCE.md §5 — public surfaces', () => {
 });
 
 describe('API.md §4 — authenticated surfaces require a session', () => {
-  it.each(['/app/home', '/app/resources', '/app/chat', '/app/responder', '/app/admin'])(
-    'refuses %s without a credential',
-    async (url) => {
-      const response = await app.server.inject({ method: 'GET', url });
-      expect(response.statusCode).toBe(401);
-    },
-  );
+  it.each([
+    '/app/home',
+    '/app/check-ins',
+    '/app/resources',
+    '/app/chat',
+    '/app/responder',
+    '/app/admin',
+  ])('refuses %s without a credential', async (url) => {
+    const response = await app.server.inject({ method: 'GET', url });
+    expect(response.statusCode).toBe(401);
+  });
 
   it('serves the veteran home to a session holder', async () => {
     const { credential } = await signIn();

@@ -95,6 +95,11 @@ HTTP surface so far:
 | `POST /api/v0/cases/:id/commands/reopen`                         | org admin; reason                       |
 | `GET /api/v0/cases/:id/settlements`                              | owner (veteran-visible) or responder    |
 | `GET /api/v0/cases/:id/settlements/:settlement_id`               | owner (veteran-visible) or responder    |
+| `GET /app/check-ins`                                             | session; start or resume Check-In       |
+| `POST /app/check-ins`                                            | session; start or resume, then 303      |
+| `GET /app/check-ins/:id`                                         | session; owner only                     |
+| `POST /app/check-ins/:id/responses`                              | session; owner only; then 303           |
+| `POST /app/check-ins/:id/commands/complete`                      | session; owner only; then 303           |
 
 ## Environment
 

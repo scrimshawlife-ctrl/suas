@@ -175,6 +175,8 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       pool,
       sessionSecret: deps.config.sessionSecret,
       safetyCopyMode: deps.config.safetyCopyMode,
+      supportSignalMode: deps.config.supportSignalMode,
+      ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
     });
   }
 
