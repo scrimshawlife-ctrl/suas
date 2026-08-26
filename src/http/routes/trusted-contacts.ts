@@ -13,13 +13,16 @@ import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import {
+  acceptTrustedContact,
   findTrustedContact,
   inviteTrustedContact,
   listTrustedCircle,
   setTrustedContactStatus,
   type TrustedContact,
 } from '../../consent/index.js';
+import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
+import { readIdempotencyKey } from '../idempotency-header.js';
 
 export interface TrustedContactRouteDeps {
   readonly pool: Pool;
@@ -80,5 +83,75 @@ export function registerTrustedContactRoutes(
     const updated = await setTrustedContactStatus(deps.pool, context.tenantId, id, 'REMOVED');
     if (updated === undefined) throw new ResourceNotVisibleError();
     return publicTrustedContact(updated);
+  });
+
+  /**
+   * TRUSTED_CIRCLE.md §3.4: the invitee accepts; acceptance does not grant consent.
+   * The authenticated actor becomes `contact_user_id`. Veterans cannot accept
+   * their own invites.
+   */
+  app.post(`${API_PREFIX}/trusted-contacts/:id/commands/accept`, async (request) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const { id } = idParams.parse(request.params);
+    const existing = await findTrustedContact(deps.pool, context.tenantId, id);
+    if (existing === undefined) throw new ResourceNotVisibleError();
+    if (existing.veteranUserId === context.userId) {
+      throw new ResourceNotVisibleError();
+    }
+    if (existing.status !== 'INVITED') {
+      // Already accepted/terminal — hide as not found rather than leaking state
+      // across actors who should not see the invite.
+      if (existing.contactUserId !== undefined && existing.contactUserId !== context.userId) {
+        throw new ResourceNotVisibleError();
+      }
+    }
+
+    const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
+    const fingerprint = fingerprintRequest({
+      trusted_contact_id: id,
+      contact_user_id: context.userId,
+      command: 'accept',
+    });
+    const scope = commandScope({
+      command: 'POST /trusted-contacts/{id}/commands/accept',
+      aggregateType: 'TrustedContact',
+      aggregateId: id,
+      actorId: context.userId,
+    });
+
+    const run = await runIdempotentCommand(
+      deps.pool,
+      {
+        tenantId: context.tenantId,
+        commandScope: scope,
+        idempotencyKey,
+        requestFingerprint: fingerprint,
+      },
+      async (tx) => {
+        const current = await findTrustedContact(tx, context.tenantId, id);
+        if (current === undefined || current.veteranUserId === context.userId) {
+          throw new ResourceNotVisibleError();
+        }
+        const accepted = await acceptTrustedContact(tx, context.tenantId, id, context.userId);
+        if (accepted === undefined) {
+          // Not INVITED anymore — return current if this actor is bound, else 404.
+          if (current.contactUserId === context.userId) {
+            return {
+              result: publicTrustedContact(current),
+              aggregateType: 'TrustedContact',
+              aggregateId: id,
+            };
+          }
+          throw new ResourceNotVisibleError();
+        }
+        return {
+          result: publicTrustedContact(accepted),
+          aggregateType: 'TrustedContact',
+          aggregateId: id,
+        };
+      },
+    );
+
+    return { ...run.result, replayed: run.replayed };
   });
 }

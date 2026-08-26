@@ -32,7 +32,9 @@
 
 ## HTTP vs domain gaps (remaining)
 
-Released sync Plane A writes for Check-In, cases/claim, resources, immediate-resources, veterans/me, consents, trusted-circle, SR create/commands, follow-ups, and notifications inbox/preferences are implemented.
+Released sync Plane A writes for Check-In, cases/claim/assign, resources, immediate-resources, veterans/me, consents, trusted-circle invite/accept/remove, contact-log, SR create/commands, follow-ups, and notifications inbox/preferences are implemented.
+
+Still CODE_FIXABLE (named residual): `createSettlement` HTTP write (settlement domain exists).
 
 Still **not** CODE_FIXABLE product gaps for this residual set:
 
