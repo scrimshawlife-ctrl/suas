@@ -9,7 +9,7 @@ Canonical specs remain in `suas-specs`. This document tracks runtime evidence to
 - Scoring fail-closed: absent/mismatched `qv-001` refused; `disabled` refuses every exported scoring path (#59/#67)
 - JSON `/api/v0` (38 routes): auth, check-ins, cases/claim, resources, immediate-resources, veterans/me, consents grant/revoke, trusted-circle, SR create/commands, follow-ups, notifications inbox/preferences, admin adapters; OpenAPI + CI drift (#60–#71)
 - Durable jobs: port + LOCAL/TEST fake + conformance suite; STAGING/PRODUCTION fail-closed pending D-022
-- Security/privacy audit + adversarial HTTP tests; runbooks; synthetic load + migration rehearse scripts
+- Security/privacy audit + adversarial HTTP tests; runbooks; synthetic load + migration rehearse + deletion drill scripts
 
 ## Classification snapshot
 
@@ -31,6 +31,7 @@ Canonical specs remain in `suas-specs`. This document tracks runtime evidence to
 3. Owner decides D-021/D-023/D-024 envelopes (or keep SCALE `NOT_COMPUTABLE`).
 4. Eng runs staging soak + human UI baseline once staging exists.
 5. Optional tooling: vitest/esbuild GHSA (dev-only).
+6. Owner decides D-007 retention/deletion durations; staging rehearsal of the synthetic deletion drill. PRIVACY stays `NOT_READY`.
 
 ## Terminal rule
 

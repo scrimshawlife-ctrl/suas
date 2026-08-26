@@ -18,7 +18,7 @@
 - JSON `/api/v0`: auth, check-ins, cases/claim, resources, immediate-resources, veterans/me, consents list/grant/revoke, trusted-circle, SR create/commands, follow-ups, notifications inbox/preferences, admin adapters; OpenAPI + CI drift.
 - Job port conformance suite; health dependency posture; D-022 / D-021–024 / D-001–005 decision packets.
 - Security/privacy audit + adversarial HTTP tests; npm audit residual documented (dev toolchain only).
-- Runbooks (deploy/rollback, incident); env matrix; synthetic load + migration apply rehearsal scripts.
+- Runbooks (deploy/rollback, incident); env matrix; synthetic load + migration apply rehearsal + synthetic deletion drill scripts.
 - Gate matrix + change map + consistency audit + this report.
 
 ## READINESS MATRIX
@@ -32,6 +32,7 @@ See `docs/readiness/gate-matrix.md`.
 3. **D-021 / D-023 / D-024 SLO/RTO/RPO** — OWNER — SCALE stays `NOT_COMPUTABLE`.
 4. **Staging soak + human UI/a11y baseline** — EVIDENCE (needs staging or human review).
 5. **Vitest/esbuild GHSA** — tooling only (runtime deps clean).
+6. **D-007 retention/deletion durations** — OWNER — synthetic deletion drill exists; formal purge/export package and staging rehearsal do not. PRIVACY stays `NOT_READY`.
 
 No remaining CODE_FIXABLE released sync Plane A JSON gaps for this residual set.
 
@@ -46,7 +47,7 @@ No remaining CODE_FIXABLE released sync Plane A JSON gaps for this residual set.
 - Full verify on HEAD (format/lint/typecheck/build/full suite/openapi/migrate) — see sprint `full-verify.log`
 - Targeted suites including `http-api-writes`, scoring bypass, consents, OpenAPI drift
 - `npm run openapi:check` — 38 routes
-- Scripts: `scripts/synthetic-load-harness.ts`, `scripts/migration-restore-rehearsal.ts`
+- Scripts: `scripts/synthetic-load-harness.ts`, `scripts/migration-restore-rehearsal.ts`, `scripts/deletion-drill.ts`
 - Existing: `tests/integration/resilience-drills.test.ts`
 - CI: PRs `#59`–`#71` verify green; main push CI recorded in `ci-run.txt`
 

@@ -1,0 +1,18 @@
+{
+  "status": "ok",
+  "privacy_gate": "NOT_READY",
+  "hipaa_claim": false,
+  "d007": "DECISION_PENDING",
+  "provider_side_copies": "NOT_COMPUTABLE",
+  "fulfillment": "SOFT_DELETE_OPERATIONAL_ROW",
+  "operational_lookup_after": "absent",
+  "row_retained": true,
+  "status_after": "REVOKED",
+  "replay": {
+    "soft_delete": "no_op",
+    "sessions": "no_op",
+    "request_recorded_once": true
+  },
+  "scale_note": "single_logical_postgres",
+  "note": "Sample shape only. Identifiers are omitted. PRIVACY stays NOT_READY. No HIPAA claim."
+}
