@@ -13,7 +13,12 @@ import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession, type RecordingChallengeDelivery } from '../../src/auth/index.js';
 import { createMembership, createOrganization, createUser } from '../../src/identity/index.js';
 import { createResource, setResourceActive, verifyResource } from '../../src/fulfillment/index.js';
-import { createServiceRequest, openCase } from '../../src/coordination/index.js';
+import {
+  claimCase,
+  createServiceRequest,
+  openCase,
+  recordContact,
+} from '../../src/coordination/index.js';
 import { withTransaction } from '../../src/db/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { auditAccessibility, DUTY_UNAVAILABLE_REASON } from '../../src/ui/index.js';
@@ -508,6 +513,122 @@ describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty HTML is not a stored fact', 
       payload: { onDuty: 'true' },
     });
     expect(response.statusCode).toBe(404);
+  });
+
+  it('serves GET /app/responder/availability as display-only UNAVAILABLE', async () => {
+    const tenantId = randomUUID();
+    const org = await createOrganization(pool(), {
+      tenantId,
+      name: `Org ${randomUUID().slice(0, 8)}`,
+      status: 'ACTIVE',
+    });
+    const responder = await createUser(pool(), {
+      tenantId,
+      email: syntheticEmail(`duty-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    await createMembership(pool(), {
+      tenantId,
+      organizationId: org.organizationId,
+      userId: responder.userId,
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+    });
+    const session = await createSession(pool(), TEST_SESSION_SECRET, {
+      tenantId,
+      userId: responder.userId,
+    });
+
+    const response = await app.server.inject({
+      method: 'GET',
+      url: '/app/responder/availability',
+      headers: authorized(session.credential),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('On Duty');
+    expect(response.body).toContain(DUTY_UNAVAILABLE_REASON);
+    expect(response.body).not.toContain('Go on duty');
+    expect(auditAccessibility(response.body)).toEqual([]);
+  });
+});
+
+describe('MVP_REFERENCE.md §9 — /app/responder/cases/:id lists contact + service requests', () => {
+  it('renders bounded contact attempts and service requests without notes or details', async () => {
+    const tenantId = randomUUID();
+    const org = await createOrganization(pool(), {
+      tenantId,
+      name: `Org ${randomUUID().slice(0, 8)}`,
+      status: 'ACTIVE',
+    });
+    const veteran = await createUser(pool(), {
+      tenantId,
+      email: syntheticEmail(`case-vet-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    const responder = await createUser(pool(), {
+      tenantId,
+      email: syntheticEmail(`case-resp-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    await createMembership(pool(), {
+      tenantId,
+      organizationId: org.organizationId,
+      userId: responder.userId,
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+    });
+    const opened = await withTransaction(pool(), (tx) =>
+      openCase(tx, {
+        tenantId,
+        veteranUserId: veteran.userId,
+        actorType: 'SYSTEM',
+        actorId: veteran.userId,
+      }),
+    );
+    await claimCase(pool(), {
+      tenantId,
+      caseId: opened.supportCase.caseId,
+      responderUserId: responder.userId,
+      correlationId: randomUUID(),
+    });
+    await recordContact(pool(), {
+      tenantId,
+      caseId: opened.supportCase.caseId,
+      responderUserId: responder.userId,
+      command: 'log-contact-attempt',
+      channel: 'PHONE',
+      outcome: 'NO_ANSWER',
+      note: 'secret note must not appear in HTML',
+    });
+    await withTransaction(pool(), (tx) =>
+      createServiceRequest(tx, {
+        tenantId,
+        caseId: opened.supportCase.caseId,
+        category: 'TRANSPORTATION',
+        createdBy: responder.userId,
+        actorType: 'RESPONDER',
+        details: { destination: 'secret-detail-must-not-appear' },
+      }),
+    );
+    const session = await createSession(pool(), TEST_SESSION_SECRET, {
+      tenantId,
+      userId: responder.userId,
+    });
+
+    const response = await app.server.inject({
+      method: 'GET',
+      url: `/app/responder/cases/${opened.supportCase.caseId}`,
+      headers: authorized(session.credential),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('Contact attempts');
+    expect(response.body).toContain('PHONE');
+    expect(response.body).toContain('NO_ANSWER');
+    expect(response.body).toContain('Service requests');
+    expect(response.body).toContain('TRANSPORTATION');
+    expect(response.body).not.toContain('secret note');
+    expect(response.body).not.toContain('secret-detail');
+    expect(auditAccessibility(response.body)).toEqual([]);
   });
 });
 

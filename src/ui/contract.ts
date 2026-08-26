@@ -148,7 +148,7 @@ export const REQUIRED_SURFACES: readonly SurfaceRequirement[] = [
     referenceAnchor: 'case claim / open from the queue',
     conformance: 'MUST_PRESERVE_BEHAVIOR',
     audience: 'RESPONDER',
-    requiredElements: ['Case', 'Back'],
+    requiredElements: ['Case', 'Back', 'Contact attempts', 'Service requests'],
     divergences: [],
   },
   {
