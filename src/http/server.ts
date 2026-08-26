@@ -27,6 +27,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
 import { registerCaseRoutes } from './routes/cases.js';
 import { registerCheckInRoutes } from './routes/check-ins.js';
+import { registerConsentRoutes } from './routes/consents.js';
 import { registerResourceRoutes } from './routes/resources.js';
 import { registerUiRoutes } from './routes/ui.js';
 import { registerVeteranRoutes } from './routes/veterans.js';
@@ -215,6 +216,11 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     });
 
     registerVeteranRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerConsentRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
     });
