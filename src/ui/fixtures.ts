@@ -33,6 +33,7 @@ import {
   renderResourceCategories,
   renderResourceList,
   renderResponderAvailability,
+  renderResponderCase,
   renderResponderDashboard,
   renderVeteranHome,
 } from './surfaces.js';
@@ -278,6 +279,25 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
       backHref: '/app/resources',
       rows: [],
     }),
+  ),
+
+  fixture(
+    'responder-case',
+    'RESPONDER_CASE',
+    'unassigned case claim from the queue',
+    () =>
+      renderResponderCase({
+        shell: shell({ title: 'Case', viewport: 'DESKTOP' }),
+        need: {
+          caseId: 'case-0001',
+          caseStatus: 'OPEN',
+          category: 'Support Case',
+          openedLabel: 'Opened',
+          prioritySignalLevel: 'RED',
+          claimable: true,
+        },
+      }),
+    { viewport: 'DESKTOP' },
   ),
 
   fixture(

@@ -7,6 +7,7 @@ export {
 export {
   assertMfaElevated,
   assertOrganizationRole,
+  assertResponder,
   assertSuasAdmin,
   assertTenant,
   authorize,

@@ -25,6 +25,7 @@ import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { authenticate } from './authenticate.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
+import { registerCaseRoutes } from './routes/cases.js';
 import { registerCheckInRoutes } from './routes/check-ins.js';
 import { registerUiRoutes } from './routes/ui.js';
 
@@ -159,6 +160,11 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       pool,
       sessionSecret: deps.config.sessionSecret,
       ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
+    });
+
+    registerCaseRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
     });
   }
 

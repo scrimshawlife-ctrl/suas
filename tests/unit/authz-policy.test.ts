@@ -11,6 +11,7 @@ import { MfaRequiredError } from '../../src/auth/index.js';
 import {
   assertMfaElevated,
   assertOrganizationRole,
+  assertResponder,
   assertSuasAdmin,
   assertTenant,
   authorize,
@@ -96,6 +97,18 @@ describe('AUTH.md §6 — role inputs', () => {
       memberships: [membership(ORG_A, 'RESPONDER'), membership(ORG_B, 'ORG_ADMIN')],
     });
     expect(rolesInOrganization(ctx, ORG_A)).toEqual(['RESPONDER']);
+  });
+});
+
+describe('RESPONDER_WORKFLOWS.md — responder membership', () => {
+  it('allows an active responder', () => {
+    expect(() =>
+      assertResponder(context({ memberships: [membership(ORG_A, 'RESPONDER')] })),
+    ).not.toThrow();
+  });
+
+  it('denies a veteran with no membership', () => {
+    expect(() => assertResponder(context())).toThrow(ForbiddenError);
   });
 });
 

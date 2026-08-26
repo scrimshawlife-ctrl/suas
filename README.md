@@ -62,24 +62,27 @@ separately. Override either with `TEST_DATABASE_URL` and `TEST_MIGRATIONS_DATABA
 
 HTTP surface so far:
 
-| Endpoint                                                         | Authorization                         |
-| ---------------------------------------------------------------- | ------------------------------------- |
-| `GET /api/v0/health`                                             | none; liveness only                   |
-| `POST /api/v0/auth/challenges`                                   | none; issues a passwordless challenge |
-| `POST /api/v0/auth/challenges/commands/verify`                   | none; exchanges a code for a session  |
-| `POST /api/v0/auth/mfa/challenges`                               | session                               |
-| `POST /api/v0/auth/mfa/challenges/commands/verify`               | session; elevates it                  |
-| `POST /api/v0/auth/sessions/commands/logout`                     | session                               |
-| `GET /api/v0/admin/build-info`                                   | SUAS admin, MFA-elevated              |
-| `GET /api/v0/admin/adapter-catalog`                              | SUAS admin, MFA-elevated              |
-| `GET /api/v0/admin/adapter-configurations`                       | SUAS admin, MFA-elevated; `tenant_id` |
-| `POST /api/v0/admin/adapter-configurations/commands/enable`      | SUAS admin, MFA-elevated              |
-| `POST /api/v0/admin/adapter-configurations/commands/disable`     | SUAS admin, MFA-elevated              |
-| `POST /api/v0/admin/adapter-configurations/commands/set-routing` | SUAS admin, MFA-elevated              |
-| `POST /api/v0/check-ins`                                         | session; starts a Check-In            |
-| `GET /api/v0/check-ins/:id`                                      | session; owner only                   |
-| `POST /api/v0/check-ins/:id/responses`                           | session; owner only                   |
-| `POST /api/v0/check-ins/:id/commands/complete`                   | session; owner only; scores qv-001    |
+| Endpoint                                                         | Authorization                           |
+| ---------------------------------------------------------------- | --------------------------------------- |
+| `GET /api/v0/health`                                             | none; liveness only                     |
+| `POST /api/v0/auth/challenges`                                   | none; issues a passwordless challenge   |
+| `POST /api/v0/auth/challenges/commands/verify`                   | none; exchanges a code for a session    |
+| `POST /api/v0/auth/mfa/challenges`                               | session                                 |
+| `POST /api/v0/auth/mfa/challenges/commands/verify`               | session; elevates it                    |
+| `POST /api/v0/auth/sessions/commands/logout`                     | session                                 |
+| `GET /api/v0/admin/build-info`                                   | SUAS admin, MFA-elevated                |
+| `GET /api/v0/admin/adapter-catalog`                              | SUAS admin, MFA-elevated                |
+| `GET /api/v0/admin/adapter-configurations`                       | SUAS admin, MFA-elevated; `tenant_id`   |
+| `POST /api/v0/admin/adapter-configurations/commands/enable`      | SUAS admin, MFA-elevated                |
+| `POST /api/v0/admin/adapter-configurations/commands/disable`     | SUAS admin, MFA-elevated                |
+| `POST /api/v0/admin/adapter-configurations/commands/set-routing` | SUAS admin, MFA-elevated                |
+| `POST /api/v0/check-ins`                                         | session; starts a Check-In              |
+| `GET /api/v0/check-ins/:id`                                      | session; owner only                     |
+| `POST /api/v0/check-ins/:id/responses`                           | session; owner only                     |
+| `POST /api/v0/check-ins/:id/commands/complete`                   | session; owner only; scores qv-001      |
+| `GET /api/v0/cases`                                              | responder; `ownership=unassigned\|mine` |
+| `GET /api/v0/cases/:id`                                          | owner or responder                      |
+| `POST /api/v0/cases/:id/commands/claim`                          | responder                               |
 
 ## Environment
 

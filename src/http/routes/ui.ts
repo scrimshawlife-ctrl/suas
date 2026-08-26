@@ -18,9 +18,14 @@
 
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
-import { assertMfaElevated, assertSuasAdmin } from '../../authz/index.js';
+import {
+  assertMfaElevated,
+  assertResponder,
+  assertSuasAdmin,
+  ResourceNotVisibleError,
+} from '../../authz/index.js';
 import type { SafetyCopyMode } from '../../config/index.js';
-import { readCaseQueue } from '../../coordination/index.js';
+import { claimCase, findCase, readCaseQueue } from '../../coordination/index.js';
 import { searchResources } from '../../fulfillment/index.js';
 import { D_012_APPROVED_SAFETY_COPY } from '../../ui/safety.js';
 import {
@@ -35,8 +40,10 @@ import {
   renderLanding,
   renderResourceCategories,
   renderResourceList,
+  renderResponderCase,
   renderResponderDashboard,
   renderVeteranHome,
+  type ActiveNeedViewModel,
   type ResourceRowViewModel,
   type ShellViewModel,
 } from '../../ui/index.js';
@@ -209,14 +216,40 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   // --- Responder surfaces ----------------------------------------------------
 
+  function toNeed(
+    supportCase: {
+      caseId: string;
+      status: string;
+      prioritySignalLevel?: string | undefined;
+    },
+    claimable: boolean,
+  ): ActiveNeedViewModel {
+    return {
+      caseId: supportCase.caseId,
+      caseStatus: supportCase.status,
+      category: 'Support Case',
+      openedLabel: 'Opened',
+      ...(supportCase.prioritySignalLevel !== undefined
+        ? { prioritySignalLevel: supportCase.prioritySignalLevel }
+        : {}),
+      ...(claimable ? { claimable: true } : {}),
+    };
+  }
+
   app.get('/app/responder', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
-    const queue = await readCaseQueue(
-      pool,
-      context.tenantId,
-      { ownership: 'mine', responderUserId: context.userId },
-      { limit: 20 },
-    );
+    const isResponder = context.memberships.some((membership) => membership.role === 'RESPONDER');
+    const unassigned = isResponder
+      ? await readCaseQueue(pool, context.tenantId, { ownership: 'unassigned' }, { limit: 20 })
+      : { cases: [] };
+    const mine = isResponder
+      ? await readCaseQueue(
+          pool,
+          context.tenantId,
+          { ownership: 'mine', responderUserId: context.userId },
+          { limit: 20 },
+        )
+      : { cases: [] };
 
     await reply.type(HTML).send(
       renderResponderDashboard({
@@ -225,12 +258,8 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         // has no on-duty store, so this reflects nothing rather than inventing
         // a roster. Returned to specs.
         onDuty: false,
-        activeNeeds: queue.cases.map((supportCase) => ({
-          caseId: supportCase.caseId,
-          caseStatus: supportCase.status,
-          category: 'PEER_SUPPORT',
-          openedLabel: 'Opened',
-        })),
+        unassignedNeeds: unassigned.cases.map((supportCase) => toNeed(supportCase, true)),
+        activeNeeds: mine.cases.map((supportCase) => toNeed(supportCase, false)),
         alerts: [],
         quickShareCategories: CATEGORY_CARDS.filter((card) => card.disposition === 'OPERATIONAL'),
         // §9: no released definition for these, so no value is displayed.
@@ -241,6 +270,41 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       }),
     );
   });
+
+  app.get<{ Params: { id: string } }>('/app/responder/cases/:id', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    assertResponder(context);
+    const supportCase = await findCase(pool, context.tenantId, request.params.id);
+    if (supportCase === undefined) {
+      throw new ResourceNotVisibleError();
+    }
+    const claimable = supportCase.status === 'OPEN' || supportCase.status === 'TRIAGED';
+    await reply.type(HTML).send(
+      renderResponderCase({
+        shell: shell('Case', { viewport: 'DESKTOP' }),
+        need: toNeed(supportCase, claimable),
+      }),
+    );
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/app/responder/cases/:id/commands/claim',
+    async (request, reply) => {
+      const context = await authenticate(pool, sessionSecret, request);
+      assertResponder(context);
+      const existing = await findCase(pool, context.tenantId, request.params.id);
+      if (existing === undefined) {
+        throw new ResourceNotVisibleError();
+      }
+      await claimCase(pool, {
+        tenantId: context.tenantId,
+        caseId: request.params.id,
+        responderUserId: context.userId,
+        correlationId: String(request.id),
+      });
+      return reply.redirect('/app/responder', 303);
+    },
+  );
 
   app.get('/app/responder/needs', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
@@ -254,12 +318,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     await reply.type(HTML).send(
       renderActiveNeeds({
         shell: shell('Active Needs', { viewport: 'DESKTOP' }),
-        needs: queue.cases.map((supportCase) => ({
-          caseId: supportCase.caseId,
-          caseStatus: supportCase.status,
-          category: 'PEER_SUPPORT',
-          openedLabel: 'Opened',
-        })),
+        needs: queue.cases.map((supportCase) => toNeed(supportCase, false)),
       }),
     );
   });

@@ -83,6 +83,13 @@ export function assertOrganizationRole(
   }
 }
 
+/** Deny unless the actor holds an active RESPONDER membership in this tenant. */
+export function assertResponder(context: AuthContext): void {
+  if (!context.memberships.some((membership) => membership.role === 'RESPONDER')) {
+    throw new ForbiddenError('This action requires an active responder membership.');
+  }
+}
+
 /** Deny unless the actor holds the global SUAS-admin grant. */
 export function assertSuasAdmin(context: AuthContext): void {
   if (!context.isSuasAdmin) {
