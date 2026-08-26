@@ -23,6 +23,7 @@ import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { authenticate } from './authenticate.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
 import { registerUiRoutes } from './routes/ui.js';
 
 export interface ServerDependencies {
@@ -143,6 +144,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       assertSuasAdmin(context);
       assertMfaElevated(context, 'Reading build info');
       return deps.buildInfo();
+    });
+
+    registerAdminAdapterRoutes(app, {
+      pool,
+      config: deps.config,
+      sessionSecret: deps.config.sessionSecret,
     });
   }
 

@@ -13,7 +13,7 @@ import { EXPECTED_SCHEMA_VERSION } from '../../src/db/index.js';
 import { createSession, elevateSession } from '../../src/auth/index.js';
 import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
+import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 /** Sign in a SUAS admin with an MFA-elevated session, as the admin surface requires. */
 async function elevatedAdminCredential(elevate = true): Promise<string> {
@@ -56,7 +56,7 @@ let app: StartedApp;
 
 beforeAll(async () => {
   app = await startApp({
-    env: validEnv({ SUAS_MIGRATIONS_MODE: 'apply' }),
+    env: validEnv({ SUAS_MIGRATIONS_MODE: 'apply', DATABASE_URL: testDatabaseUrl() }),
     listen: false,
   });
 });
@@ -144,6 +144,90 @@ describe('GET /api/v0/admin/build-info', () => {
     });
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe('MFA_REQUIRED');
+  });
+});
+
+describe('GET /api/v0/admin/adapter-catalog', () => {
+  it('lists installed adapters without secrets', async () => {
+    const response = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/admin/adapter-catalog',
+      headers: { authorization: `Bearer ${await elevatedAdminCredential()}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const adapters: { adapter_id: string }[] = response.json().adapters;
+    const ids = adapters.map((entry) => entry.adapter_id).sort();
+    expect(ids).toEqual([
+      'food-manual',
+      'peer-support-manual',
+      'shelter-api',
+      'shelter-manual',
+      'transportation-api',
+      'transportation-manual',
+    ]);
+    expect(response.body).not.toContain('client_secret');
+    expect(response.body).not.toContain(TEST_SESSION_SECRET);
+  });
+
+  it('refuses a non-admin', async () => {
+    const response = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/admin/adapter-catalog',
+      headers: { authorization: `Bearer ${await plainCredential()}` },
+    });
+    expect(response.statusCode).toBe(403);
+  });
+});
+
+describe('admin adapter configurations', () => {
+  it('seeds manuals on list and enables a catalog API adapter only with secrets', async () => {
+    const pool = app.pool;
+    if (pool === undefined) throw new Error('The test app has no database pool.');
+    const tenantId = randomUUID();
+    const user = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail(`admin-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    await grantSuasAdmin(pool, user.userId, undefined);
+    const session = await createSession(pool, TEST_SESSION_SECRET, {
+      tenantId,
+      userId: user.userId,
+    });
+    await elevateSession(pool, session.session.sessionId);
+    const headers = { authorization: `Bearer ${session.credential}` };
+
+    const listed = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/admin/adapter-configurations?tenant_id=${tenantId}`,
+      headers,
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().configurations).toHaveLength(4);
+
+    const denied = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/admin/adapter-configurations/commands/enable',
+      headers,
+      payload: {
+        tenant_id: tenantId,
+        adapter_id: 'food-api',
+        capability: 'FOOD',
+      },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const disableManual = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/admin/adapter-configurations/commands/disable',
+      headers,
+      payload: {
+        tenant_id: tenantId,
+        adapter_id: 'food-manual',
+        capability: 'FOOD',
+      },
+    });
+    expect(disableManual.statusCode).toBe(422);
   });
 });
 

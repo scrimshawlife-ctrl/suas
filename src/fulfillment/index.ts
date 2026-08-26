@@ -91,6 +91,35 @@ export {
 } from './referrals.js';
 export { createFulfillmentAdapterRegistry } from './registry.js';
 export {
+  ADAPTER_CATALOG,
+  ADAPTER_DECISIONS,
+  AdapterNotAcceptedError,
+  AdapterSecretsMissingError,
+  API_ADAPTER_CATALOG,
+  assertCanEnable,
+  findCatalogEntry,
+  MANUAL_ADAPTER_CATALOG,
+  secretPresence,
+  SECRET_PRESENCE_STATES,
+  type AdapterCatalogEntry,
+  type AdapterDecision,
+  type SecretPresence,
+} from './catalog.js';
+export {
+  AdapterConfigurationNotFoundError,
+  disableAdapterConfiguration,
+  enableAdapterConfiguration,
+  listAdapterCatalog,
+  listAdapterConfigurations,
+  ManualAdapterRequiredError,
+  seedManualAdapterConfigurations,
+  setAdapterRouting,
+  type AdapterConfigurationView,
+  type DisableAdapterInput,
+  type EnableAdapterInput,
+  type SetAdapterRoutingInput,
+} from './configurations.js';
+export {
   AMADEUS_LODGING_DEFAULT_API_BASE_URL,
   AMADEUS_LODGING_DEFAULT_TOKEN_URL,
   AmadeusLodgingAdapter,
