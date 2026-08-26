@@ -134,8 +134,8 @@ Wave F  draft Rev 3 (islands)           ← defer
 
 **Also decide with D-011 or immediately after (depends on scores existing):**
 
-| ID                | Why it rides with D-011                                                                                                                                                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ID                | Why it rides with D-011                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **G-I-28 action** | **Transcribed.** Command `APPLY_EFFECTIVE_SIGNAL`; one apply per settled `support_signal_id`; non-RED is a no-op; CLOSED opens a new case (does not REOPEN). |
 
 **Not D-011:** effective-signal _selection_ (P-21), abandoned Check-In idle timeout (`CHECKINS.md` §4.2), island/crisis numbers (D-026).
@@ -239,16 +239,16 @@ Draft files are not authority. Do not implement islands, anonymous front door, o
 
 Smallest set that unblocks the most _product_ (not hosting):
 
-| Priority | Item                                                 | Why this next                                               |
-| -------- | ---------------------------------------------------- | ----------------------------------------------------------- |
-| 1        | **Wave A** (G-III-2, leftover headers)               | **Done** in specs `0.1.6`. This repo re-pins to that stack. |
-| 2        | **Wave B — D-011**                                   | **Done** in specs `0.2.0`. This repo registers `sv-001`.    |
-| 2b       | **G-I-28 action**                                    | **Transcribed** as `APPLY_EFFECTIVE_SIGNAL`. Live Check-In job still does not compute/settle. |
-| 3        | **Wave C1** (G-I-6/7/8)                              | Stops fulfillment edge-case invention                       |
+| Priority | Item                                                 | Why this next                                                                                           |
+| -------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 1        | **Wave A** (G-III-2, leftover headers)               | **Done** in specs `0.1.6`. This repo re-pins to that stack.                                             |
+| 2        | **Wave B — D-011**                                   | **Done** in specs `0.2.0`. This repo registers `sv-001`.                                                |
+| 2b       | **G-I-28 action**                                    | **Transcribed** as `APPLY_EFFECTIVE_SIGNAL`. Live Check-In job still does not compute/settle.           |
+| 3        | **Wave C1** (G-I-6/7/8)                              | Stops fulfillment edge-case invention                                                                   |
 | 4        | **Wave D — D-019/D-020** (or “manual through pilot”) | Admin enable/disable of the accepted catalog is already the add/remove path. Food/peer APIs still wait. |
-| 5        | **G-I-30** if live QRF matching is the next UX goal  | Dashboard/on-duty truth                                     |
-| 6        | **D-010** when reservation/payment is in scope       | Unblocks Amadeus book + Uber pay                            |
-| 7        | **Wave E** when a real pilot date exists             | SPEC-018                                                    |
+| 5        | **G-I-30** if live QRF matching is the next UX goal  | Dashboard/on-duty truth                                                                                 |
+| 6        | **D-010** when reservation/payment is in scope       | Unblocks Amadeus book + Uber pay                                                                        |
+| 7        | **Wave E** when a real pilot date exists             | SPEC-018                                                                                                |
 
 ---
 
