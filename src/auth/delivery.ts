@@ -27,6 +27,7 @@ import type {
   OutboundMessage,
 } from '../notifications/channels.js';
 import { RESEND_IMPLEMENTATION } from '../notifications/resend-email.js';
+import { renderEmailTemplate } from '../notifications/templates.js';
 
 export type ChallengeMethod = 'MAGIC_LINK' | 'EMAIL_OTP' | 'PHONE_OTP';
 export type ChallengeChannel = 'EMAIL' | 'SMS';
@@ -138,16 +139,35 @@ export function availableChannels(config: SuasConfig): ChallengeChannel[] {
 
 /**
  * Map a challenge onto the EMAIL/SMS notification port.
- * The secret is the rendered body. Do not log it (NOTIFICATIONS.md §10).
+ * EMAIL uses the catalog renderer. SMS stays text-only. Do not log the secret
+ * (NOTIFICATIONS.md §10).
  */
 export function outboundMessageFromChallenge(delivery: ChallengeDelivery): OutboundMessage {
   const idempotencyKey =
     delivery.idempotencyKey ??
     `auth:${delivery.method}:${delivery.destination}:${delivery.expiresAt.toISOString()}`;
+  const templateVersion = `auth.${delivery.method.toLowerCase()}`;
+
+  if (delivery.channel === 'EMAIL') {
+    const rendered = renderEmailTemplate(templateVersion, templateVersion, {
+      secret: delivery.secret,
+      expiresAt: delivery.expiresAt,
+    });
+    return {
+      channel: 'EMAIL',
+      destination: delivery.destination,
+      templateVersion,
+      subject: rendered.subject,
+      body: rendered.text,
+      html: rendered.html,
+      idempotencyKey,
+    };
+  }
+
   return {
     channel: delivery.channel,
     destination: delivery.destination,
-    templateVersion: `auth.${delivery.method.toLowerCase()}`,
+    templateVersion,
     body: delivery.secret,
     idempotencyKey,
   };

@@ -144,8 +144,6 @@ describe('DATA_MODEL.md §9 / P-12 — subject reference', () => {
   });
 });
 
-const renderBody = () => 'Synthetic notification body.';
-
 describe('NOTIFICATIONS.md §2 — channels', () => {
   it.each(['EMAIL', 'SMS', 'IN_APP'])('accepts MVP channel %s', (channel) => {
     expect(() => assertNotificationChannel(channel)).not.toThrow();
@@ -190,7 +188,6 @@ describe('NOTIFICATIONS.md §2 — channels', () => {
         tenantId,
         notificationId: enqueued.notification.notificationId,
         disclosure,
-        renderBody,
       }),
     ).rejects.toThrow(ChannelUnavailableError);
 
@@ -320,7 +317,6 @@ describe('NOTIFICATIONS.md §4 — consent at creation and before each attempt',
       tenantId,
       notificationId: enqueued.notification.notificationId,
       disclosure,
-      renderBody,
     });
 
     expect(result.outcome).toBe('CANCELLED');
@@ -348,7 +344,6 @@ describe('NOTIFICATIONS.md §4 — consent at creation and before each attempt',
       tenantId,
       notificationId: enqueued.notification.notificationId,
       disclosure: systemDisclosure(tenantId, veteran.userId),
-      renderBody,
     });
     expect(result.outcome).toBe('SENT');
   });
@@ -400,7 +395,6 @@ describe('NOTIFICATIONS.md §5 — durable execution and attempt history', () =>
       tenantId,
       notificationId: notification.notificationId,
       disclosure,
-      renderBody,
     });
 
     const audits = await pool.query<{ payload: Record<string, unknown> }>(
@@ -435,7 +429,6 @@ describe('NOTIFICATIONS.md §5 — durable execution and attempt history', () =>
       tenantId,
       notificationId: notification.notificationId,
       disclosure,
-      renderBody,
     });
     expect(first.outcome).toBe('FAILED');
     expect(first.notification.deliveryStatus).toBe('FAILED');
@@ -444,7 +437,6 @@ describe('NOTIFICATIONS.md §5 — durable execution and attempt history', () =>
       tenantId,
       notificationId: notification.notificationId,
       disclosure,
-      renderBody,
     });
     expect(second.notification.deliveryStatus).toBe('UNDELIVERABLE');
 
@@ -460,13 +452,11 @@ describe('NOTIFICATIONS.md §5 — durable execution and attempt history', () =>
       tenantId,
       notificationId: notification.notificationId,
       disclosure,
-      renderBody,
     });
     const replay = await attemptSend(pool, registry, {
       tenantId,
       notificationId: notification.notificationId,
       disclosure,
-      renderBody,
     });
 
     expect(replay.outcome).toBe('SKIPPED');
@@ -483,7 +473,6 @@ describe('NOTIFICATIONS.md §5 — durable execution and attempt history', () =>
       tenantId,
       notificationId: notification.notificationId,
       disclosure,
-      renderBody: () => 'Sensitive body text that must not be audited.',
     });
 
     const audits = await pool.query(
@@ -492,7 +481,7 @@ describe('NOTIFICATIONS.md §5 — durable execution and attempt history', () =>
       [tenantId],
     );
     const serialized = JSON.stringify(audits.rows);
-    expect(serialized).not.toContain('Sensitive body text');
+    expect(serialized).not.toContain('named you as a trusted contact');
     expect(serialized).not.toContain(notification.destination ?? 'no-destination');
   });
 });
@@ -513,7 +502,6 @@ describe('NOTIFICATIONS.md §6 — delivery callbacks', () => {
       tenantId: scenario.tenantId,
       notificationId: enqueued.notification.notificationId,
       disclosure: scenario.disclosure,
-      renderBody,
     });
     return { ...scenario, notification: enqueued.notification };
   }
@@ -607,13 +595,11 @@ describe('NOTIFICATIONS.md §9 — attempt counts are not coordination counts', 
       tenantId,
       notificationId: enqueued.notification.notificationId,
       disclosure,
-      renderBody,
     });
     await attemptSend(pool, failing, {
       tenantId,
       notificationId: enqueued.notification.notificationId,
       disclosure,
-      renderBody,
     });
 
     const after = await findNotification(pool, tenantId, enqueued.notification.notificationId);

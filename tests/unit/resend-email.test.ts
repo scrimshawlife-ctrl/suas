@@ -55,8 +55,10 @@ function message(overrides: Partial<OutboundMessage> = {}) {
   return {
     channel: 'EMAIL' as const,
     destination: DESTINATION,
-    templateVersion: 'notify.v1',
+    templateVersion: 'followup@1',
+    subject: 'SUAS Follow-Up is due',
     body: 'synthetic message body that must not appear in logs',
+    html: '<p>synthetic html that must not appear in logs</p>',
     idempotencyKey: 'notify-1',
     ...overrides,
   };
@@ -104,9 +106,15 @@ describe('ResendEmailChannel', () => {
     const body = JSON.parse(requestBody(transport.calls[0]?.init ?? {})) as {
       from: string;
       to: string[];
+      subject: string;
+      text: string;
+      html: string;
     };
     expect(body.from).toBe(FROM);
     expect(body.to).toEqual([DESTINATION]);
+    expect(body.subject).toBe('SUAS Follow-Up is due');
+    expect(body.text).toBe('synthetic message body that must not appear in logs');
+    expect(body.html).toBe('<p>synthetic html that must not appear in logs</p>');
   });
 
   it('reads a wrapped { data, error } success payload', async () => {
@@ -181,6 +189,7 @@ describe('ResendEmailChannel', () => {
     expect(serialized).not.toContain('Authorization');
     expect(serialized).not.toContain(API_KEY);
     expect(serialized).not.toContain('synthetic message body');
+    expect(serialized).not.toContain('synthetic html');
     expect(serialized).not.toContain(DESTINATION);
     expect(serialized).not.toContain(FROM);
   });
@@ -192,6 +201,19 @@ describe('ResendEmailChannel', () => {
     expect(() => createResendEmailChannel({ apiKey: API_KEY, fromAddress: undefined })).toThrow(
       ResendEmailMisconfiguredError,
     );
+  });
+
+  it('does not accept EMAIL without a rendered subject and html', async () => {
+    const transport = new ScriptedTransport([]);
+    const result = await emailChannel(transport).send({
+      channel: 'EMAIL',
+      destination: DESTINATION,
+      templateVersion: 'followup@1',
+      body: 'synthetic message body that must not appear in logs',
+      idempotencyKey: 'notify-1',
+    });
+    expect(result.accepted).toBe(false);
+    expect(transport.calls).toHaveLength(0);
   });
 
   it('rejects an idempotency key longer than 256 characters', async () => {
@@ -234,11 +256,41 @@ describe('challenge delivery uses the same EMAIL port', () => {
     expect(transport.calls[0]?.init.headers).toMatchObject({
       'Idempotency-Key': 'auth-otp-1',
     });
-    const first = JSON.parse(requestBody(transport.calls[0]?.init ?? {})) as { text: string };
-    const second = JSON.parse(requestBody(transport.calls[1]?.init ?? {})) as { text: string };
-    expect(first.text).toBe('123456');
-    expect(second.text).toBe('opaque-token');
+    const first = JSON.parse(requestBody(transport.calls[0]?.init ?? {})) as {
+      subject: string;
+      text: string;
+      html: string;
+    };
+    const second = JSON.parse(requestBody(transport.calls[1]?.init ?? {})) as {
+      subject: string;
+      text: string;
+      html: string;
+    };
+    expect(first.subject).toBe('SUAS sign-in code');
+    expect(first.text).toContain('123456');
+    expect(first.html).toContain('123456');
+    expect(second.subject).toBe('SUAS sign-in token');
+    expect(second.text).toContain('opaque-token');
+    expect(second.html).toContain('opaque-token');
     expect(delivery.implementation).toBe(RESEND_IMPLEMENTATION);
+
+    const logs: ResendEmailLogRecord[] = [];
+    const logged = emailChannel(
+      new ScriptedTransport([Response.json({ id: 'logged-challenge' })]),
+      logs,
+    );
+    const loggedDelivery = new ChannelBackedChallengeDelivery('sink', logged, undefined);
+    await loggedDelivery.deliver({
+      channel: 'EMAIL',
+      destination: DESTINATION,
+      method: 'EMAIL_OTP',
+      secret: '123456',
+      expiresAt: new Date('2026-08-26T21:00:00.000Z'),
+      idempotencyKey: 'auth-otp-log',
+    });
+    const serialized = JSON.stringify(logs);
+    expect(serialized).not.toContain('123456');
+    expect(serialized).not.toContain(DESTINATION);
   });
 
   it('does not fake success when Resend does not accept the challenge', async () => {
@@ -267,7 +319,10 @@ describe('challenge delivery uses the same EMAIL port', () => {
       expiresAt: new Date('2026-08-26T22:00:00.000Z'),
     });
     expect(mapped.channel).toBe('EMAIL');
-    expect(mapped.body).toBe('654321');
+    expect(mapped.subject).toBe('SUAS sign-in code');
+    expect(mapped.body).toContain('654321');
+    expect(mapped.html).toContain('654321');
+    expect(mapped.templateVersion).toBe('auth.email_otp');
     expect(mapped.idempotencyKey).toContain('EMAIL_OTP');
   });
 });

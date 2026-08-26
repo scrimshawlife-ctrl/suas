@@ -121,6 +121,9 @@ export class ResendEmailChannel implements NotificationChannelPort {
     ) {
       return this.finish('not_accepted');
     }
+    if (message.subject === undefined || message.html === undefined) {
+      return this.finish('not_accepted');
+    }
 
     try {
       const response = await this.transport.fetch(RESEND_EMAILS_URL, {
@@ -133,8 +136,9 @@ export class ResendEmailChannel implements NotificationChannelPort {
         body: JSON.stringify({
           from: this.fromAddress,
           to: [message.destination],
-          subject: message.templateVersion,
+          subject: message.subject,
           text: message.body,
+          html: message.html,
         }),
       });
 

@@ -27,6 +27,18 @@ export {
   type ResendSendOutcome,
 } from './resend-email.js';
 export {
+  EMAIL_TEMPLATE_CATALOG_VERSION,
+  EMAIL_TEMPLATE_KEYS,
+  EmailTemplateContextError,
+  escapeEmailHtml,
+  renderEmailTemplate,
+  UnknownEmailTemplateError,
+  type EmailTemplateContext,
+  type EmailTemplateReason,
+  type EmailTemplateVersion,
+  type RenderedEmail,
+} from './templates.js';
+export {
   applyDeliveryCallback,
   attemptSend,
   channelAllowedByPreference,

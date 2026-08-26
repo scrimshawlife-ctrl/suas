@@ -68,12 +68,17 @@ export interface OutboundMessage {
   readonly channel: NotificationChannel;
   /** Address or reference. For IN_APP this is the recipient user id. */
   readonly destination: string;
+  /** Catalog version key. Not a human subject. */
   readonly templateVersion: string;
+  /** Human subject from the renderer. Required for EMAIL. */
+  readonly subject?: string;
   /**
-   * Rendered body. NOTIFICATIONS.md §10 forbids writing this to ordinary
+   * Rendered text body. NOTIFICATIONS.md §10 forbids writing this to ordinary
    * application logs, and §7 forbids templates carrying safety-critical logic.
    */
   readonly body: string;
+  /** Rendered HTML body. Required for EMAIL; optional for IN_APP and SMS. */
+  readonly html?: string;
   /** Stable identity so an adapter can deduplicate its own retries. */
   readonly idempotencyKey: string;
 }

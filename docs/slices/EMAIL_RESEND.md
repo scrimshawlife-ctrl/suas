@@ -22,14 +22,15 @@ D-006, or SPEC-018. It does not set `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=true`.
 
 ## 2. Change map — file to spec section
 
-| Path                                  | Implements                                                         |
-| ------------------------------------- | ------------------------------------------------------------------ |
-| `src/notifications/resend-email.ts`   | ARCHITECTURE.md §11 EmailPort; NOTIFICATIONS.md §2, §6, §10–§11    |
-| `src/notifications/channels.ts`       | ENVIRONMENT.md §3 — registry stays on `RecordingChannel`           |
-| `src/auth/delivery.ts`                | AUTH.md §9 — same EMAIL port; no second Resend client              |
-| `src/config/schema.ts`                | ENVIRONMENT.md §3, §5 — optional slots; `resend` mode still closed |
-| `src/worker/env.ts`                   | Optional bindings; secrets never in `vars`                         |
-| `docs/runbooks/cloudflare-workers.md` | Operator note: email stays sink; Resend secret is later            |
+| Path                                  | Implements                                                          |
+| ------------------------------------- | ------------------------------------------------------------------- |
+| `src/notifications/resend-email.ts`   | ARCHITECTURE.md §11 EmailPort; NOTIFICATIONS.md §2, §6, §10–§11     |
+| `src/notifications/channels.ts`       | ENVIRONMENT.md §3 — registry stays on `RecordingChannel`            |
+| `src/auth/delivery.ts`                | AUTH.md §9 — same EMAIL port; no second Resend client               |
+| `src/config/schema.ts`                | ENVIRONMENT.md §3, §5 — optional slots; `resend` mode still closed  |
+| `src/worker/env.ts`                   | Optional bindings; secrets never in `vars`                          |
+| `docs/runbooks/cloudflare-workers.md` | Operator note: email stays sink; Resend secret is later             |
+| `src/notifications/templates.ts`      | NOTIFICATIONS.md §7–§8, §10; AUTH.md §2–§3; SAFETY_COPY.md §2.3, §4 |
 
 ## 3. Vendor pick and lock
 
@@ -60,6 +61,11 @@ does not claim those decisions closed.
 | Default `sink` still starts; `resend` mode is rejected                     | `tests/unit/config.test.ts`             |
 | Real-effects flag stays rejected                                           | same file                               |
 | No API key or from-address mailbox in `wrangler.jsonc`                     | `tests/unit/repository-hygiene.test.ts` |
+| Every shipped EMAIL template renders subject + text + html                 | `tests/unit/email-templates.test.ts`    |
+| Unknown reason or version fails closed                                     | same file                               |
+| HTML escapes interpolated context                                          | same file                               |
+| Crisis-adjacent templates use only 911/988 and omit forbidden phrases      | same file                               |
+| Resend POST body uses rendered subject/text/html                           | `tests/unit/resend-email.test.ts`       |
 
 ## 5. Environment and configuration changes
 
@@ -105,7 +111,43 @@ rejected. SPEC-018 is not authorized.
 3. **No from-address mailbox is chosen.** Operators set `SUAS_EMAIL_FROM`
    only after a released mode can select Resend.
 
-## 11. Readiness statement
+## 11. EMAIL templates (`email-templates/v1`)
+
+The catalog renders `{ subject, text, html }` from OBSERVED `reason` +
+`templateVersion` keys. `templateVersion` stays the version key. It is not
+the human subject. Unknown keys fail closed.
+
+| reason                   | templateVersion   | Audience        | Notes                                              |
+| ------------------------ | ----------------- | --------------- | -------------------------------------------------- |
+| `auth.magic_link`        | `auth.magic_link` | Veteran sign-in | AUTH.md §2 MAGIC_LINK. No crisis footer.           |
+| `auth.email_otp`         | `auth.email_otp`  | Veteran sign-in | AUTH.md §2 EMAIL_OTP. No crisis footer.            |
+| `trusted_contact_alert`  | `alert@1`         | Trusted contact | Observed EMAIL enqueue. SAFETY_COPY.md §2.3 footer |
+| `followup_due`           | `followup@1`      | Veteran         | Observed EMAIL enqueue. SAFETY_COPY.md §2.3 footer |
+| `qrf.responder_notified` | `test@1`          | Responder       | Observed enqueue (IN_APP in tests). No later state |
+| `service_request_update` | `update@1`        | Veteran         | Observed enqueue. SAFETY_COPY.md §2.3 footer       |
+
+Omitted NOTIFICATIONS.md §8 facts — no product send path and no notification
+reason key in `src/`:
+
+| §8 fact                    | Evidence                                                                          |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| `CHECKIN_COMPLETED`        | `src/signals/check-ins.ts` emits the Domain Event only                            |
+| `SUPPORT_SIGNAL_CHANGED`   | `src/signals/settlement.ts` emits the Domain Event only                           |
+| `CASE_ASSIGNED`            | `src/coordination/cases.ts` emits the Domain Event only                           |
+| `SERVICE_REQUEST_ASSIGNED` | `src/coordination/requests.ts` emits the Domain Event only                        |
+| `SERVICE_ACCEPTED`         | Named in `src/events/envelope.ts` only                                            |
+| `SERVICE_FULFILLED`        | Named in `src/events/envelope.ts` only                                            |
+| `TRUSTED_CONTACT_INVITED`  | `src/consent/trusted-circle.ts` emits the Domain Event; no notification reason    |
+| Consent-receipt send       | Consent templates live in `consent_template_versions`; no notification reason key |
+| `PHONE_OTP`                | AUTH.md §2 SMS channel; not an EMAIL template                                     |
+
+Test-only enqueue keys `drill_provider_outage` / `drill_duplicate_webhook` /
+`drill@1` were not shipped. Those drills now use `followup_due` / `followup@1`.
+
+`attemptSend` and challenge EMAIL go through `renderEmailTemplate`.
+`createChannelRegistry` stays on `RecordingChannel`. Email stays sink.
+
+## 12. Readiness statement
 
 SPEC-017 stays `NOT READY`. SPEC-018 is not authorized. This record does
 not claim live email, a Worker deploy, or production operation.

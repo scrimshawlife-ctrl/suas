@@ -27,6 +27,7 @@ import {
   type NotificationChannel,
   type NotificationChannelPort,
 } from './channels.js';
+import { renderEmailTemplate } from './templates.js';
 
 export const DELIVERY_STATUSES = [
   'QUEUED',
@@ -299,7 +300,6 @@ export async function attemptSend(
     tenantId: string;
     notificationId: string;
     disclosure: DisclosureRequest;
-    renderBody: (notification: Notification) => string;
   },
 ): Promise<SendAttemptResult> {
   const notification = await findNotification(pool, input.tenantId, input.notificationId);
@@ -345,11 +345,17 @@ export async function attemptSend(
     throw new Error('Notification has no destination or recipient.');
   }
 
+  const rendered = renderEmailTemplate(notification.reason, notification.templateVersion, {
+    ...(notification.subjectType !== undefined ? { subjectType: notification.subjectType } : {}),
+  });
+
   const acknowledgement = await port.send({
     channel: notification.channel,
     destination,
     templateVersion: notification.templateVersion,
-    body: input.renderBody(notification),
+    subject: rendered.subject,
+    body: rendered.text,
+    html: rendered.html,
     idempotencyKey: notification.notificationId,
   });
 
