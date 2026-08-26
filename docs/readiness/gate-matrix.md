@@ -1,7 +1,7 @@
 # Twelve-gate evidence matrix — SPEC-018
 
 **Stack:** `0.2.0`  
-**Runtime head:** post `#63` (`410617e` lineage)  
+**Runtime head:** `428c20d` (#71) + settlement doc refresh  
 **Verdict vocabulary:** `READY` | `NOT_READY` | `NOT_COMPUTABLE`
 
 | Gate                 | Verdict        | Evidence                                                                  | Remaining blockers                                 | Owner                   | Smallest next action                                           | Blocks       |
