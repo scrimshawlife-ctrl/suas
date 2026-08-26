@@ -101,6 +101,36 @@ workflow.
 or schema validation fails, the fetch handler returns `503` with
 `{ "error": { "code": "NOT_READY" } }` and does not serve `/app` or `/api/v0`.
 
+## Shared synthetic deploy (interim, owner-authorized)
+
+Topology recommendation: [D-001-005-staging-hosting.md](../decision-packets/D-001-005-staging-hosting.md).
+
+Owner checklist before first shared publish:
+
+1. Neon synthetic database created (no production data path).
+2. Hyperdrive created against the **pooled** Neon URL; id placed in an
+   uncommitted local override or CF dashboard — never a connection string in git.
+3. Schema applied once from Node with the **unpooled** URL:
+   `npm run migrate -- apply` then `npm run migrate -- validate`.
+4. `npx wrangler secret put SUAS_SESSION_SECRET` for the Worker.
+5. Optional stamp: `SUAS_BUILD_COMMIT` / `SUAS_BUILD_TIMESTAMP` as Wrangler vars.
+6. Publish: `npx wrangler deploy` (manual) or the `worker-deploy` workflow
+   (`workflow_dispatch` only) after `CLOUDFLARE_API_TOKEN` and
+   `CLOUDFLARE_ACCOUNT_ID` exist in the GitHub Environment `synthetic-worker`.
+
+Keep `SUAS_ENV=LOCAL` until D-022. Do not set
+`SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=true`. Do not treat this publish as
+SPEC-018 production authorization or formal STAGING-class gate closure.
+
+Smoke after deploy:
+
+```bash
+curl -sS "$WORKER_BASE_URL/api/v0/health"
+curl -sS -o /dev/null -w "%{http_code}\n" "$WORKER_BASE_URL/app"
+```
+
+Expect health JSON without secrets; `/app` HTML for the reference surfaces.
+
 ## Rollback
 
 Stop traffic to the bad Worker version and roll back to the previous

@@ -84,12 +84,16 @@ Copy `.dev.vars.example` to `.dev.vars` for `wrangler dev`. Replace
 
 `wrangler.jsonc` sets `SUAS_ENV=LOCAL` because STAGING/PRODUCTION still fail
 closed on the durable job product (D-022) and PRODUCTION stays rejected until
-SPEC-018. Email and SMS stay `sink`. This repository does not deploy a live
-Worker and does not claim production readiness.
+SPEC-018. Email and SMS stay `sink`. This repository does not claim production
+readiness. Recommended shared synthetic topology (GitHub + Worker + Neon) is in
+[docs/decision-packets/D-001-005-staging-hosting.md](docs/decision-packets/D-001-005-staging-hosting.md);
+owner-authorized publish uses Actions `worker-deploy` (`workflow_dispatch` only)
+or `npx wrangler deploy` — see
+[docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
 
 Cloudflare published limits (not SUAS SLOs): 30 s CPU default on paid plans
 (10 ms on free), 128 MB memory, 50 subrequests per invocation on free / 10,000
-on paid. See [docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
+on paid.
 
 HTTP surface so far:
 
