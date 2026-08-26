@@ -82,7 +82,18 @@ describe('TESTING.md §12 — fixtures are synthetic', () => {
         continue;
       }
       const contents = readFileSync(new URL(file, `file://${repoRoot}`), 'utf8');
+      // Public legal notices publish the Zero State LLC mailbox by design.
+      // ENVIRONMENT.md §7 targets fixture and production leakage, not that mailbox.
+      const publicLegalContact = ['zer0state', 'zer0state.com'].join('@');
+      const isPublicLegalNotice = file.startsWith('docs/legal/');
       for (const finding of scanForNonSyntheticContactData(contents)) {
+        if (
+          isPublicLegalNotice &&
+          finding.kind === 'email' &&
+          finding.value === publicLegalContact
+        ) {
+          continue;
+        }
         findings.push(`${file}: ${finding.kind} ${finding.value} — ${finding.reason}`);
       }
     }
