@@ -31,6 +31,7 @@ import {
   claimCase,
   findActiveAssignment,
   findCase,
+  IllegalCaseTransitionError,
   readCaseQueue,
 } from '../../coordination/index.js';
 import { searchResources } from '../../fulfillment/index.js';
@@ -327,6 +328,16 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       if (existing === undefined) {
         throw new ResourceNotVisibleError();
       }
+      // CLAIM_CASE is documented from OPEN/TRIAGED only. A same-responder
+      // replay arrives when the case is already ASSIGNED, so treat "already
+      // mine" as success rather than an illegal edge.
+      const held = await findActiveAssignment(pool, request.params.id);
+      if (held !== undefined) {
+        if (held.responderUserId === context.userId) {
+          return reply.redirect('/app/responder', 303);
+        }
+        throw new CaseAlreadyClaimedError();
+      }
       try {
         await claimCase(pool, {
           tenantId: context.tenantId,
@@ -335,9 +346,12 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
           correlationId: String(request.id),
         });
       } catch (error) {
-        // Same-responder replay: the case is already theirs. A different
-        // responder still receives the released conflict.
-        if (!(error instanceof CaseAlreadyClaimedError)) throw error;
+        if (
+          !(error instanceof CaseAlreadyClaimedError) &&
+          !(error instanceof IllegalCaseTransitionError)
+        ) {
+          throw error;
+        }
         const assignment = await findActiveAssignment(pool, request.params.id);
         if (assignment?.responderUserId !== context.userId) throw error;
       }

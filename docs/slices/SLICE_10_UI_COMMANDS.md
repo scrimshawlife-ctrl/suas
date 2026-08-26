@@ -39,7 +39,9 @@ chat, metrics, or Check-In domain.
 
 - **Deploy QRF** (`POST /app/qrf/deploy`): authenticate, `openCase` (idempotent), then create a `PEER_SUPPORT` Service Request if none is in flight. Concurrent deploys lock the Case row. 303 to `/app/home`.
 - **Cancel request** (`POST /app/qrf/cancel`): authenticate, look up the veteran's in-flight request (server-derived; no client id), `CANCEL` with a recorded reason. Replay after cancel is a no-op. 303 to `/app/home`.
-- **Claim** (already registered): same-responder replay now 303s instead of 409. A different responder still conflicts.
+- **Claim** (already registered): same-responder replay 303s when the case is
+  already `ASSIGNED` to that responder (`CLAIM_CASE` has no documented edge
+  from `ASSIGNED`). A different responder still conflicts.
 - **Resource Call / Email / Web:** already rendered from P-13 `contactMethodKind`. Untyped / `FREEFORM` still offer no guessed scheme.
 - **`RESPONDER_NOTIFIED`:** already readable via P-12 subject join. An assignment alone stays off that label.
 
