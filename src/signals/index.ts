@@ -1,6 +1,7 @@
 export {
   clearSignalEngines,
   computeSignal,
+  configureSupportSignalScoring,
   findSignalEngine,
   IncompleteInputError,
   registerSignalEngine,
@@ -10,6 +11,7 @@ export {
   UnreleasedEngineError,
   type CanonicalAnswer,
   type CanonicalSignalInput,
+  type ComputeOptions,
   type SignalComputation,
   type SignalEngine,
   type SignalLevel,

@@ -292,10 +292,16 @@ function levelForRule(ruleId: SignalRuleId): SignalLevel {
  * equivalent basis. Missing required safety input throws and returns no basis.
  */
 export function computeSv001(input: CanonicalSignalInput): SignalComputation {
-  if (input.questionnaireVersion !== undefined && input.questionnaireVersion !== QV_001_VERSION) {
+  // B5: scoring identity is exact qv-001. Absent, unknown, and mismatched versions
+  // all refuse — there is no implicit default questionnaire.
+  if (input.questionnaireVersion !== QV_001_VERSION) {
+    const received =
+      input.questionnaireVersion === undefined || input.questionnaireVersion === ''
+        ? 'absent'
+        : `"${input.questionnaireVersion}"`;
     throw new SignalInputError(
       `sv-001 scores only questionnaire_version ${QV_001_VERSION} ` +
-        `(received "${input.questionnaireVersion}"; SIGNAL_SCORING.md B5).`,
+        `(received ${received}; SIGNAL_SCORING.md B5).`,
     );
   }
 

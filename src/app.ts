@@ -16,7 +16,11 @@ import type { Pool } from 'pg';
 import { describeConfig, loadConfig, type ConfigSource, type SuasConfig } from './config/index.js';
 import { createPool, EXPECTED_SCHEMA_VERSION, runMigrations } from './db/index.js';
 import { createJobQueue, DispatchingJobQueue, type DurableJobQueuePort } from './jobs/index.js';
-import { parseComputeJobPayload, runSupportSignalComputeJob } from './signals/index.js';
+import {
+  configureSupportSignalScoring,
+  parseComputeJobPayload,
+  runSupportSignalComputeJob,
+} from './signals/index.js';
 import {
   createChallengeDelivery,
   createMfaPort,
@@ -49,6 +53,10 @@ export interface StartAppOptions {
 export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   // 1. Configuration validation. Nothing else may run before this succeeds.
   const config = loadConfig(options.env);
+
+  // Pin scoring availability before any job or HTTP handler can run. `disabled`
+  // fails closed at computeSignal as well as the job entry (ENVIRONMENT.md §3).
+  configureSupportSignalScoring(config.supportSignalMode);
 
   // 2. Persistence and schema-state validation.
   let pool: Pool | undefined;

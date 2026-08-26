@@ -9,11 +9,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   clearSignalEngines,
   computeSignal,
+  configureSupportSignalScoring,
   MISSING_REQUIRED_SAFETY_INPUT,
   MissingRequiredSafetyInputError,
   QV_001_QUESTIONS,
   QV_001_VERSION,
   SIGNAL_RULE_IDS,
+  SignalInputError,
+  SignalScoringUnavailableError,
   SV_001_ENGINE,
   SV_001_VERSION,
   type CanonicalSignalInput,
@@ -278,5 +281,45 @@ describe('SIGNAL_SCORING.md B2 — minimized basis and determinism', () => {
         'signal_version',
       ].sort(),
     );
+  });
+});
+
+describe('SIGNAL_SCORING.md B5 — exact questionnaire identity', () => {
+  it('rejects an absent questionnaireVersion', () => {
+    const input = fromAnswers(A0);
+    expect(() =>
+      computeSignal(SV_001_VERSION, { ...input, questionnaireVersion: undefined }),
+    ).toThrow(SignalInputError);
+    try {
+      computeSignal(SV_001_VERSION, { ...input, questionnaireVersion: undefined });
+    } catch (error) {
+      expect(error).toBeInstanceOf(SignalInputError);
+      expect((error as SignalInputError).message).toContain('absent');
+    }
+  });
+
+  it('rejects a mismatched questionnaireVersion', () => {
+    const input = fromAnswers(A0);
+    expect(() =>
+      computeSignal(SV_001_VERSION, { ...input, questionnaireVersion: 'qv-other' }),
+    ).toThrow(SignalInputError);
+  });
+});
+
+describe('ENVIRONMENT.md §3 — disabled mode refuses scoring', () => {
+  it('refuses computeSignal when the process mode is disabled', () => {
+    configureSupportSignalScoring('disabled');
+    expect(() => compute(A0)).toThrow(SignalScoringUnavailableError);
+  });
+
+  it('refuses computeSignal when the call passes disabled explicitly', () => {
+    expect(() =>
+      computeSignal(SV_001_VERSION, fromAnswers(A0), { supportSignalMode: 'disabled' }),
+    ).toThrow(SignalScoringUnavailableError);
+  });
+
+  it('still scores under fixture mode', () => {
+    configureSupportSignalScoring('fixture');
+    expect(compute(A0).level).toBe('GREEN');
   });
 });
