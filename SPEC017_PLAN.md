@@ -23,8 +23,9 @@
 | 11 — Scale / resilience harness         | `IMPLEMENTED (drills only)`  | [docs/slices/SLICE_11_RESILIENCE_HARNESS.md](docs/slices/SLICE_11_RESILIENCE_HARNESS.md)       |
 | 12 — D-011 scoring (`qv-001`/`sv-001`)  | `IMPLEMENTED`                | [docs/slices/SLICE_12_SIGNAL_SCORING.md](docs/slices/SLICE_12_SIGNAL_SCORING.md)               |
 
-The Slice 10 follow-on wires released deploy / cancel / claim HTML POSTs. Join,
-on-duty, chat, and metrics stay unwired residuals. SPEC-017 and `UI_CONFORMANCE`
+The Slice 10 follow-on wires released deploy / cancel / claim HTML POSTs.
+On-duty HTML now states unavailability (G-I-30) instead of posting a 404 form.
+Join, chat, and metrics stay unwired residuals. SPEC-017 and `UI_CONFORMANCE`
 do **not** advance.
 
 Slices 1–12 each record conformance and returned gaps. Slice 12 registers the

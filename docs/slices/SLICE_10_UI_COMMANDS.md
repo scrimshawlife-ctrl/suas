@@ -12,6 +12,14 @@ Plane A JSON already shipped the underlying commands. This cut wires only those
 released facts into `/app` POST handlers. It does not invent join, on-duty,
 chat, metrics, or Check-In domain.
 
+**On-duty honesty follow-on.** The responder dashboard and availability
+surfaces kept a `Go on duty` / `Go off duty` form that posted to
+`/app/responder/availability`. That route has no handler. A successful no-op
+write would claim a stored roster that G-I-30 / `MVP_REFERENCE.md` §9 do not
+release. This follow-on removes the form and states unavailability the same
+way chat does. The `On Duty` landmark stays. The copy does not say the
+responder is receiving or not receiving requests.
+
 ## 1. Released spec citations
 
 | Spec                                 | Sections used                                                                                                                                                     |
@@ -31,9 +39,11 @@ chat, metrics, or Check-In domain.
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `src/ui/commands.ts`                    | `CASES.md` §3.1 + `DISPATCH.md` §4 / §7 composed as HTML deploy / cancel                                                    |
 | `src/http/routes/ui.ts`                 | `MVP_REFERENCE.md` §7.2; `API.md` §4; `AUTH.md` §5 — POST `/app/qrf/deploy`, `/app/qrf/cancel`; same-responder claim replay |
-| `src/ui/surfaces.ts`                    | Enrollment role links stay on `GET /app/join` (display-only)                                                                |
+| `src/ui/surfaces.ts`                    | Enrollment role links stay on `GET /app/join` (display-only). On-duty renders `UNAVAILABLE` and posts no form               |
+| `src/ui/view-models.ts`                 | `DutyAvailability` is `UNAVAILABLE` only. A boolean on/off would invent a stored roster (G-I-30 / `MVP_REFERENCE.md` §9)    |
 | `tests/integration/ui-commands.test.ts` | Deploy / cancel / claim success, idempotency, authz; `RESPONDER_NOTIFIED` only with a subject-linked delivery               |
-| `tests/unit/ui-surfaces.test.ts`        | Form actions and enrollment hrefs                                                                                           |
+| `tests/integration/ui.test.ts`          | Live `/app/responder` keeps `On Duty` and states unavailability; `POST /app/responder/availability` is 404                  |
+| `tests/unit/ui-surfaces.test.ts`        | Form actions, enrollment hrefs, and on-duty honesty                                                                         |
 
 ## 3. What is wired
 
@@ -48,10 +58,17 @@ chat, metrics, or Check-In domain.
 ## 4. Residuals — not wired, returned to specs
 
 1. **`/app/join` stays display-only.** `issueChallenge` / `verifyChallenge` exist, but (a) tenant resolution at sign-in is an open Slice 3 gap, (b) a challenge does not create a User, (c) LOCAL/TEST never expose the OTP over HTTP, and (d) there is no cookie UI session — HTML cannot persist a Bearer credential after verify. Inventing any of those would be new domain. Role links now stay on `GET /app/join?role=…` so they no longer 404.
-2. **On-duty / availability (G-I-30).** The control still posts to `/app/responder/availability`, which has no handler. A successful POST that changed nothing would be a lie.
+2. **On-duty / availability (G-I-30).** The `On Duty` landmark remains. The
+   HTML no longer posts to `/app/responder/availability`. Both responder
+   surfaces render `UNAVAILABLE` with a stated reason. There is still no
+   on-duty store, duty window, or availability verb. A successful no-op
+   handler is not added.
 3. **Chat / threads (G-I-31).** Surface stays truthful `UNAVAILABLE`.
 4. **Dashboard metrics (G-I-32).** Stay `NOT_COMPUTABLE`.
-5. **QRF Call / Message.** Still hidden unless an authorized path exists. No counterpart consent evaluation is asserted on the live home.
+5. **QRF Call / Message.** Still hidden unless an authorized path exists. The
+   live home never asserts a counterpart consent path, so those links do not
+   render. `/app/qrf/call` and `/app/qrf/message` have no handler and 404 if
+   requested. This cut does not invent voice or message domain.
 6. **Check-In / Support Signal HTML.** Not added. Not in the canonical loop display.
 
 ## 5. Environment, migrations, readiness

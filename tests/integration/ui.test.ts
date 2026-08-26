@@ -16,7 +16,7 @@ import { createServiceRequest, openCase } from '../../src/coordination/index.js'
 import { withTransaction } from '../../src/db/index.js';
 import type { RecordingChallengeDelivery } from '../../src/auth/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { auditAccessibility } from '../../src/ui/index.js';
+import { auditAccessibility, DUTY_UNAVAILABLE_REASON } from '../../src/ui/index.js';
 import { validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
@@ -396,5 +396,88 @@ describe('Chat states its own unavailability', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('Messaging is not available yet');
+  });
+});
+
+describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty HTML is not a stored fact', () => {
+  it('keeps the On Duty landmark and states unavailability', async () => {
+    const { credential } = await signIn();
+    const response = await app.server.inject({
+      method: 'GET',
+      url: '/app/responder',
+      headers: authorized(credential),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('On Duty');
+    expect(response.body).toContain(DUTY_UNAVAILABLE_REASON);
+    expect(response.body).not.toContain('action="/app/responder/availability"');
+    expect(response.body).not.toContain('Go on duty');
+    expect(response.body).not.toContain('You are receiving requests.');
+    expect(response.body).not.toContain('You are not receiving requests.');
+    expect(auditAccessibility(response.body)).toEqual([]);
+  });
+
+  it('does not accept a duty POST — a no-op write would be a lie', async () => {
+    const { credential } = await signIn();
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/responder/availability',
+      headers: authorized(credential),
+      payload: { onDuty: 'true' },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('QRF Call and Message stay hidden without an authorized path', () => {
+  it('does not render Call or Message hrefs on the live home', async () => {
+    const { credential, tenantId, userId } = await signIn();
+    const idle = await app.server.inject({
+      method: 'GET',
+      url: '/app/home',
+      headers: authorized(credential),
+    });
+    expect(idle.statusCode).toBe(200);
+    expect(idle.body).not.toContain('/app/qrf/call');
+    expect(idle.body).not.toContain('/app/qrf/message');
+
+    await withTransaction(pool(), async (tx) => {
+      const opened = await openCase(tx, {
+        tenantId,
+        veteranUserId: userId,
+        actorType: 'VETERAN',
+        actorId: userId,
+      });
+      await createServiceRequest(tx, {
+        tenantId,
+        caseId: opened.supportCase.caseId,
+        category: 'PEER_SUPPORT',
+        createdBy: userId,
+        actorType: 'VETERAN',
+      });
+    });
+
+    const inFlight = await app.server.inject({
+      method: 'GET',
+      url: '/app/home',
+      headers: authorized(credential),
+    });
+    expect(inFlight.statusCode).toBe(200);
+    expect(inFlight.body).toContain('Your QRF request');
+    expect(inFlight.body).not.toContain('/app/qrf/call');
+    expect(inFlight.body).not.toContain('/app/qrf/message');
+  });
+
+  it('does not serve /app/qrf/call or /app/qrf/message as product routes', async () => {
+    const { credential } = await signIn();
+    for (const url of ['/app/qrf/call', '/app/qrf/message']) {
+      const response = await app.server.inject({
+        method: 'GET',
+        url,
+        headers: authorized(credential),
+      });
+      expect(response.statusCode, url).toBe(404);
+    }
   });
 });

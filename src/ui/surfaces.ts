@@ -67,6 +67,7 @@ import type {
   ResourceCategoriesViewModel,
   ResourceListViewModel,
   ResourceRowViewModel,
+  DutyAvailability,
   ResponderAvailabilityViewModel,
   ResponderDashboardViewModel,
   ShellViewModel,
@@ -176,6 +177,14 @@ function stateBlock(label_: string, headline: string, detail?: string): Renderab
 }
 
 /**
+ * §9.1 keeps the On Duty landmark. G-I-30: the landmark is not a stored
+ * on/off fact, so the block states unavailability the way chat does.
+ */
+function dutyUnavailability(duty: DutyAvailability): Renderable {
+  return stateBlock('Unavailable', duty.reason);
+}
+
+/**
  * The reserved immediate-resource slot.
  *
  * §7.3 keeps the placement. In `approved` mode the slot renders the D-012
@@ -272,6 +281,8 @@ function qrfCard(model: QrfCardViewModel): Renderable {
     stateBlock(presentation.state.replace(/_/g, ' '), presentation.headline),
     // Call and Message exist only with an authorized path (§7.2). An
     // unauthorized path renders nothing rather than a disabled control.
+    // `/app/qrf/call` and `/app/qrf/message` have no handler. The live home
+    // keeps both flags false so these hrefs do not render as dead product routes.
     affordances.call ? a({ class: 'action-secondary', href: '/app/qrf/call' }, 'Call') : undefined,
     affordances.message
       ? a({ class: 'action-secondary', href: '/app/qrf/message' }, 'Message')
@@ -489,26 +500,12 @@ export function renderResponderCase(model: {
 export function renderResponderDashboard(model: ResponderDashboardViewModel): string {
   const markup = document(model.shell, [
     h1({}, 'Responder'),
-    // §9.1: on-duty is a primary control and state.
+    // §9.1: on-duty is a primary landmark. G-I-30: it is not a stored fact,
+    // so the block states unavailability rather than posting a 404 form.
     section(
       { 'aria-labelledby': 'duty' },
       h2({ id: 'duty' }, 'On Duty'),
-      stateBlock(
-        model.onDuty ? 'On duty' : 'Off duty',
-        model.onDuty ? 'You are receiving requests.' : 'You are not receiving requests.',
-      ),
-      form(
-        { method: 'post', action: '/app/responder/availability' },
-        button(
-          {
-            class: 'action',
-            type: 'submit',
-            name: 'onDuty',
-            value: model.onDuty ? 'false' : 'true',
-          },
-          model.onDuty ? 'Go off duty' : 'Go on duty',
-        ),
-      ),
+      dutyUnavailability(model.duty),
     ),
     section(
       { 'aria-labelledby': 'unassigned' },
@@ -570,18 +567,8 @@ export function renderResponderDashboard(model: ResponderDashboardViewModel): st
 export function renderResponderAvailability(model: ResponderAvailabilityViewModel): string {
   const markup = document(model.shell, [
     h1({}, 'On Duty'),
-    stateBlock(
-      model.onDuty ? 'On duty' : 'Off duty',
-      model.onDuty ? 'You are receiving requests.' : 'You are not receiving requests.',
-      model.coverageWindow,
-    ),
-    form(
-      { method: 'post', action: '/app/responder/availability' },
-      button(
-        { class: 'action', type: 'submit', name: 'onDuty', value: model.onDuty ? 'false' : 'true' },
-        model.onDuty ? 'Go off duty' : 'Go on duty',
-      ),
-    ),
+    dutyUnavailability(model.duty),
+    // D-009 coverage hours stay absent. A window here would invent hours.
   ]);
   return assertSurface('RESPONDER_AVAILABILITY', markup);
 }

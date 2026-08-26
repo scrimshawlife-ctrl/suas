@@ -39,6 +39,7 @@ import { cancelQrf, deployQrf } from '../../ui/commands.js';
 import { D_012_APPROVED_SAFETY_COPY } from '../../ui/safety.js';
 import {
   CATEGORY_CARDS,
+  DUTY_UNAVAILABLE_REASON,
   categoryForCard,
   NonOperationalCategoryError,
   renderActiveNeeds,
@@ -127,6 +128,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
                 // Contact paths require a consent evaluation against a known
                 // counterpart. Until a request is accepted there is no
                 // counterpart, so no path is asserted here (§7.2).
+                // `/app/qrf/call` and `/app/qrf/message` have no handler.
                 authorizedVoicePath: false,
                 authorizedMessagePath: false,
               },
@@ -286,10 +288,9 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     await reply.type(HTML).send(
       renderResponderDashboard({
         shell: shell('Responder', { viewport: 'DESKTOP' }),
-        // Availability is not a released domain fact; RESPONDER_WORKFLOWS.md
-        // has no on-duty store, so this reflects nothing rather than inventing
-        // a roster. Returned to specs.
-        onDuty: false,
+        // G-I-30: on-duty is not a recorded fact. State unavailability rather
+        // than inventing a roster or posting a no-op that would look like a write.
+        duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
         unassignedNeeds: unassigned.cases.map((supportCase) => toNeed(supportCase, true)),
         activeNeeds: mine.cases.map((supportCase) => toNeed(supportCase, false)),
         alerts: [],

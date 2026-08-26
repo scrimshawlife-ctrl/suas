@@ -38,7 +38,7 @@ import {
   renderVeteranHome,
 } from './surfaces.js';
 import type { MarkupKind } from './a11y.js';
-import type { ShellViewModel, ViewportClass } from './view-models.js';
+import { DUTY_UNAVAILABLE_REASON, type ShellViewModel, type ViewportClass } from './view-models.js';
 
 /** MVP_REFERENCE.md §4 header block. Recorded on every fixture. */
 export const REFERENCE_SOURCE = 'https://suasqrf.org/app/' as const;
@@ -303,11 +303,11 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
   fixture(
     'responder-dashboard',
     'RESPONDER_DASHBOARD',
-    '§11.8 responder dashboard, on duty',
+    '§11.8 responder dashboard, on-duty unavailable',
     () =>
       renderResponderDashboard({
         shell: shell({ title: 'Responder', viewport: 'DESKTOP' }),
-        onDuty: true,
+        duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
         activeNeeds: [
           {
             caseId: 'case-0001',
@@ -323,12 +323,16 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
     { viewport: 'DESKTOP' },
   ),
 
-  fixture('responder-availability', 'RESPONDER_AVAILABILITY', '§11.8 off-duty state', () =>
-    renderResponderAvailability({
-      shell: shell({ title: 'On Duty' }),
-      onDuty: false,
-      // D-009 coverage hours are DECISION_PENDING, so no window is shown.
-    }),
+  fixture(
+    'responder-availability',
+    'RESPONDER_AVAILABILITY',
+    '§11.8 on-duty unavailable (G-I-30)',
+    () =>
+      renderResponderAvailability({
+        shell: shell({ title: 'On Duty' }),
+        duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
+        // D-009 coverage hours are DECISION_PENDING, so no window is shown.
+      }),
   ),
 
   fixture(
