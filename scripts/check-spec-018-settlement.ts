@@ -26,6 +26,8 @@ const STALE_PLANE_A_PATTERNS = [
   /Consent grant\/revoke command JSON still thin/i,
   /Service-request command JSON; durable async/i,
   /finishes remaining released Plane A JSON/i,
+  /createSettlement.*CODE_FIXABLE/i,
+  /Still CODE_FIXABLE \(named residual\): `createSettlement`/i,
 ];
 
 /**
@@ -52,6 +54,21 @@ const REQUIRED_OPENAPI_ROUTES: readonly { method: string; path: string; reason: 
     method: 'post',
     path: '/api/v0/cases/{id}/commands/assign',
     reason: 'assignCase ASSIGN_CASE (CASES.md §5.7)',
+  },
+  {
+    method: 'post',
+    path: '/api/v0/cases/{id}/commands/resolve',
+    reason: 'resolveCaseWithSettlement / createSettlement (API.md §9; SETTLEMENT.md)',
+  },
+  {
+    method: 'get',
+    path: '/api/v0/cases/{id}/settlements',
+    reason: 'listSettlements (API.md §9)',
+  },
+  {
+    method: 'get',
+    path: '/api/v0/cases/{id}/settlements/{settlement_id}',
+    reason: 'findSettlement (API.md §9)',
   },
 ];
 

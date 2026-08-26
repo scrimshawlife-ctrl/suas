@@ -1616,6 +1616,175 @@
           }
         }
       }
+    },
+    "/api/v0/cases/{id}/commands/resolve": {
+      "post": {
+        "tags": ["cases"],
+        "summary": "Resolve a Case with required Settlement content",
+        "operationId": "resolveCaseWithSettlement",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "requested",
+                  "occurred",
+                  "fulfilled",
+                  "unresolved",
+                  "authored_by",
+                  "responder_confirmed_by"
+                ],
+                "properties": {
+                  "requested": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "occurred": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "fulfilled": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "unresolved": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "authored_by": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "responder_confirmed_by": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "veteran_confirmed_by": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expected_status": {
+                    "type": "string",
+                    "enum": ["ACTIVE", "FOLLOWUP"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Case resolved; Settlement created for this resolution cycle"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/cases/{id}/settlements": {
+      "get": {
+        "tags": ["cases"],
+        "summary": "List Settlements for a Case (actor-bounded visibility)",
+        "operationId": "listCaseSettlements",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Settlement history oldest cycle first"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/cases/{id}/settlements/{settlement_id}": {
+      "get": {
+        "tags": ["cases"],
+        "summary": "Read one Settlement (actor-bounded visibility)",
+        "operationId": "getCaseSettlement",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "name": "settlement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Settlement"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

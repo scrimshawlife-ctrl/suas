@@ -1,7 +1,7 @@
 # SPEC-018 change map
 
 **Runtime head:** `428c20d` (#71) and later.  
-**OpenAPI:** `docs/openapi/v0.json` — 38 `/api/v0` routes with CI drift check.
+**OpenAPI:** `docs/openapi/v0.json` — `/api/v0` routes with CI drift check (includes resolve + settlements).
 
 ## Gates (current honest posture)
 
@@ -32,9 +32,9 @@
 
 ## HTTP vs domain gaps (remaining)
 
-Released sync Plane A writes for Check-In, cases/claim/assign, resources, immediate-resources, veterans/me, consents, trusted-circle invite/accept/remove, contact-log, SR create/commands, follow-ups, and notifications inbox/preferences are implemented.
+Released sync Plane A writes for Check-In, cases/claim/assign/resolve, settlements reads, resources, immediate-resources, veterans/me, consents, trusted-circle invite/accept/remove, contact-log, SR create/commands, follow-ups, and notifications inbox/preferences are implemented.
 
-Still CODE_FIXABLE (named residual): `createSettlement` HTTP write (settlement domain exists).
+No remaining CODE_FIXABLE Plane A JSON gaps for this residual set (`resolveCaseWithSettlement` / Settlement reads shipped).
 
 Still **not** CODE_FIXABLE product gaps for this residual set:
 
