@@ -102,6 +102,20 @@ describe('scanForNonSyntheticContactData', () => {
     ).toEqual([]);
   });
 
+  it('ignores UUID hex tails that look like ten-digit NANP numbers', () => {
+    // Deletion-drill reports serialize randomUUID() values. A last segment such
+    // as 4724466123ab is twelve hex chars; digit-only lookarounds falsely
+    // matched the leading ten digits on main verify after #91.
+    expect(
+      scanForNonSyntheticContactData(
+        JSON.stringify({
+          subject_user_id: 'a1b2c3d4-e5f6-7890-abcd-4724466123ab',
+          tenant_id: '11111111-2222-3333-4444-555555555555',
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it('passes clean synthetic fixture text', () => {
     expect(
       scanForNonSyntheticContactData('email: veteran-01@example.invalid\nphone: +1-555-555-0101\n'),

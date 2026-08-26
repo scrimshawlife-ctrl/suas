@@ -120,9 +120,11 @@ export interface ContactDataFinding {
 }
 
 const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-// Digit boundaries keep the scan off checksums, timestamps, and other long digit
-// runs that are not phone numbers.
-const PHONE_PATTERN = /(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/g;
+// Boundaries keep the scan off checksums, timestamps, UUID hex tails, and other
+// digit runs that are not phone numbers. Hex lookarounds matter because a UUID
+// last segment can be twelve digits/letters and would otherwise match NANP.
+const PHONE_PATTERN =
+  /(?<![A-Fa-f0-9])(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?![A-Fa-f0-9])/g;
 
 /** True when the match sits inside a URL's userinfo section rather than free text. */
 function isInsideUrl(text: string, index: number): boolean {
