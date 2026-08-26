@@ -15,6 +15,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CASE_COMMANDS, type CaseCommand } from '../src/coordination/case-transitions.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch = process.env.SUAS_SETTLE_SCRATCH ?? '/tmp/grok-goal-b26a2796bc90/implementer';
@@ -31,8 +32,28 @@ const STALE_PLANE_A_PATTERNS = [
 ];
 
 /**
- * Released domain commands that must have matching OpenAPI `/api/v0` routes.
- * Prevents settle:check from greenwashing domain-only surfaces.
+ * CASE_COMMANDS that may stay domain-only. Each entry needs a one-line cite.
+ * Empty = every released case command must have POST /api/v0/.../commands/<kebab>.
+ */
+const INTENTIONALLY_DEFERRED_CASE_COMMANDS: Readonly<Partial<Record<CaseCommand, string>>> = {};
+
+/** Map CASES.md command enum → OpenAPI kebab path segment. */
+const CASE_COMMAND_KEBAB: Readonly<Record<CaseCommand, string>> = {
+  TRIAGE: 'triage',
+  CLAIM_CASE: 'claim',
+  ASSIGN_CASE: 'assign',
+  ACTIVATE: 'activate',
+  MOVE_TO_FOLLOWUP: 'move-to-followup',
+  RESUME_ACTIVE: 'resume-active',
+  ESCALATE: 'escalate',
+  RESOLVE: 'resolve',
+  CLOSE: 'close',
+  REOPEN: 'reopen',
+};
+
+/**
+ * Non-case released domain commands that must have matching OpenAPI `/api/v0` routes.
+ * Case commands are asserted from CASE_COMMANDS (source of truth).
  */
 const REQUIRED_OPENAPI_ROUTES: readonly { method: string; path: string; reason: string }[] = [
   {
@@ -49,16 +70,6 @@ const REQUIRED_OPENAPI_ROUTES: readonly { method: string; path: string; reason: 
     method: 'post',
     path: '/api/v0/cases/{caseId}/commands/complete-contact',
     reason: 'recordContact complete-contact (RESPONDER_WORKFLOWS.md §7)',
-  },
-  {
-    method: 'post',
-    path: '/api/v0/cases/{id}/commands/assign',
-    reason: 'assignCase ASSIGN_CASE (CASES.md §5.7)',
-  },
-  {
-    method: 'post',
-    path: '/api/v0/cases/{id}/commands/resolve',
-    reason: 'resolveCaseWithSettlement / createSettlement (API.md §9; SETTLEMENT.md)',
   },
   {
     method: 'get',
@@ -110,6 +121,34 @@ function assertRequiredOpenApiRoutes(): void {
         `OpenAPI missing ${required.method.toUpperCase()} ${required.path} required for ${required.reason}`,
       );
     }
+  }
+
+  for (const command of CASE_COMMANDS) {
+    const deferred = INTENTIONALLY_DEFERRED_CASE_COMMANDS[command];
+    if (deferred !== undefined) continue;
+    const kebab = CASE_COMMAND_KEBAB[command];
+    const path = `/api/v0/cases/{id}/commands/${kebab}`;
+    const methods = document.paths[path];
+    if (methods === undefined || methods.post === undefined) {
+      fail(
+        `OpenAPI missing POST ${path} required for CASE_COMMANDS.${command} (CASES.md §4). ` +
+          `Add the route or cite INTENTIONALLY_DEFERRED_CASE_COMMANDS.`,
+      );
+    }
+  }
+}
+
+/** HTTP contract suites must not bypass missing surfaces via domain executeCaseCommand. */
+function assertNoHttpSettlementDomainBypass(): void {
+  const settlementHttp = readFileSync(
+    join(root, 'tests/integration/http-settlement.test.ts'),
+    'utf8',
+  );
+  if (/\bexecuteCaseCommand\b/.test(settlementHttp)) {
+    fail(
+      'tests/integration/http-settlement.test.ts must not call executeCaseCommand; ' +
+        'claim→activate→resolve must use /api/v0 only',
+    );
   }
 }
 
@@ -230,6 +269,7 @@ function main(): void {
   console.log(`settle:check HEAD=${head} openapi_operations=${ops} scratch=${scratch}`);
   assertFullVerify(head, ops);
   assertRequiredOpenApiRoutes();
+  assertNoHttpSettlementDomainBypass();
   assertReadinessDocs();
   assertCiRun(head);
   console.log('settle:check OK');

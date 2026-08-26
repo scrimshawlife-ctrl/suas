@@ -85,7 +85,14 @@ HTTP surface so far:
 | `GET /api/v0/cases/:id`                                          | owner or responder                      |
 | `POST /api/v0/cases/:id/commands/claim`                          | responder                               |
 | `POST /api/v0/cases/:id/commands/assign`                         | org admin; Idempotency-Key              |
+| `POST /api/v0/cases/:id/commands/triage`                         | responder or org admin; Idempotency-Key |
+| `POST /api/v0/cases/:id/commands/activate`                       | assigned responder; Idempotency-Key     |
+| `POST /api/v0/cases/:id/commands/move-to-followup`               | assigned responder; reason              |
+| `POST /api/v0/cases/:id/commands/resume-active`                  | assigned responder; Idempotency-Key     |
+| `POST /api/v0/cases/:id/commands/escalate`                       | assigned responder; reason              |
 | `POST /api/v0/cases/:id/commands/resolve`                        | assigned responder; Settlement content  |
+| `POST /api/v0/cases/:id/commands/close`                          | assigned responder or org admin         |
+| `POST /api/v0/cases/:id/commands/reopen`                         | org admin; reason                       |
 | `GET /api/v0/cases/:id/settlements`                              | owner (veteran-visible) or responder    |
 | `GET /api/v0/cases/:id/settlements/:settlement_id`               | owner (veteran-visible) or responder    |
 

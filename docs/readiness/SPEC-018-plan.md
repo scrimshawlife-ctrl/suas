@@ -2,12 +2,12 @@
 
 Canonical specs remain in `suas-specs`. This document tracks runtime evidence toward SPEC-018 go/no-go.
 
-## Frontier (verified on main `e8d3082`)
+## Frontier (verified after full CASE_COMMANDS HTTP)
 
 - Spec stack pin: `0.2.0`
 - Formal readiness: `NOT_READY` (no gate marked `READY` without TESTING.md evidence)
 - Scoring fail-closed: absent/mismatched `qv-001` refused; `disabled` refuses every exported scoring path (#59/#67)
-- JSON `/api/v0`: auth, check-ins, cases/claim/assign/resolve, settlements reads, resources, immediate-resources, veterans/me, consents grant/revoke, trusted-circle, SR create/commands, follow-ups, notifications inbox/preferences, admin adapters; OpenAPI + CI drift
+- JSON `/api/v0`: auth, check-ins, every `CASE_COMMANDS` verb + settlements, resources, immediate-resources, veterans/me, consents grant/revoke, trusted-circle, SR create/commands, follow-ups, notifications inbox/preferences, admin adapters; OpenAPI + CI drift; settle:check enum coverage
 - Durable jobs: port + LOCAL/TEST fake + conformance suite; STAGING/PRODUCTION fail-closed pending D-022
 - Security/privacy audit + adversarial HTTP tests; runbooks; synthetic load + migration rehearse + deletion drill scripts
 
