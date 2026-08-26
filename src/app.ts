@@ -119,6 +119,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     ...(pool !== undefined ? { pool } : {}),
     challengeDelivery,
     mfa,
+    jobQueue,
   });
 
   if (options.listen !== false) {

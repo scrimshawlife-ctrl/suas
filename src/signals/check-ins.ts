@@ -270,6 +270,52 @@ export async function listQuestions(
   }));
 }
 
+export interface QuestionOption {
+  readonly answerOptionId: string;
+  readonly optionKey: string;
+  readonly label: string;
+}
+
+export interface QuestionWithOptions extends Question {
+  readonly options: readonly QuestionOption[];
+}
+
+/** Bound questionnaire items plus closed options, for the Check-In HTTP surface. */
+export async function listQuestionsWithOptions(
+  db: Queryable,
+  questionnaireVersion: string,
+): Promise<QuestionWithOptions[]> {
+  const questions = await listQuestions(db, questionnaireVersion);
+  if (questions.length === 0) return [];
+  const options = await db.query<{
+    answer_option_id: string;
+    question_id: string;
+    option_key: string;
+    label: string;
+  }>(
+    `SELECT o.answer_option_id, o.question_id, o.option_key, o.label
+     FROM answer_options o
+     JOIN questions q ON q.question_id = o.question_id
+     WHERE q.questionnaire_version = $1
+     ORDER BY o.display_order, o.option_key`,
+    [questionnaireVersion],
+  );
+  const byQuestion = new Map<string, QuestionOption[]>();
+  for (const row of options.rows) {
+    const list = byQuestion.get(row.question_id) ?? [];
+    list.push({
+      answerOptionId: row.answer_option_id,
+      optionKey: row.option_key,
+      label: row.label,
+    });
+    byQuestion.set(row.question_id, list);
+  }
+  return questions.map((question) => ({
+    ...question,
+    options: byQuestion.get(question.questionId) ?? [],
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Check-Ins
 // ---------------------------------------------------------------------------
