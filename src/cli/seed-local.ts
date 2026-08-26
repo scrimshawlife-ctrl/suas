@@ -52,6 +52,7 @@ import {
   verifyResource,
   type Resource,
 } from '../fulfillment/index.js';
+import { ensurePublishedQv001 } from '../signals/index.js';
 import {
   claimCase,
   createServiceRequest,
@@ -471,6 +472,7 @@ async function main(): Promise<void> {
     if (!(await isSuasAdmin(pool, admin.userId))) {
       await grantSuasAdmin(pool, admin.userId, admin.userId);
     }
+    await ensurePublishedQv001(pool, admin.userId);
     await ensureMembership(pool, responder.userId, org.organizationId);
     await seedManualAdapterConfigurations(pool, TENANT_ID);
 

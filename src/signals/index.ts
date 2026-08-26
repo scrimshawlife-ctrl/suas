@@ -60,6 +60,14 @@ export {
   type EffectiveSignalCaseDecision,
   type EffectiveSignalCaseReason,
 } from './case-action.js';
+export { ensurePublishedQv001 } from './qv-001-publish.js';
+export {
+  parseComputeJobPayload,
+  runSupportSignalComputeJob,
+  type SupportSignalComputeReason,
+  type SupportSignalComputeResult,
+  type SupportSignalComputeStatus,
+} from './compute-job.js';
 export {
   computationKey,
   effectiveSignal,
