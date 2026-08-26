@@ -30,6 +30,7 @@ export {
   VISUAL_FIXTURES,
   type VisualFixture,
 } from './fixtures.js';
+export { cancelQrf, deployQrf, VETERAN_QRF_CANCEL_REASON } from './commands.js';
 export { escapeHtml } from './html.js';
 export {
   contactAffordances,

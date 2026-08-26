@@ -19,8 +19,13 @@
 | 8 — Notifications                       | `IMPLEMENTED`                | [docs/slices/SLICE_08_NOTIFICATIONS.md](docs/slices/SLICE_08_NOTIFICATIONS.md)                 |
 | 9 — Check-In / Support Signal interface | `IMPLEMENTED`                | [docs/slices/SLICE_09_CHECKINS_SIGNALS.md](docs/slices/SLICE_09_CHECKINS_SIGNALS.md)           |
 | 10 — MVP-reference UI                   | `IMPLEMENTED`                | [docs/slices/SLICE_10_MVP_UI.md](docs/slices/SLICE_10_MVP_UI.md)                               |
+| 10 follow-on — HTML command wiring      | `IMPLEMENTED`                | [docs/slices/SLICE_10_UI_COMMANDS.md](docs/slices/SLICE_10_UI_COMMANDS.md)                     |
 | 11 — Scale / resilience harness         | `IMPLEMENTED (drills only)`  | [docs/slices/SLICE_11_RESILIENCE_HARNESS.md](docs/slices/SLICE_11_RESILIENCE_HARNESS.md)       |
 | 12 — D-011 scoring (`qv-001`/`sv-001`)  | `IMPLEMENTED`                | [docs/slices/SLICE_12_SIGNAL_SCORING.md](docs/slices/SLICE_12_SIGNAL_SCORING.md)               |
+
+The Slice 10 follow-on wires released deploy / cancel / claim HTML POSTs. Join,
+on-duty, chat, and metrics stay unwired residuals. SPEC-017 and `UI_CONFORMANCE`
+do **not** advance.
 
 Slices 1–12 each record conformance and returned gaps. Slice 12 registers the
 released `sv-001` engine. APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2
