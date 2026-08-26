@@ -78,10 +78,23 @@ describe('startup sequence', () => {
 });
 
 describe('GET /api/v0/health', () => {
-  it('reports liveness without provenance or configuration detail', async () => {
+  it('reports liveness and non-secret dependency posture', async () => {
     const response = await app.server.inject({ method: 'GET', url: '/api/v0/health' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok' });
+    expect(response.json()).toEqual({
+      status: 'ok',
+      dependencies: {
+        database: { status: 'configured' },
+        job_queue: {
+          status: 'configured',
+          durability: 'non-durable',
+          implementation: 'in-memory-fake',
+        },
+      },
+    });
+    expect(response.body).not.toContain('suas:suas');
+    expect(response.body).not.toContain('DATABASE_URL');
+    expect(response.body).not.toContain('SESSION_SECRET');
   });
 });
 
