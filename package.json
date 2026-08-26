@@ -30,7 +30,8 @@
     "load:synthetic": "tsx scripts/synthetic-load-harness.ts",
     "migrate:rehearse": "tsx scripts/migration-restore-rehearsal.ts",
     "settle:check": "tsx scripts/check-spec-018-settlement.ts",
-    "privacy:deletion-drill": "tsx scripts/deletion-drill.ts"
+    "privacy:deletion-drill": "tsx scripts/deletion-drill.ts",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "fastify": "^5.2.1",
@@ -42,6 +43,7 @@
     "@types/node": "^22.10.6",
     "@types/pg": "^8.11.10",
     "eslint": "^9.18.0",
+    "patch-package": "^8.0.1",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",

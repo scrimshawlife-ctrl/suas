@@ -1,5 +1,6 @@
 /**
- * Cloudflare Worker entry. Serves `/app` and `/api/v0` without `listen()`.
+ * Cloudflare Worker entry. Serves `/app` and `/api/v0` via Cloudflare's
+ * Node.js HTTP server integration (`cloudflare:node`).
  *
  * Spec citations:
  * - SUAS-specs ENVIRONMENT.md §5 (startup validation fails closed before
@@ -11,29 +12,29 @@
  * SPEC-018, real external effects, or a durable job product (D-022).
  */
 
+import { handleAsNodeRequest } from 'cloudflare:node';
+import { env as workerEnv } from 'cloudflare:workers';
 import { startApp, type StartedApp } from './app.js';
 import { ConfigurationError } from './config/index.js';
 import { SchemaStateError } from './db/index.js';
-import { dispatchToFastify } from './http/dispatch.js';
 import { configSourceFromWorkerEnv, type WorkerBindings } from './worker/env.js';
 
 export type { WorkerBindings, WorkerHyperdrive } from './worker/env.js';
 export { configSourceFromWorkerEnv } from './worker/env.js';
-export { dispatchToFastify } from './http/dispatch.js';
+
+/** Routing key for `cloudflare:node` (not a real TCP port). */
+const WORKER_HTTP_PORT = 8787;
 
 /** Isolate-scoped app. Not request state. */
 let isolateApp: Promise<StartedApp> | undefined;
 
-async function startWorkerApp(env: WorkerBindings): Promise<StartedApp> {
-  return startApp({
-    env: configSourceFromWorkerEnv(env),
-    listen: false,
+async function getIsolateApp(bindings: WorkerBindings): Promise<StartedApp> {
+  isolateApp ??= startApp({
+    env: configSourceFromWorkerEnv(bindings),
+    listen: true,
+    listenPort: WORKER_HTTP_PORT,
     runtime: 'worker',
-  });
-}
-
-async function getIsolateApp(env: WorkerBindings): Promise<StartedApp> {
-  isolateApp ??= startWorkerApp(env).catch((error: unknown) => {
+  }).catch((error: unknown) => {
     isolateApp = undefined;
     throw error;
   });
@@ -45,57 +46,29 @@ function notReadyResponse(error: unknown): Response {
     error instanceof ConfigurationError || error instanceof SchemaStateError
       ? 'Startup validation failed; this isolate is not serving traffic.'
       : 'Isolate failed startup validation.';
+  const err = error instanceof Error ? error : undefined;
   console.error(
     JSON.stringify({
       level: 'error',
       msg: 'isolate_not_ready',
-      error_name: error instanceof Error ? error.name : 'unknown',
+      error_name: err?.name ?? 'unknown',
+      error_message: err?.message?.slice(0, 300),
+      error_stack: err?.stack?.split('\n').slice(0, 8),
     }),
   );
   return Response.json({ error: { code: 'NOT_READY', message: safe } }, { status: 503 });
 }
 
-function logRequest(request: Request, response: Response, durationMs: number): void {
-  const url = new URL(request.url);
-  console.log(
-    JSON.stringify({
-      level: 'info',
-      msg: 'request',
-      method: request.method,
-      path: url.pathname,
-      status: response.status,
-      duration_ms: durationMs,
-      request_id: response.headers.get('x-request-id') ?? undefined,
-    }),
-  );
-}
-
 /**
- * Fetch handler used by wrangler and by tests. Builds the Fastify app once
- * per isolate with `listen: false` and answers through `inject()`.
+ * Production fetch handler: Fastify listen() + Cloudflare Node HTTP bridge.
  */
-export async function handleWorkerFetch(request: Request, env: WorkerBindings): Promise<Response> {
-  const started = Date.now();
-  try {
-    const app = await getIsolateApp(env);
-    const response = await dispatchToFastify(app.server, request);
-    logRequest(request, response, Date.now() - started);
-    return response;
-  } catch (error) {
-    return notReadyResponse(error);
-  }
-}
-
-/** Test helper: close the cached isolate so suites do not leak pools. */
-export async function resetWorkerIsolateForTests(): Promise<void> {
-  if (isolateApp === undefined) return;
-  const app = await isolateApp.catch(() => undefined);
-  isolateApp = undefined;
-  if (app !== undefined) await app.close();
-}
-
 export default {
-  async fetch(request: Request, env: WorkerBindings): Promise<Response> {
-    return handleWorkerFetch(request, env);
+  async fetch(request: Request): Promise<Response> {
+    try {
+      await getIsolateApp(workerEnv as WorkerBindings);
+      return await handleAsNodeRequest(WORKER_HTTP_PORT, request);
+    } catch (error: unknown) {
+      return notReadyResponse(error);
+    }
   },
 };

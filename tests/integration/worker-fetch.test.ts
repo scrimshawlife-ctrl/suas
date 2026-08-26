@@ -1,5 +1,6 @@
 /**
- * Worker fetch handler: existing /app and /api/v0 routes without listen().
+ * Worker fetch helper tests (Node/vitest): inject path + startApp worker rules.
+ * Production CF entry is `src/worker.ts` (`handleAsNodeRequest` + listen).
  *
  * SUAS-specs API.md §2, §6; ENVIRONMENT.md §5, §9.
  */
@@ -8,11 +9,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ConfigurationError } from '../../src/config/index.js';
 import { startApp } from '../../src/app.js';
 import { dispatchToFastify } from '../../src/http/dispatch.js';
-import {
-  handleWorkerFetch,
-  resetWorkerIsolateForTests,
-  type WorkerBindings,
-} from '../../src/worker.js';
+import type { WorkerBindings } from '../../src/worker/env.js';
+import { handleWorkerFetch, resetWorkerIsolateForTests } from '../../src/worker/test-fetch.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 function workerBindings(overrides: Partial<WorkerBindings> = {}): WorkerBindings {
@@ -104,14 +102,18 @@ describe('handleWorkerFetch', () => {
 });
 
 describe('startApp worker runtime', () => {
-  it('refuses listen() and apply mode', async () => {
-    await expect(
-      startApp({
-        env: validEnv({ SUAS_MIGRATIONS_MODE: 'validate' }),
-        listen: true,
-        runtime: 'worker',
-      }),
-    ).rejects.toBeInstanceOf(ConfigurationError);
+  it('allows listen with listenPort (cloudflare:node routing key) and refuses apply mode', async () => {
+    const app = await startApp({
+      env: validEnv({ SUAS_MIGRATIONS_MODE: 'validate' }),
+      listen: true,
+      listenPort: 18787,
+      runtime: 'worker',
+    });
+    try {
+      expect(app.server.server.listening).toBe(true);
+    } finally {
+      await app.close();
+    }
 
     await expect(
       startApp({
