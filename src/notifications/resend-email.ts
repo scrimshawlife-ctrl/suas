@@ -70,21 +70,24 @@ export class ResendEmailMisconfiguredError extends Error {
  * Fail closed unless both the API key and from address are present.
  * Callers must not construct this adapter from `createChannelRegistry`.
  */
+function requireConfigured(value: string | undefined, label: string): string {
+  if (value === undefined || value.trim() === '') {
+    throw new ResendEmailMisconfiguredError(`${label} is absent`);
+  }
+  return value;
+}
+
 export function createResendEmailChannel(options: {
   readonly apiKey: string | undefined;
   readonly fromAddress: string | undefined;
   readonly transport?: FetchTransport;
   readonly logger?: ResendEmailLogger;
 }): ResendEmailChannel {
-  if (options.apiKey === undefined) {
-    throw new ResendEmailMisconfiguredError('RESEND_API_KEY is absent');
-  }
-  if (options.fromAddress === undefined) {
-    throw new ResendEmailMisconfiguredError('SUAS_EMAIL_FROM is absent');
-  }
+  const apiKey = requireConfigured(options.apiKey, 'RESEND_API_KEY');
+  const fromAddress = requireConfigured(options.fromAddress, 'SUAS_EMAIL_FROM');
   return new ResendEmailChannel({
-    apiKey: options.apiKey,
-    fromAddress: options.fromAddress,
+    apiKey,
+    fromAddress,
     ...(options.transport !== undefined ? { transport: options.transport } : {}),
     ...(options.logger !== undefined ? { logger: options.logger } : {}),
   });
@@ -121,7 +124,12 @@ export class ResendEmailChannel implements NotificationChannelPort {
     ) {
       return this.finish('not_accepted');
     }
-    if (message.subject === undefined || message.html === undefined) {
+    if (
+      message.subject === undefined ||
+      message.subject.trim() === '' ||
+      message.html === undefined ||
+      message.html.trim() === ''
+    ) {
       return this.finish('not_accepted');
     }
 

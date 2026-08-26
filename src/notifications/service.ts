@@ -26,6 +26,7 @@ import {
   ChannelUnavailableError,
   type NotificationChannel,
   type NotificationChannelPort,
+  type OutboundMessage,
 } from './channels.js';
 import { renderEmailTemplate } from './templates.js';
 
@@ -287,6 +288,47 @@ export interface SendAttemptResult {
 }
 
 /**
+ * EMAIL uses the versioned catalog (subject + text + html). SMS and IN_APP use
+ * a text body only — either a caller-supplied renderer, or catalog text when
+ * the observed reason/version key exists. Non-EMAIL must not fail closed on an
+ * EMAIL-catalog miss when a text renderer is supplied.
+ */
+function buildOutboundMessage(
+  notification: Notification,
+  destination: string,
+  renderBody: ((notification: Notification) => string) | undefined,
+): OutboundMessage {
+  const base = {
+    channel: notification.channel,
+    destination,
+    templateVersion: notification.templateVersion,
+    idempotencyKey: notification.notificationId,
+  } as const;
+
+  if (notification.channel === 'EMAIL') {
+    const rendered = renderEmailTemplate(notification.reason, notification.templateVersion, {
+      ...(notification.subjectType !== undefined ? { subjectType: notification.subjectType } : {}),
+    });
+    return {
+      ...base,
+      subject: rendered.subject,
+      body: rendered.text,
+      html: rendered.html,
+    };
+  }
+
+  if (renderBody !== undefined) {
+    return { ...base, body: renderBody(notification) };
+  }
+
+  // Shared observed keys may reuse catalog text without subject/html.
+  const rendered = renderEmailTemplate(notification.reason, notification.templateVersion, {
+    ...(notification.subjectType !== undefined ? { subjectType: notification.subjectType } : {}),
+  });
+  return { ...base, body: rendered.text };
+}
+
+/**
  * Attempt one external send.
  *
  * NOTIFICATIONS.md §4.2 and CONSENT.md §4: the basis is re-checked immediately
@@ -300,6 +342,12 @@ export async function attemptSend(
     tenantId: string;
     notificationId: string;
     disclosure: DisclosureRequest;
+    /**
+     * Text body for SMS and IN_APP. Ignored for EMAIL (versioned catalog).
+     * Required when the Notification channel is not EMAIL so non-EMAIL sends
+     * do not throw on EMAIL-catalog misses (NOTIFICATIONS.md §7).
+     */
+    renderBody?: (notification: Notification) => string;
   },
 ): Promise<SendAttemptResult> {
   const notification = await findNotification(pool, input.tenantId, input.notificationId);
@@ -345,19 +393,9 @@ export async function attemptSend(
     throw new Error('Notification has no destination or recipient.');
   }
 
-  const rendered = renderEmailTemplate(notification.reason, notification.templateVersion, {
-    ...(notification.subjectType !== undefined ? { subjectType: notification.subjectType } : {}),
-  });
-
-  const acknowledgement = await port.send({
-    channel: notification.channel,
-    destination,
-    templateVersion: notification.templateVersion,
-    subject: rendered.subject,
-    body: rendered.text,
-    html: rendered.html,
-    idempotencyKey: notification.notificationId,
-  });
+  const acknowledgement = await port.send(
+    buildOutboundMessage(notification, destination, input.renderBody),
+  );
 
   return withTransaction(pool, async (tx) => {
     const attempts = notification.attemptCount + 1;

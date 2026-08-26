@@ -49,23 +49,25 @@ does not claim those decisions closed.
 
 ## 4. Evidence
 
-| Invariant                                                                  | Evidence                                |
-| -------------------------------------------------------------------------- | --------------------------------------- |
-| HTTP success maps to `accepted` plus an opaque Resend id                   | `tests/unit/resend-email.test.ts`       |
-| Provider `{ error }` or non-OK HTTP maps to `accepted: false`              | same file                               |
-| Timeout or abort maps to `accepted: false` with `timeout`                  | same file                               |
-| Structured logs omit Authorization, API keys, and message bodies           | same file                               |
-| Missing key or from address fails closed at adapter construction           | same file                               |
-| Challenge EMAIL uses the same `ResendEmailChannel.send` path               | same file                               |
-| `createChannelRegistry` stays on `RecordingChannel` when credentials exist | same file                               |
-| Default `sink` still starts; `resend` mode is rejected                     | `tests/unit/config.test.ts`             |
-| Real-effects flag stays rejected                                           | same file                               |
-| No API key or from-address mailbox in `wrangler.jsonc`                     | `tests/unit/repository-hygiene.test.ts` |
-| Every shipped EMAIL template renders subject + text + html                 | `tests/unit/email-templates.test.ts`    |
-| Unknown reason or version fails closed                                     | same file                               |
-| HTML escapes interpolated context                                          | same file                               |
-| Crisis-adjacent templates use only 911/988 and omit forbidden phrases      | same file                               |
-| Resend POST body uses rendered subject/text/html                           | `tests/unit/resend-email.test.ts`       |
+| Invariant                                                                  | Evidence                                  |
+| -------------------------------------------------------------------------- | ----------------------------------------- |
+| HTTP success maps to `accepted` plus an opaque Resend id                   | `tests/unit/resend-email.test.ts`         |
+| Provider `{ error }` or non-OK HTTP maps to `accepted: false`              | same file                                 |
+| Timeout or abort maps to `accepted: false` with `timeout`                  | same file                                 |
+| Structured logs omit Authorization, API keys, and message bodies           | same file                                 |
+| Missing key or from address fails closed at adapter construction           | same file                                 |
+| Challenge EMAIL uses the same `ResendEmailChannel.send` path               | same file                                 |
+| `createChannelRegistry` stays on `RecordingChannel` when credentials exist | same file                                 |
+| Default `sink` still starts; `resend` mode is rejected                     | `tests/unit/config.test.ts`               |
+| Real-effects flag stays rejected                                           | same file                                 |
+| No API key or from-address mailbox in `wrangler.jsonc`                     | `tests/unit/repository-hygiene.test.ts`   |
+| Every shipped EMAIL template renders subject + text + html                 | `tests/unit/email-templates.test.ts`      |
+| Unknown reason or version fails closed                                     | same file                                 |
+| HTML escapes interpolated context                                          | same file                                 |
+| Crisis-adjacent templates use only 911/988 and omit forbidden phrases      | same file                                 |
+| Resend POST body uses rendered subject/text/html                           | `tests/unit/resend-email.test.ts`         |
+| `attemptSend` uses EMAIL catalog only for EMAIL; SMS/IN_APP keep text path | `tests/integration/notifications.test.ts` |
+| Empty/whitespace API key or from-address fails closed at construction      | `tests/unit/resend-email.test.ts`         |
 
 ## 5. Environment and configuration changes
 

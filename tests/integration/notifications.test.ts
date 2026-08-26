@@ -348,6 +348,48 @@ describe('NOTIFICATIONS.md §4 — consent at creation and before each attempt',
     expect(result.outcome).toBe('SENT');
   });
 
+  it('sends SMS with a caller body when the EMAIL catalog has no matching key', async () => {
+    const tenantId = syntheticTenantId();
+    const veteran = await user(tenantId, 'veteran');
+    const registry = channelRegistry();
+
+    const enqueued = await enqueueNotification(pool, {
+      tenantId,
+      recipientUserId: veteran.userId,
+      destination: '+15555550100',
+      reason: 'sms.custom_outside_email_catalog',
+      channel: 'SMS',
+      templateVersion: 'sms@1',
+      disclosure: systemDisclosure(tenantId, veteran.userId),
+    });
+
+    await expect(
+      attemptSend(pool, registry, {
+        tenantId,
+        notificationId: enqueued.notification.notificationId,
+        disclosure: systemDisclosure(tenantId, veteran.userId),
+      }),
+    ).rejects.toThrow(/No EMAIL template exists/);
+
+    const result = await attemptSend(pool, registry, {
+      tenantId,
+      notificationId: enqueued.notification.notificationId,
+      disclosure: systemDisclosure(tenantId, veteran.userId),
+      renderBody: () => 'Synthetic SMS body outside the EMAIL catalog.',
+    });
+    expect(result.outcome).toBe('SENT');
+
+    const sms = registry.get('SMS') as RecordingChannel;
+    expect(sms.sent()).toEqual([
+      expect.objectContaining({
+        channel: 'SMS',
+        body: 'Synthetic SMS body outside the EMAIL catalog.',
+      }),
+    ]);
+    expect(sms.sent()[0]?.subject).toBeUndefined();
+    expect(sms.sent()[0]?.html).toBeUndefined();
+  });
+
   it('honours a disabled channel preference without treating it as consent', async () => {
     const { tenantId, veteran, disclosure } = await alertScenario();
     await setChannelPreference(pool, {

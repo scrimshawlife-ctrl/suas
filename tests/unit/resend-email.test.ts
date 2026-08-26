@@ -201,6 +201,15 @@ describe('ResendEmailChannel', () => {
     expect(() => createResendEmailChannel({ apiKey: API_KEY, fromAddress: undefined })).toThrow(
       ResendEmailMisconfiguredError,
     );
+    expect(() => createResendEmailChannel({ apiKey: '', fromAddress: FROM })).toThrow(
+      ResendEmailMisconfiguredError,
+    );
+    expect(() => createResendEmailChannel({ apiKey: '   ', fromAddress: FROM })).toThrow(
+      ResendEmailMisconfiguredError,
+    );
+    expect(() => createResendEmailChannel({ apiKey: API_KEY, fromAddress: '' })).toThrow(
+      ResendEmailMisconfiguredError,
+    );
   });
 
   it('does not accept EMAIL without a rendered subject and html', async () => {
@@ -213,6 +222,31 @@ describe('ResendEmailChannel', () => {
       idempotencyKey: 'notify-1',
     });
     expect(result.accepted).toBe(false);
+    expect(transport.calls).toHaveLength(0);
+  });
+
+  it('does not accept EMAIL with empty subject or html', async () => {
+    const transport = new ScriptedTransport([]);
+    const blankSubject = await emailChannel(transport).send({
+      channel: 'EMAIL',
+      destination: DESTINATION,
+      templateVersion: 'followup@1',
+      subject: '   ',
+      body: 'synthetic message body that must not appear in logs',
+      html: '<p>synthetic</p>',
+      idempotencyKey: 'notify-blank-subject',
+    });
+    const blankHtml = await emailChannel(transport).send({
+      channel: 'EMAIL',
+      destination: DESTINATION,
+      templateVersion: 'followup@1',
+      subject: 'Synthetic subject',
+      body: 'synthetic message body that must not appear in logs',
+      html: '',
+      idempotencyKey: 'notify-blank-html',
+    });
+    expect(blankSubject.accepted).toBe(false);
+    expect(blankHtml.accepted).toBe(false);
     expect(transport.calls).toHaveLength(0);
   });
 
