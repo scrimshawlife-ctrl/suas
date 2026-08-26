@@ -84,6 +84,10 @@ HTTP surface so far:
 | `GET /api/v0/cases`                                              | responder; `ownership=unassigned\|mine` |
 | `GET /api/v0/cases/:id`                                          | owner or responder                      |
 | `POST /api/v0/cases/:id/commands/claim`                          | responder                               |
+| `POST /api/v0/cases/:id/commands/assign`                         | org admin; Idempotency-Key              |
+| `POST /api/v0/cases/:id/commands/resolve`                        | assigned responder; Settlement content  |
+| `GET /api/v0/cases/:id/settlements`                              | owner (veteran-visible) or responder    |
+| `GET /api/v0/cases/:id/settlements/:settlement_id`               | owner (veteran-visible) or responder    |
 
 ## Environment
 
