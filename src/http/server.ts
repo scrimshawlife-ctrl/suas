@@ -27,6 +27,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
 import { registerCaseRoutes } from './routes/cases.js';
 import { registerCheckInRoutes } from './routes/check-ins.js';
+import { registerResourceRoutes } from './routes/resources.js';
 import { registerUiRoutes } from './routes/ui.js';
 
 export interface ServerDependencies {
@@ -38,6 +39,18 @@ export interface ServerDependencies {
   readonly challengeDelivery?: ChallengeDeliveryPort;
   readonly mfa?: MfaPort;
   readonly jobQueue?: DurableJobQueuePort;
+}
+
+export interface RegisteredApiRoute {
+  readonly method: string;
+  readonly path: string;
+}
+
+const registeredApiRoutes: RegisteredApiRoute[] = [];
+
+/** `/api/v0` routes registered on the last `createServer` call (OpenAPI drift). */
+export function listRegisteredApiRoutes(): readonly RegisteredApiRoute[] {
+  return [...registeredApiRoutes];
 }
 
 /** Errors that declare a released API error code and HTTP status. API.md §6. */
@@ -56,6 +69,8 @@ function asDomainError(error: unknown): { code: string; httpStatus: number } | u
 }
 
 export function createServer(deps: ServerDependencies): FastifyInstance {
+  registeredApiRoutes.length = 0;
+
   const app = Fastify({
     logger: {
       level: deps.config.logLevel,
@@ -77,6 +92,17 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
         ? supplied
         : randomUUID();
     },
+  });
+
+  app.addHook('onRoute', (route) => {
+    const path = route.url;
+    if (typeof path !== 'string' || !path.startsWith(API_PREFIX)) return;
+    const methods = Array.isArray(route.method) ? route.method : [route.method];
+    for (const method of methods) {
+      const upper = String(method).toUpperCase();
+      if (upper === 'HEAD' || upper === 'OPTIONS') continue;
+      registeredApiRoutes.push({ method: upper, path });
+    }
   });
 
   app.addHook('onSend', (request, reply, payload, done) => {
@@ -165,6 +191,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerCaseRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerResourceRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      safetyCopyMode: deps.config.safetyCopyMode,
     });
   }
 

@@ -1,0 +1,468 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SUAS API",
+    "version": "0.2.0",
+    "description": "Machine-readable contract for the implemented `/api/v0` surface. Paths document what the runtime registers today; draft APIS.md Plane A paths that are not yet implemented are intentionally absent."
+  },
+  "servers": [{ "url": "/", "description": "Relative to the SUAS process" }],
+  "tags": [
+    { "name": "health" },
+    { "name": "auth" },
+    { "name": "check-ins" },
+    { "name": "cases" },
+    { "name": "resources" },
+    { "name": "admin" }
+  ],
+  "paths": {
+    "/api/v0/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Liveness probe",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Process is up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status"],
+                  "properties": { "status": { "type": "string", "enum": ["ok"] } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/auth/challenges": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Start an authentication challenge",
+        "operationId": "createAuthChallenge",
+        "responses": {
+          "200": { "description": "Challenge created" },
+          "400": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/auth/challenges/commands/verify": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Verify an authentication challenge",
+        "operationId": "verifyAuthChallenge",
+        "responses": {
+          "200": { "description": "Session issued" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/auth/mfa/challenges": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Start an MFA challenge",
+        "operationId": "createMfaChallenge",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "MFA challenge created" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/auth/mfa/challenges/commands/verify": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Verify an MFA challenge",
+        "operationId": "verifyMfaChallenge",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Session MFA-elevated" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/auth/sessions/commands/logout": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Revoke the current session",
+        "operationId": "logoutSession",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Session revoked" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/check-ins": {
+      "post": {
+        "tags": ["check-ins"],
+        "summary": "Start a Check-In on the published questionnaire",
+        "operationId": "startCheckIn",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Check-In started with questions" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/check-ins/{id}": {
+      "get": {
+        "tags": ["check-ins"],
+        "summary": "Read an owned Check-In",
+        "operationId": "getCheckIn",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Check-In projection" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/check-ins/{id}/responses": {
+      "post": {
+        "tags": ["check-ins"],
+        "summary": "Save one closed-choice answer",
+        "operationId": "saveCheckInResponse",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Response saved" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/check-ins/{id}/commands/complete": {
+      "post": {
+        "tags": ["check-ins"],
+        "summary": "Complete a Check-In and request scoring",
+        "operationId": "completeCheckIn",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Check-In completed; RED may open a case" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/cases": {
+      "get": {
+        "tags": ["cases"],
+        "summary": "Responder case queue (unassigned or mine)",
+        "operationId": "listCases",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "ownership",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["unassigned", "mine"], "default": "unassigned" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Bounded case list" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/cases/{id}": {
+      "get": {
+        "tags": ["cases"],
+        "summary": "Read a case visible to the actor",
+        "operationId": "getCase",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Case projection" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/cases/{id}/commands/claim": {
+      "post": {
+        "tags": ["cases"],
+        "summary": "Claim an unassigned case",
+        "operationId": "claimCase",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": { "description": "Case claimed" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/resources": {
+      "get": {
+        "tags": ["resources"],
+        "summary": "List active tenant resources",
+        "operationId": "listResources",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT"]
+            }
+          },
+          {
+            "name": "county",
+            "in": "query",
+            "schema": { "type": "string", "minLength": 1, "maxLength": 128 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded active catalog page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["resources", "limit"],
+                  "properties": {
+                    "resources": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/CatalogResource" }
+                    },
+                    "limit": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/resources/{id}": {
+      "get": {
+        "tags": ["resources"],
+        "summary": "Read one active tenant resource",
+        "operationId": "getResource",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdPath" }],
+        "responses": {
+          "200": {
+            "description": "Resource projection",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CatalogResource" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/immediate-resources": {
+      "get": {
+        "tags": ["resources"],
+        "summary": "Immediate-resource / approved safety-copy slot",
+        "operationId": "getImmediateResources",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Approved crisis destinations or labelled placeholder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["state", "basis", "resources", "placeholder"],
+                  "properties": {
+                    "state": { "type": "string", "enum": ["APPROVED", "PLACEHOLDER"] },
+                    "basis": { "type": "string" },
+                    "placeholder": { "type": ["string", "null"] },
+                    "resources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["label", "destination", "approved_under"],
+                        "properties": {
+                          "label": { "type": "string" },
+                          "destination": { "type": "string" },
+                          "approved_under": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/admin/build-info": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "Build provenance (SUAS-admin + MFA)",
+        "operationId": "getAdminBuildInfo",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Build info without secrets" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/admin/adapter-catalog": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "List adapter catalog entries",
+        "operationId": "getAdminAdapterCatalog",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Catalog" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/admin/adapter-configurations": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "List adapter configurations",
+        "operationId": "getAdminAdapterConfigurations",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Configurations" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/admin/adapter-configurations/commands/enable": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Enable an adapter configuration",
+        "operationId": "enableAdminAdapterConfiguration",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Enabled" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/admin/adapter-configurations/commands/disable": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Disable an adapter configuration",
+        "operationId": "disableAdminAdapterConfiguration",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Disabled" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v0/admin/adapter-configurations/commands/set-routing": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Set adapter routing preference",
+        "operationId": "setAdminAdapterRouting",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Routing updated" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Opaque session credential from challenge verify"
+      }
+    },
+    "parameters": {
+      "IdPath": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      }
+    },
+    "schemas": {
+      "ErrorBody": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      },
+      "CatalogResource": {
+        "type": "object",
+        "required": [
+          "resource_id",
+          "service_name",
+          "category",
+          "counties",
+          "hours",
+          "cost",
+          "contact_method",
+          "contact_method_kind",
+          "freshness",
+          "stale_warning"
+        ],
+        "properties": {
+          "resource_id": { "type": "string", "format": "uuid" },
+          "service_name": { "type": "string" },
+          "category": {
+            "type": "string",
+            "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT"]
+          },
+          "counties": { "type": "array", "items": { "type": "string" } },
+          "hours": { "type": ["string", "null"] },
+          "cost": { "type": ["string", "null"] },
+          "contact_method": { "type": ["string", "null"] },
+          "contact_method_kind": {
+            "type": ["string", "null"],
+            "enum": ["PHONE", "EMAIL", "URL", "FREEFORM", null]
+          },
+          "freshness": {
+            "type": "string",
+            "enum": ["FRESH", "AGING", "STALE", "UNVERIFIED"]
+          },
+          "stale_warning": { "type": "boolean" }
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Canonical API.md §6 error body",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorBody" }
+          }
+        }
+      }
+    }
+  }
+}
