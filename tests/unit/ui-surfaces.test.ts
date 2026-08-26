@@ -137,6 +137,14 @@ describe('MVP_REFERENCE.md §7.2 — the veteran home is truthful about QRF', ()
     expect(markup).toContain('not available in this build');
     expect(markup).not.toMatch(/\b988\b/);
   });
+
+  it('shows Pages chrome without adding a Check-In surface', () => {
+    expect(markup).toContain('zer0state');
+    expect(markup).toContain('SPEC-017 · NOT READY');
+    expect(markup).toContain('Deploy QRF');
+    expect(markup).not.toContain('Check-in');
+    expect(markup).not.toContain('Check-In');
+  });
 });
 
 describe('SAFETY_COPY.md §1 / MVP_REFERENCE.md §7.3 — approved crisis copy', () => {
