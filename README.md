@@ -36,18 +36,19 @@ closed without it. It ships empty in `.env.example` and must never be committed.
 
 Commands:
 
-| Command                       | Purpose                                                |
-| ----------------------------- | ------------------------------------------------------ |
-| `npm run verify`              | format check, lint, typecheck, and the full test suite |
-| `npm run build`               | compile to `dist/`                                     |
-| `npm start`                   | run the compiled build                                 |
-| `npm run dev`                 | run from source with reload                            |
-| `npm test`                    | full suite (integration tests need PostgreSQL)         |
-| `npm run test:unit`           | unit tests only, no database required                  |
-| `npm run migrate -- status`   | applied, pending, drifted, and orphaned migrations     |
-| `npm run migrate -- apply`    | apply pending migrations under an advisory lock        |
-| `npm run migrate -- validate` | verify schema state without mutating it                |
-| `npm run provenance`          | print the build-info object                            |
+| Command                          | Purpose                                                |
+| -------------------------------- | ------------------------------------------------------ |
+| `npm run verify`                 | format check, lint, typecheck, and the full test suite |
+| `npm run build`                  | compile to `dist/`                                     |
+| `npm start`                      | run the compiled build                                 |
+| `npm run dev`                    | run from source with reload                            |
+| `npm test`                       | full suite (integration tests need PostgreSQL)         |
+| `npm run test:unit`              | unit tests only, no database required                  |
+| `npm run migrate -- status`      | applied, pending, drifted, and orphaned migrations     |
+| `npm run migrate -- apply`       | apply pending migrations under an advisory lock        |
+| `npm run migrate -- validate`    | verify schema state without mutating it                |
+| `npm run provenance`             | print the build-info object                            |
+| `npm run privacy:deletion-drill` | synthetic deletion path against the TEST database      |
 
 Integration tests use two databases, created once:
 

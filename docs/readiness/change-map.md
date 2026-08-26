@@ -5,20 +5,20 @@
 
 ## Gates (current honest posture)
 
-| Gate                 | Verdict        | Blocker class                     | Notes                                                                                      |
-| -------------------- | -------------- | --------------------------------- | ------------------------------------------------------------------------------------------ |
-| AUTH                 | NOT_READY      | EVIDENCE_FIXABLE                  | Auth HTTP + rate-limit adversarial tests exist; staging soak missing                       |
-| CONSENT              | NOT_READY      | EVIDENCE_FIXABLE                  | List/grant/revoke + trusted-circle JSON shipped (#63/#70); staging soak / policy review    |
-| CHECK-IN             | NOT_READY      | EVIDENCE_FIXABLE                  | HTTP + scoring path live; staging soak missing                                             |
-| COORDINATION         | NOT_READY      | OWNER (D-022) + EVIDENCE          | Cases/claim, SR create/commands, follow-ups shipped (#58/#71); durable async pending D-022 |
-| EXTERNAL_FULFILLMENT | NOT_READY      | OWNER + INTENTIONALLY_UNAVAILABLE | Ports/fakes; real effects prohibited                                                       |
-| UI_CONFORMANCE       | NOT_READY      | EVIDENCE_FIXABLE                  | HTML reference surfaces exist; human a11y/visual baseline                                  |
-| SAFETY               | NOT_READY      | EVIDENCE_FIXABLE                  | D-012 slot JSON + HTML; no dispatch; staging `approved` mode review                        |
-| PRIVACY              | NOT_READY      | EVIDENCE_FIXABLE                  | Min-necessary projections + audit pack; deletion drill / staging evidence                  |
-| SCALE                | NOT_COMPUTABLE | OWNER_DECISION_REQUIRED           | D-021/D-023 envelopes unset; synthetic measurements only                                   |
-| RESILIENCE           | NOT_READY      | OWNER (D-022/D-024) + EVIDENCE    | Fail-closed seams + drills exist; durable queue + RTO/RPO pending                          |
-| OPERATIONS           | NOT_READY      | OWNER (D-001/D-005) + EVIDENCE    | Health/runbooks/migrate harness exist; real staging topology pending                       |
-| REPORTING            | NOT_READY      | OWNER (D-025)                     | Sensitive aggregate reporting disabled                                                     |
+| Gate                 | Verdict        | Blocker class                     | Notes                                                                                            |
+| -------------------- | -------------- | --------------------------------- | ------------------------------------------------------------------------------------------------ |
+| AUTH                 | NOT_READY      | EVIDENCE_FIXABLE                  | Auth HTTP + rate-limit adversarial tests exist; staging soak missing                             |
+| CONSENT              | NOT_READY      | EVIDENCE_FIXABLE                  | List/grant/revoke + trusted-circle JSON shipped (#63/#70); staging soak / policy review          |
+| CHECK-IN             | NOT_READY      | EVIDENCE_FIXABLE                  | HTTP + scoring path live; staging soak missing                                                   |
+| COORDINATION         | NOT_READY      | OWNER (D-022) + EVIDENCE          | Cases/claim, SR create/commands, follow-ups shipped (#58/#71); durable async pending D-022       |
+| EXTERNAL_FULFILLMENT | NOT_READY      | OWNER + INTENTIONALLY_UNAVAILABLE | Ports/fakes; real effects prohibited                                                             |
+| UI_CONFORMANCE       | NOT_READY      | EVIDENCE_FIXABLE                  | HTML reference surfaces exist; human a11y/visual baseline                                        |
+| SAFETY               | NOT_READY      | EVIDENCE_FIXABLE                  | D-012 slot JSON + HTML; no dispatch; staging `approved` mode review                              |
+| PRIVACY              | NOT_READY      | EVIDENCE_FIXABLE + OWNER (D-007)  | Min-necessary projections + audit pack; synthetic deletion drill shipped; D-007 + staging remain |
+| SCALE                | NOT_COMPUTABLE | OWNER_DECISION_REQUIRED           | D-021/D-023 envelopes unset; synthetic measurements only                                         |
+| RESILIENCE           | NOT_READY      | OWNER (D-022/D-024) + EVIDENCE    | Fail-closed seams + drills exist; durable queue + RTO/RPO pending                                |
+| OPERATIONS           | NOT_READY      | OWNER (D-001/D-005) + EVIDENCE    | Health/runbooks/migrate harness exist; real staging topology pending                             |
+| REPORTING            | NOT_READY      | OWNER (D-025)                     | Sensitive aggregate reporting disabled                                                           |
 
 ## Open D-0xx affecting pilot/production
 
@@ -28,6 +28,7 @@
 | D-021 / D-023 / D-024 | OWNER_DECISION_REQUIRED | `docs/decision-packets/D-021-023-024-slo-rto.md`     |
 | D-001 / D-005         | OWNER_DECISION_REQUIRED | `docs/decision-packets/D-001-005-staging-hosting.md` |
 | D-025                 | OWNER_DECISION_REQUIRED | (reporting policy; packet not required for this cut) |
+| D-007                 | OWNER_DECISION_REQUIRED | Retention/deletion durations; synthetic drill only   |
 
 ## HTTP vs domain gaps (remaining)
 

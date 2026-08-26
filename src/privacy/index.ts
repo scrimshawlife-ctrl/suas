@@ -13,3 +13,22 @@ export {
   type ProviderCapability,
   type ProviderProjection,
 } from './projection.js';
+export {
+  assertDeletionDrillEnvironment,
+  DELETION_DRILL_ENVIRONMENTS,
+  DELETION_DRILL_STATEMENT_TIMEOUT_MS,
+  DELETION_DRILL_TIMEOUT_MS,
+  DELETION_FULFILLMENT,
+  DELETION_REQUEST_AUDIT_EVENT_TYPE,
+  D_007_RETENTION,
+  DeletionDrillEnvironmentError,
+  DeletionDrillInvariantError,
+  DeletionDrillTimeoutError,
+  deletionDrillNote,
+  fulfillSyntheticDeletion,
+  isDeletionRequestDomainEvent,
+  PRIVACY_GATE_VERDICT,
+  PROVIDER_SIDE_COPIES,
+  runDeletionDrill,
+  type DeletionDrillReport,
+} from './deletion-drill.js';
