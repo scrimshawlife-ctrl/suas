@@ -1,0 +1,104 @@
+{
+  "capturedAt": "2026-08-27T01:24:28.525Z",
+  "workerBaseUrl": "https://suas.zer0state-noema.workers.dev",
+  "suasEnv": "LOCAL",
+  "seedExpiresAt": "2026-08-27T12:48:26.287Z",
+  "results": [
+    {
+      "id": "landing",
+      "path": "/app",
+      "who": "anon",
+      "status": 200,
+      "bytes": 10732,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/landing.html"
+    },
+    {
+      "id": "veteran-home",
+      "path": "/app/home",
+      "who": "vet",
+      "status": 200,
+      "bytes": 13039,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/veteran-home.html"
+    },
+    {
+      "id": "notifications",
+      "path": "/app/notifications",
+      "who": "vet",
+      "status": 200,
+      "bytes": 10980,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/notifications.html"
+    },
+    {
+      "id": "preferences",
+      "path": "/app/notifications/preferences",
+      "who": "vet",
+      "status": 200,
+      "bytes": 11498,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/preferences.html"
+    },
+    {
+      "id": "consents",
+      "path": "/app/consents",
+      "who": "vet",
+      "status": 200,
+      "bytes": 10798,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/consents.html"
+    },
+    {
+      "id": "trusted-contacts",
+      "path": "/app/trusted-contacts",
+      "who": "vet",
+      "status": 200,
+      "bytes": 10672,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/trusted-contacts.html"
+    },
+    {
+      "id": "resources",
+      "path": "/app/resources",
+      "who": "vet",
+      "status": 200,
+      "bytes": 11323,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/resources.html"
+    },
+    {
+      "id": "resources-food",
+      "path": "/app/resources/food",
+      "who": "vet",
+      "status": 200,
+      "bytes": 10720,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/resources-food.html"
+    },
+    {
+      "id": "immediate-resources",
+      "path": "/app/immediate-resources",
+      "who": "vet",
+      "status": 200,
+      "bytes": 10672,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/immediate-resources.html"
+    },
+    {
+      "id": "responder",
+      "path": "/app/responder",
+      "who": "resp",
+      "status": 200,
+      "bytes": 12175,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/responder.html"
+    },
+    {
+      "id": "responder-case",
+      "path": "/app/responder/cases/82747c6c-fe9d-4441-9453-3dc17a55e739",
+      "who": "resp",
+      "status": 200,
+      "bytes": 13454,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/responder-case.html"
+    },
+    {
+      "id": "responder-availability",
+      "path": "/app/responder/availability",
+      "who": "resp",
+      "status": 200,
+      "bytes": 10513,
+      "htmlFile": "docs/readiness/evidence/local-ui-a11y-2026-08-26/html/responder-availability.html"
+    }
+  ]
+}
