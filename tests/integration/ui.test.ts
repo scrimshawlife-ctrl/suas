@@ -554,6 +554,52 @@ describe('PRIVACY.md — consents and trusted contacts HTML', () => {
   });
 });
 
+describe('NOTIFICATIONS.md §4.4 — HTML channel preferences', () => {
+  it('lists defaults and toggles a channel without destinations', async () => {
+    const { credential } = await signIn();
+
+    const page = await app.server.inject({
+      method: 'GET',
+      url: '/app/notifications/preferences',
+      headers: authorized(credential),
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('Channel preferences');
+    expect(page.body).toContain('EMAIL');
+    expect(page.body).toContain('SMS');
+    expect(page.body).toContain('IN_APP');
+    expect(page.body).toContain('do not grant consent');
+    expect(auditAccessibility(page.body)).toEqual([]);
+
+    const disabled = await app.server.inject({
+      method: 'POST',
+      url: '/app/notifications/preferences',
+      headers: {
+        ...authorized(credential),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      payload: 'channel=EMAIL&enabled=false',
+    });
+    expect(disabled.statusCode).toBe(303);
+    expect(disabled.headers.location).toBe('/app/notifications/preferences');
+
+    const after = await app.server.inject({
+      method: 'GET',
+      url: '/app/notifications/preferences',
+      headers: authorized(credential),
+    });
+    expect(after.body).toContain('Enable EMAIL');
+    expect(after.body).toContain('Disable SMS');
+
+    const inbox = await app.server.inject({
+      method: 'GET',
+      url: '/app/notifications',
+      headers: authorized(credential),
+    });
+    expect(inbox.body).toContain('/app/notifications/preferences');
+  });
+});
+
 describe('NOTIFICATIONS.md — /app/notifications inbox', () => {
   it('serves the recipient inbox without destinations', async () => {
     const { credential, tenantId, userId } = await signIn();

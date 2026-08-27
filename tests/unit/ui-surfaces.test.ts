@@ -25,6 +25,7 @@ import {
   renderCheckInStart,
   renderEnrollment,
   renderImmediateResources,
+  renderNotificationPreferences,
   renderNotificationsInbox,
   renderResourceList,
   renderResponderAvailability,
@@ -778,6 +779,35 @@ describe('Consents and trusted contacts HTML', () => {
     expect(markup).toContain('href="/app/consents"');
     expect(markup).toContain('href="/app/trusted-contacts"');
     expect(markup).toContain('View consents');
+  });
+});
+
+describe('Channel preferences HTML', () => {
+  it('states that preferences do not grant consent', () => {
+    const markup = renderNotificationPreferences({
+      shell,
+      preferences: [
+        { channel: 'EMAIL', enabled: true },
+        { channel: 'SMS', enabled: false },
+        { channel: 'IN_APP', enabled: true },
+      ],
+    });
+    expect(markup).toContain('Channel preferences');
+    expect(markup).toContain('do not grant consent');
+    expect(markup).toContain('Disable EMAIL');
+    expect(markup).toContain('Enable SMS');
+    expect(markup).toContain('action="/app/notifications/preferences"');
+    expect(auditAccessibility(markup)).toEqual([]);
+  });
+
+  it('links preferences from the notifications inbox when supplied', () => {
+    const markup = renderNotificationsInbox({
+      shell,
+      limit: 50,
+      notifications: [],
+      preferencesHref: '/app/notifications/preferences',
+    });
+    expect(markup).toContain('href="/app/notifications/preferences"');
   });
 });
 

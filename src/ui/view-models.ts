@@ -82,6 +82,22 @@ export interface NotificationsInboxViewModel {
   readonly notifications: readonly NotificationRowViewModel[];
   /** Echo of the applied limit (API default 50, max 100). */
   readonly limit: number;
+  /** Optional link to channel preference controls. */
+  readonly preferencesHref?: string;
+}
+
+/**
+ * Channel preference row. Preferences select a channel and never grant consent
+ * (NOTIFICATIONS.md §4.4). Absent rows are treated as enabled.
+ */
+export interface NotificationPreferenceRowViewModel {
+  readonly channel: string;
+  readonly enabled: boolean;
+}
+
+export interface NotificationPreferencesViewModel {
+  readonly shell: ShellViewModel;
+  readonly preferences: readonly NotificationPreferenceRowViewModel[];
 }
 
 export interface VeteranHomeViewModel {

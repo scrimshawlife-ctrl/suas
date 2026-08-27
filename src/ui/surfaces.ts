@@ -78,6 +78,7 @@ import type {
   ResourceRowViewModel,
   DutyAvailability,
   ConsentsListViewModel,
+  NotificationPreferencesViewModel,
   NotificationsInboxViewModel,
   TrustedContactsListViewModel,
   ResponderAvailabilityViewModel,
@@ -906,6 +907,9 @@ export function renderNotificationsInbox(model: NotificationsInboxViewModel): st
   return document(model.shell, [
     h1({}, 'Notifications'),
     a({ class: 'action-secondary', href: '/app/home' }, 'Back to Support'),
+    model.preferencesHref === undefined
+      ? undefined
+      : a({ class: 'action-secondary', href: model.preferencesHref }, 'Channel preferences'),
     p(
       { class: 'muted' },
       `Showing up to ${model.limit} recent notifications. Destinations and message bodies are never listed.`,
@@ -929,6 +933,43 @@ export function renderNotificationsInbox(model: NotificationsInboxViewModel): st
             ),
           ),
         ),
+  ]);
+}
+
+/**
+ * Channel preference controls. Preferences never grant consent (§4.4).
+ */
+export function renderNotificationPreferences(model: NotificationPreferencesViewModel): string {
+  return document(model.shell, [
+    h1({}, 'Channel preferences'),
+    a({ class: 'action-secondary', href: '/app/notifications' }, 'Back to notifications'),
+    p(
+      { class: 'muted' },
+      'These settings only choose delivery channels. They do not grant consent and cannot authorize a send.',
+    ),
+    ul(
+      { class: 'card-grid' },
+      model.preferences.map((pref) =>
+        li(
+          { class: 'card' },
+          h2({}, pref.channel),
+          p({}, span({ class: 'badge' }, pref.enabled ? 'Enabled' : 'Disabled')),
+          form(
+            { method: 'post', action: '/app/notifications/preferences' },
+            input({ type: 'hidden', name: 'channel', value: pref.channel }),
+            input({
+              type: 'hidden',
+              name: 'enabled',
+              value: pref.enabled ? 'false' : 'true',
+            }),
+            button(
+              { class: 'action', type: 'submit' },
+              pref.enabled ? `Disable ${pref.channel}` : `Enable ${pref.channel}`,
+            ),
+          ),
+        ),
+      ),
+    ),
   ]);
 }
 

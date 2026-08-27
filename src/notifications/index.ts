@@ -47,6 +47,7 @@ export {
   enqueueNotification,
   findByDedupeKey,
   findNotification,
+  listChannelPreferences,
   listNotificationsForRecipient,
   listUndeliverable,
   NotificationConsentDeniedError,

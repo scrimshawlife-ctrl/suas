@@ -59,7 +59,12 @@ import {
 } from '../../fulfillment/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
 import { listGrantsForVeteran, listTrustedCircle } from '../../consent/index.js';
-import { listNotificationsForRecipient } from '../../notifications/index.js';
+import {
+  listChannelPreferences,
+  listNotificationsForRecipient,
+  NOTIFICATION_CHANNELS,
+  setChannelPreference,
+} from '../../notifications/index.js';
 import {
   completeCheckIn,
   effectiveSignal,
@@ -87,6 +92,7 @@ import {
   renderImmediateResources,
   renderLanding,
   renderConsentsList,
+  renderNotificationPreferences,
   renderNotificationsInbox,
   renderTrustedContactsList,
   renderResourceCategories,
@@ -249,6 +255,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       renderNotificationsInbox({
         shell: shell('Notifications'),
         limit: query.limit,
+        preferencesHref: '/app/notifications/preferences',
         notifications: page.map((notification) => ({
           reason: notification.reason,
           channel: notification.channel,
@@ -263,6 +270,37 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         })),
       }),
     );
+  });
+
+  app.get('/app/notifications/preferences', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    const preferences = await listChannelPreferences(pool, context.tenantId, context.userId);
+    await reply.type(HTML).send(
+      renderNotificationPreferences({
+        shell: shell('Channel preferences'),
+        preferences: preferences.map((pref) => ({
+          channel: pref.channel,
+          enabled: pref.enabled,
+        })),
+      }),
+    );
+  });
+
+  const preferenceBody = z.object({
+    channel: z.enum(NOTIFICATION_CHANNELS),
+    enabled: z.enum(['true', 'false']),
+  });
+
+  app.post('/app/notifications/preferences', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    const body = preferenceBody.parse(request.body ?? {});
+    await setChannelPreference(pool, {
+      tenantId: context.tenantId,
+      userId: context.userId,
+      channel: body.channel,
+      enabled: body.enabled === 'true',
+    });
+    return reply.redirect('/app/notifications/preferences', 303);
   });
 
   app.get('/app/consents', async (request, reply) => {
