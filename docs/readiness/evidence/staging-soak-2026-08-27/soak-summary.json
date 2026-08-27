@@ -1,0 +1,262 @@
+{
+  "capturedAt": "2026-08-27T02:50:19.681Z",
+  "finishedAt": "2026-08-27T02:50:29.281Z",
+  "workerBaseUrl": "https://suas.zer0state-noema.workers.dev",
+  "suasEnvClaim": "STAGING",
+  "seedExpiresAt": "2026-08-27T12:48:26.287Z",
+  "health": {
+    "status": "ok",
+    "dependencies": {
+      "database": {
+        "status": "configured"
+      },
+      "job_queue": {
+        "status": "configured",
+        "durability": "durable",
+        "implementation": "postgres-outbox"
+      }
+    }
+  },
+  "routeMatrix": [
+    {
+      "id": "health",
+      "path": "/api/v0/health",
+      "who": "anon",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 161
+    },
+    {
+      "id": "app-landing",
+      "path": "/app",
+      "who": "anon",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 10732
+    },
+    {
+      "id": "veteran-home",
+      "path": "/app/home",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 13039
+    },
+    {
+      "id": "notifications",
+      "path": "/app/notifications",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 10980
+    },
+    {
+      "id": "preferences",
+      "path": "/app/notifications/preferences",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 11498
+    },
+    {
+      "id": "consents",
+      "path": "/app/consents",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 10798
+    },
+    {
+      "id": "trusted-contacts",
+      "path": "/app/trusted-contacts",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 10672
+    },
+    {
+      "id": "resources",
+      "path": "/app/resources",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 11323
+    },
+    {
+      "id": "resources-food",
+      "path": "/app/resources/food",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 10720
+    },
+    {
+      "id": "immediate-resources",
+      "path": "/app/immediate-resources",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 10672
+    },
+    {
+      "id": "api-resources",
+      "path": "/api/v0/resources?limit=5",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 1356
+    },
+    {
+      "id": "api-notifications",
+      "path": "/api/v0/notifications",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 572
+    },
+    {
+      "id": "api-consents",
+      "path": "/api/v0/consents",
+      "who": "vet",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 427
+    },
+    {
+      "id": "responder",
+      "path": "/app/responder",
+      "who": "resp",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 12175
+    },
+    {
+      "id": "responder-case",
+      "path": "/app/responder/cases/82747c6c-fe9d-4441-9453-3dc17a55e739",
+      "who": "resp",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 13454
+    },
+    {
+      "id": "responder-availability",
+      "path": "/app/responder/availability",
+      "who": "resp",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 10513
+    },
+    {
+      "id": "api-cases-unassigned",
+      "path": "/api/v0/cases?ownership=unassigned&limit=5",
+      "who": "resp",
+      "attempts": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "ok": true,
+      "bytes": 128
+    }
+  ],
+  "jobsWorkOnceExit": 0,
+  "allRoutesOk": true
+}
