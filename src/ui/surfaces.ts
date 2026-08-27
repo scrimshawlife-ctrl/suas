@@ -73,6 +73,7 @@ import type {
   ResourceRowViewModel,
   DutyAvailability,
   ResponderAvailabilityViewModel,
+  ResponderCaseViewModel,
   ResponderDashboardViewModel,
   ShellViewModel,
   VeteranHomeViewModel,
@@ -507,14 +508,35 @@ function needRow(need: ActiveNeedViewModel, level: HeadingLevel = 3): Renderable
   );
 }
 
-export function renderResponderCase(model: {
-  readonly shell: ShellViewModel;
-  readonly need: ActiveNeedViewModel;
-}): string {
+export function renderResponderCase(model: ResponderCaseViewModel): string {
   const markup = document(model.shell, [
     h1({}, 'Case'),
     a({ href: '/app/responder' }, 'Back'),
     ul({ class: 'card-grid' }, needRow(model.need, 2)),
+    section(
+      { 'aria-labelledby': 'contact-attempts' },
+      h2({ id: 'contact-attempts' }, 'Contact attempts'),
+      model.contactAttempts.length === 0
+        ? p({ class: 'muted' }, 'No contact attempts recorded for this case.')
+        : ul(
+            {},
+            model.contactAttempts.map((attempt) =>
+              li({}, `${attempt.channel} · ${attempt.outcome} · ${attempt.attemptedAtLabel}`),
+            ),
+          ),
+    ),
+    section(
+      { 'aria-labelledby': 'service-requests' },
+      h2({ id: 'service-requests' }, 'Service requests'),
+      model.serviceRequests.length === 0
+        ? p({ class: 'muted' }, 'No service requests on this case.')
+        : ul(
+            {},
+            model.serviceRequests.map((request) =>
+              li({}, `${request.category} · ${request.status}`),
+            ),
+          ),
+    ),
   ]);
   return assertSurface('RESPONDER_CASE', markup);
 }

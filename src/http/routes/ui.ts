@@ -38,6 +38,8 @@ import {
   findCase,
   findNonClosedCase,
   IllegalCaseTransitionError,
+  listCaseServiceRequests,
+  listContactAttempts,
   MAX_PAGE_SIZE,
   readCaseQueue,
 } from '../../coordination/index.js';
@@ -75,6 +77,7 @@ import {
   renderLanding,
   renderResourceCategories,
   renderResourceList,
+  renderResponderAvailability,
   renderResponderCase,
   renderResponderDashboard,
   renderVeteranHome,
@@ -538,6 +541,18 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     );
   });
 
+  app.get('/app/responder/availability', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    assertResponder(context);
+    // G-I-30: on-duty is not a recorded fact. GET is display-only; POST stays 404.
+    await reply.type(HTML).send(
+      renderResponderAvailability({
+        shell: shell('On Duty', { viewport: 'DESKTOP' }),
+        duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
+      }),
+    );
+  });
+
   app.get<{ Params: { id: string } }>('/app/responder/cases/:id', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     assertResponder(context);
@@ -546,10 +561,23 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       throw new ResourceNotVisibleError();
     }
     const claimable = supportCase.status === 'OPEN' || supportCase.status === 'TRIAGED';
+    const [attempts, serviceRequests] = await Promise.all([
+      listContactAttempts(pool, context.tenantId, supportCase.caseId, 50),
+      listCaseServiceRequests(pool, context.tenantId, supportCase.caseId, 50),
+    ]);
     await reply.type(HTML).send(
       renderResponderCase({
         shell: shell('Case', { viewport: 'DESKTOP' }),
         need: toNeed(supportCase, claimable),
+        contactAttempts: attempts.map((attempt) => ({
+          channel: attempt.channel,
+          outcome: attempt.outcome,
+          attemptedAtLabel: attempt.attemptedAt.toISOString(),
+        })),
+        serviceRequests: serviceRequests.map((request) => ({
+          category: request.category,
+          status: request.status,
+        })),
       }),
     );
   });

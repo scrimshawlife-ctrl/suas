@@ -25,6 +25,7 @@ import {
   renderImmediateResources,
   renderResourceList,
   renderResponderAvailability,
+  renderResponderCase,
   renderResponderDashboard,
   renderVeteranHome,
   UnknownSurfaceStateError,
@@ -530,6 +531,46 @@ describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty is not a recorded fact', () 
       expect(markup).not.toContain('You are receiving requests.');
       expect(markup).not.toContain('You are not receiving requests.');
     }
+  });
+});
+
+describe('Responder case HTML lists contact and service requests', () => {
+  it('renders contact attempts and service requests on the case page', () => {
+    const markup = renderResponderCase({
+      shell,
+      need: {
+        caseId: 'case-0001',
+        caseStatus: 'ASSIGNED',
+        category: 'Support Case',
+        openedLabel: 'Opened',
+      },
+      contactAttempts: [
+        { channel: 'PHONE', outcome: 'REACHED', attemptedAtLabel: '2026-08-26T12:00:00.000Z' },
+      ],
+      serviceRequests: [{ category: 'FOOD', status: 'REQUESTED' }],
+    });
+    expect(markup).toContain('Contact attempts');
+    expect(markup).toContain('PHONE · REACHED');
+    expect(markup).toContain('Service requests');
+    expect(markup).toContain('FOOD · REQUESTED');
+    expect(auditAccessibility(markup)).toEqual([]);
+  });
+
+  it('states empty lists without inventing rows', () => {
+    const markup = renderResponderCase({
+      shell,
+      need: {
+        caseId: 'case-0002',
+        caseStatus: 'OPEN',
+        category: 'Support Case',
+        openedLabel: 'Opened',
+        claimable: true,
+      },
+      contactAttempts: [],
+      serviceRequests: [],
+    });
+    expect(markup).toContain('No contact attempts recorded for this case.');
+    expect(markup).toContain('No service requests on this case.');
   });
 });
 

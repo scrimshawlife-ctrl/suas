@@ -200,6 +200,35 @@ export interface ActiveNeedViewModel {
 }
 
 /**
+ * Contact attempt row for the HTML case page. Matches the public JSON shape
+ * (no note / destination — PRIVACY.md / contact-log route).
+ */
+export interface ContactAttemptRowViewModel {
+  readonly channel: string;
+  readonly outcome: string;
+  /** ISO timestamp or short label already formatted for display. */
+  readonly attemptedAtLabel: string;
+}
+
+/**
+ * Service request row for the HTML case page. Matches the public JSON shape
+ * (category + status only; details stay off the HTML surface).
+ */
+export interface ServiceRequestRowViewModel {
+  readonly category: string;
+  readonly status: string;
+}
+
+export interface ResponderCaseViewModel {
+  readonly shell: ShellViewModel;
+  readonly need: ActiveNeedViewModel;
+  /** Bounded contact-attempt page (newest first). Empty when none recorded. */
+  readonly contactAttempts: readonly ContactAttemptRowViewModel[];
+  /** Bounded service-request page (newest first). Empty when none recorded. */
+  readonly serviceRequests: readonly ServiceRequestRowViewModel[];
+}
+
+/**
  * On-duty availability. G-I-30 / MVP_REFERENCE.md §9: on-duty is not a
  * recorded domain fact. A boolean on/off would claim a stored roster that
  * no released table has. The only honest state is UNAVAILABLE.
