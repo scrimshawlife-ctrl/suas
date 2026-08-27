@@ -552,6 +552,83 @@ describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty HTML is not a stored fact', 
   });
 });
 
+describe('RESPONDER_WORKFLOWS.md §2 — HTML log-contact-attempt', () => {
+  it('lets the assigned responder log a contact attempt from the case page', async () => {
+    const tenantId = randomUUID();
+    const org = await createOrganization(pool(), {
+      tenantId,
+      name: `Org ${randomUUID().slice(0, 8)}`,
+      status: 'ACTIVE',
+    });
+    const veteran = await createUser(pool(), {
+      tenantId,
+      email: syntheticEmail(`log-vet-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    const responder = await createUser(pool(), {
+      tenantId,
+      email: syntheticEmail(`log-resp-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    await createMembership(pool(), {
+      tenantId,
+      organizationId: org.organizationId,
+      userId: responder.userId,
+      role: 'RESPONDER',
+      status: 'ACTIVE',
+    });
+    const opened = await withTransaction(pool(), (tx) =>
+      openCase(tx, {
+        tenantId,
+        veteranUserId: veteran.userId,
+        actorType: 'SYSTEM',
+        actorId: veteran.userId,
+      }),
+    );
+    await claimCase(pool(), {
+      tenantId,
+      caseId: opened.supportCase.caseId,
+      responderUserId: responder.userId,
+      correlationId: randomUUID(),
+    });
+    const session = await createSession(pool(), TEST_SESSION_SECRET, {
+      tenantId,
+      userId: responder.userId,
+    });
+
+    const page = await app.server.inject({
+      method: 'GET',
+      url: `/app/responder/cases/${opened.supportCase.caseId}`,
+      headers: authorized(session.credential),
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain(
+      `action="/app/responder/cases/${opened.supportCase.caseId}/commands/log-contact-attempt"`,
+    );
+
+    const logged = await app.server.inject({
+      method: 'POST',
+      url: `/app/responder/cases/${opened.supportCase.caseId}/commands/log-contact-attempt`,
+      headers: {
+        ...authorized(session.credential),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      payload: 'channel=PHONE&outcome=NO_ANSWER',
+    });
+    expect(logged.statusCode).toBe(303);
+    expect(logged.headers.location).toBe(`/app/responder/cases/${opened.supportCase.caseId}`);
+
+    const after = await app.server.inject({
+      method: 'GET',
+      url: `/app/responder/cases/${opened.supportCase.caseId}`,
+      headers: authorized(session.credential),
+    });
+    expect(after.statusCode).toBe(200);
+    expect(after.body).toContain('PHONE');
+    expect(after.body).toContain('NO_ANSWER');
+  });
+});
+
 describe('MVP_REFERENCE.md §9 — /app/responder/cases/:id lists contact + service requests', () => {
   it('renders bounded contact attempts and service requests without notes or details', async () => {
     const tenantId = randomUUID();

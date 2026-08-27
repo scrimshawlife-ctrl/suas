@@ -219,6 +219,25 @@ export interface ServiceRequestRowViewModel {
   readonly status: string;
 }
 
+/**
+ * Released contact channels for the HTML log form (EVENT_MODEL.md §3.3).
+ * Keep in sync with `CONTACT_CHANNELS` in coordination/contact.ts.
+ */
+export const CONTACT_CHANNEL_OPTIONS = ['EMAIL', 'SMS', 'IN_APP', 'PHONE'] as const;
+
+/**
+ * Released contact outcomes for the HTML log form (EVENT_MODEL.md §3.3).
+ * Keep in sync with `CONTACT_OUTCOMES` in coordination/contact.ts.
+ */
+export const CONTACT_OUTCOME_OPTIONS = [
+  'PENDING',
+  'REACHED',
+  'NO_ANSWER',
+  'LEFT_MESSAGE',
+  'DECLINED',
+  'UNABLE',
+] as const;
+
 export interface ResponderCaseViewModel {
   readonly shell: ShellViewModel;
   readonly need: ActiveNeedViewModel;
@@ -226,6 +245,11 @@ export interface ResponderCaseViewModel {
   readonly contactAttempts: readonly ContactAttemptRowViewModel[];
   /** Bounded service-request page (newest first). Empty when none recorded. */
   readonly serviceRequests: readonly ServiceRequestRowViewModel[];
+  /**
+   * When true, render the log-contact form. Requires an active assignment for
+   * this responder (RESPONDER_WORKFLOWS.md §2). Absent/false for unclaimed cases.
+   */
+  readonly canLogContact?: boolean;
 }
 
 /**

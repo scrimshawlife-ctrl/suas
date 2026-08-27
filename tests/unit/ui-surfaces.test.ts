@@ -535,6 +535,42 @@ describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty is not a recorded fact', () 
 });
 
 describe('Responder case HTML lists contact and service requests', () => {
+  it('posts Log contact attempt only when canLogContact', () => {
+    const withForm = renderResponderCase({
+      shell,
+      need: {
+        caseId: 'case-claimed',
+        caseStatus: 'ASSIGNED',
+        category: 'Support Case',
+        openedLabel: 'Opened',
+      },
+      contactAttempts: [],
+      serviceRequests: [],
+      canLogContact: true,
+    });
+    expect(withForm).toContain(
+      'action="/app/responder/cases/case-claimed/commands/log-contact-attempt"',
+    );
+    expect(withForm).toContain('Log contact attempt');
+    expect(withForm).toContain('name="channel"');
+    expect(withForm).toContain('name="outcome"');
+    expect(auditAccessibility(withForm)).toEqual([]);
+
+    const without = renderResponderCase({
+      shell,
+      need: {
+        caseId: 'case-open',
+        caseStatus: 'OPEN',
+        category: 'Support Case',
+        openedLabel: 'Opened',
+        claimable: true,
+      },
+      contactAttempts: [],
+      serviceRequests: [],
+    });
+    expect(without).not.toContain('log-contact-attempt');
+  });
+
   it('renders contact attempts and service requests on the case page', () => {
     const markup = renderResponderCase({
       shell,
