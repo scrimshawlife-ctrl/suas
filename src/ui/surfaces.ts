@@ -77,6 +77,7 @@ import type {
   ResourceListViewModel,
   ResourceRowViewModel,
   DutyAvailability,
+  NotificationsInboxViewModel,
   ResponderAvailabilityViewModel,
   ResponderCaseViewModel,
   ResponderDashboardViewModel,
@@ -383,6 +384,17 @@ export function renderVeteranHome(model: VeteranHomeViewModel): string {
             { class: 'muted' },
             'Answer the published questionnaire. This is not a diagnosis. ' +
               'Fixture Support Signal scoring is not a clinical score.',
+          ),
+        ),
+    model.notificationsHref === undefined
+      ? undefined
+      : section(
+          { 'aria-labelledby': 'notifications' },
+          h2({ id: 'notifications' }, 'Notifications'),
+          a({ class: 'action-secondary', href: model.notificationsHref }, 'Open notifications'),
+          p(
+            { class: 'muted' },
+            'Delivery status for messages addressed to you. Destinations and message bodies are not shown here.',
           ),
         ),
     // §3.5 / §5: immediate resources sit above the broader catalog.
@@ -804,6 +816,40 @@ export function renderAdminOverview(model: AdminOverviewViewModel): string {
     ),
   ]);
   return assertSurface('ADMIN_OVERVIEW', markup);
+}
+
+/**
+ * Recipient notification inbox. Not in the MVP_REFERENCE.md §5 inventory, so
+ * this does not call `assertRequiredElementsPresent`. Public fields only.
+ */
+export function renderNotificationsInbox(model: NotificationsInboxViewModel): string {
+  return document(model.shell, [
+    h1({}, 'Notifications'),
+    a({ class: 'action-secondary', href: '/app/home' }, 'Back to Support'),
+    p(
+      { class: 'muted' },
+      `Showing up to ${model.limit} recent notifications. Destinations and message bodies are never listed.`,
+    ),
+    model.notifications.length === 0
+      ? p({ class: 'muted' }, 'No notifications yet.')
+      : ul(
+          { class: 'card-grid' },
+          model.notifications.map((row) =>
+            li(
+              { class: 'card' },
+              h2({}, row.reason),
+              p({}, span({ class: 'badge' }, row.deliveryStatus)),
+              p({ class: 'muted' }, `${row.channel} · attempts ${row.attemptCount}`),
+              row.sentAtLabel === undefined
+                ? undefined
+                : p({ class: 'muted' }, `Sent ${row.sentAtLabel}`),
+              row.subjectType === undefined
+                ? undefined
+                : p({ class: 'muted' }, `About ${row.subjectType}`),
+            ),
+          ),
+        ),
+  ]);
 }
 
 /**

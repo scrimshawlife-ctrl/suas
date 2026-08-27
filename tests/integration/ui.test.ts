@@ -485,6 +485,40 @@ describe('Chat states its own unavailability', () => {
   });
 });
 
+describe('NOTIFICATIONS.md — /app/notifications inbox', () => {
+  it('serves the recipient inbox without destinations', async () => {
+    const { credential, tenantId, userId } = await signIn();
+    await pool().query(
+      `INSERT INTO notifications
+         (notification_id, tenant_id, recipient_user_id, destination, reason, channel,
+          consent_basis, template_version, delivery_status, attempt_count, max_attempts)
+       VALUES ($1, $2, $3, $4, 'challenge.otp', 'EMAIL', 'AUTH_CHALLENGE',
+               'test-v1', 'QUEUED', 0, 3)`,
+      [randomUUID(), tenantId, userId, 'secret-destination@example.invalid'],
+    );
+
+    const response = await app.server.inject({
+      method: 'GET',
+      url: '/app/notifications',
+      headers: authorized(credential),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('Notifications');
+    expect(response.body).toContain('challenge.otp');
+    expect(response.body).toContain('EMAIL');
+    expect(response.body).not.toContain('secret-destination');
+    expect(auditAccessibility(response.body)).toEqual([]);
+
+    const home = await app.server.inject({
+      method: 'GET',
+      url: '/app/home',
+      headers: authorized(credential),
+    });
+    expect(home.statusCode).toBe(200);
+    expect(home.body).toContain('/app/notifications');
+  });
+});
+
 describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty HTML is not a stored fact', () => {
   it('keeps the On Duty landmark and states unavailability', async () => {
     const { credential } = await signIn();
