@@ -34,13 +34,13 @@ describe('assertExpectedSchemaVersion', () => {
     await expect(assertExpectedSchemaVersion(db)).resolves.toBe(EXPECTED_SCHEMA_VERSION);
   });
 
-  it('fails closed when the recorded version is not 11', async () => {
+  it(`fails closed when the recorded version is not ${EXPECTED_SCHEMA_VERSION}`, async () => {
     const db = {
       query: () =>
         Promise.resolve({
           rows: [
             {
-              version: 10,
+              version: EXPECTED_SCHEMA_VERSION - 2,
               name: 'notification_subject',
               checksum: 'abc',
               applied_at: new Date('2026-08-26T00:00:00Z'),
@@ -53,7 +53,9 @@ describe('assertExpectedSchemaVersion', () => {
         }),
     };
     await expect(assertExpectedSchemaVersion(db)).rejects.toBeInstanceOf(SchemaStateError);
-    await expect(assertExpectedSchemaVersion(db)).rejects.toThrow(/requires 11/);
+    await expect(assertExpectedSchemaVersion(db)).rejects.toThrow(
+      new RegExp(`requires ${EXPECTED_SCHEMA_VERSION}`),
+    );
     await expect(assertExpectedSchemaVersion(db)).rejects.toThrow(/never applies migrations/);
   });
 

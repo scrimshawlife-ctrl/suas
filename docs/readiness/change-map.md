@@ -16,7 +16,7 @@
 | SAFETY               | NOT_READY      | EVIDENCE_FIXABLE                  | D-012 slot JSON + HTML; no dispatch; staging `approved` mode review                                           |
 | PRIVACY              | NOT_READY      | EVIDENCE_FIXABLE + OWNER (D-007)  | Min-necessary projections + audit pack; synthetic deletion drill shipped; D-007 + staging remain              |
 | SCALE                | NOT_COMPUTABLE | OWNER_DECISION_REQUIRED           | D-021/D-023 envelopes unset; synthetic measurements only                                                      |
-| RESILIENCE           | NOT_READY      | OWNER (D-022/D-024) + EVIDENCE    | Fail-closed seams + drills exist; durable queue + RTO/RPO pending                                             |
+| RESILIENCE           | NOT_READY      | EVIDENCE + OWNER (D-024)          | D-022 DECIDED + postgres-outbox adapter; STAGING wire + D-024 RTO/RPO pending                                 |
 | OPERATIONS           | NOT_READY      | OWNER (D-001/D-005) + EVIDENCE    | Health/runbooks/migrate harness exist; real staging topology pending                                          |
 | REPORTING            | NOT_READY      | OWNER (D-025)                     | Sensitive aggregate reporting disabled                                                                        |
 

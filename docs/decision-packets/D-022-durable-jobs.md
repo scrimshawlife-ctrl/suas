@@ -1,8 +1,14 @@
 # Decision packet — D-022 Production durable job/queue implementation
 
-**Status:** OWNER_DECISION_REQUIRED  
+**Status:** DECIDED — Postgres outbox / SKIP LOCKED (2026-08-26)  
 **Affects gates:** `RESILIENCE`, `OPERATIONS`, `COORDINATION` (async settlement path)  
 **Blocks:** STAGING/PRODUCTION process start (already fail-closed); durable recovery evidence
+
+## Decision (2026-08-26)
+
+**Chosen:** Option 2 — Postgres-backed outbox / SKIP LOCKED worker behind `DurableJobQueuePort`.
+
+LOCAL/TEST may continue to use the declared in-memory fake. STAGING/PRODUCTION must use the durable outbox once the adapter and schema are released.
 
 ## Exact question
 
