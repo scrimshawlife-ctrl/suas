@@ -101,12 +101,10 @@ export class PostgresOutboxJobQueue implements DurableJobQueuePort {
 }
 
 function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code: unknown }).code === '23505'
-  );
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return false;
+  }
+  return error.code === '23505';
 }
 
 /**
