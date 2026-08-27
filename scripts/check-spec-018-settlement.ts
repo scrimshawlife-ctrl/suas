@@ -20,7 +20,7 @@ import { CASE_COMMANDS, type CaseCommand } from '../src/coordination/case-transi
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch = process.env.SUAS_SETTLE_SCRATCH ?? '/tmp/grok-goal-b26a2796bc90/implementer';
 
-const STALE_PLANE_A_PATTERNS = [
+const STALE_READINESS_PATTERNS = [
   /Still missing vs APIS\.md Plane A drafts:.*notifications/i,
   /Remaining Plane A JSON \(notifications/i,
   /Domain present; JSON projection incomplete/i,
@@ -29,6 +29,10 @@ const STALE_PLANE_A_PATTERNS = [
   /finishes remaining released Plane A JSON/i,
   /createSettlement.*CODE_FIXABLE/i,
   /Still CODE_FIXABLE \(named residual\): `createSettlement`/i,
+  /Owner decides D-022/i,
+  /STAGING\/PRODUCTION fail-closed pending D-022/i,
+  /Owner decides D-007 retention\/deletion durations/i,
+  /D-007 durations and staging rehearsal remain/i,
 ];
 
 /**
@@ -168,11 +172,12 @@ function assertReadinessDocs(): void {
     'docs/readiness/change-map.md',
     'docs/readiness/SPEC-018-plan.md',
     'docs/readiness/SPEC-018-final-report.md',
+    'docs/readiness/security-privacy-audit.md',
   ]) {
     const text = readFileSync(join(root, relative), 'utf8');
-    for (const pattern of STALE_PLANE_A_PATTERNS) {
+    for (const pattern of STALE_READINESS_PATTERNS) {
       if (pattern.test(text)) {
-        fail(`${relative} still contains stale Plane A CODE_FIXABLE residual: ${pattern}`);
+        fail(`${relative} still contains a stale readiness claim: ${pattern}`);
       }
     }
   }

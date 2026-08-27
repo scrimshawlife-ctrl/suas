@@ -162,8 +162,9 @@ variable changed.
 `auth_rate_limits`), seven enum types, and the indexes backing the DATA_MODEL.md
 §13 access paths. `EXPECTED_SCHEMA_VERSION` moves from 2 to 3.
 
-No destructive step. Deletion is soft-delete only, and nothing purges: retention
-remains D-007 `DECISION_PENDING`. Rate-limit counters are abuse-control state
+No destructive step. Deletion is soft-delete only. The later D-007 STAGING
+decision retains event/audit/consent history for 365 days; production purge/export
+remains deferred. Rate-limit counters are abuse-control state
 rather than business facts, so `pruneRateLimits` exists for elapsed windows; it is
 not wired to a schedule and is not event retention.
 

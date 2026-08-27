@@ -127,8 +127,9 @@ three enum types, the immutability trigger on settlements, and one nullable
 column on `support_cases` (`current_settlement_id`).
 `EXPECTED_SCHEMA_VERSION` moves from 5 to 6.
 
-No destructive step. Settlement history is never deleted and nothing purges;
-retention remains D-007 `DECISION_PENDING`.
+No destructive step. Settlement history is never deleted and nothing purges in
+this slice. The later D-007 STAGING decision covers 365-day retained history;
+production purge/export remains deferred.
 
 `resolution_disposition` is deliberately nullable: NULL means "not yet
 classified", which is the state SETTLEMENT.md §4 requires resolution to refuse.

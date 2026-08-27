@@ -133,7 +133,8 @@ enum types, two partial unique indexes carrying the one-winner invariants, and
 the indexes backing the queue paths. `EXPECTED_SCHEMA_VERSION` moves from 4 to 5.
 
 No destructive step, and nothing purges: CASES.md §7 requires closure to retain
-history, and retention remains D-007 `DECISION_PENDING`.
+history. The later D-007 STAGING decision retains event/audit/consent history for
+365 days; production purge/export remains deferred.
 
 `support_cases` has no `current_settlement_id` column yet. DATA_MODEL.md §6
 describes it as a convenience projection over Settlement history, so it belongs

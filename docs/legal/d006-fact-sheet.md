@@ -43,7 +43,7 @@ Do not treat this list as a legal class.
 - Intended later use (not authorized): identified opt-in veteran coordination (Check-In, Support Signal in fixture or disabled mode, QRF / Support Case). SUAS is not an EHR. It does not diagnose. It does not predict suicide. It does not call 911. It is not a VA health API. It is not Medi-Cal billing.
 - Specs name a Santa Clara County 25–50 veteran pilot. That pilot is not authorized. D-008 and D-013 are open.
 - Product rules already specified (not a HIPAA conclusion): TLS; database and backup encryption (key management is open); role and tenant isolation; privileged MFA; audit events; minimization; consent at use time; no production data in development environments; UI forbids compliance-claim strings.
-- D-007 retention durations are not decided. This page does not invent a number of days.
+- D-007 has a synthetic STAGING-only operating decision, but production retention, purge/export, and legal obligations are not decided. This counsel-facing page does not publish the synthetic duration or project it into a production or HIPAA claim.
 - Vendors for host, auth, SMS, email, and production database are not selected (D-001–D-005).
 - Do not execute a BAA as if HIPAA applies until D-006 closes. Written data-processing terms with vendors are an operational control, not a legal class.
 

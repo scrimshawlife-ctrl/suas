@@ -127,9 +127,10 @@ on-disk migration set.
 the indexes backing the DATA_MODEL.md §13 access paths. `EXPECTED_SCHEMA_VERSION`
 moves from 1 to 2.
 
-No destructive step; forward-fix is a later numbered migration. Retention and
-expiry remain D-007 `DECISION_PENDING`, so no purge or TTL behavior is added —
-`expires_at` exists only so a released retention policy has a home.
+No destructive step; forward-fix is a later numbered migration. The later D-007
+STAGING decision retains event/audit/consent history for 365 days but does not
+authorize an idempotency reaper or production purge, so no TTL behavior is added.
+`expires_at` remains the home for a separately released replay-window policy.
 
 `tenant_id` carries no foreign key yet because organizations arrive in Slice 3.
 The column exists now because tenant scope is part of the released envelope and
@@ -157,7 +158,8 @@ Nothing becomes production-operational. The Domain Event catalog is exactly the
 22 released types, with a test asserting no vendor-native names leak in
 (EVENT_MODEL.md §3, §9). No durable queue vendor is selected: publication is
 driven by an explicit function call, and the D-022 seam from Slice 1 is untouched.
-No retention or purge behavior is invented while D-007 is open.
+No retention or purge behavior is invented beyond the later D-007 synthetic
+STAGING decision; production purge/export remains deferred.
 
 ## 10. Semantic gaps returned to `SUAS-specs`
 

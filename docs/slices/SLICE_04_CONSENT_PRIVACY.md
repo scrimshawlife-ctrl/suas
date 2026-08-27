@@ -131,8 +131,9 @@ None. No new configuration variable, and no change to an existing one.
 reusing the guard from migration 0002, and the indexes backing use-time
 evaluation. `EXPECTED_SCHEMA_VERSION` moves from 3 to 4.
 
-No destructive step. Consent history is never deleted (CONSENT.md §4), and
-retention remains D-007 `DECISION_PENDING`, so nothing purges.
+No destructive step. Consent history is never deleted by this slice (CONSENT.md
+§4). The later D-007 STAGING decision retains it for 365 days; production
+purge/export remains separately deferred, so nothing here purges.
 
 `trusted_contacts` and `consent_grants` reference `users` with composite
 `(user_id, tenant_id)` foreign keys, so a grant cannot span tenants.
