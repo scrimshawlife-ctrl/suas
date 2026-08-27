@@ -5,17 +5,16 @@
  * - SUAS-specs PRIVACY.md §2 (deletion is a documented process; events/audit
  *   are not silently destroyed; consent history is preserved)
  * - SUAS-specs PRIVACY.md §9 (deletion requests emit Audit Events)
- * - SUAS-specs PRIVACY.md §10 (D-007 `DECISION_PENDING`: soft-delete operational
- *   rows; do not purge Audit Events or Domain Events; fulfill a deletion request
- *   only to the extent a later spec allows; provider-side copies are
- *   `NOT_COMPUTABLE`)
+ * - SUAS-specs PRIVACY.md §10 / D-007 DECIDED (STAGING): soft-delete operational
+ *   rows; retain Audit Events, Domain Events, and consent history for 365 days;
+ *   provider-side copies remain `NOT_COMPUTABLE`
  * - SUAS-specs SECURITY.md §2 (soft-delete plus process; events not casually
  *   purged; no sensitive data in logs)
  * - SUAS-specs AUTH.md §5 (REVOKED invalidates sessions)
  * - SUAS-specs CONSENT.md §4 (consent history survives; grant rows are not
  *   deleted)
- * - SUAS-specs ENVIRONMENT.md §2, §5 (LOCAL/TEST are synthetic-only; drills
- *   refuse PRODUCTION and real external effects)
+ * - SUAS-specs ENVIRONMENT.md §2, §5 (synthetic-only; drills refuse PRODUCTION
+ *   and real external effects; STAGING allowed when DATABASE_URL is synthetic)
  * - SUAS-specs TESTING.md §11 (`PRIVACY` gate), §12 (synthetic veterans only)
  * - SUAS-specs EVENT_MODEL.md §3 (Domain Event catalog is not extended here),
  *   §4 (Audit Events), §5.7 (no invented destructive event purge)
@@ -43,7 +42,7 @@ import {
 import { syntheticEmail } from '../testing/fixture-boundary.js';
 
 /** Environments that may run this mutating synthetic drill. */
-export const DELETION_DRILL_ENVIRONMENTS = ['LOCAL', 'TEST'] as const;
+export const DELETION_DRILL_ENVIRONMENTS = ['LOCAL', 'TEST', 'STAGING'] as const;
 
 /**
  * Operational bound for one drill run. This is not a released RTO (D-024 is
@@ -63,7 +62,11 @@ export const DELETION_REQUEST_AUDIT_EVENT_TYPE = 'DELETION_REQUEST';
 /** Fixed PRIVACY verdict. The drill has no path to `READY`. */
 export const PRIVACY_GATE_VERDICT = 'NOT_READY' as const;
 
-export const D_007_RETENTION = 'DECISION_PENDING' as const;
+/**
+ * STAGING policy from D-007 (2026-08-27): soft-delete ops rows; retain events
+ * 365 days. PRODUCTION purge/export remains a separate package.
+ */
+export const D_007_RETENTION = 'SOFT_DELETE_RETAIN_EVENTS_365D' as const;
 
 export const PROVIDER_SIDE_COPIES = 'NOT_COMPUTABLE' as const;
 
@@ -133,10 +136,11 @@ export function isDeletionRequestDomainEvent(): boolean {
 }
 
 /**
- * Refuse any environment that is not a local/test synthetic database.
+ * Refuse PRODUCTION and any non-synthetic database URL.
  *
- * STAGING is synthetic-only in ENVIRONMENT.md but is a shared soak target; this
- * mutating drill stays on LOCAL/TEST so it cannot erase another run's fixtures.
+ * STAGING is allowed for shared soak rehearsal when DATABASE_URL has no
+ * production markers. The drill creates its own synthetic subject UUID and
+ * does not target seeded demo accounts.
  */
 export function assertDeletionDrillEnvironment(config: SuasConfig): void {
   if (config.environment === 'PRODUCTION') {
@@ -147,9 +151,9 @@ export function assertDeletionDrillEnvironment(config: SuasConfig): void {
   }
   if (!(DELETION_DRILL_ENVIRONMENTS as readonly string[]).includes(config.environment)) {
     throw new DeletionDrillEnvironmentError(
-      `A deletion drill cannot run in ${config.environment}. Only LOCAL and TEST ` +
-        'synthetic databases are accepted (SUAS-specs ENVIRONMENT.md §2, §5; ' +
-        'PRIVACY.md §10).',
+      `A deletion drill cannot run in ${config.environment}. Only LOCAL, TEST, ` +
+        'and STAGING synthetic databases are accepted (SUAS-specs ENVIRONMENT.md §2, §5; ' +
+        'PRIVACY.md §10; D-007).',
     );
   }
   if (config.allowRealExternalEffects) {
@@ -169,7 +173,7 @@ export function assertDeletionDrillEnvironment(config: SuasConfig): void {
     throw new DeletionDrillEnvironmentError(
       `DATABASE_URL host/database name contains production marker(s) ${markers
         .map((marker) => `"${marker}"`)
-        .join(', ')}. LOCAL/TEST must not point at production data resources ` +
+        .join(', ')}. Synthetic drills must not point at production data resources ` +
         '(SUAS-specs ENVIRONMENT.md §3, §5).',
     );
   }
@@ -178,10 +182,11 @@ export function assertDeletionDrillEnvironment(config: SuasConfig): void {
 const DRILL_NOTE =
   'Synthetic deletion path only: records a deletion request as an Audit Event, ' +
   'soft-deletes the operational user row, and revokes sessions. Audit Events, ' +
-  'Domain Events, and consent history are retained. D-007 is DECISION_PENDING, ' +
-  'so no automatic purge runs. Provider-side copies are NOT_COMPUTABLE. PRIVACY ' +
-  'stays NOT_READY. This is one logical PostgreSQL system of record and does not ' +
-  'prove sharded or multi-cluster deletion. No HIPAA claim.';
+  'Domain Events, and consent history are retained for 365 days (D-007 STAGING). ' +
+  'No automatic purge job is started here. Provider-side copies are NOT_COMPUTABLE. ' +
+  'PRIVACY stays NOT_READY until purge/export package + broader sign-off. This is ' +
+  'one logical PostgreSQL system of record and does not prove sharded or ' +
+  'multi-cluster deletion. No HIPAA claim.';
 
 export function deletionDrillNote(): string {
   return DRILL_NOTE;

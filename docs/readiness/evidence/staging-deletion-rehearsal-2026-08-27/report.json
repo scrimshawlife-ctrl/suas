@@ -1,0 +1,31 @@
+{
+  "status": "ok",
+  "privacy_gate": "NOT_READY",
+  "hipaa_claim": false,
+  "d007": "SOFT_DELETE_RETAIN_EVENTS_365D",
+  "provider_side_copies": "NOT_COMPUTABLE",
+  "fulfillment": "SOFT_DELETE_OPERATIONAL_ROW",
+  "subject_user_id": "7f4f9f14-c990-4fcf-a727-6df1bde1c696",
+  "tenant_id": "1854d3e2-ee9f-4796-8de2-75b8d8002aac",
+  "neighbor_user_id": "ddec178b-8faa-4052-915f-ff59b83db76d",
+  "other_tenant_id": "09a2d803-3ba3-451f-8eb9-e260886e4e2d",
+  "deletion_request_audit_event_id": "0f351ec4-a90e-484c-a36c-daa5f2b18281",
+  "operational_lookup_after": "absent",
+  "row_retained": true,
+  "status_after": "REVOKED",
+  "sessions_revoked": 1,
+  "history": {
+    "domain_events_retained": 1,
+    "audit_events_retained": 2,
+    "consent_events_retained": 1
+  },
+  "neighbor_untouched": true,
+  "other_tenant_untouched": true,
+  "replay": {
+    "soft_delete": "no_op",
+    "sessions": "no_op",
+    "request_recorded_once": true
+  },
+  "scale_note": "single_logical_postgres",
+  "note": "Synthetic deletion path only: records a deletion request as an Audit Event, soft-deletes the operational user row, and revokes sessions. Audit Events, Domain Events, and consent history are retained for 365 days (D-007 STAGING). No automatic purge job is started here. Provider-side copies are NOT_COMPUTABLE. PRIVACY stays NOT_READY until purge/export package + broader sign-off. This is one logical PostgreSQL system of record and does not prove sharded or multi-cluster deletion. No HIPAA claim."
+}

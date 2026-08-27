@@ -38,7 +38,7 @@ describe('PRIVACY.md §10 — synthetic deletion path', () => {
     expect(report.status).toBe('ok');
     expect(report.privacy_gate).toBe('NOT_READY');
     expect(report.hipaa_claim).toBe(false);
-    expect(report.d007).toBe('DECISION_PENDING');
+    expect(report.d007).toBe('SOFT_DELETE_RETAIN_EVENTS_365D');
     expect(report.provider_side_copies).toBe('NOT_COMPUTABLE');
     expect(report.fulfillment).toBe('SOFT_DELETE_OPERATIONAL_ROW');
     expect(report.operational_lookup_after).toBe('absent');
@@ -75,7 +75,7 @@ describe('PRIVACY.md §10 — synthetic deletion path', () => {
     );
     expect(payload.rows[0]?.payload).toMatchObject({
       fulfillment: 'SOFT_DELETE_OPERATIONAL_ROW',
-      d007: 'DECISION_PENDING',
+      d007: 'SOFT_DELETE_RETAIN_EVENTS_365D',
       provider_side_copies: 'NOT_COMPUTABLE',
       automatic_event_purge: false,
     });

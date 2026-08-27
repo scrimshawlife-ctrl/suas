@@ -43,10 +43,10 @@ describe('PRIVACY.md §10 — deletion drill refuses non-synthetic targets', () 
     );
   });
 
-  it('refuses STAGING so the mutating drill cannot erase a shared soak', () => {
-    expect(() => assertDeletionDrillEnvironment(testConfig({ environment: 'STAGING' }))).toThrow(
-      /LOCAL and TEST/,
-    );
+  it('allows STAGING when the database URL is synthetic', () => {
+    expect(() =>
+      assertDeletionDrillEnvironment(testConfig({ environment: 'STAGING' })),
+    ).not.toThrow();
   });
 
   it('refuses real external effects', () => {

@@ -1,16 +1,11 @@
 /**
  * CLI for the synthetic privacy deletion drill.
  *
- * Runs only against the LOCAL/TEST synthetic database. Prints a structured
- * JSON report with opaque identifiers and no contact data. Exits non-zero on
- * environment refusal, timeout, or invariant failure.
+ * Default: LOCAL/TEST against TEST_DATABASE_URL.
+ * Staging rehearsal: set SUAS_ENV=STAGING and DATABASE_URL to the synthetic
+ * Neon unpooled URL (no production markers).
  *
- * Health / rollback:
- * - Fail closed on PRODUCTION, STAGING, real external effects, or a production
- *   URL marker.
- * - Timeout aborts the run; leftover rows are synthetic UUIDs in the test DB.
- * - There is no automatic purge and no provider-side effect.
- * - Do not point this script at a non-synthetic database.
+ * Prints structured JSON with opaque identifiers and no contact data.
  */
 
 import { loadConfig } from '../src/config/index.js';
@@ -19,10 +14,20 @@ import { runDeletionDrill } from '../src/privacy/deletion-drill.js';
 import { testDatabaseUrl, validEnv } from '../tests/helpers/env.js';
 
 async function main(): Promise<void> {
+  const environment = process.env.SUAS_ENV === 'STAGING' ? 'STAGING' : 'TEST';
+  const databaseUrl =
+    process.env.DATABASE_URL !== undefined && process.env.DATABASE_URL !== ''
+      ? process.env.DATABASE_URL
+      : testDatabaseUrl();
+
   const config = loadConfig(
     validEnv({
+      SUAS_ENV: environment,
       SUAS_MIGRATIONS_MODE: 'validate',
-      DATABASE_URL: testDatabaseUrl(),
+      DATABASE_URL: databaseUrl,
+      ...(environment === 'STAGING'
+        ? { SUAS_SESSION_SECRET: process.env.SUAS_SESSION_SECRET ?? 'a'.repeat(48) }
+        : {}),
     }),
   );
   const pool = createPool(config);
