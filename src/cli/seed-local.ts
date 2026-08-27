@@ -321,7 +321,7 @@ async function ensureConsent(pool: Pool, veteran: User, responder: User): Promis
     veteranUserId: veteran.userId,
     permission: 'can_view',
     scope: 'current_requests',
-    purpose: 'Coordinate the veteran's active support requests (synthetic seed).',
+    purpose: "Coordinate the veteran's active support requests (synthetic seed).",
     granteeType: 'RESPONDER',
     granteeId: responder.userId,
     consentTemplateVersion: versionKey,
