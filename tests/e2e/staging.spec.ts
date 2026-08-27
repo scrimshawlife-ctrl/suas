@@ -39,6 +39,29 @@ async function expectHtmlSurface(page: Page, path: string): Promise<void> {
   await expect(page.locator('h1')).toHaveCount(1);
 }
 
+async function expectNoHorizontalOverflow(page: Page, path: string): Promise<void> {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await expectHtmlSurface(page, path);
+  const dimensions = await page.evaluate<{ clientWidth: number; scrollWidth: number }>(
+    '({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth })',
+  );
+  expect(
+    dimensions.scrollWidth <= dimensions.clientWidth + 1,
+    `${path} overflows at 320 CSS px`,
+  ).toBe(true);
+}
+
+async function expectKeyboardEntry(page: Page, path: string): Promise<void> {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expectHtmlSurface(page, path);
+  const skipLink = page.getByRole('link', { name: 'Skip to main content' });
+  await page.keyboard.press('Tab');
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#main$/);
+}
+
 test.describe('deployed public boundary', () => {
   test('@public health exposes durable synthetic-STAGING dependencies', async ({ request }) => {
     const response = await request.get('/api/v0/health');
@@ -72,6 +95,12 @@ test.describe('deployed public boundary', () => {
       error: { code: 'UNAUTHENTICATED' },
     });
   });
+
+  test('@public keyboard entry and 320px reflow work in Chromium', async ({ page }) => {
+    await expectKeyboardEntry(page, '/app');
+    await expectNoHorizontalOverflow(page, '/app');
+    await expectNoHorizontalOverflow(page, '/app/join');
+  });
 });
 
 test.describe('deployed authenticated synthetic surfaces', () => {
@@ -85,10 +114,13 @@ test.describe('deployed authenticated synthetic surfaces', () => {
       '/app/consents',
       '/app/trusted-contacts',
       '/app/resources',
+      '/app/resources/food',
       '/app/immediate-resources',
     ]) {
       await expectHtmlSurface(page, path);
+      await expectNoHorizontalOverflow(page, path);
     }
+    await expectKeyboardEntry(page, '/app/home');
   });
 
   test('responder routes render with an operator-supplied synthetic session', async ({
@@ -98,7 +130,16 @@ test.describe('deployed authenticated synthetic surfaces', () => {
     const page = await authenticatedPage(browser, responderBearer ?? '');
     for (const path of ['/app/responder', '/app/responder/availability']) {
       await expectHtmlSurface(page, path);
+      await expectNoHorizontalOverflow(page, path);
     }
+    await expectHtmlSurface(page, '/app/responder');
+    const casePath = await page
+      .locator('a[href^="/app/responder/cases/"]')
+      .first()
+      .getAttribute('href');
+    expect(casePath, 'Seeded responder dashboard has no case link.').not.toBeNull();
+    await expectNoHorizontalOverflow(page, casePath ?? '');
+    await expectKeyboardEntry(page, '/app/responder');
   });
 
   test('admin route renders only with an operator-supplied elevated session', async ({
@@ -107,5 +148,7 @@ test.describe('deployed authenticated synthetic surfaces', () => {
     test.skip(adminBearer === undefined, 'SUAS_E2E_ADMIN_BEARER is not configured.');
     const page = await authenticatedPage(browser, adminBearer ?? '');
     await expectHtmlSurface(page, '/app/admin');
+    await expectNoHorizontalOverflow(page, '/app/admin');
+    await expectKeyboardEntry(page, '/app/admin');
   });
 });

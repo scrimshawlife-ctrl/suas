@@ -3,7 +3,10 @@
 **Environment:** `SUAS_ENV=LOCAL` Worker soak  
 **Host:** `https://suas.zer0state-noema.workers.dev`  
 **Data:** Neon synthetic seed (`npm run seed`); bearers from `.local-secrets/seed-summary.json`  
-**Claim boundary:** This is a **pinned LOCAL baseline**, not a `UI_CONFORMANCE=READY` claim. Formal gate closure still needs human review (contrast, focus order, 320px reflow) and preferably a STAGING-class soak after D-022.
+**Claim boundary:** This is a **pinned LOCAL baseline**, not a `UI_CONFORMANCE=READY` claim.
+Formal synthetic STAGING now has automated 320px reflow and keyboard-entry coverage in
+`tests/e2e/staging.spec.ts`; gate closure still needs human full-workflow focus-order and
+screen-reader review.
 
 ## Surfaces captured (HTTP 200)
 
@@ -53,8 +56,8 @@ Under `screenshots/` (pinned visual baseline for human review):
 
 ## Still required for UI_CONFORMANCE READY
 
-1. Human review of contrast, focus order, 320 CSS px reflow, screen-reader pass on the pinned surfaces.
-2. Re-run (or promote) this pack against formal **STAGING** after D-022 / D-001–005.
+1. Human review of full workflow focus order and screen-reader behavior on the pinned surfaces.
+2. Re-pin screenshots from live **STAGING** CSS if the visual baseline is used for final sign-off.
 3. Optional: SAFETY `approved` copy mode checklist (separate from this baseline).
 
 ## How to reproduce
