@@ -1,0 +1,4 @@
+npm notice run suas@0.1.0 jobs:work
+npm notice run tsx src/cli/job-worker.ts --once --limit 5
+
+To prepare for this change:
