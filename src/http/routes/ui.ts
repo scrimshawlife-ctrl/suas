@@ -33,6 +33,8 @@ import type { SafetyCopyMode, SupportSignalMode } from '../../config/index.js';
 import {
   CaseAlreadyClaimedError,
   claimCase,
+  CONTACT_CHANNELS,
+  CONTACT_OUTCOMES,
   DEFAULT_PAGE_SIZE,
   findActiveAssignment,
   findCase,
@@ -41,7 +43,9 @@ import {
   listCaseServiceRequests,
   listContactAttempts,
   MAX_PAGE_SIZE,
+  NoActiveAssignmentError,
   readCaseQueue,
+  recordContact,
 } from '../../coordination/index.js';
 import {
   RESOURCE_DEFAULT_PAGE_SIZE,
@@ -553,6 +557,11 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     );
   });
 
+  const logContactBody = z.object({
+    channel: z.enum(CONTACT_CHANNELS),
+    outcome: z.enum(CONTACT_OUTCOMES),
+  });
+
   app.get<{ Params: { id: string } }>('/app/responder/cases/:id', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     assertResponder(context);
@@ -561,6 +570,8 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       throw new ResourceNotVisibleError();
     }
     const claimable = supportCase.status === 'OPEN' || supportCase.status === 'TRIAGED';
+    const assignment = await findActiveAssignment(pool, supportCase.caseId);
+    const canLogContact = assignment?.responderUserId === context.userId;
     const [attempts, serviceRequests] = await Promise.all([
       listContactAttempts(pool, context.tenantId, supportCase.caseId, 50),
       listCaseServiceRequests(pool, context.tenantId, supportCase.caseId, 50),
@@ -578,9 +589,40 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
           category: request.category,
           status: request.status,
         })),
+        ...(canLogContact ? { canLogContact: true } : {}),
       }),
     );
   });
+
+  app.post<{ Params: { id: string } }>(
+    '/app/responder/cases/:id/commands/log-contact-attempt',
+    async (request, reply) => {
+      const context = await authenticate(pool, sessionSecret, request);
+      assertResponder(context);
+      const supportCase = await findCase(pool, context.tenantId, request.params.id);
+      if (supportCase === undefined) {
+        throw new ResourceNotVisibleError();
+      }
+      const body = logContactBody.parse(request.body ?? {});
+      try {
+        await recordContact(pool, {
+          tenantId: context.tenantId,
+          caseId: request.params.id,
+          responderUserId: context.userId,
+          command: 'log-contact-attempt',
+          channel: body.channel,
+          outcome: body.outcome,
+          correlationId: String(request.id),
+        });
+      } catch (error) {
+        if (error instanceof NoActiveAssignmentError) {
+          throw new ResourceNotVisibleError();
+        }
+        throw error;
+      }
+      return reply.redirect(`/app/responder/cases/${request.params.id}`, 303);
+    },
+  );
 
   app.post<{ Params: { id: string } }>(
     '/app/responder/cases/:id/commands/claim',

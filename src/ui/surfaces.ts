@@ -57,6 +57,7 @@ import {
 } from './safety.js';
 import type { SafetyCopyMode } from '../config/index.js';
 import { STYLESHEET } from './theme.js';
+import { CONTACT_CHANNEL_OPTIONS, CONTACT_OUTCOME_OPTIONS } from './view-models.js';
 import type {
   ActiveNeedsViewModel,
   ActiveNeedViewModel,
@@ -509,6 +510,7 @@ function needRow(need: ActiveNeedViewModel, level: HeadingLevel = 3): Renderable
 }
 
 export function renderResponderCase(model: ResponderCaseViewModel): string {
+  const logAction = `/app/responder/cases/${model.need.caseId}/commands/log-contact-attempt`;
   const markup = document(model.shell, [
     h1({}, 'Case'),
     a({ href: '/app/responder' }, 'Back'),
@@ -524,6 +526,49 @@ export function renderResponderCase(model: ResponderCaseViewModel): string {
               li({}, `${attempt.channel} · ${attempt.outcome} · ${attempt.attemptedAtLabel}`),
             ),
           ),
+      model.canLogContact === true
+        ? form(
+            { method: 'post', action: logAction },
+            h3({}, 'Log contact attempt'),
+            fieldset(
+              { class: 'check-in-options' },
+              legend({}, 'Channel'),
+              CONTACT_CHANNEL_OPTIONS.map((channel) => {
+                const id = `channel-${channel}`;
+                return label(
+                  { for: id, class: 'option' },
+                  input({
+                    id,
+                    type: 'radio',
+                    name: 'channel',
+                    value: channel,
+                    ...(channel === 'PHONE' ? { checked: true } : {}),
+                  }),
+                  channel,
+                );
+              }),
+            ),
+            fieldset(
+              { class: 'check-in-options' },
+              legend({}, 'Outcome'),
+              CONTACT_OUTCOME_OPTIONS.map((outcome) => {
+                const id = `outcome-${outcome}`;
+                return label(
+                  { for: id, class: 'option' },
+                  input({
+                    id,
+                    type: 'radio',
+                    name: 'outcome',
+                    value: outcome,
+                    ...(outcome === 'PENDING' ? { checked: true } : {}),
+                  }),
+                  outcome,
+                );
+              }),
+            ),
+            button({ class: 'action', type: 'submit' }, 'Log contact attempt'),
+          )
+        : undefined,
     ),
     section(
       { 'aria-labelledby': 'service-requests' },
