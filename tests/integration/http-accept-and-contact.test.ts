@@ -305,6 +305,39 @@ describe('Contact log commands', () => {
 });
 
 describe('POST /api/v0/cases/:id/commands/assign', () => {
+  it('denies an org admin when the session has no explicit organization scope', async () => {
+    const { pool, tenantId, supportCase } = await openRedCase();
+    const org = await createOrganization(pool, {
+      tenantId,
+      name: `Admin Org ${randomUUID().slice(0, 8)}`,
+      status: 'ACTIVE',
+    });
+    const admin = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail(`admin-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    await createMembership(pool, {
+      tenantId,
+      organizationId: org.organizationId,
+      userId: admin.userId,
+      role: 'ORG_ADMIN',
+      status: 'ACTIVE',
+    });
+    const { responder } = await responderFor(tenantId, org.organizationId);
+
+    const denied = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${supportCase.caseId}/commands/assign`,
+      headers: {
+        ...(await bearer(tenantId, admin.userId)),
+        'idempotency-key': `unscoped-assign-${randomUUID()}`,
+      },
+      payload: { responder_user_id: responder.userId },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+
   it('lets an org admin assign a responder', async () => {
     const { pool, tenantId, supportCase } = await openRedCase();
     const org = await createOrganization(pool, {
