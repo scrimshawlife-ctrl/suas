@@ -57,7 +57,11 @@ import {
 } from './safety.js';
 import type { SafetyCopyMode } from '../config/index.js';
 import { STYLESHEET } from './theme.js';
-import { CONTACT_CHANNEL_OPTIONS, CONTACT_OUTCOME_OPTIONS } from './view-models.js';
+import {
+  CONTACT_CHANNEL_OPTIONS,
+  CONTACT_OUTCOME_OPTIONS,
+  SERVICE_CATEGORY_OPTIONS,
+} from './view-models.js';
 import type {
   ActiveNeedsViewModel,
   ActiveNeedViewModel,
@@ -581,6 +585,34 @@ export function renderResponderCase(model: ResponderCaseViewModel): string {
               li({}, `${request.category} · ${request.status}`),
             ),
           ),
+      model.canCreateServiceRequest === true
+        ? form(
+            {
+              method: 'post',
+              action: `/app/responder/cases/${model.need.caseId}/service-requests`,
+            },
+            h3({}, 'Create service request'),
+            fieldset(
+              { class: 'check-in-options' },
+              legend({}, 'Category'),
+              SERVICE_CATEGORY_OPTIONS.map((category) => {
+                const id = `category-${category}`;
+                return label(
+                  { for: id, class: 'option' },
+                  input({
+                    id,
+                    type: 'radio',
+                    name: 'category',
+                    value: category,
+                    ...(category === 'FOOD' ? { checked: true } : {}),
+                  }),
+                  category,
+                );
+              }),
+            ),
+            button({ class: 'action', type: 'submit' }, 'Create service request'),
+          )
+        : undefined,
     ),
   ]);
   return assertSurface('RESPONDER_CASE', markup);

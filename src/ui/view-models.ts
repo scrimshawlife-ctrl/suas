@@ -238,6 +238,17 @@ export const CONTACT_OUTCOME_OPTIONS = [
   'UNABLE',
 ] as const;
 
+/**
+ * MVP service categories for the HTML create form (DISPATCH.md §7).
+ * Keep in sync with `SERVICE_CATEGORIES` in coordination/request-transitions.ts.
+ */
+export const SERVICE_CATEGORY_OPTIONS = [
+  'FOOD',
+  'TRANSPORTATION',
+  'SHELTER',
+  'PEER_SUPPORT',
+] as const;
+
 export interface ResponderCaseViewModel {
   readonly shell: ShellViewModel;
   readonly need: ActiveNeedViewModel;
@@ -250,6 +261,11 @@ export interface ResponderCaseViewModel {
    * this responder (RESPONDER_WORKFLOWS.md §2). Absent/false for unclaimed cases.
    */
   readonly canLogContact?: boolean;
+  /**
+   * When true, render the create-service-request form. Parent case must not be
+   * CLOSED (DISPATCH.md §4). Absent/false when the case cannot accept creates.
+   */
+  readonly canCreateServiceRequest?: boolean;
 }
 
 /**

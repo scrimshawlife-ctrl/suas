@@ -32,9 +32,12 @@ import {
 import type { SafetyCopyMode, SupportSignalMode } from '../../config/index.js';
 import {
   CaseAlreadyClaimedError,
+  CaseNotFoundError,
   claimCase,
+  ClosedCaseError,
   CONTACT_CHANNELS,
   CONTACT_OUTCOMES,
+  createServiceRequest,
   DEFAULT_PAGE_SIZE,
   findActiveAssignment,
   findCase,
@@ -46,7 +49,9 @@ import {
   NoActiveAssignmentError,
   readCaseQueue,
   recordContact,
+  SERVICE_CATEGORIES,
 } from '../../coordination/index.js';
+import { withTransaction } from '../../db/index.js';
 import {
   RESOURCE_DEFAULT_PAGE_SIZE,
   RESOURCE_MAX_PAGE_SIZE,
@@ -562,6 +567,10 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     outcome: z.enum(CONTACT_OUTCOMES),
   });
 
+  const createServiceRequestBody = z.object({
+    category: z.enum(SERVICE_CATEGORIES),
+  });
+
   app.get<{ Params: { id: string } }>('/app/responder/cases/:id', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     assertResponder(context);
@@ -572,6 +581,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     const claimable = supportCase.status === 'OPEN' || supportCase.status === 'TRIAGED';
     const assignment = await findActiveAssignment(pool, supportCase.caseId);
     const canLogContact = assignment?.responderUserId === context.userId;
+    const canCreateServiceRequest = supportCase.status !== 'CLOSED';
     const [attempts, serviceRequests] = await Promise.all([
       listContactAttempts(pool, context.tenantId, supportCase.caseId, 50),
       listCaseServiceRequests(pool, context.tenantId, supportCase.caseId, 50),
@@ -590,9 +600,41 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
           status: request.status,
         })),
         ...(canLogContact ? { canLogContact: true } : {}),
+        ...(canCreateServiceRequest ? { canCreateServiceRequest: true } : {}),
       }),
     );
   });
+
+  app.post<{ Params: { id: string } }>(
+    '/app/responder/cases/:id/service-requests',
+    async (request, reply) => {
+      const context = await authenticate(pool, sessionSecret, request);
+      assertResponder(context);
+      const supportCase = await findCase(pool, context.tenantId, request.params.id);
+      if (supportCase === undefined) {
+        throw new ResourceNotVisibleError();
+      }
+      const body = createServiceRequestBody.parse(request.body ?? {});
+      try {
+        await withTransaction(pool, (tx) =>
+          createServiceRequest(tx, {
+            tenantId: context.tenantId,
+            caseId: request.params.id,
+            category: body.category,
+            createdBy: context.userId,
+            actorType: 'RESPONDER',
+            correlationId: String(request.id),
+          }),
+        );
+      } catch (error) {
+        if (error instanceof CaseNotFoundError || error instanceof ClosedCaseError) {
+          throw new ResourceNotVisibleError();
+        }
+        throw error;
+      }
+      return reply.redirect(`/app/responder/cases/${request.params.id}`, 303);
+    },
+  );
 
   app.post<{ Params: { id: string } }>(
     '/app/responder/cases/:id/commands/log-contact-attempt',
