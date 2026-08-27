@@ -77,7 +77,9 @@ import type {
   ResourceListViewModel,
   ResourceRowViewModel,
   DutyAvailability,
+  ConsentsListViewModel,
   NotificationsInboxViewModel,
+  TrustedContactsListViewModel,
   ResponderAvailabilityViewModel,
   ResponderCaseViewModel,
   ResponderDashboardViewModel,
@@ -395,6 +397,25 @@ export function renderVeteranHome(model: VeteranHomeViewModel): string {
           p(
             { class: 'muted' },
             'Delivery status for messages addressed to you. Destinations and message bodies are not shown here.',
+          ),
+        ),
+    model.consentsHref === undefined && model.trustedContactsHref === undefined
+      ? undefined
+      : section(
+          { 'aria-labelledby': 'privacy' },
+          h2({ id: 'privacy' }, 'Privacy'),
+          model.consentsHref === undefined
+            ? undefined
+            : a({ class: 'action-secondary', href: model.consentsHref }, 'View consents'),
+          model.trustedContactsHref === undefined
+            ? undefined
+            : a(
+                { class: 'action-secondary', href: model.trustedContactsHref },
+                'View trusted contacts',
+              ),
+          p(
+            { class: 'muted' },
+            'Consent grants and trusted-circle membership for your account. Invite channels are never listed here.',
           ),
         ),
     // §3.5 / §5: immediate resources sit above the broader catalog.
@@ -816,6 +837,65 @@ export function renderAdminOverview(model: AdminOverviewViewModel): string {
     ),
   ]);
   return assertSurface('ADMIN_OVERVIEW', markup);
+}
+
+/**
+ * Consent grant list for the authenticated veteran. Not in MVP_REFERENCE.md §5.
+ */
+export function renderConsentsList(model: ConsentsListViewModel): string {
+  return document(model.shell, [
+    h1({}, 'Consents'),
+    a({ class: 'action-secondary', href: '/app/home' }, 'Back to Support'),
+    p(
+      { class: 'muted' },
+      'Grants you have issued. Membership in a trusted circle is not a permission.',
+    ),
+    model.grants.length === 0
+      ? p({ class: 'muted' }, 'No consent grants on file.')
+      : ul(
+          { class: 'card-grid' },
+          model.grants.map((grant) =>
+            li(
+              { class: 'card' },
+              h2({}, grant.permission),
+              p({}, span({ class: 'badge' }, grant.status)),
+              p({ class: 'muted' }, `${grant.scope} · ${grant.granteeType}`),
+              p({ class: 'muted' }, grant.purpose),
+              p({ class: 'muted' }, `Granted ${grant.grantedAtLabel}`),
+              grant.expiresAtLabel === undefined
+                ? undefined
+                : p({ class: 'muted' }, `Expires ${grant.expiresAtLabel}`),
+            ),
+          ),
+        ),
+  ]);
+}
+
+/**
+ * Trusted-circle roster for the authenticated veteran. Not in §5 inventory.
+ * Invite email/phone never appear (TRUSTED_CIRCLE.md / PRIVACY.md).
+ */
+export function renderTrustedContactsList(model: TrustedContactsListViewModel): string {
+  return document(model.shell, [
+    h1({}, 'Trusted contacts'),
+    a({ class: 'action-secondary', href: '/app/home' }, 'Back to Support'),
+    p(
+      { class: 'muted' },
+      'People in your trusted circle. Accepting an invite does not grant consent. Invite channels are not shown.',
+    ),
+    model.contacts.length === 0
+      ? p({ class: 'muted' }, 'No trusted contacts on file.')
+      : ul(
+          { class: 'card-grid' },
+          model.contacts.map((contact) =>
+            li(
+              { class: 'card' },
+              h2({}, contact.relationshipLabel),
+              p({}, span({ class: 'badge' }, contact.status)),
+            ),
+          ),
+        ),
+  ]);
 }
 
 /**

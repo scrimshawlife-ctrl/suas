@@ -19,6 +19,13 @@ import {
   openCase,
   recordContact,
 } from '../../src/coordination/index.js';
+import {
+  consentTemplateVersionKey,
+  createConsentTemplateVersion,
+  grantConsent,
+  inviteTrustedContact,
+  publishConsentTemplateVersion,
+} from '../../src/consent/index.js';
 import { withTransaction } from '../../src/db/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { auditAccessibility, DUTY_UNAVAILABLE_REASON } from '../../src/ui/index.js';
@@ -482,6 +489,68 @@ describe('Chat states its own unavailability', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('Messaging is not available yet');
+  });
+});
+
+describe('PRIVACY.md — consents and trusted contacts HTML', () => {
+  it('lists self consents and trusted contacts without invite channels', async () => {
+    const { credential, tenantId, userId } = await signIn();
+    const inviteEmail = 'secret-invite@example.invalid';
+    await inviteTrustedContact(pool(), {
+      tenantId,
+      veteranUserId: userId,
+      relationshipLabel: 'Battle buddy',
+      inviteEmail,
+    });
+
+    const key = consentTemplateVersionKey(`ui-consent-${randomUUID().slice(0, 8)}`, 1);
+    await createConsentTemplateVersion(pool(), {
+      templateKey: key.split('@')[0] ?? 'ui-consent',
+      version: 1,
+      body: 'Synthetic UI consent template.',
+    });
+    await publishConsentTemplateVersion(pool(), key, undefined);
+    await grantConsent(pool(), {
+      tenantId,
+      veteranUserId: userId,
+      permission: 'can_view',
+      scope: 'support_signal',
+      purpose: 'View support signal',
+      granteeType: 'SERVICE_PROVIDER',
+      granteeId: randomUUID(),
+      consentTemplateVersion: key,
+    });
+
+    const consents = await app.server.inject({
+      method: 'GET',
+      url: '/app/consents',
+      headers: authorized(credential),
+    });
+    expect(consents.statusCode).toBe(200);
+    expect(consents.body).toContain('Consents');
+    expect(consents.body).toContain('can_view');
+    expect(consents.body).toContain('support_signal');
+    expect(auditAccessibility(consents.body)).toEqual([]);
+
+    const trusted = await app.server.inject({
+      method: 'GET',
+      url: '/app/trusted-contacts',
+      headers: authorized(credential),
+    });
+    expect(trusted.statusCode).toBe(200);
+    expect(trusted.body).toContain('Battle buddy');
+    expect(trusted.body).toContain('INVITED');
+    expect(trusted.body).not.toContain(inviteEmail);
+    expect(trusted.body).not.toContain('secret-invite');
+    expect(auditAccessibility(trusted.body)).toEqual([]);
+
+    const home = await app.server.inject({
+      method: 'GET',
+      url: '/app/home',
+      headers: authorized(credential),
+    });
+    expect(home.body).toContain('/app/consents');
+    expect(home.body).toContain('/app/trusted-contacts');
   });
 });
 

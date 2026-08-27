@@ -58,6 +58,7 @@ import {
   searchResources,
 } from '../../fulfillment/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
+import { listGrantsForVeteran, listTrustedCircle } from '../../consent/index.js';
 import { listNotificationsForRecipient } from '../../notifications/index.js';
 import {
   completeCheckIn,
@@ -85,7 +86,9 @@ import {
   renderEnrollment,
   renderImmediateResources,
   renderLanding,
+  renderConsentsList,
   renderNotificationsInbox,
+  renderTrustedContactsList,
   renderResourceCategories,
   renderResourceList,
   renderResponderAvailability,
@@ -210,6 +213,8 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
           label: inProgress === undefined ? 'Start a Check-In' : 'Continue Check-In',
         },
         notificationsHref: '/app/notifications',
+        consentsHref: '/app/consents',
+        trustedContactsHref: '/app/trusted-contacts',
         ...(active === undefined
           ? {}
           : {
@@ -255,6 +260,41 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
           ...(notification.subjectType !== undefined
             ? { subjectType: notification.subjectType }
             : {}),
+        })),
+      }),
+    );
+  });
+
+  app.get('/app/consents', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    const grants = await listGrantsForVeteran(pool, context.tenantId, context.userId);
+    await reply.type(HTML).send(
+      renderConsentsList({
+        shell: shell('Consents'),
+        grants: grants.map((grant) => ({
+          permission: grant.permission,
+          scope: grant.scope,
+          purpose: grant.purpose,
+          granteeType: grant.granteeType,
+          status: grant.status,
+          grantedAtLabel: grant.grantedAt.toISOString(),
+          ...(grant.expiresAt !== undefined
+            ? { expiresAtLabel: grant.expiresAt.toISOString() }
+            : {}),
+        })),
+      }),
+    );
+  });
+
+  app.get('/app/trusted-contacts', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    const contacts = await listTrustedCircle(pool, context.tenantId, context.userId);
+    await reply.type(HTML).send(
+      renderTrustedContactsList({
+        shell: shell('Trusted contacts'),
+        contacts: contacts.map((contact) => ({
+          relationshipLabel: contact.relationshipLabel,
+          status: contact.status,
         })),
       }),
     );

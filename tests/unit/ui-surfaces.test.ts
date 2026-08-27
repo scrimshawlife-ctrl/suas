@@ -19,6 +19,8 @@ import {
   presentCheckInResult,
   renderActiveNeeds,
   renderChat,
+  renderConsentsList,
+  renderTrustedContactsList,
   renderCheckInSession,
   renderCheckInStart,
   renderEnrollment,
@@ -729,6 +731,53 @@ describe('HTML command targets stay on registered /app routes', () => {
     });
     expect(dashboard).not.toContain('action="/app/responder/availability"');
     expect(dashboard).not.toContain('Go on duty');
+  });
+});
+
+describe('Consents and trusted contacts HTML', () => {
+  it('lists grants without inventing permissions', () => {
+    const markup = renderConsentsList({
+      shell,
+      grants: [
+        {
+          permission: 'can_view',
+          scope: 'support_signal',
+          purpose: 'View support signal',
+          granteeType: 'TRUSTED_CONTACT',
+          status: 'ACTIVE',
+          grantedAtLabel: '2026-08-26T12:00:00.000Z',
+        },
+      ],
+    });
+    expect(markup).toContain('Consents');
+    expect(markup).toContain('can_view');
+    expect(markup).toContain('ACTIVE');
+    expect(auditAccessibility(markup)).toEqual([]);
+  });
+
+  it('lists trusted contacts without invite channels', () => {
+    const markup = renderTrustedContactsList({
+      shell,
+      contacts: [{ relationshipLabel: 'Battle buddy', status: 'INVITED' }],
+    });
+    expect(markup).toContain('Trusted contacts');
+    expect(markup).toContain('Battle buddy');
+    expect(markup).toContain('INVITED');
+    expect(markup).not.toContain('mailto:');
+    expect(markup).not.toContain('secret-invite');
+    expect(auditAccessibility(markup)).toEqual([]);
+  });
+
+  it('links privacy pages from home when hrefs are supplied', () => {
+    const markup = renderVeteranHome({
+      shell,
+      categories: CATEGORY_CARDS,
+      consentsHref: '/app/consents',
+      trustedContactsHref: '/app/trusted-contacts',
+    });
+    expect(markup).toContain('href="/app/consents"');
+    expect(markup).toContain('href="/app/trusted-contacts"');
+    expect(markup).toContain('View consents');
   });
 });
 
