@@ -58,6 +58,7 @@ import {
   searchResources,
 } from '../../fulfillment/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
+import { listNotificationsForRecipient } from '../../notifications/index.js';
 import {
   completeCheckIn,
   effectiveSignal,
@@ -84,6 +85,7 @@ import {
   renderEnrollment,
   renderImmediateResources,
   renderLanding,
+  renderNotificationsInbox,
   renderResourceCategories,
   renderResourceList,
   renderResponderAvailability,
@@ -207,6 +209,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
             inProgress === undefined ? '/app/check-ins' : `/app/check-ins/${inProgress.checkInId}`,
           label: inProgress === undefined ? 'Start a Check-In' : 'Continue Check-In',
         },
+        notificationsHref: '/app/notifications',
         ...(active === undefined
           ? {}
           : {
@@ -220,6 +223,39 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
                 authorizedMessagePath: false,
               },
             }),
+      }),
+    );
+  });
+
+  const notificationsQuery = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  });
+
+  app.get('/app/notifications', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    const query = notificationsQuery.parse(request.query);
+    const page = await listNotificationsForRecipient(
+      pool,
+      context.tenantId,
+      context.userId,
+      query.limit,
+    );
+    await reply.type(HTML).send(
+      renderNotificationsInbox({
+        shell: shell('Notifications'),
+        limit: query.limit,
+        notifications: page.map((notification) => ({
+          reason: notification.reason,
+          channel: notification.channel,
+          deliveryStatus: notification.deliveryStatus,
+          attemptCount: notification.attemptCount,
+          ...(notification.sentAt !== undefined
+            ? { sentAtLabel: notification.sentAt.toISOString() }
+            : {}),
+          ...(notification.subjectType !== undefined
+            ? { subjectType: notification.subjectType }
+            : {}),
+        })),
       }),
     );
   });

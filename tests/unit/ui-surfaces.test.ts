@@ -23,6 +23,7 @@ import {
   renderCheckInStart,
   renderEnrollment,
   renderImmediateResources,
+  renderNotificationsInbox,
   renderResourceList,
   renderResponderAvailability,
   renderResponderCase,
@@ -728,6 +729,47 @@ describe('HTML command targets stay on registered /app routes', () => {
     });
     expect(dashboard).not.toContain('action="/app/responder/availability"');
     expect(dashboard).not.toContain('Go on duty');
+  });
+});
+
+describe('Notifications inbox HTML', () => {
+  it('lists public fields and never destinations or bodies', () => {
+    const markup = renderNotificationsInbox({
+      shell,
+      limit: 50,
+      notifications: [
+        {
+          reason: 'qrf.responder_notified',
+          channel: 'IN_APP',
+          deliveryStatus: 'DELIVERED',
+          attemptCount: 1,
+          sentAtLabel: '2026-08-26T12:00:00.000Z',
+          subjectType: 'ServiceRequest',
+        },
+      ],
+    });
+    expect(markup).toContain('Notifications');
+    expect(markup).toContain('qrf.responder_notified');
+    expect(markup).toContain('DELIVERED');
+    expect(markup).toContain('IN_APP');
+    expect(markup).not.toContain('mailto:');
+    expect(markup).not.toContain('secret-');
+    expect(auditAccessibility(markup)).toEqual([]);
+  });
+
+  it('states an empty inbox without implying messaging works', () => {
+    const markup = renderNotificationsInbox({ shell, limit: 50, notifications: [] });
+    expect(markup).toContain('No notifications yet.');
+  });
+
+  it('links Open notifications from home when href is supplied', () => {
+    const markup = renderVeteranHome({
+      shell,
+      categories: CATEGORY_CARDS,
+      notificationsHref: '/app/notifications',
+    });
+    expect(markup).toContain('href="/app/notifications"');
+    expect(markup).toContain('Open notifications');
   });
 });
 

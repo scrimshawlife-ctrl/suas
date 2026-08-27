@@ -63,6 +63,27 @@ export interface QrfCardViewModel {
   readonly authorizedMessagePath: boolean;
 }
 
+/**
+ * One inbox row. Matches the public JSON notification shape (no destination,
+ * no body — NOTIFICATIONS.md §10 / PRIVACY.md).
+ */
+export interface NotificationRowViewModel {
+  readonly reason: string;
+  readonly channel: string;
+  readonly deliveryStatus: string;
+  readonly attemptCount: number;
+  /** ISO timestamp when known; absent when not yet sent. */
+  readonly sentAtLabel?: string;
+  readonly subjectType?: string;
+}
+
+export interface NotificationsInboxViewModel {
+  readonly shell: ShellViewModel;
+  readonly notifications: readonly NotificationRowViewModel[];
+  /** Echo of the applied limit (API default 50, max 100). */
+  readonly limit: number;
+}
+
 export interface VeteranHomeViewModel {
   readonly shell: ShellViewModel;
   readonly categories: readonly CategoryCard[];
@@ -78,6 +99,11 @@ export interface VeteranHomeViewModel {
    * inventory stays Check-In-free. The live `/app/home` always supplies it.
    */
   readonly checkInLink?: CheckInHomeLinkViewModel;
+  /**
+   * Optional notifications inbox entry. Not in MVP_REFERENCE.md §5 inventory;
+   * live `/app/home` supplies it. Mobile nav stays Home+Chat only (§5).
+   */
+  readonly notificationsHref?: string;
 }
 
 /** Truthful home entry to the Check-In HTML loop. Not a scoring dashboard. */
