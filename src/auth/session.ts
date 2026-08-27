@@ -45,6 +45,16 @@ export interface IssuedSession {
   readonly credential: string;
 }
 
+export class InvalidSessionOrganizationError extends Error {
+  readonly code = 'FORBIDDEN';
+  readonly httpStatus = 403;
+
+  constructor() {
+    super('A session organization must be an active organization membership.');
+    this.name = 'InvalidSessionOrganizationError';
+  }
+}
+
 interface SessionRow {
   session_id: string;
   tenant_id: string;
@@ -81,6 +91,20 @@ export async function createSession(
   sessionSecret: string | undefined,
   input: { tenantId: string; userId: string; organizationId?: string },
 ): Promise<IssuedSession> {
+  if (input.organizationId !== undefined) {
+    const membership = await db.query(
+      `SELECT 1
+       FROM organization_memberships m
+       JOIN organizations o ON o.organization_id = m.organization_id
+       WHERE m.tenant_id = $1 AND m.user_id = $2 AND m.organization_id = $3
+         AND m.status = 'ACTIVE' AND o.status = 'ACTIVE'`,
+      [input.tenantId, input.userId, input.organizationId],
+    );
+    if ((membership.rowCount ?? 0) === 0) {
+      throw new InvalidSessionOrganizationError();
+    }
+  }
+
   const credential = generateOpaqueToken();
   const result = await db.query<SessionRow>(
     `INSERT INTO sessions

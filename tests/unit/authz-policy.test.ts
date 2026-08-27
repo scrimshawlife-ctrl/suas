@@ -11,11 +11,14 @@ import { MfaRequiredError } from '../../src/auth/index.js';
 import {
   assertMfaElevated,
   assertOrganizationRole,
+  assertScopedOrganizationRole,
   assertResponder,
   assertSuasAdmin,
   assertTenant,
+  assertTenantRole,
   authorize,
   ForbiddenError,
+  hasTenantRole,
   ResourceNotVisibleError,
   rolesInOrganization,
   type AuthContext,
@@ -90,6 +93,43 @@ describe('AUTH.md §6 — role inputs', () => {
   it('denies a role the actor does not hold', () => {
     const ctx = context({ memberships: [membership(ORG_A, 'RESPONDER')] });
     expect(() => assertOrganizationRole(ctx, ORG_A, ['ORG_ADMIN'])).toThrow(ForbiddenError);
+  });
+
+  it('does not let a membership from another tenant confer a tenant-scoped role', () => {
+    const ctx = context({
+      memberships: [
+        {
+          ...membership(ORG_B, 'ORG_ADMIN'),
+          tenantId: TENANT_B,
+        },
+      ],
+    });
+    expect(() => assertTenantRole(ctx, ['ORG_ADMIN'])).toThrow(ForbiddenError);
+    expect(() =>
+      assertResponder({
+        ...ctx,
+        memberships: [{ ...membership(ORG_B, 'RESPONDER'), tenantId: TENANT_B }],
+      }),
+    ).toThrow(ForbiddenError);
+  });
+
+  it('narrows tenant role checks to the organization selected by the session', () => {
+    const ctx = context({
+      session: {
+        ...context().session,
+        organizationId: ORG_A,
+      },
+      memberships: [membership(ORG_A, 'RESPONDER'), membership(ORG_B, 'ORG_ADMIN')],
+    });
+    expect(hasTenantRole(ctx, ['RESPONDER'])).toBe(true);
+    expect(hasTenantRole(ctx, ['ORG_ADMIN'])).toBe(false);
+    expect(() => assertOrganizationRole(ctx, ORG_B, ['ORG_ADMIN'])).toThrow(ForbiddenError);
+    expect(rolesInOrganization(ctx, ORG_B)).toEqual([]);
+  });
+
+  it('denies Org Admin authority when the session has no organization scope', () => {
+    const ctx = context({ memberships: [membership(ORG_A, 'ORG_ADMIN')] });
+    expect(() => assertScopedOrganizationRole(ctx, ['ORG_ADMIN'])).toThrow(ForbiddenError);
   });
 
   it('reports only the roles held in the named organization', () => {

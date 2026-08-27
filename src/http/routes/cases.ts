@@ -16,7 +16,9 @@ import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import {
   assertResponder,
+  assertScopedOrganizationRole,
   ForbiddenError,
+  hasScopedOrganizationRole,
   ResourceNotVisibleError,
   type AuthContext,
 } from '../../authz/index.js';
@@ -154,9 +156,7 @@ function publicSettlement(settlement: Settlement) {
 }
 
 function assertOrgAdmin(context: AuthContext): void {
-  if (!context.memberships.some((membership) => membership.role === 'ORG_ADMIN')) {
-    throw new ForbiddenError('This action requires an active organization admin membership.');
-  }
+  assertScopedOrganizationRole(context, ['ORG_ADMIN']);
 }
 
 async function assertAssignedResponder(
@@ -174,7 +174,7 @@ async function assertAssignedResponder(
 }
 
 function isOrgAdmin(context: AuthContext): boolean {
-  return context.memberships.some((membership) => membership.role === 'ORG_ADMIN');
+  return hasScopedOrganizationRole(context, ['ORG_ADMIN']);
 }
 
 const optionalReasonBody = z.object({

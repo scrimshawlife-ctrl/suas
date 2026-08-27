@@ -83,11 +83,54 @@ export function assertOrganizationRole(
   }
 }
 
+/**
+ * Check a role without widening the request to another tenant or organization.
+ * This is intentionally separate from `assertOrganizationRole`: some released
+ * coordination commands are tenant-scoped because SupportCase does not yet carry
+ * an organization link. Callers must not implement this check with
+ * `context.memberships.some(...)`, which would make a membership in another
+ * tenant confer authority.
+ */
+export function assertTenantRole(context: AuthContext, roles: readonly MembershipRole[]): void {
+  if (!hasTenantRole(context, roles)) {
+    throw new ForbiddenError(`This action requires one of ${roles.join(', ')} in the tenant.`);
+  }
+}
+
+/** Return whether the active request scope holds one of the supplied roles. */
+export function hasTenantRole(context: AuthContext, roles: readonly MembershipRole[]): boolean {
+  return context.memberships.some(
+    (membership) =>
+      membership.tenantId === context.tenantId &&
+      (context.session.organizationId === undefined ||
+        membership.organizationId === context.session.organizationId) &&
+      roles.includes(membership.role),
+  );
+}
+
+/** Return whether the session has an explicit organization-scoped role. */
+export function hasScopedOrganizationRole(
+  context: AuthContext,
+  roles: readonly MembershipRole[],
+): boolean {
+  return context.session.organizationId !== undefined && hasTenantRole(context, roles);
+}
+
+/** Org Admin actions cannot run from an unscoped tenant session. */
+export function assertScopedOrganizationRole(
+  context: AuthContext,
+  roles: readonly MembershipRole[],
+): void {
+  if (!hasScopedOrganizationRole(context, roles)) {
+    throw new ForbiddenError(
+      `This action requires one of ${roles.join(', ')} in an organization-scoped session.`,
+    );
+  }
+}
+
 /** Deny unless the actor holds an active RESPONDER membership in this tenant. */
 export function assertResponder(context: AuthContext): void {
-  if (!context.memberships.some((membership) => membership.role === 'RESPONDER')) {
-    throw new ForbiddenError('This action requires an active responder membership.');
-  }
+  assertTenantRole(context, ['RESPONDER']);
 }
 
 /** Deny unless the actor holds the global SUAS-admin grant. */

@@ -246,14 +246,16 @@ export async function setMembershipRole(
 export async function listActiveMemberships(
   db: Queryable,
   userId: string,
+  tenantId: string,
 ): Promise<OrganizationMembership[]> {
   const result = await db.query<MembershipRow>(
     `SELECT m.membership_id, m.tenant_id, m.user_id, m.organization_id, m.role, m.status
      FROM organization_memberships m
      JOIN organizations o ON o.organization_id = m.organization_id
-     WHERE m.user_id = $1 AND m.status = 'ACTIVE' AND o.status = 'ACTIVE'
+     WHERE m.user_id = $1 AND m.tenant_id = $2
+       AND m.status = 'ACTIVE' AND o.status = 'ACTIVE'
      ORDER BY m.created_at`,
-    [userId],
+    [userId, tenantId],
   );
   return result.rows.map(toMembership);
 }

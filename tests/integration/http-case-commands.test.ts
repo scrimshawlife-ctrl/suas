@@ -40,10 +40,14 @@ interface QuestionJson {
   options: { answer_option_id: string; option_key: string }[];
 }
 
-async function bearer(tenantId: string, userId: string) {
+async function bearer(tenantId: string, userId: string, organizationId?: string) {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
-  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId });
+  const session = await createSession(pool, TEST_SESSION_SECRET, {
+    tenantId,
+    userId,
+    ...(organizationId !== undefined ? { organizationId } : {}),
+  });
   return { authorization: `Bearer ${session.credential}` };
 }
 
@@ -96,14 +100,18 @@ async function openRedCase() {
 async function membership(
   tenantId: string,
   role: 'RESPONDER' | 'ORG_ADMIN',
-): Promise<{ userId: string; headers: Record<string, string> }> {
+  organizationId?: string,
+): Promise<{ userId: string; organizationId: string; headers: Record<string, string> }> {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
-  const org = await createOrganization(pool, {
-    tenantId,
-    name: `Org ${randomUUID().slice(0, 8)}`,
-    status: 'ACTIVE',
-  });
+  const org =
+    organizationId === undefined
+      ? await createOrganization(pool, {
+          tenantId,
+          name: `Org ${randomUUID().slice(0, 8)}`,
+          status: 'ACTIVE',
+        })
+      : { organizationId };
   const user = await createUser(pool, {
     tenantId,
     email: syntheticEmail(`${role.toLowerCase()}-${randomUUID().slice(0, 8)}`),
@@ -116,7 +124,11 @@ async function membership(
     role,
     status: 'ACTIVE',
   });
-  return { userId: user.userId, headers: await bearer(tenantId, user.userId) };
+  return {
+    userId: user.userId,
+    organizationId: org.organizationId,
+    headers: await bearer(tenantId, user.userId, org.organizationId),
+  };
 }
 
 function settlementPayload(responderId: string) {
@@ -134,7 +146,7 @@ describe('CASE_COMMANDS over /api/v0', () => {
   it('runs claim → activate → escalate → move-to-followup → resume → resolve → close → reopen', async () => {
     const { tenantId, supportCase } = await openRedCase();
     const responder = await membership(tenantId, 'RESPONDER');
-    const admin = await membership(tenantId, 'ORG_ADMIN');
+    const admin = await membership(tenantId, 'ORG_ADMIN', responder.organizationId);
     const caseId = supportCase.caseId;
 
     const claimed = await app.server.inject({

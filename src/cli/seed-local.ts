@@ -122,7 +122,7 @@ async function getOrCreateOrg(pool: Pool): Promise<Organization> {
 }
 
 async function ensureMembership(pool: Pool, userId: string, organizationId: string): Promise<void> {
-  const memberships = await listActiveMemberships(pool, userId);
+  const memberships = await listActiveMemberships(pool, userId, TENANT_ID);
   if (memberships.some((m) => m.organizationId === organizationId)) return;
   const membership = await createMembership(pool, {
     tenantId: TENANT_ID,

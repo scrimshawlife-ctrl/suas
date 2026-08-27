@@ -42,10 +42,14 @@ interface QuestionJson {
   options: { answer_option_id: string; option_key: string }[];
 }
 
-async function bearer(tenantId: string, userId: string) {
+async function bearer(tenantId: string, userId: string, organizationId?: string) {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
-  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId });
+  const session = await createSession(pool, TEST_SESSION_SECRET, {
+    tenantId,
+    userId,
+    ...(organizationId !== undefined ? { organizationId } : {}),
+  });
   return { authorization: `Bearer ${session.credential}` };
 }
 
@@ -95,14 +99,17 @@ async function openRedCase() {
   return { pool, tenantId, veteran, headers, supportCase };
 }
 
-async function responderFor(tenantId: string) {
+async function responderFor(tenantId: string, organizationId?: string) {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
-  const org = await createOrganization(pool, {
-    tenantId,
-    name: `Org ${randomUUID().slice(0, 8)}`,
-    status: 'ACTIVE',
-  });
+  const org =
+    organizationId === undefined
+      ? await createOrganization(pool, {
+          tenantId,
+          name: `Org ${randomUUID().slice(0, 8)}`,
+          status: 'ACTIVE',
+        })
+      : { organizationId };
   const responder = await createUser(pool, {
     tenantId,
     email: syntheticEmail(`resp-${randomUUID().slice(0, 8)}`),
@@ -115,7 +122,11 @@ async function responderFor(tenantId: string) {
     role: 'RESPONDER',
     status: 'ACTIVE',
   });
-  return { responder, headers: await bearer(tenantId, responder.userId) };
+  return {
+    responder,
+    organizationId: org.organizationId,
+    headers: await bearer(tenantId, responder.userId, org.organizationId),
+  };
 }
 
 describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
@@ -313,12 +324,12 @@ describe('POST /api/v0/cases/:id/commands/assign', () => {
       role: 'ORG_ADMIN',
       status: 'ACTIVE',
     });
-    const { responder } = await responderFor(tenantId);
+    const { responder } = await responderFor(tenantId, org.organizationId);
     const assigned = await app.server.inject({
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/commands/assign`,
       headers: {
-        ...(await bearer(tenantId, admin.userId)),
+        ...(await bearer(tenantId, admin.userId, org.organizationId)),
         'idempotency-key': `assign-${randomUUID()}`,
       },
       payload: { responder_user_id: responder.userId },

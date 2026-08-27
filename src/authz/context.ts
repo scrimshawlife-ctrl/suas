@@ -59,7 +59,7 @@ export async function resolveAuthContext(
   }
 
   const [memberships, admin] = await Promise.all([
-    listActiveMemberships(pool, resolved.session.userId),
+    listActiveMemberships(pool, resolved.session.userId, resolved.session.tenantId),
     isSuasAdmin(pool, resolved.session.userId),
   ]);
 
@@ -82,6 +82,12 @@ export function rolesInOrganization(
   organizationId: string,
 ): OrganizationMembership['role'][] {
   return context.memberships
-    .filter((membership) => membership.organizationId === organizationId)
+    .filter(
+      (membership) =>
+        membership.tenantId === context.tenantId &&
+        membership.organizationId === organizationId &&
+        (context.session.organizationId === undefined ||
+          context.session.organizationId === organizationId),
+    )
     .map((membership) => membership.role);
 }

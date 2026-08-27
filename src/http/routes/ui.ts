@@ -27,6 +27,7 @@ import {
   assertMfaElevated,
   assertResponder,
   assertSuasAdmin,
+  hasTenantRole,
   ResourceNotVisibleError,
 } from '../../authz/index.js';
 import type { SafetyCopyMode, SupportSignalMode } from '../../config/index.js';
@@ -651,7 +652,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   app.get('/app/responder', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     const query = responderQueueQuery.parse(request.query ?? {});
-    const isResponder = context.memberships.some((membership) => membership.role === 'RESPONDER');
+    const isResponder = hasTenantRole(context, ['RESPONDER']);
     const unassigned = isResponder
       ? await readCaseQueue(
           pool,

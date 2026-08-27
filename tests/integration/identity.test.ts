@@ -188,14 +188,14 @@ describe('AUTH.md §6 — active membership confers authority', () => {
   }
 
   it('lists an active membership in an active organization', async () => {
-    const { user } = await activeMembership();
-    expect(await listActiveMemberships(pool, user.userId)).toHaveLength(1);
+    const { tenantId, user } = await activeMembership();
+    expect(await listActiveMemberships(pool, user.userId, tenantId)).toHaveLength(1);
   });
 
   it('drops a revoked membership immediately', async () => {
     const { tenantId, user, membership } = await activeMembership();
     await setMembershipStatus(pool, tenantId, membership.membershipId, 'REVOKED');
-    expect(await listActiveMemberships(pool, user.userId)).toEqual([]);
+    expect(await listActiveMemberships(pool, user.userId, tenantId)).toEqual([]);
   });
 
   it('refuses to reactivate a REVOKED membership (terminal)', async () => {
@@ -209,7 +209,7 @@ describe('AUTH.md §6 — active membership confers authority', () => {
   it('drops authority when the organization itself is suspended', async () => {
     const { tenantId, user, org } = await activeMembership();
     await setOrganizationStatus(pool, tenantId, org.organizationId, 'SUSPENDED');
-    expect(await listActiveMemberships(pool, user.userId)).toEqual([]);
+    expect(await listActiveMemberships(pool, user.userId, tenantId)).toEqual([]);
   });
 
   it('refuses to reactivate an ARCHIVED organization (terminal)', async () => {
@@ -231,7 +231,7 @@ describe('AUTH.md §6 — active membership confers authority', () => {
       organizationId: org.organizationId,
       role: 'RESPONDER',
     });
-    expect(await listActiveMemberships(pool, user.userId)).toEqual([]);
+    expect(await listActiveMemberships(pool, user.userId, tenantId)).toEqual([]);
   });
 
   it('keeps one membership per user per organization', async () => {
