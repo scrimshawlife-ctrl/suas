@@ -19,6 +19,7 @@ import {
   a,
   button,
   dd,
+  details,
   div,
   dl,
   dt,
@@ -35,11 +36,14 @@ import {
   main,
   nav,
   ol,
+  option,
   p,
   raw,
   render,
   section,
+  select,
   span,
+  summary,
   ul,
   type Renderable,
 } from './html.js';
@@ -798,11 +802,102 @@ export function renderChat(model: ChatViewModel): string {
 }
 
 export function renderAdminOverview(model: AdminOverviewViewModel): string {
+  const providerHelp = details(
+    { class: 'help-tip' },
+    summary({}, 'What can I change here?'),
+    p(
+      { class: 'muted' },
+      'Choose an accepted adapter for this tenant, set its routing coverage, or disable it. ' +
+        'Disable removes it from new routing and keeps existing fulfillment history.',
+    ),
+  );
+
+  const providerCatalog = model.providerCatalog.map((provider) =>
+    option(
+      { value: provider.adapterId },
+      `${provider.label} · ${provider.capability} · ${provider.integrationMode}`,
+    ),
+  );
+
+  const providerConfigurationCards = model.providerConfigurations.map((provider) => {
+    const fieldKey = provider.adapterId.replace(/[^a-zA-Z0-9_-]/g, '-');
+    const helpId = `provider-help-${fieldKey}`;
+    const isManual = provider.integrationMode === 'MANUAL_COORDINATION';
+    return li(
+      { class: 'card provider-card' },
+      div(
+        { class: 'provider-card-heading' },
+        h3({}, provider.label),
+        span({ class: 'badge' }, provider.enabled ? 'ENABLED' : 'DISABLED'),
+      ),
+      p({ class: 'muted' }, `${provider.capability} · ${provider.integrationMode}`),
+      p({}, `Health: ${provider.health} · Credentials: ${provider.secretPresence}`),
+      p(
+        { class: 'muted' },
+        provider.coverageCounties.length === 0
+          ? 'Coverage: no county restriction recorded.'
+          : `Coverage: ${provider.coverageCounties.join(', ')}`,
+      ),
+      p({ class: 'muted' }, `Routing priority: ${provider.routingPriority}`),
+      details(
+        { class: 'help-tip', id: helpId },
+        summary({}, 'What does this status mean?'),
+        p(
+          { class: 'muted' },
+          isManual
+            ? 'Manual coordination is the required fallback for this capability and cannot be disabled.'
+            : 'API adapters are accepted implementations. Missing credentials keep the adapter unavailable until deployment configuration is completed.',
+        ),
+      ),
+      form(
+        { class: 'provider-form', method: 'post', action: '/app/admin/providers/routing' },
+        input({ type: 'hidden', name: 'adapter_id', value: provider.adapterId }),
+        input({ type: 'hidden', name: 'capability', value: provider.capability }),
+        label({ for: `coverage-${fieldKey}` }, 'Coverage counties'),
+        input({
+          id: `coverage-${fieldKey}`,
+          type: 'text',
+          name: 'coverage_counties',
+          value: provider.coverageCounties.join(', '),
+          placeholder: 'santa-clara, san-mateo',
+          'aria-describedby': helpId,
+        }),
+        label({ for: `priority-${fieldKey}` }, 'Routing priority'),
+        input({
+          id: `priority-${fieldKey}`,
+          type: 'number',
+          name: 'routing_priority',
+          value: provider.routingPriority,
+          min: 0,
+          max: 10000,
+          required: true,
+          'aria-describedby': helpId,
+        }),
+        button({ class: 'action-secondary', type: 'submit' }, 'Save routing'),
+      ),
+      isManual
+        ? p({ class: 'muted' }, 'Required fallback. This adapter stays enabled.')
+        : provider.enabled
+          ? form(
+              { class: 'provider-form', method: 'post', action: '/app/admin/providers/disable' },
+              input({ type: 'hidden', name: 'adapter_id', value: provider.adapterId }),
+              input({ type: 'hidden', name: 'capability', value: provider.capability }),
+              button({ class: 'action-secondary', type: 'submit' }, 'Disable provider'),
+            )
+          : form(
+              { class: 'provider-form', method: 'post', action: '/app/admin/providers/enable' },
+              input({ type: 'hidden', name: 'adapter_id', value: provider.adapterId }),
+              button({ class: 'action', type: 'submit' }, 'Enable provider'),
+            ),
+    );
+  });
+
   const markup = document(model.shell, [
     // §7.5: explicit admin terminology, never the prototype's informal label.
     h1({}, 'SUAS Admin'),
     // §7.5 also asks that role/tenant scope be clearer than the prototype.
     p({}, span({ class: 'badge' }, `Scope: ${model.tenantLabel}`)),
+    model.notice === undefined ? undefined : p({ class: 'state' }, model.notice),
     section(
       { 'aria-labelledby': 'capabilities' },
       h2({ id: 'capabilities' }, 'Capabilities'),
@@ -820,6 +915,38 @@ export function renderAdminOverview(model: AdminOverviewViewModel): string {
           ),
         ]),
       ),
+    ),
+    section(
+      { 'aria-labelledby': 'provider-controls' },
+      h2({ id: 'provider-controls' }, 'Provider controls'),
+      p(
+        {},
+        'Enable accepted provider adapters for this tenant. “Disable” removes an adapter from new routing; it does not delete history.',
+      ),
+      providerHelp,
+      form(
+        {
+          class: 'provider-form provider-enable-form',
+          method: 'post',
+          action: '/app/admin/providers/enable',
+        },
+        label({ for: 'provider-adapter' }, 'Accepted provider'),
+        select({ id: 'provider-adapter', name: 'adapter_id', required: true }, [
+          option({ value: '', disabled: true, selected: true }, 'Choose a provider'),
+          providerCatalog,
+        ]),
+        p(
+          { class: 'field-note' },
+          'The catalog is fixed by released decisions. API adapters with missing credentials will be refused safely.',
+        ),
+        button({ class: 'action', type: 'submit' }, 'Enable provider'),
+      ),
+      model.providerConfigurations.length === 0
+        ? stateBlock(
+            'No provider configurations',
+            'No accepted provider adapter is configured for this tenant yet.',
+          )
+        : ul({ class: 'card-grid provider-grid' }, providerConfigurationCards),
     ),
     section(
       { 'aria-labelledby': 'blocking' },

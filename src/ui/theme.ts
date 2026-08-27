@@ -268,7 +268,9 @@ label {
 
 input[type='text'],
 input[type='email'],
-input[type='tel'] {
+input[type='tel'],
+input[type='number'],
+select {
   display: block;
   width: 100%;
   min-height: ${String(PRIMARY_TARGET_PX)}px;
@@ -278,6 +280,69 @@ input[type='tel'] {
   font: inherit;
   color: var(--bone);
   background: var(--plate);
+}
+
+select {
+  appearance: auto;
+}
+
+.provider-grid {
+  margin-top: 1rem;
+}
+
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.provider-card-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.provider-card-heading h3 {
+  margin: 0;
+}
+
+.provider-form {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--line);
+}
+
+.provider-enable-form {
+  margin: 1rem 0 1.25rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--plate);
+}
+
+.field-note {
+  margin: 0.45rem 0 0.75rem;
+  color: var(--bone-dim);
+  font-size: 0.85rem;
+}
+
+.help-tip {
+  margin: 0.75rem 0;
+  border-left: 2px solid var(--olive);
+  padding-left: 0.65rem;
+}
+
+.help-tip summary {
+  min-height: ${String(MIN_TARGET_PX)}px;
+  padding: 0.2rem 0;
+  color: var(--olive);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.help-tip p {
+  margin: 0.35rem 0 0;
 }
 
 fieldset.check-in-options {

@@ -30,7 +30,7 @@ import {
   hasTenantRole,
   ResourceNotVisibleError,
 } from '../../authz/index.js';
-import type { SafetyCopyMode, SupportSignalMode } from '../../config/index.js';
+import type { SafetyCopyMode, SupportSignalMode, SuasConfig } from '../../config/index.js';
 import {
   CaseAlreadyClaimedError,
   CaseNotFoundError,
@@ -56,8 +56,18 @@ import { withTransaction } from '../../db/index.js';
 import {
   RESOURCE_DEFAULT_PAGE_SIZE,
   RESOURCE_MAX_PAGE_SIZE,
+  AdapterConfigurationNotFoundError,
+  AdapterNotAcceptedError,
+  AdapterSecretsMissingError,
+  disableAdapterConfiguration,
+  enableAdapterConfiguration,
+  listAdapterCatalog,
+  listAdapterConfigurations,
   searchResources,
+  seedManualAdapterConfigurations,
+  setAdapterRouting,
 } from '../../fulfillment/index.js';
+import { ManualAdapterRequiredError } from '../../fulfillment/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
 import { listGrantsForVeteran, listTrustedCircle } from '../../consent/index.js';
 import {
@@ -112,6 +122,7 @@ import { authenticate } from '../authenticate.js';
 export interface UiRouteDependencies {
   readonly pool: Pool;
   readonly sessionSecret: string | undefined;
+  readonly config: SuasConfig;
   /** D-012 safety-copy mode; controls the immediate-resources slot. */
   readonly safetyCopyMode: SafetyCopyMode;
   readonly supportSignalMode: SupportSignalMode;
@@ -163,6 +174,67 @@ const checkInResponseBody = z.object({
   answer_option_id: z.string().uuid(),
 });
 
+const coverageCountiesBody = z
+  .string()
+  .max(4096)
+  .transform((value) =>
+    value
+      .split(',')
+      .map((county) => county.trim())
+      .filter(Boolean),
+  )
+  .pipe(z.array(z.string().min(1).max(64)).max(64));
+
+const providerEnableBody = z.object({
+  adapter_id: z.string().min(1).max(128),
+  coverage_counties: coverageCountiesBody.optional(),
+  routing_priority: z.coerce.number().int().min(0).max(10000).optional(),
+});
+
+const providerDisableBody = z.object({
+  adapter_id: z.string().min(1).max(128),
+  capability: z.enum(SERVICE_CATEGORIES),
+});
+
+const providerRoutingBody = z.object({
+  adapter_id: z.string().min(1).max(128),
+  capability: z.enum(SERVICE_CATEGORIES),
+  coverage_counties: coverageCountiesBody,
+  routing_priority: z.coerce.number().int().min(0).max(10000),
+});
+
+const adminProviderFeedback = z.enum([
+  'enabled',
+  'disabled',
+  'routing-saved',
+  'credentials-missing',
+  'not-accepted',
+  'manual-required',
+  'not-found',
+]);
+
+function providerFeedbackMessage(value: unknown): string | undefined {
+  const feedback = adminProviderFeedback.safeParse(value);
+  if (!feedback.success) return undefined;
+  return {
+    enabled: 'Provider enabled for this tenant.',
+    disabled: 'Provider disabled for new routing. Existing fulfillment history is unchanged.',
+    'routing-saved': 'Provider routing saved.',
+    'credentials-missing': 'Provider was not enabled because required credentials are missing.',
+    'not-accepted': 'Provider was not changed because it is not accepted in this release.',
+    'manual-required': 'The manual fallback is required and cannot be disabled.',
+    'not-found': 'That provider configuration was not found for this tenant.',
+  }[feedback.data];
+}
+
+function providerFailureFeedback(error: unknown): string | undefined {
+  if (error instanceof AdapterSecretsMissingError) return 'credentials-missing';
+  if (error instanceof AdapterNotAcceptedError) return 'not-accepted';
+  if (error instanceof ManualAdapterRequiredError) return 'manual-required';
+  if (error instanceof AdapterConfigurationNotFoundError) return 'not-found';
+  return undefined;
+}
+
 function parseFormBody(body: string): Record<string, string> {
   const parsed: Record<string, string> = {};
   for (const [key, value] of new URLSearchParams(body)) {
@@ -200,8 +272,15 @@ async function loadOwnedCheckIn(
 }
 
 export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies): void {
-  const { pool, sessionSecret, safetyCopyMode, supportSignalMode } = deps;
+  const { config, pool, sessionSecret, safetyCopyMode, supportSignalMode } = deps;
   registerHtmlFormParser(app);
+
+  const adminContext = async (request: Parameters<typeof authenticate>[2], reason: string) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    assertSuasAdmin(context);
+    assertMfaElevated(context, reason);
+    return context;
+  };
 
   // --- Public surfaces -------------------------------------------------------
   // §5 lists these as public: a veteran must be able to see the action surface
@@ -892,17 +971,111 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   // --- Admin surface ---------------------------------------------------------
 
+  app.post('/app/admin/providers/enable', async (request, reply) => {
+    const context = await adminContext(request, 'Enabling provider adapter');
+    const body = providerEnableBody.parse(request.body ?? {});
+    const entry = listAdapterCatalog(config).find(
+      (candidate) => candidate.adapterId === body.adapter_id,
+    );
+    if (entry === undefined) throw new AdapterNotAcceptedError(body.adapter_id, 'provider');
+
+    try {
+      await enableAdapterConfiguration(pool, config, {
+        tenantId: context.tenantId,
+        adapterId: entry.adapterId,
+        capability: entry.capability,
+        actorId: context.userId,
+        ...(body.coverage_counties !== undefined
+          ? { coverageCounties: body.coverage_counties }
+          : {}),
+        ...(body.routing_priority !== undefined ? { routingPriority: body.routing_priority } : {}),
+        correlationId: String(request.id),
+      });
+    } catch (error) {
+      const feedback = providerFailureFeedback(error);
+      if (feedback !== undefined) return reply.redirect(`/app/admin?provider=${feedback}`, 303);
+      throw error;
+    }
+    return reply.redirect('/app/admin?provider=enabled', 303);
+  });
+
+  app.post('/app/admin/providers/disable', async (request, reply) => {
+    const context = await adminContext(request, 'Disabling provider adapter');
+    const body = providerDisableBody.parse(request.body ?? {});
+
+    try {
+      await disableAdapterConfiguration(pool, config, {
+        tenantId: context.tenantId,
+        adapterId: body.adapter_id,
+        capability: body.capability,
+        actorId: context.userId,
+        correlationId: String(request.id),
+      });
+    } catch (error) {
+      const feedback = providerFailureFeedback(error);
+      if (feedback !== undefined) return reply.redirect(`/app/admin?provider=${feedback}`, 303);
+      throw error;
+    }
+    return reply.redirect('/app/admin?provider=disabled', 303);
+  });
+
+  app.post('/app/admin/providers/routing', async (request, reply) => {
+    const context = await adminContext(request, 'Changing provider routing');
+    const body = providerRoutingBody.parse(request.body ?? {});
+
+    try {
+      await setAdapterRouting(pool, config, {
+        tenantId: context.tenantId,
+        adapterId: body.adapter_id,
+        capability: body.capability,
+        actorId: context.userId,
+        coverageCounties: body.coverage_counties,
+        routingPriority: body.routing_priority,
+        correlationId: String(request.id),
+      });
+    } catch (error) {
+      const feedback = providerFailureFeedback(error);
+      if (feedback !== undefined) return reply.redirect(`/app/admin?provider=${feedback}`, 303);
+      throw error;
+    }
+    return reply.redirect('/app/admin?provider=routing-saved', 303);
+  });
+
   app.get('/app/admin', async (request, reply) => {
-    const context = await authenticate(pool, sessionSecret, request);
-    // §7.5 asks for clearer scope than the prototype; ADMIN.md §2 and
-    // SECURITY.md §2 supply the actual gate.
-    assertSuasAdmin(context);
-    assertMfaElevated(context, 'Viewing the admin overview');
+    const context = await adminContext(request, 'Viewing the admin overview');
+    const query = z
+      .object({ provider: adminProviderFeedback.optional() })
+      .parse(request.query ?? {});
+    await seedManualAdapterConfigurations(pool, context.tenantId);
+    const catalog = listAdapterCatalog(config);
+    const configurations = await listAdapterConfigurations(pool, config, context.tenantId);
+    const notice = providerFeedbackMessage(query.provider);
 
     await reply.type(HTML).send(
       renderAdminOverview({
         shell: shell('SUAS Admin', { viewport: 'DESKTOP', showMobileNav: false }),
         tenantLabel: context.tenantId,
+        ...(notice === undefined ? {} : { notice }),
+        providerCatalog: catalog.map((provider) => ({
+          adapterId: provider.adapterId,
+          capability: provider.capability,
+          integrationMode: provider.integrationMode,
+          decision: provider.decision,
+          label: provider.label,
+          secretPresence: provider.secretPresence,
+        })),
+        providerConfigurations: configurations.map((provider) => ({
+          adapterConfigurationId: provider.adapterConfigurationId,
+          adapterId: provider.adapterId,
+          capability: provider.capability,
+          integrationMode: provider.integrationMode,
+          enabled: provider.enabled,
+          routingPriority: provider.routingPriority,
+          health: provider.health,
+          coverageCounties: provider.coverageCounties,
+          secretPresence: provider.secretPresence,
+          label: provider.catalogLabel,
+        })),
         // Presence only. ARCHITECTURE.md forbids credential values on any
         // domain or admin surface.
         capabilities: [

@@ -195,6 +195,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerUiRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
+      config: deps.config,
       safetyCopyMode: deps.config.safetyCopyMode,
       supportSignalMode: deps.config.supportSignalMode,
       ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),

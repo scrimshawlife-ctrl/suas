@@ -429,11 +429,37 @@ export interface AdminCapabilityViewModel {
   readonly note?: string;
 }
 
+export interface AdminProviderCatalogViewModel {
+  readonly adapterId: string;
+  readonly capability: string;
+  readonly integrationMode: string;
+  readonly decision: string;
+  readonly label: string;
+  /** Presence only. Never render credential values. */
+  readonly secretPresence: string;
+}
+
+export interface AdminProviderConfigurationViewModel {
+  readonly adapterConfigurationId: string;
+  readonly adapterId: string;
+  readonly capability: string;
+  readonly integrationMode: string;
+  readonly enabled: boolean;
+  readonly routingPriority: number;
+  readonly health: string;
+  readonly coverageCounties: readonly string[];
+  readonly secretPresence: string;
+  readonly label: string;
+}
+
 export interface AdminOverviewViewModel {
   readonly shell: ShellViewModel;
   /** §7.5: explicit `SUAS Admin` terminology, and a visible scope. */
   readonly tenantLabel: string;
   readonly capabilities: readonly AdminCapabilityViewModel[];
+  readonly providerCatalog: readonly AdminProviderCatalogViewModel[];
+  readonly providerConfigurations: readonly AdminProviderConfigurationViewModel[];
+  readonly notice?: string;
   /** Open decisions that currently block operation. */
   readonly blockingDecisions: readonly string[];
   readonly readiness: string;

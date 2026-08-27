@@ -104,6 +104,8 @@ export {
   type ActiveNeedsViewModel,
   type ActiveNeedViewModel,
   type AdminCapabilityViewModel,
+  type AdminProviderCatalogViewModel,
+  type AdminProviderConfigurationViewModel,
   type AdminOverviewViewModel,
   type ChatAvailability,
   type ChatThreadViewModel,

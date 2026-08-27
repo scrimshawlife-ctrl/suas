@@ -10,8 +10,17 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession, type RecordingChallengeDelivery } from '../../src/auth/index.js';
-import { createMembership, createOrganization, createUser } from '../../src/identity/index.js';
+import {
+  createSession,
+  elevateSession,
+  type RecordingChallengeDelivery,
+} from '../../src/auth/index.js';
+import {
+  createMembership,
+  createOrganization,
+  createUser,
+  grantSuasAdmin,
+} from '../../src/identity/index.js';
 import { createResource, setResourceActive, verifyResource } from '../../src/fulfillment/index.js';
 import {
   claimCase,
@@ -83,6 +92,24 @@ async function signIn(
 
 function authorized(credential: string) {
   return { authorization: `Bearer ${credential}` };
+}
+
+async function adminSignIn(target: StartedApp = app) {
+  const targetPool = target.pool;
+  if (targetPool === undefined) throw new Error('The test app has no database pool.');
+  const tenantId = randomUUID();
+  const user = await createUser(targetPool, {
+    tenantId,
+    email: syntheticEmail(`suas-admin-${randomUUID().slice(0, 8)}`),
+    status: 'ACTIVE',
+  });
+  await grantSuasAdmin(targetPool, user.userId, undefined);
+  const issued = await createSession(targetPool, TEST_SESSION_SECRET, {
+    tenantId,
+    userId: user.userId,
+  });
+  await elevateSession(targetPool, issued.session.sessionId);
+  return { credential: issued.credential, tenantId };
 }
 
 describe('MVP_REFERENCE.md §5 — public surfaces', () => {
@@ -475,6 +502,94 @@ describe('MVP_REFERENCE.md §7.5 / ADMIN.md §2 — the admin overview', () => {
     });
 
     expect(response.statusCode).toBe(403);
+  });
+
+  it('shows provider controls and enables an accepted adapter through the HTML surface', async () => {
+    const { credential } = await adminSignIn();
+    const page = await app.server.inject({
+      method: 'GET',
+      url: '/app/admin',
+      headers: authorized(credential),
+    });
+
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('Provider controls');
+    expect(page.body).toContain('name="adapter_id"');
+    expect(page.body).toContain('Transportation API adapter');
+    expect(page.body).toContain('What can I change here?');
+    expect(page.body).toContain('What does this status mean?');
+    expect(page.body).toContain('Disable removes it from new routing');
+    expect(auditAccessibility(page.body)).toEqual([]);
+
+    const enabled = await app.server.inject({
+      method: 'POST',
+      url: '/app/admin/providers/enable',
+      headers: {
+        ...authorized(credential),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      payload: 'adapter_id=transportation-manual',
+    });
+    expect(enabled.statusCode).toBe(303);
+    expect(enabled.headers.location).toBe('/app/admin?provider=enabled');
+
+    const after = await app.server.inject({
+      method: 'GET',
+      url: '/app/admin?provider=enabled',
+      headers: authorized(credential),
+    });
+    expect(after.statusCode).toBe(200);
+    expect(after.body).toContain('Provider enabled for this tenant.');
+    expect(auditAccessibility(after.body)).toEqual([]);
+  });
+
+  it('enables and disables an API adapter through the HTML surface without exposing secrets', async () => {
+    const configured = await startApp({
+      env: validEnv({
+        SUAS_MIGRATIONS_MODE: 'apply',
+        SUAS_UBER_GUEST_RIDES_CLIENT_ID: 'synthetic-client',
+        SUAS_UBER_GUEST_RIDES_CLIENT_SECRET: 'synthetic-secret',
+      }),
+      listen: false,
+    });
+    try {
+      const { credential } = await adminSignIn(configured);
+      const enabled = await configured.server.inject({
+        method: 'POST',
+        url: '/app/admin/providers/enable',
+        headers: {
+          ...authorized(credential),
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        payload: 'adapter_id=transportation-api',
+      });
+      expect(enabled.statusCode).toBe(303);
+      expect(enabled.headers.location).toBe('/app/admin?provider=enabled');
+
+      const disabled = await configured.server.inject({
+        method: 'POST',
+        url: '/app/admin/providers/disable',
+        headers: {
+          ...authorized(credential),
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        payload: 'adapter_id=transportation-api&capability=TRANSPORTATION',
+      });
+      expect(disabled.statusCode).toBe(303);
+      expect(disabled.headers.location).toBe('/app/admin?provider=disabled');
+
+      const page = await configured.server.inject({
+        method: 'GET',
+        url: '/app/admin',
+        headers: authorized(credential),
+      });
+      expect(page.body).toContain('DISABLED');
+      expect(page.body).toContain('Credentials: CONFIGURED');
+      expect(page.body).not.toContain('synthetic-secret');
+      expect(auditAccessibility(page.body)).toEqual([]);
+    } finally {
+      await configured.close();
+    }
   });
 });
 
