@@ -36,20 +36,22 @@ closed without it. It ships empty in `.env.example` and must never be committed.
 
 Commands:
 
-| Command                          | Purpose                                                |
-| -------------------------------- | ------------------------------------------------------ |
-| `npm run verify`                 | format check, lint, typecheck, and the full test suite |
-| `npm run build`                  | compile to `dist/`                                     |
-| `npm start`                      | run the compiled build                                 |
-| `npm run dev`                    | run from source with reload                            |
-| `npm test`                       | full suite (integration tests need PostgreSQL)         |
-| `npm run test:unit`              | unit tests only, no database required                  |
-| `npm run migrate -- status`      | applied, pending, drifted, and orphaned migrations     |
-| `npm run migrate -- apply`       | apply pending migrations under an advisory lock        |
-| `npm run migrate -- validate`    | verify schema state without mutating it                |
-| `npm run provenance`             | print the build-info object                            |
-| `npm run privacy:deletion-drill` | synthetic deletion path against the TEST database      |
-| `npm run worker:dev`             | Wrangler local Worker (`src/worker.ts`, no `listen()`) |
+| Command                           | Purpose                                                |
+| --------------------------------- | ------------------------------------------------------ |
+| `npm run verify`                  | format check, lint, typecheck, and the full test suite |
+| `npm run build`                   | compile to `dist/`                                     |
+| `npm start`                       | run the compiled build                                 |
+| `npm run dev`                     | run from source with reload                            |
+| `npm test`                        | full suite (integration tests need PostgreSQL)         |
+| `npm run test:unit`               | unit tests only, no database required                  |
+| `npm run test:e2e:staging`        | Chromium acceptance against synthetic STAGING          |
+| `npm run test:e2e:staging:public` | public STAGING acceptance without credentials          |
+| `npm run migrate -- status`       | applied, pending, drifted, and orphaned migrations     |
+| `npm run migrate -- apply`        | apply pending migrations under an advisory lock        |
+| `npm run migrate -- validate`     | verify schema state without mutating it                |
+| `npm run provenance`              | print the build-info object                            |
+| `npm run privacy:deletion-drill`  | synthetic deletion path against the TEST database      |
+| `npm run worker:dev`              | Wrangler local Worker (`src/worker.ts`, no `listen()`) |
 
 Integration tests use two databases, created once:
 
@@ -98,6 +100,14 @@ Pinned formal STAGING evidence is under
 evidence gate, not a standalone static check: `npm run settle:check` requires
 `full-verify.log` and `ci-run.txt` under `SUAS_SETTLE_SCRATCH` for the current
 HEAD.
+
+Browser acceptance defaults to the formal synthetic Worker. Install Chromium
+once with `npx playwright install chromium`, then run the public suite without
+credentials. Authenticated routes are opt-in via fresh gitignored synthetic seed
+sessions in `SUAS_E2E_VETERAN_BEARER`, `SUAS_E2E_RESPONDER_BEARER`, and
+`SUAS_E2E_ADMIN_BEARER`. The scheduled `staging-acceptance` workflow uses the
+same names as repository secrets and reports those tests as skipped when secrets
+are absent. Never supply production sessions or real veteran data.
 
 Cloudflare published limits (not SUAS SLOs): 30 s CPU default on paid plans
 (10 ms on free), 128 MB memory, 50 subrequests per invocation on free / 10,000

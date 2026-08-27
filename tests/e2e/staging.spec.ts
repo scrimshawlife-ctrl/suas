@@ -1,0 +1,106 @@
+/**
+ * Deployed synthetic-STAGING browser acceptance.
+ *
+ * SUAS-specs ENVIRONMENT.md §2/§5: no production data or real support effects.
+ * TESTING.md §11: readiness evidence exercises deployed integration boundaries.
+ * AUTH.md §5: authenticated HTML uses the same bearer session gate as JSON.
+ * MVP_REFERENCE.md §5/§10: public, veteran, responder, and admin surfaces remain
+ * truthful and structurally usable in a browser.
+ *
+ * Public checks need no secrets. Authenticated checks run only when an operator
+ * supplies fresh gitignored synthetic seed credentials through environment
+ * variables or GitHub Actions secrets. Credentials are never printed.
+ */
+
+import { expect, test, type Browser, type Page } from '@playwright/test';
+
+const veteranBearer = process.env.SUAS_E2E_VETERAN_BEARER;
+const responderBearer = process.env.SUAS_E2E_RESPONDER_BEARER;
+const adminBearer = process.env.SUAS_E2E_ADMIN_BEARER;
+
+async function authenticatedPage(browser: Browser, credential: string): Promise<Page> {
+  const context = await browser.newContext({
+    extraHTTPHeaders: { authorization: `Bearer ${credential}` },
+  });
+  return context.newPage();
+}
+
+async function expectHtmlSurface(page: Page, path: string): Promise<void> {
+  const response = await page.goto(path, { waitUntil: 'domcontentloaded' });
+  expect(response, `${path} returned no response`).not.toBeNull();
+  expect(response?.status(), `${path} did not return HTTP 200`).toBe(200);
+  expect(response?.headers()['content-type']).toContain('text/html');
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.locator('h1')).toHaveCount(1);
+}
+
+test.describe('deployed public boundary', () => {
+  test('@public health exposes durable synthetic-STAGING dependencies', async ({ request }) => {
+    const response = await request.get('/api/v0/health');
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toMatchObject({
+      status: 'ok',
+      dependencies: {
+        database: { status: 'configured' },
+        job_queue: {
+          status: 'configured',
+          durability: 'durable',
+          implementation: 'postgres-outbox',
+        },
+      },
+    });
+  });
+
+  test('@public landing and enrollment render in Chromium', async ({ page }) => {
+    await expectHtmlSurface(page, '/app');
+    await expect(page).toHaveTitle(/Shut Up and Serve/i);
+    await expect(page.getByText('Veteran peer support', { exact: false })).toBeVisible();
+
+    await expectHtmlSurface(page, '/app/join');
+    await expect(page.getByText('sign-in code', { exact: false })).toBeVisible();
+  });
+
+  test('@public protected HTML fails closed without a session', async ({ page }) => {
+    const response = await page.goto('/app/home');
+    expect(response?.status()).toBe(401);
+    expect(await response?.json()).toMatchObject({
+      error: { code: 'UNAUTHENTICATED' },
+    });
+  });
+});
+
+test.describe('deployed authenticated synthetic surfaces', () => {
+  test('veteran routes render with an operator-supplied synthetic session', async ({ browser }) => {
+    test.skip(veteranBearer === undefined, 'SUAS_E2E_VETERAN_BEARER is not configured.');
+    const page = await authenticatedPage(browser, veteranBearer ?? '');
+    for (const path of [
+      '/app/home',
+      '/app/notifications',
+      '/app/notifications/preferences',
+      '/app/consents',
+      '/app/trusted-contacts',
+      '/app/resources',
+      '/app/immediate-resources',
+    ]) {
+      await expectHtmlSurface(page, path);
+    }
+  });
+
+  test('responder routes render with an operator-supplied synthetic session', async ({
+    browser,
+  }) => {
+    test.skip(responderBearer === undefined, 'SUAS_E2E_RESPONDER_BEARER is not configured.');
+    const page = await authenticatedPage(browser, responderBearer ?? '');
+    for (const path of ['/app/responder', '/app/responder/availability']) {
+      await expectHtmlSurface(page, path);
+    }
+  });
+
+  test('admin route renders only with an operator-supplied elevated session', async ({
+    browser,
+  }) => {
+    test.skip(adminBearer === undefined, 'SUAS_E2E_ADMIN_BEARER is not configured.');
+    const page = await authenticatedPage(browser, adminBearer ?? '');
+    await expectHtmlSurface(page, '/app/admin');
+  });
+});

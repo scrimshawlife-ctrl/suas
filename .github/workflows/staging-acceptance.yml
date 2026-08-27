@@ -1,0 +1,53 @@
+# Browser acceptance against formal synthetic STAGING.
+#
+# This workflow does not deploy and does not authorize production operation.
+# Public checks always run. Authenticated checks run only when repository secrets
+# hold fresh synthetic seed sessions; absent credentials are reported as skips.
+
+name: staging-acceptance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 15 * * *'
+
+concurrency:
+  group: staging-acceptance
+  cancel-in-progress: true
+
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      SUAS_E2E_BASE_URL: https://suas.zer0state-noema.workers.dev
+      SUAS_E2E_VETERAN_BEARER: ${{ secrets.SUAS_E2E_VETERAN_BEARER }}
+      SUAS_E2E_RESPONDER_BEARER: ${{ secrets.SUAS_E2E_RESPONDER_BEARER }}
+      SUAS_E2E_ADMIN_BEARER: ${{ secrets.SUAS_E2E_ADMIN_BEARER }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Exercise deployed STAGING
+        run: npm run test:e2e:staging
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-playwright-evidence
+          path: artifacts/playwright/
+          if-no-files-found: ignore
+          retention-days: 14
