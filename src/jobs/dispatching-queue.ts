@@ -2,8 +2,7 @@
  * LOCAL/TEST job dispatch: run a handler after a successful enqueue.
  *
  * Completing a Check-In still only *requests* work (CHECKINS.md §6.3). This
- * wrapper is how that request is honoured in the non-durable seam while D-022
- * remains open. Handler failures are logged and do not fail the enqueue, so
+ * wrapper is how that request is honoured in the non-durable seam in LOCAL/TEST when using the in-memory seam. Handler failures are logged and do not fail the enqueue, so
  * CHECKIN_COMPLETED stays committed even when scoring refuses.
  */
 

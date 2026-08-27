@@ -1,8 +1,8 @@
 # Decision packet — D-001 / D-005 staging & hosting
 
-**Status:** OWNER_DECISION_REQUIRED (recommendation pinned; account/secrets still owner)  
+**Status:** DECIDED for synthetic STAGING topology (2026-08-27) — GitHub + CF Worker + Neon  
 **Affects gates:** `OPERATIONS`, staging evidence for nearly all other gates  
-**Runtime tip when written:** post-`#90` Worker compute + `#88` cases cursor
+**Runtime tip when written:** post-`#108` D-022 outbox; formal `SUAS_ENV=STAGING` on workers.dev
 
 ## Exact questions
 
@@ -15,7 +15,7 @@
 - PRODUCTION prohibited until SPEC-018 authorizes it.
 - LOCAL/TEST/STAGING must not point at production data resources.
 - Real provider effects remain false outside authorized production (`SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`).
-- Durable job product remains D-022: `STAGING` / `PRODUCTION` fail closed on the in-memory queue (`src/jobs/factory.ts`). Shared HTTP soak can use `SUAS_ENV=LOCAL` on the Worker until D-022 lands; do not relabel that as formal STAGING class readiness.
+- Durable job product is D-022 Postgres outbox (`DECIDED`). `STAGING` uses `postgres-outbox`; `PRODUCTION` remains prohibited until SPEC-018.
 
 ## Recommended option (STAGING topology)
 
@@ -27,7 +27,7 @@
 | `/app` + `/api/v0` compute | Cloudflare Worker (`wrangler.jsonc`, `src/worker.ts`)                  | Already implemented (#90); `nodejs_compat` + Hyperdrive |
 | Synthetic Postgres         | Neon (pooled URL → Hyperdrive; unpooled URL → local `npm run migrate`) | Never production data; never commit connection strings  |
 | Secrets                    | Wrangler secrets + GitHub Environment secrets for deploy               | `SUAS_SESSION_SECRET`; CF API token for publish         |
-| Jobs                       | In-memory fake only while `SUAS_ENV=LOCAL`                             | Formal `STAGING` class waits on D-022                   |
+| Jobs                       | Postgres outbox (`job_outbox`, D-022)                                  | Drain with `npm run jobs:work` (Node against unpooled)  |
 
 This matches the shipped runbook [cloudflare-workers.md](../runbooks/cloudflare-workers.md): Pages stays the poster; the Worker is the only API host; do not add Fly or a second orchestrator.
 
@@ -39,8 +39,8 @@ This matches the shipped runbook [cloudflare-workers.md](../runbooks/cloudflare-
 
 ## Interim vs formal STAGING
 
-1. **Interim shared synthetic (allowed now):** deploy Worker with `SUAS_ENV=LOCAL`, fixture/fake adapters, synthetic Neon DB. Use for `/app` + `/api/v0` soak and Pages-linked demos. Does **not** close OPERATIONS as formal STAGING evidence alone.
-2. **Formal STAGING class:** after owner decides D-022 durable queue, set `SUAS_ENV=STAGING` on a dedicated Worker env + Neon branch, keep effects false, re-run soak under STAGING.
+1. **Interim shared synthetic (superseded):** Worker ran as `SUAS_ENV=LOCAL` with in-memory jobs before D-022.
+2. **Formal synthetic STAGING (live 2026-08-27):** same Neon + Hyperdrive + `suas` Worker promoted to `SUAS_ENV=STAGING` with postgres-outbox. Effects false. Not PRODUCTION. Owner may later split a dedicated Neon branch without changing the vendor topology.
 
 ## Required owner action
 

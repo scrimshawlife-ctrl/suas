@@ -2,8 +2,8 @@
 
 This Worker hosts the existing Fastify `/app` and `/api/v0` surfaces. GitHub
 Pages `docs/` stays the static poster. This runbook does not authorize
-PRODUCTION or SPEC-018. Interim `SUAS_ENV=LOCAL` soak is allowed after the
-owner checklist; it is not STAGING.
+PRODUCTION or SPEC-018. Formal synthetic **STAGING** (`SUAS_ENV=STAGING` +
+Postgres outbox) is the shared soak class after D-022.
 
 ## What runs where
 
@@ -75,9 +75,9 @@ Use the unpooled URL in `.env` for those commands.
 
 ## Environment class
 
-`wrangler.jsonc` sets `SUAS_ENV=LOCAL` because that is the only class that
-can start the HTTP path while D-022 (durable jobs) is open. `STAGING` and
-`PRODUCTION` still fail closed on the in-memory queue. `PRODUCTION` also
+`wrangler.jsonc` / `wrangler.synthetic.jsonc` set `SUAS_ENV=STAGING` so the
+Worker uses the D-022 Postgres outbox. `PRODUCTION` remains rejected until
+SPEC-018. `PRODUCTION` also
 stays rejected until SPEC-018. Do not set
 `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=true`.
 
@@ -109,19 +109,18 @@ or schema validation fails, the fetch handler returns `503` with
 
 Topology recommendation: [D-001-005-staging-hosting.md](../decision-packets/D-001-005-staging-hosting.md).
 
-### Status (2026-08-26)
+### Status (2026-08-27)
 
-Owner-authorized interim **LOCAL** Worker soak is live on
-`https://suas.zer0state-noema.workers.dev` (`SUAS_ENV=LOCAL`). Smoked:
+Owner-authorized formal synthetic **STAGING** Worker is live on
+`https://suas.zer0state-noema.workers.dev` (`SUAS_ENV=STAGING`). Smoked:
 
-- `GET /api/v0/health` → `200` (`status: ok`, DB configured, job queue
-  `in-memory-fake`)
-- `GET /app` → `200` HTML
+- `GET /api/v0/health` → `200` with `job_queue.durability: durable`,
+  `implementation: postgres-outbox`
+- Seeded `/app` routes (home, responder, resources/food, notifications) → `200`
 
-This is **not** STAGING, **not** PRODUCTION, and **not** SPEC-018 gate
-closure. Formal `SUAS_ENV=STAGING` still waits on D-022. Real external
+This is **not** PRODUCTION and **not** SPEC-018 gate closure. Real external
 effects stay off (`SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`, email/SMS
-`sink`).
+`sink`). Synthetic Neon only.
 
 Committed `wrangler.jsonc` keeps `YOUR_HYPERDRIVE_ID`. Live deploys use
 gitignored `wrangler.synthetic.jsonc` (real Hyperdrive id + build stamp).
@@ -165,7 +164,7 @@ errors (CF 1101). Node/CLI keeps a normal `pg.Pool`.
    `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exist in the GitHub
    Environment `synthetic-worker`.
 
-Keep `SUAS_ENV=LOCAL` until D-022. Do not set
+Keep effects false. Do not set
 `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=true`. Do not treat this publish as
 SPEC-018 production authorization or formal STAGING-class gate closure.
 
@@ -208,3 +207,16 @@ Sessions expire (~24h); re-run `npm run seed` to mint fresh bearers.
 Stop traffic to the bad Worker version and roll back to the previous
 Wrangler version. Prefer a forward-fix migration over reversing schema.
 See [deployment-rollback.md](deployment-rollback.md).
+
+### Drain durable jobs (Node)
+
+The Worker enqueues into `job_outbox`. A Node process against the **unpooled**
+Neon URL claims work:
+
+```bash
+# .env → unpooled DATABASE_URL; SUAS_ENV can be LOCAL for the CLI process
+npm run jobs:work -- --once
+npm run jobs:work            # poll loop
+```
+
+Known handler today: `support-signal.compute`. Unknown types fail toward DLQ.
