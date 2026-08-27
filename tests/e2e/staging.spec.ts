@@ -14,9 +14,14 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
-const veteranBearer = process.env.SUAS_E2E_VETERAN_BEARER;
-const responderBearer = process.env.SUAS_E2E_RESPONDER_BEARER;
-const adminBearer = process.env.SUAS_E2E_ADMIN_BEARER;
+function optionalCredential(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value === '' ? undefined : value;
+}
+
+const veteranBearer = optionalCredential('SUAS_E2E_VETERAN_BEARER');
+const responderBearer = optionalCredential('SUAS_E2E_RESPONDER_BEARER');
+const adminBearer = optionalCredential('SUAS_E2E_ADMIN_BEARER');
 
 async function authenticatedPage(browser: Browser, credential: string): Promise<Page> {
   const context = await browser.newContext({
