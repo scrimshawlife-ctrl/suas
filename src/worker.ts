@@ -66,7 +66,32 @@ export default {
   async fetch(request: Request): Promise<Response> {
     try {
       await getIsolateApp(workerEnv as WorkerBindings);
-      return await handleAsNodeRequest(WORKER_HTTP_PORT, request);
+      try {
+        return await handleAsNodeRequest(WORKER_HTTP_PORT, request);
+      } catch (error: unknown) {
+        // Request-path failures (e.g. leftover cross-request I/O) must not look
+        // like startup NOT_READY — log and return a bounded 500.
+        const err = error instanceof Error ? error : undefined;
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            msg: 'worker_request_failed',
+            error_name: err?.name ?? 'unknown',
+            error_message: err?.message?.slice(0, 300),
+            error_stack: err?.stack?.split('\n').slice(0, 8),
+            path: new URL(request.url).pathname,
+          }),
+        );
+        return Response.json(
+          {
+            error: {
+              code: 'INTERNAL_ERROR',
+              message: 'Unexpected internal failure.',
+            },
+          },
+          { status: 500 },
+        );
+      }
     } catch (error: unknown) {
       return notReadyResponse(error);
     }

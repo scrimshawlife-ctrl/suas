@@ -92,7 +92,8 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   let schemaVersion: number | null = null;
 
   if (config.database.migrationsMode !== 'off') {
-    pool = createPool(config);
+    // Worker + Hyperdrive: Client-per-query/request (no cross-request Pool).
+    pool = createPool(config, runtime === 'worker' ? 'worker' : 'node');
     if (runtime === 'worker') {
       // Workers have no on-disk migrations/ tree. SELECT the recorded version
       // only; never apply, never CREATE TABLE (ENVIRONMENT.md §9).

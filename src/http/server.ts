@@ -140,6 +140,19 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
 
     if (status >= 500) {
       request.log.error({ err: error }, 'unhandled request failure');
+      // Workers run with logger:false; still emit a structured console line for
+      // wrangler tail / observability (do not include secrets).
+      const err = error instanceof Error ? error : undefined;
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'unhandled_request_failure',
+          path: request.url,
+          error_name: err?.name ?? 'unknown',
+          error_message: err?.message?.slice(0, 400),
+          error_stack: err?.stack?.split('\n').slice(0, 10),
+        }),
+      );
     }
     void reply.status(status).send({
       error: {
