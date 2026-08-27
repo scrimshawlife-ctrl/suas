@@ -84,6 +84,11 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
     expect(wrangler).toContain('"SUAS_EMAIL_MODE": "sink"');
     expect(wrangler).toContain('"SUAS_ALLOW_REAL_EXTERNAL_EFFECTS": "false"');
   });
+
+  it('keeps gitignored operator scratch artifacts outside repository lint', () => {
+    const eslintConfig = readFileSync(new URL('../../eslint.config.js', import.meta.url), 'utf8');
+    expect(eslintConfig).toContain("'.local-secrets/**'");
+  });
 });
 
 describe('TESTING.md §12 — fixtures are synthetic', () => {

@@ -3,7 +3,10 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**'],
+    // `.local-secrets/` is gitignored operator scratch space. Wrangler dry-run
+    // bundles and one-off staging audit scripts live there and are deliberately
+    // outside the TypeScript project, so repository lint must not discover them.
+    ignores: ['dist/**', 'coverage/**', 'node_modules/**', '.local-secrets/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

@@ -82,14 +82,22 @@ Copy `.dev.vars.example` to `.dev.vars` for `wrangler dev`. Replace
 `YOUR_HYPERDRIVE_ID` in `wrangler.jsonc` with the id from
 `npx wrangler hyperdrive create` — do not commit connection strings.
 
-`wrangler.jsonc` sets `SUAS_ENV=LOCAL` because STAGING/PRODUCTION still fail
-closed on the durable job product (D-022) and PRODUCTION stays rejected until
-SPEC-018. Email and SMS stay `sink`. This repository does not claim production
-readiness. Recommended shared synthetic topology (GitHub + Worker + Neon) is in
+The committed `wrangler.jsonc` remains a safe LOCAL template. The formal
+synthetic STAGING deployment supplies `SUAS_ENV=STAGING` and the D-022
+Postgres-outbox job queue through owner-controlled deployment configuration.
+PRODUCTION remains rejected until SPEC-018. Email and SMS stay `sink`, and no
+real support-provider effects are authorized. This repository does not claim
+production readiness. The shared synthetic topology (GitHub + Worker + Neon) is in
 [docs/decision-packets/D-001-005-staging-hosting.md](docs/decision-packets/D-001-005-staging-hosting.md);
 owner-authorized publish uses Actions `worker-deploy` (`workflow_dispatch` only)
 or `npx wrangler deploy` — see
 [docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
+
+Pinned formal STAGING evidence is under
+`docs/readiness/evidence/staging-soak-2026-08-27/`. The settlement command is an
+evidence gate, not a standalone static check: `npm run settle:check` requires
+`full-verify.log` and `ci-run.txt` under `SUAS_SETTLE_SCRATCH` for the current
+HEAD.
 
 Cloudflare published limits (not SUAS SLOs): 30 s CPU default on paid plans
 (10 ms on free), 128 MB memory, 50 subrequests per invocation on free / 10,000
