@@ -535,6 +535,39 @@ describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty is not a recorded fact', () 
 });
 
 describe('Responder case HTML lists contact and service requests', () => {
+  it('posts Create service request only when canCreateServiceRequest', () => {
+    const withForm = renderResponderCase({
+      shell,
+      need: {
+        caseId: 'case-open',
+        caseStatus: 'ASSIGNED',
+        category: 'Support Case',
+        openedLabel: 'Opened',
+      },
+      contactAttempts: [],
+      serviceRequests: [],
+      canCreateServiceRequest: true,
+    });
+    expect(withForm).toContain('action="/app/responder/cases/case-open/service-requests"');
+    expect(withForm).toContain('Create service request');
+    expect(withForm).toContain('name="category"');
+    expect(auditAccessibility(withForm)).toEqual([]);
+
+    const without = renderResponderCase({
+      shell,
+      need: {
+        caseId: 'case-closed',
+        caseStatus: 'CLOSED',
+        category: 'Support Case',
+        openedLabel: 'Opened',
+      },
+      contactAttempts: [],
+      serviceRequests: [],
+    });
+    expect(without).not.toContain('action="/app/responder/cases/case-closed/service-requests"');
+    expect(without).not.toContain('Create service request');
+  });
+
   it('posts Log contact attempt only when canLogContact', () => {
     const withForm = renderResponderCase({
       shell,
