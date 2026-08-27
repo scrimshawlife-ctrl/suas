@@ -24,6 +24,7 @@ import type { DurableJobQueuePort } from '../jobs/index.js';
 import {
   assertNotificationChannel,
   ChannelUnavailableError,
+  NOTIFICATION_CHANNELS,
   type NotificationChannel,
   type NotificationChannelPort,
   type OutboundMessage,
@@ -199,6 +200,27 @@ export async function setChannelPreference(
        DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()`,
     [input.tenantId, input.userId, input.channel, input.enabled],
   );
+}
+
+/**
+ * Effective preference per MVP channel. Absent rows mean allowed (opt-out model,
+ * NOTIFICATIONS.md §4.4).
+ */
+export async function listChannelPreferences(
+  db: Queryable,
+  tenantId: string,
+  userId: string,
+): Promise<readonly { channel: NotificationChannel; enabled: boolean }[]> {
+  const result = await db.query<{ channel: NotificationChannel; enabled: boolean }>(
+    `SELECT channel, enabled FROM notification_preferences
+     WHERE tenant_id = $1 AND user_id = $2`,
+    [tenantId, userId],
+  );
+  const byChannel = new Map(result.rows.map((row) => [row.channel, row.enabled] as const));
+  return NOTIFICATION_CHANNELS.map((channel) => ({
+    channel,
+    enabled: byChannel.get(channel) ?? true,
+  }));
 }
 
 /**
