@@ -173,6 +173,31 @@ curl -sS -o /dev/null -w "%{http_code}\n" "$WORKER_BASE_URL/app"
 
 Expect health JSON without secrets; `/app` HTML for the reference surfaces.
 
+### Seed synthetic demo data (Neon unpooled)
+
+With `.env` pointing at the **unpooled** Neon URL (`SUAS_ENV=LOCAL`, effects
+false), apply schema if needed then seed:
+
+```bash
+npm run migrate -- apply
+npm run migrate -- validate
+npm run seed
+```
+
+`npm run seed` is idempotent. It writes a coherent org/admin/responder/veterans
+dataset (active QRF, consent, trusted contact, IN_APP notifications, resources,
+settled case) and prints bearer credentials. Save the JSON somewhere gitignored
+(e.g. `.local-secrets/seed-summary.json`) — do not commit bearers.
+
+Example (credential from the seed summary):
+
+```bash
+curl -sS -H "authorization: Bearer $VETERAN_BEARER" \
+  "$WORKER_BASE_URL/app/home"
+```
+
+Sessions expire (~24h); re-run `npm run seed` to mint fresh bearers.
+
 ## Rollback
 
 Stop traffic to the bad Worker version and roll back to the previous

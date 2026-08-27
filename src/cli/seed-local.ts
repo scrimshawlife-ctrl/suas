@@ -70,8 +70,11 @@ import {
   findActiveGrant,
   findConsentTemplateVersion,
   grantConsent,
+  inviteTrustedContact,
+  listTrustedCircle,
   publishConsentTemplateVersion,
 } from '../consent/index.js';
+import { enqueueNotification, listNotificationsForRecipient } from '../notifications/index.js';
 import {
   completeFollowUp,
   createFollowUp,
@@ -318,12 +321,78 @@ async function ensureConsent(pool: Pool, veteran: User, responder: User): Promis
     veteranUserId: veteran.userId,
     permission: 'can_view',
     scope: 'current_requests',
-    purpose: 'Coordinate the veteran’s active support requests (synthetic seed).',
+    purpose: "Coordinate the veteran's active support requests (synthetic seed).",
     granteeType: 'RESPONDER',
     granteeId: responder.userId,
     consentTemplateVersion: versionKey,
   });
   return grant.consentGrantId;
+}
+
+/**
+ * One INVITED trusted contact so `/app/trusted-contacts` is non-empty. Invite
+ * email is synthetic and never rendered on HTML.
+ */
+async function ensureTrustedContact(pool: Pool, veteran: User): Promise<string> {
+  const existing = await listTrustedCircle(pool, TENANT_ID, veteran.userId);
+  const match = existing.find((c) => c.relationshipLabel === 'Battle buddy (synthetic)');
+  if (match !== undefined) return match.trustedContactId;
+  const invited = await inviteTrustedContact(pool, {
+    tenantId: TENANT_ID,
+    veteranUserId: veteran.userId,
+    relationshipLabel: 'Battle buddy (synthetic)',
+    inviteEmail: syntheticEmail('battle-buddy'),
+  });
+  return invited.trustedContactId;
+}
+
+/**
+ * A few IN_APP logical sends for the veteran inbox (system basis — no external
+ * disclosure). Idempotent via dedupe keys.
+ */
+async function ensureVeteranNotifications(
+  pool: Pool,
+  veteran: User,
+  serviceRequestId: string,
+): Promise<number> {
+  const already = await listNotificationsForRecipient(pool, TENANT_ID, veteran.userId, 20);
+  if (already.length >= 2) return already.length;
+
+  const disclosure = {
+    tenantId: TENANT_ID,
+    veteranUserId: veteran.userId,
+    permission: 'can_view' as const,
+    scope: 'current_requests' as const,
+    granteeType: 'SYSTEM' as const,
+    granteeId: 'notifications',
+    purpose: 'Notify the veteran about their own request',
+    systemBasis: 'SYSTEM_INTERNAL_PROCESSING' as const,
+  };
+
+  await enqueueNotification(pool, {
+    tenantId: TENANT_ID,
+    recipientUserId: veteran.userId,
+    reason: 'qrf.veteran_ack',
+    channel: 'IN_APP',
+    templateVersion: 'seed@1',
+    dedupeKey: `seed:veteran-ack:${serviceRequestId}`,
+    subjectType: 'ServiceRequest',
+    subjectId: serviceRequestId,
+    disclosure,
+  });
+  await enqueueNotification(pool, {
+    tenantId: TENANT_ID,
+    recipientUserId: veteran.userId,
+    reason: 'case.status_changed',
+    channel: 'IN_APP',
+    templateVersion: 'seed@1',
+    dedupeKey: `seed:case-status:${serviceRequestId}`,
+    subjectType: 'ServiceRequest',
+    subjectId: serviceRequestId,
+    disclosure,
+  });
+  const after = await listNotificationsForRecipient(pool, TENANT_ID, veteran.userId, 20);
+  return after.length;
 }
 
 /**
@@ -483,6 +552,8 @@ async function main(): Promise<void> {
 
     const qrf = await ensureActiveQrf(pool, veteran, responder);
     const consentGrantId = await ensureConsent(pool, veteran, responder);
+    const trustedContactId = await ensureTrustedContact(pool, veteran);
+    const notificationCount = await ensureVeteranNotifications(pool, veteran, qrf.serviceRequestId);
     const settled = await ensureSettledCase(pool, veteranTwo, responder);
 
     // Sessions are minted fresh each run so the printed credentials are live.
@@ -523,6 +594,8 @@ async function main(): Promise<void> {
         serviceRequestId: qrf.serviceRequestId,
       },
       consentGrantId,
+      trustedContactId,
+      notificationCount,
       settledCase: {
         caseId: settled.caseId,
         caseStatus: settled.status,
@@ -535,7 +608,10 @@ async function main(): Promise<void> {
         adminBearer: adminSession.credential,
         expiresAt: veteranSession.session.expiresAt.toISOString(),
       },
-      hint: 'Use the bearer with: curl -H "authorization: Bearer <cred>" http://127.0.0.1:3000/app/home',
+      workerBaseUrl: 'https://suas.zer0state-noema.workers.dev',
+      hint:
+        'Use the bearer with: curl -H "authorization: Bearer <cred>" ' +
+        'https://suas.zer0state-noema.workers.dev/app/home',
     };
     console.log(JSON.stringify(summary, null, 2));
   } finally {
