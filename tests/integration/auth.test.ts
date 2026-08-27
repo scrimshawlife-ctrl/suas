@@ -25,6 +25,7 @@ import {
   revokeSession,
   verifyChallenge,
   CHALLENGE_ISSUE_LIMIT,
+  CHALLENGE_ISSUE_WINDOW_SECONDS,
   CHALLENGE_MAX_ATTEMPTS,
 } from '../../src/auth/index.js';
 import { resolveAuthContext } from '../../src/authz/index.js';
@@ -61,6 +62,24 @@ async function enrolledVeteran() {
   const email = syntheticEmail(`veteran-${randomUUID().slice(0, 8)}`);
   const user = await createUser(pool, { tenantId, email, status: 'ACTIVE' });
   return { tenantId, email, user };
+}
+
+/**
+ * Keep fixed-window assertions from straddling the database's window boundary.
+ * The production implementation intentionally uses database time; a full suite
+ * can otherwise begin its five fast attempts just before a 15-minute rollover
+ * and correctly receive a fresh budget halfway through the assertion.
+ */
+async function enterStableRateLimitWindow(): Promise<void> {
+  const result = await pool.query<{ remaining_ms: number }>(
+    `SELECT ($1 * 1000 - mod(floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint, $1 * 1000))::int
+       AS remaining_ms`,
+    [CHALLENGE_ISSUE_WINDOW_SECONDS.value],
+  );
+  const remainingMs = result.rows[0]?.remaining_ms ?? 0;
+  if (remainingMs < 5_000) {
+    await new Promise((resolve) => setTimeout(resolve, remainingMs + 100));
+  }
 }
 
 describe('AUTH.md §3 — challenge contract', () => {
@@ -237,6 +256,8 @@ describe('AUTH.md §9 — unavailable channels are not faked', () => {
 });
 
 describe('AUTH.md §3, §11 — shared rate limits', () => {
+  beforeEach(enterStableRateLimitWindow);
+
   it('rejects issuance past the budget, counting in shared state', async () => {
     const { tenantId, email } = await enrolledVeteran();
 
