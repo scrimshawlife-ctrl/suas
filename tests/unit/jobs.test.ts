@@ -1,10 +1,10 @@
 /**
  * Durable job seam evidence.
  *
- * SUAS-specs ARCHITECTURE.md §3 invariant 5, §8 (D-022 undecided), §10, §16;
- * SUAS-specs HANDOFF.md §3.
+ * SUAS-specs ARCHITECTURE.md §3 invariant 5, §8 (D-022 = Postgres outbox), §10, §16.
  */
 
+import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
 import {
@@ -24,12 +24,21 @@ describe('job queue selection', () => {
     expect(queue.implementation).toBe('in-memory-fake');
   });
 
-  it('refuses to hand a non-durable queue to STAGING and cites D-022', () => {
+  it('refuses STAGING without a pool and cites D-022', () => {
     const config = loadConfig(
       validEnv({ SUAS_ENV: 'STAGING', SUAS_SESSION_SECRET: STRONG_SECRET }),
     );
     expect(() => createJobQueue(config)).toThrow(DurableJobQueueUnavailableError);
     expect(() => createJobQueue(config)).toThrow(/D-022/);
+  });
+
+  it('selects Postgres outbox for STAGING when a pool is provided', () => {
+    const config = loadConfig(
+      validEnv({ SUAS_ENV: 'STAGING', SUAS_SESSION_SECRET: STRONG_SECRET }),
+    );
+    const queue = createJobQueue(config, { pool: {} as Pool });
+    expect(queue.durability).toBe('durable');
+    expect(queue.implementation).toBe('postgres-outbox');
   });
 });
 

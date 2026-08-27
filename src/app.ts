@@ -119,9 +119,18 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     }
   }
 
-  // 3. Durable async-work seam. LOCAL/TEST honour enqueued compute jobs in-process
-  // while D-022 remains open. CHECKIN_COMPLETED still commits before scoring.
-  const innerQueue = createJobQueue(config);
+  // 3. Durable async-work seam (D-022 = Postgres outbox for STAGING/PRODUCTION).
+  // LOCAL/TEST keep the in-memory fake unless a pool + override is supplied.
+  // CHECKIN_COMPLETED still commits before scoring.
+  const localImpl = (
+    options.env.SUAS_JOB_QUEUE === 'postgres-outbox' ? 'postgres-outbox' : 'in-memory-fake'
+  ) as 'in-memory-fake' | 'postgres-outbox';
+  const innerQueue = createJobQueue(config, {
+    ...(pool !== undefined ? { pool } : {}),
+    ...(config.environment === 'LOCAL' || config.environment === 'TEST'
+      ? { localImplementation: localImpl }
+      : {}),
+  });
   const jobQueue =
     pool === undefined
       ? innerQueue
