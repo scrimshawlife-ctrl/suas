@@ -1,0 +1,66 @@
+{
+  "auditedAt": "2026-08-27T01:24:39.271Z",
+  "tool": "src/ui/a11y.ts auditAccessibility",
+  "rows": [
+    {
+      "file": "consents.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "immediate-resources.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "landing.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "notifications.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "preferences.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "resources-food.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "resources.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "responder-availability.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "responder-case.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "responder.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "trusted-contacts.html",
+      "findingCount": 0,
+      "findings": []
+    },
+    {
+      "file": "veteran-home.html",
+      "findingCount": 0,
+      "findings": []
+    }
+  ]
+}
