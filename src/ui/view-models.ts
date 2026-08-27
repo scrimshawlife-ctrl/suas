@@ -104,6 +104,42 @@ export interface VeteranHomeViewModel {
    * live `/app/home` supplies it. Mobile nav stays Home+Chat only (§5).
    */
   readonly notificationsHref?: string;
+  /**
+   * Optional privacy links. Not in MVP_REFERENCE.md §5 inventory; live home
+   * supplies them. Invite channels never appear on these pages.
+   */
+  readonly consentsHref?: string;
+  readonly trustedContactsHref?: string;
+}
+
+/** One consent grant row (public JSON shape — PRIVACY.md self grants only). */
+export interface ConsentGrantRowViewModel {
+  readonly permission: string;
+  readonly scope: string;
+  readonly purpose: string;
+  readonly granteeType: string;
+  readonly status: string;
+  readonly grantedAtLabel: string;
+  readonly expiresAtLabel?: string;
+}
+
+export interface ConsentsListViewModel {
+  readonly shell: ShellViewModel;
+  readonly grants: readonly ConsentGrantRowViewModel[];
+}
+
+/**
+ * One trusted-circle row. Matches public JSON (relationship + status only —
+ * no invite email/phone — TRUSTED_CIRCLE.md / PRIVACY.md).
+ */
+export interface TrustedContactRowViewModel {
+  readonly relationshipLabel: string;
+  readonly status: string;
+}
+
+export interface TrustedContactsListViewModel {
+  readonly shell: ShellViewModel;
+  readonly contacts: readonly TrustedContactRowViewModel[];
 }
 
 /** Truthful home entry to the Check-In HTML loop. Not a scoring dashboard. */
