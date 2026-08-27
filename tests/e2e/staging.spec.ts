@@ -42,13 +42,15 @@ async function expectHtmlSurface(page: Page, path: string): Promise<void> {
 async function expectNoHorizontalOverflow(page: Page, path: string): Promise<void> {
   await page.setViewportSize({ width: 320, height: 800 });
   await expectHtmlSurface(page, path);
-  const dimensions = await page.evaluate<{ clientWidth: number; scrollWidth: number }>(
-    '({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth })',
-  );
-  expect(
-    dimensions.scrollWidth <= dimensions.clientWidth + 1,
-    `${path} overflows at 320 CSS px`,
-  ).toBe(true);
+  await expect
+    .poll(
+      async () =>
+        page.evaluate<boolean>(
+          'document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1',
+        ),
+      { message: `${path} overflows at 320 CSS px` },
+    )
+    .toBe(true);
 }
 
 async function expectKeyboardEntry(page: Page, path: string): Promise<void> {
