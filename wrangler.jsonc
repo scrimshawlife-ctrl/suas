@@ -19,10 +19,10 @@
     },
   ],
   "vars": {
-    // LOCAL is the only class that can start the HTTP+jobs path while D-022
-    // is open. PRODUCTION stays rejected until SPEC-018. STAGING still fails
-    // closed on the durable job product.
-    "SUAS_ENV": "LOCAL",
+    // Formal STAGING class (D-022 Postgres outbox). PRODUCTION stays rejected
+    // until SPEC-018. Effects remain false; synthetic Neon only. Live deploys
+    // use gitignored wrangler.synthetic.jsonc with the real Hyperdrive id.
+    "SUAS_ENV": "STAGING",
     "SUAS_SPEC_VERSION": "0.2.0",
     "SUAS_RELEASE_MANIFEST": "RELEASE_MANIFEST-0.2.0.md",
     "SUAS_ALLOW_REAL_EXTERNAL_EFFECTS": "false",
