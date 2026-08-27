@@ -145,6 +145,11 @@ modules).
 `allow_eval_during_startup` for remaining constraint compilers that fall
 back safely when codegen is denied.
 
+Persistence on Workers uses a **Client-per-query** adapter (`createPool(...,
+'worker')`), not a retained `pg.Pool`. Hyperdrive is the network pooler;
+reusing TCP clients across requests triggers Workers cross-request I/O
+errors (CF 1101). Node/CLI keeps a normal `pg.Pool`.
+
 ### Owner checklist (repeat for a new synthetic DB)
 
 1. Neon synthetic database created (no production data path).

@@ -141,7 +141,10 @@ export function freshnessBand(
   now: Date = new Date(),
 ): FreshnessBand {
   if (lastVerifiedAt === undefined) return 'UNVERIFIED';
-  const ageDays = (now.getTime() - lastVerifiedAt.getTime()) / 86_400_000;
+  // Drivers (esp. Hyperdrive) may yield a Date or an ISO string.
+  const verifiedAt = lastVerifiedAt instanceof Date ? lastVerifiedAt : new Date(lastVerifiedAt);
+  if (Number.isNaN(verifiedAt.getTime())) return 'UNVERIFIED';
+  const ageDays = (now.getTime() - verifiedAt.getTime()) / 86_400_000;
   if (ageDays < FRESHNESS_AGING_DAYS) return 'FRESH';
   if (ageDays <= FRESHNESS_STALE_DAYS) return 'AGING';
   return 'STALE';

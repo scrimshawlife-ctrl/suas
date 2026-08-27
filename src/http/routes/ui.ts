@@ -127,6 +127,35 @@ function shell(title: string, overrides: Partial<ShellViewModel> = {}): ShellVie
     ...(overrides.currentNav === undefined ? {} : { currentNav: overrides.currentNav }),
   };
 }
+
+/**
+ * Fastify params under Cloudflare `handleAsNodeRequest` are sometimes null.
+ * Fall back to path segments so `/app/resources/:label` and `/app/.../:id` still work.
+ */
+function pathParams(
+  request: { readonly params?: Record<string, string> | null; readonly url: string },
+  kind: 'resource-label' | 'case-id' | 'check-in-id',
+): { label?: string; id?: string } {
+  const fromRoute = request.params;
+  if (fromRoute !== null && fromRoute !== undefined) {
+    return fromRoute;
+  }
+  const path = (request.url.split('?')[0] ?? '').split('/').filter(Boolean);
+  if (kind === 'resource-label' && path[0] === 'app' && path[1] === 'resources' && path[2]) {
+    return { label: path[2] };
+  }
+  if (kind === 'case-id') {
+    const i = path.indexOf('cases');
+    const id = i >= 0 ? path[i + 1] : undefined;
+    return id !== undefined ? { id } : {};
+  }
+  if (kind === 'check-in-id') {
+    const i = path.indexOf('check-ins');
+    const id = i >= 0 ? path[i + 1] : undefined;
+    return id !== undefined ? { id } : {};
+  }
+  return {};
+}
 const checkInIdParams = z.object({ id: z.string().uuid() });
 const checkInResponseBody = z.object({
   question_id: z.string().uuid(),
@@ -244,7 +273,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get('/app/notifications', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
-    const query = notificationsQuery.parse(request.query);
+    const query = notificationsQuery.parse(request.query ?? {});
     const page = await listNotificationsForRecipient(
       pool,
       context.tenantId,
@@ -383,7 +412,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get<{ Params: { id: string } }>('/app/check-ins/:id', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
-    const { id } = checkInIdParams.parse(request.params);
+    const { id } = checkInIdParams.parse(pathParams(request, 'check-in-id'));
     const checkIn = await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
     const questions = await listQuestionsWithOptions(pool, checkIn.questionnaireVersion);
     const answered = new Set(await listAnsweredQuestionIds(pool, checkIn.checkInId));
@@ -439,7 +468,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.post<{ Params: { id: string } }>('/app/check-ins/:id/responses', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
-    const { id } = checkInIdParams.parse(request.params);
+    const { id } = checkInIdParams.parse(pathParams(request, 'check-in-id'));
     await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
     const body = checkInResponseBody.parse(request.body);
     await saveResponse(pool, {
@@ -455,7 +484,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     '/app/check-ins/:id/commands/complete',
     async (request, reply) => {
       const context = await authenticate(pool, sessionSecret, request);
-      const { id } = checkInIdParams.parse(request.params);
+      const { id } = checkInIdParams.parse(pathParams(request, 'check-in-id'));
       await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
       await completeCheckIn(
         pool,
@@ -507,12 +536,16 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get<{ Params: { label: string } }>('/app/resources/:label', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    const { label } = pathParams(request, 'resource-label');
+    if (label === undefined || label === '') {
+      throw new NonOperationalCategoryError('(missing)', 'COMING_SOON');
+    }
 
     const card = CATEGORY_CARDS.find(
-      (entry) => entry.label.toLowerCase().replace(/ /g, '-') === request.params.label,
+      (entry) => entry.label.toLowerCase().replace(/ /g, '-') === label,
     );
     if (card === undefined) {
-      throw new NonOperationalCategoryError(request.params.label, 'COMING_SOON');
+      throw new NonOperationalCategoryError(label, 'COMING_SOON');
     }
 
     // §6: a non-operational card renders its information state and never
@@ -530,7 +563,8 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     }
 
     const category = categoryForCard(card.label);
-    const query = resourceListQuery.parse(request.query);
+    // handleAsNodeRequest may yield a null query object; coerce before Zod.
+    const query = resourceListQuery.parse(request.query ?? {});
     const page = await searchResources(
       pool,
       context.tenantId,
@@ -616,7 +650,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get('/app/responder', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
-    const query = responderQueueQuery.parse(request.query);
+    const query = responderQueueQuery.parse(request.query ?? {});
     const isResponder = context.memberships.some((membership) => membership.role === 'RESPONDER');
     const unassigned = isResponder
       ? await readCaseQueue(
@@ -688,7 +722,9 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   app.get<{ Params: { id: string } }>('/app/responder/cases/:id', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     assertResponder(context);
-    const supportCase = await findCase(pool, context.tenantId, request.params.id);
+    const caseId = pathParams(request, 'case-id').id;
+    if (caseId === undefined) throw new ResourceNotVisibleError();
+    const supportCase = await findCase(pool, context.tenantId, caseId);
     if (supportCase === undefined) {
       throw new ResourceNotVisibleError();
     }
@@ -696,10 +732,15 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     const assignment = await findActiveAssignment(pool, supportCase.caseId);
     const canLogContact = assignment?.responderUserId === context.userId;
     const canCreateServiceRequest = supportCase.status !== 'CLOSED';
-    const [attempts, serviceRequests] = await Promise.all([
-      listContactAttempts(pool, context.tenantId, supportCase.caseId, 50),
-      listCaseServiceRequests(pool, context.tenantId, supportCase.caseId, 50),
-    ]);
+    // Sequential reads: Worker Hyperdrive Client-per-query is safer than
+    // parallel pool.query under nodejs_compat.
+    const attempts = await listContactAttempts(pool, context.tenantId, supportCase.caseId, 50);
+    const serviceRequests = await listCaseServiceRequests(
+      pool,
+      context.tenantId,
+      supportCase.caseId,
+      50,
+    );
     await reply.type(HTML).send(
       renderResponderCase({
         shell: shell('Case', { viewport: 'DESKTOP' }),
@@ -707,7 +748,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         contactAttempts: attempts.map((attempt) => ({
           channel: attempt.channel,
           outcome: attempt.outcome,
-          attemptedAtLabel: attempt.attemptedAt.toISOString(),
+          attemptedAtLabel: new Date(attempt.attemptedAt).toISOString(),
         })),
         serviceRequests: serviceRequests.map((request) => ({
           category: request.category,
@@ -724,7 +765,9 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     async (request, reply) => {
       const context = await authenticate(pool, sessionSecret, request);
       assertResponder(context);
-      const supportCase = await findCase(pool, context.tenantId, request.params.id);
+      const caseId = pathParams(request, 'case-id').id;
+      if (caseId === undefined) throw new ResourceNotVisibleError();
+      const supportCase = await findCase(pool, context.tenantId, caseId);
       if (supportCase === undefined) {
         throw new ResourceNotVisibleError();
       }
@@ -733,7 +776,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         await withTransaction(pool, (tx) =>
           createServiceRequest(tx, {
             tenantId: context.tenantId,
-            caseId: request.params.id,
+            caseId,
             category: body.category,
             createdBy: context.userId,
             actorType: 'RESPONDER',
@@ -746,7 +789,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         }
         throw error;
       }
-      return reply.redirect(`/app/responder/cases/${request.params.id}`, 303);
+      return reply.redirect(`/app/responder/cases/${caseId}`, 303);
     },
   );
 
@@ -755,7 +798,9 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     async (request, reply) => {
       const context = await authenticate(pool, sessionSecret, request);
       assertResponder(context);
-      const supportCase = await findCase(pool, context.tenantId, request.params.id);
+      const caseId = pathParams(request, 'case-id').id;
+      if (caseId === undefined) throw new ResourceNotVisibleError();
+      const supportCase = await findCase(pool, context.tenantId, caseId);
       if (supportCase === undefined) {
         throw new ResourceNotVisibleError();
       }
@@ -763,7 +808,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       try {
         await recordContact(pool, {
           tenantId: context.tenantId,
-          caseId: request.params.id,
+          caseId,
           responderUserId: context.userId,
           command: 'log-contact-attempt',
           channel: body.channel,
@@ -776,7 +821,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         }
         throw error;
       }
-      return reply.redirect(`/app/responder/cases/${request.params.id}`, 303);
+      return reply.redirect(`/app/responder/cases/${caseId}`, 303);
     },
   );
 
@@ -785,14 +830,16 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     async (request, reply) => {
       const context = await authenticate(pool, sessionSecret, request);
       assertResponder(context);
-      const existing = await findCase(pool, context.tenantId, request.params.id);
+      const caseId = pathParams(request, 'case-id').id;
+      if (caseId === undefined) throw new ResourceNotVisibleError();
+      const existing = await findCase(pool, context.tenantId, caseId);
       if (existing === undefined) {
         throw new ResourceNotVisibleError();
       }
       // CLAIM_CASE is documented from OPEN/TRIAGED only. A same-responder
       // replay arrives when the case is already ASSIGNED, so treat "already
       // mine" as success rather than an illegal edge.
-      const held = await findActiveAssignment(pool, request.params.id);
+      const held = await findActiveAssignment(pool, caseId);
       if (held !== undefined) {
         if (held.responderUserId === context.userId) {
           return reply.redirect('/app/responder', 303);
@@ -802,7 +849,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       try {
         await claimCase(pool, {
           tenantId: context.tenantId,
-          caseId: request.params.id,
+          caseId,
           responderUserId: context.userId,
           correlationId: String(request.id),
         });
@@ -813,7 +860,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         ) {
           throw error;
         }
-        const assignment = await findActiveAssignment(pool, request.params.id);
+        const assignment = await findActiveAssignment(pool, caseId);
         if (assignment?.responderUserId !== context.userId) throw error;
       }
       return reply.redirect('/app/responder', 303);
@@ -822,7 +869,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get('/app/responder/needs', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
-    const query = activeNeedsQuery.parse(request.query);
+    const query = activeNeedsQuery.parse(request.query ?? {});
     const queue = await readCaseQueue(
       pool,
       context.tenantId,
