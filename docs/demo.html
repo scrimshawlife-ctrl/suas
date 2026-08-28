@@ -105,6 +105,19 @@
       </header>
 
       <main id="main" class="demo-main">
+        <div class="demo-pins" aria-hidden="true">
+          <span id="open"></span>
+          <span id="what-it-is"></span>
+          <span id="what-it-is-not"></span>
+          <span id="the-loop"></span>
+          <span id="check-in"></span>
+          <span id="case"></span>
+          <span id="consent"></span>
+          <span id="qrf"></span>
+          <span id="unavailable"></span>
+          <span id="real-versus-not"></span>
+          <span id="close"></span>
+        </div>
         <p class="page-trail">
           <a href="index.html">SUAS</a>
           <span aria-hidden="true"> / </span>
@@ -155,32 +168,28 @@
         </noscript>
 
         <div id="demo-stage" class="demo-screens">
-          <article class="demo-screen" id="open">
+          <article class="demo-screen" data-demo-screen="open">
             <p class="kicker">Veteran Innovation Hackathon</p>
             <h2>Shut up and serve.</h2>
             <p class="demo-lead">
               Built by <strong>zer0state</strong>. Our entry for the Veteran Innovation Hackathon.
-            </p>
-            <p class="demo-banner demo-banner-inline">
-              Click-through demo. Not live operations. No public /app host.
             </p>
             <p>
               When a veteran needs help, finding it should not be another battle. This walk is
               static HTML on GitHub Pages. Buttons that would need a missing route stay in this tab.
             </p>
             <p class="status-badge">SPEC-017 · NOT READY</p>
-            <ol class="loop" aria-label="Canonical support loop">
-              <li>SIGNAL</li>
-              <li>NEED</li>
-              <li>CONSENT</li>
-              <li>COORDINATION</li>
-              <li>FULFILLMENT</li>
-              <li>FOLLOW-UP</li>
-              <li>SETTLEMENT</li>
-            </ol>
+            <p class="demo-loop-line" aria-label="Canonical support loop">
+              <span>SIGNAL</span><span aria-hidden="true"> → </span><span>NEED</span
+              ><span aria-hidden="true"> → </span><span>CONSENT</span
+              ><span aria-hidden="true"> → </span><span>COORDINATION</span
+              ><span aria-hidden="true"> → </span><span>FULFILLMENT</span
+              ><span aria-hidden="true"> → </span><span>FOLLOW-UP</span
+              ><span aria-hidden="true"> → </span><span>SETTLEMENT</span>
+            </p>
           </article>
 
-          <article class="demo-screen" id="what-it-is">
+          <article class="demo-screen" data-demo-screen="what-it-is">
             <p class="kicker">What it is</p>
             <h2>Consent-governed peer coordination.</h2>
             <p class="demo-lead">
@@ -212,7 +221,7 @@
             </ul>
           </article>
 
-          <article class="demo-screen" id="what-it-is-not">
+          <article class="demo-screen" data-demo-screen="what-it-is-not">
             <p class="kicker">What it is not</p>
             <h2>Not a clinic. Not a launch.</h2>
             <ul class="demo-plates" aria-label="Out of scope">
@@ -242,7 +251,7 @@
             </p>
           </article>
 
-          <article class="demo-screen" id="the-loop">
+          <article class="demo-screen" data-demo-screen="the-loop">
             <p class="kicker">The loop</p>
             <h2>One path. Seven words.</h2>
             <p class="demo-lead">
@@ -319,7 +328,7 @@
             </p>
           </article>
 
-          <article class="demo-screen" id="check-in">
+          <article class="demo-screen" data-demo-screen="check-in">
             <p class="kicker">Check-In</p>
             <h2>Pick a band.</h2>
             <p class="demo-lead">
@@ -369,7 +378,7 @@
             </p>
           </article>
 
-          <article class="demo-screen" id="case">
+          <article class="demo-screen" data-demo-screen="case">
             <p class="kicker">Support Case</p>
             <h2>What the band did.</h2>
             <p class="status-badge" id="demo-case-badge">NO BAND</p>
@@ -382,7 +391,7 @@
             </div>
           </article>
 
-          <article class="demo-screen" id="consent">
+          <article class="demo-screen" data-demo-screen="consent">
             <p class="kicker">Consent Grant</p>
             <h2>Grant and revoke stay local.</h2>
             <p class="demo-lead">
@@ -434,7 +443,7 @@
             </ul>
           </article>
 
-          <article class="demo-screen" id="qrf">
+          <article class="demo-screen" data-demo-screen="qrf">
             <p class="kicker">QRF</p>
             <h2>Deploy is a peer-support request.</h2>
             <p class="demo-lead">
@@ -459,7 +468,7 @@
             </p>
           </article>
 
-          <article class="demo-screen" id="unavailable">
+          <article class="demo-screen" data-demo-screen="unavailable">
             <p class="kicker">Honest unavailable</p>
             <h2>Missing routes stay missing.</h2>
             <p class="demo-lead">
@@ -493,7 +502,7 @@
             </ul>
           </article>
 
-          <article class="demo-screen" id="real-versus-not">
+          <article class="demo-screen" data-demo-screen="real-versus-not">
             <p class="kicker">Real versus not</p>
             <h2>What the API can do today.</h2>
             <p class="demo-lead">
@@ -530,7 +539,7 @@
             </div>
           </article>
 
-          <article class="demo-screen" id="close">
+          <article class="demo-screen" data-demo-screen="close">
             <p class="kicker">Close</p>
             <h2>Sunday is not a launch.</h2>
             <p class="demo-lead">After this room we keep listening.</p>

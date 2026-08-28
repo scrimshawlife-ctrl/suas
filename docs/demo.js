@@ -114,11 +114,12 @@ function syncChrome() {
     position.textContent = stepLabel;
   }
 
-  const heading = document.querySelector(`#${id} h2`);
+  const heading = document.querySelector(`[data-demo-screen="${id}"] h2`);
   if (heading instanceof HTMLElement && document.activeElement !== heading) {
     heading.setAttribute('tabindex', '-1');
     heading.focus({ preventScroll: true });
   }
+  window.scrollTo(0, 0);
 
   renderCase();
   renderConsent();
