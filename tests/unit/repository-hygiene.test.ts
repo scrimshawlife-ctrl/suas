@@ -89,6 +89,11 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
     const eslintConfig = readFileSync(new URL('../../eslint.config.js', import.meta.url), 'utf8');
     expect(eslintConfig).toContain("'.local-secrets/**'");
   });
+
+  it('keeps the Pages poster outside type-checked repository lint', () => {
+    const eslintConfig = readFileSync(new URL('../../eslint.config.js', import.meta.url), 'utf8');
+    expect(eslintConfig).toContain("'docs/**'");
+  });
 });
 
 describe('TESTING.md §12 — fixtures are synthetic', () => {
