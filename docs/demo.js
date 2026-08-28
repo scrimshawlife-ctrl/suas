@@ -74,6 +74,17 @@ function syncChrome() {
     beat.setAttribute('aria-current', selected ? 'step' : 'false');
   });
 
+  const jump = document.getElementById('demo-jump');
+  if (jump instanceof HTMLSelectElement && jump.value !== id) {
+    jump.value = id;
+  }
+
+  const beatIndex = document.getElementById('demo-beat-index');
+  const stepLabel = `${String(index + 1).padStart(2, '0')} / ${String(SCREENS.length).padStart(2, '0')}`;
+  if (beatIndex) {
+    beatIndex.textContent = stepLabel;
+  }
+
   const back = document.getElementById('demo-back');
   const next = document.getElementById('demo-next');
   const position = document.getElementById('demo-position');
@@ -100,13 +111,13 @@ function syncChrome() {
     }
   }
   if (position) {
-    position.textContent = `${index + 1} / ${SCREENS.length}`;
+    position.textContent = stepLabel;
   }
 
   const heading = document.querySelector(`#${id} h2`);
   if (heading instanceof HTMLElement && document.activeElement !== heading) {
     heading.setAttribute('tabindex', '-1');
-    heading.focus({ preventScroll: false });
+    heading.focus({ preventScroll: true });
   }
 
   renderCase();
@@ -293,6 +304,12 @@ function init() {
   const loop = document.getElementById('demo-loop-plates');
   if (loop) {
     loop.addEventListener('click', onLoopClick);
+  }
+  const jump = document.getElementById('demo-jump');
+  if (jump instanceof HTMLSelectElement) {
+    jump.addEventListener('change', () => {
+      goToScreen(jump.value);
+    });
   }
   window.addEventListener('hashchange', syncChrome);
   syncChrome();

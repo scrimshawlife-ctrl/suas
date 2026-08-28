@@ -101,7 +101,7 @@
             <span class="brand-sub">ZERO STATE</span>
           </span>
         </a>
-        <p class="event-pill">CLICK-THROUGH DEMO · NOT LIVE</p>
+        <p class="event-pill">NOT LIVE</p>
       </header>
 
       <main id="main" class="demo-main">
@@ -116,20 +116,38 @@
         </p>
 
         <nav class="demo-beats" aria-label="Demo screens">
-          <a class="demo-beat" data-demo-beat href="#open">Open</a>
-          <a class="demo-beat" data-demo-beat href="#what-it-is">What it is</a>
-          <a class="demo-beat" data-demo-beat href="#what-it-is-not">What it is not</a>
-          <a class="demo-beat" data-demo-beat href="#the-loop">The loop</a>
-          <a class="demo-beat" data-demo-beat href="#check-in">Check-In</a>
-          <a class="demo-beat" data-demo-beat href="#case">Case</a>
-          <a class="demo-beat" data-demo-beat href="#consent">Consent</a>
-          <a class="demo-beat" data-demo-beat href="#qrf">QRF</a>
-          <a class="demo-beat" data-demo-beat href="#unavailable">Unavailable</a>
-          <a class="demo-beat" data-demo-beat href="#real-versus-not">Real versus not</a>
-          <a class="demo-beat" data-demo-beat href="#close">Close</a>
+          <p class="demo-beat-index" id="demo-beat-index">01 / 11</p>
+          <label class="demo-jump">
+            <span class="demo-jump-label">Screen</span>
+            <select id="demo-jump">
+              <option value="open">Open</option>
+              <option value="what-it-is">What it is</option>
+              <option value="what-it-is-not">What it is not</option>
+              <option value="the-loop">The loop</option>
+              <option value="check-in">Check-In</option>
+              <option value="case">Case</option>
+              <option value="consent">Consent</option>
+              <option value="qrf">QRF</option>
+              <option value="unavailable">Unavailable</option>
+              <option value="real-versus-not">Real versus not</option>
+              <option value="close">Close</option>
+            </select>
+          </label>
         </nav>
-
         <noscript>
+          <nav class="demo-beat-fallback" aria-label="Demo screens without script">
+            <a class="demo-beat" data-demo-beat href="#open">Open</a>
+            <a class="demo-beat" data-demo-beat href="#what-it-is">What it is</a>
+            <a class="demo-beat" data-demo-beat href="#what-it-is-not">What it is not</a>
+            <a class="demo-beat" data-demo-beat href="#the-loop">The loop</a>
+            <a class="demo-beat" data-demo-beat href="#check-in">Check-In</a>
+            <a class="demo-beat" data-demo-beat href="#case">Case</a>
+            <a class="demo-beat" data-demo-beat href="#consent">Consent</a>
+            <a class="demo-beat" data-demo-beat href="#qrf">QRF</a>
+            <a class="demo-beat" data-demo-beat href="#unavailable">Unavailable</a>
+            <a class="demo-beat" data-demo-beat href="#real-versus-not">Real versus not</a>
+            <a class="demo-beat" data-demo-beat href="#close">Close</a>
+          </nav>
           <p class="demo-note">
             Scripts are off. Use the plates to move between screens. Interactive Check-In, Consent
             Grant, and QRF controls need a script in this tab. Nothing is sent to a server.
@@ -540,7 +558,7 @@
 
         <nav class="demo-nav" aria-label="Demo movement">
           <a class="action" id="demo-back" href="index.html">Poster</a>
-          <p id="demo-position" class="demo-position">1 / 11</p>
+          <p id="demo-position" class="demo-position">01 / 11</p>
           <a class="action" id="demo-next" href="#what-it-is">Next</a>
         </nav>
       </main>
