@@ -1056,7 +1056,7 @@ body:not(:has(.demo-pins :target)) [data-demo-screen='open'] {
 }
 
 .demo-loop-detail {
-  min-height: 3.6rem;
+  min-height: 5.2rem;
 }
 
 .demo-band span {

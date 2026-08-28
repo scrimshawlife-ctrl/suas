@@ -119,7 +119,7 @@ function syncChrome() {
     if (index <= 0) {
       back.href = 'index.html';
       back.textContent = 'Poster';
-      back.setAttribute('aria-label', 'Back to the Pages poster');
+      back.setAttribute('aria-label', 'Back to the poster');
     } else {
       back.href = `#${SCREENS[index - 1]}`;
       back.textContent = 'Back';
@@ -130,7 +130,7 @@ function syncChrome() {
     if (index >= SCREENS.length - 1) {
       next.href = 'index.html';
       next.textContent = 'Poster';
-      next.setAttribute('aria-label', 'Return to the Pages poster');
+      next.setAttribute('aria-label', 'Return to the poster');
     } else {
       next.href = `#${SCREENS[index + 1]}`;
       next.textContent = 'Next';
@@ -159,29 +159,29 @@ function renderCase() {
   }
 
   if (state.band === null) {
-    badge.textContent = 'NO BAND';
+    badge.textContent = 'NONE YET';
     result.innerHTML =
-      '<p>No band selected. A Support Case opens only from a settled effective <strong>RED</strong>.</p>' +
-      '<p class="demo-note">SUAS did not contact emergency services.</p>';
+      '<p>You have not picked a color yet. A support case opens only if you pick <strong>red</strong>.</p>' +
+      '<p class="demo-note">SUAS did not call 911.</p>';
     return;
   }
 
   if (state.band === 'RED') {
     badge.textContent = 'RED · CASE OPEN';
     result.innerHTML =
-      '<p>Recorded Support Signal level: <strong>RED</strong>.</p>' +
-      '<p>A Support Case was opened. A settled effective RED opens or updates a Support Case.</p>' +
-      '<p class="demo-note">This is local demo state. It is not a live Case on an API host.</p>' +
-      '<p class="demo-note">SUAS did not contact emergency services. SUAS does not call 911.</p>';
+      '<p>You picked <strong>red</strong>. A support case is open in this tab.</p>' +
+      '<p>Red means someone may need help now. A support case is a record of that need.</p>' +
+      '<p class="demo-note">This lives only in this tab. It is not a live case.</p>' +
+      '<p class="demo-note">SUAS did not call 911.</p>';
     return;
   }
 
   badge.textContent = `${state.band} · NO CASE`;
   result.innerHTML =
-    `<p>Recorded Support Signal level: <strong>${state.band}</strong>.</p>` +
-    `<p>No Support Case was opened. <strong>YELLOW</strong> and <strong>ORANGE</strong> do not open a case.</p>` +
-    '<p class="demo-note">A later RED can open a case. A closed case is not reopened. This demo does not show CLOSE.</p>' +
-    '<p class="demo-note">SUAS did not contact emergency services. SUAS does not call 911.</p>';
+    `<p>You picked <strong>${state.band.toLowerCase()}</strong>. No support case opened.</p>` +
+    '<p>Yellow and orange do not open a case.</p>' +
+    '<p class="demo-note">Red later can open a case. A closed case does not reopen. This walk does not show closing a case.</p>' +
+    '<p class="demo-note">SUAS did not call 911.</p>';
 }
 
 /**
