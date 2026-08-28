@@ -850,12 +850,8 @@ button.action:disabled,
 .demo-main {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
   max-width: 42rem;
   min-width: 0;
-  min-height: calc(100vh - 2.5rem);
-  min-height: calc(100svh - 2.5rem);
 }
 
 .demo-beat-fallback {
@@ -897,13 +893,12 @@ button.action:disabled,
   background: var(--plate-selected);
 }
 
-.demo-screens {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
 .demo-screen {
   display: none;
+}
+
+.demo-screen.is-current {
+  display: block;
 }
 
 .demo-pins {
@@ -915,20 +910,24 @@ button.action:disabled,
   overflow: hidden;
 }
 
-body:has(#open:target) [data-demo-screen='open'],
-body:has(#what:target) [data-demo-screen='what'],
-body:has(#what-it-is:target) [data-demo-screen='what'],
-body:has(#what-it-is-not:target) [data-demo-screen='what'],
-body:has(#loop:target) [data-demo-screen='loop'],
-body:has(#the-loop:target) [data-demo-screen='loop'],
-body:has(#check-in:target) [data-demo-screen='check-in'],
-body:has(#case:target) [data-demo-screen='check-in'],
-body:has(#consent:target) [data-demo-screen='close'],
-body:has(#qrf:target) [data-demo-screen='close'],
-body:has(#unavailable:target) [data-demo-screen='close'],
-body:has(#real-versus-not:target) [data-demo-screen='close'],
-body:has(#close:target) [data-demo-screen='close'],
-body:not(:has(.demo-pins :target)) [data-demo-screen='open'] {
+/*
+ * Script path is .is-current. :target stays as the noscript fallback so the
+ * fallback links still show a screen when the script did not run.
+ */
+body:not(.demo-js):has(#open:target) [data-demo-screen='open'],
+body:not(.demo-js):has(#what:target) [data-demo-screen='what'],
+body:not(.demo-js):has(#what-it-is:target) [data-demo-screen='what'],
+body:not(.demo-js):has(#what-it-is-not:target) [data-demo-screen='what'],
+body:not(.demo-js):has(#loop:target) [data-demo-screen='loop'],
+body:not(.demo-js):has(#the-loop:target) [data-demo-screen='loop'],
+body:not(.demo-js):has(#check-in:target) [data-demo-screen='check-in'],
+body:not(.demo-js):has(#case:target) [data-demo-screen='check-in'],
+body:not(.demo-js):has(#consent:target) [data-demo-screen='close'],
+body:not(.demo-js):has(#qrf:target) [data-demo-screen='close'],
+body:not(.demo-js):has(#unavailable:target) [data-demo-screen='close'],
+body:not(.demo-js):has(#real-versus-not:target) [data-demo-screen='close'],
+body:not(.demo-js):has(#close:target) [data-demo-screen='close'],
+body:not(.demo-js):not(:has(.demo-pins :target)) [data-demo-screen='open'] {
   display: block;
 }
 
@@ -1141,7 +1140,6 @@ body:not(:has(.demo-pins :target)) [data-demo-screen='open'] {
   align-items: center;
   gap: 0.65rem;
   margin: 1.35rem 0 0;
-  margin-top: auto;
   padding-top: 0.95rem;
   border-top: 1px solid var(--line);
 }

@@ -2,8 +2,9 @@
  * Click-through demo state for docs/demo.html.
  *
  * Local only. No fetch. No invented /app host. Hash navigation is the five
- * screens. This file keeps Check-In stand-in score state in memory for the tab.
- * Retired hashes map to the nearest remaining screen.
+ * screens. This file marks the current article and keeps Check-In stand-in
+ * score state in memory for the tab. Retired hashes map to the nearest
+ * remaining screen. Visibility is the is-current class, not CSS :target.
  *
  * Spec citations (released stack 0.2.0, RELEASE_MANIFEST-0.2.0.md):
  * - PRODUCT.md / CONTEXT.md (consent-governed coordination; not EHR / 911)
@@ -69,7 +70,7 @@ function canonicalizeHash() {
   const raw = window.location.hash.replace(/^#/, '');
   const id = resolveScreenId(raw);
   if (!raw) {
-    window.history.replaceState(null, '', `#${id}`);
+    window.location.hash = id;
     return;
   }
   if (Object.hasOwn(HASH_ALIASES, raw) && raw !== id) {
@@ -81,6 +82,10 @@ function syncChrome() {
   canonicalizeHash();
   const id = currentScreenId();
   const index = SCREENS.indexOf(id);
+
+  document.querySelectorAll('[data-demo-screen]').forEach((screen) => {
+    screen.classList.toggle('is-current', screen.getAttribute('data-demo-screen') === id);
+  });
 
   document.querySelectorAll('[data-demo-beat]').forEach((beat) => {
     const selected = beat.getAttribute('href') === `#${id}`;
@@ -209,8 +214,9 @@ function onLoopClick(event) {
 }
 
 function init() {
+  document.body.classList.add('demo-js');
   if (!window.location.hash) {
-    window.history.replaceState(null, '', '#open');
+    window.location.hash = 'open';
   }
 
   document.addEventListener('click', onClick);
