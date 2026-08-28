@@ -64,10 +64,10 @@ describe('Pages poster changelog', () => {
   });
 
   it('does not claim the walk shows Consent or peer backup, or a live host', () => {
-    expect(changelog).toMatch(/This walk does not show them/);
-    expect(changelog).toMatch(/They are not in\s+this walk/);
+    expect(changelog).toMatch(/This walk\s+does not show them/);
+    expect(changelog).toMatch(/They are not\s+in this walk/);
     expect(changelog).toMatch(/does not call a public host/);
-    expect(changelog).toMatch(/Not ready for a pilot/);
+    expect(changelog).toMatch(/Not\s+ready for a pilot/);
     expect(changelog).toMatch(/SUAS does not call 911/);
   });
 });
