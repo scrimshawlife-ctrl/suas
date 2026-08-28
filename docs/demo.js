@@ -2,7 +2,7 @@
  * Click-through demo state for docs/demo.html.
  *
  * Local only. No fetch. No invented /app host. Hash navigation is the five
- * investor screens. This file keeps Check-In band state in memory for the tab.
+ * screens. This file keeps Check-In stand-in score state in memory for the tab.
  * Retired hashes map to the nearest remaining screen.
  *
  * Spec citations (released stack 0.2.0, RELEASE_MANIFEST-0.2.0.md):
@@ -77,20 +77,6 @@ function canonicalizeHash() {
   }
 }
 
-/**
- * @param {string} id
- */
-function goToScreen(id) {
-  if (!SCREENS.includes(id)) {
-    return;
-  }
-  if (window.location.hash.replace(/^#/, '') === id) {
-    syncChrome();
-    return;
-  }
-  window.location.hash = id;
-}
-
 function syncChrome() {
   canonicalizeHash();
   const id = currentScreenId();
@@ -101,16 +87,7 @@ function syncChrome() {
     beat.setAttribute('aria-current', selected ? 'step' : 'false');
   });
 
-  const jump = document.getElementById('demo-jump');
-  if (jump instanceof HTMLSelectElement && jump.value !== id) {
-    jump.value = id;
-  }
-
-  const beatIndex = document.getElementById('demo-beat-index');
   const stepLabel = `${String(index + 1).padStart(2, '0')} / ${String(SCREENS.length).padStart(2, '0')}`;
-  if (beatIndex) {
-    beatIndex.textContent = stepLabel;
-  }
 
   const back = document.getElementById('demo-back');
   const next = document.getElementById('demo-next');
@@ -146,7 +123,9 @@ function syncChrome() {
     heading.setAttribute('tabindex', '-1');
     heading.focus({ preventScroll: true });
   }
-  window.scrollTo(0, 0);
+  const pinTop = () => window.scrollTo(0, 0);
+  pinTop();
+  requestAnimationFrame(pinTop);
 
   renderCase();
 }
@@ -161,7 +140,7 @@ function renderCase() {
   if (state.band === null) {
     badge.textContent = 'NONE YET';
     result.innerHTML =
-      '<p>You have not picked a color yet. A support case opens only if you pick <strong>red</strong>.</p>' +
+      '<p>No stand-in score yet. A support case opens only from a settled <strong>red</strong> score.</p>' +
       '<p class="demo-note">SUAS did not call 911.</p>';
     return;
   }
@@ -169,8 +148,8 @@ function renderCase() {
   if (state.band === 'RED') {
     badge.textContent = 'RED · CASE OPEN';
     result.innerHTML =
-      '<p>You picked <strong>red</strong>. A support case is open in this tab.</p>' +
-      '<p>Red means someone may need help now. A support case is a record of that need.</p>' +
+      '<p>This stand-in score is <strong>red</strong>. A support case is open in this tab.</p>' +
+      '<p>A support case opens only from a settled red score. A support case is a record that someone needs help now.</p>' +
       '<p class="demo-note">This lives only in this tab. It is not a live case.</p>' +
       '<p class="demo-note">SUAS did not call 911.</p>';
     return;
@@ -178,9 +157,9 @@ function renderCase() {
 
   badge.textContent = `${state.band} · NO CASE`;
   result.innerHTML =
-    `<p>You picked <strong>${state.band.toLowerCase()}</strong>. No support case opened.</p>` +
-    '<p>Yellow and orange do not open a case.</p>' +
-    '<p class="demo-note">Red later can open a case. A closed case does not reopen. This walk does not show closing a case.</p>' +
+    `<p>This stand-in score is <strong>${state.band.toLowerCase()}</strong>. No support case opened.</p>` +
+    '<p>A support case opens only from a settled red score. Yellow and orange do not.</p>' +
+    '<p class="demo-note">A later settled red score can open a case. A closed case does not reopen. This walk does not show closing a case.</p>' +
     '<p class="demo-note">SUAS did not call 911.</p>';
 }
 
@@ -223,8 +202,9 @@ function onLoopClick(event) {
   });
   const detail = document.getElementById('demo-loop-detail');
   const copy = plate.getAttribute('data-loop-copy');
+  const word = plate.textContent.replace(/\s+/g, ' ').trim();
   if (detail && copy) {
-    detail.textContent = copy;
+    detail.textContent = `${word}. ${copy}`;
   }
 }
 
@@ -237,12 +217,6 @@ function init() {
   const loop = document.getElementById('demo-loop-plates');
   if (loop) {
     loop.addEventListener('click', onLoopClick);
-  }
-  const jump = document.getElementById('demo-jump');
-  if (jump instanceof HTMLSelectElement) {
-    jump.addEventListener('change', () => {
-      goToScreen(jump.value);
-    });
   }
   window.addEventListener('hashchange', syncChrome);
   syncChrome();
