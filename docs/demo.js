@@ -134,7 +134,7 @@ function renderCase() {
     badge.textContent = 'RED · CASE OPEN';
     result.innerHTML =
       '<p>Recorded Support Signal level: <strong>RED</strong>.</p>' +
-      '<p>A Support Case was opened. That is the SAFETY.md §3.2 line: a settled effective RED opens or updates a Support Case.</p>' +
+      '<p>A Support Case was opened. A settled effective RED opens or updates a Support Case.</p>' +
       '<p class="demo-note">This is local demo state. It is not a live Case on an API host.</p>' +
       '<p class="demo-note">SUAS did not contact emergency services. SUAS does not call 911.</p>';
     return;
