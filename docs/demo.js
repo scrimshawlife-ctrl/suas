@@ -1,54 +1,80 @@
 /**
  * Click-through demo state for docs/demo.html.
  *
- * Local only. No fetch. No invented /app host. Hash navigation is the screen
- * list; this file keeps Check-In band, Consent Grant, and QRF request state
- * in memory for the tab.
+ * Local only. No fetch. No invented /app host. Hash navigation is the five
+ * investor screens. This file keeps Check-In band state in memory for the tab.
+ * Retired hashes map to the nearest remaining screen.
  *
  * Spec citations (released stack 0.2.0, RELEASE_MANIFEST-0.2.0.md):
  * - PRODUCT.md / CONTEXT.md (consent-governed coordination; not EHR / 911)
  * - SAFETY.md §3.2 (settled effective RED opens or updates a Support Case)
  * - CHECKINS.md (qv-001 completion requests scoring)
- * - CONSENT.md §2 (Consent Grant; small scale is not an exception)
- * - MVP_REFERENCE.md §7.2 / §9 (QRF deploy/cancel; on-duty and metrics honesty)
+ * - CONSENT.md §2 (Consent Grant exists; this walk does not open those controls)
+ * - MVP_REFERENCE.md §7.2 / §9 (QRF deploy/cancel live in the kernel, not here)
  */
 'use strict';
 
-const SCREENS = [
-  'open',
-  'what-it-is',
-  'what-it-is-not',
-  'the-loop',
-  'check-in',
-  'case',
-  'consent',
-  'qrf',
-  'unavailable',
-  'real-versus-not',
-  'close',
-];
+const SCREENS = ['open', 'what', 'loop', 'check-in', 'close'];
+
+/**
+ * Leftover hashes from the eleven-screen walk. Each value is a remaining
+ * screen so old links do not blank.
+ *
+ * @type {Record<string, string>}
+ */
+const HASH_ALIASES = {
+  'what-it-is': 'what',
+  'what-it-is-not': 'what',
+  'the-loop': 'loop',
+  case: 'check-in',
+  consent: 'close',
+  qrf: 'close',
+  unavailable: 'close',
+  'real-versus-not': 'close',
+};
 
 /** @typedef {'YELLOW' | 'ORANGE' | 'RED'} SignalBand */
 
 const state = {
   /** @type {SignalBand | null} */
   band: null,
-  /** @type {Record<string, boolean>} */
-  grants: {
-    'can_receive:RED': false,
-    'can_view:support_signal': false,
-    'can_share:service_request_fulfillment': false,
-  },
-  qrfOpen: false,
-  joinAttempted: false,
 };
+
+/**
+ * @param {string} raw
+ * @returns {string}
+ */
+function resolveScreenId(raw) {
+  if (SCREENS.includes(raw)) {
+    return raw;
+  }
+  if (Object.hasOwn(HASH_ALIASES, raw)) {
+    return HASH_ALIASES[raw];
+  }
+  return 'open';
+}
 
 /**
  * @returns {string}
  */
 function currentScreenId() {
   const hash = window.location.hash.replace(/^#/, '');
-  return SCREENS.includes(hash) ? hash : 'open';
+  return resolveScreenId(hash);
+}
+
+/**
+ * Rewrite retired hashes to the remaining screen they now mean.
+ */
+function canonicalizeHash() {
+  const raw = window.location.hash.replace(/^#/, '');
+  const id = resolveScreenId(raw);
+  if (!raw) {
+    window.history.replaceState(null, '', `#${id}`);
+    return;
+  }
+  if (Object.hasOwn(HASH_ALIASES, raw) && raw !== id) {
+    window.history.replaceState(null, '', `#${id}`);
+  }
 }
 
 /**
@@ -66,6 +92,7 @@ function goToScreen(id) {
 }
 
 function syncChrome() {
+  canonicalizeHash();
   const id = currentScreenId();
   const index = SCREENS.indexOf(id);
 
@@ -122,8 +149,6 @@ function syncChrome() {
   window.scrollTo(0, 0);
 
   renderCase();
-  renderConsent();
-  renderQrf();
 }
 
 function renderCase() {
@@ -137,7 +162,6 @@ function renderCase() {
     badge.textContent = 'NO BAND';
     result.innerHTML =
       '<p>No band selected. A Support Case opens only from a settled effective <strong>RED</strong>.</p>' +
-      '<p class="demo-note">Go back to Check-In and pick YELLOW, ORANGE, or RED. This page does not invent a score.</p>' +
       '<p class="demo-note">SUAS did not contact emergency services.</p>';
     return;
   }
@@ -160,63 +184,6 @@ function renderCase() {
     '<p class="demo-note">SUAS did not contact emergency services. SUAS does not call 911.</p>';
 }
 
-function renderConsent() {
-  document.querySelectorAll('[data-grant-key]').forEach((row) => {
-    const key = row.getAttribute('data-grant-key');
-    if (!key) {
-      return;
-    }
-    const granted = state.grants[key] === true;
-    const status = row.querySelector('[data-grant-status]');
-    if (status) {
-      status.textContent = granted ? 'ACTIVE' : 'REVOKED';
-    }
-    row.setAttribute('data-granted', granted ? 'true' : 'false');
-    const grantBtn = row.querySelector('[data-grant-action="grant"]');
-    const revokeBtn = row.querySelector('[data-grant-action="revoke"]');
-    if (grantBtn instanceof HTMLButtonElement) {
-      grantBtn.disabled = granted;
-    }
-    if (revokeBtn instanceof HTMLButtonElement) {
-      revokeBtn.disabled = !granted;
-    }
-  });
-}
-
-function renderQrf() {
-  const status = document.getElementById('demo-qrf-status');
-  const detail = document.getElementById('demo-qrf-detail');
-  const deploy = document.getElementById('demo-qrf-deploy');
-  const cancel = document.getElementById('demo-qrf-cancel');
-  const joinNote = document.getElementById('demo-qrf-join-note');
-  if (!status || !detail) {
-    return;
-  }
-
-  if (state.qrfOpen) {
-    status.textContent = 'REQUESTED';
-    detail.innerHTML =
-      '<p>A peer-support Service Request is recorded in this tab.</p>' +
-      '<p>Headline: Your request is recorded.</p>' +
-      '<p class="demo-note">Local only. Not a live Deploy QRF. No responder was notified. ARRIVED is not a recorded fact and stays unshown.</p>';
-  } else {
-    status.textContent = 'NONE';
-    detail.innerHTML =
-      '<p>No peer-support request is open in this tab.</p>' +
-      '<p class="demo-note">Deploy opens a request here. Cancel closes it. This is not emergency dispatch.</p>';
-  }
-
-  if (deploy instanceof HTMLButtonElement) {
-    deploy.disabled = state.qrfOpen;
-  }
-  if (cancel instanceof HTMLButtonElement) {
-    cancel.disabled = !state.qrfOpen;
-  }
-  if (joinNote) {
-    joinNote.hidden = !state.joinAttempted;
-  }
-}
-
 /**
  * @param {Event} event
  */
@@ -234,43 +201,8 @@ function onClick(event) {
       document.querySelectorAll('[data-band]').forEach((button) => {
         button.setAttribute('aria-pressed', button === bandButton ? 'true' : 'false');
       });
-      const picked = document.getElementById('demo-band-picked');
-      if (picked) {
-        picked.textContent =
-          band === 'RED'
-            ? 'RED selected. Next screen: a Support Case opens.'
-            : `${band} selected. Next screen: no Support Case.`;
-      }
       renderCase();
     }
-    return;
-  }
-
-  const grantButton = target.closest('[data-grant-action]');
-  if (grantButton instanceof HTMLButtonElement) {
-    const row = grantButton.closest('[data-grant-key]');
-    const key = row?.getAttribute('data-grant-key');
-    const action = grantButton.getAttribute('data-grant-action');
-    if (key && Object.hasOwn(state.grants, key)) {
-      state.grants[key] = action === 'grant';
-      renderConsent();
-    }
-    return;
-  }
-
-  if (target.closest('#demo-qrf-deploy')) {
-    state.qrfOpen = true;
-    renderQrf();
-    return;
-  }
-  if (target.closest('#demo-qrf-cancel')) {
-    state.qrfOpen = false;
-    renderQrf();
-    return;
-  }
-  if (target.closest('#demo-qrf-join')) {
-    state.joinAttempted = true;
-    renderQrf();
   }
 }
 

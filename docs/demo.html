@@ -6,7 +6,7 @@
     <title>SUAS click-through demo — not live operations</title>
     <meta
       name="description"
-      content="Static click-through of Shut Up and Serve. Not live operations. No public /app host. Built by zer0state."
+      content="Five-screen investor walk of Shut Up and Serve. Not live operations. No public /app host. Built by zer0state."
     />
     <meta name="theme-color" content="#0B0D0C" />
     <link rel="canonical" href="https://scrimshawlife-ctrl.github.io/suas/demo.html" />
@@ -15,7 +15,7 @@
     <meta property="og:title" content="SUAS click-through demo — not live operations" />
     <meta
       property="og:description"
-      content="Static click-through of Shut Up and Serve. Not live operations. No public /app host. Built by zer0state."
+      content="Five-screen investor walk of Shut Up and Serve. Not live operations. No public /app host. Built by zer0state."
     />
     <meta property="og:image" content="https://scrimshawlife-ctrl.github.io/suas/og.jpg" />
     <meta property="og:image:type" content="image/jpeg" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="SUAS click-through demo — not live operations" />
     <meta
       name="twitter:description"
-      content="Static click-through of Shut Up and Serve. Not live operations. No public /app host. Built by zer0state."
+      content="Five-screen investor walk of Shut Up and Serve. Not live operations. No public /app host. Built by zer0state."
     />
     <meta name="twitter:image" content="https://scrimshawlife-ctrl.github.io/suas/og.jpg" />
     <link
@@ -107,8 +107,10 @@
       <main id="main" class="demo-main">
         <div class="demo-pins" aria-hidden="true">
           <span id="open"></span>
+          <span id="what"></span>
           <span id="what-it-is"></span>
           <span id="what-it-is-not"></span>
+          <span id="loop"></span>
           <span id="the-loop"></span>
           <span id="check-in"></span>
           <span id="case"></span>
@@ -125,24 +127,18 @@
         </p>
 
         <p class="demo-banner" role="status">
-          Click-through demo. Not live operations. No public /app host.
+          Five-screen investor walk. Not live operations. No public /app host.
         </p>
 
         <nav class="demo-beats" aria-label="Demo screens">
-          <p class="demo-beat-index" id="demo-beat-index">01 / 11</p>
+          <p class="demo-beat-index" id="demo-beat-index">01 / 05</p>
           <label class="demo-jump">
             <span class="demo-jump-label">Screen</span>
             <select id="demo-jump">
               <option value="open">Open</option>
-              <option value="what-it-is">What it is</option>
-              <option value="what-it-is-not">What it is not</option>
-              <option value="the-loop">The loop</option>
+              <option value="what">What</option>
+              <option value="loop">Loop</option>
               <option value="check-in">Check-In</option>
-              <option value="case">Case</option>
-              <option value="consent">Consent</option>
-              <option value="qrf">QRF</option>
-              <option value="unavailable">Unavailable</option>
-              <option value="real-versus-not">Real versus not</option>
               <option value="close">Close</option>
             </select>
           </label>
@@ -150,20 +146,14 @@
         <noscript>
           <nav class="demo-beat-fallback" aria-label="Demo screens without script">
             <a class="demo-beat" data-demo-beat href="#open">Open</a>
-            <a class="demo-beat" data-demo-beat href="#what-it-is">What it is</a>
-            <a class="demo-beat" data-demo-beat href="#what-it-is-not">What it is not</a>
-            <a class="demo-beat" data-demo-beat href="#the-loop">The loop</a>
+            <a class="demo-beat" data-demo-beat href="#what">What</a>
+            <a class="demo-beat" data-demo-beat href="#loop">Loop</a>
             <a class="demo-beat" data-demo-beat href="#check-in">Check-In</a>
-            <a class="demo-beat" data-demo-beat href="#case">Case</a>
-            <a class="demo-beat" data-demo-beat href="#consent">Consent</a>
-            <a class="demo-beat" data-demo-beat href="#qrf">QRF</a>
-            <a class="demo-beat" data-demo-beat href="#unavailable">Unavailable</a>
-            <a class="demo-beat" data-demo-beat href="#real-versus-not">Real versus not</a>
             <a class="demo-beat" data-demo-beat href="#close">Close</a>
           </nav>
           <p class="demo-note">
-            Scripts are off. Use the plates to move between screens. Interactive Check-In, Consent
-            Grant, and QRF controls need a script in this tab. Nothing is sent to a server.
+            Scripts are off. Use the plates to move between screens. Interactive Check-In needs a
+            script in this tab. Nothing is sent to a server.
           </p>
         </noscript>
 
@@ -172,11 +162,10 @@
             <p class="kicker">Veteran Innovation Hackathon</p>
             <h2>Shut up and serve.</h2>
             <p class="demo-lead">
-              Built by <strong>zer0state</strong>. Our entry for the Veteran Innovation Hackathon.
+              When a veteran needs help, finding it should not be another battle.
             </p>
             <p>
-              When a veteran needs help, finding it should not be another battle. This walk is
-              static HTML on GitHub Pages. Buttons that would need a missing route stay in this tab.
+              This walk is static HTML on GitHub Pages. Not live operations. No public /app host.
             </p>
             <p class="status-badge">SPEC-017 · NOT READY</p>
             <p class="demo-loop-line" aria-label="Canonical support loop">
@@ -189,69 +178,25 @@
             </p>
           </article>
 
-          <article class="demo-screen" data-demo-screen="what-it-is">
-            <p class="kicker">What it is</p>
+          <article class="demo-screen" data-demo-screen="what">
+            <p class="kicker">What it is / is not</p>
             <h2>Consent-governed peer coordination.</h2>
-            <p class="demo-lead">
-              A veteran says what they need. They grant consent. We try to put a human or a material
-              resource on that need.
-            </p>
-            <ul class="demo-plates" aria-label="How the product moves">
-              <li class="slice-plate">
-                <h3>Need</h3>
+            <div class="demo-split">
+              <section class="slice-plate">
+                <h3>What it is</h3>
                 <p>
-                  The veteran names a need. MVP categories: FOOD, TRANSPORTATION, SHELTER,
-                  PEER_SUPPORT.
+                  A veteran names a need. They grant consent. We try to put a human or a material
+                  resource on that need.
                 </p>
-              </li>
-              <li class="slice-plate">
-                <h3>Consent Grant</h3>
-                <p>
-                  Disclosure waits on a Consent Grant. Membership in a trusted circle is not a
-                  permission.
-                </p>
-              </li>
-              <li class="slice-plate">
-                <h3>Coordination</h3>
-                <p>
-                  We try to match a consented human or a material resource. Manual coordination
-                  remains valid where a live provider is unavailable.
-                </p>
-              </li>
-            </ul>
+              </section>
+              <section class="slice-plate">
+                <h3>What it is not</h3>
+                <p>Not a clinic. Not an EHR. Not 911. Not a launch.</p>
+              </section>
+            </div>
           </article>
 
-          <article class="demo-screen" data-demo-screen="what-it-is-not">
-            <p class="kicker">What it is not</p>
-            <h2>Not a clinic. Not a launch.</h2>
-            <ul class="demo-plates" aria-label="Out of scope">
-              <li class="slice-plate">
-                <h3>Not an EHR</h3>
-                <p>SUAS does not store a medical record or stand in for clinical systems.</p>
-              </li>
-              <li class="slice-plate">
-                <h3>Not a diagnosis</h3>
-                <p>A Check-In is not a diagnosis. A Support Signal is not a clinical score.</p>
-              </li>
-              <li class="slice-plate">
-                <h3>Not a suicide predictor</h3>
-                <p>
-                  SUAS does not predict suicide and does not run safety-critical generative scoring.
-                </p>
-              </li>
-              <li class="slice-plate">
-                <h3>Not 911</h3>
-                <p>SUAS does not call 911. There is no automated emergency dispatch.</p>
-              </li>
-            </ul>
-            <p class="status-badge">SPEC STACK 0.2.0</p>
-            <p>
-              SPEC-017 is not ready. This is not a pilot. Production and pilot readiness stay
-              <strong>NOT_READY</strong>.
-            </p>
-          </article>
-
-          <article class="demo-screen" data-demo-screen="the-loop">
+          <article class="demo-screen" data-demo-screen="loop">
             <p class="kicker">The loop</p>
             <h2>One path. Seven words.</h2>
             <p class="demo-lead">
@@ -338,7 +283,7 @@
             </p>
             <p>
               <strong>RED</strong> can open a Support Case. <strong>YELLOW</strong> and
-              <strong>ORANGE</strong> do not.
+              <strong>ORANGE</strong> do not. The case result stays on this screen.
             </p>
             <div class="demo-band-grid" role="group" aria-label="Support Signal band">
               <button
@@ -369,18 +314,6 @@
                 <span>Can open a Support Case.</span>
               </button>
             </div>
-            <p id="demo-band-picked" class="demo-note" aria-live="polite">
-              No band selected yet. The next screen stays honest if you skip this pick.
-            </p>
-            <p class="demo-note">
-              Fixture Support Signal scoring is not a clinical score and is not a diagnosis. SUAS
-              does not call 911.
-            </p>
-          </article>
-
-          <article class="demo-screen" data-demo-screen="case">
-            <p class="kicker">Support Case</p>
-            <h2>What the band did.</h2>
             <p class="status-badge" id="demo-case-badge">NO BAND</p>
             <div id="demo-case-result" class="slice-plate" aria-live="polite">
               <p>
@@ -389,164 +322,27 @@
               </p>
               <p class="demo-note">SUAS did not contact emergency services.</p>
             </div>
-          </article>
-
-          <article class="demo-screen" data-demo-screen="consent">
-            <p class="kicker">Consent Grant</p>
-            <h2>Grant and revoke stay local.</h2>
-            <p class="demo-lead">
-              Small scale is not an exception. A hackathon room, a small county, or this tab still
-              needs a Consent Grant before disclosure.
+            <p class="demo-note">
+              Fixture Support Signal scoring is not a clinical score and is not a diagnosis. SUAS
+              does not call 911.
             </p>
-            <p>
-              These toggles use released permission and scope pairs. They are not written to
-              <code>/api/v0</code>. A grant for YELLOW does not imply ORANGE or RED.
-            </p>
-            <ul class="demo-grant-list">
-              <li class="slice-plate" data-grant-key="can_receive:RED" data-granted="false">
-                <h3>can_receive · RED</h3>
-                <p>RESPONDER may receive a RED Support Signal. Grantee type stays a label here.</p>
-                <p class="demo-grant-status">Status <span data-grant-status>REVOKED</span></p>
-                <div class="demo-inline-actions">
-                  <button type="button" class="action" data-grant-action="grant">Grant</button>
-                  <button type="button" class="action" data-grant-action="revoke" disabled>
-                    Revoke
-                  </button>
-                </div>
-              </li>
-              <li class="slice-plate" data-grant-key="can_view:support_signal" data-granted="false">
-                <h3>can_view · support_signal</h3>
-                <p>View the Support Signal object. This does not imply checkin_answers.</p>
-                <p class="demo-grant-status">Status <span data-grant-status>REVOKED</span></p>
-                <div class="demo-inline-actions">
-                  <button type="button" class="action" data-grant-action="grant">Grant</button>
-                  <button type="button" class="action" data-grant-action="revoke" disabled>
-                    Revoke
-                  </button>
-                </div>
-              </li>
-              <li
-                class="slice-plate"
-                data-grant-key="can_share:service_request_fulfillment"
-                data-granted="false"
-              >
-                <h3>can_share · service_request_fulfillment</h3>
-                <p>Share enough to fulfill a Service Request. Minimum-necessary still applies.</p>
-                <p class="demo-grant-status">Status <span data-grant-status>REVOKED</span></p>
-                <div class="demo-inline-actions">
-                  <button type="button" class="action" data-grant-action="grant">Grant</button>
-                  <button type="button" class="action" data-grant-action="revoke" disabled>
-                    Revoke
-                  </button>
-                </div>
-              </li>
-            </ul>
-          </article>
-
-          <article class="demo-screen" data-demo-screen="qrf">
-            <p class="kicker">QRF</p>
-            <h2>Deploy is a peer-support request.</h2>
-            <p class="demo-lead">
-              Deploy opens a peer-support request in this tab. Cancel closes it. Join does not
-              persist. This demo does not mint a session.
-            </p>
-            <p class="status-badge" id="demo-qrf-status">NONE</p>
-            <div id="demo-qrf-detail" class="slice-plate" aria-live="polite">
-              <p>No peer-support request is open in this tab.</p>
-              <p class="demo-note">
-                Deploy opens a request here. Cancel closes it. This is not emergency dispatch.
-              </p>
-            </div>
-            <div class="demo-inline-actions">
-              <button type="button" class="action" id="demo-qrf-deploy">Deploy QRF</button>
-              <button type="button" class="action" id="demo-qrf-cancel" disabled>Cancel</button>
-              <button type="button" class="action" id="demo-qrf-join">Join</button>
-            </div>
-            <p id="demo-qrf-join-note" class="demo-note" hidden>
-              Join does not persist. This demo does not mint a session. The live Join the Mission
-              HTML exists in the app tree; Pages is not that host.
-            </p>
-          </article>
-
-          <article class="demo-screen" data-demo-screen="unavailable">
-            <p class="kicker">Honest unavailable</p>
-            <h2>Missing routes stay missing.</h2>
-            <p class="demo-lead">
-              Surfaces that are not live say so. This demo does not draw a green inbox or a duty
-              roster that no released table stores.
-            </p>
-            <ul class="demo-plates">
-              <li class="slice-plate">
-                <p class="hash">CHAT</p>
-                <h3>UNAVAILABLE</h3>
-                <p>
-                  Messaging is not available yet. Your responder will contact you through the
-                  channels you have consented to.
-                </p>
-              </li>
-              <li class="slice-plate">
-                <p class="hash">ON-DUTY</p>
-                <h3>UNAVAILABLE</h3>
-                <p>
-                  On-duty is not a recorded fact. This build does not store responder availability.
-                </p>
-              </li>
-              <li class="slice-plate">
-                <p class="hash">METRICS</p>
-                <h3>NOT_COMPUTABLE</h3>
-                <p>
-                  No released definition. The dashboard does not print 0 or an em dash in place of a
-                  fact.
-                </p>
-              </li>
-            </ul>
-          </article>
-
-          <article class="demo-screen" data-demo-screen="real-versus-not">
-            <p class="kicker">Real versus not</p>
-            <h2>What the API can do today.</h2>
-            <p class="demo-lead">
-              This is the implementation kernel, not this Pages tab. Pages does not call Fastify,
-              Neon, or Workers.
-            </p>
-            <div class="demo-split">
-              <section class="slice-plate">
-                <h3>On the API today</h3>
-                <ul>
-                  <li>Passwordless challenge and session</li>
-                  <li>Check-In start, answer, complete (qv-001 scores)</li>
-                  <li>Support Case read and claim</li>
-                  <li>Consent Grant grant and revoke</li>
-                  <li>Resources and veteran status</li>
-                  <li>Follow-Ups</li>
-                  <li>Notifications: in-app, fake or sink only</li>
-                  <li>QRF deploy and cancel</li>
-                </ul>
-              </section>
-              <section class="slice-plate">
-                <h3>Not wired</h3>
-                <ul>
-                  <li>Join persist</li>
-                  <li>Live Uber, rooms, food, or peer APIs</li>
-                  <li>911 or any automated emergency dispatch</li>
-                  <li>A public /app host on this Pages site</li>
-                </ul>
-                <p class="demo-note">
-                  Formal synthetic STAGING exists for owner-controlled evidence. It is not this URL,
-                  and it is not authorization for real veteran data.
-                </p>
-              </section>
-            </div>
           </article>
 
           <article class="demo-screen" data-demo-screen="close">
             <p class="kicker">Close</p>
             <h2>Sunday is not a launch.</h2>
-            <p class="demo-lead">After this room we keep listening.</p>
-            <p>
-              Spec stack 0.2.0. SPEC-017 is not ready. This click-through stays on GitHub Pages. It
-              is not live operations.
-            </p>
+            <ul class="demo-close-lines">
+              <li>
+                <strong>Real.</strong> Check-In HTML and QRF deploy/cancel are in the kernel. Neon
+                is standing. Notifications stay in-app, fake or sink only.
+              </li>
+              <li>
+                <strong>Not.</strong> No public /app host. Join persist, chat, and on-duty stay
+                unavailable. No live send.
+              </li>
+              <li>Consent Grant grant and revoke exist. They are not this walk.</li>
+              <li>SPEC-017 is still NOT READY. After this room we keep listening.</li>
+            </ul>
             <nav class="actions" aria-label="After the demo">
               <a class="action" href="index.html">
                 <span>Poster</span>
@@ -567,8 +363,8 @@
 
         <nav class="demo-nav" aria-label="Demo movement">
           <a class="action" id="demo-back" href="index.html">Poster</a>
-          <p id="demo-position" class="demo-position">01 / 11</p>
-          <a class="action" id="demo-next" href="#what-it-is">Next</a>
+          <p id="demo-position" class="demo-position">01 / 05</p>
+          <a class="action" id="demo-next" href="#what">Next</a>
         </nav>
       </main>
 
