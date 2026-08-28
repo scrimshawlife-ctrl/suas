@@ -123,7 +123,9 @@ function syncChrome() {
     heading.setAttribute('tabindex', '-1');
     heading.focus({ preventScroll: true });
   }
-  window.scrollTo(0, 0);
+  const pinTop = () => window.scrollTo(0, 0);
+  pinTop();
+  requestAnimationFrame(pinTop);
 
   renderCase();
 }
