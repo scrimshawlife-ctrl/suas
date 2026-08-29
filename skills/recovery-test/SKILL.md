@@ -1,3 +1,15 @@
+---
+name: recovery-test
+version: 1.0.0
+kind: runtime
+status: active
+authority: released-runtime-conformance
+inputs: [recovery_contract, environment, backup_identity, runtime_provenance, durability_expectations]
+outputs: [recovery_execution]
+fail_closed: true
+self_test: skills/self-tests/recovery-test.yaml
+---
+
 # recovery-test
 
 ## Purpose
@@ -23,6 +35,9 @@ Use when a readiness/evidence gate requires restoration proof, when validating b
 8. Record failures, duplicate effects, data loss, and unresolved ambiguity.
 9. Do not infer production RTO/RPO/SLO guarantees unless released authority permits the claim.
 
+## Invocation example
+`Execute the approved STAGING restore exercise for the current commit and record integrity, loss boundary, durable-job behavior, and idempotency evidence.`
+
 ## Output schema
 ```yaml
 exercise_id: string
@@ -42,6 +57,9 @@ evidence: [string]
 findings: [string]
 claims_not_authorized: [string]
 ```
+
+## Self-test
+Run `skills/self-tests/recovery-test.yaml`. Migration-only evidence must return NOT_COMPUTABLE for a gate that requires an actual restore exercise.
 
 ## Completion criteria
 Complete only when restore integrity, loss boundary, and durable-work behavior are explicitly evidenced or marked NOT_COMPUTABLE with missing prerequisites identified.
