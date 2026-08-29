@@ -52,7 +52,9 @@ export {
   RETENTION_DRY_RUN_ACTION,
   RETENTION_EXCLUSIONS,
   RETENTION_WINDOW_DAYS,
+  summarizeRetentionDryRun,
   type RetentionDryRunCandidate,
   type RetentionDryRunEvaluation,
   type RetentionExclusion,
+  type RetentionDryRunSummary,
 } from './retention-dry-run.js';

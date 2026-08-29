@@ -31,6 +31,20 @@ export interface RetentionDryRunEvaluation {
   readonly reasons: readonly string[];
 }
 
+/**
+ * Evidence suitable for a D-007 dry-run record. It intentionally contains no
+ * candidate identifiers, dates, free text, or any signal that can be used to
+ * reconstruct an individual retention decision.
+ */
+export interface RetentionDryRunSummary {
+  readonly action: typeof RETENTION_DRY_RUN_ACTION;
+  readonly asOf: Date;
+  readonly candidateCount: number;
+  readonly eligibleForManualReviewCount: number;
+  readonly excludedOrNotYetEligibleCount: number;
+  readonly reasonCounts: Readonly<Record<string, number>>;
+}
+
 function latestRelevantDate(candidate: RetentionDryRunCandidate): Date | null {
   const dates = [candidate.caseClosedAt, candidate.lastParticipantActivityAt].filter(
     (value): value is Date => value !== null,
@@ -77,5 +91,36 @@ export function evaluateRetentionDryRun(
     eligible: reasons.length === 0,
     eligibleAfter,
     reasons,
+  };
+}
+
+/**
+ * Produces an aggregate-only record for an authorized dry-run. This does not
+ * select records, record an operational decision, or authorize a purge.
+ */
+export function summarizeRetentionDryRun(
+  candidates: readonly RetentionDryRunCandidate[],
+  asOf: Date,
+): RetentionDryRunSummary {
+  const reasonCounts = new Map<string, number>();
+  let eligibleForManualReviewCount = 0;
+
+  for (const candidate of candidates) {
+    const evaluation = evaluateRetentionDryRun(candidate, asOf);
+    if (evaluation.eligible) eligibleForManualReviewCount += 1;
+    for (const reason of evaluation.reasons) {
+      reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
+    }
+  }
+
+  return {
+    action: RETENTION_DRY_RUN_ACTION,
+    asOf: new Date(asOf),
+    candidateCount: candidates.length,
+    eligibleForManualReviewCount,
+    excludedOrNotYetEligibleCount: candidates.length - eligibleForManualReviewCount,
+    reasonCounts: Object.fromEntries(
+      [...reasonCounts.entries()].sort(([left], [right]) => left.localeCompare(right)),
+    ),
   };
 }

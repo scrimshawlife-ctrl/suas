@@ -3,6 +3,7 @@ import {
   evaluateRetentionDryRun,
   RETENTION_DRY_RUN_ACTION,
   RETENTION_WINDOW_DAYS,
+  summarizeRetentionDryRun,
 } from '../../src/privacy/index.js';
 
 const CLOSED_AT = new Date('2025-08-29T12:00:00.000Z');
@@ -71,5 +72,42 @@ describe('D-007 365-day retention dry-run', () => {
       eligibleAfter: null,
       reasons: ['MISSING_CASE_CLOSURE_OR_PARTICIPANT_ACTIVITY'],
     });
+  });
+
+  it('produces deterministic aggregate-only evidence for manual review', () => {
+    const summary = summarizeRetentionDryRun(
+      [
+        { caseClosedAt: CLOSED_AT, lastParticipantActivityAt: null, exclusions: [] },
+        { caseClosedAt: CLOSED_AT, lastParticipantActivityAt: null, exclusions: ['LEGAL_HOLD'] },
+        { caseClosedAt: null, lastParticipantActivityAt: null, exclusions: [] },
+        {
+          caseClosedAt: CLOSED_AT,
+          lastParticipantActivityAt: new Date('2025-10-01T12:00:00.000Z'),
+          exclusions: [],
+        },
+      ],
+      BOUNDARY,
+    );
+
+    expect(summary).toEqual({
+      action: RETENTION_DRY_RUN_ACTION,
+      asOf: BOUNDARY,
+      candidateCount: 4,
+      eligibleForManualReviewCount: 1,
+      excludedOrNotYetEligibleCount: 3,
+      reasonCounts: {
+        LEGAL_HOLD: 1,
+        MISSING_CASE_CLOSURE_OR_PARTICIPANT_ACTIVITY: 1,
+        RETENTION_WINDOW_NOT_ELAPSED: 1,
+      },
+    });
+    expect(Object.keys(summary).sort()).toEqual([
+      'action',
+      'asOf',
+      'candidateCount',
+      'eligibleForManualReviewCount',
+      'excludedOrNotYetEligibleCount',
+      'reasonCounts',
+    ]);
   });
 });
