@@ -1,0 +1,20 @@
+skill:
+  name: <skill-name>
+  version: 1.0.0
+execution_id: <unique-execution-id>
+executed_at_utc: <ISO-8601-UTC>
+authority:
+  spec_version: <spec-version-or-null>
+  manifest: <manifest-or-null>
+runtime:
+  commit: <commit-or-null>
+  build: <build-or-null>
+  schema: <schema-or-null>
+  environment: <environment-or-null>
+inputs_resolved: false
+result: NOT_COMPUTABLE
+observed: []
+inferred: []
+evidence: []
+missing: []
+warnings: []
