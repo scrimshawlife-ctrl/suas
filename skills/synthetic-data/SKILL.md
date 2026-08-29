@@ -1,3 +1,15 @@
+---
+name: synthetic-data
+version: 1.0.0
+kind: runtime
+status: active
+authority: released-runtime-conformance
+inputs: [spec_contract, environment, case_requirements, mapping_rules, runtime_provenance]
+outputs: [dataset_execution]
+fail_closed: true
+self_test: skills/self-tests/synthetic-data.yaml
+---
+
 # synthetic-data
 
 ## Purpose
@@ -21,6 +33,9 @@ Use for fixture generation, deterministic test datasets, aggregate-only dry runs
 7. Record dataset identity, generator identity, seed, mapping identity, exact cutoff where applicable, expected-output reference, and cryptographic hashes.
 8. Verify regeneration produces identical evidence-relevant data and expected outputs.
 
+## Invocation example
+`Generate and execute the canonical D-007 fixture set on the current TEST commit, then return dataset/mapping hashes and evidence references.`
+
 ## Output schema
 ```yaml
 dataset_id: string
@@ -38,6 +53,9 @@ result: PASS|FAIL|NOT_COMPUTABLE
 evidence: [string]
 production_authority: false
 ```
+
+## Self-test
+Run `skills/self-tests/synthetic-data.yaml`. The fixture must fail on an unpinned generator and must never permit `production_authority: true`.
 
 ## Completion criteria
 Complete only when fixtures are deterministic, executable, hashed, cover all required cases, and results are tied to current runtime provenance.
