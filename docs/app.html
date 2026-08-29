@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b0d0c" />
+    <title>SUAS — product preview</title>
+    <meta
+      name="description"
+      content="Static product preview of the SUAS veteran support runtime. Synthetic data only."
+    />
+    <link rel="canonical" href="https://scrimshawlife-ctrl.github.io/suas/app.html" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0b0d0c;
+        --panel: #111512;
+        --panel-raised: #151b16;
+        --bone: #e8e4d6;
+        --bone-soft: #c9c3b2;
+        --bone-dim: #9a9588;
+        --bone-mute: #6e6a60;
+        --olive: #9aaa5c;
+        --olive-deep: #69763e;
+        --amber: #d4a85d;
+        --red: #c87962;
+        --line: rgba(232, 228, 214, 0.16);
+        --line-strong: rgba(232, 228, 214, 0.32);
+        --sans: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+        --serif: 'IBM Plex Serif', Georgia, serif;
+        --mono: 'IBM Plex Mono', ui-monospace, monospace;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        color-scheme: dark;
+        background: var(--bg);
+      }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        color: var(--bone);
+        background:
+          radial-gradient(circle at 88% 12%, rgba(154, 170, 92, 0.08), transparent 24rem), var(--bg);
+        font: 1rem/1.5 var(--sans);
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        content: '';
+        pointer-events: none;
+        opacity: 0.18;
+        background-image:
+          linear-gradient(
+            115deg,
+            transparent 49.8%,
+            rgba(154, 170, 92, 0.13) 50%,
+            transparent 50.2%
+          ),
+          linear-gradient(
+            25deg,
+            transparent 49.8%,
+            rgba(232, 228, 214, 0.05) 50%,
+            transparent 50.2%
+          );
+        background-size:
+          9rem 9rem,
+          13rem 13rem;
+        mask-image: linear-gradient(to bottom, black, transparent 80%);
+      }
+
+      button,
+      a {
+        font: inherit;
+      }
+
+      a {
+        color: inherit;
+        text-underline-offset: 0.2em;
+      }
+
+      button:focus-visible,
+      a:focus-visible {
+        outline: 2px solid var(--bone);
+        outline-offset: 4px;
+      }
+
+      .skip-link {
+        position: absolute;
+        top: -3rem;
+        left: 1rem;
+        z-index: 20;
+        padding: 0.45rem 0.7rem;
+        color: var(--bg);
+        background: var(--bone);
+      }
+
+      .skip-link:focus {
+        top: 1rem;
+      }
+
+      .page {
+        width: min(100% - 2rem, 1260px);
+        margin: 0 auto;
+        padding: 1.25rem 0 3rem;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 2.5rem;
+      }
+
+      .brand,
+      .brand-mark,
+      .meta-line,
+      .status-line,
+      .nav-label,
+      .eyebrow,
+      .pill,
+      .button,
+      .role-switcher,
+      .metric-label,
+      .case-id,
+      .mini-label,
+      .table-label {
+        font-family: var(--mono);
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.7rem;
+        color: var(--bone);
+        text-decoration: none;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 2.35rem;
+        height: 2.35rem;
+        place-items: center;
+        border: 1px solid var(--line-strong);
+        color: var(--olive);
+        font-size: 1.25rem;
+      }
+
+      .brand-name {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+      }
+
+      .brand-sub {
+        display: block;
+        margin-top: 0.1rem;
+        color: var(--bone-mute);
+        font-size: 0.59rem;
+        letter-spacing: 0.19em;
+      }
+
+      .preview-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.45rem 0.65rem;
+        border: 1px solid rgba(154, 170, 92, 0.38);
+        color: var(--olive);
+        font: 0.66rem/1 var(--mono);
+        letter-spacing: 0.12em;
+      }
+
+      .preview-label::before {
+        width: 0.45rem;
+        height: 0.45rem;
+        border-radius: 50%;
+        background: var(--olive);
+        box-shadow: 0 0 0 0.22rem rgba(154, 170, 92, 0.12);
+        content: '';
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 15rem minmax(0, 1fr);
+        gap: clamp(1.5rem, 4vw, 4rem);
+        align-items: start;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 1.25rem;
+      }
+
+      .sidebar-kicker {
+        margin: 0 0 0.7rem;
+        color: var(--bone-mute);
+        font: 0.63rem/1.4 var(--mono);
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      .sidebar h1 {
+        max-width: 12rem;
+        margin: 0;
+        font: 2rem/1.05 var(--serif);
+        font-weight: 400;
+        letter-spacing: -0.03em;
+      }
+
+      .sidebar-copy {
+        margin: 1rem 0 2rem;
+        color: var(--bone-dim);
+        font-size: 0.85rem;
+      }
+
+      .role-switcher {
+        display: grid;
+        gap: 0.35rem;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      .role-switcher legend {
+        margin-bottom: 0.55rem;
+        color: var(--bone-mute);
+        font-size: 0.62rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .role-button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 0.7rem 0.75rem;
+        border: 1px solid transparent;
+        color: var(--bone-dim);
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .role-button:hover {
+        border-color: var(--line);
+        color: var(--bone);
+      }
+
+      .role-button[aria-selected='true'] {
+        border-color: var(--line-strong);
+        color: var(--bone);
+        background: var(--panel);
+      }
+
+      .role-button[aria-selected='true']::after {
+        color: var(--olive);
+        content: '↗';
+      }
+
+      .sidebar-foot {
+        margin-top: 2.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+        color: var(--bone-mute);
+        font-size: 0.72rem;
+      }
+
+      .sidebar-foot strong {
+        display: block;
+        margin-top: 0.25rem;
+        color: var(--bone-soft);
+        font: 0.72rem var(--mono);
+        font-weight: 400;
+      }
+
+      .surface {
+        min-width: 0;
+        padding: clamp(1.1rem, 3vw, 2.25rem);
+        border: 1px solid var(--line);
+        background: rgba(17, 21, 18, 0.88);
+        box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.18);
+      }
+
+      .surface-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 1.6rem;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow,
+      .mini-label,
+      .table-label {
+        color: var(--bone-mute);
+        font-size: 0.63rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .surface h2 {
+        margin: 0.25rem 0 0;
+        font: clamp(2rem, 5vw, 3.65rem)/0.95 var(--serif);
+        font-weight: 400;
+        letter-spacing: -0.045em;
+      }
+
+      .surface-intro {
+        max-width: 32rem;
+        margin: 0.9rem 0 0;
+        color: var(--bone-dim);
+        font-size: 0.92rem;
+      }
+
+      .status-line {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        flex: none;
+        padding: 0.45rem 0.55rem;
+        border: 1px solid var(--line);
+        color: var(--bone-soft);
+        font-size: 0.63rem;
+        letter-spacing: 0.08em;
+      }
+
+      .status-dot {
+        width: 0.45rem;
+        height: 0.45rem;
+        border-radius: 50%;
+        background: var(--olive);
+      }
+
+      .status-dot.amber {
+        background: var(--amber);
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 0.8rem;
+        margin-top: 1.15rem;
+      }
+
+      .card {
+        min-width: 0;
+        padding: 1rem;
+        border: 1px solid var(--line);
+        background: rgba(232, 228, 214, 0.025);
+      }
+
+      .card:hover {
+        border-color: var(--line-strong);
+      }
+
+      .span-12 {
+        grid-column: span 12;
+      }
+
+      .span-8 {
+        grid-column: span 8;
+      }
+
+      .span-7 {
+        grid-column: span 7;
+      }
+
+      .span-6 {
+        grid-column: span 6;
+      }
+
+      .span-5 {
+        grid-column: span 5;
+      }
+
+      .span-4 {
+        grid-column: span 4;
+      }
+
+      .card h3 {
+        margin: 0.3rem 0 0;
+        font-size: 1.05rem;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+      }
+
+      .card p {
+        margin: 0.55rem 0 0;
+        color: var(--bone-dim);
+        font-size: 0.84rem;
+      }
+
+      .hero-card {
+        position: relative;
+        overflow: hidden;
+        min-height: 11rem;
+        padding: 1.25rem;
+        border-color: rgba(154, 170, 92, 0.35);
+        background:
+          linear-gradient(120deg, rgba(154, 170, 92, 0.12), transparent 60%), var(--panel-raised);
+      }
+
+      .hero-card::after {
+        position: absolute;
+        right: -1.5rem;
+        bottom: -3rem;
+        width: 13rem;
+        height: 13rem;
+        border: 1px solid rgba(154, 170, 92, 0.24);
+        border-radius: 50%;
+        box-shadow:
+          0 0 0 1.4rem rgba(154, 170, 92, 0.045),
+          0 0 0 2.8rem rgba(154, 170, 92, 0.035),
+          0 0 0 4.2rem rgba(154, 170, 92, 0.025);
+        content: '';
+      }
+
+      .hero-card h3 {
+        position: relative;
+        z-index: 1;
+        max-width: 28rem;
+        font: clamp(1.55rem, 4vw, 2.4rem)/1 var(--serif);
+        font-weight: 400;
+      }
+
+      .hero-card p {
+        position: relative;
+        z-index: 1;
+        max-width: 25rem;
+      }
+
+      .card-topline,
+      .metric,
+      .case-row,
+      .resource-row,
+      .admin-row,
+      .action-row,
+      .mobile-tabs {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.8rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        padding: 0.3rem 0.45rem;
+        border: 1px solid var(--line-strong);
+        color: var(--bone-soft);
+        font-size: 0.61rem;
+        letter-spacing: 0.08em;
+      }
+
+      .pill.good {
+        border-color: rgba(154, 170, 92, 0.48);
+        color: var(--olive);
+      }
+
+      .pill.warn {
+        border-color: rgba(212, 168, 93, 0.48);
+        color: var(--amber);
+      }
+
+      .metric {
+        align-items: flex-end;
+        margin-top: 1rem;
+      }
+
+      .metric-value {
+        color: var(--bone);
+        font: 2.2rem/0.95 var(--serif);
+      }
+
+      .metric-label {
+        color: var(--bone-mute);
+        font-size: 0.62rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.55rem;
+        padding: 0.55rem 0.8rem;
+        border: 1px solid var(--bone-soft);
+        color: var(--bone);
+        background: transparent;
+        cursor: pointer;
+        font-size: 0.7rem;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+      }
+
+      .button:hover {
+        border-color: var(--olive);
+        color: var(--olive);
+      }
+
+      .button.primary {
+        border-color: var(--olive);
+        color: var(--bg);
+        background: var(--olive);
+      }
+
+      .button.primary:hover {
+        border-color: var(--bone);
+        color: var(--bg);
+        background: var(--bone);
+      }
+
+      .action-row {
+        justify-content: flex-start;
+        margin-top: 1.15rem;
+      }
+
+      .case-row,
+      .resource-row,
+      .admin-row {
+        padding: 0.85rem 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .case-row:first-of-type,
+      .resource-row:first-of-type,
+      .admin-row:first-of-type {
+        margin-top: 0.8rem;
+      }
+
+      .case-title,
+      .resource-title,
+      .admin-title {
+        min-width: 0;
+      }
+
+      .case-title strong,
+      .resource-title strong,
+      .admin-title strong {
+        display: block;
+        font-size: 0.88rem;
+        font-weight: 500;
+      }
+
+      .case-id,
+      .resource-title span,
+      .admin-title span {
+        display: block;
+        margin-top: 0.15rem;
+        overflow: hidden;
+        color: var(--bone-mute);
+        font-size: 0.62rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .safety-note {
+        margin-top: 1rem;
+        padding: 0.7rem 0.8rem;
+        border-left: 2px solid var(--amber);
+        color: var(--bone-dim);
+        background: rgba(212, 168, 93, 0.06);
+        font-size: 0.75rem;
+      }
+
+      .safety-note strong {
+        color: var(--amber);
+        font-weight: 500;
+      }
+
+      .admin-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.55rem;
+        margin-top: 0.9rem;
+      }
+
+      .admin-chip {
+        padding: 0.7rem;
+        border: 1px solid var(--line);
+      }
+
+      .admin-chip strong,
+      .admin-chip span {
+        display: block;
+      }
+
+      .admin-chip strong {
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+
+      .admin-chip span {
+        margin-top: 0.25rem;
+        color: var(--olive);
+        font: 0.62rem var(--mono);
+        text-transform: uppercase;
+      }
+
+      .mobile-tabs {
+        display: none;
+        margin: 1rem 0 0;
+        padding: 0.3rem;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .mobile-tabs a {
+        flex: 1;
+        padding: 0.45rem 0.2rem;
+        color: var(--bone-dim);
+        font: 0.62rem var(--mono);
+        text-align: center;
+        text-decoration: none;
+      }
+
+      .mobile-tabs a:hover,
+      .mobile-tabs a[aria-current='page'] {
+        color: var(--bone);
+        background: var(--panel-raised);
+      }
+
+      .surface-footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: 1.4rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+        color: var(--bone-mute);
+        font: 0.62rem var(--mono);
+        letter-spacing: 0.05em;
+      }
+
+      .toast {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 10;
+        max-width: 20rem;
+        padding: 0.75rem 0.9rem;
+        border: 1px solid var(--olive);
+        color: var(--bone);
+        background: var(--panel-raised);
+        box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.3);
+        font-size: 0.78rem;
+      }
+
+      .toast[hidden] {
+        display: none;
+      }
+
+      @media (max-width: 850px) {
+        .layout {
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
+
+        .sidebar {
+          position: static;
+        }
+
+        .sidebar h1,
+        .sidebar-copy,
+        .sidebar-foot,
+        .role-switcher legend {
+          display: none;
+        }
+
+        .role-switcher {
+          display: flex;
+          gap: 0.35rem;
+          overflow-x: auto;
+        }
+
+        .role-button {
+          width: auto;
+          flex: 1;
+          justify-content: center;
+          min-width: 8rem;
+          text-align: center;
+        }
+
+        .role-button[aria-selected='true']::after {
+          display: none;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .page {
+          width: min(100% - 1rem, 1260px);
+          padding-top: 0.75rem;
+        }
+
+        .topbar {
+          margin-bottom: 1rem;
+        }
+
+        .preview-label {
+          max-width: 9rem;
+          font-size: 0.55rem;
+          line-height: 1.25;
+        }
+
+        .surface {
+          padding: 1rem;
+        }
+
+        .surface-header {
+          display: block;
+        }
+
+        .status-line {
+          margin-top: 1rem;
+        }
+
+        .dashboard-grid {
+          display: block;
+        }
+
+        .card {
+          margin-top: 0.8rem;
+        }
+
+        .span-12:first-child {
+          margin-top: 0;
+        }
+
+        .admin-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .surface-footer {
+          display: block;
+        }
+
+        .surface-footer span + span {
+          display: block;
+          margin-top: 0.35rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="page">
+      <header class="topbar">
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">∅</span>
+          <span>
+            <span class="brand-name">SUAS</span>
+            <span class="brand-sub">SHUT UP AND SERVE</span>
+          </span>
+        </a>
+        <span class="preview-label">STATIC PRODUCT PREVIEW · SYNTHETIC DATA</span>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar" aria-label="Preview controls">
+          <p class="sidebar-kicker">A clearer handoff</p>
+          <h1>Support without the runaround.</h1>
+          <p class="sidebar-copy">
+            A visual preview of the released runtime surfaces. Nothing here connects to an API or
+            stores a session.
+          </p>
+          <fieldset class="role-switcher">
+            <legend>View as</legend>
+            <button class="role-button" type="button" data-role="veteran" aria-selected="true">
+              Veteran
+            </button>
+            <button class="role-button" type="button" data-role="responder" aria-selected="false">
+              Responder
+            </button>
+            <button class="role-button" type="button" data-role="admin" aria-selected="false">
+              Admin
+            </button>
+          </fieldset>
+          <p class="sidebar-foot">
+            Runtime status
+            <strong>SPEC-017 · NOT READY</strong>
+          </p>
+        </aside>
+
+        <main id="main" tabindex="-1">
+          <section class="surface" data-surface="veteran" aria-labelledby="surface-title">
+            <header class="surface-header">
+              <div>
+                <div class="eyebrow">Veteran surface / home</div>
+                <h2 id="surface-title">Support</h2>
+                <p class="surface-intro">
+                  One place to ask for help, check in, and keep your choices visible.
+                </p>
+              </div>
+              <div class="status-line"><span class="status-dot"></span>SESSION · SYNTHETIC</div>
+            </header>
+
+            <div class="mobile-tabs" aria-label="Veteran navigation">
+              <a href="#support" aria-current="page">Home</a>
+              <a href="#check-in">Check-In</a>
+              <a href="#resources">Resources</a>
+            </div>
+
+            <div class="dashboard-grid" data-view="veteran">
+              <article class="card hero-card span-12" id="support">
+                <div class="eyebrow">Peer support</div>
+                <h3>Your request is recorded. A responder is assigned.</h3>
+                <p>
+                  The next step is visible, without asking you to repeat what you already shared.
+                </p>
+                <div class="action-row">
+                  <button class="button primary" type="button" data-action="case">
+                    View request
+                  </button>
+                  <button class="button" type="button" data-action="cancel">Cancel request</button>
+                </div>
+              </article>
+
+              <article class="card span-5" id="check-in">
+                <div class="card-topline">
+                  <div class="eyebrow">Check-In</div>
+                  <span class="pill good">READY</span>
+                </div>
+                <h3>A quick read on how things are going.</h3>
+                <p>Start a short check-in. Your answers stay within your consent.</p>
+                <div class="action-row">
+                  <button class="button" type="button" data-action="check-in">
+                    Start Check-In
+                  </button>
+                </div>
+              </article>
+
+              <article class="card span-7">
+                <div class="card-topline">
+                  <div class="eyebrow">Privacy</div>
+                  <span class="pill">VISIBLE</span>
+                </div>
+                <h3>You decide who helps.</h3>
+                <p>Review consent, trusted contacts, and the boundaries around your support.</p>
+                <div class="action-row">
+                  <button class="button" type="button" data-action="privacy">View choices</button>
+                </div>
+              </article>
+
+              <article class="card span-12" id="resources">
+                <div class="card-topline">
+                  <div>
+                    <div class="eyebrow">Find help</div>
+                    <h3>Immediate resources</h3>
+                  </div>
+                  <span class="pill warn">NO AUTO-DISPATCH</span>
+                </div>
+                <div class="resource-row">
+                  <div class="resource-title">
+                    <strong>Housing</strong><span>Local listings and next steps</span>
+                  </div>
+                  <span class="pill good">BROWSE</span>
+                </div>
+                <div class="resource-row">
+                  <div class="resource-title">
+                    <strong>Food</strong><span>Food support near you</span>
+                  </div>
+                  <span class="pill good">BROWSE</span>
+                </div>
+                <div class="resource-row">
+                  <div class="resource-title">
+                    <strong>Transportation</strong><span>Options to get where you need to go</span>
+                  </div>
+                  <span class="pill good">BROWSE</span>
+                </div>
+              </article>
+            </div>
+
+            <div class="dashboard-grid" data-view="responder" hidden>
+              <article class="card span-12">
+                <div class="card-topline">
+                  <div>
+                    <div class="eyebrow">Responder / home</div>
+                    <h3>Active needs, with the next action clear.</h3>
+                  </div>
+                  <span class="status-line"
+                    ><span class="status-dot amber"></span>ON DUTY · UNAVAILABLE</span
+                  >
+                </div>
+                <p>
+                  The roster is not invented here. The queue remains truthful about what is
+                  available.
+                </p>
+              </article>
+
+              <article class="card span-7">
+                <div class="card-topline">
+                  <div class="eyebrow">Unassigned</div>
+                  <span class="pill warn">1 NEED</span>
+                </div>
+                <div class="case-row">
+                  <div class="case-title">
+                    <strong>Support Case</strong
+                    ><span class="case-id">SYNTH-CASE-001 · priority signal GREEN</span>
+                  </div>
+                  <span class="pill good">CLAIM</span>
+                </div>
+                <div class="action-row">
+                  <button class="button primary" type="button" data-action="claim">
+                    Open case
+                  </button>
+                </div>
+              </article>
+
+              <article class="card span-5">
+                <div class="card-topline">
+                  <div class="eyebrow">Active needs</div>
+                  <span class="pill good">ASSIGNED</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-value">01</span
+                  ><span class="metric-label">synthetic case</span>
+                </div>
+                <p>Assignment and contact history stay attached to the case.</p>
+              </article>
+
+              <article class="card span-12">
+                <div class="card-topline">
+                  <div class="eyebrow">Quick resource share</div>
+                  <span class="pill">MANUAL REVIEW</span>
+                </div>
+                <div class="resource-row">
+                  <div class="resource-title">
+                    <strong>Housing</strong><span>Share an approved resource after review</span>
+                  </div>
+                  <button class="button" type="button" data-action="share">Share</button>
+                </div>
+                <div class="resource-row">
+                  <div class="resource-title">
+                    <strong>Food</strong><span>Share an approved resource after review</span>
+                  </div>
+                  <button class="button" type="button" data-action="share">Share</button>
+                </div>
+              </article>
+            </div>
+
+            <div class="dashboard-grid" data-view="admin" hidden>
+              <article class="card span-12">
+                <div class="card-topline">
+                  <div>
+                    <div class="eyebrow">SUAS admin / build information</div>
+                    <h3>Know what is running before you trust it.</h3>
+                  </div>
+                  <span class="status-line"
+                    ><span class="status-dot amber"></span>MFA ELEVATED</span
+                  >
+                </div>
+                <div class="admin-grid">
+                  <div class="admin-chip"><strong>Environment</strong><span>LOCAL</span></div>
+                  <div class="admin-chip"><strong>Specification</strong><span>0.2.0</span></div>
+                  <div class="admin-chip"><strong>Implementation</strong><span>SPEC-017</span></div>
+                  <div class="admin-chip"><strong>Readiness</strong><span>NOT READY</span></div>
+                </div>
+              </article>
+
+              <article class="card span-7">
+                <div class="card-topline">
+                  <div class="eyebrow">Adapter boundary</div>
+                  <span class="pill good">SAFE LOCAL</span>
+                </div>
+                <div class="admin-row">
+                  <div class="admin-title">
+                    <strong>Email / SMS</strong><span>Outbound delivery</span>
+                  </div>
+                  <span class="pill">SINK</span>
+                </div>
+                <div class="admin-row">
+                  <div class="admin-title">
+                    <strong>Transportation / Shelter / Food</strong
+                    ><span>Fulfillment adapters</span>
+                  </div>
+                  <span class="pill">FAKE</span>
+                </div>
+                <div class="admin-row">
+                  <div class="admin-title">
+                    <strong>Peer support</strong><span>Human handoff</span>
+                  </div>
+                  <span class="pill">MANUAL</span>
+                </div>
+              </article>
+
+              <article class="card span-5">
+                <div class="eyebrow">Release boundary</div>
+                <h3>No production claim.</h3>
+                <p>
+                  This surface is a static product preview, not an enrollment or operating console.
+                </p>
+                <div class="safety-note">
+                  <strong>Boundary:</strong> synthetic records only. Real effects stay disabled.
+                </div>
+              </article>
+            </div>
+
+            <footer class="surface-footer">
+              <span>STATIC PREVIEW · NO API CONNECTION</span>
+              <span>SUAS · 0.2.0 · LOCAL SHAPE</span>
+            </footer>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script>
+      (() => {
+        const buttons = [...document.querySelectorAll('[data-role]')];
+        const views = [...document.querySelectorAll('[data-view]')];
+        const surface = document.querySelector('[data-surface]');
+        const title = document.querySelector('#surface-title');
+        const toast = document.querySelector('.toast');
+        const copy = {
+          veteran: [
+            'Veteran surface / home',
+            'Support',
+            'One place to ask for help, check in, and keep your choices visible.',
+          ],
+          responder: [
+            'Responder surface / queue',
+            'Responder',
+            'Keep the queue truthful and make the next useful action obvious.',
+          ],
+          admin: [
+            'SUAS admin / build information',
+            'Build information',
+            'A small operational view of the boundaries around the system.',
+          ],
+        };
+
+        function setRole(role) {
+          buttons.forEach((button) =>
+            button.setAttribute('aria-selected', String(button.dataset.role === role)),
+          );
+          views.forEach((view) => {
+            view.hidden = view.dataset.view !== role;
+          });
+          surface.dataset.surface = role;
+          title.textContent = copy[role][1];
+          document.querySelector('.eyebrow').textContent = copy[role][0];
+          document.querySelector('.surface-intro').textContent = copy[role][2];
+          history.replaceState(null, '', `?role=${role}`);
+          document.querySelector('#main').focus({ preventScroll: true });
+        }
+
+        function showToast(message) {
+          toast.textContent = message;
+          toast.hidden = false;
+          window.clearTimeout(showToast.timer);
+          showToast.timer = window.setTimeout(() => {
+            toast.hidden = true;
+          }, 2600);
+        }
+
+        buttons.forEach((button) =>
+          button.addEventListener('click', () => setRole(button.dataset.role)),
+        );
+        document.querySelectorAll('[data-action]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const messages = {
+              case: 'Static preview: the real runtime would open the consent-scoped case view.',
+              cancel: 'Static preview: no request was changed.',
+              'check-in': 'Static preview: the real runtime would start a check-in.',
+              privacy: 'Static preview: the real runtime would open consent choices.',
+              claim: 'Static preview: the real runtime would require a responder session.',
+              share: 'Static preview: resource sharing remains a manual, reviewed action.',
+            };
+            showToast(
+              messages[button.dataset.action] || 'Static preview: no live action was taken.',
+            );
+          });
+        });
+
+        const initial = new URLSearchParams(location.search).get('role');
+        setRole(['veteran', 'responder', 'admin'].includes(initial) ? initial : 'veteran');
+      })();
+    </script>
+  </body>
+</html>

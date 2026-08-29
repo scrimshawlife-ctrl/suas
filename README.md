@@ -70,6 +70,11 @@ On Windows PowerShell use `.\scripts\start-local.ps1 -Role veteran` (or
 non-loopback URLs, and credentials that are not present in the gitignored
 `.local-secrets/seed-output.json` or an explicit session environment variable.
 
+The static GitHub Pages product preview is available at
+`https://scrimshawlife-ctrl.github.io/suas/app.html`. It shows the veteran,
+responder, and admin surfaces with synthetic display data only. It does not
+connect to the API, issue sessions, or represent an operating environment.
+
 Commands:
 
 | Command                           | Purpose                                                |
