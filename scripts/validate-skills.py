@@ -16,7 +16,7 @@ REQUIRED_META = {
     "version": "1.0.0",
     "kind": "runtime",
     "status": "active",
-    "authority": "implementation-conformance",
+    "authority": "released-runtime-conformance",
     "fail_closed": "true",
 }
 SHARED = [
