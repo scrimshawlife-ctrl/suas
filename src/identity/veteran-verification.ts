@@ -67,13 +67,13 @@ export class VeteranVerificationDisabledError extends Error {
 }
 
 export class DisabledVeteranVerificationAdapter implements VeteranVerificationPort {
-  async verifyVeteranStatus(_input: {
+  verifyVeteranStatus(_input: {
     veteranId: string;
     authorizationCode: string;
     redirectUri: string;
     codeVerifier?: string;
   }): Promise<VeteranVerificationResult> {
-    throw new VeteranVerificationDisabledError();
+    return Promise.reject(new VeteranVerificationDisabledError());
   }
 }
 
