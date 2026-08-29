@@ -17,20 +17,40 @@
       rel="stylesheet"
     />
     <style>
+      /* Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V4 */
+      /* Hallmark · macrostructure: Workbench · tone: utilitarian · anchor hue: olive */
       :root {
-        --bg: #0b0d0c;
-        --panel: #111512;
-        --panel-raised: #151b16;
-        --bone: #e8e4d6;
-        --bone-soft: #c9c3b2;
-        --bone-dim: #9a9588;
-        --bone-mute: #6e6a60;
-        --olive: #9aaa5c;
-        --olive-deep: #69763e;
-        --amber: #d4a85d;
-        --red: #c87962;
-        --line: rgba(232, 228, 214, 0.16);
-        --line-strong: rgba(232, 228, 214, 0.32);
+        --bg: oklch(9.5% 0.012 145);
+        --panel: oklch(13.5% 0.016 145);
+        --panel-raised: oklch(16% 0.022 145);
+        --bone: oklch(91% 0.025 92);
+        --bone-soft: oklch(80% 0.028 92);
+        --bone-dim: oklch(65% 0.025 92);
+        --bone-mute: oklch(48% 0.022 92);
+        --olive: oklch(68% 0.095 112);
+        --olive-deep: oklch(50% 0.075 112);
+        --amber: oklch(73% 0.105 78);
+        --red: oklch(63% 0.095 38);
+        --line: oklch(91% 0.025 92 / 0.16);
+        --line-strong: oklch(91% 0.025 92 / 0.32);
+        --glow-olive: oklch(68% 0.095 112 / 0.08);
+        --grid-olive: oklch(68% 0.095 112 / 0.13);
+        --grid-bone: oklch(91% 0.025 92 / 0.05);
+        --preview-border: oklch(68% 0.095 112 / 0.38);
+        --preview-ring: oklch(68% 0.095 112 / 0.12);
+        --surface-fill: oklch(13.5% 0.016 145 / 0.88);
+        --card-fill: oklch(91% 0.025 92 / 0.025);
+        --hero-border: oklch(68% 0.095 112 / 0.35);
+        --hero-sheen: oklch(68% 0.095 112 / 0.12);
+        --hero-ring: oklch(68% 0.095 112 / 0.24);
+        --hero-ring-soft: oklch(68% 0.095 112 / 0.045);
+        --hero-ring-faint: oklch(68% 0.095 112 / 0.035);
+        --hero-ring-quiet: oklch(68% 0.095 112 / 0.025);
+        --good-border: oklch(68% 0.095 112 / 0.48);
+        --warn-border: oklch(73% 0.105 78 / 0.48);
+        --amber-fill: oklch(73% 0.105 78 / 0.06);
+        --shadow: oklch(0% 0 0 / 0.18);
+        --shadow-heavy: oklch(0% 0 0 / 0.3);
         --sans: 'Outfit', 'Segoe UI', system-ui, sans-serif;
         --serif: 'IBM Plex Serif', Georgia, serif;
         --mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -45,6 +65,7 @@
       html {
         color-scheme: dark;
         background: var(--bg);
+        overflow-x: clip;
       }
 
       body {
@@ -52,8 +73,9 @@
         margin: 0;
         color: var(--bone);
         background:
-          radial-gradient(circle at 88% 12%, rgba(154, 170, 92, 0.08), transparent 24rem), var(--bg);
+          radial-gradient(circle at 88% 12%, var(--glow-olive), transparent 24rem), var(--bg);
         font: 1rem/1.5 var(--sans);
+        overflow-x: clip;
       }
 
       body::before {
@@ -64,18 +86,8 @@
         pointer-events: none;
         opacity: 0.18;
         background-image:
-          linear-gradient(
-            115deg,
-            transparent 49.8%,
-            rgba(154, 170, 92, 0.13) 50%,
-            transparent 50.2%
-          ),
-          linear-gradient(
-            25deg,
-            transparent 49.8%,
-            rgba(232, 228, 214, 0.05) 50%,
-            transparent 50.2%
-          );
+          linear-gradient(115deg, transparent 49.8%, var(--grid-olive) 50%, transparent 50.2%),
+          linear-gradient(25deg, transparent 49.8%, var(--grid-bone) 50%, transparent 50.2%);
         background-size:
           9rem 9rem,
           13rem 13rem;
@@ -180,7 +192,7 @@
         align-items: center;
         gap: 0.55rem;
         padding: 0.45rem 0.65rem;
-        border: 1px solid rgba(154, 170, 92, 0.38);
+        border: 1px solid var(--preview-border);
         color: var(--olive);
         font: 0.66rem/1 var(--mono);
         letter-spacing: 0.12em;
@@ -191,7 +203,7 @@
         height: 0.45rem;
         border-radius: 50%;
         background: var(--olive);
-        box-shadow: 0 0 0 0.22rem rgba(154, 170, 92, 0.12);
+        box-shadow: 0 0 0 0.22rem var(--preview-ring);
         content: '';
       }
 
@@ -263,13 +275,13 @@
         color: var(--bone);
       }
 
-      .role-button[aria-selected='true'] {
+      .role-button[aria-pressed='true'] {
         border-color: var(--line-strong);
         color: var(--bone);
         background: var(--panel);
       }
 
-      .role-button[aria-selected='true']::after {
+      .role-button[aria-pressed='true']::after {
         color: var(--olive);
         content: '↗';
       }
@@ -294,8 +306,8 @@
         min-width: 0;
         padding: clamp(1.1rem, 3vw, 2.25rem);
         border: 1px solid var(--line);
-        background: rgba(17, 21, 18, 0.88);
-        box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.18);
+        background: var(--surface-fill);
+        box-shadow: 0 2rem 5rem var(--shadow);
       }
 
       .surface-header {
@@ -317,10 +329,12 @@
       }
 
       .surface h2 {
+        min-width: 0;
         margin: 0.25rem 0 0;
         font: clamp(2rem, 5vw, 3.65rem)/0.95 var(--serif);
         font-weight: 400;
         letter-spacing: -0.045em;
+        overflow-wrap: anywhere;
       }
 
       .surface-intro {
@@ -364,7 +378,7 @@
         min-width: 0;
         padding: 1rem;
         border: 1px solid var(--line);
-        background: rgba(232, 228, 214, 0.025);
+        background: var(--card-fill);
       }
 
       .card:hover {
@@ -413,9 +427,9 @@
         overflow: hidden;
         min-height: 11rem;
         padding: 1.25rem;
-        border-color: rgba(154, 170, 92, 0.35);
+        border-color: var(--hero-border);
         background:
-          linear-gradient(120deg, rgba(154, 170, 92, 0.12), transparent 60%), var(--panel-raised);
+          linear-gradient(120deg, var(--hero-sheen), transparent 60%), var(--panel-raised);
       }
 
       .hero-card::after {
@@ -424,12 +438,12 @@
         bottom: -3rem;
         width: 13rem;
         height: 13rem;
-        border: 1px solid rgba(154, 170, 92, 0.24);
+        border: 1px solid var(--hero-ring);
         border-radius: 50%;
         box-shadow:
-          0 0 0 1.4rem rgba(154, 170, 92, 0.045),
-          0 0 0 2.8rem rgba(154, 170, 92, 0.035),
-          0 0 0 4.2rem rgba(154, 170, 92, 0.025);
+          0 0 0 1.4rem var(--hero-ring-soft),
+          0 0 0 2.8rem var(--hero-ring-faint),
+          0 0 0 4.2rem var(--hero-ring-quiet);
         content: '';
       }
 
@@ -470,12 +484,12 @@
       }
 
       .pill.good {
-        border-color: rgba(154, 170, 92, 0.48);
+        border-color: var(--good-border);
         color: var(--olive);
       }
 
       .pill.warn {
-        border-color: rgba(212, 168, 93, 0.48);
+        border-color: var(--warn-border);
         color: var(--amber);
       }
 
@@ -528,6 +542,17 @@
         background: var(--bone);
       }
 
+      .button:active,
+      .role-button:active {
+        transform: translateY(1px);
+      }
+
+      .button:disabled,
+      .role-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
       .action-row {
         justify-content: flex-start;
         margin-top: 1.15rem;
@@ -577,7 +602,7 @@
         padding: 0.7rem 0.8rem;
         border-left: 2px solid var(--amber);
         color: var(--bone-dim);
-        background: rgba(212, 168, 93, 0.06);
+        background: var(--amber-fill);
         font-size: 0.75rem;
       }
 
@@ -660,7 +685,7 @@
         border: 1px solid var(--olive);
         color: var(--bone);
         background: var(--panel-raised);
-        box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.3);
+        box-shadow: 0 1rem 3rem var(--shadow-heavy);
         font-size: 0.78rem;
       }
 
@@ -686,20 +711,21 @@
         }
 
         .role-switcher {
-          display: flex;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 0.35rem;
-          overflow-x: auto;
+          overflow: visible;
         }
 
         .role-button {
-          width: auto;
-          flex: 1;
+          width: 100%;
+          min-width: 0;
           justify-content: center;
-          min-width: 8rem;
           text-align: center;
+          white-space: nowrap;
         }
 
-        .role-button[aria-selected='true']::after {
+        .role-button[aria-pressed='true']::after {
           display: none;
         }
       }
@@ -793,13 +819,13 @@
           </p>
           <fieldset class="role-switcher">
             <legend>View as</legend>
-            <button class="role-button" type="button" data-role="veteran" aria-selected="true">
+            <button class="role-button" type="button" data-role="veteran" aria-pressed="true">
               Veteran
             </button>
-            <button class="role-button" type="button" data-role="responder" aria-selected="false">
+            <button class="role-button" type="button" data-role="responder" aria-pressed="false">
               Responder
             </button>
-            <button class="role-button" type="button" data-role="admin" aria-selected="false">
+            <button class="role-button" type="button" data-role="admin" aria-pressed="false">
               Admin
             </button>
           </fieldset>
@@ -1060,7 +1086,7 @@
 
         function setRole(role) {
           buttons.forEach((button) =>
-            button.setAttribute('aria-selected', String(button.dataset.role === role)),
+            button.setAttribute('aria-pressed', String(button.dataset.role === role)),
           );
           views.forEach((view) => {
             view.hidden = view.dataset.view !== role;
