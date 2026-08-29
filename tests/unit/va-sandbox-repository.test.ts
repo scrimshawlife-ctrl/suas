@@ -56,9 +56,18 @@ describe('VA sandbox OAuth persistence', () => {
     };
     const recorder = queryRecorder([row]);
 
-    await expect(consumeVaOAuthTransaction(recorder.db, 'state')).resolves.toEqual(row);
-    expect(recorder.calls[0]?.sql).toContain('consumed_at IS NULL AND expires_at > now()');
-    expect(recorder.calls[0]?.values).toEqual([vaSafeHash('state')]);
+    await expect(
+      consumeVaOAuthTransaction(recorder.db, {
+        state: 'state',
+        tenantId: 'tenant',
+        userId: 'user',
+      }),
+    ).resolves.toEqual(row);
+    expect(recorder.calls[0]?.sql).toContain('tenant_id = $2');
+    expect(recorder.calls[0]?.sql).toContain('user_id = $3');
+    expect(recorder.calls[0]?.sql).toContain('consumed_at IS NULL');
+    expect(recorder.calls[0]?.sql).toContain('expires_at > now()');
+    expect(recorder.calls[0]?.values).toEqual([vaSafeHash('state'), 'tenant', 'user']);
   });
 
   it('records a normalized result without provider tokens or raw payloads', async () => {

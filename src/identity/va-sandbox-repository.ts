@@ -55,15 +55,19 @@ export async function createVaOAuthTransactionRecord(
 /** Atomically consume a non-expired transaction. A replay returns undefined. */
 export async function consumeVaOAuthTransaction(
   db: Queryable,
-  state: string,
+  input: { state: string; tenantId: string; userId: string },
 ): Promise<StoredVaOAuthTransaction | undefined> {
   const result = await db.query<TransactionRow>(
     `UPDATE va_oauth_transactions
        SET consumed_at = now()
-     WHERE state_hash = $1 AND consumed_at IS NULL AND expires_at > now()
+     WHERE state_hash = $1
+       AND tenant_id = $2
+       AND user_id = $3
+       AND consumed_at IS NULL
+       AND expires_at > now()
      RETURNING transaction_id AS "transactionId", tenant_id AS "tenantId", user_id AS "userId",
                redirect_uri AS "redirectUri", code_verifier_hash AS "codeVerifierHash"`,
-    [vaSafeHash(state)],
+    [vaSafeHash(input.state), input.tenantId, input.userId],
   );
   return result.rows[0];
 }

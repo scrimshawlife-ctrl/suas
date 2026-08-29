@@ -76,10 +76,8 @@ export function registerVaSandboxOAuthRoutes(
   deps: { pool: Pool; config: SuasConfig; sessionSecret: string | undefined },
 ): void {
   const va = enabledConfig(deps.config);
-  // The authorization endpoint's origin is deliberately not reused as callback
-  // origin. Operators configure a full callback origin by setting an endpoint
-  // whose origin is the independently provisioned sandbox host in evidence runs.
-  // For normal deployment, the callback is rewritten below from request origin.
+  // The configured redirect URI is passed verbatim through the whole flow. It
+  // is never inferred from an inbound request or provider endpoint.
   app.get('/auth/va/onboarding', async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const transaction = createVaOAuthTransaction(va.redirectUri);
@@ -125,13 +123,12 @@ export function registerVaSandboxOAuthRoutes(
             message: 'The VA sandbox authorization response could not be accepted.',
           },
         });
-    const transaction = await consumeVaOAuthTransaction(deps.pool, state);
-    if (
-      !transaction ||
-      transaction.tenantId !== context.tenantId ||
-      transaction.userId !== context.userId ||
-      !hashesMatch(verifier, transaction.codeVerifierHash)
-    )
+    const transaction = await consumeVaOAuthTransaction(deps.pool, {
+      state,
+      tenantId: context.tenantId,
+      userId: context.userId,
+    });
+    if (!transaction || !hashesMatch(verifier, transaction.codeVerifierHash))
       return reply
         .status(400)
         .header('cache-control', 'no-store')
