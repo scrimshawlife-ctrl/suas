@@ -1,0 +1,77 @@
+# Approval-gated migration of the independently owned synthetic STAGING database.
+#
+# This workflow never runs on push, never targets PRODUCTION, and never changes
+# the Worker binding. It only applies the committed migration set through the
+# Node migration CLI using an owner-provided unpooled synthetic STAGING URL.
+
+name: staging-migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type migrate to apply the committed migrations to synthetic STAGING'
+        required: true
+        type: string
+
+concurrency:
+  group: staging-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.event.inputs.confirm == 'migrate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: suas-synthetic-staging
+    permissions:
+      contents: read
+    env:
+      SUAS_ENV: STAGING
+      SUAS_SPEC_VERSION: '0.4.0'
+      SUAS_RELEASE_MANIFEST: RELEASE_MANIFEST-0.4.0.md
+      SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false'
+      SUAS_MIGRATIONS_MODE: validate
+      SUAS_EMAIL_MODE: sink
+      SUAS_SMS_MODE: sink
+      SUAS_TRANSPORTATION_ADAPTER_MODE: fake
+      SUAS_SHELTER_ADAPTER_MODE: fake
+      SUAS_FOOD_ADAPTER_MODE: fake
+      SUAS_PEER_SUPPORT_ADAPTER_MODE: manual
+      SUAS_SUPPORT_SIGNAL_MODE: fixture
+      SUAS_SAFETY_COPY_MODE: placeholder_test_only
+      SUAS_SENSITIVE_AGGREGATE_REPORTING: disabled
+      DATABASE_POOL_MAX: '1'
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Require the owner-provided synthetic database URL
+        run: test -n "$DATABASE_URL"
+
+      - name: Generate a throwaway session secret
+        run: echo "SUAS_SESSION_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Provide dotenv file for the runtime CLI wrapper
+        run: cp .env.example .env
+
+      - name: Validate committed STAGING configuration
+        run: npm run staging:contract
+
+      - name: Inspect migration status before apply
+        run: npm run migrate -- status
+
+      - name: Apply committed migrations
+        run: npm run migrate -- apply
+
+      - name: Validate migration state after apply
+        run: npm run migrate -- validate
