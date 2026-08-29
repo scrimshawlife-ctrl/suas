@@ -81,15 +81,14 @@ for skill in SKILLS:
             fixture_text = fixture.read_text(encoding="utf-8")
             if not re.search(rf"(?m)^skill:\s*{re.escape(skill)}\s*$", fixture_text):
                 fail(f"{fixture.relative_to(ROOT)}: fixture skill does not match {skill}")
-            if not re.search(r"(?m)^expected(_verdict|_status|_result)?:", fixture_text):
-                fail(f"{fixture.relative_to(ROOT)}: fixture must declare an expected result/status/verdict")
+            if not re.search(r"(?m)^(expect|expected(?:_verdict|_status|_result)?):", fixture_text):
+                fail(f"{fixture.relative_to(ROOT)}: fixture must declare expect or expected result/status/verdict")
     for section in ("## Purpose", "## Trigger", "## Procedure", "## Output schema", "## Completion criteria", "## Invocation example", "## Self-test"):
         if section not in text:
             fail(f"{path.relative_to(ROOT)}: missing required section {section}")
     if skill not in router_text:
         fail(f"skills/README.md: router does not reference {skill}")
 
-    # Runtime skill outputs must bind evidence to runtime provenance.
     if not any(token in text for token in ("runtime_commit", "build_identity")):
         fail(f"{path.relative_to(ROOT)}: runtime skill lacks runtime/build provenance binding")
 
