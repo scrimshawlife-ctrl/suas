@@ -1,8 +1,10 @@
 # Browser acceptance against formal synthetic STAGING.
 #
 # This workflow does not deploy and does not authorize production operation.
-# Public checks always run. Authenticated checks run only when repository secrets
-# hold fresh synthetic seed sessions; absent credentials are reported as skips.
+# Public checks always run. Authenticated checks run only when the `suas-synthetic-staging`
+# environment exposes STAGING_DATABASE_URL and SUAS_SESSION_SECRET; absent credentials are
+# reported as skips. The session-refresh step mints fresh bearer tokens immediately before
+# each run so the tests never fail due to expired sessions.
 # Scheduled runs deliberately exclude elevated-admin coverage because the MFA elevation
 # is intentionally short-lived. Dispatch it manually only after refreshing that synthetic session.
 
@@ -50,6 +52,32 @@ jobs:
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+
+      - name: Refresh synthetic staging sessions
+        # Mints fresh bearer tokens using the deployed Worker's session secret so
+        # the Playwright tests never see an expired credential.  Writes masked
+        # values to $GITHUB_ENV; they override the job-level env for subsequent steps.
+        # Requires STAGING_DATABASE_URL and SUAS_SESSION_SECRET in the
+        # `suas-synthetic-staging` GitHub Environment.
+        env:
+          SUAS_ENV: STAGING
+          SUAS_SPEC_VERSION: '0.4.0'
+          SUAS_RELEASE_MANIFEST: RELEASE_MANIFEST-0.4.0.md
+          SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false'
+          SUAS_MIGRATIONS_MODE: validate
+          SUAS_EMAIL_MODE: sink
+          SUAS_SMS_MODE: sink
+          SUAS_TRANSPORTATION_ADAPTER_MODE: fake
+          SUAS_SHELTER_ADAPTER_MODE: fake
+          SUAS_FOOD_ADAPTER_MODE: fake
+          SUAS_PEER_SUPPORT_ADAPTER_MODE: manual
+          SUAS_SUPPORT_SIGNAL_MODE: fixture
+          SUAS_SAFETY_COPY_MODE: placeholder_test_only
+          SUAS_SENSITIVE_AGGREGATE_REPORTING: disabled
+          DATABASE_POOL_MAX: '1'
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUAS_SESSION_SECRET: ${{ secrets.SUAS_SESSION_SECRET }}
+        run: npm run seed:staging:sessions
 
       - name: Exercise deployed STAGING
         run: npm run test:e2e:staging
