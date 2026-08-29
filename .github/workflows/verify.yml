@@ -82,6 +82,12 @@ jobs:
         # (ENVIRONMENT.md §6-§7).
         run: echo "SUAS_SESSION_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
+      - name: Provide dotenv file for runtime CLI wrappers
+        # The npm migration and provenance scripts intentionally load .env for
+        # local parity. Existing CI environment variables take precedence over
+        # the safe placeholder values in this temporary, untracked file.
+        run: cp .env.example .env
+
       - name: Stamp build provenance
         # ENVIRONMENT.md §8: commit SHA and build timestamp for shared builds.
         run: |
