@@ -6,18 +6,18 @@ This file defines the reusable agent skills recommended for implementation work 
 
 ## Required core skills
 
-| Skill | Purpose in SUAS runtime | Requirement |
-|---|---|---|
-| `github` | Inspect branches, commits, PRs, review threads, Actions, releases, evidence references, and cross-repo changes. | REQUIRED |
-| `implementation` | Implement only released SUAS contracts and preserve existing invariants. | REQUIRED |
-| `code-review` | Detect contract drift, regressions, unsafe defaults, authority leaks, and non-minimal changes. | REQUIRED |
-| `test-engineering` | Execute and extend unit, integration, E2E, regression, golden-vector, and negative-path tests. | REQUIRED |
-| `security-audit` | Validate authentication, authorization, tenant isolation, secrets, provider boundaries, replay safety, and fail-closed behavior. | REQUIRED |
-| `browser-testing` | Exercise real public and authenticated SUAS routes in LOCAL/STAGING using authorized synthetic/operator-scoped credentials. | REQUIRED |
-| `api-integration` | Implement released provider adapters behind SUAS-owned capability ports and preserve sandbox/production boundaries. | REQUIRED |
-| `database-migration-audit` | Validate schema changes, forward/rollback behavior, data lifecycle, tenant isolation, and compatibility. | REQUIRED |
-| `deployment-runbook` | Validate build provenance, environment configuration, staging soak evidence, rollback, and release gates. | REQUIRED |
-| `documentation` | Keep runtime handoffs, operational notes, evidence references, and implementation records current. | REQUIRED |
+| Skill                      | Purpose in SUAS runtime                                                                                                          | Requirement |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `github`                   | Inspect branches, commits, PRs, review threads, Actions, releases, evidence references, and cross-repo changes.                  | REQUIRED    |
+| `implementation`           | Implement only released SUAS contracts and preserve existing invariants.                                                         | REQUIRED    |
+| `code-review`              | Detect contract drift, regressions, unsafe defaults, authority leaks, and non-minimal changes.                                   | REQUIRED    |
+| `test-engineering`         | Execute and extend unit, integration, E2E, regression, golden-vector, and negative-path tests.                                   | REQUIRED    |
+| `security-audit`           | Validate authentication, authorization, tenant isolation, secrets, provider boundaries, replay safety, and fail-closed behavior. | REQUIRED    |
+| `browser-testing`          | Exercise real public and authenticated SUAS routes in LOCAL/STAGING using authorized synthetic/operator-scoped credentials.      | REQUIRED    |
+| `api-integration`          | Implement released provider adapters behind SUAS-owned capability ports and preserve sandbox/production boundaries.              | REQUIRED    |
+| `database-migration-audit` | Validate schema changes, forward/rollback behavior, data lifecycle, tenant isolation, and compatibility.                         | REQUIRED    |
+| `deployment-runbook`       | Validate build provenance, environment configuration, staging soak evidence, rollback, and release gates.                        | REQUIRED    |
+| `documentation`            | Keep runtime handoffs, operational notes, evidence references, and implementation records current.                               | REQUIRED    |
 
 ## Platform skills
 

@@ -13,17 +13,21 @@ self_test: skills/self-tests/synthetic-data.yaml
 # synthetic-data
 
 ## Purpose
+
 Generate and execute reproducible privacy-safe SUAS runtime fixtures against real contracts and adapters.
 
 ## Trigger
+
 Use for fixture generation, deterministic test datasets, aggregate-only dry runs, provider sandbox scenarios, deletion/export validation, and evidence requiring exact inputs.
 
 ## Inputs
+
 - Governing spec/test/evidence contract from `SUAS-specs`.
 - Current runtime/environment restrictions.
 - Required cases, mappings, projections, and expected outputs.
 
 ## Procedure
+
 1. Read `CONTEXT.md`, `AGENTS.md`, `ENVIRONMENT.md` authority, and the relevant contract.
 2. Build deterministic synthetic records only; never use real veteran or production data in prohibited environments.
 3. Use deterministic IDs/values and a pinned seed when generation is required.
@@ -34,9 +38,11 @@ Use for fixture generation, deterministic test datasets, aggregate-only dry runs
 8. Verify regeneration produces identical evidence-relevant data and expected outputs.
 
 ## Invocation example
+
 `Generate and execute the canonical D-007 fixture set on the current TEST commit, then return dataset/mapping hashes and evidence references.`
 
 ## Output schema
+
 ```yaml
 dataset_id: string
 version: string
@@ -55,7 +61,9 @@ production_authority: false
 ```
 
 ## Self-test
+
 Run `skills/self-tests/synthetic-data.yaml`. The fixture must fail on an unpinned generator and must never permit `production_authority: true`.
 
 ## Completion criteria
+
 Complete only when fixtures are deterministic, executable, hashed, cover all required cases, and results are tied to current runtime provenance.

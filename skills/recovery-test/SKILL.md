@@ -4,7 +4,8 @@ version: 1.0.0
 kind: runtime
 status: active
 authority: released-runtime-conformance
-inputs: [recovery_contract, environment, backup_identity, runtime_provenance, durability_expectations]
+inputs:
+  [recovery_contract, environment, backup_identity, runtime_provenance, durability_expectations]
 outputs: [recovery_execution]
 fail_closed: true
 self_test: skills/self-tests/recovery-test.yaml
@@ -13,18 +14,22 @@ self_test: skills/self-tests/recovery-test.yaml
 # recovery-test
 
 ## Purpose
+
 Execute and record approved SUAS backup/restore and durable-work recovery exercises.
 
 ## Trigger
+
 Use when a readiness/evidence gate requires restoration proof, when validating backup integrity, or when determining whether migration rehearsal is insufficient.
 
 ## Inputs
+
 - Governing recovery/readiness contract from `SUAS-specs`.
 - Approved target environment.
 - Backup/restore mechanism and backup identity.
 - Current app/schema/config identities and durable-job expectations.
 
 ## Procedure
+
 1. Read `CONTEXT.md`, `AGENTS.md`, environment constraints, and governing recovery contract.
 2. Confirm the target is approved; do not use production without explicit authority.
 3. Capture pre-exercise runtime/schema/config provenance and backup identity.
@@ -36,9 +41,11 @@ Use when a readiness/evidence gate requires restoration proof, when validating b
 9. Do not infer production RTO/RPO/SLO guarantees unless released authority permits the claim.
 
 ## Invocation example
+
 `Execute the approved STAGING restore exercise for the current commit and record integrity, loss boundary, durable-job behavior, and idempotency evidence.`
 
 ## Output schema
+
 ```yaml
 exercise_id: string
 environment: string
@@ -59,7 +66,9 @@ claims_not_authorized: [string]
 ```
 
 ## Self-test
+
 Run `skills/self-tests/recovery-test.yaml`. Migration-only evidence must return NOT_COMPUTABLE for a gate that requires an actual restore exercise.
 
 ## Completion criteria
+
 Complete only when restore integrity, loss boundary, and durable-work behavior are explicitly evidenced or marked NOT_COMPUTABLE with missing prerequisites identified.

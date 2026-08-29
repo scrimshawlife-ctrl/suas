@@ -4,7 +4,8 @@ version: 1.0.0
 kind: runtime
 status: active
 authority: released-runtime-conformance
-inputs: [security_contract, surface_inventory, credentials, runtime_provenance, failure_expectations]
+inputs:
+  [security_contract, surface_inventory, credentials, runtime_provenance, failure_expectations]
 outputs: [negative_test_execution]
 fail_closed: true
 self_test: skills/self-tests/adversarial-testing.yaml
@@ -13,18 +14,22 @@ self_test: skills/self-tests/adversarial-testing.yaml
 # adversarial-testing
 
 ## Purpose
+
 Execute deterministic negative-path tests against SUAS runtime boundaries that must fail closed.
 
 ## Trigger
+
 Use for auth/authorization, tenant isolation, replay/idempotency, provider failures, disabled modes, malformed input, ambiguous mutations, reporting/admin access, and boundary-sensitive changes.
 
 ## Inputs
+
 - Governing security/domain contract from `SUAS-specs`.
 - Current runtime commit/build/schema identities.
 - Surface inventory: API, DB, jobs, caches, adapters, reports, admin.
 - Authorized synthetic credentials and expected failure behavior.
 
 ## Procedure
+
 1. Read `CONTEXT.md`, `AGENTS.md`, security/auth/environment authority, and applicable release contract.
 2. Enumerate applicable cases: unauthenticated, unauthorized, wrong-role, wrong-tenant, stale/revoked credential, malformed input, replay, duplicate delivery, unavailable provider, disabled feature, timeout, and ambiguous provider outcome.
 3. Execute each case against every relevant boundary carrying scoped state.
@@ -35,9 +40,11 @@ Use for auth/authorization, tenant isolation, replay/idempotency, provider failu
 8. Tie every result to current runtime provenance.
 
 ## Invocation example
+
 `Run the reporting-surface adversarial suite on STAGING with operator-scoped synthetic credentials, including cross-tenant, revoked-token, disabled-mode, and side-effect checks.`
 
 ## Output schema
+
 ```yaml
 test_set_id: string
 environment: string
@@ -58,7 +65,9 @@ verdict: PASS|FAIL|NOT_COMPUTABLE
 ```
 
 ## Self-test
+
 Run `skills/self-tests/adversarial-testing.yaml`. A wrong-tenant request that produces any unauthorized persistent or external effect must fail the suite.
 
 ## Completion criteria
+
 Complete only when every applicable fail-closed boundary has executed negative evidence or is marked NOT_COMPUTABLE with the missing prerequisite identified.

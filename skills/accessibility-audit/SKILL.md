@@ -4,7 +4,8 @@ version: 1.0.0
 kind: runtime
 status: active
 authority: released-runtime-conformance
-inputs: [ui_authority, runtime_provenance, surfaces, viewport_matrix, automated_criteria, human_criteria]
+inputs:
+  [ui_authority, runtime_provenance, surfaces, viewport_matrix, automated_criteria, human_criteria]
 outputs: [accessibility_execution]
 fail_closed: true
 self_test: skills/self-tests/accessibility-audit.yaml
@@ -13,17 +14,21 @@ self_test: skills/self-tests/accessibility-audit.yaml
 # accessibility-audit
 
 ## Purpose
+
 Execute accessibility verification against the actual released SUAS client surface and produce reviewable evidence.
 
 ## Trigger
+
 Use for UI/client changes, staging route validation, accessibility regressions, or readiness gates requiring accessibility evidence.
 
 ## Inputs
+
 - Released UI/MVP and safety-copy authority from `SUAS-specs`.
 - Current runtime commit/build identity and environment.
 - Route/surface inventory, viewport/device matrix, and required automated/human criteria.
 
 ## Procedure
+
 1. Read `CONTEXT.md`, `AGENTS.md`, released UI/MVP authority, safety-copy requirements, and applicable readiness contract.
 2. Resolve exact build, routes, environment, and viewport/device under review.
 3. Run automated checks for semantic structure, accessible names/labels, contrast, structural errors, and other machine-testable criteria.
@@ -34,9 +39,11 @@ Use for UI/client changes, staging route validation, accessibility regressions, 
 8. Never settle a required human-review gate from automation alone.
 
 ## Invocation example
+
 `Run the STAGING accessibility audit for onboarding and crisis-copy routes on the current build and separate automated findings from human-review disposition.`
 
 ## Output schema
+
 ```yaml
 audit_id: string
 runtime_commit: string
@@ -59,7 +66,9 @@ verdict: PASS|FAIL|PARTIAL|NOT_COMPUTABLE
 ```
 
 ## Self-test
+
 Run `skills/self-tests/accessibility-audit.yaml`. Automated PASS with incomplete required human review must not yield overall PASS.
 
 ## Completion criteria
+
 Complete only when automated and human-review requirements are separately classified and tied to current build provenance.

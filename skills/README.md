@@ -2,14 +2,14 @@
 
 Read repository-root `SKILLS.md` for the full runtime skill catalog and execution order. Load the specialized skill below when its trigger matches the task.
 
-| Skill | Load |
-|---|---|
-| Readiness/evidence/feature-enablement gates | [`evidence-gate/SKILL.md`](evidence-gate/SKILL.md) |
-| Deterministic contract/scoring conformance | [`contract-validation/SKILL.md`](contract-validation/SKILL.md) |
-| Executable synthetic fixtures | [`synthetic-data/SKILL.md`](synthetic-data/SKILL.md) |
-| Backup/restore execution | [`recovery-test/SKILL.md`](recovery-test/SKILL.md) |
-| Negative/fail-closed runtime tests | [`adversarial-testing/SKILL.md`](adversarial-testing/SKILL.md) |
-| Built-surface accessibility evidence | [`accessibility-audit/SKILL.md`](accessibility-audit/SKILL.md) |
+| Skill                                       | Load                                                           |
+| ------------------------------------------- | -------------------------------------------------------------- |
+| Readiness/evidence/feature-enablement gates | [`evidence-gate/SKILL.md`](evidence-gate/SKILL.md)             |
+| Deterministic contract/scoring conformance  | [`contract-validation/SKILL.md`](contract-validation/SKILL.md) |
+| Executable synthetic fixtures               | [`synthetic-data/SKILL.md`](synthetic-data/SKILL.md)           |
+| Backup/restore execution                    | [`recovery-test/SKILL.md`](recovery-test/SKILL.md)             |
+| Negative/fail-closed runtime tests          | [`adversarial-testing/SKILL.md`](adversarial-testing/SKILL.md) |
+| Built-surface accessibility evidence        | [`accessibility-audit/SKILL.md`](accessibility-audit/SKILL.md) |
 
 ## Routing rule
 
