@@ -1,6 +1,6 @@
-# D-007 synthetic aggregate-only dry-run approval request
+# D-007 synthetic aggregate-only dry-run approval request (superseded)
 
-**Status:** incomplete request scaffold. It is **not signable** until the Privacy owner supplies or approves the identified synthetic dataset, exact mapping, and cutoff. These facts are intentionally not invented.
+**Status:** superseded by `pre-execution/owner-decision-defer-required.md`, which populates all computable synthetic artifacts and remains `DEFER_REQUIRED` until a human supplies the outstanding accountable identity, signing time, and verified STAGING deployment ID.
 
 | Required approval field | Value required before signing |
 | --- | --- |

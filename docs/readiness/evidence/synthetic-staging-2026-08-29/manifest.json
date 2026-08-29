@@ -50,7 +50,63 @@
     },
     {
       "path": "d007/approval-request.md",
-      "sha256": "8f229af2f0be1453777eb41813a1e7cc1b877af272f86b0662f4d7db75bdc963",
+      "sha256": "12b1cb975692e5499008c2fbc2f60b8f6c6054c95b531319249db98bd4e3210c",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/pre-execution/aggregate-output-contract-v1.json",
+      "sha256": "a228cbc4062f3eb429188820ac92b3d0d757d71b62da87a01fadd59767aed614",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/pre-execution/deterministic-mapping-v1.json",
+      "sha256": "90c96397594110072c1ddbc94c2d087f06071e4110db7afa5fda6288b64fd048",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/pre-execution/dry-run-execution-contract-v1.md",
+      "sha256": "8a5ebc16d46e7be74b84558751e8a08b0170585e98f86292fd509547bda6aed9",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/pre-execution/owner-decision-defer-required.md",
+      "sha256": "6f5f396ed6b913de8ccaae82d9f45c40902f99f3c5555fac2daa4f1a645b3464",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/pre-execution/post-execution-acceptance-template.md",
+      "sha256": "4e53d0edecbcba46ebc64eb5c42e5108fe97579e3cf24d745eb21413bb115246",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/pre-execution/preflight-invariant-v1.json",
+      "sha256": "fa2b3418a367753a1bd896f31c687a5f2bea18457959bf8f0028f0e11198acd7",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/pre-execution/synthetic-dataset-manifest-v1.json",
+      "sha256": "7f3aca4b8cdfc88bcf7fcfe390b3307da9c874e3bc4ddd23d61d7baf71ece519",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/pre-execution/synthetic-dataset-v1.json",
+      "sha256": "8e7480e1f87ed68370a93f757d88b40135651bada242983574d96d71726c760e",
       "category": "d007",
       "provenance": "campaign-authored documentation or sanitized command output",
       "contains_sensitive_values": false

@@ -1,0 +1,35 @@
+{
+  "schema_version": "d007-synthetic-retention-fixture/v1",
+  "dataset_id": "d007-retention-boundary-fixture",
+  "dataset_version": "1.0.0",
+  "classification": "SYNTHETIC",
+  "canonical_reference_source": "tests/unit/retention-dry-run.test.ts",
+  "canonical_reference_time_utc": "2026-08-29T12:00:00.000Z",
+  "candidates": [
+    {
+      "caseClosedAt": "2025-08-29T12:00:00.001Z",
+      "lastParticipantActivityAt": null,
+      "exclusions": []
+    },
+    {
+      "caseClosedAt": "2025-08-29T12:00:00.000Z",
+      "lastParticipantActivityAt": null,
+      "exclusions": []
+    },
+    {
+      "caseClosedAt": "2025-08-29T11:59:59.999Z",
+      "lastParticipantActivityAt": null,
+      "exclusions": []
+    },
+    {
+      "caseClosedAt": "2025-08-29T12:00:00.000Z",
+      "lastParticipantActivityAt": null,
+      "exclusions": ["LEGAL_HOLD"]
+    },
+    {
+      "caseClosedAt": null,
+      "lastParticipantActivityAt": null,
+      "exclusions": []
+    }
+  ]
+}

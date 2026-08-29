@@ -1,0 +1,35 @@
+{
+  "contract_id": "d007-retention-aggregate-contract",
+  "contract_version": "1.0.0",
+  "permitted_fields": {
+    "action": "constant MANUAL_REVIEW_REQUIRED",
+    "asOf": "approved UTC cutoff",
+    "candidateCount": "integer total",
+    "eligibleForManualReviewCount": "integer total",
+    "excludedOrNotYetEligibleCount": "integer total",
+    "reasonCounts": "map of permitted reason token to integer total"
+  },
+  "permitted_reason_tokens": [
+    "RETENTION_WINDOW_NOT_ELAPSED",
+    "MISSING_CASE_CLOSURE_OR_PARTICIPANT_ACTIVITY",
+    "OPEN_CASE",
+    "LEGAL_HOLD",
+    "UNRESOLVED_SAFETY_OR_SECURITY_INCIDENT",
+    "ACTIVE_PROVIDER_OR_PAYMENT_DISPUTE",
+    "INCOMPLETE_EXPORT_OR_DELETION_REQUEST",
+    "STATUTORY_RETENTION_OBLIGATION"
+  ],
+  "prohibited_fields": [
+    "candidate identifiers",
+    "case or participant identifiers",
+    "row-level timestamps",
+    "free text",
+    "contact data",
+    "provider identifiers",
+    "export payloads",
+    "download links",
+    "notification destinations",
+    "credentials or secrets"
+  ],
+  "serialization": "Canonical JSON with stable key ordering for retained evidence; no rows may be emitted."
+}
