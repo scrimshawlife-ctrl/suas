@@ -60,3 +60,11 @@ export {
   type VaSandboxConfig,
   type VaSandboxTransport,
 } from './va-sandbox.js';
+export {
+  consumeVaOAuthTransaction,
+  createVaOAuthTransactionRecord,
+  hashesMatch,
+  recordVaSandboxVerification,
+  vaSafeHash,
+  type StoredVaOAuthTransaction,
+} from './va-sandbox-repository.js';
