@@ -1,0 +1,12 @@
+skill: synthetic-data
+scenario: unpinned generator cannot produce evidence
+given:
+  deterministic_generator: true
+  seed: null
+  runtime_commit: abc123
+expect:
+  result: NOT_COMPUTABLE
+  production_authority: false
+must_not:
+  - accept_unseeded_generation
+  - production_authority_true

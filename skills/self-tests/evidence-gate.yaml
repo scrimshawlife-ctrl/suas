@@ -1,0 +1,12 @@
+skill: evidence-gate
+scenario: prior-commit evidence becomes stale
+given:
+  current_runtime_commit: abc123
+  evidence_runtime_commit: def456
+  owner_disposition: ACCEPT
+expect:
+  status: NOT_READY
+  stale_due_to_contains: runtime_commit_changed
+must_not:
+  - status_ACCEPTED
+  - status_RELEASED

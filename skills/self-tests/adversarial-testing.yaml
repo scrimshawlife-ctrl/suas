@@ -1,0 +1,13 @@
+skill: adversarial-testing
+scenario: rejected wrong-tenant request caused unauthorized persistence
+given:
+  request: wrong_tenant
+  rejected: true
+  persistent_effect: UNAUTHORIZED
+  external_effect: NONE
+  runtime_commit: abc123
+expect:
+  verdict: FAIL
+  findings_contains: unauthorized_persistent_effect
+must_not:
+  - verdict_PASS
