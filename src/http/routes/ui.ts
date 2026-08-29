@@ -286,6 +286,10 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   // §5 lists these as public: a veteran must be able to see the action surface
   // before holding a session.
 
+  app.get('/', async (_request, reply) => {
+    await reply.redirect('/app');
+  });
+
   app.get('/app', async (_request, reply) => {
     await reply.type(HTML).send(
       renderLanding({
