@@ -1,6 +1,6 @@
 # Decision packet — D-007 retention / deletion
 
-**Status:** DECIDED for STAGING (2026-08-27)  
+**Status:** DECIDED for STAGING (2026-08-27), with pilot dry-run controls authorized in `OPERATIONAL_AUTHORIZATION-2026-08-29.md`
 **Affects gates:** `PRIVACY`  
 **Blocks:** Formal PRIVACY READY (purge/export package + human sign-off may still remain)
 
@@ -15,7 +15,7 @@ What retention and deletion durations apply after a deletion request, and what m
 3. **Domain Events, Audit Events, consent history:** **retain for 365 days**.
 4. **Provider-side copies:** `NOT_COMPUTABLE` (no erase claim).
 5. **HIPAA:** no claim.
-6. **PRODUCTION** purge/export package: still deferred (SPEC-018 / separate owner authorization).
+6. **PRODUCTION** purge/export package: still deferred (SPEC-018 / separate owner authorization). The later operational record authorizes dry-run evaluation only, not destructive enforcement.
 
 ## Released constraints
 

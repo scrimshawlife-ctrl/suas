@@ -8,6 +8,7 @@ import {
   authorizeDataOperation,
   buildPilotExport,
   planRetentionPurge,
+  recordProviderDeletionOutcome,
 } from '../../src/privacy/index.js';
 const pool: Pool = createTestPool();
 beforeEach(() => resetKernelTables(pool));
@@ -102,5 +103,46 @@ describe('D-007 approved pilot data operations', () => {
     expect(await planRetentionPurge(pool, new Date())).toMatchObject({
       action: 'MANUAL_REVIEW_REQUIRED',
     });
+  });
+  it('records an approved provider deletion outcome without calling a provider', async () => {
+    const tenantId = syntheticTenantId();
+    const user = await createUser(pool, {
+      tenantId,
+      email: 'd007-provider-outcome@synthetic.suas.test',
+      status: 'ACTIVE',
+    });
+    const operation = await authorizeDataOperation(pool, {
+      tenantId,
+      subjectUserId: user.userId,
+      kind: 'DELETION',
+      requestId: 'd007-provider-outcome-1',
+      verifier: 'verified-account-channel',
+      authorizer: 'privacy-lead',
+      affectedSystems: ['covered_downstream_processors'],
+      actorId: 'privacy-operations',
+    });
+    await recordProviderDeletionOutcome(pool, {
+      tenantId,
+      subjectUserId: user.userId,
+      dataOperationId: operation.dataOperationId,
+      actorId: 'privacy-operations',
+      providerReference: 'opaque-synthetic-provider-reference',
+      outcome: 'BACKUP_EXPIRY_PENDING',
+    });
+    const recorded = await pool.query<{ provider_receipts: unknown[] }>(
+      'SELECT provider_receipts FROM data_operation_requests WHERE data_operation_id=$1',
+      [operation.dataOperationId],
+    );
+    expect(recorded.rows[0]?.provider_receipts).toEqual([
+      {
+        provider_reference: 'opaque-synthetic-provider-reference',
+        outcome: 'BACKUP_EXPIRY_PENDING',
+      },
+    ]);
+    const audit = await pool.query<{ n: number }>(
+      'SELECT count(*)::int n FROM audit_events WHERE event_type=$1 AND target_id=$2',
+      ['DATA_OPERATION_PROVIDER_DELETION_RECORDED', operation.dataOperationId],
+    );
+    expect(audit.rows[0]?.n).toBe(1);
   });
 });

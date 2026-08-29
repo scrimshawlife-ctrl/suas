@@ -16,6 +16,16 @@ export const DATA_OPERATION_AFFECTED_SYSTEMS = [
 ] as const;
 export type DataOperationKind = 'EXPORT' | 'DELETION' | 'RETENTION_PURGE';
 export type DataOperationStatus = 'RECEIVED' | 'VERIFIED' | 'AUTHORIZED' | 'COMPLETED' | 'BLOCKED';
+export const PROVIDER_DELETION_OUTCOMES = [
+  'DELETED_CONFIRMED',
+  'DELETION_REQUESTED',
+  'BACKUP_EXPIRY_PENDING',
+  'LEGAL_RETENTION_APPLIES',
+  'PROVIDER_LIMITATION_DOCUMENTED',
+  'NOT_HELD_BY_PROVIDER',
+  'FAILED_REQUIRES_ESCALATION',
+] as const;
+export type ProviderDeletionOutcome = (typeof PROVIDER_DELETION_OUTCOMES)[number];
 const requestSchema = z.object({
   tenantId: z.string().uuid(),
   subjectUserId: z.string().uuid(),
@@ -33,6 +43,16 @@ export interface DataOperationRecord {
   readonly status: DataOperationStatus;
   readonly requestId: string;
 }
+
+const providerDeletionReceiptSchema = z.object({
+  tenantId: z.string().uuid(),
+  subjectUserId: z.string().uuid(),
+  dataOperationId: z.string().uuid(),
+  actorId: z.string().min(1).max(200),
+  providerReference: z.string().min(1).max(200),
+  outcome: z.enum(PROVIDER_DELETION_OUTCOMES),
+});
+export type RecordProviderDeletionOutcomeInput = z.input<typeof providerDeletionReceiptSchema>;
 
 export async function authorizeDataOperation(
   pool: Pool,
@@ -74,6 +94,47 @@ export async function authorizeDataOperation(
       exceptions: input.exceptions,
     });
     return { dataOperationId: id, status: 'AUTHORIZED', requestId: input.requestId };
+  });
+}
+
+/**
+ * Records a provider-side deletion outcome against an already authorized
+ * deletion operation. The provider reference is opaque and this function never
+ * contacts a provider or claims that a deletion was completed.
+ */
+export async function recordProviderDeletionOutcome(
+  pool: Pool,
+  raw: RecordProviderDeletionOutcomeInput,
+): Promise<void> {
+  const input = providerDeletionReceiptSchema.parse(raw);
+  await withTransaction(pool, async (tx) => {
+    const operation = await tx.query<{ data_operation_id: string }>(
+      `SELECT data_operation_id FROM data_operation_requests
+       WHERE data_operation_id=$1 AND tenant_id=$2 AND subject_user_id=$3
+         AND kind='DELETION' AND status IN ('AUTHORIZED', 'COMPLETED')
+       FOR UPDATE`,
+      [input.dataOperationId, input.tenantId, input.subjectUserId],
+    );
+    if (operation.rows[0] === undefined) {
+      throw new Error('Provider deletion outcomes require an authorized D-007 deletion operation.');
+    }
+    const receipt = {
+      provider_reference: input.providerReference,
+      outcome: input.outcome,
+    };
+    await tx.query(
+      `UPDATE data_operation_requests
+       SET provider_receipts = provider_receipts || $1::jsonb, updated_at=now()
+       WHERE data_operation_id=$2`,
+      [JSON.stringify([receipt]), input.dataOperationId],
+    );
+    await audit(
+      tx,
+      input,
+      'DATA_OPERATION_PROVIDER_DELETION_RECORDED',
+      input.dataOperationId,
+      receipt,
+    );
   });
 }
 async function audit(

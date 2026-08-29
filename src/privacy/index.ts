@@ -37,9 +37,22 @@ export {
   authorizeDataOperation,
   buildPilotExport,
   planRetentionPurge,
+  recordProviderDeletionOutcome,
   DATA_OPERATION_AFFECTED_SYSTEMS,
   PILOT_DATA_OPERATIONS_VERDICT,
+  PROVIDER_DELETION_OUTCOMES,
   type CreateDataOperationInput,
   type DataOperationRecord,
   type EncryptedExport,
+  type ProviderDeletionOutcome,
+  type RecordProviderDeletionOutcomeInput,
 } from './data-operations.js';
+export {
+  evaluateRetentionDryRun,
+  RETENTION_DRY_RUN_ACTION,
+  RETENTION_EXCLUSIONS,
+  RETENTION_WINDOW_DAYS,
+  type RetentionDryRunCandidate,
+  type RetentionDryRunEvaluation,
+  type RetentionExclusion,
+} from './retention-dry-run.js';
