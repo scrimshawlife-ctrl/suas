@@ -45,3 +45,18 @@ export {
   type VeteranVerificationResult,
   type VeteranVerificationStatus,
 } from './veteran-verification.js';
+
+export {
+  authorizationUrl,
+  assertOAuthCallbackState,
+  createVaOAuthTransaction,
+  pkceChallenge,
+  VA_SANDBOX_SCOPES,
+  type VaOAuthTransaction,
+  type VaSandboxScope,
+} from './va-oauth.js';
+export {
+  VaSandboxVeteranVerificationAdapter,
+  type VaSandboxConfig,
+  type VaSandboxTransport,
+} from './va-sandbox.js';
