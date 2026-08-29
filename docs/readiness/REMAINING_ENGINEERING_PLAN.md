@@ -2,16 +2,17 @@
 
 **Date:** 2026-08-29
 **Repository:** `scrimshawlife-ctrl/suas`
-**Local HEAD:** `f457d43`
+**Current review:** PR [#119](https://github.com/scrimshawlife-ctrl/suas/pull/119), `pilot-readiness-2026-08-29`
 **Scope:** engineering implementation only. Owner decisions, human reviews, and production authorization remain explicit gates.
 
 ## Current repository and PR status
 
-- There are no open pull requests.
+- PR #119 is open with the approved pilot-readiness stack; its required `verify` check passed on 2026-08-29.
 - There are no open GitHub issues.
 - Recent Pages PRs `#112` through `#118` are merged.
-- The latest local full verification passed: 71 test files and 1,033 tests, with OpenAPI drift `53/53`.
-- Two recent remote `verify` runs failed in the migration-harness step because `npm run migrate -- apply` loads `--env-file=.env` and the workflow did not create that temporary file. The workflow fix is tracked separately in `.github/workflows/verify.yml`.
+- The latest local full verification passed: 73 test files and 1,039 tests, with OpenAPI drift checks passing.
+- The PR's remote `verify` run passed after the migration harness began creating its untracked `.env` placeholder from `.env.example` while retaining CI-provided variables as authoritative.
+- Synthetic STAGING is deployed, schema version 13 is validated, public synthetic-STAGING smoke checks passed 4/4, and effects remain disabled.
 
 ## Readiness boundary
 
@@ -25,20 +26,20 @@ The current SPEC-018 evidence still says `NOT_READY` for pilot and production. T
 
 ## Ordered implementation plan
 
-### P0. Restore a green verification path
+### P0. Restore a green verification path — completed for the current review
 
-1. Create a temporary `.env` from `.env.example` in the GitHub Actions verify job.
-2. Keep CI-provided environment variables authoritative, including the generated session secret and test database URLs.
-3. Confirm the full verify workflow, including migration harness and provenance, passes on the current main lineage.
-4. Confirm `.env` remains untracked and repository-hygiene checks stay green.
+1. A temporary `.env` is created from `.env.example` in the GitHub Actions verify job.
+2. CI-provided environment variables remain authoritative, including the generated session secret and test database URLs.
+3. PR #119's full verify workflow, including migration harness and provenance, passed.
+4. The placeholder remains untracked and repository-hygiene checks passed.
 
-**Exit condition:** current HEAD has a green `verify` run, not only a local run.
+**Exit condition met for PR #119:** the reviewed head has a green remote `verify` run. Merge remains a separate review decision.
 
 ### P1. Finish engineering that can move the pilot gates
 
 #### 1. D-007 production retention package
 
-**Dependency:** explicit owner authorization for the production purge/export behavior. Do not infer production retention semantics from the STAGING rehearsal.
+**Current state:** approved pilot D-007 export-package primitives and retention planning are implemented and tested. The implementation does not deliver exports, create a download network effect, or perform destructive purges. Do not infer production retention semantics from the STAGING rehearsal.
 
 When authorized, implement and test the package with these invariants:
 
@@ -53,7 +54,7 @@ Update the privacy runbook and add integration coverage against a representative
 
 #### 2. Resilience restore evidence
 
-**Dependency:** owner-approved D-021, D-023, and D-024 SLO, RTO, and RPO envelopes.
+**Current state:** pilot D-021, D-023, and D-024 SLO, RTO, and RPO objectives are approved and encoded. A backup-based restore exercise is still required; the current migration rehearsal only proves applying migrations to an empty database.
 
 Then:
 
@@ -62,7 +63,7 @@ Then:
 3. capture restore timing, data-loss boundary, schema validation, and durable-job behavior
 4. update the resilience and operations evidence without marking a gate ready from synthetic measurements alone
 
-The existing rehearsal script is an implementation starting point. The missing thresholds are an owner decision, not a code default.
+The existing rehearsal script is an implementation starting point. It must not be represented as backup-restore proof or as an RTO/RPO measurement.
 
 #### 3. Evidence reruns after code stabilizes
 
@@ -77,7 +78,7 @@ Human contrast, focus, reflow, policy, and safety-copy review remain human or op
 
 #### 4. Auth constant release handling
 
-The AUTH gate still contains inferred abuse-limit constants. Once the owner either approves those constants or supplies released values:
+The approved pilot challenge limits are now encoded. Remaining AUTH evidence is a staged abuse-SLO measurement, not an implied production policy. If values change:
 
 - codify the decision in the appropriate release documentation
 - update typed configuration and tests if the values change
@@ -130,7 +131,7 @@ Completed 2026-08-29: Vitest was upgraded to 4.1.11, `npm audit` reports 0 vulne
 CI dotenv fix
   -> green current-HEAD verify
   -> refreshed STAGING evidence
-  -> owner decisions: auth, safety, retention, SLO/RTO/RPO, reporting
+  -> remaining owner decisions: safety, production retention, reporting
   -> authorized engineering implementations
   -> restore / deletion / provider acceptance evidence
   -> SPEC-018 gate resettlement

@@ -32,3 +32,14 @@ export {
   runDeletionDrill,
   type DeletionDrillReport,
 } from './deletion-drill.js';
+
+export {
+  authorizeDataOperation,
+  buildPilotExport,
+  planRetentionPurge,
+  DATA_OPERATION_AFFECTED_SYSTEMS,
+  PILOT_DATA_OPERATIONS_VERDICT,
+  type CreateDataOperationInput,
+  type DataOperationRecord,
+  type EncryptedExport,
+} from './data-operations.js';

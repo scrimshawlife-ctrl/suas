@@ -3,7 +3,8 @@
  *
  * Applies migrations to TEST_MIGRATIONS_DATABASE_URL (separate from the shared
  * suite DB), reports applied version count, and exits non-zero on drift/plan
- * failure. Full filesystem backup restore remains D-024 / ops-owned.
+ * failure. It does not restore a backup: the approved D-024 pilot objectives
+ * remain unverified until an ops-owned restore exercise supplies its evidence.
  */
 
 import { loadConfig } from '../src/config/index.js';
@@ -65,8 +66,13 @@ async function main(): Promise<void> {
         {
           status: 'ok',
           applied: appliedAfter.length,
+          approved_pilot_objectives: {
+            system_of_record: { rto_hours: 4, rpo_hours: 24 },
+            durable_job_store: { rto_hours: 4, rpo_hours: 1 },
+          },
+          evidence_status: 'EMPTY_DB_MIGRATION_APPLY_ONLY',
           rto_rpo_verdict: 'NOT_COMPUTABLE',
-          note: 'D-024 envelopes absent — empty-DB apply rehearsal only',
+          note: 'Pilot objectives are approved, but no backup restore, recovery duration, data-loss boundary, or durable-job recovery evidence was exercised.',
         },
         null,
         2,

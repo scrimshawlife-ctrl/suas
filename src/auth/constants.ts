@@ -8,30 +8,34 @@
  *   constants".
  * - SUAS-specs SECURITY.md §2 — rate limits on auth challenges.
  *
- * Every value below is `INFERRED`. None is a released decision. They are gathered
- * in one file, explicitly labelled, so a released constant replaces them in one
- * place rather than being hunted through the codebase. The Slice 3 conformance
- * record returns them to specs.
+ * Pilot-approved values and still-inferred values are gathered in one file so
+ * enforcement is reviewable. Approval is limited to pilot implementation and
+ * does not establish production readiness or measured compliance.
  */
 
 /** Lifecycle label for a value this implementation chose, not one the release fixed. */
 export const INFERRED = 'INFERRED' as const;
+export const APPROVED_FOR_PILOT_IMPLEMENTATION = 'APPROVED_FOR_PILOT_IMPLEMENTATION' as const;
+export type ConstantLifecycle = typeof INFERRED | typeof APPROVED_FOR_PILOT_IMPLEMENTATION;
 
-export interface InferredConstant {
+export interface AuthConstant {
   readonly value: number;
-  readonly lifecycle: typeof INFERRED;
+  readonly lifecycle: ConstantLifecycle;
   readonly rationale: string;
 }
 
-function inferred(value: number, rationale: string): InferredConstant {
+function inferred(value: number, rationale: string): AuthConstant {
   return { value, lifecycle: INFERRED, rationale };
 }
 
-/** AUTH.md §3: challenges are time-bounded. Exact TTL is DECISION_PENDING. */
-export const CHALLENGE_TTL_SECONDS = inferred(
-  600,
-  'Ten minutes is short enough to bound replay exposure and long enough for a ' +
-    'veteran to move between email and app. AUTH.md §3 leaves the exact TTL open.',
+function pilotApproved(value: number, rationale: string): AuthConstant {
+  return { value, lifecycle: APPROVED_FOR_PILOT_IMPLEMENTATION, rationale };
+}
+
+/** Pilot decision: participant magic links are single-use and expire after 15 minutes. */
+export const CHALLENGE_TTL_SECONDS = pilotApproved(
+  900,
+  'Approved pilot magic-link expiration. The same bounded challenge primitive is used for OTP.',
 );
 
 /** AUTH.md §3: challenges are rate-limited and attempt-bounded. */
@@ -40,10 +44,10 @@ export const CHALLENGE_MAX_ATTEMPTS = inferred(
   'Bounds brute force against a 6-digit OTP while tolerating mistyping.',
 );
 
-/** SECURITY.md §2: rate limit auth challenge issuance per destination. */
-export const CHALLENGE_ISSUE_LIMIT = inferred(
-  5,
-  'Per destination per window; bounds mail-bombing a veteran address.',
+/** Pilot decision: no more than three challenge issuances per account in 15 minutes. */
+export const CHALLENGE_ISSUE_LIMIT = pilotApproved(
+  3,
+  'Approved pilot account-level issuance limit. The separate IP limit still requires request-IP plumbing.',
 );
 
 export const CHALLENGE_ISSUE_WINDOW_SECONDS = inferred(
@@ -51,11 +55,10 @@ export const CHALLENGE_ISSUE_WINDOW_SECONDS = inferred(
   'Fifteen-minute window pairs with the issue limit above.',
 );
 
-/** SECURITY.md §2: rate limit verification attempts per destination. */
-export const CHALLENGE_VERIFY_LIMIT = inferred(
-  10,
-  'Per destination per window, across challenges, so rotating challenges does ' +
-    'not reset an attacker budget.',
+/** Pilot decision: failed authentication is limited to five attempts per 15 minutes. */
+export const CHALLENGE_VERIFY_LIMIT = pilotApproved(
+  5,
+  'Approved pilot destination-level verification limit across challenge rotation.',
 );
 
 export const CHALLENGE_VERIFY_WINDOW_SECONDS = inferred(
@@ -89,8 +92,8 @@ export const MFA_ELEVATION_TTL_SECONDS = inferred(
 /** Length of the numeric code delivered for OTP methods. */
 export const OTP_CODE_DIGITS = inferred(6, 'Standard OTP length; paired with attempt bounds.');
 
-/** All inferred constants, for the build-info/admin surface and for review. */
-export const INFERRED_AUTH_CONSTANTS: Readonly<Record<string, InferredConstant>> = {
+/** All authentication constants, for the build-info/admin surface and review. */
+export const AUTH_CONSTANTS: Readonly<Record<string, AuthConstant>> = {
   CHALLENGE_TTL_SECONDS,
   CHALLENGE_MAX_ATTEMPTS,
   CHALLENGE_ISSUE_LIMIT,
@@ -102,3 +105,6 @@ export const INFERRED_AUTH_CONSTANTS: Readonly<Record<string, InferredConstant>>
   MFA_ELEVATION_TTL_SECONDS,
   OTP_CODE_DIGITS,
 };
+
+/** @deprecated Use AUTH_CONSTANTS, which preserves each value's lifecycle. */
+export const INFERRED_AUTH_CONSTANTS = AUTH_CONSTANTS;
