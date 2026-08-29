@@ -9,6 +9,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CONFIG_VARIABLE_NAMES } from '../../src/config/index.js';
@@ -21,12 +22,17 @@ const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
  * files would let new work pass the hygiene gate before it is ever staged.
  */
 function repositoryFiles(): string[] {
-  return execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-  })
-    .split('\n')
-    .filter((line) => line.trim() !== '');
+  return (
+    execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      // `git ls-files --cached` retains paths deleted in the worktree until the
+      // deletion is staged. Do not attempt to read an intentionally removed file.
+      .filter((file) => existsSync(join(repoRoot, file)))
+  );
 }
 
 describe('ENVIRONMENT.md §7 — repository files', () => {

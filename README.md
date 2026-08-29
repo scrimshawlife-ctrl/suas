@@ -4,8 +4,10 @@ Shut Up and Serve (SUAS) is the implementation repository for the consent-govern
 
 Public site: https://scrimshawlife-ctrl.github.io/suas/
 
-Click-through demo (static Pages HTML, not live operations):
-https://scrimshawlife-ctrl.github.io/suas/demo.html
+Product UI preview (static Pages HTML, not live operations):
+https://scrimshawlife-ctrl.github.io/suas/app.html
+
+The former `demo.html` URL remains as a compatibility redirect to the Product UI preview.
 
 ## Start here
 
@@ -70,7 +72,7 @@ On Windows PowerShell use `.\scripts\start-local.ps1 -Role veteran` (or
 non-loopback URLs, and credentials that are not present in the gitignored
 `.local-secrets/seed-output.json` or an explicit session environment variable.
 
-The static GitHub Pages product preview is available at
+The static GitHub Pages Product UI preview is available at
 `https://scrimshawlife-ctrl.github.io/suas/app.html`. It shows the veteran,
 responder, and admin surfaces with synthetic display data only. It does not
 connect to the API, issue sessions, or represent an operating environment.
