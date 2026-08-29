@@ -288,6 +288,7 @@ select {
 
 .provider-grid {
   margin-top: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
 }
 
 .provider-card {
@@ -305,6 +306,12 @@ select {
 
 .provider-card-heading h3 {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.provider-card-heading .badge {
+  flex: 0 0 auto;
 }
 
 .provider-form {
