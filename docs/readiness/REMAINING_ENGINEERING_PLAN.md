@@ -122,7 +122,7 @@ Production must remain fail-closed while any required decision or evidence is ab
 
 ### P4. Toolchain hygiene
 
-The documented Vitest/Vite/esbuild advisory is dev-tooling-only. Upgrade it in a separate change after compatibility testing, then rerun the full suite and audit output. This is useful hygiene but is not a substitute for the pilot or production gates.
+Completed 2026-08-29: Vitest was upgraded to 4.1.11, `npm audit` reports 0 vulnerabilities, and the full verification suite passes. Continue periodic dependency hygiene, but this remediation is not a substitute for the pilot or production gates.
 
 ## Dependency graph
 

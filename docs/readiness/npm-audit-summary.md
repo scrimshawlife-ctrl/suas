@@ -1,5 +1,7 @@
-# npm audit snapshot 2026-08-26
+# npm audit snapshot 2026-08-29
 
 Runtime dependencies (fastify, pg, zod): no advisories reported.
-Dev toolchain: vitest/vite/esbuild GHSA-67mh (moderate→reported as high/critical via chain).
-Remediation requires vitest major upgrade (breaking); deferred with residual note in security-privacy-audit.md.
+Dev toolchain: no advisories reported after upgrading Vitest to 4.1.11.
+Verification: `npm audit` reports 0 vulnerabilities and `npm run verify` passes.
+
+This is dependency hygiene only. It does not satisfy pilot or production readiness gates.
