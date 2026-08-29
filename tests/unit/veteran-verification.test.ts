@@ -49,6 +49,18 @@ describe('D-035 proposed Veteran verification contract', () => {
     });
   });
 
+  it('does not emit an undefined reason when the source supplies none', () => {
+    expect(
+      normalizeVaVeteranStatus({
+        veteranStatus: 'not confirmed',
+        sourceContractVersion: 'va-veteran-verification-v2',
+      }),
+    ).toEqual({
+      status: 'NOT_CONFIRMED',
+      sourceContractVersion: 'va-veteran-verification-v2',
+    });
+  });
+
   it('fails closed while the provider adapter is disabled', async () => {
     const adapter = new DisabledVeteranVerificationAdapter();
 
