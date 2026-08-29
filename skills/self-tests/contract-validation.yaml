@@ -1,0 +1,12 @@
+skill: contract-validation
+scenario: emitted basis version mismatches released contract
+given:
+  expected_questionnaire: qv-001
+  emitted_questionnaire: qv-002
+  runtime_commit: abc123
+expect:
+  verdict: NON_CONFORMANT
+  mismatches_contains: questionnaire_version
+must_not:
+  - verdict_CONFORMANT
+  - invent_semantic_rule
