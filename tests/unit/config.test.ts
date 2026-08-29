@@ -54,6 +54,23 @@ describe('valid configuration', () => {
   });
 });
 
+describe('D-035 sandbox OAuth config gate', () => {
+  it('keeps the sandbox OAuth route disabled unless explicitly enabled', () => {
+    expect(loadConfig(validEnv()).vaSandboxOAuth.enabled).toBe(false);
+  });
+
+  it('fails closed when sandbox OAuth is enabled without its complete configuration', () => {
+    const issues = issuesFor(validEnv({ SUAS_VA_SANDBOX_OAUTH_ENABLED: 'true' }));
+    expect(issues.join('\n')).toContain('SUAS_VA_SANDBOX_OAUTH_CLIENT_ID is required');
+    expect(issues.join('\n')).toContain('SUAS_VA_SANDBOX_OAUTH_REDIRECT_URI is required');
+  });
+
+  it('rejects non-boolean sandbox OAuth enablement values', () => {
+    const issues = issuesFor(validEnv({ SUAS_VA_SANDBOX_OAUTH_ENABLED: 'yes' }));
+    expect(issues.join('\n')).toContain('must be exactly "true" or "false"');
+  });
+});
+
 describe('ENVIRONMENT.md §2 — environment class is explicit', () => {
   it('rejects an unknown SUAS_ENV', () => {
     const issues = issuesFor(validEnv({ SUAS_ENV: 'DEV' }));
