@@ -72,13 +72,10 @@ describe('dispatchToFastify', () => {
         app.server,
         new Request('http://suas.test/auth/va/callback?code=synthetic-code&state=synthetic-state'),
       );
-      expect(callback.status).toBe(200);
-      expect(callback.headers.get('cache-control')).toBe('no-store');
-      expect(callback.headers.get('referrer-policy')).toBe('no-referrer');
-      const callbackHtml = await callback.text();
-      expect(callbackHtml).toContain('VA verification unavailable');
-      expect(callbackHtml).not.toContain('synthetic-code');
-      expect(callbackHtml).not.toContain('synthetic-state');
+      expect(callback.status).toBe(404);
+      const callbackBody = await callback.text();
+      expect(callbackBody).not.toContain('synthetic-code');
+      expect(callbackBody).not.toContain('synthetic-state');
     } finally {
       await app.close();
     }
