@@ -1,3 +1,15 @@
+---
+name: accessibility-audit
+version: 1.0.0
+kind: runtime
+status: active
+authority: released-runtime-conformance
+inputs: [ui_authority, runtime_provenance, surfaces, viewport_matrix, automated_criteria, human_criteria]
+outputs: [accessibility_execution]
+fail_closed: true
+self_test: skills/self-tests/accessibility-audit.yaml
+---
+
 # accessibility-audit
 
 ## Purpose
@@ -21,6 +33,9 @@ Use for UI/client changes, staging route validation, accessibility regressions, 
 7. Invalidate evidence when the tested surface changes materially.
 8. Never settle a required human-review gate from automation alone.
 
+## Invocation example
+`Run the STAGING accessibility audit for onboarding and crisis-copy routes on the current build and separate automated findings from human-review disposition.`
+
 ## Output schema
 ```yaml
 audit_id: string
@@ -42,6 +57,9 @@ human_review:
 findings: [string]
 verdict: PASS|FAIL|PARTIAL|NOT_COMPUTABLE
 ```
+
+## Self-test
+Run `skills/self-tests/accessibility-audit.yaml`. Automated PASS with incomplete required human review must not yield overall PASS.
 
 ## Completion criteria
 Complete only when automated and human-review requirements are separately classified and tied to current build provenance.
