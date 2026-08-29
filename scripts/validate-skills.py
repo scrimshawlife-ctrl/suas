@@ -40,14 +40,19 @@ def parse_frontmatter(text: str, path: Path) -> dict[str, str]:
         fail(f"{path}: missing YAML frontmatter closer")
         return {}
     meta = {}
+    current_key = None
     for raw in text[4:end].splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         if ":" not in raw:
+            if raw[:1].isspace() and current_key:
+                meta[current_key] = f"{meta[current_key]} {raw.strip()}"
+                continue
             fail(f"{path}: malformed frontmatter line: {raw}")
             continue
         key, value = raw.split(":", 1)
-        meta[key.strip()] = value.strip()
+        current_key = key.strip()
+        meta[current_key] = value.strip()
     return meta
 
 for path in SHARED:
