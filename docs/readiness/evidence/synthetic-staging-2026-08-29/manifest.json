@@ -1,0 +1,183 @@
+{
+  "evidence_packet_id": "synthetic-staging-2026-08-29",
+  "assembled_at_utc": "2026-08-29T03:57:00Z",
+  "repository": "SUAS",
+  "repository_sha_at_preflight": "e306f873cd364f9ffea588a2450a8ca2a3a9b7bd",
+  "deployed_sha": "NOT_COMPUTABLE",
+  "deployment_id": "NOT_COMPUTABLE",
+  "environment_classification": "STAGING_INTENDED_COMMITTED_CONFIGURATION_AND_PUBLIC_STATUS_ONLY",
+  "dataset_identifier": "NOT_COMPUTABLE",
+  "dataset_hash": "NOT_COMPUTABLE",
+  "responsible_operator": "Jcode (automated evidence assembler; not an approver)",
+  "real_world_effects": "disabled",
+  "pilot_launch": "blocked",
+  "production_launch": "blocked",
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "3cc7d3eec6bb047ba966953e2654b80211b0de06e31cdc62dd43b3b84e215ad7",
+      "category": "packet",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "accessibility/automated.md",
+      "sha256": "1dd8db6e65b7ebeb7022d64f4ca3928e0235cc66f23c58d5d86810ab683d6df4",
+      "category": "accessibility",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "accessibility/human-review-worksheet.md",
+      "sha256": "dd2dbd4494371cf64bb68dce1ae4c028d1c4641e61decb923585fd4848929f99",
+      "category": "accessibility",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "authenticated-routes/route-matrix.md",
+      "sha256": "e91ac0884251a6859431523af2af6c23bc769770ed46638fa0902f26b9ecc910",
+      "category": "authenticated-routes",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "authenticated-routes/status.md",
+      "sha256": "28530a5be2ddaff75bac7cf7a656128bcc40cd39d1ac2ffc114a76d5007ba684",
+      "category": "authenticated-routes",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/approval-request.md",
+      "sha256": "8f229af2f0be1453777eb41813a1e7cc1b877af272f86b0662f4d7db75bdc963",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d007/status.md",
+      "sha256": "798e6fb28c7f4dacc5658d1c40ef7c07365184d02f27aac2a6a63a0a7d0ceef0",
+      "category": "d007",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d012/copy-inventory.md",
+      "sha256": "805e670d02eba22c974d2ea914b11204333a4a595b44faaea066b857dbc97aa2",
+      "category": "d012",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d012/human-review-worksheet.md",
+      "sha256": "917edc9b0208b59ddb3b49915214f46fd359fcd0fc5a44edf4d92cb84a0a5175",
+      "category": "d012",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d012/technical-review.md",
+      "sha256": "db9e6ef699d494af33760d64a8794f5587091b1a73dd387bb6f2f75d16f4a795",
+      "category": "d012",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d025/containment.md",
+      "sha256": "6b1eac13782cc6b32b83c3fa953d141103d41aa12abd688308a276c4758664d4",
+      "category": "d025",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "d025/implementation-evidence-matrix.md",
+      "sha256": "97d84abe24e886440f27d2d1b0c518b86742bd466e548ad436412e6ac147b683",
+      "category": "d025",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "environment-boundary.md",
+      "sha256": "432400f7c817592f2c01554492f0030f8d55637b42910b20c98ca5e22d1b0911",
+      "category": "packet",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "gate-settlement.md",
+      "sha256": "6b3e7dddcf78d370fde6fb854a02c27f25b07258982ceb027552d110a7c205a3",
+      "category": "packet",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "logs-sanitized/final-invariant-result.json",
+      "sha256": "7965ea89aad72a60d1af70ae14bbbdff2785116f5d0fd6a15775701b4496bf36",
+      "category": "logs-sanitized",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "logs-sanitized/local-safety-reporting-result.json",
+      "sha256": "97a0c0862e06fd02f6c25d7518c3f53505fdaa351dbf8878a885fc1e70c429fd",
+      "category": "logs-sanitized",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "logs-sanitized/preflight-result.json",
+      "sha256": "26eba6ad939bc141d56b26f8f75f1cd2a90850b85e0e98d074b09327ba317301",
+      "category": "logs-sanitized",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "logs-sanitized/public-e2e-result.json",
+      "sha256": "cbac47a419f7d14f650cf61afe9c6df6557c6117228284cedfd1670c0cc92738",
+      "category": "logs-sanitized",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "owner-review-form.md",
+      "sha256": "cc4b5574a1cd653f61b9602945b766919f86ab787e6ba4f2e5012788c3ae0e04",
+      "category": "packet",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "preflight.md",
+      "sha256": "c455d8c128c195b1e61ad3363e6a687dc1492ede9becd63c2f7d732f28582ba8",
+      "category": "packet",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "recovery/exercise-plan.md",
+      "sha256": "983d699855840392148bbb2336d7b571dbc785271b8444dff8c5459444960d41",
+      "category": "recovery",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "recovery/status.md",
+      "sha256": "d5660c5f5e522878880a4e120b5abfb995f50a3b96370bf51d9d3ecd1c892115",
+      "category": "recovery",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    },
+    {
+      "path": "soak/status.md",
+      "sha256": "5984a88f3251e5fac6cc7666e5289a361c9961e36bee719b21c9a43b521a4037",
+      "category": "soak",
+      "provenance": "campaign-authored documentation or sanitized command output",
+      "contains_sensitive_values": false
+    }
+  ],
+  "manifest_notes": [
+    "Artifact hashes exclude this manifest to avoid a circular digest.",
+    "No secret, credential, authorization-header, connection-string, or sensitive payload value is included.",
+    "A local PASS is not a release authorization."
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "kind": "local_test_result",
+  "timestamp_utc": "2026-08-29T03:56:28Z",
+  "command": "npx vitest run [bounded D-012, D-025, config, build-info, integration UI, and invariant test files]",
+  "environment": "local only",
+  "exit_code": 0,
+  "test_files_passed": 10,
+  "tests_passed": 258,
+  "sensitive_values_included": false,
+  "real_world_effects": "disabled",
+  "interpretation": "PASS_LOCAL_ONLY; no deployment, credentials, provider calls, report release, export, deletion, or restore was performed."
+}
