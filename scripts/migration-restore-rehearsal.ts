@@ -72,8 +72,7 @@ async function main(): Promise<void> {
           },
           evidence_status: 'EMPTY_DB_MIGRATION_APPLY_ONLY',
           rto_rpo_verdict: 'NOT_COMPUTABLE',
-          note:
-            'Pilot objectives are approved, but no backup restore, recovery duration, data-loss boundary, or durable-job recovery evidence was exercised.',
+          note: 'Pilot objectives are approved, but no backup restore, recovery duration, data-loss boundary, or durable-job recovery evidence was exercised.',
         },
         null,
         2,
