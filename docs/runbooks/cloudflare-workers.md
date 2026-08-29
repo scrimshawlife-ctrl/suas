@@ -105,18 +105,21 @@ workflow.
 or schema validation fails, the fetch handler returns `503` with
 `{ "error": { "code": "NOT_READY" } }` and does not serve `/app` or `/api/v0`.
 
-## Shared synthetic deploy (interim LOCAL soak)
+## Dedicated SUAS synthetic-STAGING deploy
 
 Topology recommendation: [D-001-005-staging-hosting.md](../decision-packets/D-001-005-staging-hosting.md).
 
-### Status (2026-08-27)
+### Status (2026-08-29)
 
-Owner-authorized formal synthetic **STAGING** Worker is live on
-`https://suas.zer0state-noema.workers.dev` (`SUAS_ENV=STAGING`). Smoked:
+The prior shared-account Workers deployment is **retired for SUAS use**. It
+must not be used for acceptance, OAuth callback registration, or new evidence.
+It does not establish an independent SUAS STAGING identity.
 
-- `GET /api/v0/health` → `200` with `job_queue.durability: durable`,
-  `implementation: postgres-outbox`
-- Seeded `/app` routes (home, responder, resources/food, notifications) → `200`
+Before a replacement deploy, provision an independently owned SUAS Cloudflare
+account/subdomain or a SUAS custom staging hostname. Keep the Worker named
+`suas`, set `SUAS_E2E_BASE_URL` to the resulting HTTPS origin in GitHub
+Environment `suas-synthetic-staging`, and use that origin for smoke tests.
+No hostname is committed as a default.
 
 This is **not** PRODUCTION and **not** SPEC-018 gate closure. Real external
 effects stay off (`SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`, email/SMS
@@ -151,18 +154,29 @@ errors (CF 1101). Node/CLI keeps a normal `pg.Pool`.
 
 ### Owner checklist (repeat for a new synthetic DB)
 
-1. Neon synthetic database created (no production data path).
-2. Hyperdrive created against the **pooled** Neon URL; id only in
+1. Independently owned SUAS Cloudflare account is selected. Its workers.dev
+   subdomain or a SUAS custom staging hostname is recorded outside this repo.
+   Do not reuse another product's account/subdomain.
+2. Neon synthetic database created (no production data path) and Hyperdrive
+   created in the SUAS Cloudflare account against the **pooled** Neon URL; id only in
    gitignored `wrangler.synthetic.jsonc` or the CF dashboard — never a
    connection string in git. Committed file keeps `YOUR_HYPERDRIVE_ID`.
-3. Schema applied once from Node with the **unpooled** URL:
+3. GitHub Environment `suas-synthetic-staging` contains only SUAS synthetic
+   deployment secrets and the non-secret `SUAS_E2E_BASE_URL` variable. It must
+   not reuse another product's environment or credentials.
+4. Schema applied once from Node with the **unpooled** URL:
    `npm run migrate -- apply` then `npm run migrate -- validate`.
-4. `npx wrangler secret put SUAS_SESSION_SECRET --config wrangler.synthetic.jsonc`.
-5. Optional stamp: `SUAS_BUILD_COMMIT` / `SUAS_BUILD_TIMESTAMP` as Wrangler vars.
-6. Publish: `npx wrangler deploy --config wrangler.synthetic.jsonc` (manual)
+5. `npx wrangler secret put SUAS_SESSION_SECRET --config wrangler.synthetic.jsonc`.
+6. Optional stamp: `SUAS_BUILD_COMMIT` / `SUAS_BUILD_TIMESTAMP` as Wrangler vars.
+7. Publish: `npx wrangler deploy --config wrangler.synthetic.jsonc` (manual)
    or the `worker-deploy` workflow (`workflow_dispatch` only) after
    `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exist in the GitHub
-   Environment `synthetic-worker`.
+   Environment `suas-synthetic-staging`.
+
+Do not register a VA OAuth callback until the independently owned hostname has
+been deployed, verified, and separately approved. The correct callback shape
+is `<SUAS_E2E_BASE_URL>/auth/va/callback`; this runbook does not authorize VA
+registration.
 
 Keep effects false. Do not set
 `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=true`. Do not treat this publish as

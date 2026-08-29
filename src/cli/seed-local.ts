@@ -29,6 +29,7 @@ import {
   syntheticPhone,
 } from '../testing/fixture-boundary.js';
 import { loadConfig } from '../config/index.js';
+import { resolveSyntheticStagingOrigin } from '../config/staging-host.js';
 import { createPool, withTransaction } from '../db/index.js';
 import {
   createMembership,
@@ -578,6 +579,9 @@ async function main(): Promise<void> {
       return issued;
     });
 
+    const workerBaseUrl = process.env.SUAS_WORKER_BASE_URL
+      ? resolveSyntheticStagingOrigin(process.env.SUAS_WORKER_BASE_URL, 'SUAS_WORKER_BASE_URL')
+      : null;
     const summary = {
       environment: config.environment,
       tenantId: TENANT_ID,
@@ -608,10 +612,11 @@ async function main(): Promise<void> {
         adminBearer: adminSession.credential,
         expiresAt: veteranSession.session.expiresAt.toISOString(),
       },
-      workerBaseUrl: 'https://suas.zer0state-noema.workers.dev',
-      hint:
-        'Use the bearer with: curl -H "authorization: Bearer <cred>" ' +
-        'https://suas.zer0state-noema.workers.dev/app/home',
+      workerBaseUrl: workerBaseUrl ?? 'UNCONFIGURED_INDEPENDENT_SUAS_STAGING_ORIGIN',
+      hint: workerBaseUrl
+        ? 'Use the bearer with: curl -H "authorization: Bearer <cred>" ' +
+          `${workerBaseUrl}/app/home`
+        : 'Set SUAS_WORKER_BASE_URL to an independently owned SUAS synthetic-STAGING origin before using these credentials against a Worker.',
     };
     console.log(JSON.stringify(summary, null, 2));
   } finally {

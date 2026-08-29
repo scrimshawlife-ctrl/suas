@@ -53,6 +53,8 @@ The repository contains a **synthetic-STAGING evidence packet only**. It is not 
 - The D-007 stage-1 owner record is deliberately `DEFER_REQUIRED` at `docs/readiness/evidence/synthetic-staging-2026-08-29/d007/pre-execution/owner-decision-defer-required.md`.
 - No D-007 dry run has executed. Do not convert the record to `ACCEPT` or run it without a complete accountable owner identity, selected decision, owner-generated UTC signing timestamp, positively identified synthetic-STAGING deployment ID, and independent verification of every frozen hash.
 - Stage 2 evidence acceptance is separate from Stage 1 authorization. Its template is `d007/pre-execution/post-execution-acceptance-template.md`.
+- The former shared-account Cloudflare Workers host is retired for SUAS. Do not use it for browser acceptance, deployment evidence, VA OAuth callback registration, or any new integration. A new independently owned SUAS Cloudflare account/subdomain or custom staging hostname must be provisioned outside the repository before STAGING deployment work resumes.
+- Browser acceptance has no committed hostname default. Its `SUAS_E2E_BASE_URL` and deployment credentials belong only in GitHub Environment `suas-synthetic-staging` after the independent hostname is provisioned and verified.
 
 The following controls remain mandatory and must stay unchanged absent separate authorization:
 

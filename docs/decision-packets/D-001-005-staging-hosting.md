@@ -1,6 +1,6 @@
 # Decision packet — D-001 / D-005 staging & hosting
 
-**Status:** DECIDED for synthetic STAGING topology (2026-08-27) — GitHub + CF Worker + Neon  
+**Status:** DECIDED vendor topology; shared-account host superseded pending independently owned SUAS STAGING identity (2026-08-29) — GitHub + CF Worker + Neon
 **Affects gates:** `OPERATIONS`, staging evidence for nearly all other gates  
 **Runtime tip when written:** post-`#108` D-022 outbox; formal `SUAS_ENV=STAGING` on workers.dev
 
@@ -40,14 +40,15 @@ This matches the shipped runbook [cloudflare-workers.md](../runbooks/cloudflare-
 ## Interim vs formal STAGING
 
 1. **Interim shared synthetic (superseded):** Worker ran as `SUAS_ENV=LOCAL` with in-memory jobs before D-022.
-2. **Formal synthetic STAGING (live 2026-08-27):** same Neon + Hyperdrive + `suas` Worker promoted to `SUAS_ENV=STAGING` with postgres-outbox. Effects false. Not PRODUCTION. Owner may later split a dedicated Neon branch without changing the vendor topology.
+2. **Shared-account Workers host (retired):** the prior `suas` Worker endpoint shared another product's Cloudflare workers.dev identity. It is not an acceptable SUAS isolation boundary and cannot be used for acceptance, OAuth callback registration, or new evidence.
+3. **Required synthetic STAGING replacement:** a `suas` Worker, SUAS-only GitHub Environment, SUAS-only Cloudflare account/subdomain or custom hostname, SUAS Hyperdrive binding, and synthetic SUAS database. Effects remain false. Not PRODUCTION.
 
 ## Required owner action
 
-1. Confirm Cloudflare account (which org/account owns `suas` Worker).
-2. Confirm Neon project (synthetic-only) and create Hyperdrive config; place id in an **uncommitted** override or CF dashboard binding — not a password in git.
-3. Authorize `npx wrangler secret put SUAS_SESSION_SECRET` (and GH Environment secrets if CI deploy is enabled).
-4. Explicitly authorize first shared deploy (interim LOCAL Worker) — this packet alone is not a deploy order.
+1. Confirm the independently owned SUAS Cloudflare account and its workers.dev subdomain or custom STAGING hostname.
+2. Confirm the synthetic-only Neon project and create its Hyperdrive config in the SUAS Cloudflare account; place id in an **uncommitted** override or CF dashboard binding — not a password in git.
+3. Create GitHub Environment `suas-synthetic-staging`, containing only SUAS synthetic secrets and `SUAS_E2E_BASE_URL`.
+4. Authorize `npx wrangler secret put SUAS_SESSION_SECRET` and the first independent synthetic-STAGING deploy. This packet alone is not a deploy order.
 5. Keep D-001/D-005 **production** cloud/DB decisions open until SPEC-018 production authorization.
 
 ## Work completed independently
