@@ -1,3 +1,15 @@
+---
+name: contract-validation
+version: 1.0.0
+kind: runtime
+status: active
+authority: released-runtime-conformance
+inputs: [release_manifest, contract_identities, runtime_provenance, golden_vectors, test_commands]
+outputs: [contract_verdict]
+fail_closed: true
+self_test: skills/self-tests/contract-validation.yaml
+---
+
 # contract-validation
 
 ## Purpose
@@ -21,6 +33,9 @@ Use for scoring/questionnaire changes, version-pin changes, provenance/basis fie
 7. Record each invariant as PASS, FAIL, or NOT_COMPUTABLE with evidence.
 8. Return semantic ambiguity to `SUAS-specs` rather than inventing runtime behavior.
 
+## Invocation example
+`Validate qv-001/sv-001 on the current runtime commit, including golden vectors, missing-input behavior, basis provenance, and disabled-mode non-callability.`
+
 ## Output schema
 ```yaml
 contract_id: string
@@ -36,6 +51,9 @@ mismatches: [string]
 verdict: CONFORMANT|NON_CONFORMANT|NOT_COMPUTABLE
 minimum_fix_or_spec_decision: [string]
 ```
+
+## Self-test
+Run `skills/self-tests/contract-validation.yaml`. The fixture must classify a basis/version mismatch as NON_CONFORMANT and must not repair unresolved semantics locally.
 
 ## Completion criteria
 Complete only when all applicable invariants are classified against current runtime provenance and the verdict is reproducible.
