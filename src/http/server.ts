@@ -169,6 +169,24 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     });
   });
 
+  /**
+   * VA OAuth redirect receiver for the independently provisioned synthetic
+   * staging origin. Veteran-status verification is intentionally disabled:
+   * this endpoint neither reads nor exchanges authorization parameters and
+   * never stores VA data. It only gives the provider a safe, non-operational
+   * landing page while the adapter remains gated.
+   */
+  app.get('/auth/va/callback', (_request, reply) => {
+    void reply
+      .header('cache-control', 'no-store')
+      .header('referrer-policy', 'no-referrer')
+      .header('x-content-type-options', 'nosniff')
+      .type('text/html; charset=utf-8')
+      .send(
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>VA verification unavailable</title></head><body><main><h1>VA verification unavailable</h1><p>Veteran-status verification is not enabled in this synthetic-only staging environment.</p><p>No authorization data was processed or stored.</p></main></body></html>',
+      );
+  });
+
   app.get(`${API_PREFIX}/health`, () => {
     // Liveness plus non-secret dependency posture. No provenance secrets,
     // configuration values, or tenant data (ENVIRONMENT.md §8; API.md health).
