@@ -103,6 +103,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Synthetic STAGING contract
+        # Static guard only. It does not contact Cloudflare or deploy anything.
+        run: npm run staging:contract
+
       - name: Build
         run: npm run build
 
