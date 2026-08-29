@@ -19,9 +19,12 @@ jobs:
   chromium:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # This environment must contain only the independently owned SUAS
+    # synthetic-STAGING host, synthetic sessions, and no production secrets.
+    environment: suas-synthetic-staging
     env:
       CI: 'true'
-      SUAS_E2E_BASE_URL: https://suas.zer0state-noema.workers.dev
+      SUAS_E2E_BASE_URL: ${{ vars.SUAS_E2E_BASE_URL }}
       SUAS_E2E_VETERAN_BEARER: ${{ secrets.SUAS_E2E_VETERAN_BEARER }}
       SUAS_E2E_RESPONDER_BEARER: ${{ secrets.SUAS_E2E_RESPONDER_BEARER }}
       SUAS_E2E_ADMIN_BEARER: ${{ secrets.SUAS_E2E_ADMIN_BEARER }}

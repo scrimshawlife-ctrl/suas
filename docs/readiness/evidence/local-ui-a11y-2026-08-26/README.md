@@ -1,9 +1,9 @@
 # LOCAL UI / a11y baseline — 2026-08-26
 
 **Environment:** `SUAS_ENV=LOCAL` Worker soak  
-**Host:** `https://suas.zer0state-noema.workers.dev`  
+**Host:** `RETIRED_SHARED_ACCOUNT_HOST_DO_NOT_USE`
 **Data:** Neon synthetic seed (`npm run seed`); bearers from `.local-secrets/seed-summary.json`  
-**Claim boundary:** This is a **pinned LOCAL baseline**, not a `UI_CONFORMANCE=READY` claim.
+**Claim boundary:** This is a **retired pinned LOCAL baseline**, not a `UI_CONFORMANCE=READY` claim. Its shared-account host is not an acceptable SUAS STAGING identity and must not be reused.
 Formal synthetic STAGING now has automated 320px reflow and keyboard-entry coverage in
 `tests/e2e/staging.spec.ts`; gate closure still needs human full-workflow focus-order and
 screen-reader review.

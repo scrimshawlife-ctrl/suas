@@ -13,9 +13,13 @@
 - **Backup mechanism:** repository contains a migration-only rehearsal, not a backup restore exercise (`scripts/migration-restore-rehearsal.ts`).
 - **Canonical evidence location:** `docs/readiness/evidence/`.
 
-## Positively observed public endpoint
+## Retired shared-account public endpoint observation
 
-The known Worker endpoint `https://suas.zer0state-noema.workers.dev/api/v0/health` returned a non-sensitive health response with database configured and durable job queue configured. It did not disclose deployment ID, deployed SHA, database/project identity, tenant data, or credentials.
+The previous public endpoint observation is **retired as STAGING evidence** because
+its Cloudflare workers.dev identity was shared with another product. It must not
+be used for a VA OAuth callback, new acceptance runs, or a deployment binding.
+The prior health response did not disclose deployment ID, deployed SHA,
+database/project identity, tenant data, or credentials.
 
 ## Not computable or blocked at preflight
 
@@ -27,5 +31,6 @@ The known Worker endpoint `https://suas.zer0state-noema.workers.dev/api/v0/healt
 | Synthetic dataset identity, provenance, and hash | NOT_COMPUTABLE | No approved dataset record or attributable approval was provided. |
 | Tenant fixtures for live cross-tenant probes | BLOCKED | Requires approved synthetic operator credentials and positively bound STAGING identity. |
 | Actual provider runtime bindings | NOT_COMPUTABLE | Committed configuration is safe, but live bindings were not inspected. |
+| Independent SUAS STAGING hostname/account | BLOCKED | The shared-account endpoint is retired. A new owner-provisioned SUAS hostname and Cloudflare account boundary are required before deployment evidence can resume. |
 
 The committed configuration guard passed. That result is limited to committed non-secret configuration and does **not** establish a deployed binding, approval, dataset provenance, or human review.
