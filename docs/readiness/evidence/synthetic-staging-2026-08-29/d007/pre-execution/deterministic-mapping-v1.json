@@ -1,0 +1,28 @@
+{
+  "mapping_id": "d007-retention-boundary-mapping",
+  "mapping_version": "1.0.0",
+  "input_schema": "d007-synthetic-retention-fixture/v1",
+  "included_entity": "RetentionDryRunCandidate",
+  "included_fields": ["caseClosedAt", "lastParticipantActivityAt", "exclusions"],
+  "eligibility_rule": "Eligible only when the UTC cutoff is at or after 365 calendar days from the later non-null caseClosedAt or lastParticipantActivityAt, and exclusions is empty. The result remains MANUAL_REVIEW_REQUIRED.",
+  "exclusion_rules": [
+    "OPEN_CASE",
+    "LEGAL_HOLD",
+    "UNRESOLVED_SAFETY_OR_SECURITY_INCIDENT",
+    "ACTIVE_PROVIDER_OR_PAYMENT_DISPUTE",
+    "INCOMPLETE_EXPORT_OR_DELETION_REQUEST",
+    "STATUTORY_RETENTION_OBLIGATION"
+  ],
+  "provider_boundary": {
+    "classification": "NO_PROVIDER_DATA_OR_CALLS",
+    "behavior": "No provider identifier, provider-bound record, provider API call, or provider deletion operation is read or produced."
+  },
+  "time_zone_behavior": "Parse all timestamps as ISO-8601 UTC instants. Add the retention window with setUTCDate. Exact cutoff equality is eligible only when exclusions are empty.",
+  "missing_invalid_input_behavior": {
+    "both_relevant_dates_null": "Return MISSING_CASE_CLOSURE_OR_PARTICIPANT_ACTIVITY and eligible=false.",
+    "invalid_candidate_date": "Reject the input with D-007 dry-run input includes an invalid date.",
+    "invalid_cutoff": "Reject the input with D-007 dry-run requires a valid as-of date.",
+    "unknown_exclusion": "Not admissible in this frozen mapping; no execution may run with a non-enumerated exclusion."
+  },
+  "output_behavior": "Aggregate only, exactly as d007-retention-aggregate-contract/v1 permits."
+}

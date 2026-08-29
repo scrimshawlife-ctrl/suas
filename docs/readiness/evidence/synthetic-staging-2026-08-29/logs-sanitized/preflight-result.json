@@ -1,0 +1,17 @@
+{
+  "timestamp_utc": "2026-08-29T03:51:11Z",
+  "command": "npm run evidence:preflight",
+  "exit_code": 0,
+  "verdict": "PASS",
+  "scope": "COMMITTED_SYNTHETIC_STAGING_CONFIGURATION_ONLY",
+  "authority": {
+    "D007_DELETION_EXECUTION": "disabled",
+    "D007_EXPORT_DELIVERY": "disabled",
+    "D007_365_DAY_PURGE": "disabled",
+    "D025_REPORTING": "disabled",
+    "REAL_WORLD_EFFECTS": "disabled",
+    "PILOT_LAUNCH": "blocked",
+    "PRODUCTION_LAUNCH": "blocked"
+  },
+  "sensitive_values": "omitted"
+}

@@ -1,0 +1,14 @@
+{
+  "verdict": "PASS",
+  "scope": "COMMITTED_SYNTHETIC_STAGING_CONFIGURATION_ONLY",
+  "authority": {
+    "D007_DELETION_EXECUTION": "disabled",
+    "D007_EXPORT_DELIVERY": "disabled",
+    "D007_365_DAY_PURGE": "disabled",
+    "D025_REPORTING": "disabled",
+    "REAL_WORLD_EFFECTS": "disabled",
+    "PILOT_LAUNCH": "blocked",
+    "PRODUCTION_LAUNCH": "blocked"
+  },
+  "note": "A deployed-binding inspection, named approvals, and human review remain separate evidence requirements."
+}

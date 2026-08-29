@@ -1,0 +1,16 @@
+{
+  "timestamp_utc": "2026-08-29T03:51:11Z",
+  "command": "npm run test:e2e:staging:public",
+  "exit_code": 0,
+  "scope": "PUBLIC_GET_AND_BROWSER_BOUNDARY_ONLY",
+  "passed": 4,
+  "failed": 0,
+  "checks": [
+    "health",
+    "landing_and_enrollment",
+    "protected_route_unauthenticated_401",
+    "keyboard_and_320px_reflow"
+  ],
+  "credentials": "not used",
+  "sensitive_values": "omitted"
+}

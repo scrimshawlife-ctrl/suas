@@ -1,0 +1,17 @@
+{
+  "kind": "synthetic_staging_authority_invariant",
+  "timestamp_utc": "2026-08-29T03:57:00Z",
+  "command": "npm run evidence:preflight",
+  "exit_code": 0,
+  "scope": "committed synthetic-STAGING configuration only",
+  "authority_state": {
+    "D007_DELETION_EXECUTION": "disabled",
+    "D007_EXPORT_DELIVERY": "disabled",
+    "D007_365_DAY_PURGE": "disabled",
+    "D025_REPORTING": "disabled",
+    "REAL_WORLD_EFFECTS": "disabled",
+    "PILOT_LAUNCH": "blocked",
+    "PRODUCTION_LAUNCH": "blocked"
+  },
+  "limitations": "Does not bind to a live deployment, grant approval, or execute a runtime exercise."
+}

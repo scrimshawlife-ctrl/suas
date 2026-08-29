@@ -1,0 +1,46 @@
+{
+  "manifest_id": "d007-synthetic-dry-run-pre-execution",
+  "manifest_version": "1.0.0",
+  "dataset": {
+    "identifier": "d007-retention-boundary-fixture",
+    "version": "1.0.0",
+    "classification": "SYNTHETIC",
+    "provenance": {
+      "canonical_source": "tests/unit/retention-dry-run.test.ts",
+      "derivation": "The UTC cutoff is the canonical BOUNDARY constant. Boundary candidates are deterministic \u00b11 millisecond derivatives around that same instant.",
+      "proof": [
+        "All inputs use only controlled timestamp/null/exclusion values.",
+        "No identifier, contact data, provider data, or production data is present.",
+        "src/testing/fixture-boundary.ts limits fixtures to LOCAL/TEST/STAGING and rejects real external effects."
+      ]
+    },
+    "record_count_summary": {
+      "total_candidates": 5,
+      "boundary_before_cutoff": 1,
+      "boundary_exact_cutoff": 1,
+      "boundary_after_cutoff": 1,
+      "excluded_legal_hold": 1,
+      "missing_relevant_dates": 1
+    },
+    "sha256": "8e7480e1f87ed68370a93f757d88b40135651bada242983574d96d71726c760e"
+  },
+  "deterministic_mapping": {
+    "path": "deterministic-mapping-v1.json",
+    "version": "1.0.0",
+    "sha256": "90c96397594110072c1ddbc94c2d087f06071e4110db7afa5fda6288b64fd048"
+  },
+  "aggregate_output_contract": {
+    "path": "aggregate-output-contract-v1.json",
+    "version": "1.0.0",
+    "sha256": "a228cbc4062f3eb429188820ac92b3d0d757d71b62da87a01fadd59767aed614"
+  },
+  "exact_cutoff_utc": "2026-08-29T12:00:00.000Z",
+  "execution_contract": {
+    "path": "dry-run-execution-contract-v1.md",
+    "version": "1.0.0",
+    "sha256": "8a5ebc16d46e7be74b84558751e8a08b0170585e98f86292fd509547bda6aed9"
+  },
+  "execution_code_commit": "31303cd",
+  "staging_deployment_id": "NOT_COMPUTABLE",
+  "status": "DEFER_REQUIRED"
+}
