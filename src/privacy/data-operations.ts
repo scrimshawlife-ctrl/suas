@@ -109,13 +109,19 @@ function canonical(value: unknown): string {
 }
 function csv(rows: readonly Record<string, unknown>[]): string {
   const keys = [...new Set(rows.flatMap((r) => Object.keys(r)))].sort();
-  const esc = (v: unknown) => `"${String(v ?? '').replaceAll('"', '""')}"`;
-  return [
-    keys.map(esc).join(','),
-    ...rows.map((r) =>
-      keys.map((k) => esc(typeof r[k] === 'object' ? canonical(r[k]) : r[k])).join(','),
-    ),
-  ].join('\n');
+  const esc = (v: unknown) => {
+    let cell = '';
+    if (typeof v === 'string') cell = v;
+    else if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'bigint') {
+      cell = String(v);
+    } else if (v !== null && typeof v === 'object') {
+      cell = canonical(v);
+    }
+    return `"${cell.replaceAll('"', '""')}"`;
+  };
+  return [keys.map(esc).join(','), ...rows.map((r) => keys.map((k) => esc(r[k])).join(','))].join(
+    '\n',
+  );
 }
 export interface EncryptedExport {
   readonly contentType: 'application/vnd.suas.encrypted-export+json';
@@ -147,7 +153,9 @@ export async function buildPilotExport(
     consent_events: 'SELECT * FROM consent_events WHERE tenant_id=$1 AND veteran_user_id=$2',
     consent_grants: 'SELECT * FROM consent_grants WHERE tenant_id=$1 AND veteran_user_id=$2',
   })) {
-    datasets[name] = (await pool.query(sql, [input.tenantId, input.subjectUserId])).rows;
+    datasets[name] = (
+      await pool.query<Record<string, unknown>>(sql, [input.tenantId, input.subjectUserId])
+    ).rows;
   }
   const files: Record<string, string> = {};
   for (const [n, r] of Object.entries(datasets)) {
