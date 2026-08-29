@@ -204,7 +204,7 @@
     },
     {
       "path": "preflight.md",
-      "sha256": "c455d8c128c195b1e61ad3363e6a687dc1492ede9becd63c2f7d732f28582ba8",
+      "sha256": "901b464d5e0a3d888eebf7591f166cc7aa76ac14bdd16ecb7f466e13577f26f8",
       "category": "packet",
       "provenance": "campaign-authored documentation or sanitized command output",
       "contains_sensitive_values": false

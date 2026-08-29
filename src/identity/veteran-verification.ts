@@ -67,8 +67,13 @@ export class VeteranVerificationDisabledError extends Error {
 }
 
 export class DisabledVeteranVerificationAdapter implements VeteranVerificationPort {
-  async verifyVeteranStatus(): Promise<VeteranVerificationResult> {
-    throw new VeteranVerificationDisabledError();
+  verifyVeteranStatus(_input: {
+    veteranId: string;
+    authorizationCode: string;
+    redirectUri: string;
+    codeVerifier?: string;
+  }): Promise<VeteranVerificationResult> {
+    return Promise.reject(new VeteranVerificationDisabledError());
   }
 }
 
@@ -88,9 +93,16 @@ export function normalizeVaVeteranStatus(input: {
     };
   }
 
+  if (input.notConfirmedReason) {
+    return {
+      status: input.notConfirmedReason === 'ERROR' ? 'UNAVAILABLE' : 'NOT_CONFIRMED',
+      notConfirmedReason: input.notConfirmedReason,
+      sourceContractVersion: input.sourceContractVersion,
+    };
+  }
+
   return {
-    status: input.notConfirmedReason === 'ERROR' ? 'UNAVAILABLE' : 'NOT_CONFIRMED',
-    notConfirmedReason: input.notConfirmedReason,
+    status: 'NOT_CONFIRMED',
     sourceContractVersion: input.sourceContractVersion,
   };
 }

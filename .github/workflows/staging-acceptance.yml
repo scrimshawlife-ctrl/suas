@@ -3,11 +3,19 @@
 # This workflow does not deploy and does not authorize production operation.
 # Public checks always run. Authenticated checks run only when repository secrets
 # hold fresh synthetic seed sessions; absent credentials are reported as skips.
+# Scheduled runs deliberately exclude elevated-admin coverage because the MFA elevation
+# is intentionally short-lived. Dispatch it manually only after refreshing that synthetic session.
 
 name: staging-acceptance
 
 on:
   workflow_dispatch:
+    inputs:
+      include_elevated_admin:
+        description: Run elevated-admin coverage using a freshly seeded synthetic bearer
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: '23 15 * * *'
 
@@ -19,12 +27,15 @@ jobs:
   chromium:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # This environment must contain only the independently owned SUAS
+    # synthetic-STAGING host, synthetic sessions, and no production secrets.
+    environment: suas-synthetic-staging
     env:
       CI: 'true'
-      SUAS_E2E_BASE_URL: https://suas.zer0state-noema.workers.dev
+      SUAS_E2E_BASE_URL: ${{ vars.SUAS_E2E_BASE_URL }}
       SUAS_E2E_VETERAN_BEARER: ${{ secrets.SUAS_E2E_VETERAN_BEARER }}
       SUAS_E2E_RESPONDER_BEARER: ${{ secrets.SUAS_E2E_RESPONDER_BEARER }}
-      SUAS_E2E_ADMIN_BEARER: ${{ secrets.SUAS_E2E_ADMIN_BEARER }}
+      SUAS_E2E_ADMIN_BEARER: ${{ github.event_name == 'workflow_dispatch' && inputs.include_elevated_admin && secrets.SUAS_E2E_ADMIN_BEARER || '' }}
 
     steps:
       - uses: actions/checkout@v4

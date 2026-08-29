@@ -1,9 +1,14 @@
 # STAGING soak evidence — 2026-08-27
 
-**Host:** `https://suas.zer0state-noema.workers.dev`  
+**Host:** `RETIRED_SHARED_ACCOUNT_HOST_DO_NOT_USE`
 **Class:** `SUAS_ENV=STAGING` (formal synthetic)  
 **Data:** Neon synthetic seed (`npm run seed`); bearers from gitignored seed summary  
 **Effects:** false (email/SMS sink; adapters fake/manual)
+
+**Topology status:** Retired. The captured host shared another product's
+Cloudflare workers.dev identity and cannot support current SUAS STAGING,
+acceptance, or OAuth callback claims. Re-run this soak only after an independent
+SUAS host is provisioned and approved.
 
 ## Health
 

@@ -1,7 +1,7 @@
 # Manual publish of the Fastify Worker. Does not run on push.
-# Requires GitHub Environment `synthetic-worker` with:
-#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
-# Hyperdrive id must already be configured (dashboard or uncommitted override).
+# Requires GitHub Environment `suas-synthetic-staging` with:
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, SUAS_HYPERDRIVE_ID
+# The Hyperdrive ID is supplied by the dedicated synthetic Environment so CI cannot fall back to wrangler.jsonc.
 # Does not authorize PRODUCTION or formal STAGING class (see D-001/D-005 packet).
 
 name: worker-deploy
@@ -22,7 +22,7 @@ jobs:
   deploy:
     if: github.event.inputs.confirm == 'deploy'
     runs-on: ubuntu-latest
-    environment: synthetic-worker
+    environment: suas-synthetic-staging
     permissions:
       contents: read
     steps:
@@ -40,8 +40,21 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUAS_HYPERDRIVE_ID: ${{ vars.SUAS_HYPERDRIVE_ID }}
         run: |
+          test -n "$SUAS_HYPERDRIVE_ID"
+          sed "s/YOUR_HYPERDRIVE_ID/$SUAS_HYPERDRIVE_ID/; s/\"name\": \"suas\"/\"name\": \"suas-synthetic-staging\"/" \
+            wrangler.jsonc > .wrangler.suas-synthetic-ci.jsonc
           STAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           npx wrangler deploy \
+            --config .wrangler.suas-synthetic-ci.jsonc \
+            --var "SUAS_E2E_BASE_URL:https://suas-synthetic-staging.suas.workers.dev" \
+            --var "D007_DELETION_EXECUTION:disabled" \
+            --var "D007_EXPORT_DELIVERY:disabled" \
+            --var "D007_365_DAY_PURGE:disabled" \
+            --var "D025_REPORTING:disabled" \
+            --var "REAL_WORLD_EFFECTS:disabled" \
+            --var "PILOT_LAUNCH:blocked" \
+            --var "PRODUCTION_LAUNCH:blocked" \
             --var "SUAS_BUILD_COMMIT:${GITHUB_SHA}" \
             --var "SUAS_BUILD_TIMESTAMP:${STAMP}"
