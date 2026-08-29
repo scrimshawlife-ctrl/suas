@@ -1,3 +1,15 @@
+---
+name: evidence-gate
+version: 1.0.0
+kind: runtime
+status: active
+authority: released-runtime-conformance
+inputs: [gate_id, spec_authority, runtime_provenance, evidence_artifacts, owner_disposition]
+outputs: [gate_assessment]
+fail_closed: true
+self_test: skills/self-tests/evidence-gate.yaml
+---
+
 # evidence-gate
 
 ## Purpose
@@ -20,6 +32,9 @@ Use before any readiness, pilot, production, reporting, or feature-enablement cl
 6. Compute only the gate state permitted by the governing spec.
 7. Preserve disabled/blocked behavior until explicit released authority permits activation.
 
+## Invocation example
+`Assess whether D-025 can move from blocked using the current runtime commit, schema, STAGING evidence, and owner disposition.`
+
 ## Output schema
 ```yaml
 gate_id: string
@@ -37,6 +52,9 @@ missing: [string]
 stale_due_to: [string]
 next_minimum_action: [string]
 ```
+
+## Self-test
+Run `skills/self-tests/evidence-gate.yaml`. A fixture with valid evidence from an older runtime commit must classify that evidence as stale and must not return ACCEPTED or RELEASED.
 
 ## Completion criteria
 Complete only when every required artifact is tied to current runtime provenance and no readiness/authority claim exceeds released spec authority.
