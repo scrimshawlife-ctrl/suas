@@ -1,3 +1,15 @@
+---
+name: adversarial-testing
+version: 1.0.0
+kind: runtime
+status: active
+authority: released-runtime-conformance
+inputs: [security_contract, surface_inventory, credentials, runtime_provenance, failure_expectations]
+outputs: [negative_test_execution]
+fail_closed: true
+self_test: skills/self-tests/adversarial-testing.yaml
+---
+
 # adversarial-testing
 
 ## Purpose
@@ -22,6 +34,9 @@ Use for auth/authorization, tenant isolation, replay/idempotency, provider failu
 7. Record cross-tenant negatives across API, DB, async jobs, caches, adapters, reports, and admin where those surfaces exist.
 8. Tie every result to current runtime provenance.
 
+## Invocation example
+`Run the reporting-surface adversarial suite on STAGING with operator-scoped synthetic credentials, including cross-tenant, revoked-token, disabled-mode, and side-effect checks.`
+
 ## Output schema
 ```yaml
 test_set_id: string
@@ -41,6 +56,9 @@ cross_tenant_coverage: [string]
 findings: [string]
 verdict: PASS|FAIL|NOT_COMPUTABLE
 ```
+
+## Self-test
+Run `skills/self-tests/adversarial-testing.yaml`. A wrong-tenant request that produces any unauthorized persistent or external effect must fail the suite.
 
 ## Completion criteria
 Complete only when every applicable fail-closed boundary has executed negative evidence or is marked NOT_COMPUTABLE with the missing prerequisite identified.
