@@ -1,4 +1,6 @@
 export {
+  APPROVED_FOR_PILOT_IMPLEMENTATION,
+  AUTH_CONSTANTS,
   CHALLENGE_ISSUE_LIMIT,
   CHALLENGE_ISSUE_WINDOW_SECONDS,
   CHALLENGE_MAX_ATTEMPTS,
@@ -11,7 +13,8 @@ export {
   OTP_CODE_DIGITS,
   SESSION_ABSOLUTE_TTL_SECONDS,
   SESSION_IDLE_TTL_SECONDS,
-  type InferredConstant,
+  type AuthConstant,
+  type ConstantLifecycle,
 } from './constants.js';
 export {
   credentialMatches,

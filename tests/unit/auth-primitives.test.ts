@@ -1,7 +1,7 @@
 /**
  * Auth primitive evidence.
  *
- * SUAS-specs AUTH.md §3 (constants are documented and labelled INFERRED; secrets
+ * SUAS-specs AUTH.md §3 (constants are documented with their decision lifecycle; secrets
  * stored hashed), §4 (MFA factor selected later), §9 (unavailable channel is not
  * faked); SECURITY.md §2; ENVIRONMENT.md §3.
  */
@@ -9,7 +9,12 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
 import {
+  APPROVED_FOR_PILOT_IMPLEMENTATION,
+  AUTH_CONSTANTS,
   availableChannels,
+  CHALLENGE_ISSUE_LIMIT,
+  CHALLENGE_TTL_SECONDS,
+  CHALLENGE_VERIFY_LIMIT,
   channelForMethod,
   ChannelUnavailableError,
   createChallengeDelivery,
@@ -29,13 +34,29 @@ import { validEnv } from '../helpers/env.js';
 
 const SECRET = 'x'.repeat(48);
 
-describe('AUTH.md §3, §5 — deferred constants are labelled', () => {
-  it('marks every auth constant INFERRED, since none is a released decision', () => {
-    for (const [name, constant] of Object.entries(INFERRED_AUTH_CONSTANTS)) {
-      expect(constant.lifecycle, `${name} must be labelled INFERRED`).toBe(INFERRED);
+describe('AUTH.md §3, §5 — authentication constants carry decision lifecycle', () => {
+  it('labels approved pilot values and remaining inferences accurately', () => {
+    for (const [name, constant] of Object.entries(AUTH_CONSTANTS)) {
+      expect(
+        [INFERRED, APPROVED_FOR_PILOT_IMPLEMENTATION],
+        `${name} has a known lifecycle`,
+      ).toContain(constant.lifecycle);
       expect(constant.value).toBeGreaterThan(0);
       expect(constant.rationale.length).toBeGreaterThan(20);
     }
+
+    expect(CHALLENGE_TTL_SECONDS).toMatchObject({
+      value: 900,
+      lifecycle: APPROVED_FOR_PILOT_IMPLEMENTATION,
+    });
+    expect(CHALLENGE_ISSUE_LIMIT).toMatchObject({
+      value: 3,
+      lifecycle: APPROVED_FOR_PILOT_IMPLEMENTATION,
+    });
+    expect(CHALLENGE_VERIFY_LIMIT).toMatchObject({
+      value: 5,
+      lifecycle: APPROVED_FOR_PILOT_IMPLEMENTATION,
+    });
   });
 
   it('keeps MFA elevation shorter than the session it elevates', () => {
