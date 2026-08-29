@@ -37,6 +37,39 @@ npm run dev
 `SUAS_SESSION_SECRET` is required in every environment class and startup fails
 closed without it. It ships empty in `.env.example` and must never be committed.
 
+### Local demo workflow
+
+The repeatable LOCAL workflow uses the isolated `suas-postgres17-local` Docker
+container, applies and validates migrations, refreshes synthetic seed sessions,
+and starts the real Fastify runtime. It never resets the database or enables
+external effects:
+
+```bash
+scripts/start-local.sh
+```
+
+To start the runtime and open an authenticated visible Chromium surface:
+
+```bash
+scripts/start-local.sh veteran
+scripts/start-local.sh responder
+scripts/start-local.sh admin
+```
+
+The equivalent browser-only commands use the latest protected seed output while
+the server is already running:
+
+```bash
+npm run demo:local:veteran
+npm run demo:local:responder
+npm run demo:local:admin
+```
+
+On Windows PowerShell use `.\scripts\start-local.ps1 -Role veteran` (or
+`responder` / `admin`). The browser helper rejects non-LOCAL environments,
+non-loopback URLs, and credentials that are not present in the gitignored
+`.local-secrets/seed-output.json` or an explicit session environment variable.
+
 Commands:
 
 | Command                           | Purpose                                                |

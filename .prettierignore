@@ -3,5 +3,7 @@ coverage/
 node_modules/
 package-lock.json
 
+graft/
+
 # Pinned readiness evidence (do not reformat captured HTML/JSON)
 docs/readiness/evidence/
