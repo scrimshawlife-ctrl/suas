@@ -1,5 +1,6 @@
 /**
- * Synthetic load harness — measures, does not judge SLOs (D-021/D-023 open).
+ * Synthetic load harness — measures against an approved pilot comparison target
+ * without claiming SLO compliance, because D-021 has no workload magnitude.
  *
  * Drives concurrent authenticated GET /api/v0/health and /api/v0/resources
  * against a running startApp instance. Prints p50/p95 latency only.
@@ -11,6 +12,7 @@ import { startApp } from '../src/app.js';
 import { createSession } from '../src/auth/index.js';
 import { createUser } from '../src/identity/index.js';
 import { syntheticEmail } from '../src/testing/fixture-boundary.js';
+import { PILOT_PERFORMANCE_SLOS } from '../src/resilience/index.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../tests/helpers/env.js';
 
 function percentile(sorted: number[], p: number): number {
@@ -70,8 +72,13 @@ async function main(): Promise<void> {
           p50_ms: Number(percentile(samples, 50).toFixed(2)),
           p95_ms: Number(percentile(samples, 95).toFixed(2)),
           max_ms: Number((samples[samples.length - 1] ?? 0).toFixed(2)),
+          comparison_target: {
+            successful_read_p95_ms: PILOT_PERFORMANCE_SLOS.successfulReadP95Ms,
+            observed_p95_within_target:
+              percentile(samples, 95) <= PILOT_PERFORMANCE_SLOS.successfulReadP95Ms,
+          },
           slo_verdict: 'NOT_COMPUTABLE',
-          note: 'D-021/D-023 envelopes absent — measurements only',
+          note: 'D-023 read target is approved for pilot comparison. D-021 workload magnitude is not released, so this local run cannot establish sustained-load compliance.',
         },
         null,
         2,

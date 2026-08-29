@@ -58,13 +58,13 @@ export interface DrillRunEnvironment {
 
 export interface DrillReport {
   readonly environment: DrillRunEnvironment;
-  /** SCALING.md §3 axes touched. Magnitudes are unreleased; see `envelopeStatus`. */
+  /** SCALING.md §3 axes touched. Workload magnitudes are unreleased; see `envelopeStatus`. */
   readonly dimensionsExercised: readonly WorkloadDimension[];
   readonly profiles: readonly ProfilePlan[];
   readonly results: readonly DrillResult[];
   readonly passed: readonly DrillId[];
   readonly blocked: readonly DrillId[];
-  /** Every open decision that bounds what this run could prove. */
+  /** Every decision state that bounds what this run could prove. */
   readonly openDecisions: readonly string[];
   readonly caveats: readonly string[];
   /**
@@ -129,13 +129,14 @@ export function assembleDrillReport(input: {
     ],
     caveats: [
       ...(input.caveats ?? []),
-      'Correctness invariants only. No rate, latency, throughput, RTO, or RPO is ' +
-        'asserted, because D-021, D-023, and D-024 are all DECISION_PENDING.',
+      'Correctness invariants only. D-023 and D-024 targets are approved pilot ' +
+        'comparison inputs, but this run does not assert compliance. D-021 still ' +
+        'has no released workload magnitude.',
       `Workload dimensions exercised without a released magnitude: ${WORKLOAD_DIMENSIONS.join(', ')}.`,
     ],
     readiness:
-      'RESILIENCE and SCALE both remain NOT_READY. Both gates require recorded ' +
-      'numeric targets (D-021, D-023, D-024), none of which are released. Readiness ' +
-      'is recorded in STATUS.md on accepted evidence, never claimed by a harness run.',
+      'SCALE remains NOT_COMPUTABLE and RESILIENCE remains NOT_READY. D-021 lacks a released workload ' +
+      'magnitude, and backup-restore plus sustained-load evidence remain required. ' +
+      'Readiness is recorded in STATUS.md on accepted evidence, never claimed by a harness run.',
   };
 }

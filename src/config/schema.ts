@@ -209,7 +209,7 @@ const rawConfigSchema = z.object({
   SUAS_SENSITIVE_AGGREGATE_REPORTING: requiredEnum(
     'SUAS_SENSITIVE_AGGREGATE_REPORTING',
     SENSITIVE_AGGREGATE_REPORTING_MODES,
-    'Sensitive aggregate reporting stays disabled while D-025 is unresolved for that surface.',
+    'Sensitive aggregate reporting stays disabled until approved D-025 projection, access, audit, retention, and human-review evidence is accepted.',
   ),
 
   // --- Implementation-owned mechanism (not released product semantics). ---

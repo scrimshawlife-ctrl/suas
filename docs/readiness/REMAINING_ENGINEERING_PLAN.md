@@ -106,7 +106,7 @@ Transportation, lodging, shelter, food, and peer-support effects remain intentio
 
 #### 3. Sensitive reporting
 
-D-025 must define the reporting policy before implementation. Until then, keep sensitive aggregate reporting disabled. After approval, implement the smallest authorized projection, authorization boundary, retention behavior, and audit evidence, then add negative tests for unauthorized and cross-tenant access.
+D-025 policy is recorded in `OPERATIONAL_AUTHORIZATION-2026-08-29.md`. The minimum fixed-dimension projection and k-threshold tests may be implemented, but sensitive aggregate reporting remains disabled. Release still requires access control, audit and retention evidence, Privacy and Safety review of rendered reports, and negative tests for unauthorized and cross-tenant access.
 
 ### P3. Production operations after authorization
 

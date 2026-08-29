@@ -1,5 +1,5 @@
 /**
- * Capacity and recovery targets — none of which are released.
+ * Pilot capacity, performance, and recovery targets.
  *
  * Spec citations:
  * - SUAS-specs SCALING.md §2 (capacity envelopes), §13 (release load profiles:
@@ -8,19 +8,39 @@
  *   (non-goal: unsupported numeric capacity forecasts)
  * - SUAS-specs RESILIENCE.md §14 (recovery objectives), §18 (`RESILIENCE` gate),
  *   §19 (non-goal: unsupported RTO/RPO promises)
- * - SUAS-specs DECISIONS.md D-021, D-023, D-024 (all `DECISION_PENDING`)
+ * - docs/decision-packets/PILOT_GOVERNANCE_DECISIONS-2026-08-29.md § Pilot
+ *   service objectives and recovery (approved for pilot implementation)
  *
- * This is the fail-closed seam of the slice. Both gates require recorded
- * numeric targets, and all three owning decisions are open, so this module
- * refuses to produce a rate, a latency target, a throughput figure, an RTO, or
- * an RPO. The drills prove *correctness* invariants, which need no numbers; a
- * numeric claim requires the decision to close first.
+ * D-021 has no released workload magnitude, so this module still refuses to
+ * select a rate, concurrency level, or duration. D-023 and D-024 do have
+ * approved pilot targets. They are comparison inputs only: a synthetic result
+ * below a target does not establish compliance or advance a readiness gate.
  */
 
-/** DECISIONS.md. Flipping any of these is a spec event, not a code edit. */
-export const D_021_WORKLOAD_ENVELOPE = 'DECISION_PENDING' as const;
-export const D_023_PERFORMANCE_SLOS = 'DECISION_PENDING' as const;
-export const D_024_RECOVERY_OBJECTIVES = 'DECISION_PENDING' as const;
+/** Pilot decision state. D-021 lacks a released workload magnitude. */
+export const D_021_WORKLOAD_ENVELOPE = 'MAGNITUDES_NOT_RELEASED' as const;
+export const D_023_PERFORMANCE_SLOS = 'APPROVED_FOR_PILOT_IMPLEMENTATION' as const;
+export const D_024_RECOVERY_OBJECTIVES = 'APPROVED_FOR_PILOT_IMPLEMENTATION' as const;
+
+/** D-023 pilot targets. Do not use these values to select an unapproved load. */
+export const PILOT_PERFORMANCE_SLOS = {
+  successfulReadP95Ms: 1_000,
+  successfulWriteP95Ms: 1_500,
+  serverErrorRateExclusiveUpperPercent: 1,
+  serverErrorRateWindowMinutes: 15,
+  durableJobAcknowledgementMinPercent: 99.9,
+  jobStartLatencyP95Minutes: 2,
+  ordinaryJobCompletionP99Minutes: 15,
+  acknowledgedJobLoss: 'ZERO_TOLERATED',
+} as const;
+
+/** D-024 pilot recovery targets. */
+export const PILOT_RECOVERY_OBJECTIVES = {
+  systemOfRecord: { rtoHours: 4, rpoHours: 24 },
+  durableJobStore: { rtoHours: 4, rpoHours: 1 },
+  sampledRestoreCadence: 'MONTHLY',
+  fullRecoveryExerciseCadence: 'QUARTERLY',
+} as const;
 
 export class NumericTargetUnavailableError extends Error {
   readonly code = 'NUMERIC_TARGET_UNAVAILABLE';
@@ -30,9 +50,9 @@ export class NumericTargetUnavailableError extends Error {
     what: string,
   ) {
     super(
-      `${what} requires ${decision}, which is DECISION_PENDING. SCALING.md §13 and ` +
-        '§16 require targets to be recorded with results rather than invented, and ' +
-        'RESILIENCE.md §19 makes an unsupported RTO/RPO promise a non-goal.',
+      `${what} requires ${decision}, whose workload magnitude is not released. ` +
+        'SCALING.md §13 and §16 require targets to be recorded with results rather ' +
+        'than invented.',
     );
     this.name = 'NumericTargetUnavailableError';
   }
@@ -85,14 +105,14 @@ export function assertWorkloadEnvelopeReleased(what: string): void {
   throw new NumericTargetUnavailableError('D-021', what);
 }
 
-/** Refuse a latency or throughput target. SCALING.md §15. */
+/** D-023 targets are approved for pilot implementation. */
 export function assertPerformanceSloReleased(what: string): void {
-  throw new NumericTargetUnavailableError('D-023', what);
+  void what;
 }
 
-/** Refuse an RTO or RPO. RESILIENCE.md §14 and §18. */
+/** D-024 recovery targets are approved for pilot implementation. */
 export function assertRecoveryObjectivesReleased(what: string): void {
-  throw new NumericTargetUnavailableError('D-024', what);
+  void what;
 }
 
 export interface ProfilePlan {
@@ -115,6 +135,6 @@ export function planProfile(profile: LoadProfile): ProfilePlan {
     executable: PROFILE_EXECUTABLE_WITHOUT_ENVELOPE[profile],
     envelopeStatus:
       `D-021 ${D_021_WORKLOAD_ENVELOPE}; D-023 ${D_023_PERFORMANCE_SLOS} — ` +
-      'no rate, concurrency, or latency target is released for this profile',
+      'no rate, concurrency, or duration is released for this profile',
   };
 }

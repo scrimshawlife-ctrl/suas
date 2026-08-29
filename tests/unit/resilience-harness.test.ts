@@ -16,6 +16,8 @@ import {
   D_021_WORKLOAD_ENVELOPE,
   D_023_PERFORMANCE_SLOS,
   D_024_RECOVERY_OBJECTIVES,
+  PILOT_PERFORMANCE_SLOS,
+  PILOT_RECOVERY_OBJECTIVES,
   DRILL_IDS,
   DrillEvidenceRequiredError,
   DuplicateDrillResultError,
@@ -125,21 +127,37 @@ describe('A partial run cannot be reported as a drill run', () => {
   });
 });
 
-describe('SCALING.md §13/§16 and RESILIENCE.md §19 — no numeric target is invented', () => {
-  it('records all three owning decisions as pending', () => {
-    expect(D_021_WORKLOAD_ENVELOPE).toBe('DECISION_PENDING');
-    expect(D_023_PERFORMANCE_SLOS).toBe('DECISION_PENDING');
-    expect(D_024_RECOVERY_OBJECTIVES).toBe('DECISION_PENDING');
+describe('pilot objective release boundaries', () => {
+  it('records the released performance and recovery decisions without inventing D-021 magnitude', () => {
+    expect(D_021_WORKLOAD_ENVELOPE).toBe('MAGNITUDES_NOT_RELEASED');
+    expect(D_023_PERFORMANCE_SLOS).toBe('APPROVED_FOR_PILOT_IMPLEMENTATION');
+    expect(D_024_RECOVERY_OBJECTIVES).toBe('APPROVED_FOR_PILOT_IMPLEMENTATION');
   });
 
-  it('refuses a load rate, a latency target, and a recovery objective', () => {
+  it('refuses only an unreleased workload magnitude', () => {
     expect(() => assertWorkloadEnvelopeReleased('A burst rate')).toThrow(
       NumericTargetUnavailableError,
     );
-    expect(() => assertPerformanceSloReleased('A p99 latency target')).toThrow(
-      NumericTargetUnavailableError,
-    );
-    expect(() => assertRecoveryObjectivesReleased('An RTO')).toThrow(NumericTargetUnavailableError);
+    expect(() => assertPerformanceSloReleased('A p95 latency target')).not.toThrow();
+    expect(() => assertRecoveryObjectivesReleased('An RTO')).not.toThrow();
+  });
+
+  it('encodes the approved pilot comparison targets', () => {
+    expect(PILOT_PERFORMANCE_SLOS).toMatchObject({
+      successfulReadP95Ms: 1_000,
+      successfulWriteP95Ms: 1_500,
+      serverErrorRateExclusiveUpperPercent: 1,
+      durableJobAcknowledgementMinPercent: 99.9,
+      jobStartLatencyP95Minutes: 2,
+      ordinaryJobCompletionP99Minutes: 15,
+      acknowledgedJobLoss: 'ZERO_TOLERATED',
+    });
+    expect(PILOT_RECOVERY_OBJECTIVES).toMatchObject({
+      systemOfRecord: { rtoHours: 4, rpoHours: 24 },
+      durableJobStore: { rtoHours: 4, rpoHours: 1 },
+      sampledRestoreCadence: 'MONTHLY',
+      fullRecoveryExerciseCadence: 'QUARTERLY',
+    });
   });
 
   it('marks the three volume-defined profiles as not executable without an envelope', () => {
@@ -158,14 +176,15 @@ describe('SCALING.md §13/§16 and RESILIENCE.md §19 — no numeric target is i
     }
   });
 
-  it('ships no numeric rate, latency, or recovery constant', () => {
-    // A number invented here would read as a released target.
+  it('ships no workload rate, concurrency, or duration constant', () => {
+    // A D-021 magnitude invented here would read as a released target.
     const source = readFileSync(
       new URL('../../src/resilience/envelope.ts', import.meta.url),
       'utf8',
     );
-    expect(source).not.toMatch(/\b\d+\s*(rps|qps|ms|seconds|minutes|hours)\b/i);
-    expect(source).not.toMatch(/\b(rto|rpo)\s*[:=]\s*\d/i);
+    expect(source).not.toMatch(
+      /\b\d+\s*(rps|qps|requests\s*\/\s*(?:min|minute)|concurrent users)\b/i,
+    );
   });
 });
 
@@ -176,13 +195,14 @@ describe('A report cannot claim readiness', () => {
     results: fullRun(),
   });
 
-  it('states both gates remain NOT_READY even when every drill passed', () => {
+  it('states SCALE is not computable and RESILIENCE is not ready even when every drill passed', () => {
     expect(report.passed).toHaveLength(13);
     expect(report.blocked).toEqual([]);
-    expect(report.readiness).toContain('NOT_READY');
+    expect(report.readiness).toContain('SCALE remains NOT_COMPUTABLE');
+    expect(report.readiness).toContain('RESILIENCE remains NOT_READY');
   });
 
-  it('lists every open decision that bounds the run', () => {
+  it('lists every decision state that bounds the run', () => {
     expect(report.openDecisions.join(' ')).toContain('D-021');
     expect(report.openDecisions.join(' ')).toContain('D-023');
     expect(report.openDecisions.join(' ')).toContain('D-024');

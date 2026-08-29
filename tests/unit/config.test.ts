@@ -236,9 +236,9 @@ describe('ENVIRONMENT.md §3 — unavailable vendor surfaces stay unavailable', 
     expect(config.safetyCopyMode).toBe('approved');
   });
 
-  it('rejects enabling sensitive aggregate reporting and cites D-025', () => {
+  it('rejects enabling sensitive aggregate reporting pending D-025 release evidence', () => {
     const issues = issuesFor(validEnv({ SUAS_SENSITIVE_AGGREGATE_REPORTING: 'enabled' }));
-    expect(issues.join('\n')).toContain('D-025');
+    expect(issues.join('\n')).toContain('D-025 projection');
   });
 });
 
