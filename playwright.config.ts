@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import { resolveSyntheticStagingOrigin } from './src/config/staging-host.js';
 
-const DEFAULT_STAGING_URL = 'https://suas.zer0state-noema.workers.dev';
-const baseURL = process.env.SUAS_E2E_BASE_URL ?? DEFAULT_STAGING_URL;
+const baseURL = resolveSyntheticStagingOrigin(process.env.SUAS_E2E_BASE_URL, 'SUAS_E2E_BASE_URL');
 
 function assertSafeAcceptanceTarget(value: string): void {
   const url = new URL(value);

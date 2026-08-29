@@ -135,6 +135,13 @@ p, li, dd { overflow-wrap: break-word; }
   white-space: nowrap;
 }
 
+/* Keep the brand and non-wrapping readiness label from creating a fractional
+   horizontal scroll range at the 320px reflow boundary. */
+@media (max-width: 22.5rem) {
+  .site-chrome { flex-wrap: wrap; }
+  .status-pill { margin-left: auto; }
+}
+
 h1 {
   margin: 0 0 0.65rem;
   font-family: var(--font-serif);

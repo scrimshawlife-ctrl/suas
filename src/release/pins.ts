@@ -3,7 +3,7 @@
  *
  * Spec citations:
  * - SUAS-specs VERSIONING.md §3 "Version identities must stay separate"
- * - SUAS-specs RELEASE_MANIFEST-0.2.0.md "Runtime pins"
+ * - SUAS-specs RELEASE_MANIFEST-0.4.0.md "Runtime pins"
  * - SUAS-specs ENVIRONMENT.md §3 (SUAS_SPEC_VERSION / SUAS_RELEASE_MANIFEST rules 1-2)
  *
  * These values are the specification identities this build claims to implement.
@@ -12,16 +12,16 @@
  */
 
 /** Specification stack version this build implements. VERSIONING.md §2. */
-export const SPEC_VERSION = '0.2.0' as const;
+export const SPEC_VERSION = '0.4.0' as const;
 
 /** Release manifest identifier this build claims. RELEASE_MANIFEST-0.2.0.md. */
-export const RELEASE_MANIFEST = 'RELEASE_MANIFEST-0.2.0.md' as const;
+export const RELEASE_MANIFEST = 'RELEASE_MANIFEST-0.4.0.md' as const;
 
 /**
  * Specs repository merge commit for the pinned release.
  * VERSIONING.md §2: a git SHA is provenance, not the specification version.
  */
-export const SPECS_COMMIT = '4a722e69ad8f7ff45a9581ca3bdd022bdf524f8f' as const;
+export const SPECS_COMMIT = '1a5ce4bba5f5d1754170788d012e1996de9fc421' as const;
 
 /** Canonical API version selector. API.md §2; unchanged by v0.2.0. */
 export const API_VERSION = 'v0' as const;

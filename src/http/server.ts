@@ -36,6 +36,7 @@ import { registerServiceRequestRoutes } from './routes/service-requests.js';
 import { registerTrustedContactRoutes } from './routes/trusted-contacts.js';
 import { registerUiRoutes } from './routes/ui.js';
 import { registerVeteranRoutes } from './routes/veterans.js';
+import { registerVaSandboxOAuthRoutes } from './routes/va-sandbox-oauth.js';
 
 export interface ServerDependencies {
   readonly config: SuasConfig;
@@ -168,6 +169,14 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       },
     });
   });
+
+  if (deps.pool !== undefined && deps.config.vaSandboxOAuth.enabled) {
+    registerVaSandboxOAuthRoutes(app, {
+      pool: deps.pool,
+      config: deps.config,
+      sessionSecret: deps.config.sessionSecret,
+    });
+  }
 
   app.get(`${API_PREFIX}/health`, () => {
     // Liveness plus non-secret dependency posture. No provenance secrets,

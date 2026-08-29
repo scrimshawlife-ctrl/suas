@@ -17,8 +17,8 @@ function workerBindings(overrides: Partial<WorkerBindings> = {}): WorkerBindings
   return {
     HYPERDRIVE: { connectionString: testDatabaseUrl() },
     SUAS_ENV: 'TEST',
-    SUAS_SPEC_VERSION: '0.2.0',
-    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.2.0.md',
+    SUAS_SPEC_VERSION: '0.4.0',
+    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.4.0.md',
     SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
     SUAS_MIGRATIONS_MODE: 'validate',
     SUAS_SESSION_SECRET: TEST_SESSION_SECRET,
@@ -67,6 +67,15 @@ describe('dispatchToFastify', () => {
       expect(landing.headers.get('content-type')).toMatch(/text\/html/);
       const html = await landing.text();
       expect(html).toContain('Shut Up and Serve');
+
+      const callback = await dispatchToFastify(
+        app.server,
+        new Request('http://suas.test/auth/va/callback?code=synthetic-code&state=synthetic-state'),
+      );
+      expect(callback.status).toBe(404);
+      const callbackBody = await callback.text();
+      expect(callbackBody).not.toContain('synthetic-code');
+      expect(callbackBody).not.toContain('synthetic-state');
     } finally {
       await app.close();
     }

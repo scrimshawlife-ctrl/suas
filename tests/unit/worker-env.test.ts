@@ -16,8 +16,8 @@ function workerEnv(overrides: Partial<WorkerBindings> = {}): WorkerBindings {
   return {
     HYPERDRIVE: { connectionString: HYPERDRIVE_URL },
     SUAS_ENV: 'LOCAL',
-    SUAS_SPEC_VERSION: '0.2.0',
-    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.2.0.md',
+    SUAS_SPEC_VERSION: '0.4.0',
+    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.4.0.md',
     SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
     SUAS_MIGRATIONS_MODE: 'validate',
     SUAS_SESSION_SECRET: TEST_SESSION_SECRET,

@@ -148,6 +148,18 @@ const rawConfigSchema = z.object({
   // --- Auth / sessions. ENVIRONMENT.md §3, §6. ---
   SUAS_SESSION_SECRET: optionalRaw,
 
+  // D-035 evidence only. This is opt-in and never enables production wiring.
+  SUAS_VA_SANDBOX_OAUTH_ENABLED: optionalRaw,
+  SUAS_VA_SANDBOX_OAUTH_CLIENT_ID: optionalRaw,
+  SUAS_VA_SANDBOX_OAUTH_CLIENT_SECRET: optionalRaw,
+  SUAS_VA_SANDBOX_OAUTH_AUTHORIZATION_ENDPOINT: optionalRaw,
+  SUAS_VA_SANDBOX_OAUTH_REDIRECT_URI: optionalRaw,
+  SUAS_VA_SANDBOX_OAUTH_TOKEN_ENDPOINT: optionalRaw,
+  SUAS_VA_SANDBOX_OAUTH_STATUS_ENDPOINT: optionalRaw,
+  SUAS_VA_SANDBOX_OAUTH_ISSUER: optionalRaw,
+  SUAS_VA_SANDBOX_OAUTH_AUDIENCE: optionalRaw,
+  SUAS_VA_SANDBOX_OAUTH_JWKS_JSON: optionalRaw,
+
   // --- Notifications. ENVIRONMENT.md §3. ---
   SUAS_EMAIL_MODE: requiredEnum(
     'SUAS_EMAIL_MODE',
@@ -240,6 +252,18 @@ export interface SuasConfig {
     readonly migrationsMode: MigrationsMode;
   };
   readonly sessionSecret: string | undefined;
+  readonly vaSandboxOAuth: {
+    readonly enabled: boolean;
+    readonly clientId: string | undefined;
+    readonly clientSecret: string | undefined;
+    readonly authorizationEndpoint: string | undefined;
+    readonly redirectUri: string | undefined;
+    readonly tokenEndpoint: string | undefined;
+    readonly statusEndpoint: string | undefined;
+    readonly issuer: string | undefined;
+    readonly audience: string | undefined;
+    readonly jwksJson: string | undefined;
+  };
   readonly notifications: {
     readonly email: CommunicationMode;
     readonly sms: CommunicationMode;
@@ -365,6 +389,77 @@ function validateProviderEndpoint(
  */
 export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   const environment = raw.SUAS_ENV;
+
+  const vaSandboxEnabled = raw.SUAS_VA_SANDBOX_OAUTH_ENABLED === 'true';
+  if (
+    raw.SUAS_VA_SANDBOX_OAUTH_ENABLED !== undefined &&
+    raw.SUAS_VA_SANDBOX_OAUTH_ENABLED !== 'true' &&
+    raw.SUAS_VA_SANDBOX_OAUTH_ENABLED !== 'false'
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SUAS_VA_SANDBOX_OAUTH_ENABLED must be exactly "true" or "false" when set.',
+    });
+  }
+  if (vaSandboxEnabled) {
+    if (environment === 'PRODUCTION')
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SUAS_VA_SANDBOX_OAUTH_ENABLED is sandbox-only and is forbidden in PRODUCTION.',
+      });
+    for (const name of [
+      'SUAS_VA_SANDBOX_OAUTH_CLIENT_ID',
+      'SUAS_VA_SANDBOX_OAUTH_CLIENT_SECRET',
+      'SUAS_VA_SANDBOX_OAUTH_AUTHORIZATION_ENDPOINT',
+      'SUAS_VA_SANDBOX_OAUTH_TOKEN_ENDPOINT',
+      'SUAS_VA_SANDBOX_OAUTH_REDIRECT_URI',
+      'SUAS_VA_SANDBOX_OAUTH_STATUS_ENDPOINT',
+      'SUAS_VA_SANDBOX_OAUTH_ISSUER',
+      'SUAS_VA_SANDBOX_OAUTH_AUDIENCE',
+      'SUAS_VA_SANDBOX_OAUTH_JWKS_JSON',
+    ] as const)
+      if (raw[name] === undefined)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${name} is required when SUAS_VA_SANDBOX_OAUTH_ENABLED=true.`,
+        });
+    validateProviderEndpoint(
+      'SUAS_VA_SANDBOX_OAUTH_AUTHORIZATION_ENDPOINT',
+      raw.SUAS_VA_SANDBOX_OAUTH_AUTHORIZATION_ENDPOINT,
+      environment,
+      ctx,
+    );
+    validateProviderEndpoint(
+      'SUAS_VA_SANDBOX_OAUTH_REDIRECT_URI',
+      raw.SUAS_VA_SANDBOX_OAUTH_REDIRECT_URI,
+      environment,
+      ctx,
+    );
+    validateProviderEndpoint(
+      'SUAS_VA_SANDBOX_OAUTH_TOKEN_ENDPOINT',
+      raw.SUAS_VA_SANDBOX_OAUTH_TOKEN_ENDPOINT,
+      environment,
+      ctx,
+    );
+    validateProviderEndpoint(
+      'SUAS_VA_SANDBOX_OAUTH_STATUS_ENDPOINT',
+      raw.SUAS_VA_SANDBOX_OAUTH_STATUS_ENDPOINT,
+      environment,
+      ctx,
+    );
+    try {
+      if (
+        raw.SUAS_VA_SANDBOX_OAUTH_JWKS_JSON !== undefined &&
+        !Array.isArray(JSON.parse(raw.SUAS_VA_SANDBOX_OAUTH_JWKS_JSON))
+      )
+        throw new Error();
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SUAS_VA_SANDBOX_OAUTH_JWKS_JSON must be a JSON array of public JWKs.',
+      });
+    }
+  }
 
   validateProviderEndpoint(
     'SUAS_AMADEUS_LODGING_TOKEN_URL',
@@ -534,6 +629,18 @@ export function shapeConfig(
       migrationsMode: raw.SUAS_MIGRATIONS_MODE,
     },
     sessionSecret: raw.SUAS_SESSION_SECRET,
+    vaSandboxOAuth: {
+      enabled: raw.SUAS_VA_SANDBOX_OAUTH_ENABLED === 'true',
+      clientId: raw.SUAS_VA_SANDBOX_OAUTH_CLIENT_ID,
+      clientSecret: raw.SUAS_VA_SANDBOX_OAUTH_CLIENT_SECRET,
+      authorizationEndpoint: raw.SUAS_VA_SANDBOX_OAUTH_AUTHORIZATION_ENDPOINT,
+      redirectUri: raw.SUAS_VA_SANDBOX_OAUTH_REDIRECT_URI,
+      tokenEndpoint: raw.SUAS_VA_SANDBOX_OAUTH_TOKEN_ENDPOINT,
+      statusEndpoint: raw.SUAS_VA_SANDBOX_OAUTH_STATUS_ENDPOINT,
+      issuer: raw.SUAS_VA_SANDBOX_OAUTH_ISSUER,
+      audience: raw.SUAS_VA_SANDBOX_OAUTH_AUDIENCE,
+      jwksJson: raw.SUAS_VA_SANDBOX_OAUTH_JWKS_JSON,
+    },
     notifications: {
       email: raw.SUAS_EMAIL_MODE,
       sms: raw.SUAS_SMS_MODE,

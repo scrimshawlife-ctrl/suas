@@ -35,6 +35,16 @@ export interface WorkerBindings {
   readonly DATABASE_POOL_MAX?: string | undefined;
   readonly SUAS_MIGRATIONS_MODE?: string | undefined;
   readonly SUAS_SESSION_SECRET?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_ENABLED?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_CLIENT_ID?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_CLIENT_SECRET?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_AUTHORIZATION_ENDPOINT?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_REDIRECT_URI?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_TOKEN_ENDPOINT?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_STATUS_ENDPOINT?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_ISSUER?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_AUDIENCE?: string | undefined;
+  readonly SUAS_VA_SANDBOX_OAUTH_JWKS_JSON?: string | undefined;
   readonly SUAS_EMAIL_MODE?: string | undefined;
   readonly SUAS_SMS_MODE?: string | undefined;
   readonly RESEND_API_KEY?: string | undefined;

@@ -71,6 +71,7 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     database_pool_max: config.database.poolMax,
     migrations_mode: config.database.migrationsMode,
     session_secret_configured: config.sessionSecret !== undefined,
+    va_sandbox_oauth_enabled: config.vaSandboxOAuth.enabled,
     email_mode: config.notifications.email,
     sms_mode: config.notifications.sms,
     resend_api_key_configured: config.notifications.resendApiKey !== undefined,
