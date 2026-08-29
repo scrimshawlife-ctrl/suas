@@ -24,7 +24,7 @@ describe('D-007 approved pilot data operations', () => {
       status: 'ACTIVE',
     });
     const input = {
-      tenantId,
+      tenantId: user.tenantId,
       subjectUserId: user.userId,
       kind: 'DELETION' as const,
       requestId: 'd007-request-1',
@@ -35,6 +35,11 @@ describe('D-007 approved pilot data operations', () => {
       >,
       actorId: 'privacy-operations',
     };
+    const parent = await pool.query<{ tenant_id: string }>(
+      'SELECT tenant_id FROM users WHERE user_id = $1',
+      [user.userId],
+    );
+    expect(parent.rows[0]?.tenant_id).toBe(user.tenantId);
     const one = await authorizeDataOperation(pool, input);
     const two = await authorizeDataOperation(pool, input);
     expect(two).toEqual(one);
@@ -68,7 +73,7 @@ describe('D-007 approved pilot data operations', () => {
     });
     const key = randomBytes(32);
     const result = await buildPilotExport(pool, {
-      tenantId,
+      tenantId: user.tenantId,
       subjectUserId: user.userId,
       kind: 'EXPORT',
       requestId: 'd007-export-1',
