@@ -85,26 +85,30 @@ Canonical `AUTH.md` requires challenge throttling by address/account and network
 
 **Exit condition:** a released decision supplies threshold, trust, privacy, and unavailable-address semantics, followed by implementation evidence. Until then, do not invent values.
 
-### P3. Produce isolated backup-restore evidence
+### P3. Complete isolated backup-restore evidence
 
-The migration harness proves clean-database migration, not backup restoration or measured RTO/RPO.
+An owner-approved immediate Neon snapshot drill restored the canonical synthetic-STAGING source into the isolated, non-default `recovery-drill-20260830` branch. The target reached `ready`, schema comparison against active STAGING returned no diff, and aggregate-only checks observed migration head 14, one synthetic tenant, persisted authentication/session state, audit continuity, a 7-second branch-ready restore observation, and an 80-second source-to-snapshot loss boundary.
 
-Current blocker:
+Current partial result:
 
 ```text
-RECOVERY_EXERCISE=BLOCKED
-reason=MISSING_AUTHENTICATED_NEON_RESTORE_CAPABILITY
+RECOVERY_EXERCISE=PARTIAL
+passed=ISOLATED_RESTORE_SCHEMA_TENANT_SESSION_AUDIT
+remaining=DURABLE_JOB_FIXTURES_AND_ISOLATED_APPLICATION_SMOKE
 ```
 
-After an authenticated recovery capability is available:
+The source snapshot contained zero durable-job fixtures, and no effects-disabled isolated runtime was bound to the target. The current evidence must not be represented as durable-job recovery, end-user application recovery, or a production RTO/RPO guarantee.
 
-1. Restore a representative synthetic-STAGING backup into an isolated target.
-2. Validate schema version, canonical tenant, browser-auth enrollment state, authoritative sessions, and durable-job behavior.
-3. Record elapsed restore time, backup age, and observed data-loss boundary.
-4. Keep the restored target isolated and remove it only through the approved recovery runbook.
-5. Do not promote synthetic RTO/RPO measurements into production guarantees.
+Next closure:
 
-**Exit condition:** the recovery evidence pack distinguishes migration from restore and records schema, tenant, session, durable-job, RTO, and RPO observations.
+1. Preserve `recovery-drill-20260830` until evidence review or explicit teardown approval.
+2. Prepare a later synthetic snapshot with approved queued, leased, completed, retrying, and dead-letter job fixtures.
+3. Restore that snapshot into a separately named isolated target.
+4. Bind an effects-disabled isolated runtime without production, provider, notification, or real-data connectivity.
+5. Verify zero acknowledged-job loss, no completed-job replay, safe lease recovery/retry behavior, and application smoke through public interfaces.
+6. Record the second drill's RTO, RPO, backup age, and loss boundary without promoting synthetic measurements into production guarantees.
+
+**Exit condition:** the recovery evidence pack records passing schema, tenant, session, durable-job, and application-smoke observations plus sanitized RTO/RPO measurements.
 
 ### P4. Run human web-surface and accessibility review
 
