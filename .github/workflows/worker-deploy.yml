@@ -57,11 +57,10 @@ jobs:
           test -n "$STAGING_DATABASE_URL"
           test -n "$SUAS_SESSION_SECRET"
           test -n "$SUAS_STAGING_AUTH_EMAILS"
-          case "$SUAS_E2E_BASE_URL" in
-            https://*) ;;
-            *) echo "SUAS_E2E_BASE_URL must use https" >&2; exit 1 ;;
-          esac
-          sed "s/YOUR_HYPERDRIVE_ID/$SUAS_HYPERDRIVE_ID/" \
+          DEPLOY_DOMAIN=$(node -e 'const url = new URL(process.env.SUAS_E2E_BASE_URL); if (url.protocol !== "https:" || url.pathname !== "/" || url.search || url.hash) process.exit(1); process.stdout.write(url.hostname)')
+          test -n "$DEPLOY_DOMAIN"
+          sed -e "s/YOUR_HYPERDRIVE_ID/$SUAS_HYPERDRIVE_ID/" \
+            -e 's/"name": "suas"/"name": "suas",\n  "workers_dev": false/' \
             wrangler.jsonc > .wrangler.suas-synthetic-ci.jsonc
           printf '%s' "$RESEND_API_KEY" | npx wrangler secret put RESEND_API_KEY \
             --config .wrangler.suas-synthetic-ci.jsonc
@@ -89,6 +88,7 @@ jobs:
           STAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           npx wrangler deploy \
             --config .wrangler.suas-synthetic-ci.jsonc \
+            --domain "$DEPLOY_DOMAIN" \
             --var "SUAS_EMAIL_FROM:${SUAS_EMAIL_FROM}" \
             --var "SUAS_E2E_BASE_URL:${SUAS_E2E_BASE_URL}" \
             --var "D007_DELETION_EXECUTION:disabled" \
