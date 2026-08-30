@@ -1,0 +1,42 @@
+name: cloudflare-token-preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: suas-synthetic-staging
+    steps:
+      - name: Verify deployment token boundaries without mutation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUAS_HYPERDRIVE_ID: ${{ vars.SUAS_HYPERDRIVE_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$SUAS_HYPERDRIVE_ID"
+          api() {
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              --header 'Content-Type: application/json' \
+              "https://api.cloudflare.com/client/v4$1"
+          }
+          verify=$(api "/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify")
+          test "$(jq -r '.success' <<<"$verify")" = true
+          test "$(jq -r '.result.status' <<<"$verify")" = active
+          hyperdrives=$(api "/accounts/$CLOUDFLARE_ACCOUNT_ID/hyperdrive/configs?per_page=100")
+          test "$(jq -r '.success' <<<"$hyperdrives")" = true
+          jq -e --arg id "$SUAS_HYPERDRIVE_ID" '.result | any(.id == $id)' <<<"$hyperdrives" >/dev/null
+          worker=$(api "/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/suas/settings")
+          test "$(jq -r '.success' <<<"$worker")" = true
+          echo "token_status=active"
+          echo "hyperdrive_list=ok"
+          echo "expected_hyperdrive=present"
+          echo "worker_scripts_read=ok"
+          echo "mutations=none"
