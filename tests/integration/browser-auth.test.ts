@@ -61,7 +61,7 @@ describe('HTML passwordless sign-in', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('If this address is enrolled');
+    expect(response.body).toContain('If this email is enrolled');
     expect(response.body).not.toContain('tenant_id');
     expect(delivery().lastFor(email.toLowerCase())?.secret).toMatch(/^\d{6}$/);
   });
