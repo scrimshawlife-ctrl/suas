@@ -88,7 +88,7 @@ jobs:
           STAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           npx wrangler deploy \
             --config .wrangler.suas-synthetic-ci.jsonc \
-            --domain "$DEPLOY_DOMAIN" \
+            --route "${DEPLOY_DOMAIN}/*" \
             --var "SUAS_EMAIL_FROM:${SUAS_EMAIL_FROM}" \
             --var "SUAS_E2E_BASE_URL:${SUAS_E2E_BASE_URL}" \
             --var "D007_DELETION_EXECUTION:disabled" \
