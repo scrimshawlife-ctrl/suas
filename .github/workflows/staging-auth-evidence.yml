@@ -1,0 +1,36 @@
+# Metadata-only browser EMAIL OTP evidence against formal synthetic STAGING.
+# Manual only because a successful run sends one OTP email to the approved owner account.
+
+name: staging-auth-evidence
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: staging-auth-evidence
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: suas-synthetic-staging
+    env:
+      SUAS_E2E_BASE_URL: ${{ vars.SUAS_E2E_BASE_URL }}
+      SUAS_CANONICAL_BASE_URL: ${{ vars.SUAS_CANONICAL_BASE_URL }}
+      SUAS_STAGING_AUTH_EMAILS: ${{ secrets.SUAS_STAGING_AUTH_EMAILS }}
+      RESEND_AUDIT_API_KEY: ${{ secrets.RESEND_AUDIT_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Exercise metadata-only browser auth evidence
+        run: npm run evidence:staging:browser-auth
