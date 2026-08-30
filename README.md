@@ -7,6 +7,9 @@ Public site: https://scrimshawlife-ctrl.github.io/suas/
 Product UI preview (static Pages HTML, not live operations):
 https://scrimshawlife-ctrl.github.io/suas/app.html
 
+iOS operator-loop demo (interactive synthetic Pages surface, no API connection):
+https://scrimshawlife-ctrl.github.io/suas/ios-operator.html
+
 The former `demo.html` URL remains as a compatibility redirect to the Product UI preview.
 
 ## Start here
