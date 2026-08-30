@@ -87,7 +87,9 @@ test.describe('deployed public boundary', () => {
     await expect(page.getByText('Veteran peer support', { exact: false })).toBeVisible();
 
     await expectHtmlSurface(page, '/app/join');
-    await expect(page.getByText('sign-in code', { exact: false })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Send sign-in code', exact: true }),
+    ).toBeVisible();
   });
 
   test('@public protected HTML fails closed without a session', async ({ page }) => {
