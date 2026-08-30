@@ -106,6 +106,37 @@ test.describe('deployed public boundary', () => {
 });
 
 test.describe('deployed authenticated synthetic surfaces', () => {
+  test('Veteran JSON case-open is idempotent on the deployed Worker', async ({ request }) => {
+    test.skip(veteranBearer === undefined, 'SUAS_E2E_VETERAN_BEARER is not configured.');
+    const authorization = `Bearer ${veteranBearer ?? ''}`;
+    const idempotencyKey = `staging-case-open-${Date.now()}`;
+
+    const opened = await request.post('/api/v0/cases', {
+      headers: { authorization, 'idempotency-key': idempotencyKey },
+    });
+    expect([200, 201]).toContain(opened.status());
+    const openedBody: { case_id: string; status: string } = await opened.json();
+    expect(openedBody.case_id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(openedBody.status).not.toBe('CLOSED');
+
+    const replayed = await request.post('/api/v0/cases', {
+      headers: { authorization, 'idempotency-key': idempotencyKey },
+    });
+    expect(replayed.status()).toBe(200);
+    expect(await replayed.json()).toMatchObject({
+      case_id: openedBody.case_id,
+      replayed: true,
+    });
+
+    const veteran = await request.get('/api/v0/veterans/me', {
+      headers: { authorization },
+    });
+    expect(veteran.status()).toBe(200);
+    expect(await veteran.json()).toMatchObject({
+      open_case: { case_id: openedBody.case_id },
+    });
+  });
+
   test('veteran routes render with an operator-supplied synthetic session', async ({ browser }) => {
     test.skip(veteranBearer === undefined, 'SUAS_E2E_VETERAN_BEARER is not configured.');
     const page = await authenticatedPage(browser, veteranBearer ?? '');
