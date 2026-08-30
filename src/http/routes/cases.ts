@@ -30,10 +30,12 @@ import {
   findActiveAssignment,
   findCase,
   MAX_PAGE_SIZE,
+  openCase,
   readCaseQueue,
   type CaseCommand,
   type SupportCase,
 } from '../../coordination/index.js';
+import { findUserById } from '../../identity/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import type { JsonObject } from '../../jobs/index.js';
 import { API_PREFIX } from '../../release/pins.js';
@@ -191,6 +193,49 @@ const requiredReasonBody = z.object({
 });
 
 export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): void {
+  app.post(`${API_PREFIX}/cases`, async (request, reply) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const veteran = await findUserById(deps.pool, context.tenantId, context.userId);
+    if (veteran === undefined) throw new ResourceNotVisibleError();
+
+    const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
+    const fingerprint = fingerprintRequest({ actor_id: context.userId });
+    const scope = commandScope({
+      command: 'POST /cases',
+      aggregateType: 'SupportCase',
+      actorId: context.userId,
+    });
+
+    const run = await runIdempotentCommand(
+      deps.pool,
+      {
+        tenantId: context.tenantId,
+        commandScope: scope,
+        idempotencyKey,
+        requestFingerprint: fingerprint,
+      },
+      async (tx) => {
+        const opened = await openCase(tx, {
+          tenantId: context.tenantId,
+          veteranUserId: context.userId,
+          actorType: 'VETERAN',
+          actorId: context.userId,
+          correlationId: String(request.id),
+        });
+        return {
+          result: { ...publicCase(opened.supportCase), created: opened.created },
+          aggregateType: 'SupportCase',
+          aggregateId: opened.supportCase.caseId,
+        };
+      },
+    );
+
+    if (!run.replayed && run.result.created) {
+      return reply.status(201).send({ ...run.result, replayed: false });
+    }
+    return { ...run.result, replayed: run.replayed };
+  });
+
   app.get(`${API_PREFIX}/cases`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     assertResponder(context);

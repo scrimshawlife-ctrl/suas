@@ -116,6 +116,73 @@ async function responderOn(tenantId: string) {
   return { user, headers: await bearer(tenantId, user.userId) };
 }
 
+describe('POST /api/v0/cases', () => {
+  it('opens one Veteran case and replays the authoritative result', async () => {
+    const pool = app.pool;
+    if (pool === undefined) throw new Error('no pool');
+    const tenantId = randomUUID();
+    const veteran = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail(`vet-open-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    const headers = {
+      ...(await bearer(tenantId, veteran.userId)),
+      'idempotency-key': randomUUID(),
+    };
+
+    const opened = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/cases',
+      headers,
+    });
+    expect(opened.statusCode).toBe(201);
+    expect(opened.json()).toMatchObject({ status: 'OPEN', created: true, replayed: false });
+
+    const replayed = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/cases',
+      headers,
+    });
+    expect(replayed.statusCode).toBe(200);
+    expect(replayed.json()).toEqual({ ...opened.json(), replayed: true });
+
+    const reused = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/cases',
+      headers: { ...headers, 'idempotency-key': randomUUID() },
+    });
+    expect(reused.statusCode).toBe(200);
+    expect(reused.json()).toMatchObject({
+      case_id: opened.json().case_id,
+      status: 'OPEN',
+      created: false,
+      replayed: false,
+    });
+  });
+
+  it('requires authentication and an idempotency key', async () => {
+    const unauthenticated = await app.server.inject({ method: 'POST', url: '/api/v0/cases' });
+    expect(unauthenticated.statusCode).toBe(401);
+
+    const pool = app.pool;
+    if (pool === undefined) throw new Error('no pool');
+    const tenantId = randomUUID();
+    const veteran = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail(`vet-key-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    const missingKey = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/cases',
+      headers: await bearer(tenantId, veteran.userId),
+    });
+    expect(missingKey.statusCode).toBe(400);
+    expect(missingKey.json().error.code).toBe('VALIDATION_FAILED');
+  });
+});
+
 describe('GET /api/v0/cases', () => {
   it('hides the unassigned queue from a veteran', async () => {
     const { tenantId, veteranHeaders } = await completeRedCheckIn();
