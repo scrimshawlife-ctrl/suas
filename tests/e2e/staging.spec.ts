@@ -131,8 +131,8 @@ test.describe('deployed public boundary', () => {
     expect(landing?.headers()['cache-control']).toBe('no-store');
     await expect(page.locator('main')).toHaveCount(1);
     await expect(page.locator('h1')).toHaveCount(1);
-    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(11, 13, 12)');
-    await expect(page.locator('body')).toHaveCSS('color', 'rgb(232, 228, 214)');
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+    await expect(page.locator('body')).toHaveCSS('color', 'rgb(16, 24, 40)');
     await expect.poll(() => page.evaluate<boolean>('globalThis.crossOriginIsolated')).toBe(true);
     expect(externalFontRequests).toEqual([]);
     await expect(page).toHaveTitle(/Shut Up and Serve/i);
