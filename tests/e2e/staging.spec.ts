@@ -88,12 +88,16 @@ test.describe('deployed public boundary', () => {
     expect(landing?.status()).toBe(200);
     expect(landing?.headers()['content-security-policy']).toContain("script-src 'none'");
     expect(landing?.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(landing?.headers()['content-security-policy']).toContain("style-src 'self' 'sha256-");
+    expect(landing?.headers()['content-security-policy']).not.toContain("'unsafe-inline'");
     expect(landing?.headers()['strict-transport-security']).toContain('max-age=31536000');
     expect(landing?.headers()['x-frame-options']).toBe('DENY');
     expect(landing?.headers()['referrer-policy']).toBe('no-referrer');
     expect(landing?.headers()['cache-control']).toBe('no-store');
     await expect(page.locator('main')).toHaveCount(1);
     await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(11, 13, 12)');
+    await expect(page.locator('body')).toHaveCSS('color', 'rgb(232, 228, 214)');
     await expect(page).toHaveTitle(/Shut Up and Serve/i);
     await expect(page.getByText('Veteran peer support', { exact: false })).toBeVisible();
 

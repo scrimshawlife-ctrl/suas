@@ -1,5 +1,7 @@
 /** Browser-facing response hardening shared by Node and Worker dispatch. */
 
+export const INLINE_STYLESHEET_SHA256 = 'XXw2y0a1mhiKVAuZCy8VLuxokUlKBtZN6jIFEsiSmMo=';
+
 export const BROWSER_SECURITY_HEADERS = {
   'content-security-policy': [
     "default-src 'none'",
@@ -10,7 +12,7 @@ export const BROWSER_SECURITY_HEADERS = {
     "frame-ancestors 'none'",
     "img-src 'self' data:",
     "script-src 'none'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    `style-src 'self' 'sha256-${INLINE_STYLESHEET_SHA256}' https://fonts.googleapis.com`,
     'upgrade-insecure-requests',
   ].join('; '),
   'cross-origin-opener-policy': 'same-origin',
