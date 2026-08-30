@@ -6,6 +6,7 @@ import { startApp, type StartedApp } from '../../src/app.js';
 import type { RecordingChallengeDelivery } from '../../src/auth/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { BROWSER_AUTH_BODY_LIMIT_BYTES } from '../../src/http/routes/ui.js';
 import { validEnv } from '../helpers/env.js';
 
 const TENANT_ID = '11111111-1111-4111-8111-111111111111';
@@ -83,6 +84,23 @@ describe('HTML passwordless sign-in', () => {
     expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
   });
 
+  it('rejects oversized challenge bodies before sending email', async () => {
+    const email = await enrolledEmail();
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: form({
+        destination: email,
+        role: 'veteran',
+        padding: 'x'.repeat(BROWSER_AUTH_BODY_LIMIT_BYTES),
+      }),
+    });
+
+    expect(response.statusCode).toBe(413);
+    expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
+  });
+
   it('rejects cross-origin verification requests before consuming a code', async () => {
     const email = await enrolledEmail();
     await app.server.inject({
@@ -105,6 +123,38 @@ describe('HTML passwordless sign-in', () => {
       payload: form({ destination: email, role: 'veteran', code }),
     });
     expect(rejected.statusCode).toBe(401);
+
+    const accepted = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: form({ destination: email, role: 'veteran', code }),
+    });
+    expect(accepted.statusCode).toBe(303);
+  });
+
+  it('rejects oversized verification bodies without consuming a code', async () => {
+    const email = await enrolledEmail();
+    await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
+
+    const rejected = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: form({
+        destination: email,
+        role: 'veteran',
+        code,
+        padding: 'x'.repeat(BROWSER_AUTH_BODY_LIMIT_BYTES),
+      }),
+    });
+    expect(rejected.statusCode).toBe(413);
 
     const accepted = await app.server.inject({
       method: 'POST',

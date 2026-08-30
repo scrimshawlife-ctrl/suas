@@ -140,6 +140,17 @@ test.describe('deployed public boundary', () => {
     expect(await response.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
   });
 
+  test('@public oversized browser-auth submissions fail before processing', async ({ request }) => {
+    const response = await request.post('/app/auth/challenges', {
+      form: {
+        destination: 'unknown-oversized@invalid.example',
+        role: 'veteran',
+        padding: 'x'.repeat(4096),
+      },
+    });
+    expect(response.status()).toBe(413);
+  });
+
   test('@public keyboard entry and 320px reflow work in Chromium', async ({ page }) => {
     await expectKeyboardEntry(page, '/app');
     await expectNoHorizontalOverflow(page, '/app');
