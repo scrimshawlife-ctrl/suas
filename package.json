@@ -41,6 +41,7 @@
     "evidence:staging:browser-auth": "tsx scripts/staging-browser-auth-evidence.ts",
     "evidence:preflight": "tsx scripts/synthetic-staging-evidence-invariants.ts",
     "load:synthetic": "tsx scripts/synthetic-load-harness.ts",
+    "soak:staging": "tsx scripts/synthetic-staging-soak.ts",
     "migrate:rehearse": "tsx scripts/migration-restore-rehearsal.ts",
     "settle:check": "tsx scripts/check-spec-018-settlement.ts",
     "privacy:deletion-drill": "tsx scripts/deletion-drill.ts",
