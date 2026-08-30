@@ -191,6 +191,32 @@ curl -sS -o /dev/null -w "%{http_code}\n" "$WORKER_BASE_URL/app"
 
 Expect health JSON without secrets; `/app` HTML for the reference surfaces.
 
+### Browser-auth delivery evidence
+
+Run the metadata-only browser-auth acceptance command after an auth-affecting
+deployment:
+
+```bash
+SUAS_E2E_BASE_URL=https://suas-synthetic-staging.suas.workers.dev \
+SUAS_CANONICAL_BASE_URL=https://suasqrf.com \
+SUAS_STAGING_AUTH_EMAILS="$OWNER_APPROVED_STAGING_EMAILS" \
+RESEND_AUDIT_API_KEY="$READ_ONLY_RESEND_AUDIT_KEY" \
+npm run evidence:staging:browser-auth
+```
+
+The command checks redirects and enrollment on both hosts, confirms that API
+routes remain bearer-only, rejects a cross-origin browser write, compares the
+normalized public responses for approved and unknown accounts, and observes
+Resend delivery metadata without requesting the email body or OTP. Its JSON
+output contains statuses and counts only; it never prints an address, API key,
+challenge secret, session, database URL, or bearer credential.
+
+`RESEND_AUDIT_API_KEY` is a separately authorized read-capable operator
+credential. Do not broaden, recover, print, or repurpose the Worker's restricted
+sending credential. If no read-capable credential is already approved and
+stored, stop and record the missing evidence capability instead of creating a
+key. Owner OTP entry remains a separate private workflow.
+
 ### Seed synthetic demo data (Neon unpooled)
 
 With `.env` pointing at the **unpooled** Neon URL (`SUAS_ENV=LOCAL`, effects

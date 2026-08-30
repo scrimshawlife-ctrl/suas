@@ -37,6 +37,7 @@
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run staging:contract && npm run test && npm run openapi:check",
     "openapi:check": "tsx scripts/check-openapi-drift.ts",
     "staging:contract": "tsx scripts/check-synthetic-staging-contract.ts",
+    "evidence:staging:browser-auth": "tsx scripts/staging-browser-auth-evidence.ts",
     "evidence:preflight": "tsx scripts/synthetic-staging-evidence-invariants.ts",
     "load:synthetic": "tsx scripts/synthetic-load-harness.ts",
     "migrate:rehearse": "tsx scripts/migration-restore-rehearsal.ts",
