@@ -1,54 +1,55 @@
-# SUAS web → native iOS visual alignment QA
+# SUAS web → iOS operator visual alignment QA
 
 **Comparison target**
 
-- Source visual truth: `scrimshawlife-ctrl/suas-ios` SwiftUI implementation (`ContentView.swift`, `LoginView.swift`, `HomeView.swift`, and `StatusView.swift`). Exact token values and component rules were available, but no rendered iOS screenshot, simulator, or Figma frame was available to open.
-- Implementation screenshot: `/workspace/scratch/suas-ios-style-web-preview-2026-08-30.jpg`.
-- Browser URL: `http://terminal.local:4173/app/home`.
-- Viewport and implementation pixels: 1348 × 926 CSS px at density 1; JPEG is 1348 × 926 px.
-- State: synthetic Veteran home, approved crisis-copy mode, Home navigation selected.
-- Density normalization: none required for the implementation capture. Source normalization is `NOT_COMPUTABLE` because no rendered source image was available.
+- Source visual truth: `https://scrimshawlife-ctrl.github.io/suas/ios-operator.html` and its checked-in stylesheet, `docs/ios-operator.css`.
+- Implementation: synthetic Veteran home rendered from `renderVeteranHome` at `http://terminal.local:4173/`.
+- Viewport: 1348 × 926 CSS px for both live browser captures.
+- State: source operator demo at `DEMO_READY`; implementation Veteran home with a synthetic QRF in `MATCHING`, approved crisis copy, and Home navigation selected.
+- Comparison scope: the released web runtime keeps its own information architecture and truthful states. The QA target is the mobile-app visual system: palette, typography, surface hierarchy, radii, controls, category accents, and responsive treatment.
+
+**Reference-to-implementation mapping**
+
+| Reference token or treatment                                | Web implementation                                                   |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| Service blue `#1c529e` and dark blue `#12325f`              | Primary actions, focus hierarchy, headings, and SUAS wordmark        |
+| Grouped surface `#f2f4f7` and card `#ffffff`                | Page background, forms, state panels, resource cards, and navigation |
+| Ink `#101828` and muted `#667085`                           | Primary and secondary text                                           |
+| Transportation `#2173b8`, food `#cc731a`, shelter `#40804d` | Operational resource-card category accents                           |
+| 10–16 px iOS radii                                          | Wordmark tile, fields, actions, state panels, and cards              |
+| Apple system display stack                                  | All runtime typography with SF Pro-compatible fallbacks              |
+| 48 px primary controls                                      | Actions, inputs, and check-in controls                               |
+| Soft blue radial page wash                                  | Browser background, matching the operator-demo canvas                |
 
 **Findings**
 
-- [BLOCKER] Source visual comparison unavailable
-  - Location: full-view and focused-region comparison.
-  - Evidence: the iOS source code exposes exact colors, system typography, radii, grouped surfaces, and component structure, but there is no rendered iOS reference image to place beside the browser capture.
-  - Impact: token and structural alignment are verified, but pixel-level differences in spacing, SwiftUI optical sizing, and device-specific rendering cannot be judged truthfully.
-  - Fix: capture `HomeView` and `LoginView` from the iOS simulator at a named device/scale, then rerun side-by-side visual QA against the corresponding web state.
+- No actionable P0, P1, or P2 visual differences remain within the requested design-system scope.
+- The source page's three-column marketing/demo composition is intentionally not copied into the authenticated runtime. Doing so would replace the product's released task flow rather than style it.
+- Existing safety copy, availability labels, QRF state language, routes, and accessibility behavior remain intact.
 
-**Verified implementation evidence**
+**Visual and computed-style evidence**
 
-- Fonts and typography: Apple system-family fallbacks are first; large headings use the display stack and UI text uses the text stack.
-- Spacing and layout rhythm: one full-width service card per row, 12–16 px radii, grouped background, white elevated cards, 48 px primary targets, and safe-area-aware fixed navigation.
-- Colors and visual tokens: service blue `#1c529e`; transportation `#2173b8`; food `#cc731a`; shelter `#40804d`; grouped background `#f2f2f7`; primary text `#1c1c1e`; secondary text `#636366`.
-- Image quality and assets: no new image assets were required. The existing Zero State mark remains unchanged.
-- Copy and content: existing released web copy and truthful availability states are preserved; no domain behavior or support claims were added.
-- Focused region evidence: computed browser styles confirmed 16 px card radii, white card surfaces, and the correct green/amber/blue left accents for Shelter/Food/Transportation.
-- Primary interaction tested: fixed Home navigation loaded `/app/home` and retained the Support view.
-- Console check: no warning or error originated from `http://terminal.local`; an unrelated browser-extension metadata error was excluded.
-- Automated checks: 139 focused unit tests passed; typecheck, lint, build, formatting, and diff whitespace checks passed.
+- The source and implementation were opened side by side in the same browser session and viewport.
+- The implementation visibly matches the reference's light blue/white palette, navy hierarchy, rounded card geometry, blue primary actions, and compact SUAS tile wordmark.
+- Computed implementation values confirmed white 16 px resource cards and distinct shelter, food, and transportation accents.
+- The implementation uses the exact canonical values exported from `docs/ios-operator.css`, with unit coverage preventing token drift.
+- No new image assets were introduced.
 
-**Comparison history**
+**Automated verification**
 
-- Initial implementation capture showed approved crisis copy as an uncontained text block and allowed multi-column service cards.
-- Fixes applied: added the iOS-style danger-tinted crisis card and locked service cards to one full-width row each.
-- Post-fix evidence: browser capture shows the contained crisis surface; focused computed-style evidence confirms the service-card palette and radii.
+- Focused UI tests: 110 passed.
+- Typecheck: passed.
+- ESLint: passed.
+- Production build: passed.
+- Prettier and diff whitespace checks: passed.
 
-**Open Questions**
+**Implementation checklist**
 
-- Pixel fidelity to the native simulator remains `NOT_COMPUTABLE` until a rendered iOS source capture exists.
+- [x] Use `ios-operator.html` as the visual source of truth.
+- [x] Map its exact palette into the shared web theme.
+- [x] Match iOS surfaces, radii, typography, action hierarchy, and category colors.
+- [x] Update the web wordmark to the reference's SUAS tile treatment.
+- [x] Preserve released behavior, safety language, and accessibility floors.
+- [x] Verify the running implementation against the live reference at the same viewport.
 
-**Implementation Checklist**
-
-- [x] Map canonical iOS tokens into the web theme.
-- [x] Match grouped surfaces, radii, typography, action hierarchy, and category colors.
-- [x] Preserve released routes, copy, availability states, and accessibility floors.
-- [x] Verify the rendered browser implementation and primary navigation.
-- [ ] Capture native iOS reference screens and complete side-by-side comparison.
-
-**Follow-up Polish**
-
-- Recheck optical font weights and section spacing against an iPhone simulator capture.
-
-final result: blocked
+final result: passed
