@@ -8,7 +8,8 @@ type EmailSummary = {
   id: string;
   to: string[];
   subject: string;
-  status: string;
+  status?: string;
+  last_event?: string;
   created_at: string;
 };
 
@@ -143,10 +144,22 @@ async function waitForDelivery(
         email.to.map((address) => address.toLowerCase()).includes(approvedEmail.toLowerCase()) &&
         email.subject === 'SUAS sign-in code',
     );
-    if (found) return found;
+    if (found) {
+      const status = deliveryStatus(found);
+      if (['bounced', 'canceled', 'complained', 'failed', 'suppressed'].includes(status)) {
+        throw new Error(`Resend reported a failed delivery lifecycle state: ${status}.`);
+      }
+      if (['delivered', 'queued', 'sent'].includes(status)) return found;
+    }
     await new Promise((resolve) => setTimeout(resolve, DELIVERY_POLL_MS));
   }
-  throw new Error('No new SUAS sign-in delivery metadata appeared before the timeout.');
+  throw new Error(
+    'No accepted, sent, or delivered SUAS sign-in metadata appeared before the timeout.',
+  );
+}
+
+function deliveryStatus(email: EmailSummary): string {
+  return (email.status ?? email.last_event ?? 'unknown').toLowerCase();
 }
 
 function assertHost(result: Evidence['hosts'][number]): void {
@@ -213,7 +226,7 @@ async function main(): Promise<void> {
     },
     resend: {
       request_observed: true,
-      delivery_status: delivered.status,
+      delivery_status: deliveryStatus(delivered),
       unknown_message_count: unknownMessages.length,
     },
   };
