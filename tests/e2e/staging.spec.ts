@@ -98,6 +98,10 @@ test.describe('deployed public boundary', () => {
     expect(landing?.headers()['content-security-policy']).toContain("font-src 'none'");
     expect(landing?.headers()['content-security-policy']).not.toContain("'unsafe-inline'");
     expect(landing?.headers()['strict-transport-security']).toContain('max-age=31536000');
+    expect(landing?.headers()['cross-origin-embedder-policy']).toBe('require-corp');
+    expect(landing?.headers()['cross-origin-opener-policy']).toBe('same-origin');
+    expect(landing?.headers()['cross-origin-resource-policy']).toBe('same-origin');
+    expect(landing?.headers()['origin-agent-cluster']).toBe('?1');
     expect(landing?.headers()['x-frame-options']).toBe('DENY');
     expect(landing?.headers()['referrer-policy']).toBe('no-referrer');
     expect(landing?.headers()['cache-control']).toBe('no-store');
@@ -105,6 +109,7 @@ test.describe('deployed public boundary', () => {
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(11, 13, 12)');
     await expect(page.locator('body')).toHaveCSS('color', 'rgb(232, 228, 214)');
+    await expect.poll(() => page.evaluate<boolean>('globalThis.crossOriginIsolated')).toBe(true);
     expect(externalFontRequests).toEqual([]);
     await expect(page).toHaveTitle(/Shut Up and Serve/i);
     await expect(page.getByText('Veteran peer support', { exact: false })).toBeVisible();

@@ -118,6 +118,11 @@ describe('browser response hardening', () => {
     expect(web.headers['strict-transport-security']).toContain('max-age=31536000');
     expect(web.headers['x-content-type-options']).toBe('nosniff');
     expect(web.headers['x-frame-options']).toBe('DENY');
+    expect(web.headers['cross-origin-embedder-policy']).toBe('require-corp');
+    expect(web.headers['cross-origin-opener-policy']).toBe('same-origin');
+    expect(web.headers['cross-origin-resource-policy']).toBe('same-origin');
+    expect(web.headers['origin-agent-cluster']).toBe('?1');
+    expect(web.headers['x-permitted-cross-domain-policies']).toBe('none');
     expect(web.headers['referrer-policy']).toBe('no-referrer');
     expect(web.headers['cache-control']).toBe('no-store');
 
