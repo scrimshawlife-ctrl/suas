@@ -146,7 +146,7 @@ function document(shell: ShellViewModel, body: Renderable): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0B0D0C">
+<meta name="theme-color" content="#F2F2F7">
 <title>${render(shell.title)} — SUAS</title>
 <style>${STYLESHEET}</style>
 </head>
@@ -208,7 +208,7 @@ function dutyUnavailability(duty: DutyAvailability): Renderable {
 export function immediateResources(mode: SafetyCopyMode = 'placeholder_test_only'): Renderable {
   const slot = resolveImmediateResourceSlot(mode);
   return section(
-    { 'aria-labelledby': 'immediate-resources' },
+    { class: 'crisis-card', 'aria-labelledby': 'immediate-resources' },
     h2({ id: 'immediate-resources' }, 'Immediate Resources'),
     slot.state === 'PLACEHOLDER'
       ? div({ class: 'reserved-slot' }, p({}, slot.placeholder ?? ''))
@@ -250,11 +250,18 @@ function cardHeading(level: HeadingLevel, ...children: Renderable[]): Renderable
 /** A category card. Non-operational cards are visible and labelled as such. */
 function categoryCard(card: CategoryCard, level: HeadingLevel): Renderable {
   const operational = card.disposition === 'OPERATIONAL';
+  const categoryClass = card.category?.toLowerCase();
   return li(
     {},
     a(
       {
-        class: operational ? 'card' : 'card card-unavailable',
+        class: [
+          'card',
+          operational && categoryClass !== undefined ? `card-category-${categoryClass}` : undefined,
+          operational ? undefined : 'card-unavailable',
+        ]
+          .filter(Boolean)
+          .join(' '),
         // Operational and non-operational cards share one route. The handler
         // decides what a category may show; a separate `/info` path would be a
         // second place for that rule to live, and it was a 404.
