@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-30  
 **Repository:** `scrimshawlife-ctrl/suas`  
-**Baseline:** `main` at `0a65999947528ba42a63443dd604485df62d45c5` after PR #146
+**Baseline:** `main` at `251503c46209c1a0c2c06d61d13e59d0ed287b91` after PR #148
 **Scope:** synthetic-STAGING engineering and evidence only. Pilot and production authorization remain blocked.
 
 ## Current verified state
@@ -12,6 +12,7 @@
 - Sanitized live browser-auth evidence run [33293111386](https://github.com/scrimshawlife-ctrl/suas/actions/runs/33293111386) observed a successful Resend send event for the approved synthetic account and no message for an unknown account. The workflow did not read an OTP or message body.
 - The latest deployment run [33296508053](https://github.com/scrimshawlife-ctrl/suas/actions/runs/33296508053) passed at baseline commit `0a65999947528ba42a63443dd604485df62d45c5`.
 - The latest deployed Chromium acceptance run [33296533377](https://github.com/scrimshawlife-ctrl/suas/actions/runs/33296533377) passed.
+- Post-hardening sanitized auth evidence run [33297787796](https://github.com/scrimshawlife-ctrl/suas/actions/runs/33297787796) passed from current `main`: both hosts passed redirect, enrollment, bearer-only, and cross-origin checks; approved and unknown public responses matched; rejected cross-origin, oversized, non-form, and rate-limited challenges returned `401`, `413`, `415`, and `429`; Resend reported `sent`; and all negative paths produced zero provider messages.
 - Canonical local verification at this baseline passed 83 test files, 1,109 tests, the synthetic-STAGING contract, and the 54-route OpenAPI drift check.
 - Required secret and binding boundaries remain fail-closed. Real-world effects, D-007 destructive execution, D-025 sensitive reporting, pilot launch, and production launch remain disabled.
 
@@ -60,16 +61,17 @@ This remains the shortest acceptance gap and cannot be automated because automat
 
 **Exit condition:** an owner-signed worksheet records every outcome above without secret material.
 
-### P1. Refresh sanitized live auth evidence after the hardening series
+### P1. Refresh sanitized live auth evidence after the hardening series — completed
 
-PRs #140, #144, #145, and #146 changed the deployed challenge boundary after the last Resend-backed evidence run.
+PR #148 extended the canonical metadata-only command across the post-hardening challenge boundary. Run 33297787796 then passed from merged `main` without reading message bodies or OTPs.
 
-1. Run the canonical `staging-auth-evidence` workflow from current `main`.
-2. Confirm both hosts, canonical redirects, approved and unknown challenge equivalence, API bearer-only behavior, cross-origin rejection, and one non-failure Resend delivery state.
-3. Confirm unknown, oversized, non-form, and rate-limited requests do not create provider sends.
-4. Record only workflow IDs, deployed commit, normalized statuses, and provider delivery metadata.
+1. Both hosts redirected roots to `/app`, rendered enrollment, and kept protected APIs bearer-only.
+2. Approved and unknown challenges returned matching normalized public responses.
+3. Cross-origin, oversized, non-form, and rate-limited challenge paths returned `401`, `413`, `415`, and `429`; the rate limit advertised a positive retry window.
+4. Resend reported the approved challenge as `sent` and reported zero messages for every unknown or rejected destination.
+5. Evidence contained workflow IDs, normalized statuses, and provider metadata only.
 
-**Exit condition:** one current sanitized workflow run covers the post-#146 deployed boundary without reading message bodies or OTPs.
+**Exit condition:** met by run 33297787796. Re-run after future release-affecting authentication changes.
 
 ### P2. Close the network-signal rate-limit decision before coding it
 
@@ -130,8 +132,8 @@ Automated Chromium coverage is necessary but does not close human usability or a
 | Requirement                                                           | Current evidence                                                  | Remaining closure                                |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------ |
 | Both public hosts serve the same application                          | Canonical deployments, Chromium acceptance, direct HTTPS checks   | Recheck after every deployment-affecting change. |
-| Approved challenge reaches Resend                                     | Sanitized live run 33293111386 observed `sent`                    | Refresh from post-#146 `main`.                   |
-| Unknown challenge does not send                                       | Sanitized live evidence plus integration coverage                 | Refresh from post-#146 `main`.                   |
+| Approved challenge reaches Resend                                     | Post-hardening run 33297787796 observed `sent`                    | Re-run after release-affecting auth changes.     |
+| Unknown and rejected challenges do not send                           | Run 33297787796 observed zero negative-path provider messages     | Re-run after release-affecting auth changes.     |
 | Cross-origin, oversized, and non-form writes fail before side effects | Integration tests and deployed Chromium acceptance                | Preserve in every release-affecting auth change. |
 | Authentication rate limits are persistent and actionable              | Database-backed integration plus deployed `429` and `Retry-After` | Network-signal threshold remains decision-gated. |
 | Cookie hardening and logout revocation                                | Integration suite                                                 | Owner-observed deployed sign-in and logout.      |
