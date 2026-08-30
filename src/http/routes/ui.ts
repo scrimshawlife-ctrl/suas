@@ -20,7 +20,12 @@
  * is weaker than an API session (AUTH.md §5).
  */
 
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+  HookHandlerDoneFunction,
+} from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import {
@@ -145,6 +150,41 @@ export interface UiRouteDependencies {
 
 const HTML = 'text/html; charset=utf-8';
 export const BROWSER_AUTH_BODY_LIMIT_BYTES = 4096;
+
+class UnsupportedBrowserFormMediaTypeError extends Error {
+  readonly code = 'UNSUPPORTED_MEDIA_TYPE';
+  readonly httpStatus = 415;
+
+  constructor() {
+    super('Browser authentication accepts HTML form submissions only.');
+    this.name = 'UnsupportedBrowserFormMediaTypeError';
+  }
+}
+
+function assertBrowserFormContentType(
+  request: FastifyRequest,
+  _reply: FastifyReply,
+  done: HookHandlerDoneFunction,
+): void {
+  const header: unknown = request.headers['content-type'];
+  const value =
+    typeof header === 'string'
+      ? header
+      : Array.isArray(header) && typeof header[0] === 'string'
+        ? header[0]
+        : undefined;
+  const mediaType = value?.split(';', 1)[0]?.trim().toLowerCase();
+  if (mediaType !== 'application/x-www-form-urlencoded') {
+    done(new UnsupportedBrowserFormMediaTypeError());
+    return;
+  }
+  done();
+}
+
+const BROWSER_AUTH_ROUTE_OPTIONS = {
+  bodyLimit: BROWSER_AUTH_BODY_LIMIT_BYTES,
+  onRequest: assertBrowserFormContentType,
+} as const;
 
 const joinQuery = z.object({
   role: z.enum(['veteran', 'responder']).optional().default('veteran'),
@@ -348,107 +388,99 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     );
   });
 
-  app.post(
-    '/app/auth/challenges',
-    { bodyLimit: BROWSER_AUTH_BODY_LIMIT_BYTES },
-    async (request, reply) => {
-      assertSameOriginBrowserWrite(request);
-      const body = browserChallengeBody.parse(request.body);
-      const tenantId = config.browserAuth.tenantId;
-      if (
-        config.browserAuth.mode !== 'email_otp' ||
-        tenantId === undefined ||
-        deps.challengeDelivery === undefined
-      ) {
-        return reply
-          .status(503)
-          .type(HTML)
-          .send(
-            renderEnrollment({
-              shell: shell('Join the Mission', { showMobileNav: false }),
-              authEnabled: false,
-              selectedRole: body.role,
-              contactChannelRequirement: 'Email sign-in is not available in this environment.',
-            }),
-          );
-      }
+  app.post('/app/auth/challenges', BROWSER_AUTH_ROUTE_OPTIONS, async (request, reply) => {
+    assertSameOriginBrowserWrite(request);
+    const body = browserChallengeBody.parse(request.body);
+    const tenantId = config.browserAuth.tenantId;
+    if (
+      config.browserAuth.mode !== 'email_otp' ||
+      tenantId === undefined ||
+      deps.challengeDelivery === undefined
+    ) {
+      return reply
+        .status(503)
+        .type(HTML)
+        .send(
+          renderEnrollment({
+            shell: shell('Join the Mission', { showMobileNav: false }),
+            authEnabled: false,
+            selectedRole: body.role,
+            contactChannelRequirement: 'Email sign-in is not available in this environment.',
+          }),
+        );
+    }
 
-      await issueChallenge(
+    await issueChallenge(
+      { pool, sessionSecret, delivery: deps.challengeDelivery },
+      {
+        tenantId,
+        destination: body.destination,
+        method: 'EMAIL_OTP',
+        correlationId: String(request.id),
+      },
+    );
+
+    return reply.type(HTML).send(
+      renderEmailOtp({
+        shell: shell('Check your email', { showMobileNav: false }),
+        destination: body.destination,
+        selectedRole: body.role,
+      }),
+    );
+  });
+
+  app.post('/app/auth/verify', BROWSER_AUTH_ROUTE_OPTIONS, async (request, reply) => {
+    assertSameOriginBrowserWrite(request);
+    const body = browserVerifyBody.parse(request.body);
+    const tenantId = config.browserAuth.tenantId;
+    if (
+      config.browserAuth.mode !== 'email_otp' ||
+      tenantId === undefined ||
+      deps.challengeDelivery === undefined
+    ) {
+      return reply
+        .status(503)
+        .type(HTML)
+        .send(
+          renderEmailOtp({
+            shell: shell('Check your email', { showMobileNav: false }),
+            destination: body.destination,
+            selectedRole: body.role,
+            error: 'Email sign-in is not available in this environment.',
+          }),
+        );
+    }
+
+    try {
+      const issued = await verifyAndCreateSession(
         { pool, sessionSecret, delivery: deps.challengeDelivery },
         {
           tenantId,
           destination: body.destination,
-          method: 'EMAIL_OTP',
+          code: body.code,
           correlationId: String(request.id),
         },
       );
-
-      return reply.type(HTML).send(
-        renderEmailOtp({
-          shell: shell('Check your email', { showMobileNav: false }),
-          destination: body.destination,
-          selectedRole: body.role,
-        }),
+      void reply.header(
+        'set-cookie',
+        browserSessionCookie(issued.credential, issued.session.expiresAt),
       );
-    },
-  );
-
-  app.post(
-    '/app/auth/verify',
-    { bodyLimit: BROWSER_AUTH_BODY_LIMIT_BYTES },
-    async (request, reply) => {
-      assertSameOriginBrowserWrite(request);
-      const body = browserVerifyBody.parse(request.body);
-      const tenantId = config.browserAuth.tenantId;
-      if (
-        config.browserAuth.mode !== 'email_otp' ||
-        tenantId === undefined ||
-        deps.challengeDelivery === undefined
-      ) {
-        return reply
-          .status(503)
-          .type(HTML)
-          .send(
-            renderEmailOtp({
-              shell: shell('Check your email', { showMobileNav: false }),
-              destination: body.destination,
-              selectedRole: body.role,
-              error: 'Email sign-in is not available in this environment.',
-            }),
-          );
-      }
-
-      try {
-        const issued = await verifyAndCreateSession(
-          { pool, sessionSecret, delivery: deps.challengeDelivery },
-          {
-            tenantId,
+      return reply.redirect(body.role === 'responder' ? '/app/responder' : '/app/home', 303);
+    } catch (error: unknown) {
+      if (!(error instanceof ChallengeVerificationFailedError)) throw error;
+      return reply
+        .status(401)
+        .type(HTML)
+        .send(
+          renderEmailOtp({
+            shell: shell('Check your email', { showMobileNav: false }),
             destination: body.destination,
-            code: body.code,
-            correlationId: String(request.id),
-          },
+            selectedRole: body.role,
+            error: 'The sign-in code is invalid or has expired.',
+          }),
         );
-        void reply.header(
-          'set-cookie',
-          browserSessionCookie(issued.credential, issued.session.expiresAt),
-        );
-        return reply.redirect(body.role === 'responder' ? '/app/responder' : '/app/home', 303);
-      } catch (error: unknown) {
-        if (!(error instanceof ChallengeVerificationFailedError)) throw error;
-        return reply
-          .status(401)
-          .type(HTML)
-          .send(
-            renderEmailOtp({
-              shell: shell('Check your email', { showMobileNav: false }),
-              destination: body.destination,
-              selectedRole: body.role,
-              error: 'The sign-in code is invalid or has expired.',
-            }),
-          );
-      }
-    },
-  );
+    }
+  });
 
   app.post('/app/auth/logout', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
