@@ -108,6 +108,7 @@ Commands:
 | `npm run test:unit`               | unit tests only, no database required                  |
 | `npm run test:e2e:staging`        | Chromium acceptance against synthetic STAGING          |
 | `npm run test:e2e:staging:public` | public STAGING acceptance without credentials          |
+| `npm run soak:staging`            | fixed read-only synthetic-STAGING soak                 |
 | `npm run migrate -- status`       | applied, pending, drifted, and orphaned migrations     |
 | `npm run migrate -- apply`        | apply pending migrations under an advisory lock        |
 | `npm run migrate -- validate`     | verify schema state without mutating it                |
@@ -171,6 +172,38 @@ sessions in `SUAS_E2E_VETERAN_BEARER`, `SUAS_E2E_RESPONDER_BEARER`, and
 `SUAS_E2E_ADMIN_BEARER`. The scheduled `staging-acceptance` workflow uses the
 same names as repository secrets and reports those tests as skipped when secrets
 are absent. Never supply production sessions or real veteran data.
+
+### Fixed-profile synthetic-STAGING soak
+
+The `synthetic-staging-soak` GitHub Actions workflow is manual-only and uses the
+existing `suas-synthetic-staging` Environment variable `SUAS_E2E_BASE_URL` plus
+the existing `SUAS_E2E_VETERAN_BEARER` and `SUAS_E2E_RESPONDER_BEARER` secrets.
+It does not provision or deploy anything. Dispatch requires the exact
+`synthetic-staging-read-only` confirmation.
+
+The canonical profile is one warm-up VU for 5 minutes, 5 VUs for 120 minutes,
+10 VUs for 15 minutes, then up to 15 minutes to drain in-flight requests. The
+dispatch duration inputs default to those values and may only shorten them,
+which permits brief harness checks without silently expanding the approved
+workload. VU counts, one-second pacing, and the route mix are fixed in code.
+
+The route mix contains only `GET` requests: public health, the authenticated
+resource catalog, veteran self, and responder unassigned-case reads. The command
+fails closed unless deletion, export delivery, 365-day purge, sensitive
+reporting, real effects, pilot launch, and production launch remain disabled or
+blocked. It never invokes command routes, provider effects, reporting release,
+export delivery, or deletion.
+
+The artifact at `artifacts/soak/synthetic-staging-soak-summary.json` contains
+only aggregate request counts, HTTP status counts, sanitized error categories,
+p50/p95/p99/max latency, fixed request identifiers, and drain counts. Response
+bodies, bearer credentials, request headers, and raw exception messages are not
+recorded. A passing run is stability evidence only and keeps capacity at
+`NOT_COMPUTABLE`; it is not a production-readiness or production-capacity claim.
+
+Do not run the soak until the synthetic-STAGING deployment and operator
+authorization prerequisites in
+`docs/readiness/evidence/synthetic-staging-2026-08-29/soak/status.md` are met.
 
 Cloudflare published limits (not SUAS SLOs): 30 s CPU default on paid plans
 (10 ms on free), 128 MB memory, 50 subrequests per invocation on free / 10,000

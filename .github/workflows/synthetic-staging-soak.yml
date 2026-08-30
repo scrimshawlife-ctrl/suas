@@ -1,0 +1,94 @@
+# Manual, read-only fixed-profile soak against independently owned synthetic STAGING.
+# It does not provision, deploy, mutate domain state, or enable external effects.
+
+name: synthetic-staging-soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type synthetic-staging-read-only to run the fixed GET-only profile'
+        required: true
+        type: string
+      warmup_seconds:
+        description: Warm-up duration, at most the canonical 300 seconds
+        required: true
+        default: '300'
+        type: string
+      steady_seconds:
+        description: Five-VU duration, at most the canonical 7200 seconds
+        required: true
+        default: '7200'
+        type: string
+      peak_seconds:
+        description: Ten-VU duration, at most the canonical 900 seconds
+        required: true
+        default: '900'
+        type: string
+      drain_seconds:
+        description: Maximum drain duration, at most the canonical 900 seconds
+        required: true
+        default: '900'
+        type: string
+
+concurrency:
+  group: synthetic-staging-soak
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    if: github.event.inputs.confirm == 'synthetic-staging-read-only'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: suas-synthetic-staging
+    permissions:
+      contents: read
+    env:
+      SUAS_ENV: STAGING
+      SUAS_SOAK_CONFIRM: synthetic-staging-read-only
+      SUAS_E2E_BASE_URL: ${{ vars.SUAS_E2E_BASE_URL }}
+      SUAS_E2E_VETERAN_BEARER: ${{ secrets.SUAS_E2E_VETERAN_BEARER }}
+      SUAS_E2E_RESPONDER_BEARER: ${{ secrets.SUAS_E2E_RESPONDER_BEARER }}
+      SUAS_SOAK_WARMUP_SECONDS: ${{ inputs.warmup_seconds }}
+      SUAS_SOAK_STEADY_SECONDS: ${{ inputs.steady_seconds }}
+      SUAS_SOAK_PEAK_SECONDS: ${{ inputs.peak_seconds }}
+      SUAS_SOAK_DRAIN_SECONDS: ${{ inputs.drain_seconds }}
+      SUAS_SOAK_OUTPUT_PATH: artifacts/soak/synthetic-staging-soak-summary.json
+      D007_DELETION_EXECUTION: disabled
+      D007_EXPORT_DELIVERY: disabled
+      D007_365_DAY_PURGE: disabled
+      D025_REPORTING: disabled
+      REAL_WORLD_EFFECTS: disabled
+      PILOT_LAUNCH: blocked
+      PRODUCTION_LAUNCH: blocked
+      SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false'
+      SUAS_SENSITIVE_AGGREGATE_REPORTING: disabled
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Require the existing synthetic-STAGING target and bearers
+        run: |
+          test -n "$SUAS_E2E_BASE_URL"
+          test -n "$SUAS_E2E_VETERAN_BEARER"
+          test -n "$SUAS_E2E_RESPONDER_BEARER"
+
+      - name: Run fixed read-only synthetic-STAGING soak
+        run: npm run soak:staging
+
+      - name: Upload sanitized aggregate results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: synthetic-staging-soak-${{ github.run_id }}
+          path: artifacts/soak/synthetic-staging-soak-summary.json
+          if-no-files-found: warn
+          retention-days: 14
