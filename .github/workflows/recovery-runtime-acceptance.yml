@@ -1,0 +1,130 @@
+# Approval-gated isolated recovery runtime. This workflow creates a dedicated
+# Hyperdrive and Worker against an already approved Neon recovery branch.
+# It never changes the canonical staging Worker or Hyperdrive.
+
+name: recovery-runtime-acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type deploy-isolated-recovery to create the temporary runtime'
+        required: true
+        type: string
+      database_host:
+        description: 'Credential-free Neon host for the isolated recovery branch'
+        required: true
+        type: string
+
+concurrency:
+  group: recovery-runtime-acceptance
+  cancel-in-progress: false
+
+jobs:
+  deploy-and-verify:
+    if: github.event.inputs.confirm == 'deploy-isolated-recovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: suas-synthetic-staging
+    permissions:
+      contents: read
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SOURCE_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      SESSION_SECRET: ${{ secrets.SUAS_SESSION_SECRET }}
+      VETERAN_BEARER: ${{ secrets.SUAS_E2E_VETERAN_BEARER }}
+      RESPONDER_BEARER: ${{ secrets.SUAS_E2E_RESPONDER_BEARER }}
+      WORKER_NAME: suas-recovery-drill-20260830
+      HYPERDRIVE_NAME: suas-recovery-drill-20260830
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Require protected inputs
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$SOURCE_DATABASE_URL"
+          test -n "$SESSION_SECRET"
+          [[ "${{ inputs.database_host }}" =~ ^[a-z0-9-]+\.us-west-2\.aws\.neon\.tech$ ]]
+
+      - name: Derive isolated connection without exposing credentials
+        env:
+          TARGET_DATABASE_HOST: ${{ inputs.database_host }}
+        run: |
+          node <<'NODE'
+          const source = new URL(process.env.SOURCE_DATABASE_URL);
+          source.hostname = process.env.TARGET_DATABASE_HOST;
+          require('node:fs').writeFileSync('.isolated-database-url', source.toString(), { mode: 0o600 });
+          NODE
+
+      - name: Create isolated Hyperdrive
+        run: |
+          set +x
+          output=$(npx wrangler hyperdrive create "$HYPERDRIVE_NAME" \
+            --connection-string "$(cat .isolated-database-url)" \
+            --sslmode require 2>&1)
+          hyperdrive_id=$(printf '%s' "$output" | grep -Eo '[0-9a-f]{32}' | tail -1)
+          test -n "$hyperdrive_id"
+          echo "HYPERDRIVE_ID=$hyperdrive_id" >> "$GITHUB_ENV"
+          echo "Created isolated Hyperdrive configuration."
+          rm -f .isolated-database-url
+
+      - name: Generate effects-disabled Worker configuration
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('wrangler.jsonc', 'utf8').replace(/^\s*\/\/.*$/gm, '').replace(/,\s*([}\]])/g, '$1'));
+          config.name = process.env.WORKER_NAME;
+          config.hyperdrive[0].id = process.env.HYPERDRIVE_ID;
+          Object.assign(config.vars, {
+            SUAS_ENV: 'STAGING',
+            SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
+            SUAS_MIGRATIONS_MODE: 'validate',
+            SUAS_BROWSER_AUTH_MODE: 'disabled',
+            SUAS_EMAIL_MODE: 'sink',
+            SUAS_SMS_MODE: 'sink',
+            SUAS_TRANSPORTATION_ADAPTER_MODE: 'fake',
+            SUAS_SHELTER_ADAPTER_MODE: 'fake',
+            SUAS_FOOD_ADAPTER_MODE: 'fake',
+            SUAS_PEER_SUPPORT_ADAPTER_MODE: 'manual',
+            SUAS_SUPPORT_SIGNAL_MODE: 'fixture',
+            SUAS_SAFETY_COPY_MODE: 'placeholder_test_only',
+            SUAS_SENSITIVE_AGGREGATE_REPORTING: 'disabled'
+          });
+          fs.writeFileSync('wrangler.recovery.json', JSON.stringify(config, null, 2));
+          NODE
+
+      - name: Deploy isolated Worker
+        run: npx wrangler deploy --config wrangler.recovery.json
+
+      - name: Install isolated session secret
+        run: printf '%s' "$SESSION_SECRET" | npx wrangler secret put SUAS_SESSION_SECRET --name "$WORKER_NAME"
+
+      - name: Exercise isolated public and bearer boundaries
+        run: |
+          base="https://${WORKER_NAME}.suas.workers.dev"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$base/app")" = 200
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$base/api/v0/health")" = 200
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$base/api/v0/veterans/me")" = 401
+          if [ -n "$VETERAN_BEARER" ]; then
+            test "$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $VETERAN_BEARER" "$base/api/v0/veterans/me")" = 200
+          fi
+          if [ -n "$RESPONDER_BEARER" ]; then
+            test "$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $RESPONDER_BEARER" "$base/api/v0/responder/cases")" != 500
+          fi
+          echo "isolated_runtime_url=$base"
+          echo "effects_enabled=false"
+          echo "browser_auth=disabled"
+          echo "public_app=pass"
+          echo "health=pass"
+          echo "unauthenticated_api=pass"
