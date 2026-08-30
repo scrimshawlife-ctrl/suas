@@ -8,14 +8,14 @@
  *   targets, text zoom/reflow, non-color-only meaning, reduced motion)
  * - SUAS-specs MVP_REFERENCE.md §13 (non-goal: freezing CSS/framework technology)
  *
- * Colors, type, radii, and surface hierarchy mirror the native iOS client
- * (`suas-ios/suas/suas/ContentView.swift`, `LoginView.swift`, and
- * `HomeView.swift`). Accessibility floors stay WCAG 2.2 AA values: 24x24 CSS px minimum
+ * Colors, type, radii, and surface hierarchy mirror the shipped iOS operator
+ * reference (`docs/ios-operator.css` and `/suas/ios-operator.html`).
+ * palette. Accessibility floors stay WCAG 2.2 AA values: 24x24 CSS px minimum
  * target size (2.5.8), visible focus (2.4.7, 2.4.11), reflow at 320 CSS px
  * (1.4.10), and text spacing tolerance (1.4.12).
  *
- * Contrast: primary text `#1c1c1e` on white is 17.01:1; secondary text
- * `#636366` on white is 5.99:1; service blue `#1c529e` on white is 7.64:1.
+ * Contrast: ink `#101828` on white is 17.70:1; muted `#667085` on white is
+ * 4.78:1; service blue `#1c529e` on white is 7.64:1.
  */
 
 /**
@@ -26,10 +26,13 @@
 export const MIN_TARGET_PX = 24;
 export const PRIMARY_TARGET_PX = 48;
 
-/** Native iOS theme tokens, observed from `suas-ios` SwiftUI source. */
-export const IOS_GROUPED_BG = '#f2f2f7';
-export const IOS_TEXT = '#1c1c1e';
-export const IOS_ACCENT = '#1c529e';
+/** Canonical tokens from `docs/ios-operator.css`. */
+export const IOS_GROUPED_BG = '#f2f4f7';
+export const IOS_CARD = '#ffffff';
+export const IOS_INK = '#101828';
+export const IOS_MUTED = '#667085';
+export const IOS_SERVICE_BLUE = '#1c529e';
+export const IOS_SERVICE_BLUE_DARK = '#12325f';
 export const IOS_TRANSPORTATION = '#2173b8';
 export const IOS_FOOD = '#cc731a';
 export const IOS_SHELTER = '#40804d';
@@ -37,37 +40,37 @@ export const IOS_SHELTER = '#40804d';
 export const STYLESHEET = `
 :root {
   --bg: ${IOS_GROUPED_BG};
-  --surface: #ffffff;
-  --bone: ${IOS_TEXT};
-  --bone-soft: #3a3a3c;
-  --bone-dim: #636366;
-  --olive: ${IOS_ACCENT};
-  --olive-deep: #17447f;
+  --surface: ${IOS_CARD};
+  --bone: ${IOS_INK};
+  --bone-soft: #344054;
+  --bone-dim: ${IOS_MUTED};
+  --olive: ${IOS_SERVICE_BLUE};
+  --olive-deep: ${IOS_SERVICE_BLUE_DARK};
   --transportation: ${IOS_TRANSPORTATION};
   --food: ${IOS_FOOD};
   --shelter: ${IOS_SHELTER};
   --danger: #c72626;
-  --line: rgba(60, 60, 67, 0.18);
-  --line-strong: rgba(60, 60, 67, 0.32);
-  --plate: #ffffff;
-  --focus: ${IOS_ACCENT};
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
-  --font-serif: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'SFMono-Regular', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --line: #d8dee8;
+  --line-strong: #98a2b3;
+  --plate: ${IOS_CARD};
+  --focus: #7eb8ff;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --font-serif: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
   color-scheme: light;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { color-scheme: light; background: var(--bg); }
+html { color-scheme: light; background: #f8fafc; }
 
 body {
   margin: 0;
   /* Relative units so text zoom and reflow (1.4.10, 1.4.4) work. */
   font: 1rem/1.5 var(--font-sans);
   color: var(--bone);
-  background: var(--bg);
   min-width: 320px;
+  background: radial-gradient(circle at 78% 10%, rgba(33, 115, 184, 0.12), transparent 28rem), #f8fafc;
 }
 
 /* 1.4.12 text spacing: never clip on user-adjusted spacing. */
@@ -75,7 +78,7 @@ p, li, dd { overflow-wrap: break-word; }
 
 .shell {
   position: relative;
-  max-width: 38rem;
+  max-width: 42rem;
   margin: 0 auto;
   /* Room for the fixed bottom nav so it never covers the last action.
      Safe-area inset keeps primary actions clear of a notched home indicator. */
@@ -88,20 +91,17 @@ p, li, dd { overflow-wrap: break-word; }
   justify-content: space-between;
   gap: 0.75rem;
   margin: 0 0 1.25rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(16, 24, 40, 0.09);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  color: var(--olive);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  color: var(--olive-deep);
+  font-weight: 800;
+  letter-spacing: 0.11em;
 }
 
 .brand-name {
@@ -109,18 +109,26 @@ p, li, dd { overflow-wrap: break-word; }
 }
 
 .zero-mark {
-  display: block;
+  display: grid;
   flex: none;
-  color: var(--olive);
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--olive);
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .status-pill {
   margin: 0;
   padding: 0.35rem 0.7rem;
-  border: 1px solid rgba(28, 82, 158, 0.24);
-  border-radius: 999px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
   color: var(--olive-deep);
-  background: rgba(28, 82, 158, 0.08);
+  background: var(--surface);
   font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 500;
@@ -138,15 +146,16 @@ p, li, dd { overflow-wrap: break-word; }
 h1 {
   margin: 0 0 0.65rem;
   font-family: var(--font-serif);
-  font-size: clamp(2rem, 8vw, 2.7rem);
-  font-weight: 700;
+  color: var(--olive-deep);
+  font-size: clamp(2.35rem, 8vw, 3.6rem);
+  font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.03em;
 }
 
 h2 {
   font-size: 1.05rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.3;
   margin: 1.5rem 0 0.5rem;
 }
@@ -242,14 +251,15 @@ h3 { font-size: 1rem; margin: 1rem 0 0.25rem; }
   border: 1px solid var(--olive);
   color: #ffffff;
   background: var(--olive);
+  box-shadow: 0 10px 26px rgba(28, 82, 158, 0.24);
 }
 
 .action-secondary {
   border: 1px solid var(--line);
 }
 
-.action:hover { background: var(--olive-deep); }
-.action-secondary:hover { background: rgba(28, 82, 158, 0.08); }
+.action:hover { background: #164984; }
+.action-secondary:hover { background: #e9f1fb; }
 
 button.action,
 button.action-secondary {
@@ -278,7 +288,7 @@ form {
 }
 
 .logout-action:hover {
-  background: rgba(199, 38, 38, 0.08);
+  background: #fceaea;
 }
 
 label {
@@ -345,8 +355,8 @@ select {
   margin: 1rem 0 1.25rem;
   padding: 0.9rem;
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: var(--surface);
+  border-radius: 16px;
+  background: var(--plate);
 }
 
 .field-note {
@@ -377,8 +387,8 @@ fieldset.check-in-options {
   margin: 0.75rem 0;
   padding: 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
+  border-radius: 16px;
+  background: var(--plate);
 }
 
 fieldset.check-in-options legend {
@@ -409,7 +419,8 @@ a, button, input, [role="button"] {
 
 .card-grid {
   display: grid;
-  /* The native HomeView uses one full-width service card per row. */
+  /* Mobile-first: one column so 320 CSS px never grows a second 9rem track
+     (1.4.10). Two columns only when 9rem + gap + 9rem fits the shell. */
   grid-template-columns: 1fr;
   gap: 0.75rem;
   padding: 0;
@@ -417,16 +428,22 @@ a, button, input, [role="button"] {
   list-style: none;
 }
 
+@media (min-width: 22.5rem) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  }
+}
+
 .card {
   display: block;
   min-height: 5rem;
   padding: 1rem;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 16px;
   background: var(--surface);
   color: var(--bone);
   text-decoration: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 3px 10px rgba(16, 24, 40, 0.06);
 }
 
 .card-category-shelter { border-left: 5px solid var(--shelter); }
@@ -455,7 +472,7 @@ a, button, input, [role="button"] {
   padding: 0.75rem;
   border: 1px solid var(--line);
   border-left: 3px solid var(--olive);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--surface);
 }
 
@@ -463,19 +480,9 @@ a, button, input, [role="button"] {
   padding: 0.75rem;
   border: 1px dashed var(--line-strong);
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--plate);
   color: var(--bone-dim);
 }
-
-.crisis-card {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  border: 1px solid rgba(199, 38, 38, 0.18);
-  border-radius: 16px;
-  background: rgba(199, 38, 38, 0.06);
-}
-
-.crisis-card h2 { margin-top: 0; }
 
 .mobile-nav {
   position: fixed;
@@ -494,9 +501,9 @@ a, button, input, [role="button"] {
   justify-content: center;
   min-height: ${String(PRIMARY_TARGET_PX)}px;
   padding: 0.5rem;
+  color: var(--bone-dim);
   font-weight: 600;
   text-decoration: none;
-  color: var(--bone-dim);
 }
 
 .mobile-nav a[aria-current='page'] {
@@ -529,7 +536,7 @@ dd {
   align-items: center;
   min-height: ${String(PRIMARY_TARGET_PX)}px;
   padding: 0.75rem 1rem;
-  background: var(--olive);
+  background: var(--olive-deep);
   color: #ffffff;
   font-weight: 600;
   text-decoration: none;
