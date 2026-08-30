@@ -363,7 +363,7 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
         : p({ class: 'muted' }, 'Email sign-in is not available in this environment.'),
     ),
   ]);
-  return assertSurface('ENROLLMENT', markup);
+  return assertSurface('ENROLLMENT', markup, role === 'responder' ? 'RESPONDER' : 'VETERAN');
 }
 
 export function renderEmailOtp(model: EmailOtpViewModel): string {
