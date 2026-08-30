@@ -109,6 +109,7 @@ import {
   NonOperationalCategoryError,
   renderActiveNeeds,
   renderAdminOverview,
+  renderAdminPlannedSurface,
   renderChat,
   renderCheckInSession,
   renderCheckInStart,
@@ -1234,6 +1235,33 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     }
     return reply.redirect('/app/admin?provider=routing-saved', 303);
   });
+
+  const plannedAdminRoutes = [
+    ['/app/admin/organizations', 'Organizations'],
+    ['/app/admin/access', 'Access'],
+    ['/app/admin/artifacts', 'Published artifacts'],
+    ['/app/admin/providers', 'Provider adapters'],
+    ['/app/admin/operations', 'Platform operations'],
+    ['/app/admin/audit', 'Audit explorer'],
+  ] as const;
+  for (const [path, title] of plannedAdminRoutes) {
+    app.get(path, async (request, reply) => {
+      const context = await adminContext(request, `Viewing ${title}`);
+      return reply
+        .status(501)
+        .type(HTML)
+        .send(
+          renderAdminPlannedSurface({
+            shell: shell('SUAS Admin', { viewport: 'DESKTOP', showMobileNav: false }),
+            title,
+            scope: context.tenantId,
+            reason:
+              'This module remains disabled until its released API, authorization, and audit contract is available.',
+            backHref: '/app/admin',
+          }),
+        );
+    });
+  }
 
   app.get('/app/admin', async (request, reply) => {
     const context = await adminContext(request, 'Viewing the admin overview');

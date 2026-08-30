@@ -78,6 +78,7 @@ export {
 export {
   renderActiveNeeds,
   renderAdminOverview,
+  renderAdminPlannedSurface,
   renderChat,
   renderConsentsList,
   renderCheckInSession,
@@ -108,6 +109,7 @@ export {
   type AdminProviderCatalogViewModel,
   type AdminProviderConfigurationViewModel,
   type AdminOverviewViewModel,
+  type AdminPlannedSurfaceViewModel,
   type ChatAvailability,
   type ChatThreadViewModel,
   type ChatViewModel,
