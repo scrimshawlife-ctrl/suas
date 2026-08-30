@@ -37,6 +37,7 @@ import { registerTrustedContactRoutes } from './routes/trusted-contacts.js';
 import { registerUiRoutes } from './routes/ui.js';
 import { registerVeteranRoutes } from './routes/veterans.js';
 import { registerVaSandboxOAuthRoutes } from './routes/va-sandbox-oauth.js';
+import { registerDevRoutes } from './routes/dev.js';
 
 export interface ServerDependencies {
   readonly config: SuasConfig;
@@ -221,6 +222,17 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       delivery: deps.challengeDelivery,
       mfa: deps.mfa,
     });
+
+    // LOCAL-only developer harness for the iOS app (code retrieval + status
+    // simulation). Registered only in the synthetic LOCAL environment class and
+    // never in TEST/STAGING/PRODUCTION. See routes/dev.ts for the rationale.
+    if (deps.config.environment === 'LOCAL') {
+      registerDevRoutes(app, {
+        pool,
+        sessionSecret: deps.config.sessionSecret,
+        delivery: deps.challengeDelivery,
+      });
+    }
 
     // ENVIRONMENT.md §8 allows provenance on an admin/debug surface. Slice 3
     // supplies the admin authorization that Slice 1 lacked, so the route is now
