@@ -361,12 +361,6 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
           )
         : p({ class: 'muted' }, 'Email sign-in is not available in this environment.'),
     ),
-    section(
-      { 'aria-labelledby': 'role' },
-      h2({ id: 'role' }, 'Use a different role'),
-      a({ class: 'action', href: '/app/join?role=veteran' }, 'Veteran'),
-      a({ class: 'action', href: '/app/join?role=responder' }, 'Responder or Peer Counselor'),
-    ),
   ]);
   return assertSurface('ENROLLMENT', markup);
 }

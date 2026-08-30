@@ -84,10 +84,10 @@ export const REQUIRED_SURFACES: readonly SurfaceRequirement[] = [
   },
   {
     id: 'ENROLLMENT',
-    referenceAnchor: 'Join the Mission; Veteran vs Responder',
+    referenceAnchor: 'Role-select landing; role-specific sign-in',
     conformance: 'MUST_PRESERVE_BEHAVIOR',
     audience: 'PUBLIC',
-    requiredElements: ['Join the Mission', 'Veteran', 'Responder'],
+    requiredElements: ['Join the Mission', 'Sign in to continue', 'Veteran'],
     divergences: ['§7.1 enrollment copy'],
   },
   {

@@ -709,16 +709,17 @@ describe('HTML command targets stay on registered /app routes', () => {
     expect(inFlight).not.toContain('Deploy QRF');
   });
 
-  it('keeps enrollment role links on /app/join instead of a dead path', () => {
+  it('keeps role-specific sign-in focused and leaves role choice on the landing page', () => {
     const markup = renderEnrollment({
       shell: { title: 'Join the Mission', viewport: 'MOBILE', showMobileNav: false },
       contactChannelRequirement:
         'We need an email address or mobile number to send your sign-in code.',
+      selectedRole: 'veteran',
     });
-    expect(markup).toContain('href="/app/join?role=veteran"');
-    expect(markup).toContain('href="/app/join?role=responder"');
-    expect(markup).not.toContain('href="/app/join/veteran"');
-    expect(markup).not.toContain('href="/app/join/responder"');
+    expect(markup).toContain('Sign in to continue');
+    expect(markup).toContain('Veteran');
+    expect(markup).not.toContain('href="/app/join?role=veteran"');
+    expect(markup).not.toContain('href="/app/join?role=responder"');
   });
 
   it('does not post On Duty to /app/responder/availability', () => {
