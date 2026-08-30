@@ -8,15 +8,15 @@
  *   ordinary logs; credentials outside domain records), §11 (provider-specific
  *   statuses must not leak into product contracts)
  * - SUAS-specs ARCHITECTURE.md §11 (`EmailPort`, `SmsPort`)
- * - SUAS-specs ENVIRONMENT.md §3 (`SUAS_EMAIL_MODE` / `SUAS_SMS_MODE` are
- *   `disabled|fake|sink` on the 0.2.0 pin; production external modes are not
- *   valid. `ResendEmailChannel` exists as EmailPort code and is not selected.)
+ * - SUAS-specs ENVIRONMENT.md §3 (`SUAS_EMAIL_MODE` adds D-004 `resend`;
+ *   `SUAS_SMS_MODE` remains `disabled|fake|sink`.)
  *
  * IN_APP is internal and always available: it writes to SUAS's own store rather
  * than contacting a provider, so no vendor decision gates it.
  */
 
 import type { CommunicationMode, SuasConfig } from '../config/index.js';
+import { createResendEmailChannel } from './resend-email.js';
 
 export const NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'IN_APP'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
@@ -174,15 +174,23 @@ export class FailingChannel implements NotificationChannelPort {
  * port at all, so the caller reports the channel unavailable instead of faking a
  * send. IN_APP is internal and always present.
  *
- * ENVIRONMENT.md §3 has not released a selectable `resend` mode, so EMAIL stays
- * on {@link RecordingChannel} even when Resend credentials are present.
+ * D-004 selects Resend as the sole external EMAIL provider. Fake and sink stay
+ * recording-only; `resend` constructs the adapter with validated configuration.
  */
 export function createChannelRegistry(
   config: SuasConfig,
 ): Map<NotificationChannel, NotificationChannelPort> {
   const registry = new Map<NotificationChannel, NotificationChannelPort>();
 
-  if (config.notifications.email !== 'disabled') {
+  if (config.notifications.email === 'resend') {
+    registry.set(
+      'EMAIL',
+      createResendEmailChannel({
+        apiKey: config.notifications.resendApiKey,
+        fromAddress: config.notifications.emailFrom,
+      }),
+    );
+  } else if (config.notifications.email !== 'disabled') {
     registry.set('EMAIL', new RecordingChannel('EMAIL', config.notifications.email));
   }
   if (config.notifications.sms !== 'disabled') {

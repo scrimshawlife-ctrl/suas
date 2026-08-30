@@ -35,6 +35,8 @@ export interface WorkerBindings {
   readonly DATABASE_POOL_MAX?: string | undefined;
   readonly SUAS_MIGRATIONS_MODE?: string | undefined;
   readonly SUAS_SESSION_SECRET?: string | undefined;
+  readonly SUAS_BROWSER_AUTH_MODE?: string | undefined;
+  readonly SUAS_BROWSER_TENANT_ID?: string | undefined;
   readonly SUAS_VA_SANDBOX_OAUTH_ENABLED?: string | undefined;
   readonly SUAS_VA_SANDBOX_OAUTH_CLIENT_ID?: string | undefined;
   readonly SUAS_VA_SANDBOX_OAUTH_CLIENT_SECRET?: string | undefined;

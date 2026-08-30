@@ -69,7 +69,9 @@ and endpoint values marked pilot/prod/production.
 
 ## Resend and browser safety
 
-STAGING keeps `SUAS_EMAIL_MODE=sink`; therefore it must not send Resend email.
+The Worker STAGING surface uses Resend only for released browser authentication
+to owner-approved enrolled test identities. GitHub Pages remains static and
+does not hold or send provider credentials.
 If a later authorized server-side mode uses Resend, the API key belongs in the
 Worker secret store, not `vars` or any public prefix. A test email address is
 not configured in this repository and must be supplied only through an approved

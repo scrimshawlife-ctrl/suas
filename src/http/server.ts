@@ -207,6 +207,9 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       config: deps.config,
       safetyCopyMode: deps.config.safetyCopyMode,
       supportSignalMode: deps.config.supportSignalMode,
+      ...(deps.challengeDelivery !== undefined
+        ? { challengeDelivery: deps.challengeDelivery }
+        : {}),
       ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
     });
   }

@@ -55,6 +55,15 @@ export interface EnrollmentViewModel {
    * the requirement instead of the reference's "No email" promise.
    */
   readonly contactChannelRequirement: string;
+  readonly authEnabled?: boolean;
+  readonly selectedRole?: 'veteran' | 'responder';
+}
+
+export interface EmailOtpViewModel {
+  readonly shell: ShellViewModel;
+  readonly destination: string;
+  readonly selectedRole: 'veteran' | 'responder';
+  readonly error?: string;
 }
 
 export interface QrfCardViewModel {

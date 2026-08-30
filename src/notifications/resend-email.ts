@@ -7,15 +7,13 @@
  * - SUAS-specs NOTIFICATIONS.md §2 (do not fake delivery), §6 (`accepted` is not
  *   delivered), §10 (no message bodies or credentials in ordinary logs), §11
  *   (provider statuses must not leak into product contracts)
- * - SUAS-specs ENVIRONMENT.md §3 (released `SUAS_EMAIL_MODE` stays
- *   `disabled|fake|sink`; this adapter is not a selectable mode), §5
+ * - SUAS-specs ENVIRONMENT.md §3 (`SUAS_EMAIL_MODE=resend`, D-004), §5
  *   (required secrets fail closed when this adapter is constructed), §6
  *   (email provider credentials are secrets)
  * - SUAS-specs AUTH.md §9 (challenge delivery uses this same EMAIL port)
  *
  * Official send API: HTTPS POST https://api.resend.com/emails
- * `createChannelRegistry` does not construct this class. ENVIRONMENT.md §3 has
- * not released a `resend` email mode.
+ * `createChannelRegistry` constructs this adapter only for the released mode.
  */
 
 import { fetchWithTimeout } from '../resilience/outbound-fetch.js';
@@ -68,7 +66,7 @@ export class ResendEmailMisconfiguredError extends Error {
 
 /**
  * Fail closed unless both the API key and from address are present.
- * Callers must not construct this adapter from `createChannelRegistry`.
+ * Construction fails closed unless both required configuration values exist.
  */
 function requireConfigured(value: string | undefined, label: string): string {
   if (value === undefined || value.trim() === '') {

@@ -12,14 +12,15 @@ import type { ConfigSource } from '../../src/config/index.js';
 export function validEnv(overrides: ConfigSource = {}): ConfigSource {
   return {
     SUAS_ENV: 'TEST',
-    SUAS_SPEC_VERSION: '0.4.0',
-    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.4.0.md',
+    SUAS_SPEC_VERSION: '0.6.0',
+    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.6.0.md',
     SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
     // Prefer TEST_DATABASE_URL when set (local non-5432 Postgres); CI leaves the
     // default which matches the workflow service on :5432.
     DATABASE_URL: testDatabaseUrl(),
     DATABASE_POOL_MAX: '5',
     SUAS_MIGRATIONS_MODE: 'validate',
+    SUAS_BROWSER_AUTH_MODE: 'disabled',
     SUAS_EMAIL_MODE: 'fake',
     SUAS_SMS_MODE: 'fake',
     SUAS_TRANSPORTATION_ADAPTER_MODE: 'fake',

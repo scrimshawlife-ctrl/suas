@@ -1,35 +1,35 @@
 # Email vendor — Resend EmailPort: conformance record
 
-**Released spec stack:** `0.2.0`
-**Release manifest:** `RELEASE_MANIFEST-0.2.0.md`
-**Specs merge:** `4a722e69ad8f7ff45a9581ca3bdd022bdf524f8f`
+**Released spec stack:** `0.6.0`
+**Release manifest:** `RELEASE_MANIFEST-0.6.0.md`
+**Specs merge:** `fb27e54114c003c15f7bc74254e0c26c0da1ec0a`
 **Stage:** `SPEC-017`
 **Production/pilot readiness:** `NOT_READY` (unchanged)
 
-This record implements the Resend EMAIL capability port. It does not send
-mail. It does not deploy a Worker. It does not close D-001–D-005, D-004,
-D-006, or SPEC-018. It does not set `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=true`.
+This record implements the Resend EMAIL capability port selected by D-004.
+It does not close D-002, D-006, or SPEC-018. It does not set
+`SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=true`.
 
 ## 1. Released spec citations
 
-| Spec                        | Sections relied on                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `ENVIRONMENT.md`            | §3 notifications (`disabled\|fake\|sink` only), §3 rules 3–4, §5 required secrets, §6–§7 secret classes |
-| `NOTIFICATIONS.md`          | §2 do not fake delivery, §6 accepted ≠ delivered, §10 no bodies/credentials in logs, §11 no vendor leak |
-| `AUTH.md`                   | §2 passwordless where email is configured, §9 provider-neutral delivery; do not fake success            |
-| `ARCHITECTURE.md`           | §11 `EmailPort`, §13 finite timeouts                                                                    |
-| `RELEASE_MANIFEST-0.2.0.md` | Readiness boundary; SPEC-017 stays not ready                                                            |
+| Spec                        | Sections relied on                                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `ENVIRONMENT.md`            | §3 notifications (`disabled\|fake\|sink\|resend`), §3 rules 3–4, §5 required secrets, §6–§7 secret classes |
+| `NOTIFICATIONS.md`          | §2 do not fake delivery, §6 accepted ≠ delivered, §10 no bodies/credentials in logs, §11 no vendor leak    |
+| `AUTH.md`                   | §2 passwordless where email is configured, §9 provider-neutral delivery; do not fake success               |
+| `ARCHITECTURE.md`           | §11 `EmailPort`, §13 finite timeouts                                                                       |
+| `RELEASE_MANIFEST-0.6.0.md` | D-004 and browser-auth boundary; SPEC-017 stays not ready                                                  |
 
 ## 2. Change map — file to spec section
 
 | Path                                  | Implements                                                          |
 | ------------------------------------- | ------------------------------------------------------------------- |
 | `src/notifications/resend-email.ts`   | ARCHITECTURE.md §11 EmailPort; NOTIFICATIONS.md §2, §6, §10–§11     |
-| `src/notifications/channels.ts`       | ENVIRONMENT.md §3 — registry stays on `RecordingChannel`            |
+| `src/notifications/channels.ts`       | ENVIRONMENT.md §3 — Resend selected only in `resend` mode           |
 | `src/auth/delivery.ts`                | AUTH.md §9 — same EMAIL port; no second Resend client               |
-| `src/config/schema.ts`                | ENVIRONMENT.md §3, §5 — optional slots; `resend` mode still closed  |
+| `src/config/schema.ts`                | ENVIRONMENT.md §3, §5 — released mode and required slots            |
 | `src/worker/env.ts`                   | Optional bindings; secrets never in `vars`                          |
-| `docs/runbooks/cloudflare-workers.md` | Operator note: email stays sink; Resend secret is later             |
+| `docs/runbooks/cloudflare-workers.md` | Operator configuration for Resend and browser auth                  |
 | `src/notifications/templates.ts`      | NOTIFICATIONS.md §7–§8, §10; AUTH.md §2–§3; SAFETY_COPY.md §2.3, §4 |
 
 ## 3. Vendor pick and lock
@@ -39,13 +39,9 @@ The connected Resend account already has a verified sending domain
 `us-east-1`). That is observed domain verification. It is not a chosen
 from-line. This record does not invent a mailbox.
 
-The 0.2.0 pin still lists `SUAS_EMAIL_MODE` as `disabled|fake|sink` and
-says production external email is not valid. Adding `resend` to
-`COMMUNICATION_MODES` would fail spec-alignment. The adapter is real
-code. The registry and default committed config stay on `sink`.
-
-D-004 (email provider) is not filed. D-006 stays pending. This record
-does not claim those decisions closed.
+The 0.6.0 pin adds `resend` to `SUAS_EMAIL_MODE` and closes D-004. The
+registry selects the adapter only for that mode. D-006 and production
+readiness stay pending.
 
 ## 4. Evidence
 
@@ -57,8 +53,8 @@ does not claim those decisions closed.
 | Structured logs omit Authorization, API keys, and message bodies           | same file                                 |
 | Missing key or from address fails closed at adapter construction           | same file                                 |
 | Challenge EMAIL uses the same `ResendEmailChannel.send` path               | same file                                 |
-| `createChannelRegistry` stays on `RecordingChannel` when credentials exist | same file                                 |
-| Default `sink` still starts; `resend` mode is rejected                     | `tests/unit/config.test.ts`               |
+| `createChannelRegistry` selects Resend only in `resend` mode               | same file                                 |
+| TEST rejects `resend`; configured STAGING accepts it                       | `tests/unit/config.test.ts`               |
 | Real-effects flag stays rejected                                           | same file                                 |
 | No API key or from-address mailbox in `wrangler.jsonc`                     | `tests/unit/repository-hygiene.test.ts`   |
 | Every shipped EMAIL template renders subject + text + html                 | `tests/unit/email-templates.test.ts`      |
@@ -71,11 +67,10 @@ does not claim those decisions closed.
 
 ## 5. Environment and configuration changes
 
-Optional `RESEND_API_KEY` and `SUAS_EMAIL_FROM` appear in the typed schema
-and `.env.example` as empty slots. They are not required at startup.
-`wrangler.jsonc` `vars` stay `SUAS_EMAIL_MODE=sink` and
-`SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`. The Worker isolate still rejects
-`apply` migrations and real external effects.
+`RESEND_API_KEY` and `SUAS_EMAIL_FROM` are required when Resend is selected.
+`wrangler.jsonc` selects `SUAS_EMAIL_MODE=resend` and keeps
+`SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`. The API key remains a platform
+secret. The Worker isolate still rejects `apply` migrations and support effects.
 
 ## 6. Migration notes
 
@@ -99,19 +94,15 @@ No schema change. Expected version remains `11`.
 
 ## 9. Availability boundaries preserved
 
-No `UNAVAILABLE`, `MANUAL_ONLY`, `INFORMATION_ONLY`, or `FUTURE` feature
-becomes operational. Email stays sink. SMS stays sink. Twilio is not
-wired. Real external effects stay false. `SUAS_ENV=PRODUCTION` stays
+Only the released authentication EMAIL path becomes operational in STAGING.
+SMS stays sink. Real support effects stay false. `SUAS_ENV=PRODUCTION` stays
 rejected. SPEC-018 is not authorized.
 
 ## 10. Semantic gaps returned to `SUAS-specs`
 
-1. **ENVIRONMENT.md §3 still forbids a named real email mode.** The Resend
-   port cannot be selected without a released mode value and a closed
-   provider decision (D-004).
-2. **D-006 remains pending.** This record does not classify legal status.
-3. **No from-address mailbox is chosen.** Operators set `SUAS_EMAIL_FROM`
-   only after a released mode can select Resend.
+1. **D-006 remains pending.** This record does not classify legal status.
+2. **Sender identity remains deployment-owned.** Operators set
+   `SUAS_EMAIL_FROM` in the protected environment configuration.
 
 ## 11. EMAIL templates (`email-templates/v1`)
 
@@ -147,7 +138,7 @@ Test-only enqueue keys `drill_provider_outage` / `drill_duplicate_webhook` /
 `drill@1` were not shipped. Those drills now use `followup_due` / `followup@1`.
 
 `attemptSend` and challenge EMAIL go through `renderEmailTemplate`.
-`createChannelRegistry` stays on `RecordingChannel`. Email stays sink.
+`createChannelRegistry` selects `ResendEmailChannel` only in `resend` mode.
 
 ## 12. Readiness statement
 

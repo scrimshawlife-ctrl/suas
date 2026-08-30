@@ -31,8 +31,8 @@ describe('valid configuration', () => {
   it('accepts a released-conformant TEST configuration', () => {
     const config = loadConfig(validEnv());
     expect(config.environment).toBe('TEST');
-    expect(config.specVersion).toBe('0.4.0');
-    expect(config.releaseManifest).toBe('RELEASE_MANIFEST-0.4.0.md');
+    expect(config.specVersion).toBe('0.6.0');
+    expect(config.releaseManifest).toBe('RELEASE_MANIFEST-0.6.0.md');
     expect(config.allowRealExternalEffects).toBe(false);
     expect(config.adapters.peerSupport).toBe('manual');
     expect(config.supportSignalMode).toBe('fixture');
@@ -217,7 +217,7 @@ describe('SECURITY.md — provider endpoint configuration', () => {
   });
 });
 
-describe('ENVIRONMENT.md §3 — unavailable vendor surfaces stay unavailable', () => {
+describe('ENVIRONMENT.md §3 — provider surfaces fail closed', () => {
   it('rejects a real fulfillment adapter and cites the owning decisions', () => {
     const issues = issuesFor(validEnv({ SUAS_TRANSPORTATION_ADAPTER_MODE: 'uber' }));
     expect(issues.join('\n')).toContain('D-017–D-020');
@@ -225,11 +225,50 @@ describe('ENVIRONMENT.md §3 — unavailable vendor surfaces stay unavailable', 
 
   it.each([
     ['SUAS_EMAIL_MODE', 'sendgrid'],
-    ['SUAS_EMAIL_MODE', 'resend'],
     ['SUAS_SMS_MODE', 'twilio'],
   ])('rejects a production communications vendor in %s', (varName, value) => {
     const issues = issuesFor(validEnv({ [varName]: value }));
     expect(issues.join('\n')).toContain(`${varName}="${value}" is not a released value`);
+  });
+
+  it('accepts Resend only in STAGING with required configuration', () => {
+    const config = loadConfig(
+      validEnv({
+        SUAS_ENV: 'STAGING',
+        SUAS_EMAIL_MODE: 'resend',
+        RESEND_API_KEY: 'test-resend-key-not-a-secret',
+        SUAS_EMAIL_FROM: 'sender@example.invalid',
+      }),
+    );
+    expect(config.notifications.email).toBe('resend');
+  });
+
+  it('rejects Resend in LOCAL/TEST and when required configuration is absent', () => {
+    const testIssues = issuesFor(
+      validEnv({
+        SUAS_EMAIL_MODE: 'resend',
+        RESEND_API_KEY: 'test-resend-key-not-a-secret',
+        SUAS_EMAIL_FROM: 'sender@example.invalid',
+      }),
+    );
+    expect(testIssues.join('\n')).toContain('forbidden in TEST');
+
+    const missing = issuesFor(validEnv({ SUAS_ENV: 'STAGING', SUAS_EMAIL_MODE: 'resend' }));
+    expect(missing.join('\n')).toContain('RESEND_API_KEY is required');
+    expect(missing.join('\n')).toContain('SUAS_EMAIL_FROM is required');
+  });
+
+  it('requires a fixed tenant for browser EMAIL OTP', () => {
+    const issues = issuesFor(validEnv({ SUAS_BROWSER_AUTH_MODE: 'email_otp' }));
+    expect(issues.join('\n')).toContain('SUAS_BROWSER_TENANT_ID is required');
+
+    const config = loadConfig(
+      validEnv({
+        SUAS_BROWSER_AUTH_MODE: 'email_otp',
+        SUAS_BROWSER_TENANT_ID: '11111111-1111-4111-8111-111111111111',
+      }),
+    );
+    expect(config.browserAuth.mode).toBe('email_otp');
   });
 
   it('rejects a malformed SUAS_EMAIL_FROM without requiring the slot', () => {

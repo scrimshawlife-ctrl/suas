@@ -82,3 +82,4 @@ export {
   type MfaFactorType,
   type MfaPort,
 } from './mfa.js';
+export { verifyAndCreateSession, type VerifyAndCreateSessionInput } from './login.js';

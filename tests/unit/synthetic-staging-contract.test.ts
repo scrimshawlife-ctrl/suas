@@ -5,7 +5,9 @@ const safeSyntheticStagingConfig = {
   SUAS_ENV: 'STAGING',
   SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
   SUAS_MIGRATIONS_MODE: 'validate',
-  SUAS_EMAIL_MODE: 'sink',
+  SUAS_BROWSER_AUTH_MODE: 'email_otp',
+  SUAS_BROWSER_TENANT_ID: '00000000-0000-4000-8000-000000000001',
+  SUAS_EMAIL_MODE: 'resend',
   SUAS_SMS_MODE: 'sink',
   SUAS_TRANSPORTATION_ADAPTER_MODE: 'fake',
   SUAS_SHELTER_ADAPTER_MODE: 'fake',
@@ -25,14 +27,14 @@ describe('synthetic STAGING contract', () => {
     const errors = syntheticStagingContractErrors({
       ...safeSyntheticStagingConfig,
       SUAS_ENV: undefined,
-      SUAS_EMAIL_MODE: 'resend',
+      SUAS_EMAIL_MODE: 'sink',
     });
 
     expect(errors).toContain('SUAS_ENV must be "STAGING".');
-    expect(errors).toContain('SUAS_EMAIL_MODE must be "sink".');
+    expect(errors).toContain('SUAS_EMAIL_MODE must be "resend".');
   });
 
-  it('rejects public secrets, direct Resend use, and pilot-marked endpoints', () => {
+  it('rejects public secrets, committed Resend secrets, and pilot-marked endpoints', () => {
     const errors = syntheticStagingContractErrors({
       ...safeSyntheticStagingConfig,
       VITE_RESEND_API_KEY: 'not-allowed',

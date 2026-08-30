@@ -37,6 +37,7 @@ import { createServer } from './http/server.js';
 import { buildInfo, type BuildInfo } from './provenance/build-info.js';
 import { RELEASE_MANIFEST, SPEC_VERSION } from './release/pins.js';
 import { createFulfillmentAdapterRegistry, type AdapterRegistry } from './fulfillment/index.js';
+import { createChannelRegistry } from './notifications/index.js';
 
 export interface StartedApp {
   readonly config: SuasConfig;
@@ -147,11 +148,11 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
           },
         );
 
-  // 4. Authentication capability ports. Neither contacts a real provider: the
-  // delivery port reports a disabled channel as unavailable rather than faking a
-  // send (AUTH.md §9), and the MFA factor is a test factor that PRODUCTION
-  // refuses outright (AUTH.md §4).
-  const challengeDelivery = createChallengeDelivery(config);
+  // 4. Authentication capability ports. EMAIL OTP uses the same EmailPort as
+  // notifications. D-004 selects Resend only when the released mode is active;
+  // fake/sink remain recording-only.
+  const channelRegistry = createChannelRegistry(config);
+  const challengeDelivery = createChallengeDelivery(config, channelRegistry);
   const mfa = createMfaPort(config);
 
   // 5. Provider-neutral fulfillment adapter composition. Uber is optional and

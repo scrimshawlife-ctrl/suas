@@ -26,12 +26,16 @@ export const MIGRATIONS_MODES = ['off', 'validate', 'apply'] as const;
 export type MigrationsMode = (typeof MIGRATIONS_MODES)[number];
 
 /**
- * ENVIRONMENT.md §3 "Notifications". Production external modes are not valid
- * on the 0.2.0 pin. `ResendEmailChannel` exists as EmailPort code; `resend`
- * is not a released `SUAS_EMAIL_MODE` value.
+ * ENVIRONMENT.md §3 "Notifications". Resend is the sole released EMAIL
+ * provider. SMS remains restricted to the provider-neutral test modes.
  */
 export const COMMUNICATION_MODES = ['disabled', 'fake', 'sink'] as const;
 export type CommunicationMode = (typeof COMMUNICATION_MODES)[number];
+export const EMAIL_MODES = [...COMMUNICATION_MODES, 'resend'] as const;
+export type EmailMode = (typeof EMAIL_MODES)[number];
+
+export const BROWSER_AUTH_MODES = ['disabled', 'email_otp'] as const;
+export type BrowserAuthMode = (typeof BROWSER_AUTH_MODES)[number];
 
 /** ENVIRONMENT.md §3 "Fulfillment adapters". Real adapter modes require D-017–D-020. */
 export const ADAPTER_MODES = [
@@ -147,6 +151,12 @@ const rawConfigSchema = z.object({
 
   // --- Auth / sessions. ENVIRONMENT.md §3, §6. ---
   SUAS_SESSION_SECRET: optionalRaw,
+  SUAS_BROWSER_AUTH_MODE: requiredEnum(
+    'SUAS_BROWSER_AUTH_MODE',
+    BROWSER_AUTH_MODES,
+    'ENVIRONMENT.md §3 "Auth / sessions".',
+  ),
+  SUAS_BROWSER_TENANT_ID: optionalRaw,
 
   // D-035 evidence only. This is opt-in and never enables production wiring.
   SUAS_VA_SANDBOX_OAUTH_ENABLED: optionalRaw,
@@ -163,15 +173,15 @@ const rawConfigSchema = z.object({
   // --- Notifications. ENVIRONMENT.md §3. ---
   SUAS_EMAIL_MODE: requiredEnum(
     'SUAS_EMAIL_MODE',
-    COMMUNICATION_MODES,
-    'Production external email is not valid in v0.1.1; the email provider decision has not closed.',
+    EMAIL_MODES,
+    'D-004 selects Resend as the sole EMAIL provider.',
   ),
   SUAS_SMS_MODE: requiredEnum(
     'SUAS_SMS_MODE',
     COMMUNICATION_MODES,
     'Production external SMS is not valid in v0.1.1; the SMS provider decision has not closed.',
   ),
-  // Optional Resend slots. Unused while SUAS_EMAIL_MODE cannot be `resend`.
+  // Resend slots are required only when the released mode is selected.
   // Secrets stay empty in committed examples (ENVIRONMENT.md §6–§7).
   RESEND_API_KEY: optionalRaw,
   SUAS_EMAIL_FROM: optionalRaw,
@@ -252,6 +262,10 @@ export interface SuasConfig {
     readonly migrationsMode: MigrationsMode;
   };
   readonly sessionSecret: string | undefined;
+  readonly browserAuth: {
+    readonly mode: BrowserAuthMode;
+    readonly tenantId: string | undefined;
+  };
   readonly vaSandboxOAuth: {
     readonly enabled: boolean;
     readonly clientId: string | undefined;
@@ -265,7 +279,7 @@ export interface SuasConfig {
     readonly jwksJson: string | undefined;
   };
   readonly notifications: {
-    readonly email: CommunicationMode;
+    readonly email: EmailMode;
     readonly sms: CommunicationMode;
     readonly resendApiKey: string | undefined;
     readonly emailFrom: string | undefined;
@@ -590,8 +604,48 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
     });
   }
 
-  // Optional from-address slot for the Resend EmailPort. The 0.2.0 pin does
-  // not select that adapter, so absence is valid. A present value must be an
+  if (raw.SUAS_BROWSER_AUTH_MODE === 'email_otp') {
+    if (raw.SUAS_BROWSER_TENANT_ID === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SUAS_BROWSER_TENANT_ID is required when SUAS_BROWSER_AUTH_MODE=email_otp.',
+      });
+    } else if (!z.string().uuid().safeParse(raw.SUAS_BROWSER_TENANT_ID).success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SUAS_BROWSER_TENANT_ID must be a UUID.',
+      });
+    }
+    if (raw.SUAS_EMAIL_MODE === 'disabled') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Browser EMAIL OTP requires an available EMAIL mode.',
+      });
+    }
+  }
+
+  if (raw.SUAS_EMAIL_MODE === 'resend') {
+    if (environment === 'LOCAL' || environment === 'TEST') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `SUAS_EMAIL_MODE=resend is forbidden in ${environment}; use fake or sink.`,
+      });
+    }
+    if (raw.RESEND_API_KEY === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'RESEND_API_KEY is required when SUAS_EMAIL_MODE=resend.',
+      });
+    }
+    if (raw.SUAS_EMAIL_FROM === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SUAS_EMAIL_FROM is required when SUAS_EMAIL_MODE=resend.',
+      });
+    }
+  }
+
+  // The from-address is required in Resend mode. A present value must be an
   // address shape; this check does not choose a mailbox.
   if (
     raw.SUAS_EMAIL_FROM !== undefined &&
@@ -629,6 +683,10 @@ export function shapeConfig(
       migrationsMode: raw.SUAS_MIGRATIONS_MODE,
     },
     sessionSecret: raw.SUAS_SESSION_SECRET,
+    browserAuth: {
+      mode: raw.SUAS_BROWSER_AUTH_MODE,
+      tenantId: raw.SUAS_BROWSER_TENANT_ID,
+    },
     vaSandboxOAuth: {
       enabled: raw.SUAS_VA_SANDBOX_OAUTH_ENABLED === 'true',
       clientId: raw.SUAS_VA_SANDBOX_OAUTH_CLIENT_ID,

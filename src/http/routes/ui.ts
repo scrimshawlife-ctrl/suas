@@ -24,6 +24,13 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import {
+  ChallengeVerificationFailedError,
+  issueChallenge,
+  revokeSession,
+  verifyAndCreateSession,
+  type ChallengeDeliveryPort,
+} from '../../auth/index.js';
+import {
   assertMfaElevated,
   assertResponder,
   assertSuasAdmin,
@@ -53,6 +60,7 @@ import {
   SERVICE_CATEGORIES,
 } from '../../coordination/index.js';
 import { withTransaction } from '../../db/index.js';
+import { appendAuditEvent } from '../../events/index.js';
 import {
   RESOURCE_DEFAULT_PAGE_SIZE,
   RESOURCE_MAX_PAGE_SIZE,
@@ -100,6 +108,7 @@ import {
   renderCheckInSession,
   renderCheckInStart,
   renderEnrollment,
+  renderEmailOtp,
   renderImmediateResources,
   renderLanding,
   renderConsentsList,
@@ -117,7 +126,7 @@ import {
   type ShellViewModel,
 } from '../../ui/index.js';
 import { readActiveQrf } from '../../ui/read.js';
-import { authenticate } from '../authenticate.js';
+import { authenticate, BROWSER_SESSION_COOKIE } from '../authenticate.js';
 
 export interface UiRouteDependencies {
   readonly pool: Pool;
@@ -127,9 +136,30 @@ export interface UiRouteDependencies {
   readonly safetyCopyMode: SafetyCopyMode;
   readonly supportSignalMode: SupportSignalMode;
   readonly jobQueue?: DurableJobQueuePort;
+  readonly challengeDelivery?: ChallengeDeliveryPort;
 }
 
 const HTML = 'text/html; charset=utf-8';
+
+const joinQuery = z.object({
+  role: z.enum(['veteran', 'responder']).optional().default('veteran'),
+});
+const browserChallengeBody = z.object({
+  destination: z.string().email().max(320),
+  role: z.enum(['veteran', 'responder']),
+});
+const browserVerifyBody = browserChallengeBody.extend({
+  code: z.string().min(1).max(512),
+});
+
+function browserSessionCookie(credential: string, expiresAt: Date): string {
+  const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+  return `${BROWSER_SESSION_COOKIE}=${encodeURIComponent(credential)}; Max-Age=${maxAge}; Path=/app; Secure; HttpOnly; SameSite=Strict`;
+}
+
+function clearBrowserSessionCookie(): string {
+  return `${BROWSER_SESSION_COOKIE}=; Max-Age=0; Path=/app; Secure; HttpOnly; SameSite=Strict`;
+}
 
 function shell(title: string, overrides: Partial<ShellViewModel> = {}): ShellViewModel {
   return {
@@ -300,18 +330,131 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     );
   });
 
-  app.get('/app/join', async (_request, reply) => {
-    // Display-only. AUTH.md challenge issue/verify exist on `/api/v0/auth`, but
-    // HTML join cannot resolve tenant (Slice 3 gap), cannot enroll a new User,
-    // and cannot persist a Bearer session. See SLICE_10_UI_COMMANDS.md §4.
+  app.get('/app/join', async (request, reply) => {
+    const query = joinQuery.parse(request.query ?? {});
     await reply.type(HTML).send(
       renderEnrollment({
         shell: shell('Join the Mission', { showMobileNav: false }),
-        // §7.1: the reference's "No email" promise contradicts AUTH.md.
+        authEnabled: config.browserAuth.mode === 'email_otp',
+        selectedRole: query.role,
         contactChannelRequirement:
-          'We need an email address or mobile number to send your sign-in code.',
+          'Use the email address already enrolled for this environment. We send a sign-in code; this does not create a new account.',
       }),
     );
+  });
+
+  app.post('/app/auth/challenges', async (request, reply) => {
+    const body = browserChallengeBody.parse(request.body);
+    const tenantId = config.browserAuth.tenantId;
+    if (
+      config.browserAuth.mode !== 'email_otp' ||
+      tenantId === undefined ||
+      deps.challengeDelivery === undefined
+    ) {
+      return reply
+        .status(503)
+        .type(HTML)
+        .send(
+          renderEnrollment({
+            shell: shell('Join the Mission', { showMobileNav: false }),
+            authEnabled: false,
+            selectedRole: body.role,
+            contactChannelRequirement: 'Email sign-in is not available in this environment.',
+          }),
+        );
+    }
+
+    await issueChallenge(
+      { pool, sessionSecret, delivery: deps.challengeDelivery },
+      {
+        tenantId,
+        destination: body.destination,
+        method: 'EMAIL_OTP',
+        correlationId: String(request.id),
+      },
+    );
+
+    return reply.type(HTML).send(
+      renderEmailOtp({
+        shell: shell('Check your email', { showMobileNav: false }),
+        destination: body.destination,
+        selectedRole: body.role,
+      }),
+    );
+  });
+
+  app.post('/app/auth/verify', async (request, reply) => {
+    const body = browserVerifyBody.parse(request.body);
+    const tenantId = config.browserAuth.tenantId;
+    if (
+      config.browserAuth.mode !== 'email_otp' ||
+      tenantId === undefined ||
+      deps.challengeDelivery === undefined
+    ) {
+      return reply
+        .status(503)
+        .type(HTML)
+        .send(
+          renderEmailOtp({
+            shell: shell('Check your email', { showMobileNav: false }),
+            destination: body.destination,
+            selectedRole: body.role,
+            error: 'Email sign-in is not available in this environment.',
+          }),
+        );
+    }
+
+    try {
+      const issued = await verifyAndCreateSession(
+        { pool, sessionSecret, delivery: deps.challengeDelivery },
+        {
+          tenantId,
+          destination: body.destination,
+          code: body.code,
+          correlationId: String(request.id),
+        },
+      );
+      void reply.header(
+        'set-cookie',
+        browserSessionCookie(issued.credential, issued.session.expiresAt),
+      );
+      return reply.redirect(body.role === 'responder' ? '/app/responder' : '/app/home', 303);
+    } catch (error: unknown) {
+      if (!(error instanceof ChallengeVerificationFailedError)) throw error;
+      return reply
+        .status(401)
+        .type(HTML)
+        .send(
+          renderEmailOtp({
+            shell: shell('Check your email', { showMobileNav: false }),
+            destination: body.destination,
+            selectedRole: body.role,
+            error: 'The sign-in code is invalid or has expired.',
+          }),
+        );
+    }
+  });
+
+  app.post('/app/auth/logout', async (request, reply) => {
+    const context = await authenticate(pool, sessionSecret, request);
+    await withTransaction(pool, async (tx) => {
+      await revokeSession(tx, context.session.sessionId, 'LOGOUT');
+      await appendAuditEvent(tx, {
+        eventType: 'AUTH_SESSION_INVALIDATED',
+        action: 'REVOKE_SESSION',
+        targetType: 'Session',
+        targetId: context.session.sessionId,
+        aggregateType: 'User',
+        aggregateId: context.userId,
+        tenantId: context.tenantId,
+        actorType: 'SYSTEM',
+        actorId: context.userId,
+        payload: { scope: 'CURRENT', channel: 'BROWSER' },
+        correlationId: String(request.id),
+      });
+    });
+    void reply.header('set-cookie', clearBrowserSessionCookie());
+    return reply.redirect('/app', 303);
   });
 
   // --- Veteran surfaces ------------------------------------------------------
