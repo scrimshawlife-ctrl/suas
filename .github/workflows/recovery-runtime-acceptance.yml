@@ -70,9 +70,16 @@ jobs:
       - name: Create isolated Hyperdrive
         run: |
           set +x
+          set +e
           output=$(npx wrangler hyperdrive create "$HYPERDRIVE_NAME" \
             --connection-string "$(cat .isolated-database-url)" \
             --sslmode require 2>&1)
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            printf '%s\n' "$output" | sed -E 's#(postgres|postgresql)://[^ ]+#postgres://REDACTED#g'
+            exit "$status"
+          fi
           hyperdrive_id=$(printf '%s' "$output" | grep -Eo '[0-9a-f]{32}' | tail -1)
           test -n "$hyperdrive_id"
           echo "HYPERDRIVE_ID=$hyperdrive_id" >> "$GITHUB_ENV"
