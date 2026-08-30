@@ -150,8 +150,8 @@ describe('MVP_REFERENCE.md §7.2 — the veteran home is truthful about QRF', ()
     expect(markup).not.toMatch(/\b988\b/);
   });
 
-  it('shows Pages chrome without adding a Check-In surface to the §11 fixture', () => {
-    expect(markup).toContain('zer0state');
+  it('shows iOS-reference chrome without adding a Check-In surface to the §11 fixture', () => {
+    expect(markup).toContain('class="brand-name">SUAS');
     expect(markup).toContain('SPEC-017 · NOT READY');
     expect(markup).toContain('Deploy QRF');
     expect(markup).not.toContain('Check-in');
