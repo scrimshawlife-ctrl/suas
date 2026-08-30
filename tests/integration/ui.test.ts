@@ -128,7 +128,7 @@ describe('MVP_REFERENCE.md §5 — public surfaces', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('Join the Mission');
-    expect(response.body).toContain('sign-in code');
+    expect(response.body).toContain('Sign in to continue');
     // §7.1: the prototype's "No email" copy contradicts AUTH.md.
     expect(response.body).not.toContain('No email');
   });

@@ -334,17 +334,13 @@ export function renderLanding(model: LandingViewModel): string {
 
 export function renderEnrollment(model: EnrollmentViewModel): string {
   const role = model.selectedRole ?? 'veteran';
+  const roleLabel = role === 'responder' ? 'Responder or Peer Counselor' : 'Veteran';
   const markup = document(model.shell, [
     h1({}, 'Join the Mission'),
     section(
-      { 'aria-labelledby': 'role' },
-      h2({ id: 'role' }, 'Choose your role'),
-      a({ class: 'action', href: '/app/join?role=veteran' }, 'Veteran'),
-      a({ class: 'action', href: '/app/join?role=responder' }, 'Responder or Peer Counselor'),
-    ),
-    section(
-      { 'aria-labelledby': 'contact' },
-      h2({ id: 'contact' }, 'How we reach you'),
+      { 'aria-labelledby': 'sign-in' },
+      h2({ id: 'sign-in' }, 'Sign in to continue'),
+      p({ class: 'kicker' }, roleLabel),
       // §7.1: replaces the reference's "No email" promise with the truth.
       p({}, model.contactChannelRequirement),
       // 3.3.2 labels; 1.3.5 autocomplete.
@@ -358,11 +354,18 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
               name: 'destination',
               type: 'email',
               autocomplete: 'email',
+              autocapitalize: 'none',
               required: true,
             }),
             button({ class: 'action', type: 'submit' }, 'Send sign-in code'),
           )
         : p({ class: 'muted' }, 'Email sign-in is not available in this environment.'),
+    ),
+    section(
+      { 'aria-labelledby': 'role' },
+      h2({ id: 'role' }, 'Use a different role'),
+      a({ class: 'action', href: '/app/join?role=veteran' }, 'Veteran'),
+      a({ class: 'action', href: '/app/join?role=responder' }, 'Responder or Peer Counselor'),
     ),
   ]);
   return assertSurface('ENROLLMENT', markup);
@@ -370,28 +373,30 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
 
 export function renderEmailOtp(model: EmailOtpViewModel): string {
   return document(model.shell, [
-    h1({}, 'Check your email'),
-    p(
-      {},
-      'If this address is enrolled, we sent a one-time sign-in code. The same message is shown for every address.',
-    ),
+    h1({}, 'Enter the code'),
+    p({}, `If this email is enrolled, a one-time sign-in code was sent to ${model.destination}.`),
     model.error === undefined ? undefined : p({ class: 'error' }, model.error),
     form(
       { method: 'post', action: '/app/auth/verify' },
       input({ type: 'hidden', name: 'destination', value: model.destination }),
       input({ type: 'hidden', name: 'role', value: model.selectedRole }),
-      label({ for: 'sign-in-code' }, 'Sign-in code'),
+      label({ for: 'sign-in-code' }, '6-digit code'),
       input({
         id: 'sign-in-code',
         name: 'code',
         type: 'text',
         inputmode: 'numeric',
         autocomplete: 'one-time-code',
+        maxlength: 6,
+        pattern: '[0-9]{6}',
         required: true,
       }),
-      button({ class: 'action', type: 'submit' }, 'Sign in'),
+      button({ class: 'action', type: 'submit' }, 'Verify & continue'),
     ),
-    a({ class: 'action-secondary', href: `/app/join?role=${model.selectedRole}` }, 'Start again'),
+    a(
+      { class: 'action-secondary', href: `/app/join?role=${model.selectedRole}` },
+      'Use a different email',
+    ),
   ]);
 }
 
