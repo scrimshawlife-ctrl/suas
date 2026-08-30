@@ -645,16 +645,18 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
     }
   }
 
-  // The from-address is required in Resend mode. A present value must be an
-  // address shape; this check does not choose a mailbox.
+  // The sender is required in Resend mode. Resend accepts either a bare
+  // address or the standard display-name form: "Name <address>".
   if (
     raw.SUAS_EMAIL_FROM !== undefined &&
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.SUAS_EMAIL_FROM)
+    !/^(?:[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+|[^<>\r\n]+\s<[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>)$/.test(
+      raw.SUAS_EMAIL_FROM,
+    )
   ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message:
-        'SUAS_EMAIL_FROM must be an email address when set. Leave it empty in committed files.',
+        'SUAS_EMAIL_FROM must be an email address or display-name sender when set. Leave it empty in committed files.',
     });
   }
 });

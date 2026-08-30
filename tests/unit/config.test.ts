@@ -243,6 +243,18 @@ describe('ENVIRONMENT.md §3 — provider surfaces fail closed', () => {
     expect(config.notifications.email).toBe('resend');
   });
 
+  it('accepts a Resend display-name sender', () => {
+    const config = loadConfig(
+      validEnv({
+        SUAS_ENV: 'STAGING',
+        SUAS_EMAIL_MODE: 'resend',
+        RESEND_API_KEY: 'test-resend-key-not-a-secret',
+        SUAS_EMAIL_FROM: 'SUAS Auth <auth@example.invalid>',
+      }),
+    );
+    expect(config.notifications.emailFrom).toBe('SUAS Auth <auth@example.invalid>');
+  });
+
   it('rejects Resend in LOCAL/TEST and when required configuration is absent', () => {
     const testIssues = issuesFor(
       validEnv({
@@ -273,7 +285,13 @@ describe('ENVIRONMENT.md §3 — provider surfaces fail closed', () => {
 
   it('rejects a malformed SUAS_EMAIL_FROM without requiring the slot', () => {
     const issues = issuesFor(validEnv({ SUAS_EMAIL_FROM: 'not-an-address' }));
-    expect(issues.join('\n')).toContain('SUAS_EMAIL_FROM must be an email address when set');
+    expect(issues.join('\n')).toContain(
+      'SUAS_EMAIL_FROM must be an email address or display-name sender when set',
+    );
+    const unterminated = issuesFor(validEnv({ SUAS_EMAIL_FROM: 'SUAS Auth <auth@example.com' }));
+    expect(unterminated.join('\n')).toContain(
+      'SUAS_EMAIL_FROM must be an email address or display-name sender when set',
+    );
     expect(loadConfig(validEnv()).notifications.emailFrom).toBeUndefined();
   });
 
