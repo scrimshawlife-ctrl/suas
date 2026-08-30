@@ -110,6 +110,8 @@ describe('browser response hardening', () => {
     expect(web.statusCode).toBe(200);
     expect(web.headers['content-security-policy']).toContain("script-src 'none'");
     expect(web.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(web.headers['content-security-policy']).toContain("style-src 'self' 'sha256-");
+    expect(web.headers['content-security-policy']).not.toContain("'unsafe-inline'");
     expect(web.headers['strict-transport-security']).toContain('max-age=31536000');
     expect(web.headers['x-content-type-options']).toBe('nosniff');
     expect(web.headers['x-frame-options']).toBe('DENY');
