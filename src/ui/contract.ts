@@ -88,6 +88,10 @@ export const REQUIRED_SURFACES: readonly SurfaceRequirement[] = [
     conformance: 'MUST_PRESERVE_BEHAVIOR',
     audience: 'PUBLIC',
     requiredElements: ['Join the Mission', 'Sign in to continue', 'Veteran'],
+    stateVariants: {
+      VETERAN: ['Join the Mission', 'Sign in to continue', 'Veteran'],
+      RESPONDER: ['Join the Mission', 'Sign in to continue', 'Responder or Peer Counselor'],
+    },
     divergences: ['§7.1 enrollment copy'],
   },
   {
