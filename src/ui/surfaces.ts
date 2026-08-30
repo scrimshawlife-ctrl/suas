@@ -94,16 +94,6 @@ import type {
 } from './view-models.js';
 import type { CategoryCard } from './categories.js';
 
-/**
- * Pages typefaces. Same families as `docs/index.html`; fallbacks stay in
- * `theme.ts` if the network request does not complete.
- */
-const FONT_LINKS = [
-  '<link rel="preconnect" href="https://fonts.googleapis.com">',
-  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
-  '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">',
-].join('\n');
-
 /** Circle plus horizontal axis. Not a vertical strike. */
 const ZERO_MARK = raw(
   '<svg class="zero-mark" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">' +
@@ -158,7 +148,6 @@ function document(shell: ShellViewModel, body: Renderable): string {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0B0D0C">
 <title>${render(shell.title)} — SUAS</title>
-${FONT_LINKS}
 <style>${STYLESHEET}</style>
 </head>
 <body>${render([

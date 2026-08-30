@@ -84,11 +84,18 @@ test.describe('deployed public boundary', () => {
   });
 
   test('@public landing and enrollment render in Chromium', async ({ page }) => {
+    const externalFontRequests: string[] = [];
+    page.on('request', (request) => {
+      if (/^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//.test(request.url())) {
+        externalFontRequests.push(request.url());
+      }
+    });
     const landing = await page.goto('/app', { waitUntil: 'domcontentloaded' });
     expect(landing?.status()).toBe(200);
     expect(landing?.headers()['content-security-policy']).toContain("script-src 'none'");
     expect(landing?.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
-    expect(landing?.headers()['content-security-policy']).toContain("style-src 'self' 'sha256-");
+    expect(landing?.headers()['content-security-policy']).toContain("style-src 'sha256-");
+    expect(landing?.headers()['content-security-policy']).toContain("font-src 'none'");
     expect(landing?.headers()['content-security-policy']).not.toContain("'unsafe-inline'");
     expect(landing?.headers()['strict-transport-security']).toContain('max-age=31536000');
     expect(landing?.headers()['x-frame-options']).toBe('DENY');
@@ -98,6 +105,7 @@ test.describe('deployed public boundary', () => {
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(11, 13, 12)');
     await expect(page.locator('body')).toHaveCSS('color', 'rgb(232, 228, 214)');
+    expect(externalFontRequests).toEqual([]);
     await expect(page).toHaveTitle(/Shut Up and Serve/i);
     await expect(page.getByText('Veteran peer support', { exact: false })).toBeVisible();
 

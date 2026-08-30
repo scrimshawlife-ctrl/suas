@@ -23,9 +23,14 @@ describe('browser response security headers', () => {
     const digest = createHash('sha256').update(STYLESHEET, 'utf8').digest('base64');
     expect(INLINE_STYLESHEET_SHA256).toBe(digest);
     expect(BROWSER_SECURITY_HEADERS['content-security-policy']).toContain(
-      `style-src 'self' 'sha256-${digest}' https://fonts.googleapis.com`,
+      `style-src 'sha256-${digest}'`,
     );
+    expect(BROWSER_SECURITY_HEADERS['content-security-policy']).toContain("font-src 'none'");
     expect(BROWSER_SECURITY_HEADERS['content-security-policy']).not.toContain("'unsafe-inline'");
+    expect(BROWSER_SECURITY_HEADERS['content-security-policy']).not.toContain(
+      'fonts.googleapis.com',
+    );
+    expect(BROWSER_SECURITY_HEADERS['content-security-policy']).not.toContain('fonts.gstatic.com');
   });
 
   it('prevents caching application and canonical API responses', () => {
