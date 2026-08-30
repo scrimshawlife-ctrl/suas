@@ -94,13 +94,8 @@ import type {
 } from './view-models.js';
 import type { CategoryCard } from './categories.js';
 
-/** Circle plus horizontal axis. Not a vertical strike. */
-const ZERO_MARK = raw(
-  '<svg class="zero-mark" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">' +
-    '<circle cx="16" cy="16" r="8.25" fill="none" stroke="currentColor" stroke-width="1.35"></circle>' +
-    '<line x1="3.5" y1="16" x2="28.5" y2="16" stroke="currentColor" stroke-width="1.35"></line>' +
-    '</svg>',
-);
+/** Wordmark tile from the shipped iOS operator reference. */
+const ZERO_MARK = raw('<span class="zero-mark" aria-hidden="true">S</span>');
 
 /** Canonical loop. CONTEXT.md; do not invent steps. */
 const CANONICAL_LOOP = [
@@ -121,7 +116,7 @@ const CANONICAL_LOOP = [
 function siteChrome(shell: ShellViewModel): Renderable {
   return header(
     { class: 'site-chrome' },
-    span({ class: 'brand' }, ZERO_MARK, span({ class: 'brand-name' }, 'zer0state')),
+    span({ class: 'brand' }, ZERO_MARK, span({ class: 'brand-name' }, 'SUAS')),
     p({ class: 'status-pill' }, 'SPEC-017 · NOT READY'),
     shell.showMobileNav
       ? form(
@@ -146,7 +141,7 @@ function document(shell: ShellViewModel, body: Renderable): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F2F2F7">
+<meta name="theme-color" content="#12325F">
 <title>${render(shell.title)} — SUAS</title>
 <style>${STYLESHEET}</style>
 </head>
@@ -208,7 +203,7 @@ function dutyUnavailability(duty: DutyAvailability): Renderable {
 export function immediateResources(mode: SafetyCopyMode = 'placeholder_test_only'): Renderable {
   const slot = resolveImmediateResourceSlot(mode);
   return section(
-    { class: 'crisis-card', 'aria-labelledby': 'immediate-resources' },
+    { 'aria-labelledby': 'immediate-resources' },
     h2({ id: 'immediate-resources' }, 'Immediate Resources'),
     slot.state === 'PLACEHOLDER'
       ? div({ class: 'reserved-slot' }, p({}, slot.placeholder ?? ''))
