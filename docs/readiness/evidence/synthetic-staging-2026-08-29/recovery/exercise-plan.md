@@ -26,6 +26,19 @@
 9. Abort on schema divergence without approved explanation, acknowledged-job loss, completed-job replay, external effect, pilot/production data, secret leakage, missing loss boundary, or missing RTO/RPO evidence.
 10. Preserve the target until evidence review or explicit teardown approval. Escalate failure through the named owner and incident route.
 
+## Synthetic durable-job fixture preparation
+
+Before creating the approved recovery snapshot, install the deterministic durable-job dataset in the authorized synthetic STAGING database:
+
+```sh
+SUAS_RECOVERY_FIXTURE_CONFIRM=INSTALL_SYNTHETIC_RECOVERY_FIXTURES \
+  npm run seed:staging:recovery
+```
+
+The command enforces the canonical synthetic-environment guard, requires `SUAS_ENV=STAGING`, and requires the explicit confirmation value above. It is idempotent and installs seven synthetic jobs covering due and scheduled work, active and expired leases, success, retry, and dead-letter states. It does not start workers, call providers, or release external effects, and it reports aggregate counts only.
+
+Run the command only after approval to mutate the authorized synthetic STAGING database. Create the recovery snapshot after it succeeds, then use the restored rows to validate queued discovery, lease recovery, retry safety, terminal-state preservation, idempotency, and zero acknowledged-job loss.
+
 ## Completion definition
 
 Recovery completes only when the isolated target is reachable, the canonical schema comparison and deterministic integrity checks pass, durable-job recovery checks pass, application smoke checks pass, and calculated RTO/RPO evidence is recorded without sensitive values.

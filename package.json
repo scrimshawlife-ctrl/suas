@@ -32,6 +32,7 @@
     "provenance": "node --env-file=.env --import tsx/esm src/cli/provenance.ts",
     "seed": "node --env-file=.env --import tsx/esm src/cli/seed-local.ts",
     "seed:staging:sessions": "node --import tsx/esm src/cli/seed-staging-sessions.ts",
+    "seed:staging:recovery": "node --import tsx/esm src/cli/seed-recovery-fixtures.ts",
     "auth:staging:provision": "node --import tsx/esm src/cli/provision-staging-auth-users.ts",
     "jobs:work": "node --env-file=.env --import tsx/esm src/cli/job-worker.ts",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run staging:contract && npm run test && npm run openapi:check",
