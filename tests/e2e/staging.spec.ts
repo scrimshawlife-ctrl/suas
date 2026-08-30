@@ -111,6 +111,18 @@ test.describe('deployed public boundary', () => {
     });
   });
 
+  test('@public cross-origin browser-auth submissions fail closed', async ({ request }) => {
+    const response = await request.post('/app/auth/challenges', {
+      form: { destination: 'unknown-cross-origin@invalid.example', role: 'veteran' },
+      headers: {
+        origin: 'https://attacker.example',
+        'sec-fetch-site': 'cross-site',
+      },
+    });
+    expect(response.status()).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
+  });
+
   test('@public keyboard entry and 320px reflow work in Chromium', async ({ page }) => {
     await expectKeyboardEntry(page, '/app');
     await expectNoHorizontalOverflow(page, '/app');

@@ -33,7 +33,7 @@ function readCookie(request: FastifyRequest, name: string): string | undefined {
   return undefined;
 }
 
-function assertSameOriginBrowserWrite(request: FastifyRequest): void {
+export function assertSameOriginBrowserWrite(request: FastifyRequest): void {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
   const fetchSite = request.headers['sec-fetch-site'];
   if (fetchSite === 'cross-site') {

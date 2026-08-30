@@ -126,7 +126,11 @@ import {
   type ShellViewModel,
 } from '../../ui/index.js';
 import { readActiveQrf } from '../../ui/read.js';
-import { authenticate, BROWSER_SESSION_COOKIE } from '../authenticate.js';
+import {
+  assertSameOriginBrowserWrite,
+  authenticate,
+  BROWSER_SESSION_COOKIE,
+} from '../authenticate.js';
 
 export interface UiRouteDependencies {
   readonly pool: Pool;
@@ -344,6 +348,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   });
 
   app.post('/app/auth/challenges', async (request, reply) => {
+    assertSameOriginBrowserWrite(request);
     const body = browserChallengeBody.parse(request.body);
     const tenantId = config.browserAuth.tenantId;
     if (
@@ -384,6 +389,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   });
 
   app.post('/app/auth/verify', async (request, reply) => {
+    assertSameOriginBrowserWrite(request);
     const body = browserVerifyBody.parse(request.body);
     const tenantId = config.browserAuth.tenantId;
     if (
