@@ -9,9 +9,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   MIN_TARGET_PX,
-  PAGES_BG,
-  PAGES_BONE,
-  PAGES_OLIVE,
+  IOS_ACCENT,
+  IOS_FOOD,
+  IOS_GROUPED_BG,
+  IOS_SHELTER,
+  IOS_TEXT,
+  IOS_TRANSPORTATION,
   PRIMARY_TARGET_PX,
   STYLESHEET,
 } from '../../src/ui/theme.js';
@@ -27,8 +30,7 @@ describe('MVP_REFERENCE.md §10 — presentation floors', () => {
   it('does not force two 9rem columns at 320 CSS px', () => {
     const defaultGrid = /\.card-grid \{[\s\S]*?grid-template-columns: ([^;]+);/.exec(STYLESHEET);
     expect(defaultGrid?.[1]?.trim()).toBe('1fr');
-    expect(STYLESHEET).toContain('@media (min-width: 22.5rem)');
-    expect(STYLESHEET).toContain('repeat(auto-fit, minmax(9rem, 1fr))');
+    expect(STYLESHEET).not.toContain('repeat(auto-fit, minmax(9rem, 1fr))');
   });
 
   it('reveals the skip link on focus without parking it at -9999px', () => {
@@ -60,25 +62,33 @@ describe('MVP_REFERENCE.md §10 — landing document still permits zoom', () => 
   });
 });
 
-describe('Pages visual system — presentation tokens', () => {
-  it('uses the shipped dark Pages palette, not the retired light theme', () => {
-    expect(PAGES_BG).toBe('#0b0d0c');
-    expect(PAGES_BONE).toBe('#e8e4d6');
-    expect(PAGES_OLIVE).toBe('#9aaa5c');
-    expect(STYLESHEET).toContain(`--bg: ${PAGES_BG}`);
-    expect(STYLESHEET).toContain(`--bone: ${PAGES_BONE}`);
-    expect(STYLESHEET).toContain('color-scheme: dark');
-    expect(STYLESHEET).toContain('border-radius: 3px');
-    expect(STYLESHEET).not.toContain('#14425f');
-    expect(STYLESHEET).not.toContain('#b4530a');
-    expect(STYLESHEET).not.toContain('color-scheme: light');
+describe('Native iOS visual system — presentation tokens', () => {
+  it('uses the canonical iOS palette and grouped surface hierarchy', () => {
+    expect(IOS_GROUPED_BG).toBe('#f2f2f7');
+    expect(IOS_TEXT).toBe('#1c1c1e');
+    expect(IOS_ACCENT).toBe('#1c529e');
+    expect(IOS_TRANSPORTATION).toBe('#2173b8');
+    expect(IOS_FOOD).toBe('#cc731a');
+    expect(IOS_SHELTER).toBe('#40804d');
+    expect(STYLESHEET).toContain(`--bg: ${IOS_GROUPED_BG}`);
+    expect(STYLESHEET).toContain(`--bone: ${IOS_TEXT}`);
+    expect(STYLESHEET).toContain(`--olive: ${IOS_ACCENT}`);
+    expect(STYLESHEET).toContain('color-scheme: light');
+    expect(STYLESHEET).toContain('border-radius: 16px');
+    expect(STYLESHEET).not.toContain('color-scheme: dark');
   });
 
-  it('keeps focus visible on dark and does not use bone-mute for body text', () => {
+  it('keeps focus visible and secondary text above the body-text contrast floor', () => {
     expect(STYLESHEET).toContain('outline: 3px solid var(--focus)');
-    expect(STYLESHEET).toContain('--focus: #e8e4d6');
+    expect(STYLESHEET).toContain('--focus: #1c529e');
     expect(STYLESHEET).toContain('.muted { color: var(--bone-dim); }');
-    expect(STYLESHEET).not.toContain('--bone-mute');
+    expect(STYLESHEET).toContain('--bone-dim: #636366');
+  });
+
+  it('maps released service cards to the same category colors as iOS', () => {
+    expect(STYLESHEET).toContain('.card-category-shelter');
+    expect(STYLESHEET).toContain('.card-category-food');
+    expect(STYLESHEET).toContain('.card-category-transportation');
   });
 
   it('keeps required landing actions after shell chrome', () => {
