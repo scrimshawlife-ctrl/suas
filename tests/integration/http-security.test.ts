@@ -35,6 +35,7 @@ describe('SECURITY.md §2 — auth challenge abuse controls', () => {
 
     let limitedStatus: number | undefined;
     let limitedCode: string | undefined;
+    let retryAfter: string | undefined;
     for (let attempt = 0; attempt < CHALLENGE_ISSUE_LIMIT.value + 2; attempt += 1) {
       const response = await app.server.inject({
         method: 'POST',
@@ -44,12 +45,14 @@ describe('SECURITY.md §2 — auth challenge abuse controls', () => {
       if (response.statusCode === 429) {
         limitedStatus = response.statusCode;
         limitedCode = response.json().error?.code as string;
+        retryAfter = response.headers['retry-after'];
         break;
       }
       expect([202, 429]).toContain(response.statusCode);
     }
     expect(limitedStatus).toBe(429);
     expect(limitedCode).toBe('RATE_LIMITED');
+    expect(Number(retryAfter)).toBeGreaterThan(0);
   });
 });
 

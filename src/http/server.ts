@@ -68,8 +68,14 @@ export function listRegisteredApiRoutes(): readonly RegisteredApiRoute[] {
   return [...registeredApiRoutes];
 }
 
+interface DomainHttpError {
+  readonly code: string;
+  readonly httpStatus: number;
+  readonly retryAfterSeconds?: number;
+}
+
 /** Errors that declare a released API error code and HTTP status. API.md §6. */
-function asDomainError(error: unknown): { code: string; httpStatus: number } | undefined {
+function asDomainError(error: unknown): DomainHttpError | undefined {
   if (typeof error !== 'object' || error === null) return undefined;
 
   // API.md §6: a malformed request body is 400, not an internal failure.
@@ -77,10 +83,23 @@ function asDomainError(error: unknown): { code: string; httpStatus: number } | u
     return { code: 'VALIDATION_FAILED', httpStatus: 400 };
   }
 
-  const candidate = error as { code?: unknown; httpStatus?: unknown };
-  return typeof candidate.code === 'string' && typeof candidate.httpStatus === 'number'
-    ? { code: candidate.code, httpStatus: candidate.httpStatus }
-    : undefined;
+  const candidate = error as {
+    code?: unknown;
+    httpStatus?: unknown;
+    retryAfterSeconds?: unknown;
+  };
+  if (typeof candidate.code !== 'string' || typeof candidate.httpStatus !== 'number') {
+    return undefined;
+  }
+  return {
+    code: candidate.code,
+    httpStatus: candidate.httpStatus,
+    ...(typeof candidate.retryAfterSeconds === 'number' &&
+    Number.isFinite(candidate.retryAfterSeconds) &&
+    candidate.retryAfterSeconds > 0
+      ? { retryAfterSeconds: Math.ceil(candidate.retryAfterSeconds) }
+      : {}),
+  };
 }
 
 export function createServer(deps: ServerDependencies): FastifyInstance {
@@ -146,6 +165,10 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     // (API.md §6): for example IDEMPOTENCY_CONFLICT from the idempotency kernel.
     const domain = asDomainError(error);
     const status = domain?.httpStatus ?? error.statusCode ?? 500;
+
+    if (status === 429 && domain?.retryAfterSeconds !== undefined) {
+      void reply.header('retry-after', String(domain.retryAfterSeconds));
+    }
 
     if (status >= 500) {
       request.log.error({ err: error }, 'unhandled request failure');

@@ -65,6 +65,30 @@ async function expectKeyboardEntry(page: Page, path: string): Promise<void> {
 }
 
 test.describe('deployed public boundary', () => {
+  test('@public auth rate limits advertise a retry window', async ({ request }) => {
+    const destination = `unknown-rate-${Date.now()}@invalid.example`;
+    let limited: Awaited<ReturnType<typeof request.post>> | undefined;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await request.post('/api/v0/auth/challenges', {
+        data: {
+          tenant_id: '00000000-0000-4000-8000-000000000001',
+          destination,
+          method: 'EMAIL_OTP',
+        },
+      });
+      if (response.status() === 429) {
+        limited = response;
+        break;
+      }
+      expect(response.status()).toBe(202);
+    }
+
+    expect(limited?.status()).toBe(429);
+    expect(Number(limited?.headers()['retry-after'])).toBeGreaterThan(0);
+    expect(await limited?.json()).toMatchObject({ error: { code: 'RATE_LIMITED' } });
+  });
+
   test('@public health exposes durable synthetic-STAGING dependencies', async ({ request }) => {
     const response = await request.get('/api/v0/health');
     expect(response.status()).toBe(200);
