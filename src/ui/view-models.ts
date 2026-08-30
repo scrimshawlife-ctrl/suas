@@ -473,3 +473,12 @@ export interface AdminOverviewViewModel {
   readonly blockingDecisions: readonly string[];
   readonly readiness: string;
 }
+
+/** A proposed admin module whose canonical API/authorization slice is not released yet. */
+export interface AdminPlannedSurfaceViewModel {
+  readonly shell: ShellViewModel;
+  readonly title: string;
+  readonly scope: string;
+  readonly reason: string;
+  readonly backHref: string;
+}

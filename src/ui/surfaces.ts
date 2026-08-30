@@ -70,6 +70,7 @@ import type {
   ActiveNeedsViewModel,
   ActiveNeedViewModel,
   AdminOverviewViewModel,
+  AdminPlannedSurfaceViewModel,
   ChatViewModel,
   CheckInSessionViewModel,
   CheckInStartViewModel,
@@ -929,6 +930,21 @@ export function renderAdminOverview(model: AdminOverviewViewModel): string {
     h1({}, 'SUAS Admin'),
     // §7.5 also asks that role/tenant scope be clearer than the prototype.
     p({}, span({ class: 'badge' }, `Scope: ${model.tenantLabel}`)),
+    nav(
+      { 'aria-label': 'SUAS Admin sections' },
+      p({ class: 'kicker' }, 'ADMIN SECTIONS'),
+      ul(
+        { class: 'card-grid' },
+        [
+          ['/app/admin/organizations', 'Organizations'],
+          ['/app/admin/access', 'Access'],
+          ['/app/admin/artifacts', 'Published artifacts'],
+          ['/app/admin/providers', 'Provider adapters'],
+          ['/app/admin/operations', 'Platform operations'],
+          ['/app/admin/audit', 'Audit explorer'],
+        ].map(([href, label]) => li({ class: 'card' }, a({ href }, label))),
+      ),
+    ),
     model.notice === undefined ? undefined : p({ class: 'state' }, model.notice),
     section(
       { 'aria-labelledby': 'capabilities' },
@@ -997,6 +1013,26 @@ export function renderAdminOverview(model: AdminOverviewViewModel): string {
     ),
   ]);
   return assertSurface('ADMIN_OVERVIEW', markup);
+}
+
+/**
+ * Explicitly blocked admin module. API-gap pages are discoverable but cannot
+ * imply authority or offer controls before their canonical contracts release.
+ */
+export function renderAdminPlannedSurface(model: AdminPlannedSurfaceViewModel): string {
+  const markup = document(model.shell, [
+    h1({}, model.title),
+    p({}, span({ class: 'badge' }, 'SUAS Admin')),
+    p({}, span({ class: 'badge' }, `Scope: ${model.scope}`)),
+    section(
+      { 'aria-labelledby': 'status' },
+      h2({ id: 'status' }, 'Not available yet'),
+      p({ class: 'state' }, 'BLOCKED · API contract unavailable'),
+      p({}, model.reason),
+      a({ class: 'action-secondary', href: model.backHref }, 'Back to SUAS Admin'),
+    ),
+  ]);
+  return markup;
 }
 
 /**
