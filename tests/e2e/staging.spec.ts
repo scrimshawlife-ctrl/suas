@@ -151,6 +151,15 @@ test.describe('deployed public boundary', () => {
     expect(response.status()).toBe(413);
   });
 
+  test('@public browser-auth rejects non-form media types', async ({ request }) => {
+    const response = await request.post('/app/auth/challenges', {
+      data: { destination: 'unknown-json@invalid.example', role: 'veteran' },
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.status()).toBe(415);
+    expect(await response.json()).toMatchObject({ error: { code: 'UNSUPPORTED_MEDIA_TYPE' } });
+  });
+
   test('@public keyboard entry and 320px reflow work in Chromium', async ({ page }) => {
     await expectKeyboardEntry(page, '/app');
     await expectNoHorizontalOverflow(page, '/app');

@@ -101,6 +101,20 @@ describe('HTML passwordless sign-in', () => {
     expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
   });
 
+  it('rejects JSON challenge bodies before sending email', async () => {
+    const email = await enrolledEmail();
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': 'application/json' },
+      payload: { destination: email, role: 'veteran' },
+    });
+
+    expect(response.statusCode).toBe(415);
+    expect(response.json()).toMatchObject({ error: { code: 'UNSUPPORTED_MEDIA_TYPE' } });
+    expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
+  });
+
   it('rejects cross-origin verification requests before consuming a code', async () => {
     const email = await enrolledEmail();
     await app.server.inject({
@@ -160,6 +174,34 @@ describe('HTML passwordless sign-in', () => {
       method: 'POST',
       url: '/app/auth/verify',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: form({ destination: email, role: 'veteran', code }),
+    });
+    expect(accepted.statusCode).toBe(303);
+  });
+
+  it('rejects JSON verification bodies without consuming a code', async () => {
+    const email = await enrolledEmail();
+    await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
+
+    const rejected = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: { 'content-type': 'application/json' },
+      payload: { destination: email, role: 'veteran', code },
+    });
+    expect(rejected.statusCode).toBe(415);
+    expect(rejected.json()).toMatchObject({ error: { code: 'UNSUPPORTED_MEDIA_TYPE' } });
+
+    const accepted = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: { 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8' },
       payload: form({ destination: email, role: 'veteran', code }),
     });
     expect(accepted.statusCode).toBe(303);
