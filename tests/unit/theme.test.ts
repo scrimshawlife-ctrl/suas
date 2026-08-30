@@ -8,13 +8,16 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  MIN_TARGET_PX,
-  IOS_ACCENT,
+  IOS_CARD,
   IOS_FOOD,
   IOS_GROUPED_BG,
+  IOS_INK,
+  IOS_MUTED,
+  IOS_SERVICE_BLUE,
+  IOS_SERVICE_BLUE_DARK,
   IOS_SHELTER,
-  IOS_TEXT,
   IOS_TRANSPORTATION,
+  MIN_TARGET_PX,
   PRIMARY_TARGET_PX,
   STYLESHEET,
 } from '../../src/ui/theme.js';
@@ -30,7 +33,8 @@ describe('MVP_REFERENCE.md §10 — presentation floors', () => {
   it('does not force two 9rem columns at 320 CSS px', () => {
     const defaultGrid = /\.card-grid \{[\s\S]*?grid-template-columns: ([^;]+);/.exec(STYLESHEET);
     expect(defaultGrid?.[1]?.trim()).toBe('1fr');
-    expect(STYLESHEET).not.toContain('repeat(auto-fit, minmax(9rem, 1fr))');
+    expect(STYLESHEET).toContain('@media (min-width: 22.5rem)');
+    expect(STYLESHEET).toContain('repeat(auto-fit, minmax(9rem, 1fr))');
   });
 
   it('reveals the skip link on focus without parking it at -9999px', () => {
@@ -62,30 +66,33 @@ describe('MVP_REFERENCE.md §10 — landing document still permits zoom', () => 
   });
 });
 
-describe('Native iOS visual system — presentation tokens', () => {
-  it('uses the canonical iOS palette and grouped surface hierarchy', () => {
-    expect(IOS_GROUPED_BG).toBe('#f2f2f7');
-    expect(IOS_TEXT).toBe('#1c1c1e');
-    expect(IOS_ACCENT).toBe('#1c529e');
+describe('iOS operator visual system — presentation tokens', () => {
+  it('uses the exact shipped ios-operator palette', () => {
+    expect(IOS_GROUPED_BG).toBe('#f2f4f7');
+    expect(IOS_CARD).toBe('#ffffff');
+    expect(IOS_INK).toBe('#101828');
+    expect(IOS_MUTED).toBe('#667085');
+    expect(IOS_SERVICE_BLUE).toBe('#1c529e');
+    expect(IOS_SERVICE_BLUE_DARK).toBe('#12325f');
     expect(IOS_TRANSPORTATION).toBe('#2173b8');
     expect(IOS_FOOD).toBe('#cc731a');
     expect(IOS_SHELTER).toBe('#40804d');
     expect(STYLESHEET).toContain(`--bg: ${IOS_GROUPED_BG}`);
-    expect(STYLESHEET).toContain(`--bone: ${IOS_TEXT}`);
-    expect(STYLESHEET).toContain(`--olive: ${IOS_ACCENT}`);
+    expect(STYLESHEET).toContain(`--bone: ${IOS_INK}`);
+    expect(STYLESHEET).toContain(`--olive: ${IOS_SERVICE_BLUE}`);
     expect(STYLESHEET).toContain('color-scheme: light');
     expect(STYLESHEET).toContain('border-radius: 16px');
     expect(STYLESHEET).not.toContain('color-scheme: dark');
   });
 
-  it('keeps focus visible and secondary text above the body-text contrast floor', () => {
+  it('keeps reference focus and secondary-text treatment', () => {
     expect(STYLESHEET).toContain('outline: 3px solid var(--focus)');
-    expect(STYLESHEET).toContain('--focus: #1c529e');
+    expect(STYLESHEET).toContain('--focus: #7eb8ff');
     expect(STYLESHEET).toContain('.muted { color: var(--bone-dim); }');
-    expect(STYLESHEET).toContain('--bone-dim: #636366');
+    expect(STYLESHEET).toContain('--bone-dim: #667085');
   });
 
-  it('maps released service cards to the same category colors as iOS', () => {
+  it('maps operational service cards to the iOS category colors', () => {
     expect(STYLESHEET).toContain('.card-category-shelter');
     expect(STYLESHEET).toContain('.card-category-food');
     expect(STYLESHEET).toContain('.card-category-transportation');
@@ -97,6 +104,7 @@ describe('Native iOS visual system — presentation tokens', () => {
       missionLine: 'Veteran peer support, coordinated by people who served.',
     });
     expect(html).toContain('class="zero-mark"');
+    expect(html).toContain('class="brand-name">SUAS');
     expect(html).toContain('SPEC-017 · NOT READY');
     expect(html).toContain('I NEED SUPPORT');
     expect(html).toContain('I WANT TO SERVE');
