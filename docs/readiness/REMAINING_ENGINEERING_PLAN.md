@@ -89,7 +89,7 @@ The approved pilot challenge limits are now encoded. Remaining AUTH evidence is 
 
 #### 1. Resend email enablement
 
-The Resend adapter already exists and is tested, but `SUAS_EMAIL_MODE=resend` is intentionally not a released configuration value. After the specification releases the mode and the sender identity is approved:
+The Resend adapter is selected by D-004 / spec 0.6.0. To operate browser authentication in STAGING:
 
 1. add the released mode to the typed configuration contract
 2. select the existing Resend adapter from the channel registry

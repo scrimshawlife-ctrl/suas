@@ -7,6 +7,6 @@
 
 SUAS_SESSION_SECRET=
 
-# Resend is not selected. SUAS_EMAIL_MODE stays sink. If you store the key
-# later, use `wrangler secret put RESEND_API_KEY`. Do not put the key in vars.
-# Do not invent a from-address mailbox.
+# Resend is selected only in STAGING deployment configuration. For local work,
+# keep the EMAIL mode fake/sink. Never commit a filled API key.
+RESEND_API_KEY=

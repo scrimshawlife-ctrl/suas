@@ -1,7 +1,7 @@
 /**
  * D-035 VA sandbox OAuth route integration evidence.
  *
- * SUAS-specs release v0.4.0, RELEASE_MANIFEST-0.4.0.md, D-035 approved
+ * SUAS-specs release v0.6.0 (inheriting D-035), RELEASE_MANIFEST-0.6.0.md,
  * plan: disabled configuration is absent/fail-closed; OAuth entry and callback
  * require a session; cancellation and malformed callbacks do not echo input.
  */

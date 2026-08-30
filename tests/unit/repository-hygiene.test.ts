@@ -87,7 +87,8 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
     expect(wrangler).not.toMatch(/SUAS_EMAIL_FROM/);
     expect(wrangler).toContain('YOUR_HYPERDRIVE_ID');
     expect(wrangler).toContain('nodejs_compat');
-    expect(wrangler).toContain('"SUAS_EMAIL_MODE": "sink"');
+    expect(wrangler).toContain('"SUAS_EMAIL_MODE": "resend"');
+    expect(wrangler).toContain('"SUAS_BROWSER_AUTH_MODE": "email_otp"');
     expect(wrangler).toContain('"SUAS_ALLOW_REAL_EXTERNAL_EFFECTS": "false"');
   });
 

@@ -16,8 +16,7 @@
  *
  * Challenge EMAIL/SMS uses the same notification channel port as product
  * notifications. There is no second Resend client. `createChallengeDelivery`
- * stays on {@link RecordingChallengeDelivery} while ENVIRONMENT.md §3 forbids
- * a selectable `resend` mode.
+ * uses the Resend-backed EMAIL port when D-004's `resend` mode is selected.
  */
 
 import type { CommunicationMode, SuasConfig } from '../config/index.js';
@@ -238,10 +237,8 @@ function reportedDeliveryMode(
 /**
  * Build the delivery port for this configuration.
  *
- * ENVIRONMENT.md §3 still allows only disabled|fake|sink. When a caller
- * supplies an EMAIL port whose implementation is `resend`, challenges use
- * that same port. Configuration cannot select `resend`: the schema rejects
- * that value.
+ * When a caller supplies an EMAIL port whose implementation is `resend`,
+ * challenges use that same port.
  */
 export function createChallengeDelivery(
   config: SuasConfig,

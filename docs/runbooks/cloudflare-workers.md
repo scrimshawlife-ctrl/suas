@@ -81,10 +81,10 @@ SPEC-018. `PRODUCTION` also
 stays rejected until SPEC-018. Do not set
 `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=true`.
 
-Email and SMS stay `sink`. The Resend EmailPort exists in code and is not
-selected. If a later released email mode can select Resend, store
-`RESEND_API_KEY` with `wrangler secret put`. Do not put that key in `vars`.
-Do not commit a from-address mailbox. Do not add Twilio.
+EMAIL uses Resend under D-004. Store `RESEND_API_KEY` with `wrangler secret
+put`; keep `SUAS_EMAIL_FROM` in the protected GitHub Environment variable.
+Browser EMAIL OTP is pinned to the canonical synthetic tenant and only
+owner-approved STAGING test identities are provisioned. SMS stays `sink`.
 
 ## Local Worker
 
@@ -121,9 +121,9 @@ account/subdomain or a SUAS custom staging hostname. Keep the Worker named
 Environment `suas-synthetic-staging`, and use that origin for smoke tests.
 No hostname is committed as a default.
 
-This is **not** PRODUCTION and **not** SPEC-018 gate closure. Real external
-effects stay off (`SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`, email/SMS
-`sink`). Synthetic Neon only.
+This is **not** PRODUCTION and **not** SPEC-018 gate closure. Real support
+effects stay off (`SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`); only released
+authentication email may use Resend. SMS stays `sink`. Synthetic Neon only.
 
 Committed `wrangler.jsonc` keeps `YOUR_HYPERDRIVE_ID`. Live deploys use
 gitignored `wrangler.synthetic.jsonc` (real Hyperdrive id + build stamp).

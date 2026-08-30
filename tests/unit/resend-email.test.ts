@@ -20,7 +20,7 @@ import {
   ResendEmailMisconfiguredError,
   type FetchTransport,
   type OutboundMessage,
-  type ResendEmailChannel,
+  ResendEmailChannel,
   type ResendEmailLogRecord,
 } from '../../src/notifications/index.js';
 import { validEnv } from '../helpers/env.js';
@@ -361,23 +361,23 @@ describe('challenge delivery uses the same EMAIL port', () => {
   });
 });
 
-describe('ENVIRONMENT.md §3 — Resend is not a selectable email mode', () => {
-  it('keeps createChannelRegistry on RecordingChannel when Resend slots are set', () => {
+describe('ENVIRONMENT.md §3 — Resend is the released EMAIL mode', () => {
+  it('constructs ResendEmailChannel only when the mode is selected', () => {
     const config = loadConfig(
       validEnv({
-        SUAS_EMAIL_MODE: 'sink',
+        SUAS_ENV: 'STAGING',
+        SUAS_EMAIL_MODE: 'resend',
         RESEND_API_KEY: API_KEY,
         SUAS_EMAIL_FROM: FROM,
       }),
     );
     const registry = createChannelRegistry(config);
     const email = registry.get('EMAIL');
-    expect(email).toBeInstanceOf(RecordingChannel);
-    expect(email?.implementation).toBe('recording-fake');
-    expect(email?.implementation).not.toBe(RESEND_IMPLEMENTATION);
+    expect(email).toBeInstanceOf(ResendEmailChannel);
+    expect(email?.implementation).toBe(RESEND_IMPLEMENTATION);
   });
 
-  it('keeps createChallengeDelivery on the recording port', () => {
+  it('keeps fake mode on the recording port', () => {
     const config = loadConfig(
       validEnv({
         SUAS_EMAIL_MODE: 'fake',
@@ -387,5 +387,6 @@ describe('ENVIRONMENT.md §3 — Resend is not a selectable email mode', () => {
     );
     const delivery = createChallengeDelivery(config, createChannelRegistry(config));
     expect(delivery.implementation).toBe('recording-fake');
+    expect(createChannelRegistry(config).get('EMAIL')).toBeInstanceOf(RecordingChannel);
   });
 });

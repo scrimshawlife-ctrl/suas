@@ -74,6 +74,7 @@ import type {
   CheckInSessionViewModel,
   CheckInStartViewModel,
   EnrollmentViewModel,
+  EmailOtpViewModel,
   LandingViewModel,
   QrfCardViewModel,
   QrfRequestViewModel,
@@ -127,11 +128,17 @@ const CANONICAL_LOOP = [
  *
  * Not a surface. Sits outside `main` so the skip link still jumps to content.
  */
-function siteChrome(): Renderable {
+function siteChrome(shell: ShellViewModel): Renderable {
   return header(
     { class: 'site-chrome' },
     span({ class: 'brand' }, ZERO_MARK, span({ class: 'brand-name' }, 'zer0state')),
     p({ class: 'status-pill' }, 'SPEC-017 · NOT READY'),
+    shell.showMobileNav
+      ? form(
+          { method: 'post', action: '/app/auth/logout', class: 'logout-form' },
+          button({ class: 'logout-action', type: 'submit' }, 'Sign out'),
+        )
+      : undefined,
   );
 }
 
@@ -156,7 +163,7 @@ ${FONT_LINKS}
 </head>
 <body>${render([
         a({ href: '#main', class: 'skip-link' }, 'Skip to main content'),
-        div({ class: 'shell' }, [siteChrome(), main({ id: 'main' }, body)]),
+        div({ class: 'shell' }, [siteChrome(shell), main({ id: 'main' }, body)]),
         shell.showMobileNav ? mobileNav(shell) : undefined,
       ])}</body>
 </html>`),
@@ -335,6 +342,7 @@ export function renderLanding(model: LandingViewModel): string {
 }
 
 export function renderEnrollment(model: EnrollmentViewModel): string {
+  const role = model.selectedRole ?? 'veteran';
   const markup = document(model.shell, [
     h1({}, 'Join the Mission'),
     section(
@@ -349,17 +357,51 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
       // §7.1: replaces the reference's "No email" promise with the truth.
       p({}, model.contactChannelRequirement),
       // 3.3.2 labels; 1.3.5 autocomplete.
-      label({ for: 'contact-channel' }, 'Email or mobile number'),
-      input({
-        id: 'contact-channel',
-        name: 'contact',
-        type: 'text',
-        autocomplete: 'email',
-        required: true,
-      }),
+      model.authEnabled === true
+        ? form(
+            { method: 'post', action: '/app/auth/challenges' },
+            input({ type: 'hidden', name: 'role', value: role }),
+            label({ for: 'contact-channel' }, 'Email address'),
+            input({
+              id: 'contact-channel',
+              name: 'destination',
+              type: 'email',
+              autocomplete: 'email',
+              required: true,
+            }),
+            button({ class: 'action', type: 'submit' }, 'Send sign-in code'),
+          )
+        : p({ class: 'muted' }, 'Email sign-in is not available in this environment.'),
     ),
   ]);
   return assertSurface('ENROLLMENT', markup);
+}
+
+export function renderEmailOtp(model: EmailOtpViewModel): string {
+  return document(model.shell, [
+    h1({}, 'Check your email'),
+    p(
+      {},
+      'If this address is enrolled, we sent a one-time sign-in code. The same message is shown for every address.',
+    ),
+    model.error === undefined ? undefined : p({ class: 'error' }, model.error),
+    form(
+      { method: 'post', action: '/app/auth/verify' },
+      input({ type: 'hidden', name: 'destination', value: model.destination }),
+      input({ type: 'hidden', name: 'role', value: model.selectedRole }),
+      label({ for: 'sign-in-code' }, 'Sign-in code'),
+      input({
+        id: 'sign-in-code',
+        name: 'code',
+        type: 'text',
+        inputmode: 'numeric',
+        autocomplete: 'one-time-code',
+        required: true,
+      }),
+      button({ class: 'action', type: 'submit' }, 'Sign in'),
+    ),
+    a({ class: 'action-secondary', href: `/app/join?role=${model.selectedRole}` }, 'Start again'),
+  ]);
 }
 
 export function renderVeteranHome(model: VeteranHomeViewModel): string {

@@ -17,13 +17,11 @@ import { z } from 'zod';
 import { withTransaction } from '../../db/index.js';
 import { appendAuditEvent } from '../../events/index.js';
 import {
-  createSession,
   elevateSession,
   issueChallenge,
   revokeAllUserSessions,
-  revokeLiveChallenges,
   revokeSession,
-  verifyChallenge,
+  verifyAndCreateSession,
   type ChallengeDeliveryPort,
   type MfaPort,
 } from '../../auth/index.js';
@@ -86,7 +84,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   app.post(`${API_PREFIX}/auth/challenges/commands/verify`, async (request, reply) => {
     const body = verifyBody.parse(request.body);
 
-    const user = await verifyChallenge(
+    const issued = await verifyAndCreateSession(
       {
         pool: deps.pool,
         sessionSecret: deps.sessionSecret,
@@ -95,34 +93,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       {
         tenantId: body.tenant_id,
         destination: body.destination,
-        secret: body.code,
+        code: body.code,
         correlationId: String(request.id),
       },
     );
-
-    const issued = await withTransaction(deps.pool, async (tx) => {
-      // Any other live challenge for this destination is spent by a successful
-      // sign-in, so an intercepted earlier code cannot still be used.
-      await revokeLiveChallenges(tx, user.tenantId, body.destination);
-      const session = await createSession(tx, deps.sessionSecret, {
-        tenantId: user.tenantId,
-        userId: user.userId,
-      });
-      await appendAuditEvent(tx, {
-        eventType: 'AUTH_LOGIN_SUCCEEDED',
-        action: 'CREATE_SESSION',
-        targetType: 'Session',
-        targetId: session.session.sessionId,
-        aggregateType: 'User',
-        aggregateId: user.userId,
-        tenantId: user.tenantId,
-        actorType: 'SYSTEM',
-        actorId: user.userId,
-        payload: { outcome: 'SUCCESS' },
-        correlationId: String(request.id),
-      });
-      return session;
-    });
 
     return reply.status(201).send({
       session_credential: issued.credential,

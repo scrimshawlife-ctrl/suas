@@ -267,6 +267,26 @@ form {
   margin: 0;
 }
 
+.logout-form {
+  margin-left: auto;
+}
+
+.logout-action {
+  appearance: none;
+  min-height: 44px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--bone);
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.logout-action:hover {
+  background: rgba(232, 228, 214, 0.06);
+}
+
 label {
   display: block;
   margin: 0.85rem 0 0.35rem;

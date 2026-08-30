@@ -15,12 +15,58 @@ import type { Pool } from 'pg';
 import { resolveAuthContext, type AuthContext } from '../authz/index.js';
 import { UnauthenticatedError } from '../authz/index.js';
 
+export const BROWSER_SESSION_COOKIE = '__Secure-suas_session';
+
+function readCookie(request: FastifyRequest, name: string): string | undefined {
+  const header = request.headers.cookie;
+  if (typeof header !== 'string') return undefined;
+  for (const part of header.split(';')) {
+    const [rawName, ...rawValue] = part.trim().split('=');
+    if (rawName === name) {
+      try {
+        return decodeURIComponent(rawValue.join('='));
+      } catch {
+        return undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+function assertSameOriginBrowserWrite(request: FastifyRequest): void {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
+  const fetchSite = request.headers['sec-fetch-site'];
+  if (fetchSite === 'cross-site') {
+    throw new UnauthenticatedError('Cross-origin browser requests are not accepted.');
+  }
+  const origin = request.headers.origin;
+  const host = request.headers.host;
+  if (typeof origin === 'string' && typeof host === 'string') {
+    let originHost: string | undefined;
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      originHost = undefined;
+    }
+    if (originHost !== host) {
+      throw new UnauthenticatedError('Cross-origin browser requests are not accepted.');
+    }
+  }
+}
+
 /** Extract the opaque session credential from the Authorization header. */
 export function readCredential(request: FastifyRequest): string | undefined {
   const header = request.headers.authorization;
   if (typeof header !== 'string') return undefined;
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
   return match?.[1];
+}
+
+function readBrowserCredential(request: FastifyRequest): string | undefined {
+  if (!request.url.split('?')[0]?.startsWith('/app')) return undefined;
+  const credential = readCookie(request, BROWSER_SESSION_COOKIE);
+  if (credential !== undefined) assertSameOriginBrowserWrite(request);
+  return credential;
 }
 
 /**
@@ -34,7 +80,7 @@ export async function authenticate(
   sessionSecret: string | undefined,
   request: FastifyRequest,
 ): Promise<AuthContext> {
-  const credential = readCredential(request);
+  const credential = readCredential(request) ?? readBrowserCredential(request);
   if (credential === undefined) {
     throw new UnauthenticatedError('A session credential is required.');
   }

@@ -9,11 +9,12 @@
  */
 
 process.env.SUAS_ENV = 'TEST';
-process.env.SUAS_SPEC_VERSION ??= '0.4.0';
-process.env.SUAS_RELEASE_MANIFEST ??= 'RELEASE_MANIFEST-0.4.0.md';
+process.env.SUAS_SPEC_VERSION ??= '0.6.0';
+process.env.SUAS_RELEASE_MANIFEST ??= 'RELEASE_MANIFEST-0.6.0.md';
 process.env.SUAS_ALLOW_REAL_EXTERNAL_EFFECTS = 'false';
 process.env.SUAS_MIGRATIONS_MODE ??= 'apply';
 process.env.SUAS_EMAIL_MODE ??= 'fake';
+process.env.SUAS_BROWSER_AUTH_MODE ??= 'disabled';
 process.env.SUAS_SMS_MODE ??= 'fake';
 process.env.SUAS_TRANSPORTATION_ADAPTER_MODE ??= 'fake';
 process.env.SUAS_SHELTER_ADAPTER_MODE ??= 'fake';
