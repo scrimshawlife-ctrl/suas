@@ -28,15 +28,18 @@
 
 The deployed owner OTP sign-in still requires the owner to enter the code privately and record only the redirect, authenticated surface, cookie attributes, logout outcome, and revoked-session result. Automation did not open or read the mailbox, retrieve an OTP, or inspect a session cookie.
 
-## Recovery execution blocker
+## Recovery execution evidence
 
 ```text
-RECOVERY_EXERCISE=BLOCKED
-reason=MISSING_AUTHENTICATED_NEON_RESTORE_CAPABILITY
+RECOVERY_EXERCISE=PARTIAL
+result=ISOLATED_SNAPSHOT_RESTORE_PASSED
+remaining=DURABLE_JOB_FIXTURES_AND_ISOLATED_APPLICATION_SMOKE
 ```
 
-The current tool boundary has no authenticated Neon integration for branch creation, point-in-time recovery, backup restoration, or sanitized restore status. No restore target was created, no backup was read, and no database credential was exposed. The empty-database migration rehearsal remains explicitly insufficient for RTO, RPO, backup-age, loss-boundary, session, or durable-job recovery evidence.
+After the owner approved an immediate drill, the authenticated Neon connector created a manual snapshot of the canonical synthetic-STAGING branch and restored it into the isolated, non-default `recovery-drill-20260830` branch. The branch became ready without changing active STAGING. Aggregate-only checks observed schema migration head 14, one synthetic tenant, persisted authentication/session state, audit continuity, and an empty schema diff against active STAGING. The measured branch-ready duration was 7 seconds from snapshot creation and the observed source-to-snapshot loss boundary was 80 seconds.
+
+The restored snapshot contained zero durable-job fixtures, and no isolated effects-disabled runtime was bound to the target. Durable-job replay/loss behavior and application smoke remain `NOT_COMPUTABLE` rather than inferred. The branch is preserved for evidence review, and no database credential or row-level identity data was exposed. Full observations are in `docs/readiness/evidence/synthetic-staging-2026-08-29/recovery/status.md`.
 
 ## Gates preserved
 
-Production effects, D-007 destructive execution, D-025 sensitive reporting, UI/accessibility approval, and Android remain blocked pending their explicit gates. No completion claim was made for owner OTP entry, screen-reader review, or backup restoration.
+Production effects, D-007 destructive execution, D-025 sensitive reporting, UI/accessibility approval, and Android remain blocked pending their explicit gates. No completion claim was made for owner OTP entry, screen-reader review, durable-job recovery, isolated application smoke, or production RTO/RPO.
