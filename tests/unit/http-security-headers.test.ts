@@ -13,6 +13,11 @@ describe('browser response security headers', () => {
     expect(BROWSER_SECURITY_HEADERS['content-security-policy']).toContain("script-src 'none'");
     expect(BROWSER_SECURITY_HEADERS['content-security-policy']).toContain("frame-ancestors 'none'");
     expect(BROWSER_SECURITY_HEADERS['x-frame-options']).toBe('DENY');
+    expect(BROWSER_SECURITY_HEADERS['cross-origin-embedder-policy']).toBe('require-corp');
+    expect(BROWSER_SECURITY_HEADERS['cross-origin-opener-policy']).toBe('same-origin');
+    expect(BROWSER_SECURITY_HEADERS['cross-origin-resource-policy']).toBe('same-origin');
+    expect(BROWSER_SECURITY_HEADERS['origin-agent-cluster']).toBe('?1');
+    expect(BROWSER_SECURITY_HEADERS['x-permitted-cross-domain-policies']).toBe('none');
     expect(BROWSER_SECURITY_HEADERS['x-content-type-options']).toBe('nosniff');
     expect(BROWSER_SECURITY_HEADERS['referrer-policy']).toBe('no-referrer');
     expect(BROWSER_SECURITY_HEADERS['permissions-policy']).toContain('camera=()');

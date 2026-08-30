@@ -15,12 +15,16 @@ export const BROWSER_SECURITY_HEADERS = {
     `style-src 'sha256-${INLINE_STYLESHEET_SHA256}'`,
     'upgrade-insecure-requests',
   ].join('; '),
+  'cross-origin-embedder-policy': 'require-corp',
   'cross-origin-opener-policy': 'same-origin',
+  'cross-origin-resource-policy': 'same-origin',
+  'origin-agent-cluster': '?1',
   'permissions-policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
   'referrer-policy': 'no-referrer',
   'strict-transport-security': 'max-age=31536000; includeSubDomains',
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
+  'x-permitted-cross-domain-policies': 'none',
 } as const;
 
 /** Authenticated application and API responses must not enter shared caches. */
