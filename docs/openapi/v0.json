@@ -295,6 +295,38 @@
       }
     },
     "/api/v0/cases": {
+      "post": {
+        "tags": ["cases"],
+        "summary": "Open or reuse the authenticated Veteran's non-closed Support Case",
+        "operationId": "openCase",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing or replayed non-closed Support Case"
+          },
+          "201": {
+            "description": "Support Case created"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
       "get": {
         "tags": ["cases"],
         "summary": "Responder case queue (unassigned or mine)",
