@@ -1,18 +1,18 @@
 /** Browser-facing response hardening shared by Node and Worker dispatch. */
 
-export const INLINE_STYLESHEET_SHA256 = 'XXw2y0a1mhiKVAuZCy8VLuxokUlKBtZN6jIFEsiSmMo=';
+export const INLINE_STYLESHEET_SHA256 = 'YI0IPFo8fZzVxXQvIAHEjMMTQbNTBkp18Rnpok/013s=';
 
 export const BROWSER_SECURITY_HEADERS = {
   'content-security-policy': [
     "default-src 'none'",
     "base-uri 'none'",
     "connect-src 'self'",
-    'font-src https://fonts.gstatic.com',
+    "font-src 'none'",
     "form-action 'self'",
     "frame-ancestors 'none'",
     "img-src 'self' data:",
     "script-src 'none'",
-    `style-src 'self' 'sha256-${INLINE_STYLESHEET_SHA256}' https://fonts.googleapis.com`,
+    `style-src 'sha256-${INLINE_STYLESHEET_SHA256}'`,
     'upgrade-insecure-requests',
   ].join('; '),
   'cross-origin-opener-policy': 'same-origin',

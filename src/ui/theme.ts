@@ -52,9 +52,9 @@ export const STYLESHEET = `
   --line-strong: rgba(232, 228, 214, 0.5);
   --plate: rgba(232, 228, 214, 0.03);
   --focus: ${PAGES_BONE};
-  --font-sans: 'Outfit', 'Segoe UI', system-ui, sans-serif;
-  --font-serif: 'IBM Plex Serif', 'Georgia', serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-sans: 'Segoe UI', system-ui, sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
   color-scheme: dark;
 }
 
