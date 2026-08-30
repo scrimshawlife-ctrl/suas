@@ -38,6 +38,7 @@ import { registerUiRoutes } from './routes/ui.js';
 import { registerVeteranRoutes } from './routes/veterans.js';
 import { registerVaSandboxOAuthRoutes } from './routes/va-sandbox-oauth.js';
 import { registerDevRoutes } from './routes/dev.js';
+import { BROWSER_SECURITY_HEADERS, requiresNoStore } from './security-headers.js';
 
 export interface ServerDependencies {
   readonly config: SuasConfig;
@@ -124,6 +125,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
 
   app.addHook('onSend', (request, reply, payload, done) => {
     void reply.header('x-request-id', request.id);
+    for (const [name, value] of Object.entries(BROWSER_SECURITY_HEADERS)) {
+      void reply.header(name, value);
+    }
+    if (requiresNoStore(request.url)) {
+      void reply.header('cache-control', 'no-store');
+    }
     done(null, payload);
   });
 
