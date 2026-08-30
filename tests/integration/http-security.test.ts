@@ -103,3 +103,22 @@ describe('ENVIRONMENT.md §6 / §8 — response redaction', () => {
     expect(missing.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
   });
 });
+
+describe('browser response hardening', () => {
+  it('applies fail-closed security and cache headers to the web and API surfaces', async () => {
+    const web = await app.server.inject({ method: 'GET', url: '/app' });
+    expect(web.statusCode).toBe(200);
+    expect(web.headers['content-security-policy']).toContain("script-src 'none'");
+    expect(web.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(web.headers['strict-transport-security']).toContain('max-age=31536000');
+    expect(web.headers['x-content-type-options']).toBe('nosniff');
+    expect(web.headers['x-frame-options']).toBe('DENY');
+    expect(web.headers['referrer-policy']).toBe('no-referrer');
+    expect(web.headers['cache-control']).toBe('no-store');
+
+    const api = await app.server.inject({ method: 'GET', url: '/api/v0/health' });
+    expect(api.statusCode).toBe(200);
+    expect(api.headers['cache-control']).toBe('no-store');
+    expect(api.headers['permissions-policy']).toContain('geolocation=()');
+  });
+});

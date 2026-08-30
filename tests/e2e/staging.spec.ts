@@ -68,6 +68,8 @@ test.describe('deployed public boundary', () => {
   test('@public health exposes durable synthetic-STAGING dependencies', async ({ request }) => {
     const response = await request.get('/api/v0/health');
     expect(response.status()).toBe(200);
+    expect(response.headers()['cache-control']).toBe('no-store');
+    expect(response.headers()['x-content-type-options']).toBe('nosniff');
     expect(await response.json()).toMatchObject({
       status: 'ok',
       dependencies: {
@@ -82,7 +84,16 @@ test.describe('deployed public boundary', () => {
   });
 
   test('@public landing and enrollment render in Chromium', async ({ page }) => {
-    await expectHtmlSurface(page, '/app');
+    const landing = await page.goto('/app', { waitUntil: 'domcontentloaded' });
+    expect(landing?.status()).toBe(200);
+    expect(landing?.headers()['content-security-policy']).toContain("script-src 'none'");
+    expect(landing?.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(landing?.headers()['strict-transport-security']).toContain('max-age=31536000');
+    expect(landing?.headers()['x-frame-options']).toBe('DENY');
+    expect(landing?.headers()['referrer-policy']).toBe('no-referrer');
+    expect(landing?.headers()['cache-control']).toBe('no-store');
+    await expect(page.locator('main')).toHaveCount(1);
+    await expect(page.locator('h1')).toHaveCount(1);
     await expect(page).toHaveTitle(/Shut Up and Serve/i);
     await expect(page.getByText('Veteran peer support', { exact: false })).toBeVisible();
 
