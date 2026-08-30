@@ -5,6 +5,11 @@
 
 ## Completed
 
+- PR #148 extended `npm run evidence:staging:browser-auth` across the post-hardening challenge boundary without reading OTPs or message bodies.
+- Sanitized live run [33297787796](https://github.com/scrimshawlife-ctrl/suas/actions/runs/33297787796) passed from merged `main` at `251503c46209c1a0c2c06d61d13e59d0ed287b91`.
+- Both deployed hosts returned root `302`, enrollment `200`, protected API `401`, browser-cookie API `401`, and cross-origin write `401`.
+- Approved and unknown challenge responses matched. Cross-origin challenge returned `401`, oversized returned `413`, non-form returned `415`, and rate-limited returned `429` with a positive retry window.
+- Resend metadata reported the approved challenge as `sent`; unknown and rejected challenge destinations produced zero provider messages.
 - PR #134 added `npm run evidence:staging:browser-auth`, a metadata-only command that checks both deployed hosts, approved and unknown challenge behavior, protected API boundaries, cross-origin browser writes, and Resend delivery metadata without retrieving message bodies or OTPs.
 - PR #136 added the manually dispatched `staging-auth-evidence` workflow and a protected `RESEND_AUDIT_API_KEY` boundary for sanitized live evidence. The credential that was exposed outside the secret store was revoked and replaced without printing the replacement value.
 - PR #137 made the evidence command require an explicit non-failure Resend delivery state. Live run [33293111386](https://github.com/scrimshawlife-ctrl/suas/actions/runs/33293111386) passed against both deployed hosts and observed `delivery_status=sent`.
