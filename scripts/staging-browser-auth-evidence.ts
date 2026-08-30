@@ -28,11 +28,16 @@ type Evidence = {
     approved_status: number;
     unknown_status: number;
     normalized_public_response_match: boolean;
+    cross_origin_status: number;
+    oversized_status: number;
+    non_form_status: number;
+    rate_limited_status: number;
+    retry_after_seconds: number;
   };
   resend: {
     request_observed: boolean;
     delivery_status: string;
-    unknown_message_count: number;
+    negative_message_count: number;
   };
 };
 
@@ -115,6 +120,49 @@ async function submitChallenge(base: string, destination: string): Promise<Respo
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ role: 'veteran', destination }),
   });
+}
+
+async function submitCrossOriginChallenge(base: string, destination: string): Promise<Response> {
+  return request(`${base}/app/auth/challenges`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      origin: 'https://cross-origin.invalid',
+      'sec-fetch-site': 'cross-site',
+    },
+    body: new URLSearchParams({ role: 'veteran', destination }),
+  });
+}
+
+async function submitOversizedChallenge(base: string, destination: string): Promise<Response> {
+  return request(`${base}/app/auth/challenges`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      role: 'veteran',
+      destination,
+      padding: 'x'.repeat(4_096),
+    }),
+  });
+}
+
+async function submitJsonChallenge(base: string, destination: string): Promise<Response> {
+  return request(`${base}/app/auth/challenges`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ role: 'veteran', destination }),
+  });
+}
+
+async function reachRateLimit(base: string, destination: string): Promise<Response> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const response = await submitChallenge(base, destination);
+    if (response.status === 429) return response;
+    if (response.status !== 200) {
+      throw new Error(`Rate-limit setup returned unexpected status ${response.status}.`);
+    }
+  }
+  throw new Error('Challenge issuance did not reach the released destination rate limit.');
 }
 
 async function listEmails(apiKey: string): Promise<EmailSummary[]> {
@@ -200,12 +248,55 @@ async function main(): Promise<void> {
   const unknownBody = await unknown.text();
   if (unknown.status !== 200) throw new Error('Unknown challenge request did not return 200.');
 
+  const negativeAddresses = [
+    unknownAddress,
+    `cross-origin-${Date.now()}@example.invalid`,
+    `oversized-${Date.now()}@example.invalid`,
+    `non-form-${Date.now()}@example.invalid`,
+    `rate-limited-${Date.now()}@example.invalid`,
+  ];
+  const [, crossOriginAddress, oversizedAddress, nonFormAddress, rateLimitedAddress] =
+    negativeAddresses;
+  if (
+    crossOriginAddress === undefined ||
+    oversizedAddress === undefined ||
+    nonFormAddress === undefined ||
+    rateLimitedAddress === undefined
+  ) {
+    throw new Error('Negative challenge evidence addresses were not initialized.');
+  }
+
+  const crossOrigin = await submitCrossOriginChallenge(workerOrigin, crossOriginAddress);
+  if (crossOrigin.status !== 401) {
+    throw new Error('Cross-origin browser-auth challenge did not fail closed with 401.');
+  }
+
+  const oversized = await submitOversizedChallenge(canonicalOrigin, oversizedAddress);
+  if (oversized.status !== 413) {
+    throw new Error('Oversized browser-auth challenge did not fail with 413.');
+  }
+
+  const nonForm = await submitJsonChallenge(workerOrigin, nonFormAddress);
+  if (nonForm.status !== 415) {
+    throw new Error('Non-form browser-auth challenge did not fail with 415.');
+  }
+
+  const rateLimited = await reachRateLimit(canonicalOrigin, rateLimitedAddress);
+  const retryAfterSeconds = Number(rateLimited.headers.get('retry-after'));
+  if (!Number.isFinite(retryAfterSeconds) || retryAfterSeconds <= 0) {
+    throw new Error('Rate-limited browser-auth challenge did not advertise a retry window.');
+  }
+
   await new Promise((resolve) => setTimeout(resolve, 2_000));
-  const afterUnknown = await listEmails(auditKey);
-  const unknownMessages = afterUnknown.filter(
+  const afterNegativeChallenges = await listEmails(auditKey);
+  const negativeMessages = afterNegativeChallenges.filter(
     (email) =>
       !afterApprovedIds.has(email.id) &&
-      email.to.map((address) => address.toLowerCase()).includes(unknownAddress.toLowerCase()),
+      email.to.some((address) =>
+        negativeAddresses
+          .map((candidate) => candidate.toLowerCase())
+          .includes(address.toLowerCase()),
+      ),
   );
 
   const responsesMatch =
@@ -213,8 +304,8 @@ async function main(): Promise<void> {
     digest(normalizedPublicResponse(unknownBody));
   if (!responsesMatch)
     throw new Error('Approved and unknown challenges exposed different public responses.');
-  if (unknownMessages.length !== 0)
-    throw new Error('Unknown challenge produced provider delivery metadata.');
+  if (negativeMessages.length !== 0)
+    throw new Error('A rejected or unknown challenge produced provider delivery metadata.');
 
   const evidence: Evidence = {
     status: 'ok',
@@ -223,11 +314,16 @@ async function main(): Promise<void> {
       approved_status: approved.status,
       unknown_status: unknown.status,
       normalized_public_response_match: responsesMatch,
+      cross_origin_status: crossOrigin.status,
+      oversized_status: oversized.status,
+      non_form_status: nonForm.status,
+      rate_limited_status: rateLimited.status,
+      retry_after_seconds: retryAfterSeconds,
     },
     resend: {
       request_observed: true,
       delivery_status: deliveryStatus(delivered),
-      unknown_message_count: unknownMessages.length,
+      negative_message_count: negativeMessages.length,
     },
   };
   console.log(JSON.stringify(evidence, null, 2));
