@@ -1,6 +1,6 @@
 /** Browser-facing response hardening shared by Node and Worker dispatch. */
 
-export const INLINE_STYLESHEET_SHA256 = 'YI0IPFo8fZzVxXQvIAHEjMMTQbNTBkp18Rnpok/013s=';
+export const INLINE_STYLESHEET_SHA256 = 'eaKv+q+fB5vyFM1uIwPi3NEYW8n9LWRvTLBxCB6B1RY=';
 
 export const BROWSER_SECURITY_HEADERS = {
   'content-security-policy': [

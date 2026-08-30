@@ -8,15 +8,14 @@
  *   targets, text zoom/reflow, non-color-only meaning, reduced motion)
  * - SUAS-specs MVP_REFERENCE.md §13 (non-goal: freezing CSS/framework technology)
  *
- * Colors and type are the shipped Pages visual system
- * (`docs/styles.css`, https://scrimshawlife-ctrl.github.io/suas/), not a third
+ * Colors, type, radii, and surface hierarchy mirror the shipped iOS operator
+ * reference (`docs/ios-operator.css` and `/suas/ios-operator.html`).
  * palette. Accessibility floors stay WCAG 2.2 AA values: 24x24 CSS px minimum
  * target size (2.5.8), visible focus (2.4.7, 2.4.11), reflow at 320 CSS px
  * (1.4.10), and text spacing tolerance (1.4.12).
  *
- * Contrast on `#0b0d0c`: bone `#e8e4d6` is 15.32:1; bone-dim `#9a9588` is
- * 6.53:1; olive `#9aaa5c` is 7.69:1 and may label or border. Bone-mute
- * `#6e6a60` is 3.61:1 and is not used for body text.
+ * Contrast: ink `#101828` on white is 17.70:1; muted `#667085` on white is
+ * 4.78:1; service blue `#1c529e` on white is 7.64:1.
  */
 
 /**
@@ -27,60 +26,51 @@
 export const MIN_TARGET_PX = 24;
 export const PRIMARY_TARGET_PX = 48;
 
-/** Pages tokens, observed from `docs/styles.css`. */
-export const PAGES_BG = '#0b0d0c';
-export const PAGES_BONE = '#e8e4d6';
-export const PAGES_OLIVE = '#9aaa5c';
-
-/**
- * Subtle topographic overlay. Decorative only: non-interactive, low-opacity,
- * and ignored by assistive technology because it is a CSS background.
- */
-const TOPO_SVG = encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice"><g fill="none" stroke="#4a5348" stroke-width="0.7"><path d="M-40 140C80 90 170 190 290 140s210-90 330-30 220 140 360 70 250-90 390-20 220 80 310 40"/><path d="M-20 220C90 180 190 280 310 230s200-70 320-10 210 120 350 60 240-70 370 10 200 70 290 30"/><path d="M-50 310C70 270 180 360 300 310s190-60 310 10 200 110 340 50 230-60 360 20 210 80 300 35"/><path d="M-30 400C100 360 210 450 330 400s180-50 300 20 190 100 330 45 220-50 350 25 200 70 290 40"/><ellipse cx="1080" cy="280" rx="160" ry="90"/><ellipse cx="240" cy="620" rx="130" ry="70"/></g></svg>',
-);
+/** Canonical tokens from `docs/ios-operator.css`. */
+export const IOS_GROUPED_BG = '#f2f4f7';
+export const IOS_CARD = '#ffffff';
+export const IOS_INK = '#101828';
+export const IOS_MUTED = '#667085';
+export const IOS_SERVICE_BLUE = '#1c529e';
+export const IOS_SERVICE_BLUE_DARK = '#12325f';
+export const IOS_TRANSPORTATION = '#2173b8';
+export const IOS_FOOD = '#cc731a';
+export const IOS_SHELTER = '#40804d';
 
 export const STYLESHEET = `
 :root {
-  --bg: ${PAGES_BG};
-  --bone: ${PAGES_BONE};
-  --bone-soft: #c9c3b2;
-  --bone-dim: #9a9588;
-  --olive: ${PAGES_OLIVE};
-  --olive-deep: #7a8644;
-  --line: rgba(232, 228, 214, 0.3);
-  --line-strong: rgba(232, 228, 214, 0.5);
-  --plate: rgba(232, 228, 214, 0.03);
-  --focus: ${PAGES_BONE};
-  --font-sans: 'Segoe UI', system-ui, sans-serif;
-  --font-serif: Georgia, 'Times New Roman', serif;
+  --bg: ${IOS_GROUPED_BG};
+  --surface: ${IOS_CARD};
+  --bone: ${IOS_INK};
+  --bone-soft: #344054;
+  --bone-dim: ${IOS_MUTED};
+  --olive: ${IOS_SERVICE_BLUE};
+  --olive-deep: ${IOS_SERVICE_BLUE_DARK};
+  --transportation: ${IOS_TRANSPORTATION};
+  --food: ${IOS_FOOD};
+  --shelter: ${IOS_SHELTER};
+  --danger: #c72626;
+  --line: #d8dee8;
+  --line-strong: #98a2b3;
+  --plate: ${IOS_CARD};
+  --focus: #7eb8ff;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --font-serif: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { color-scheme: dark; }
+html { color-scheme: light; background: #f8fafc; }
 
 body {
   margin: 0;
   /* Relative units so text zoom and reflow (1.4.10, 1.4.4) work. */
   font: 1rem/1.5 var(--font-sans);
   color: var(--bone);
-  background: var(--bg);
-  isolation: isolate;
-}
-
-/* Decorative topo only. pointer-events: none so it cannot steal hits. */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: 0.18;
-  background-image: url("data:image/svg+xml,${TOPO_SVG}");
-  background-size: 90rem 56rem;
+  min-width: 320px;
+  background: radial-gradient(circle at 78% 10%, rgba(33, 115, 184, 0.12), transparent 28rem), #f8fafc;
 }
 
 /* 1.4.12 text spacing: never clip on user-adjusted spacing. */
@@ -88,7 +78,7 @@ p, li, dd { overflow-wrap: break-word; }
 
 .shell {
   position: relative;
-  max-width: 34rem;
+  max-width: 42rem;
   margin: 0 auto;
   /* Room for the fixed bottom nav so it never covers the last action.
      Safe-area inset keeps primary actions clear of a notched home indicator. */
@@ -100,16 +90,18 @@ p, li, dd { overflow-wrap: break-word; }
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0 0 1.75rem;
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(16, 24, 40, 0.09);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  color: var(--bone);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  color: var(--olive-deep);
+  font-weight: 800;
+  letter-spacing: 0.11em;
 }
 
 .brand-name {
@@ -117,17 +109,26 @@ p, li, dd { overflow-wrap: break-word; }
 }
 
 .zero-mark {
-  display: block;
+  display: grid;
   flex: none;
-  color: var(--bone);
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--olive);
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .status-pill {
   margin: 0;
   padding: 0.35rem 0.7rem;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  color: var(--bone);
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  color: var(--olive-deep);
+  background: var(--surface);
   font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 500;
@@ -145,8 +146,9 @@ p, li, dd { overflow-wrap: break-word; }
 h1 {
   margin: 0 0 0.65rem;
   font-family: var(--font-serif);
-  font-size: clamp(2rem, 8vw, 3.1rem);
-  font-weight: 700;
+  color: var(--olive-deep);
+  font-size: clamp(2.35rem, 8vw, 3.6rem);
+  font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.03em;
 }
@@ -219,7 +221,7 @@ h3 { font-size: 1rem; margin: 1rem 0 0.25rem; }
   background: var(--bone);
 }
 
-/* 2.4.7 / 2.4.11 focus is always visible and never clipped. Bone on #0b0d0c. */
+/* 2.4.7 / 2.4.11 focus is always visible and never clipped. */
 :focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
@@ -233,29 +235,31 @@ h3 { font-size: 1rem; margin: 1rem 0 0.25rem; }
   min-height: ${String(PRIMARY_TARGET_PX)}px;
   padding: 0.75rem 1rem;
   margin: 0.5rem 0;
-  border-radius: 3px;
-  font-family: var(--font-mono);
+  border-radius: 12px;
+  font-family: var(--font-sans);
   font-size: 0.95rem;
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
-  background: transparent;
-  color: var(--bone);
+  background: var(--surface);
+  color: var(--olive);
 }
 
 .action {
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--olive);
+  color: #ffffff;
+  background: var(--olive);
+  box-shadow: 0 10px 26px rgba(28, 82, 158, 0.24);
 }
 
 .action-secondary {
   border: 1px solid var(--line);
 }
 
-.action:hover, .action-secondary:hover {
-  background: rgba(232, 228, 214, 0.06);
-}
+.action:hover { background: #164984; }
+.action-secondary:hover { background: #e9f1fb; }
 
 button.action,
 button.action-secondary {
@@ -276,15 +280,15 @@ form {
   min-height: 44px;
   padding: 0.45rem 0.65rem;
   border: 1px solid var(--line);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--bone);
-  font-family: var(--font-mono);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--danger);
+  font-family: var(--font-sans);
   cursor: pointer;
 }
 
 .logout-action:hover {
-  background: rgba(232, 228, 214, 0.06);
+  background: #fceaea;
 }
 
 label {
@@ -303,7 +307,7 @@ select {
   min-height: ${String(PRIMARY_TARGET_PX)}px;
   padding: 0.7rem 0.85rem;
   border: 1px solid var(--line-strong);
-  border-radius: 3px;
+  border-radius: 10px;
   font: inherit;
   color: var(--bone);
   background: var(--plate);
@@ -351,7 +355,7 @@ select {
   margin: 1rem 0 1.25rem;
   padding: 0.9rem;
   border: 1px solid var(--line-strong);
-  border-radius: 3px;
+  border-radius: 16px;
   background: var(--plate);
 }
 
@@ -383,7 +387,7 @@ fieldset.check-in-options {
   margin: 0.75rem 0;
   padding: 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: 16px;
   background: var(--plate);
 }
 
@@ -433,13 +437,18 @@ a, button, input, [role="button"] {
 .card {
   display: block;
   min-height: 5rem;
-  padding: 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--plate);
+  padding: 1rem;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface);
   color: var(--bone);
   text-decoration: none;
+  box-shadow: 0 3px 10px rgba(16, 24, 40, 0.06);
 }
+
+.card-category-shelter { border-left: 5px solid var(--shelter); }
+.card-category-food { border-left: 5px solid var(--food); }
+.card-category-transportation { border-left: 5px solid var(--transportation); }
 
 .card-unavailable { color: var(--bone-soft); }
 
@@ -463,14 +472,14 @@ a, button, input, [role="button"] {
   padding: 0.75rem;
   border: 1px solid var(--line);
   border-left: 3px solid var(--olive);
-  border-radius: 3px;
-  background: var(--plate);
+  border-radius: 16px;
+  background: var(--surface);
 }
 
 .reserved-slot {
   padding: 0.75rem;
   border: 1px dashed var(--line-strong);
-  border-radius: 3px;
+  border-radius: 12px;
   background: var(--plate);
   color: var(--bone-dim);
 }
@@ -481,7 +490,7 @@ a, button, input, [role="button"] {
   z-index: 10;
   display: flex;
   border-top: 1px solid var(--line);
-  background: var(--bg);
+  background: rgba(255, 255, 255, 0.96);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -492,13 +501,14 @@ a, button, input, [role="button"] {
   justify-content: center;
   min-height: ${String(PRIMARY_TARGET_PX)}px;
   padding: 0.5rem;
-  color: var(--bone);
+  color: var(--bone-dim);
   font-weight: 600;
   text-decoration: none;
 }
 
 .mobile-nav a[aria-current='page'] {
-  text-decoration: underline;
+  color: var(--olive);
+  text-decoration: none;
   box-shadow: inset 0 -3px 0 var(--olive);
 }
 
@@ -526,8 +536,8 @@ dd {
   align-items: center;
   min-height: ${String(PRIMARY_TARGET_PX)}px;
   padding: 0.75rem 1rem;
-  background: var(--bone);
-  color: var(--bg);
+  background: var(--olive-deep);
+  color: #ffffff;
   font-weight: 600;
   text-decoration: none;
   /* 2.4.1: hidden until keyboard focus. clip-path (not left:-9999px) so

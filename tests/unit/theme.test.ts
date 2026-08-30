@@ -8,10 +8,16 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  IOS_CARD,
+  IOS_FOOD,
+  IOS_GROUPED_BG,
+  IOS_INK,
+  IOS_MUTED,
+  IOS_SERVICE_BLUE,
+  IOS_SERVICE_BLUE_DARK,
+  IOS_SHELTER,
+  IOS_TRANSPORTATION,
   MIN_TARGET_PX,
-  PAGES_BG,
-  PAGES_BONE,
-  PAGES_OLIVE,
   PRIMARY_TARGET_PX,
   STYLESHEET,
 } from '../../src/ui/theme.js';
@@ -60,25 +66,36 @@ describe('MVP_REFERENCE.md §10 — landing document still permits zoom', () => 
   });
 });
 
-describe('Pages visual system — presentation tokens', () => {
-  it('uses the shipped dark Pages palette, not the retired light theme', () => {
-    expect(PAGES_BG).toBe('#0b0d0c');
-    expect(PAGES_BONE).toBe('#e8e4d6');
-    expect(PAGES_OLIVE).toBe('#9aaa5c');
-    expect(STYLESHEET).toContain(`--bg: ${PAGES_BG}`);
-    expect(STYLESHEET).toContain(`--bone: ${PAGES_BONE}`);
-    expect(STYLESHEET).toContain('color-scheme: dark');
-    expect(STYLESHEET).toContain('border-radius: 3px');
-    expect(STYLESHEET).not.toContain('#14425f');
-    expect(STYLESHEET).not.toContain('#b4530a');
-    expect(STYLESHEET).not.toContain('color-scheme: light');
+describe('iOS operator visual system — presentation tokens', () => {
+  it('uses the exact shipped ios-operator palette', () => {
+    expect(IOS_GROUPED_BG).toBe('#f2f4f7');
+    expect(IOS_CARD).toBe('#ffffff');
+    expect(IOS_INK).toBe('#101828');
+    expect(IOS_MUTED).toBe('#667085');
+    expect(IOS_SERVICE_BLUE).toBe('#1c529e');
+    expect(IOS_SERVICE_BLUE_DARK).toBe('#12325f');
+    expect(IOS_TRANSPORTATION).toBe('#2173b8');
+    expect(IOS_FOOD).toBe('#cc731a');
+    expect(IOS_SHELTER).toBe('#40804d');
+    expect(STYLESHEET).toContain(`--bg: ${IOS_GROUPED_BG}`);
+    expect(STYLESHEET).toContain(`--bone: ${IOS_INK}`);
+    expect(STYLESHEET).toContain(`--olive: ${IOS_SERVICE_BLUE}`);
+    expect(STYLESHEET).toContain('color-scheme: light');
+    expect(STYLESHEET).toContain('border-radius: 16px');
+    expect(STYLESHEET).not.toContain('color-scheme: dark');
   });
 
-  it('keeps focus visible on dark and does not use bone-mute for body text', () => {
+  it('keeps reference focus and secondary-text treatment', () => {
     expect(STYLESHEET).toContain('outline: 3px solid var(--focus)');
-    expect(STYLESHEET).toContain('--focus: #e8e4d6');
+    expect(STYLESHEET).toContain('--focus: #7eb8ff');
     expect(STYLESHEET).toContain('.muted { color: var(--bone-dim); }');
-    expect(STYLESHEET).not.toContain('--bone-mute');
+    expect(STYLESHEET).toContain('--bone-dim: #667085');
+  });
+
+  it('maps operational service cards to the iOS category colors', () => {
+    expect(STYLESHEET).toContain('.card-category-shelter');
+    expect(STYLESHEET).toContain('.card-category-food');
+    expect(STYLESHEET).toContain('.card-category-transportation');
   });
 
   it('keeps required landing actions after shell chrome', () => {
@@ -87,6 +104,7 @@ describe('Pages visual system — presentation tokens', () => {
       missionLine: 'Veteran peer support, coordinated by people who served.',
     });
     expect(html).toContain('class="zero-mark"');
+    expect(html).toContain('class="brand-name">SUAS');
     expect(html).toContain('SPEC-017 · NOT READY');
     expect(html).toContain('I NEED SUPPORT');
     expect(html).toContain('I WANT TO SERVE');

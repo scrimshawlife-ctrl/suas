@@ -94,13 +94,8 @@ import type {
 } from './view-models.js';
 import type { CategoryCard } from './categories.js';
 
-/** Circle plus horizontal axis. Not a vertical strike. */
-const ZERO_MARK = raw(
-  '<svg class="zero-mark" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">' +
-    '<circle cx="16" cy="16" r="8.25" fill="none" stroke="currentColor" stroke-width="1.35"></circle>' +
-    '<line x1="3.5" y1="16" x2="28.5" y2="16" stroke="currentColor" stroke-width="1.35"></line>' +
-    '</svg>',
-);
+/** Wordmark tile from the shipped iOS operator reference. */
+const ZERO_MARK = raw('<span class="zero-mark" aria-hidden="true">S</span>');
 
 /** Canonical loop. CONTEXT.md; do not invent steps. */
 const CANONICAL_LOOP = [
@@ -121,7 +116,7 @@ const CANONICAL_LOOP = [
 function siteChrome(shell: ShellViewModel): Renderable {
   return header(
     { class: 'site-chrome' },
-    span({ class: 'brand' }, ZERO_MARK, span({ class: 'brand-name' }, 'zer0state')),
+    span({ class: 'brand' }, ZERO_MARK, span({ class: 'brand-name' }, 'SUAS')),
     p({ class: 'status-pill' }, 'SPEC-017 · NOT READY'),
     shell.showMobileNav
       ? form(
@@ -146,7 +141,7 @@ function document(shell: ShellViewModel, body: Renderable): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0B0D0C">
+<meta name="theme-color" content="#12325F">
 <title>${render(shell.title)} — SUAS</title>
 <style>${STYLESHEET}</style>
 </head>
@@ -250,11 +245,18 @@ function cardHeading(level: HeadingLevel, ...children: Renderable[]): Renderable
 /** A category card. Non-operational cards are visible and labelled as such. */
 function categoryCard(card: CategoryCard, level: HeadingLevel): Renderable {
   const operational = card.disposition === 'OPERATIONAL';
+  const categoryClass = card.category?.toLowerCase();
   return li(
     {},
     a(
       {
-        class: operational ? 'card' : 'card card-unavailable',
+        class: [
+          'card',
+          operational && categoryClass !== undefined ? `card-category-${categoryClass}` : undefined,
+          operational ? undefined : 'card-unavailable',
+        ]
+          .filter(Boolean)
+          .join(' '),
         // Operational and non-operational cards share one route. The handler
         // decides what a category may show; a separate `/info` path would be a
         // second place for that rule to live, and it was a 404.
