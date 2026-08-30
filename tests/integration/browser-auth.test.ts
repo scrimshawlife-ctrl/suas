@@ -65,6 +65,56 @@ describe('HTML passwordless sign-in', () => {
     expect(delivery().lastFor(email.toLowerCase())?.secret).toMatch(/^\d{6}$/);
   });
 
+  it('rejects cross-origin challenge requests before sending email', async () => {
+    const email = await enrolledEmail();
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        host: 'suas.example',
+        origin: 'https://attacker.example',
+        'sec-fetch-site': 'cross-site',
+      },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
+  });
+
+  it('rejects cross-origin verification requests before consuming a code', async () => {
+    const email = await enrolledEmail();
+    await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
+
+    const rejected = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        host: 'suas.example',
+        origin: 'https://attacker.example',
+        'sec-fetch-site': 'cross-site',
+      },
+      payload: form({ destination: email, role: 'veteran', code }),
+    });
+    expect(rejected.statusCode).toBe(401);
+
+    const accepted = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: form({ destination: email, role: 'veteran', code }),
+    });
+    expect(accepted.statusCode).toBe(303);
+  });
+
   it('verifies the code, sets a hardened cookie, and authenticates /app', async () => {
     const email = await enrolledEmail();
     await app.server.inject({
