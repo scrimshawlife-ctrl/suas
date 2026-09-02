@@ -75,7 +75,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Require the existing synthetic-STAGING target and bearers
+      - name: Refresh synthetic staging sessions
+        # Mints fresh, masked bearer values into GITHUB_ENV for this job only.
+        # This prevents a long soak from starting with expired stored sessions.
+        env:
+          SUAS_SPEC_VERSION: '0.6.0'
+          SUAS_RELEASE_MANIFEST: RELEASE_MANIFEST-0.6.0.md
+          SUAS_MIGRATIONS_MODE: validate
+          SUAS_BROWSER_AUTH_MODE: disabled
+          SUAS_EMAIL_MODE: sink
+          SUAS_SMS_MODE: sink
+          SUAS_TRANSPORTATION_ADAPTER_MODE: fake
+          SUAS_SHELTER_ADAPTER_MODE: fake
+          SUAS_FOOD_ADAPTER_MODE: fake
+          SUAS_PEER_SUPPORT_ADAPTER_MODE: manual
+          SUAS_SUPPORT_SIGNAL_MODE: fixture
+          SUAS_SAFETY_COPY_MODE: placeholder_test_only
+          DATABASE_POOL_MAX: '1'
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUAS_SESSION_SECRET: ${{ secrets.SUAS_SESSION_SECRET }}
+        run: npm run seed:staging:sessions
+
+      - name: Require the existing synthetic-STAGING target and refreshed bearers
         run: |
           test -n "$SUAS_E2E_BASE_URL"
           test -n "$SUAS_E2E_VETERAN_BEARER"
