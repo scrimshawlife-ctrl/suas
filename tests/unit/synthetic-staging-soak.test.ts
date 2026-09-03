@@ -121,7 +121,9 @@ describe('synthetic STAGING soak runner', () => {
     let request = 0;
     const fetchMock = vi.fn<typeof fetch>(() => {
       request += 1;
-      return Promise.resolve(new Response(null, { status: request % 2 === 0 ? 503 : 401 }));
+      const status = request % 2 === 0 ? 503 : 401;
+      const code = status === 503 ? 'NOT_READY' : 'UNAUTHENTICATED';
+      return Promise.resolve(Response.json({ error: { code, message: 'discard-me' } }, { status }));
     });
     const summary = await runSoak(shortConfig(), { fetch: fetchMock, pacingMs: 1 });
 
@@ -129,6 +131,9 @@ describe('synthetic STAGING soak runner', () => {
     expect(summary.aggregate.statuses['503']).toBeGreaterThan(0);
     expect(summary.aggregate.errors.http_4xx).toBeGreaterThan(0);
     expect(summary.aggregate.errors.http_5xx).toBeGreaterThan(0);
+    expect(summary.aggregate.public_error_codes.NOT_READY).toBeGreaterThan(0);
+    expect(summary.aggregate.public_error_codes.UNAUTHENTICATED).toBeGreaterThan(0);
+    expect(JSON.stringify(summary)).not.toContain('discard-me');
     expect(summary.verdict).toBe('ERRORS_OBSERVED');
   });
 });
