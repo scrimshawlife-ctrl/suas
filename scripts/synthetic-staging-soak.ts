@@ -64,6 +64,7 @@ export interface SoakConfig {
 interface Aggregate {
   requests: number;
   statuses: Record<string, number>;
+  publicErrorCodes: Record<string, number>;
   errors: Record<ErrorCategory, number>;
   latenciesMs: number[];
 }
@@ -71,6 +72,7 @@ interface Aggregate {
 export interface SanitizedAggregate {
   readonly requests: number;
   readonly statuses: Readonly<Record<string, number>>;
+  readonly public_error_codes: Readonly<Record<string, number>>;
   readonly errors: Readonly<Record<ErrorCategory, number>>;
   readonly latency_ms: {
     readonly p50: number;
@@ -125,6 +127,7 @@ function emptyAggregate(): Aggregate {
   return {
     requests: 0,
     statuses: {},
+    publicErrorCodes: {},
     errors: { timeout: 0, network: 0, drain_aborted: 0, http_4xx: 0, http_5xx: 0 },
     latenciesMs: [],
   };
@@ -215,6 +218,7 @@ function sanitized(aggregate: Aggregate): SanitizedAggregate {
   return {
     requests: aggregate.requests,
     statuses: { ...aggregate.statuses },
+    public_error_codes: { ...aggregate.publicErrorCodes },
     errors: { ...aggregate.errors },
     latency_ms: {
       p50: rounded(percentile(latencies, 50)),
@@ -234,12 +238,24 @@ function addObservation(
   status: number | undefined,
   latencyMs: number,
   error: ErrorCategory | undefined,
+  publicErrorCode: string | undefined,
 ): void {
   for (const aggregate of aggregates) {
     aggregate.requests += 1;
     aggregate.latenciesMs.push(latencyMs);
     if (status !== undefined) increment(aggregate.statuses, String(status));
+    if (publicErrorCode !== undefined) increment(aggregate.publicErrorCodes, publicErrorCode);
     if (error !== undefined) aggregate.errors[error] += 1;
+  }
+}
+
+function publicErrorCode(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: { code?: unknown } };
+    const code = parsed.error?.code;
+    return typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNCLASSIFIED';
+  } catch {
+    return 'UNCLASSIFIED';
   }
 }
 
@@ -290,6 +306,7 @@ export async function runSoak(
     const started = dependencies.now();
     let status: number | undefined;
     let error: ErrorCategory | undefined;
+    let observedPublicErrorCode: string | undefined;
     try {
       const bearer = credential(config, request.credential);
       const response = await dependencies.fetch(new URL(request.path, config.baseUrl), {
@@ -299,9 +316,12 @@ export async function runSoak(
         signal: controller.signal,
       });
       status = response.status;
-      await response.arrayBuffer();
-      if (status >= 500) error = 'http_5xx';
-      else if (status >= 400) error = 'http_4xx';
+      if (status >= 400) {
+        observedPublicErrorCode = publicErrorCode(await response.text());
+        error = status >= 500 ? 'http_5xx' : 'http_4xx';
+      } else {
+        await response.arrayBuffer();
+      }
     } catch {
       error = timedOut ? 'timeout' : draining ? 'drain_aborted' : 'network';
     } finally {
@@ -313,6 +333,7 @@ export async function runSoak(
         status,
         dependencies.now() - started,
         error,
+        observedPublicErrorCode,
       );
     }
   };
