@@ -125,18 +125,17 @@ describe('synthetic STAGING soak runner', () => {
   });
 
   it('retries transient GET 503/500 responses and records only the final observation', async () => {
+    const attemptsByPath = new Map<string, number>();
     const fetchMock = vi.fn<typeof fetch>((input) => {
       const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
       const path = new URL(url).pathname;
-      if (path === '/api/v0/resources') {
-        if (fetchMock.mock.calls.filter((call) => String(call[0]).includes('/resources')).length < 2) {
-          return Promise.resolve(new Response(null, { status: 503 }));
-        }
+      const attempt = (attemptsByPath.get(path) ?? 0) + 1;
+      attemptsByPath.set(path, attempt);
+      if (path === '/api/v0/resources' && attempt === 1) {
+        return Promise.resolve(new Response(null, { status: 503 }));
       }
-      if (path === '/api/v0/cases') {
-        if (fetchMock.mock.calls.filter((call) => String(call[0]).includes('/cases')).length < 2) {
-          return Promise.resolve(new Response(null, { status: 500 }));
-        }
+      if (path === '/api/v0/cases' && attempt === 1) {
+        return Promise.resolve(new Response(null, { status: 500 }));
       }
       return Promise.resolve(new Response(null, { status: 200 }));
     });
