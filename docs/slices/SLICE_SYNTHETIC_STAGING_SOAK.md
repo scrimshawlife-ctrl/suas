@@ -13,9 +13,9 @@
 - `scripts/synthetic-staging-soak.ts`: fixed GET-only route mix, canonical
   5-minute warm-up + 5 VUs/120 minutes + 10 VUs/15 minutes + up-to-15-minute
   drain, shorter-duration test overrides, fail-closed safety locks, sanitized
-  aggregate output, and bounded GET retries for transient staging `503`/`500`
-  before recording the observation. Retry counts are aggregate-only; this is
-  not a capacity SLO.
+  aggregate output, and bounded GET retries for transient staging `503`/`500`.
+  Every attempt is recorded (recovered 5xx stay non-fatal). Retry delay is
+  abortable and rechecked after drain. This is not a capacity SLO.
 - `.github/workflows/synthetic-staging-soak.yml`: manual dispatch only, existing
   synthetic E2E origin and bearer secrets, no provisioning or deployment.
 - `tests/unit/synthetic-staging-soak.test.ts`: profile, safety, secret/body
@@ -54,6 +54,7 @@ being invented by this request-only harness.
 
 Failed canonical soak on `fad50fb` after PR #168 was staging `503` flake (plus
 two `500`s on `responder_unassigned_cases`), not a session-minting or product
-bug. Session refresh succeeded; health stayed `200`; no `401`. The harness now
-retries those GET statuses before recording so a transient platform 5xx is not
-a false red. Persistent 5xx still fail the run. SPEC-017 stays `NOT READY`.
+bug. Session refresh succeeded; health stayed `200`; no `401`. The harness
+retries those GET statuses so a transient platform 5xx is not a false red, and
+records every attempt (including recovered 5xx) plus retry/drain outcomes.
+Exhausted 5xx still fail the run. SPEC-017 stays `NOT READY`.

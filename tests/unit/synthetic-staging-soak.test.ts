@@ -121,10 +121,11 @@ describe('synthetic STAGING soak runner', () => {
       retried_statuses: [...TRANSIENT_GET_RETRY.statuses],
       recovered: 0,
       exhausted: 0,
+      statuses: {},
     });
   });
 
-  it('retries transient GET 503/500 responses and records only the final observation', async () => {
+  it('records recovered GET 503/500 statuses without failing the job', async () => {
     const attemptsByPath = new Map<string, number>();
     const fetchMock = vi.fn<typeof fetch>((input) => {
       const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
@@ -143,10 +144,15 @@ describe('synthetic STAGING soak runner', () => {
     const summary = await runSoak(shortConfig(), { fetch: fetchMock, pacingMs: 1 });
 
     expect(summary.verdict).toBe('PASS');
+    expect(summary.aggregate.statuses['503']).toBeGreaterThan(0);
+    expect(summary.aggregate.statuses['500']).toBeGreaterThan(0);
+    expect(summary.aggregate.statuses['200']).toBeGreaterThan(0);
     expect(summary.aggregate.errors.http_5xx).toBe(0);
     expect(summary.retry.recovered).toBeGreaterThan(0);
     expect(summary.retry.exhausted).toBe(0);
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(summary.aggregate.requests);
+    expect(summary.retry.statuses['503']).toBeGreaterThan(0);
+    expect(summary.retry.statuses['500']).toBeGreaterThan(0);
+    expect(fetchMock.mock.calls.length).toBe(summary.aggregate.requests);
   });
 
   it('aggregates statuses and sanitized error categories', async () => {
@@ -177,8 +183,29 @@ describe('synthetic STAGING soak runner', () => {
     expect(summary.retry.exhausted).toBeGreaterThan(0);
     expect(summary.by_request.veteran_self?.errors.http_4xx).toBeGreaterThan(0);
     expect(summary.by_request.resource_catalog?.errors.http_5xx).toBeGreaterThan(0);
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(summary.aggregate.requests);
+    expect(fetchMock.mock.calls.length).toBe(summary.aggregate.requests);
     expect(summary.verdict).toBe('ERRORS_OBSERVED');
+  });
+
+  it('does not start another fetch when drain expires during the retry delay', async () => {
+    const fetchTimes: number[] = [];
+    const fetchMock = vi.fn<typeof fetch>(() => {
+      fetchTimes.push(performance.now());
+      return Promise.resolve(new Response(null, { status: 503 }));
+    });
+
+    const summary = await runSoak(shortConfig(), { fetch: fetchMock, pacingMs: 1 });
+
+    const clusterStart = fetchTimes.reduce((earliest, time) => {
+      const nearby = fetchTimes.filter((other) => Math.abs(other - time) < 20).length;
+      return nearby >= 8 ? Math.min(earliest, time) : earliest;
+    }, Number.POSITIVE_INFINITY);
+    const lastFetch = Math.max(...fetchTimes);
+
+    expect(Number.isFinite(clusterStart)).toBe(true);
+    expect(lastFetch - clusterStart).toBeLessThan(80);
+    expect(summary.drain.forced_aborts).toBeGreaterThan(0);
+    expect(summary.aggregate.statuses['503']).toBeGreaterThan(0);
   });
 });
 
