@@ -196,10 +196,14 @@ export delivery, or deletion.
 
 The artifact at `artifacts/soak/synthetic-staging-soak-summary.json` contains
 only aggregate request counts, HTTP status counts, sanitized error categories,
-p50/p95/p99/max latency, fixed request identifiers, and drain counts. Response
-bodies, bearer credentials, request headers, and raw exception messages are not
-recorded. A passing run is stability evidence only and keeps capacity at
-`NOT_COMPUTABLE`; it is not a production-readiness or production-capacity claim.
+p50/p95/p99/max latency, fixed request identifiers, drain counts, and GET retry
+totals. Each GET retries transient `503`/`500` up to two times before the
+observation is recorded, so a brief synthetic-STAGING platform flake does not
+by itself fail the harness. Persistent 5xx, 4xx, timeouts, and network errors
+still fail the run. Response bodies, bearer credentials, request headers, and
+raw exception messages are not recorded. A passing run is stability evidence
+only and keeps capacity at `NOT_COMPUTABLE`; it is not a production-readiness
+or production-capacity claim.
 
 Do not run the soak until the synthetic-STAGING deployment and operator
 authorization prerequisites in
