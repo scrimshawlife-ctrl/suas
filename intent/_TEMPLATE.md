@@ -31,8 +31,8 @@ Product and domain intents belong in [`SUAS-specs` `intent/`](https://github.com
 
 ## Verified / assumed claims
 
-| Claim | Label | Basis |
-|---|---|---|
+| Claim                  | Label                                                                                      | Basis                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------- |
 | \<fact or assumption\> | `OBSERVED` / `INFERRED` / `SPECULATIVE` / `NOT_COMPUTABLE` / `DECISION_PENDING` / `FUTURE` | \<source or why it is not computable\> |
 
 ## Author / date
