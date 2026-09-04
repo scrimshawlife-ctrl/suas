@@ -112,6 +112,15 @@ async function adminSignIn(target: StartedApp = app) {
   return { credential: issued.credential, tenantId };
 }
 
+const plannedAdminSurfacePaths = [
+  '/app/admin/organizations',
+  '/app/admin/access',
+  '/app/admin/artifacts',
+  '/app/admin/providers',
+  '/app/admin/operations',
+  '/app/admin/audit',
+] as const;
+
 describe('MVP_REFERENCE.md §5 — public surfaces', () => {
   it('serves the landing action surface without a session', async () => {
     const response = await app.server.inject({ method: 'GET', url: '/app' });
@@ -520,6 +529,9 @@ describe('MVP_REFERENCE.md §7.5 / ADMIN.md §2 — the admin overview', () => {
     expect(page.body).toContain('What does this status mean?');
     expect(page.body).toContain('Disable removes it from new routing');
     expect(auditAccessibility(page.body)).toEqual([]);
+    for (const path of plannedAdminSurfacePaths) {
+      expect(page.body).toContain(`href="${path}"`);
+    }
 
     const enabled = await app.server.inject({
       method: 'POST',
@@ -590,6 +602,57 @@ describe('MVP_REFERENCE.md §7.5 / ADMIN.md §2 — the admin overview', () => {
     } finally {
       await configured.close();
     }
+  });
+
+  it.each(plannedAdminSurfacePaths)('refuses %s to a non-admin session', async (url) => {
+    const { credential } = await signIn();
+    const response = await app.server.inject({
+      method: 'GET',
+      url,
+      headers: authorized(credential),
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it.each(plannedAdminSurfacePaths)('requires MFA elevation for %s', async (url) => {
+    const targetPool = app.pool;
+    if (targetPool === undefined) throw new Error('The test app has no database pool.');
+
+    const tenantId = randomUUID();
+    const user = await createUser(targetPool, {
+      tenantId,
+      email: syntheticEmail(`unelevated-admin-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    await grantSuasAdmin(targetPool, user.userId, undefined);
+    const issued = await createSession(targetPool, TEST_SESSION_SECRET, {
+      tenantId,
+      userId: user.userId,
+    });
+
+    const response = await app.server.inject({
+      method: 'GET',
+      url,
+      headers: authorized(issued.credential),
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it.each(plannedAdminSurfacePaths)('renders %s as an explicitly disabled module', async (url) => {
+    const { credential } = await adminSignIn();
+    const response = await app.server.inject({
+      method: 'GET',
+      url,
+      headers: authorized(credential),
+    });
+
+    expect(response.statusCode).toBe(501);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.body).toContain('This module remains disabled');
+    expect(response.body).toContain('Back to SUAS Admin');
+    expect(auditAccessibility(response.body)).toEqual([]);
   });
 });
 
