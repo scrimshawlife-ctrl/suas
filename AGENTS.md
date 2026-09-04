@@ -63,3 +63,18 @@ Standard commands live in `README.md` (command table) and `package.json` scripts
 - In LOCAL/TEST the challenge-delivery channel is fake/sink, so OTP codes are never emitted or retrievable over HTTP; drive full login flows through the integration tests or by minting a session with the domain `createSession` helper against `suas_local` (synthetic data only — ENVIRONMENT.md §2).
 - D-012 is `DECIDED` (v0.1.5). TEST/CI stay on `SUAS_SAFETY_COPY_MODE=placeholder_test_only` and must keep that default — do not switch the verify workflow or `tests/setup.ts` to `approved`. To see 911/988 copy locally, export `SUAS_SAFETY_COPY_MODE=approved` in the shell that starts the app. `ARRIVED` has no recorded domain fact today and must stay unshown.
 - D-011 is `DECIDED` (v0.2.0) for `qv-001` + `sv-001`. TEST/CI stay on `SUAS_SUPPORT_SIGNAL_MODE=fixture`. Do not add a production scoring mode or claim live compute. APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2: a settled effective `RED` opens or updates a Support Case; non-RED is a no-op; CLOSED is not reopened. Do not add real provider adapters here.
+
+## SDLC
+
+Non-trivial changes start here:
+
+1. `intent.md` — copy [intent/_TEMPLATE.md](intent/_TEMPLATE.md); see [intent/README.md](intent/README.md). Product and domain intents belong in [`SUAS-specs` `intent/`](https://github.com/scrimshawlife-ctrl/SUAS-specs/tree/main/intent).
+2. Product/domain `spec.md` lives in `SUAS-specs` and must include `## Workflows`. Implementation-only work continues as a plan in this repository and must cite released specs.
+3. plan
+4. implement
+
+Clarifications that do not change behavior may skip this sequence. The [FABLE_HANDOFF.md](FABLE_HANDOFF.md) hold still applies: do not define complete. Do not add an SDLC `HANDOFF.md` in this repository.
+
+## Escalation
+
+If CI or tests look wrong, open a labeled defect (`bug`). Do not edit tests to force green.
