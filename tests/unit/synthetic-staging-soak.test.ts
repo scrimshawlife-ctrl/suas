@@ -161,7 +161,10 @@ describe('synthetic STAGING soak runner', () => {
       const path = new URL(url).pathname;
       if (path === '/api/v0/veterans/me') {
         return Promise.resolve(
-          Response.json({ error: { code: 'UNAUTHENTICATED', message: 'discard-me' } }, { status: 401 }),
+          Response.json(
+            { error: { code: 'UNAUTHENTICATED', message: 'discard-me' } },
+            { status: 401 },
+          ),
         );
       }
       if (path === '/api/v0/resources') {
