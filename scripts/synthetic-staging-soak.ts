@@ -9,6 +9,18 @@ const DEFAULT_OUTPUT = 'artifacts/soak/synthetic-staging-soak-summary.json';
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 const REQUEST_PACING_MS = 1_000;
 
+/**
+ * GET-only client retries for transient synthetic-STAGING platform statuses.
+ * 503 is the Worker isolate/Hyperdrive not-ready and Cloudflare edge path.
+ * 500 is the Worker leftover-I/O / unhandled request-path fallback.
+ * This is soak-harness transport hardening, not a product SLO or capacity claim.
+ */
+export const TRANSIENT_GET_RETRY = Object.freeze({
+  statuses: Object.freeze([503, 500]),
+  maxAttempts: 3,
+  delayMs: 200,
+});
+
 export const CANONICAL_SOAK_PROFILE = Object.freeze({
   warmup: { durationSeconds: 5 * 60, virtualUsers: 1 },
   steady: { durationSeconds: 120 * 60, virtualUsers: 5 },
@@ -111,6 +123,13 @@ export interface SoakSummary {
   readonly by_phase: Readonly<Record<PhaseName, SanitizedAggregate>>;
   readonly by_request: Readonly<Record<string, SanitizedAggregate>>;
   readonly drain: { readonly elapsed_ms: number; readonly forced_aborts: number };
+  readonly retry: {
+    readonly max_attempts_per_request: number;
+    readonly retried_statuses: readonly number[];
+    readonly recovered: number;
+    readonly exhausted: number;
+    readonly statuses: Readonly<Record<string, number>>;
+  };
   readonly verdict: 'PASS' | 'ERRORS_OBSERVED';
   readonly capacity_claim: 'NOT_COMPUTABLE';
 }
@@ -269,6 +288,20 @@ function totalErrors(aggregate: Aggregate): number {
   return Object.values(aggregate.errors).reduce((total, count) => total + count, 0);
 }
 
+async function sleepOrAbort(
+  sleep: (milliseconds: number) => Promise<void>,
+  milliseconds: number,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) return;
+  await Promise.race([
+    sleep(milliseconds),
+    new Promise<void>((resolve) => {
+      signal.addEventListener('abort', () => resolve(), { once: true });
+    }),
+  ]);
+}
+
 export async function runSoak(
   config: SoakConfig,
   overrides: Partial<RunDependencies> = {},
@@ -294,47 +327,85 @@ export async function runSoak(
   const activeControllers = new Set<AbortController>();
   let draining = false;
   let forcedAborts = 0;
+  let recoveredRetries = 0;
+  let exhaustedRetries = 0;
+  const retryAttemptStatuses: Record<string, number> = {};
+  const retryableStatuses = new Set<number>(TRANSIENT_GET_RETRY.statuses);
 
   const execute = async (phase: PhaseName, request: FixedRequest): Promise<void> => {
-    const controller = new AbortController();
-    activeControllers.add(controller);
-    let timedOut = false;
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, config.requestTimeoutMs);
-    const started = dependencies.now();
-    let status: number | undefined;
-    let error: ErrorCategory | undefined;
-    let observedPublicErrorCode: string | undefined;
-    try {
-      const bearer = credential(config, request.credential);
-      const response = await dependencies.fetch(new URL(request.path, config.baseUrl), {
-        method: 'GET',
-        ...(bearer === undefined ? {} : { headers: { authorization: `Bearer ${bearer}` } }),
-        redirect: 'error',
-        signal: controller.signal,
-      });
-      status = response.status;
-      if (status >= 400) {
-        observedPublicErrorCode = publicErrorCode(await response.text());
-        error = status >= 500 ? 'http_5xx' : 'http_4xx';
-      } else {
-        await response.arrayBuffer();
+    const requestAggregate = byRequest[request.id] as Aggregate;
+    const targets = [aggregate, byPhase[phase], requestAggregate] as const;
+    let attempts = 0;
+    let retried = false;
+
+    while (attempts < TRANSIENT_GET_RETRY.maxAttempts) {
+      if (draining) break;
+      attempts += 1;
+      const started = dependencies.now();
+      let status: number | undefined;
+      let error: ErrorCategory | undefined;
+      let observedPublicErrorCode: string | undefined;
+      const controller = new AbortController();
+      activeControllers.add(controller);
+      let timedOut = false;
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, config.requestTimeoutMs);
+      let retryThis = false;
+      try {
+        const bearer = credential(config, request.credential);
+        const response = await dependencies.fetch(new URL(request.path, config.baseUrl), {
+          method: 'GET',
+          ...(bearer === undefined ? {} : { headers: { authorization: `Bearer ${bearer}` } }),
+          redirect: 'error',
+          signal: controller.signal,
+        });
+        status = response.status;
+        if (status >= 400) {
+          observedPublicErrorCode = publicErrorCode(await response.text());
+          if (status >= 500) {
+            retryThis =
+              retryableStatuses.has(status) &&
+              attempts < TRANSIENT_GET_RETRY.maxAttempts &&
+              !draining;
+            error = retryThis ? undefined : 'http_5xx';
+          } else {
+            error = 'http_4xx';
+          }
+        } else {
+          await response.arrayBuffer();
+        }
+      } catch {
+        error = timedOut ? 'timeout' : draining ? 'drain_aborted' : 'network';
+      } finally {
+        clearTimeout(timeout);
+        activeControllers.delete(controller);
       }
-    } catch {
-      error = timedOut ? 'timeout' : draining ? 'drain_aborted' : 'network';
-    } finally {
-      clearTimeout(timeout);
-      activeControllers.delete(controller);
-      const requestAggregate = byRequest[request.id] as Aggregate;
-      addObservation(
-        [aggregate, byPhase[phase], requestAggregate],
-        status,
-        dependencies.now() - started,
-        error,
-        observedPublicErrorCode,
-      );
+
+      addObservation(targets, status, dependencies.now() - started, error, observedPublicErrorCode);
+
+      if (!retryThis) {
+        if (retried && error === undefined) recoveredRetries += 1;
+        if (retried && error !== undefined) exhaustedRetries += 1;
+        break;
+      }
+
+      retried = true;
+      if (status !== undefined) increment(retryAttemptStatuses, String(status));
+
+      const delayController = new AbortController();
+      activeControllers.add(delayController);
+      try {
+        await sleepOrAbort(dependencies.sleep, TRANSIENT_GET_RETRY.delayMs, delayController.signal);
+      } finally {
+        activeControllers.delete(delayController);
+      }
+      if (draining || delayController.signal.aborted) {
+        for (const target of targets) target.errors.http_5xx += 1;
+        exhaustedRetries += 1;
+        break;
+      }
     }
   };
 
@@ -437,6 +508,13 @@ export async function runSoak(
       ]),
     ),
     drain: { elapsed_ms: Number(drainElapsedMs.toFixed(2)), forced_aborts: forcedAborts },
+    retry: {
+      max_attempts_per_request: TRANSIENT_GET_RETRY.maxAttempts,
+      retried_statuses: [...TRANSIENT_GET_RETRY.statuses],
+      recovered: recoveredRetries,
+      exhausted: exhaustedRetries,
+      statuses: { ...retryAttemptStatuses },
+    },
     verdict: totalErrors(aggregate) === 0 ? 'PASS' : 'ERRORS_OBSERVED',
     capacity_claim: 'NOT_COMPUTABLE',
   };
