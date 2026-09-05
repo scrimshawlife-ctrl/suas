@@ -288,3 +288,5 @@ Manual/fake/test adapters are valid where the release permits them.
 9. If you change `/api/v0`, auth, environment class, or a Veteran journey, consider both `suas-ios` and `suas-android`. Native clients consume `/api/v0`. Do not add `/api/mobile`. Do not treat HTML `/app/*` commands as the mobile contract.
 
 See [FABLE_HANDOFF.md](FABLE_HANDOFF.md), [CONTEXT.md](CONTEXT.md), [AGENTS.md](AGENTS.md), [IMPLEMENTATION_BOOTSTRAP.md](IMPLEMENTATION_BOOTSTRAP.md), and [SPEC017_PLAN.md](SPEC017_PLAN.md).
+
+Skill source selection, migration and safe checks: [SKILL_PROVENANCE.md](SKILL_PROVENANCE.md).
