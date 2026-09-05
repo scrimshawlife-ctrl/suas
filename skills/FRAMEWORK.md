@@ -7,7 +7,7 @@ This framework applies to every project-local runtime skill under `skills/*/SKIL
 ```yaml
 ---
 name: <kebab-case>
-description: "Use when <trigger>. <What this skill does; non-empty, at most 1024 characters>."
+description: 'Use when <trigger>. <What this skill does; non-empty, at most 1024 characters>.'
 version: 1.0.0
 kind: runtime
 status: active
