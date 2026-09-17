@@ -3,7 +3,7 @@
 ## Preconditions
 
 - `SUAS_ENV` is `LOCAL`, `TEST`, or (when authorized) `STAGING` — never enable `PRODUCTION` to “try deploy”.
-- Spec pin `SUAS_SPEC_VERSION=0.2.0` and matching release manifest.
+- Spec pin `SUAS_SPEC_VERSION=0.6.0` and `SUAS_RELEASE_MANIFEST=RELEASE_MANIFEST-0.6.0.md` (`src/release/pins.ts`).
 - `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`.
 - Durable job product still D-022: STAGING process start fails closed until decided.
 

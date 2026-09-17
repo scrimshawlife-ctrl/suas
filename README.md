@@ -14,17 +14,18 @@ The former `demo.html` URL remains as a compatibility redirect to the Product UI
 
 ## Start here
 
-**Fable:** read [FABLE_HANDOFF.md](FABLE_HANDOFF.md), then [CONTEXT.md](CONTEXT.md), [AGENTS.md](AGENTS.md), and [SPEC017_PLAN.md](SPEC017_PLAN.md).
+**Fable:** read [FABLE_HANDOFF.md](FABLE_HANDOFF.md), then [CONTEXT.md](CONTEXT.md), [AGENTS.md](AGENTS.md), [SPEC017_PLAN.md](SPEC017_PLAN.md), and [SPEC017_NEXT.md](SPEC017_NEXT.md).
 
 Canonical released specs:
 
-- specification stack: `0.2.0`
-- specs merge: `4a722e69ad8f7ff45a9581ca3bdd022bdf524f8f`
-- manifest: `RELEASE_MANIFEST-0.2.0.md`
+- specification stack: `0.6.0`
+- specs merge pin: `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` (`src/release/pins.ts`)
+- manifest: `RELEASE_MANIFEST-0.6.0.md`
 - current stage: `SPEC-017` implementation conformance
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - pilot readiness: `NOT_READY`
 - production readiness: `NOT_READY`
+- pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
 
 ## Product surfaces
 
@@ -263,7 +264,7 @@ Logical classes are `LOCAL`, `TEST`, `STAGING`, `PRODUCTION`. LOCAL/TEST/STAGING
 
 ## Release boundary
 
-v0.2.0 authorizes implementation but not production operation.
+v0.6.0 authorizes implementation but not production operation.
 
 Production-unavailable until later decision/evidence closure:
 
@@ -287,6 +288,6 @@ Manual/fake/test adapters are valid where the release permits them.
 8. Do not claim HIPAA compliance or production readiness from release/implementation alone.
 9. If you change `/api/v0`, auth, environment class, or a Veteran journey, consider both `suas-ios` and `suas-android`. Native clients consume `/api/v0`. Do not add `/api/mobile`. Do not treat HTML `/app/*` commands as the mobile contract.
 
-See [FABLE_HANDOFF.md](FABLE_HANDOFF.md), [CONTEXT.md](CONTEXT.md), [AGENTS.md](AGENTS.md), [IMPLEMENTATION_BOOTSTRAP.md](IMPLEMENTATION_BOOTSTRAP.md), and [SPEC017_PLAN.md](SPEC017_PLAN.md).
+See [FABLE_HANDOFF.md](FABLE_HANDOFF.md), [CONTEXT.md](CONTEXT.md), [AGENTS.md](AGENTS.md), [IMPLEMENTATION_BOOTSTRAP.md](IMPLEMENTATION_BOOTSTRAP.md), [SPEC017_PLAN.md](SPEC017_PLAN.md), and [SPEC017_NEXT.md](SPEC017_NEXT.md).
 
 Skill source selection, migration and safe checks: [SKILL_PROVENANCE.md](SKILL_PROVENANCE.md).
