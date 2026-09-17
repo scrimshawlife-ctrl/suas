@@ -1,11 +1,11 @@
 # AGENTS.md — SUAS implementation rules
 
-Released stack: `0.2.0`  
-Manifest: `RELEASE_MANIFEST-0.2.0.md` in `SUAS-specs`  
+Released stack: `0.6.0`  
+Manifest: `RELEASE_MANIFEST-0.6.0.md` in `SUAS-specs`  
 Authority: `RELEASED_FOR_IMPLEMENTATION`  
 Stage: `SPEC-017`
 
-Read `FABLE_HANDOFF.md` and `CONTEXT.md` first.
+Read `FABLE_HANDOFF.md` and `CONTEXT.md` first. Pin inventory: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md).
 
 ## Product surfaces
 
