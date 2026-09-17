@@ -3,7 +3,8 @@
 **Released spec:** `0.2.0` (plan opened against `0.1.1`; the runtime now pins `0.2.0` — `src/release/pins.ts`, `RELEASE_MANIFEST-0.2.0.md`)  
 **Status:** `IN_PROGRESS`  
 **Implementation repository:** `scrimshawlife-ctrl/SUAS`  
-**Canonical specs:** `scrimshawlife-ctrl/SUAS-specs`
+**Canonical specs:** `scrimshawlife-ctrl/SUAS-specs`  
+**Current residual map:** [SPEC017_NEXT.md](SPEC017_NEXT.md)
 
 ## Progress
 
@@ -28,6 +29,9 @@ On-duty HTML now states unavailability (G-I-30) instead of posting a 404 form.
 A signed-in veteran can finish `qv-001` on `/app/check-ins` using the same
 domain functions as the JSON API. Join, chat, and metrics stay unwired
 residuals. SPEC-017 and `UI_CONFORMANCE` do **not** advance.
+
+See [SPEC017_NEXT.md](SPEC017_NEXT.md) for the pin-drift inventory and the order
+of those residuals. D-037 does not add slices here.
 
 Slices 1–12 each record conformance and returned gaps. Slice 12 registers the
 released `sv-001` engine. APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2
