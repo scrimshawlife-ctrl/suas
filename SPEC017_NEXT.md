@@ -9,25 +9,26 @@ Slices 1–12 are recorded `IMPLEMENTED` in [SPEC017_PLAN.md](SPEC017_PLAN.md). 
 
 ## 1. Pin state
 
-Runtime constants already pin `0.6.0` / `RELEASE_MANIFEST-0.6.0.md` (`src/release/pins.ts`, `.env.example`, CI). Living handoff docs were still advertising `0.2.0`. That is documentation drift, not an open pin choice.
+Runtime constants pin `0.6.0` / `RELEASE_MANIFEST-0.6.0.md`. Living handoff docs match.
 
-`suas-specs` STATUS "Next stage" text named `0.4.0` while the stack header is `0.6.0`. That is specs editorial drift. It does not authorize a second pin.
-
-## 2. Product residuals named by Slice 10
+## 2. Slice 10 residuals
 
 | Residual | Status | Rule |
 |---|---|---|
-| Veteran join HTML | unwired | released MVP_REFERENCE / AUTH only; no new journey |
+| Veteran join / browser EMAIL OTP | `IMPLEMENTED` on `/app/join`, `/app/auth/challenges`, `/app/auth/verify`, `/app/auth/logout` when `SUAS_BROWSER_AUTH_MODE=email_otp` | AUTH.md §9.1; already-enrolled only |
+| Native sign-in parity | specified in `suas-specs` [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md) | Bearer on `/api/v0`; no `/app` cookie; iOS and Android same meaning |
 | Chat HTML | unwired | truthful unavailable state already required; do not invent a live chat backend |
 | Metrics HTML | unwired | ANALYTICS.md operational metrics only; D-025 still open; no clinical claims |
+
+The plan line “Join … stay unwired” is stale for join. Chat and metrics remain.
 
 ## 3. Out of this lane
 
 - D-037 funding overlay, GCP evidence project, credit spend
 - SPEC-018
 - Moving the Worker onto Google Cloud
-- Inventing Run 001 JSON
+- Wrapping `/app/join` in a native WebView
 
-## 4. Next product PR after this inventory
+## 4. Next product PR
 
-Join / chat / metrics HTML against released contracts, one residual at a time. Pin constants stay `0.6.0` unless a later release manifest supersedes them.
+Chat HTML truthful-unavailable surface, or Android `/api/v0` sign-in client matching iOS and [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md). Pin stays `0.6.0`.
