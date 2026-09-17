@@ -1,10 +1,11 @@
-# SPEC017_PLAN.md — Implementation conformance plan for SUAS v0.1.1
+# SPEC017_PLAN.md — Implementation conformance plan
 
-**Released spec:** `0.2.0` (plan opened against `0.1.1`; the runtime now pins `0.2.0` — `src/release/pins.ts`, `RELEASE_MANIFEST-0.2.0.md`)  
+**Released spec (current pin):** `0.6.0` (`src/release/pins.ts`, `RELEASE_MANIFEST-0.6.0.md`)  
+**Plan opened against:** `0.1.1`; slices 1–12 were recorded while the stack moved `0.1.1` → `0.6.0`  
 **Status:** `IN_PROGRESS`  
 **Implementation repository:** `scrimshawlife-ctrl/SUAS`  
 **Canonical specs:** `scrimshawlife-ctrl/SUAS-specs`  
-**Current residual map:** [SPEC017_NEXT.md](SPEC017_NEXT.md)
+**What to build next:** [SPEC017_NEXT.md](SPEC017_NEXT.md)
 
 ## Progress
 
@@ -24,50 +25,25 @@
 | 11 — Scale / resilience harness         | `IMPLEMENTED (drills only)`  | [docs/slices/SLICE_11_RESILIENCE_HARNESS.md](docs/slices/SLICE_11_RESILIENCE_HARNESS.md)       |
 | 12 — D-011 scoring (`qv-001`/`sv-001`)  | `IMPLEMENTED`                | [docs/slices/SLICE_12_SIGNAL_SCORING.md](docs/slices/SLICE_12_SIGNAL_SCORING.md)               |
 
-The Slice 10 follow-on wires released deploy / cancel / claim HTML POSTs.
-On-duty HTML now states unavailability (G-I-30) instead of posting a 404 form.
-A signed-in veteran can finish `qv-001` on `/app/check-ins` using the same
-domain functions as the JSON API. Join, chat, and metrics stay unwired
-residuals. SPEC-017 and `UI_CONFORMANCE` do **not** advance.
+The Slice 10 follow-on wires deploy / cancel / claim HTML POSTs. On-duty HTML states unavailability instead of posting a dead form. A signed-in veteran can finish `qv-001` on `/app/check-ins`.
 
-See [SPEC017_NEXT.md](SPEC017_NEXT.md) for the pin-drift inventory and the order
-of those residuals. D-037 does not add slices here.
+Web sign-in, the Chat tab, and responder summary tiles exist. Sign-in sends an email code when that mode is on. Chat says unavailable. Summary tiles say the numbers have no definition. `POST /api/v0/cases` opens or returns the Veteran’s one non-closed Case.
 
-Slices 1–12 each record conformance and returned gaps. Slice 12 registers the
-released `sv-001` engine. APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2
-for settled `RED`. No readiness gate has advanced,
-and production remains blocked until SPEC-018.
+SPEC-017 and `UI_CONFORMANCE` do **not** advance because those pages exist.
 
-**D-011 is `DECIDED` as of v0.2.0** for questionnaire `qv-001` and rules
-`sv-001`. The released engine is registered with `released: true` and the B4
-golden vectors are conformance fixtures. TEST/CI stay on
-`SUAS_SUPPORT_SIGNAL_MODE=fixture`. APPLY_EFFECTIVE_SIGNAL opens or updates a
-Support Case from a settled effective `RED` only. D-012 (approved safety/crisis copy) is
-`DECIDED` as of v0.1.5 (`SAFETY_COPY.md`); the veteran-facing crisis slot
-renders the released 911/988 copy when `SUAS_SAFETY_COPY_MODE=approved` and a
-labelled placeholder otherwise.
+See [SPEC017_NEXT.md](SPEC017_NEXT.md). D-037 does not add slices here. Slice records that landed under `0.2.0` keep that header.
 
-Per-capability provider disclosure is no longer globally absent. v0.1.2 closed
-D-017 (Uber selected behind `TransportationPort`) and v0.1.3 closed D-018 (Amadeus
-selected behind `TemporaryShelterPort`); both ship as adapter-local realizations
-with released field-level disclosure projections, deterministic ranking, provider
-health/fallback, and SUAS-side idempotency, and both keep their manual adapters
-mandatory (`RELEASE_DECISIONS-0.1.2.md`, `RELEASE_DECISIONS-0.1.3.md`). Amadeus
-reservation remains `BLOCKED_BY_PAYMENT_ARCHITECTURE`. D-019 (food) and D-020
-(external peer support) stay `DECISION_PENDING`, so those capabilities remain
-manual/fake only.
+**D-011 is `DECIDED` as of v0.2.0** for `qv-001` and `sv-001`. TEST/CI stay on `SUAS_SUPPORT_SIGNAL_MODE=fixture`. APPLY_EFFECTIVE_SIGNAL opens or updates a Support Case from a settled effective `RED` only. D-012 is `DECIDED` as of v0.1.5; the crisis slot renders 911/988 copy when `SUAS_SAFETY_COPY_MODE=approved`.
 
-Manual coordination — which the release makes first-class — works end to end, and
-every real-external-effect path still fails closed until SPEC-018, proven by test.
-No readiness gate has advanced, and production remains blocked until SPEC-018.
+D-017 (Uber) and D-018 (Amadeus) stay adapter-local. Amadeus reservation stays blocked on payment architecture. D-019 and D-020 stay open, so food and external peer support stay manual/fake. Real external effects fail closed until SPEC-018.
 
 ## Objective
 
-Build SUAS against the released v0.2.0 contracts and continuously prove conformance without upgrading any production-unavailable release feature by implication.
+Build against the current `0.6.0` contracts. Prove conformance. Do not turn on a production-blocked feature because code exists.
 
 ## Slice 1 — Foundation
 
-Implement project/tooling structure, lockfiles, deterministic install/build/lint/typecheck/test commands, typed configuration validation, `.env.example`, build provenance/version surface, PostgreSQL migration/schema-version harness, test harness, synthetic-fixture boundary, CI skeleton, and durable-job abstraction seam.
+Project structure, lockfiles, install/build/lint/typecheck/test, typed config, `.env.example`, build provenance, PostgreSQL migrations, test harness, synthetic fixtures, CI, durable-job seam.
 
 Must cite: `HANDOFF.md`, `ENVIRONMENT.md`, ARCHITECTURE, DATA_MODEL, VERSIONING, RELEASE_MANIFEST.
 
@@ -75,11 +51,11 @@ No real external effects.
 
 ## Slice 2 — Event/idempotency kernel
 
-Persistent command idempotency, event envelope, replay-safe publication/outbox-equivalent semantics, correlation/causation, duplicate-delivery tests.
+Persistent command idempotency, event envelope, replay-safe publication, correlation/causation, duplicate-delivery tests.
 
 ## Slice 3 — Identity / tenancy / authorization
 
-User, Organization, Membership, passwordless auth abstraction, shared session revocation semantics, privileged MFA boundary, tenant isolation, role + tenant + row + consent authorization. Production auth/email/SMS providers remain unavailable; use fakes/test seams.
+User, Organization, Membership, passwordless auth, shared session revocation, privileged MFA boundary, tenant isolation. Production auth/email/SMS providers stay unavailable except D-004 Resend as the EMAIL adapter; LOCAL/TEST stay sink/fake.
 
 ## Slice 4 — Consent and privacy kernel
 
@@ -87,46 +63,36 @@ Consent Grants, use-time evaluation, revocation, minimum-necessary projection, T
 
 ## Slice 5 — Coordination kernel
 
-Support Case, CaseAssignment, Service Request, responder one-winner claim/reassignment, Contact Attempt, explicit transition commands.
+Support Case, CaseAssignment, Service Request, one-winner claim, Contact Attempt, explicit transition commands.
 
 ## Slice 6 — Follow-Up / Settlement
 
-Stale-job schedule identity, blocking/carry-forward, multi-cycle Settlement history, idempotent resolve, reopen behavior.
+Stale-job schedule identity, blocking/carry-forward, multi-cycle Settlement, idempotent resolve, reopen.
 
 ## Slice 7 — Resources / fulfillment
 
-Resource, Referral, ServiceProvider, ProviderAdapterConfiguration, FulfillmentAttempt, ServiceFulfillment, Provider Router, Manual/Fake adapters. Real providers remain unavailable/manual-only.
+Resource, Referral, ServiceProvider, adapter configuration, FulfillmentAttempt, ServiceFulfillment, router, Manual/Fake adapters.
 
 ## Slice 8 — Notifications
 
-Logical-send dedupe, durable-job abstraction, consent re-check, fake email/SMS, IN_APP path.
+Logical-send dedupe, durable jobs, consent re-check, fake email/SMS, IN_APP path.
 
 ## Slice 9 — Check-In / Support Signal interface
 
-Questionnaire/Check-In/versioning and deterministic engine interface. Use clearly labeled unreleased fixtures only; production scoring remains unavailable.
+Questionnaire/Check-In/versioning and the released `sv-001` engine. TEST/CI stay on fixture mode.
 
 ## Slice 10 — MVP-reference UI
 
-Veteran, responder/QRF, resource, chat, admin surfaces with truthful pending/no-availability states, WCAG target, deterministic visual fixtures.
+Veteran, responder, resource, chat, admin surfaces with truthful unavailable or not-computable states.
 
 ## Slice 11 — Scale / resilience harness
 
-Horizontal-instance, duplicate delivery, stale-work, concurrency, provider-timeout, queue-backlog, event-recovery, session-revoke, migration/restore simulation. No production numeric SLO/RTO/RPO is invented.
+Instance rotation, duplicate delivery, stale work, concurrency, provider timeout, queue backlog, event recovery, session revoke, migration/restore simulation. No invented production SLO numbers.
 
 ## Per-slice definition of done
 
-Each slice includes:
-
-- released spec references;
-- changed files/packages;
-- unit/domain/integration/E2E evidence as applicable;
-- migration/data invariants;
-- environment/config changes and `.env.example` updates;
-- release-manifest availability-boundary verification;
-- security/privacy/failure/idempotency notes where relevant;
-- unresolved semantic gaps returned to `SUAS-specs`;
-- no readiness claim beyond evidence.
+Each slice includes released spec citations, changed files, tests, migration notes, env/config, availability-boundary checks, security/privacy/failure notes, gaps returned to specs, and no readiness claim beyond evidence.
 
 ## SPEC-017 completion
 
-SPEC-017 completes only when the built implementation is audited against the entire released v0.2.0 cut and all material gaps are fixed or returned to specs. SPEC-018 remains required before any real pilot or production operation. No readiness gate advances with D-011.
+SPEC-017 completes only when the build is audited against the current released cut and material gaps are fixed or returned to specs. SPEC-018 remains required before any real pilot or production operation.
