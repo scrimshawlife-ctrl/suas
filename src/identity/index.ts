@@ -1,6 +1,7 @@
 export {
   createUser,
   findUserByDestination,
+  findUsersByDestination,
   findUserById,
   NoEnrolledChannelError,
   setUserStatus,
@@ -11,6 +12,7 @@ export {
   type User,
   type UserStatus,
 } from './users.js';
+export { selectUserForSignIn } from './signin-tenant.js';
 export {
   createMembership,
   createOrganization,
