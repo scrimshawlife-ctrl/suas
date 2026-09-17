@@ -9,26 +9,28 @@ Slices 1–12 are recorded `IMPLEMENTED` in [SPEC017_PLAN.md](SPEC017_PLAN.md). 
 
 ## 1. Pin state
 
-Runtime constants pin `0.6.0` / `RELEASE_MANIFEST-0.6.0.md`. Living handoff docs match.
+Runtime constants pin `0.6.0` / `RELEASE_MANIFEST-0.6.0.md`.
 
 ## 2. Slice 10 residuals
 
 | Residual | Status | Rule |
 |---|---|---|
-| Veteran join / browser EMAIL OTP | `IMPLEMENTED` on `/app/join`, `/app/auth/challenges`, `/app/auth/verify`, `/app/auth/logout` when `SUAS_BROWSER_AUTH_MODE=email_otp` | AUTH.md §9.1; already-enrolled only |
-| Native sign-in parity | specified in `suas-specs` [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md) | Bearer on `/api/v0`; no `/app` cookie; iOS and Android same meaning |
-| Chat HTML | unwired | truthful unavailable state already required; do not invent a live chat backend |
-| Metrics HTML | unwired | ANALYTICS.md operational metrics only; D-025 still open; no clinical claims |
+| Veteran join / browser EMAIL OTP | `IMPLEMENTED` | AUTH.md §9.1 |
+| Native sign-in parity | specified | [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md) |
+| Chat HTML | `IMPLEMENTED` as truthful `UNAVAILABLE` | `GET /app/chat` authenticates and states unavailability (G-I-31). No message store. No `/app/chat/:id` product route. |
+| Native chat parity | specified | [D033_CHAT_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_CHAT_PARITY.md) |
+| Metrics HTML | unwired / `NOT_COMPUTABLE` | ANALYTICS.md; D-025 open; no clinical claims |
 
-The plan line “Join … stay unwired” is stale for join. Chat and metrics remain.
+The plan line that listed chat as “unwired” meant “no messaging product.” The landmark is already required and already honest on `/app/chat`.
+
+The renderer still has an `AVAILABLE` fixture branch that can emit `Open conversation` links. That branch is not the live route. Do not promote it.
 
 ## 3. Out of this lane
 
-- D-037 funding overlay, GCP evidence project, credit spend
+- Inventing threads, compose, or a chat SDK
+- D-037 / GCP / credit spend
 - SPEC-018
-- Moving the Worker onto Google Cloud
-- Wrapping `/app/join` in a native WebView
 
 ## 4. Next product PR
 
-Chat HTML truthful-unavailable surface, or Android `/api/v0` sign-in client matching iOS and [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md). Pin stays `0.6.0`.
+Metrics HTML as `NOT_COMPUTABLE` (same honesty pattern as chat), or the Android `/api/v0` sign-in client matching iOS. Pin stays `0.6.0`.
