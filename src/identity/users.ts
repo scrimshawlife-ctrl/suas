@@ -1,13 +1,5 @@
 /**
  * Users.
- *
- * Spec citations:
- * - SUAS-specs DOMAIN_MODEL.md §2 "User" — lifecycle INVITED → ACTIVE →
- *   SUSPENDED → REVOKED; revoked users cannot authenticate or act, and historical
- *   actor ids remain.
- * - SUAS-specs DATA_MODEL.md §2 "users", §14 rule 1 (tenant consistency)
- * - SUAS-specs AUTH.md §6 (User.status = ACTIVE required)
- * - SUAS-specs SECURITY.md §2 (tenant isolation; soft-delete)
  */
 
 import { randomUUID } from 'node:crypto';
@@ -55,10 +47,6 @@ export interface CreateUserInput {
   readonly status?: UserStatus;
 }
 
-/**
- * AUTH.md §2 / D-016: MVP enrollment requires at least one usable enrolled
- * channel, and requires no VA API, DD-214, or in-person proofing.
- */
 export class NoEnrolledChannelError extends Error {
   readonly code = 'NO_ENROLLED_CHANNEL';
   readonly httpStatus = 422;
@@ -72,11 +60,6 @@ export class NoEnrolledChannelError extends Error {
   }
 }
 
-/**
- * DOMAIN_MODEL.md §2: the User lifecycle ends at `REVOKED`, and "revoked users
- * cannot authenticate/act". A revoked user must not be reactivated (that would
- * silently restore the ability to authenticate); re-onboarding is a new user.
- */
 export class UserTerminalError extends Error {
   readonly code = 'UNPROCESSABLE';
   readonly httpStatus = 422;
@@ -122,11 +105,6 @@ export async function findUserById(
   return row === undefined ? undefined : toUser(row);
 }
 
-/**
- * Look up a user by an enrolled contact destination within one tenant.
- * Contact identifiers are unique per tenant, not globally, so the tenant must be
- * known before authentication can resolve a user.
- */
 export async function findUserByDestination(
   db: Queryable,
   tenantId: string,
@@ -143,12 +121,21 @@ export async function findUserByDestination(
   return row === undefined ? undefined : toUser(row);
 }
 
-/**
- * Change a user's lifecycle status.
- *
- * AUTH.md §5: SUSPENDED and REVOKED are session-invalidation triggers, so callers
- * revoke that user's sessions in the same transaction.
- */
+/** Destinations may exist in more than one tenant. Sign-in picks with selectUserForSignIn. */
+export async function findUsersByDestination(
+  db: Queryable,
+  destination: string,
+): Promise<User[]> {
+  const normalized = normalizeDestination(destination);
+  const result = await db.query<UserRow>(
+    `SELECT ${USER_COLUMNS} FROM users
+     WHERE deleted_at IS NULL
+       AND (lower(email) = lower($1) OR phone = $1)`,
+    [normalized],
+  );
+  return result.rows.map(toUser);
+}
+
 export async function setUserStatus(
   db: Queryable,
   tenantId: string,
@@ -164,8 +151,6 @@ export async function setUserStatus(
   );
   const row = result.rows[0];
   if (row === undefined) {
-    // Distinguish "no such live user" (undefined, as before) from a refused
-    // transition out of the terminal REVOKED state.
     const existing = await findUserById(db, tenantId, userId);
     if (existing?.status === 'REVOKED') throw new UserTerminalError();
     return undefined;
@@ -173,11 +158,6 @@ export async function setUserStatus(
   return toUser(row);
 }
 
-/**
- * Soft-delete. SECURITY.md §2: deletion is soft-delete plus process, and events
- * are not casually purged. The row remains so historical actor ids stay
- * resolvable (DOMAIN_MODEL.md §2).
- */
 export async function softDeleteUser(
   db: Queryable,
   tenantId: string,

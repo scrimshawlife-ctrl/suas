@@ -1,14 +1,5 @@
 /**
  * Authentication routes.
- *
- * Spec citations:
- * - SUAS-specs API.md §2 (`/api/v0` prefix), §3 (`/auth` resource prefix),
- *   §4 (command endpoints, server-derived authority), §6 (error bodies)
- * - SUAS-specs AUTH.md §2-§5, §8-§9
- *
- * These endpoints are the documented exception to "every non-auth request
- * requires an authenticated session" (API.md §4): issuing and verifying a
- * challenge is how a session is obtained in the first place.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -26,6 +17,7 @@ import {
   type MfaPort,
 } from '../../auth/index.js';
 import { CHALLENGE_METHODS } from '../../auth/index.js';
+import { findUsersByDestination, selectUserForSignIn } from '../../identity/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { authenticate } from '../authenticate.js';
 import { UnauthenticatedError } from '../../authz/index.js';
@@ -37,17 +29,16 @@ export interface AuthRouteDeps {
   readonly mfa: MfaPort;
 }
 
+const UNKNOWN_TENANT = '00000000-0000-4000-8000-000000000000';
+
 const issueBody = z.object({
-  // Pre-authentication, the server has no session to derive tenant scope from,
-  // so the client supplies it. How a veteran's tenant is resolved at sign-in is
-  // returned to specs in the Slice 3 conformance record.
-  tenant_id: z.string().uuid(),
+  tenant_id: z.string().uuid().optional(),
   destination: z.string().min(3).max(320),
   method: z.enum([CHALLENGE_METHODS[0], ...CHALLENGE_METHODS.slice(1)] as [string, ...string[]]),
 });
 
 const verifyBody = z.object({
-  tenant_id: z.string().uuid(),
+  tenant_id: z.string().uuid().optional(),
   destination: z.string().min(3).max(320),
   code: z.string().min(1).max(512),
 });
@@ -57,9 +48,20 @@ const mfaVerifyBody = z.object({
   response: z.string().min(1).max(512),
 });
 
+async function tenantForSignIn(
+  pool: Pool,
+  destination: string,
+  assertedTenantId: string | undefined,
+): Promise<string> {
+  const matches = await findUsersByDestination(pool, destination);
+  const user = selectUserForSignIn(matches, assertedTenantId);
+  return user?.tenantId ?? assertedTenantId ?? UNKNOWN_TENANT;
+}
+
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   app.post(`${API_PREFIX}/auth/challenges`, async (request, reply) => {
     const body = issueBody.parse(request.body);
+    const tenantId = await tenantForSignIn(deps.pool, body.destination, body.tenant_id);
 
     await issueChallenge(
       {
@@ -68,21 +70,19 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         delivery: deps.delivery,
       },
       {
-        tenantId: body.tenant_id,
+        tenantId,
         destination: body.destination,
         method: body.method as (typeof CHALLENGE_METHODS)[number],
         correlationId: String(request.id),
       },
     );
 
-    // Deliberately uniform: the response does not reveal whether the destination
-    // is enrolled, so this endpoint cannot enumerate veterans. An unavailable
-    // channel is a different matter and does surface, as a 503.
     return reply.status(202).send({ status: 'accepted' });
   });
 
   app.post(`${API_PREFIX}/auth/challenges/commands/verify`, async (request, reply) => {
     const body = verifyBody.parse(request.body);
+    const tenantId = await tenantForSignIn(deps.pool, body.destination, body.tenant_id);
 
     const issued = await verifyAndCreateSession(
       {
@@ -91,7 +91,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         delivery: deps.delivery,
       },
       {
-        tenantId: body.tenant_id,
+        tenantId,
         destination: body.destination,
         code: body.code,
         correlationId: String(request.id),
@@ -101,7 +101,6 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     return reply.status(201).send({
       session_credential: issued.credential,
       expires_at: issued.session.expiresAt.toISOString(),
-      // Elevation is a separate step; a fresh session is never privileged.
       mfa_elevated: false,
     });
   });
