@@ -2,43 +2,31 @@
 
 ## Canonical release
 
-Build against `scrimshawlife-ctrl/SUAS-specs` release **v0.2.0**.
+Build against `scrimshawlife-ctrl/SUAS-specs` release **v0.6.0**.
 
-- Specs merge: `4a722e69ad8f7ff45a9581ca3bdd022bdf524f8f`
-- Manifest: `RELEASE_MANIFEST-0.2.0.md`
-- Decision ledger: `RELEASE_DECISIONS-0.2.0.md` (D-011); inherited `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise.
+- Specs merge pin: `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` (`src/release/pins.ts`)
+- Manifest: `RELEASE_MANIFEST-0.6.0.md`
+- Decision ledger: `RELEASE_DECISIONS-0.6.0.md` (D-004); inherited `RELEASE_DECISIONS-0.5.0.md` / `0.4.0.md` (D-035); `RELEASE_DECISIONS-0.3.0.md` (D-033); `RELEASE_DECISIONS-0.2.0.md` (D-011); `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise.
 - Current stage: SPEC-017 implementation conformance
 - Production/pilot readiness: `NOT_READY`
+- Pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
 
 ## Read order
 
 1. This file.
 2. `CONTEXT.md` in this repo.
 3. `AGENTS.md`.
-4. `SPEC017_PLAN.md`.
+4. `SPEC017_PLAN.md` and `SPEC017_NEXT.md`.
 5. In `SUAS-specs`: `HANDOFF.md`.
 6. `ENVIRONMENT.md`.
-7. `RELEASE_MANIFEST-0.2.0.md`.
+7. `RELEASE_MANIFEST-0.6.0.md`.
 8. `STATUS.md`, `PRODUCT.md`, `GLOSSARY.md`.
 9. `ARCHITECTURE.md`, `DOMAIN_MODEL.md`, `DATA_MODEL.md`, `API.md`, `APIS.md`, `TESTING.md`.
 10. Domain files for the slice you are implementing.
 
 ## First task
 
-Start with **SPEC-017 Slice 1 — Foundation**. Do not jump to UI/provider work first.
-
-Slice 1 should establish:
-
-- chosen project/toolchain structure and lockfiles;
-- deterministic install/build/lint/typecheck/test commands;
-- typed configuration schema implementing `ENVIRONMENT.md`;
-- `.env.example` mapping;
-- build/version provenance surface;
-- PostgreSQL migration/schema-version harness;
-- test harness and synthetic fixture boundary;
-- repository quality checks/CI skeleton;
-- durable-job abstraction seam without choosing an unreleased production queue vendor;
-- no real external effects.
+Slices 1–12 are already recorded. Do not restart at Slice 1. Follow [SPEC017_NEXT.md](SPEC017_NEXT.md).
 
 ## Hard constraints
 
@@ -46,11 +34,12 @@ Slice 1 should establish:
 - If a product/domain rule is missing, return it to specs instead of guessing.
 - LOCAL/TEST/STAGING cannot use production data or real support effects.
 - Production operation is blocked until SPEC-018.
-- Real email/SMS/auth/service-provider vendors are not authorized by the current release; use disabled/fake/sink/manual seams.
+- Real email/SMS/auth/service-provider vendors are not authorized by the current release except D-004 Resend as the EMAIL adapter; LOCAL/TEST stay sink/fake. Use disabled/fake/sink/manual seams for everything still open.
 - D-011 released `qv-001` + `sv-001` as implementation-authoritative scoring. TEST/CI stay on `SUAS_SUPPORT_SIGNAL_MODE=fixture`. That mode is never production authority. APPLY_EFFECTIVE_SIGNAL transcribes SAFETY.md §3.2 (RED opens/updates a case; non-RED is a no-op; CLOSED is not REOPEN). Real provider adapters stay out of this packet. D-012 approved safety copy is gated by `SUAS_SAFETY_COPY_MODE` (`approved` renders it; TEST/CI stay on `placeholder_test_only`).
 - No automated emergency dispatch, diagnosis, suicide prediction, or safety-critical generative AI.
 - No provider SDK types/statuses in domain modules.
-- Preserve MVP visual/interaction identity when the UI slice begins.
+- Preserve MVP visual/interaction identity when the UI residual is touched.
+- D-037 does not add implementation tasks.
 
 ## Every PR must include
 
@@ -68,7 +57,7 @@ Slice 1 should establish:
 
 Keep these separate:
 
-- spec stack: `0.2.0`;
+- spec stack: `0.6.0`;
 - application version: implementation-owned;
 - API version: `/api/v0`;
 - event schema: `0.1.0` until revised;
@@ -79,4 +68,4 @@ A build should expose app version/commit, spec version, release manifest, enviro
 
 ## Definition of successful handoff
 
-You should be able to begin Slice 1 without asking what is canonical, what can contact real systems, which environment classes exist, how versions are identified, or which production surfaces are still disabled.
+You should be able to begin the current residual without asking what is canonical, what can contact real systems, which environment classes exist, how versions are identified, or which production surfaces are still disabled.
