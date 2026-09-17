@@ -1,7 +1,7 @@
 # Twelve-gate evidence matrix — SPEC-018
 
-**Stack:** `0.2.0`  
-**Runtime head:** full `CASE_COMMANDS` HTTP + Settlement reads (settle:check enum gate)  
+**Stack:** `0.6.0`  
+**Runtime head:** `/api/v0` Case commands including Veteran `POST /cases`; Settlement reads; browser EMAIL OTP on `/app` when enabled  
 **Verdict vocabulary:** `READY` | `NOT_READY` | `NOT_COMPUTABLE`
 
 | Gate                 | Verdict        | Evidence                                                                                                                                             | Remaining blockers                                                                       | Owner            | Smallest next action                                                                           | Blocks       |
@@ -19,4 +19,4 @@
 | OPERATIONS           | NOT_READY      | Health/runbooks; STAGING Worker live; public smoke 4/4; PR #119 verify green                                                                         | Authenticated STAGING soak evidence; PRODUCTION still closed                             | Eng              | Keep PRODUCTION closed and add authenticated synthetic soak evidence                           | Staging      |
 | REPORTING            | NOT_READY      | Sensitive aggregate reporting disabled                                                                                                               | D-025 policy                                                                             | Owner            | Decide D-025                                                                                   | Production   |
 
-No gate is marked `READY`.
+No gate is marked `READY`. Changing the stack line here does not mark a gate ready.

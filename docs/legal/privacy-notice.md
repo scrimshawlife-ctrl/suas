@@ -2,8 +2,8 @@
 
 **Status:** DRAFT. Pending counsel review (D-013). Not legal advice.
 **Readiness:** SPEC-017 · NOT READY. The PRIVACY gate stays NOT_READY.
-**Last updated:** 25 Aug 2026 PT
-**Authority:** SUAS-specs `PRIVACY.md`, `CONSENT.md`, `COMPLIANCE.md`, `SECURITY.md`, and `SAFETY.md` on released stack `0.2.0` (`RELEASE_MANIFEST-0.2.0.md`).
+**Last updated:** 17 Sep 2026 PT
+**Authority:** SUAS-specs `PRIVACY.md`, `CONSENT.md`, `COMPLIANCE.md`, `SECURITY.md`, and `SAFETY.md` on released stack `0.6.0` (`RELEASE_MANIFEST-0.6.0.md`).
 
 This file is the source of truth for [`docs/privacy.html`](../privacy.html). It is a public notice, not a certification.
 
@@ -21,7 +21,7 @@ We do not collect Social Security numbers, medical history, diagnoses, DD-214 du
 
 You can grant or revoke consent. You can request an export. You can request deletion. Export package format is not decided. Retention durations are not decided (D-007). A deletion request is a recorded process, not a promised deadline.
 
-Draft pending counsel review (D-013). Not legal advice. Last updated 25 Aug 2026 PT.
+Draft pending counsel review (D-013). Not legal advice. Last updated 17 Sep 2026 PT.
 
 ---
 
@@ -184,6 +184,6 @@ zer0state@zer0state.com
 
 ## Status of this notice
 
-Last updated 25 Aug 2026 PT.
+Last updated 17 Sep 2026 PT.
 
 This is a draft notice pending counsel review (D-013). It is not legal advice. It is not a certification. SPEC-017 remains NOT READY. The PRIVACY gate remains NOT_READY. No readiness gate advances because this notice exists.
