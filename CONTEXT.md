@@ -48,12 +48,15 @@ Specs are authority. Implementation gaps return to specs.
 
 ## Released implementation contract
 
-- spec version: `0.2.0`
+- spec version: `0.6.0`
+- release manifest: `RELEASE_MANIFEST-0.6.0.md`
+- specs merge pin: `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` (`src/release/pins.ts`)
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - current implementation stage: `SPEC-017`
 - production/pilot readiness: `NOT_READY`
+- pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
 
-Use `FABLE_HANDOFF.md`, `AGENTS.md`, and `SPEC017_PLAN.md` in this repo, then the released `HANDOFF.md` and `ENVIRONMENT.md` in `SUAS-specs`.
+Use `FABLE_HANDOFF.md`, `AGENTS.md`, `SPEC017_PLAN.md`, and `SPEC017_NEXT.md` in this repo, then the released `HANDOFF.md` and `ENVIRONMENT.md` in `SUAS-specs`.
 
 ## Current handoff state · 2026-08-29
 
@@ -82,9 +85,9 @@ PRODUCTION_LAUNCH=blocked
 ### Machine and platform handoff
 
 - Remote: `origin` → `https://github.com/scrimshawlife-ctrl/suas.git`.
-- Default branch: `main`. This branch contains the handoff packet as a pull request candidate and must be reviewed before merge.
+- Default branch: `main`.
 - Preserve unrelated working-tree files `.gitignore` and `.ignore`. They pre-date this handoff and are not part of the evidence packet.
-- On a new machine: clone the repository, fetch `origin`, check out the pull-request branch, run `npm ci`, then run `npm run evidence:preflight` and the targeted D-007 tests before reviewing or continuing.
+- On a new machine: clone the repository, fetch `origin`, check out `main`, run `npm ci`, then run `npm run evidence:preflight` and the targeted D-007 tests before reviewing or continuing.
 - Never place secrets, deployment credentials, personal data, or real provider configuration in this repository or its evidence packet.
 
 ## Architecture
@@ -124,7 +127,7 @@ Do not make operational by implementation default:
 - real production infrastructure/provider side effects;
 - real veteran data/live pilot;
 - production Support Signal scoring;
-- official safety/crisis copy;
+- official safety/crisis copy as the TEST/CI default;
 - real external transportation/shelter/food/peer provider adapters;
 - production SLO/RTO/RPO targets;
 - sensitive aggregate reporting.
