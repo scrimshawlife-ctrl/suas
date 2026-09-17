@@ -17,20 +17,19 @@ Runtime constants pin `0.6.0` / `RELEASE_MANIFEST-0.6.0.md`.
 |---|---|---|
 | Veteran join / browser EMAIL OTP | `IMPLEMENTED` | AUTH.md §9.1 |
 | Native sign-in parity | specified | [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md) |
-| Chat HTML | `IMPLEMENTED` as truthful `UNAVAILABLE` | `GET /app/chat` authenticates and states unavailability (G-I-31). No message store. No `/app/chat/:id` product route. |
-| Native chat parity | specified | [D033_CHAT_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_CHAT_PARITY.md) |
-| Metrics HTML | unwired / `NOT_COMPUTABLE` | ANALYTICS.md; D-025 open; no clinical claims |
+| Chat HTML | `IMPLEMENTED` as truthful `UNAVAILABLE` | G-I-31; [D033_CHAT_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_CHAT_PARITY.md) |
+| Metrics HTML | `IMPLEMENTED` as `NOT_COMPUTABLE` | Live `/app/responder` Summary tiles (`Responses`, `Avg Response`) carry state `NOT_COMPUTABLE` / `No released definition`. G-I-32. D-025 still open. |
+| Native metrics parity | specified | [D033_METRICS_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_METRICS_PARITY.md) |
 
-The plan line that listed chat as “unwired” meant “no messaging product.” The landmark is already required and already honest on `/app/chat`.
-
-The renderer still has an `AVAILABLE` fixture branch that can emit `Open conversation` links. That branch is not the live route. Do not promote it.
+Join, chat, and metrics were listed as “unwired” meaning “no invented product.” The landmarks exist and stay honest.
 
 ## 3. Out of this lane
 
-- Inventing threads, compose, or a chat SDK
+- Inventing metric formulas, zeros-as-values, or reporting privacy thresholds
 - D-037 / GCP / credit spend
 - SPEC-018
+- `REPORTING=READY`
 
 ## 4. Next product PR
 
-Metrics HTML as `NOT_COMPUTABLE` (same honesty pattern as chat), or the Android `/api/v0` sign-in client matching iOS. Pin stays `0.6.0`.
+Android `/api/v0` sign-in client matching iOS and [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md), or register Veteran-reachable `POST /cases` on `/api/v0` per [D033_NATIVE_CLIENT_PLAN.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_NATIVE_CLIENT_PLAN.md) §9. Pin stays `0.6.0`.
