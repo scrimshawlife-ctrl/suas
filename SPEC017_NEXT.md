@@ -32,5 +32,5 @@ Funding overlay, Google Cloud evidence project, credit spend, production launch,
 
 1. Keep phones and web on `/api/v0` only. Do not re-implement Android sign-in / case-open; that work is already on `suas-android` main.
 2. Android leftover from specs `GAP_ANALYSIS.md`: dummy `MainActivity` stays for tests and must not imply live fulfillment (peer-support launcher card shipped).
-3. Owner confirm Wave C fail-closed defaults, then SPEC-017 evidence acceptance before any `STATUS.md` completion claim.
+3. Owner confirm Wave C via [WAVE_C_OWNER_CONFIRMATION_PACKET.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/WAVE_C_OWNER_CONFIRMATION_PACKET.md), then SPEC-017 evidence acceptance before any `STATUS.md` completion claim.
 4. SPEC-018 / production / store distribution stay blocked.
