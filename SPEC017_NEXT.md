@@ -18,7 +18,7 @@ Prefer [SUAS-specs `REMAINING.md`](https://github.com/scrimshawlife-ctrl/suas-sp
 | Responder summary tiles | `/app/responder` says the numbers have no definition |
 | Open a Case from JSON | `POST /api/v0/cases` — one non-closed Case per Veteran |
 | Android `/api/v0` | Sign-in, `POST /cases`, ride / food / shelter / peer-support submit (see sibling `suas-android`) |
-| iOS `/api/v0` | Staging HTTPS (`suasqrf.com`), typed email code, `POST /cases`; `/dev/*` refused off localhost |
+| iOS `/api/v0` | Staging HTTPS (`suasqrf.com`), typed email code, `POST /cases`, ride / food / shelter / peer-support; `/dev/*` refused off localhost |
 
 Phone rules for those surfaces: [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md), [D033_CHAT_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_CHAT_PARITY.md), [D033_METRICS_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_METRICS_PARITY.md), [D033_CASE_OPEN.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_CASE_OPEN.md).
 
@@ -30,7 +30,7 @@ Funding overlay, Google Cloud evidence project, credit spend, production launch,
 
 ## Next
 
-1. Keep phones and web on `/api/v0` only. Do not re-implement Android sign-in / case-open; that work is already on `suas-android` main.
-2. Android leftover from specs `GAP_ANALYSIS.md`: dummy `MainActivity` stays for tests and must not imply live fulfillment (peer-support launcher card shipped).
+1. Keep phones and web on `/api/v0` only. Do not re-implement Android/iOS sign-in / case-open / MVP categories; that work is already on sibling mains.
+2. Android leftover from specs `GAP_ANALYSIS.md`: dummy `MainActivity` stays for tests and must not imply live fulfillment (now labeled test harness).
 3. Owner confirm Wave C via [WAVE_C_OWNER_CONFIRMATION_PACKET.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/WAVE_C_OWNER_CONFIRMATION_PACKET.md), then SPEC-017 evidence acceptance before any `STATUS.md` completion claim.
 4. SPEC-018 / production / store distribution stay blocked.
