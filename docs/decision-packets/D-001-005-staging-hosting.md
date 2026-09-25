@@ -25,7 +25,7 @@
 | -------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
 | Source, CI, Pages poster   | GitHub (`scrimshawlife-ctrl/suas`)                                     | `verify` + `pages` workflows; static `docs/` on Pages   |
 | `/app` + `/api/v0` compute | Cloudflare Worker (`wrangler.jsonc`, `src/worker.ts`)                  | Already implemented (#90); `nodejs_compat` + Hyperdrive |
-| Synthetic Postgres         | Neon (pooled URL → Hyperdrive; unpooled URL → local `npm run migrate`) | Never production data; never commit connection strings  |
+| Synthetic Postgres         | Neon (pooled URL → Hyperdrive; unpooled URL → local `npm run migrate`) | Never production data; never commit connection strings. Operator prefers Neon for later production DB too; if counsel requires a BAA path, use Neon Scale + org BAA + project HIPAA enablement ([neon.com/docs/security/hipaa](https://neon.com/docs/security/hipaa)). That does **not** close D-006 or claim SUAS is HIPAA compliant. |
 | Secrets                    | Wrangler secrets + GitHub Environment secrets for deploy               | `SUAS_SESSION_SECRET`; CF API token for publish         |
 | Jobs                       | Postgres outbox (`job_outbox`, D-022)                                  | Drain with `npm run jobs:work` (Node against unpooled)  |
 
