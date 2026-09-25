@@ -3,9 +3,9 @@
 **Date:** `2026-09-25`  
 **Pin:** `0.6.0` / `RELEASE_MANIFEST-0.6.0.md`  
 **Still not ready:** production, pilot, `UI_CONFORMANCE`  
-**SPEC-017 STATUS claim:** `NO` — see specs [SPEC017_EVIDENCE_PACK.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC017_EVIDENCE_PACK.md)
+**SPEC-017 status:** implementation evidence recorded against `0.6.0` — [docs/SPEC017_COMPLETION_AUDIT.md](docs/SPEC017_COMPLETION_AUDIT.md); owner evidence mark follows on specs
 
-Slices 1–12 are recorded in [SPEC017_PLAN.md](SPEC017_PLAN.md). That does not mean the product is finished.
+Slices 1–12 are recorded in [SPEC017_PLAN.md](SPEC017_PLAN.md). That does not mean the product is finished or ready for veterans.
 
 Prefer [SUAS-specs `REMAINING.md`](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/REMAINING.md) and [`GAP_ANALYSIS.md`](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/GAP_ANALYSIS.md) when this file and those disagree.
 
@@ -32,6 +32,6 @@ Funding overlay, Google Cloud evidence project, credit spend, production launch,
 ## Next
 
 1. Keep phones and web on `/api/v0` only. Do not re-implement Android/iOS sign-in / case-open / MVP categories; that work is already on sibling mains.
-2. Android leftover from specs `GAP_ANALYSIS.md`: dummy `MainActivity` stays for tests and must not imply live fulfillment (now labeled test harness).
-3. **Refresh [docs/SPEC017_COMPLETION_AUDIT.md](docs/SPEC017_COMPLETION_AUDIT.md) against pin `0.6.0`** (header is still `0.2.0`). Wave C is already `ACCEPT_AS_SPECIFIED`; evidence STATUS claim is `NO` until that audit lands and is re-marked.
-4. SPEC-018 / production / store distribution stay blocked.
+2. Android leftover: dummy `MainActivity` stays for tests and must not imply live fulfillment (labeled test harness).
+3. Owner evidence pack on specs may mark SPEC-017 STATUS claim after this `0.6.0` audit. Do not flip readiness gates.
+4. SPEC-018 / production / store distribution stay blocked until their own evidence.

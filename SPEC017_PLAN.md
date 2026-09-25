@@ -2,7 +2,7 @@
 
 **Released spec (current pin):** `0.6.0` (`src/release/pins.ts`, `RELEASE_MANIFEST-0.6.0.md`)  
 **Plan opened against:** `0.1.1`; slices 1–12 were recorded while the stack moved `0.1.1` → `0.6.0`  
-**Status:** `IN_PROGRESS`  
+**Status:** `AUDITED` against pin `0.6.0` — see [docs/SPEC017_COMPLETION_AUDIT.md](docs/SPEC017_COMPLETION_AUDIT.md)  
 **Implementation repository:** `scrimshawlife-ctrl/SUAS`  
 **Canonical specs:** `scrimshawlife-ctrl/SUAS-specs`  
 **What to build next:** [SPEC017_NEXT.md](SPEC017_NEXT.md)

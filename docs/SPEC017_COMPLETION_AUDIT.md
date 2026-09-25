@@ -1,11 +1,14 @@
-# SPEC-017 completion audit — released stack `0.2.0`
+# SPEC-017 completion audit — released stack `0.6.0`
 
-**Released spec stack:** `0.2.0`
-**Release manifest:** `RELEASE_MANIFEST-0.2.0.md`
-**Specs merge:** `4a722e69ad8f7ff45a9581ca3bdd022bdf524f8f` (`src/release/pins.ts`)
-**Decision ledgers:** `RELEASE_DECISIONS-0.2.0.md` (D-011), `RELEASE_DECISIONS-0.1.5.md` (D-012), `RELEASE_DECISIONS-0.1.3.md` (D-018), `RELEASE_DECISIONS-0.1.2.md` (D-017), `RELEASE_DECISIONS-0.1.0.md` otherwise
-**Stage:** `SPEC-017` implementation conformance
-**Pilot / production readiness:** `NOT_READY` (unchanged by this audit)
+**Released spec stack:** `0.6.0`  
+**Release manifest:** `RELEASE_MANIFEST-0.6.0.md`  
+**Specs merge:** `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` (`src/release/pins.ts`)  
+**Decision ledgers:** `RELEASE_DECISIONS-0.6.0.md` (D-004); `RELEASE_DECISIONS-0.3.0.md` (D-033 / opens D-034); `RELEASE_DECISIONS-0.2.0.md` (D-011); `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise  
+**Wave C:** owner-accepted fail-closed `ACCEPT_AS_SPECIFIED` (2026-09-25) — not a stack bump  
+**Stage:** `SPEC-017` implementation conformance  
+**Pilot / production readiness:** `NOT_READY` (unchanged by this audit)  
+
+**Supersedes:** the prior completion audit filed against stack `0.2.0` in this path. Slice records that keep older stack headers remain historical; this document is the current-cut cross-check.
 
 This document is implementation evidence, not a readiness claim. Readiness is
 recorded in the specs' `STATUS.md` on accepted evidence, and SPEC-018 remains the
@@ -17,228 +20,201 @@ here.
 `SPEC017_PLAN.md` states: "SPEC-017 completes only when the built implementation
 is audited against the entire released cut and all material gaps are fixed or
 returned to specs." This audit performs that cross-check against the released
-`0.2.0` cut: it confirms every planned slice is implemented, cross-checks the
+`0.6.0` cut: it confirms every planned slice is implemented, cross-checks the
 build's provenance and availability boundaries against the released manifests and
-decision ledgers, and consolidates every gap each slice returned to specs together
-with its current disposition.
+decision ledgers, consolidates gaps returned to specs (including Wave C
+fail-closed rows), and records post-`0.2.0` contract additions that landed under
+the same SPEC-017 stage (D-033 native clients, D-004 Resend / browser auth).
 
 It audits the built implementation as it stands on the default branch. It does not
-re-run the per-slice conformance analysis, change any released product/domain
-rule, or advance any gate.
+re-author every per-slice analysis, change any released product/domain rule, or
+advance any gate.
 
 ## 2. Method and provenance cross-check
 
-- Consolidated the eleven per-slice conformance records in `docs/slices/`.
-- Cross-checked the runtime pins in `src/release/pins.ts` against the released
-  `RELEASE_MANIFEST-0.2.0.md`, `STATUS.md`, `CHANGELOG.md`, and the D-017/D-018
-  decision ledgers in a fresh clone of `scrimshawlife-ctrl/SUAS-specs`.
-- Verified the provider-adapter and disclosure-projection surfaces exist in code
-  (`src/fulfillment/*`, `src/privacy/projection.ts`).
-- Ran the full quality gate (`npm run verify`).
+- Consolidated the twelve `SPEC017_PLAN.md` slice records in `docs/slices/` plus
+  the D-004 Resend record `docs/slices/EMAIL_RESEND.md`.
+- Cross-checked `src/release/pins.ts` against `RELEASE_MANIFEST-0.6.0.md`,
+  `STATUS.md`, and the D-004 / D-033 / D-011 / D-012 / D-017 / D-018 ledgers in
+  `scrimshawlife-ctrl/suas-specs` at pin commit `fb27e541…`.
+- Verified provider-adapter and disclosure-projection surfaces
+  (`src/fulfillment/*`, `src/privacy/projection.ts`), Resend EMAIL port
+  (`src/notifications/resend-email.ts`), browser `/app` auth routes, JSON
+  sign-in tenant resolve (`src/identity/signin-tenant.ts`), and Wave C honest
+  unavailability on `/app/chat` and `/app/responder`.
+- Sibling native clients (separate repos): Android `RootActivity` + `SupportKind`
+  including `PEER_SUPPORT`; iOS `ServiceCategory` including `PEER_SUPPORT`;
+  staging HTTPS; memory-only session / clear stale disk keys (D-034 open).
+- Quality gate this session (2026-09-25): `npm run typecheck` pass; `npm run lint`
+  pass; `npm run test:unit` — **609 tests across 45 files** pass. Full
+  `npm run verify` (integration against PostgreSQL 17 + OpenAPI/staging contract)
+  was not re-run in this environment; prior slice records and integration suites
+  under `tests/integration/` remain the durable integration evidence.
 
-The slice records are each pinned to the stack they were authored under (`0.1.1`
-for Slices 1–11; Slice 12 at `0.2.0`). The runtime later advanced through
-decision patches — D-017 (v0.1.2), D-018 (v0.1.3), D-012 (v0.1.5), editorial
-v0.1.6, and D-011 (v0.2.0). `src/release/pins.ts` pins `SPEC_VERSION = 0.2.0`
-and `RELEASE_MANIFEST-0.2.0.md`. This audit is filed at `0.2.0`. API selector
-`/api/v0` and event schema `0.1.0` are unchanged. No readiness gate advances.
+Pin identities OBSERVED: `SPEC_VERSION = 0.6.0`,
+`RELEASE_MANIFEST = RELEASE_MANIFEST-0.6.0.md`,
+`SPECS_COMMIT = fb27e54114c003c15f7bc74254e0c26c0da1ec0a`,
+`API_PREFIX = /api/v0`, `EVENT_SCHEMA_VERSION = 0.1.0`,
+`EXPECTED_SCHEMA_VERSION = 14`, `IMPLEMENTATION_STAGE = SPEC-017`,
+`PRODUCTION_READINESS = NOT_READY`, `SPEC_018_PRODUCTION_AUTHORIZED = false`.
 
 ## 3. Slice conformance status
 
-All eleven `SPEC017_PLAN.md` slices are implemented, with conformance records and
-passing evidence. Qualifiers mark surfaces the release keeps manual-only or
-interface-only.
+All twelve `SPEC017_PLAN.md` slices remain `IMPLEMENTED` (Slice 11 drills-only;
+Slice 7 manual paths for open D-019/D-020). Primary evidence pointers are
+unchanged from the slice records.
 
-| Slice                           | Status                      | Primary evidence                                                                                                |
-| ------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 1 — Foundation                  | `IMPLEMENTED`               | `config`, `build-info`, `jobs`, `fixture-boundary`, `migration-plan` (unit); `migrations`, `http` (integration) |
-| 2 — Event / idempotency kernel  | `IMPLEMENTED`               | `event-envelope`, `fingerprint` (unit); `events`, `idempotency` (integration)                                   |
-| 3 — Identity / tenancy / authz  | `IMPLEMENTED`               | `auth-primitives`, `authz-policy` (unit); `auth`, `identity`, `http-auth` (integration)                         |
-| 4 — Consent and privacy kernel  | `IMPLEMENTED`               | `projection` (unit); `consent` (integration)                                                                    |
-| 5 — Coordination kernel         | `IMPLEMENTED`               | `coordination-transitions` (unit); `coordination` (integration)                                                 |
-| 6 — Follow-Up / Settlement      | `IMPLEMENTED`               | `settlement` (integration)                                                                                      |
-| 7 — Resources / fulfillment     | `IMPLEMENTED`               | `fulfillment` (integration); `uber-guest-rides`, `amadeus-lodging` (unit)                                       |
-| 8 — Notifications               | `IMPLEMENTED`               | `notifications` (integration)                                                                                   |
-| 9 — Check-In / Support Signal   | `IMPLEMENTED`               | `signals` (integration); `signal-scoring` (unit, GV-001–014)                                                    |
-| 12 — D-011 scoring (`sv-001`)   | `IMPLEMENTED`               | `docs/slices/SLICE_12_SIGNAL_SCORING.md`; `src/signals/sv-001.ts`                                               |
-| 10 — MVP-reference UI           | `IMPLEMENTED`               | `ui-contract`, `ui-surfaces` (unit); `ui` (integration)                                                         |
-| 11 — Scale / resilience harness | `IMPLEMENTED (drills only)` | `resilience-harness` (unit); `resilience-drills` (integration)                                                  |
+| Slice | Status | Primary evidence |
+| --- | --- | --- |
+| 1 — Foundation | `IMPLEMENTED` | `docs/slices/SLICE_01_FOUNDATION.md` |
+| 2 — Event / idempotency | `IMPLEMENTED` | `docs/slices/SLICE_02_EVENT_IDEMPOTENCY.md` |
+| 3 — Identity / tenancy / authz | `IMPLEMENTED` | `docs/slices/SLICE_03_IDENTITY_TENANCY.md`; tenant-from-email `5d7d58b` |
+| 4 — Consent / privacy | `IMPLEMENTED` | `docs/slices/SLICE_04_CONSENT_PRIVACY.md` |
+| 5 — Coordination | `IMPLEMENTED` | `docs/slices/SLICE_05_COORDINATION.md` |
+| 6 — Follow-Up / Settlement | `IMPLEMENTED` | `docs/slices/SLICE_06_FOLLOWUP_SETTLEMENT.md` |
+| 7 — Resources / fulfillment | `IMPLEMENTED (manual paths)` | `docs/slices/SLICE_07_RESOURCES_FULFILLMENT.md` |
+| 8 — Notifications | `IMPLEMENTED` | `docs/slices/SLICE_08_NOTIFICATIONS.md` |
+| 9 — Check-In / Support Signal | `IMPLEMENTED` | `docs/slices/SLICE_09_CHECKINS_SIGNALS.md` |
+| 10 — MVP UI + HTML commands | `IMPLEMENTED` | `SLICE_10_MVP_UI.md`, `SLICE_10_UI_COMMANDS.md` |
+| 11 — Scale / resilience harness | `IMPLEMENTED (drills only)` | `docs/slices/SLICE_11_RESILIENCE_HARNESS.md` |
+| 12 — D-011 scoring | `IMPLEMENTED` | `docs/slices/SLICE_12_SIGNAL_SCORING.md` |
 
-Per-slice detail lives in `docs/slices/SLICE_01_FOUNDATION.md` through
-`docs/slices/SLICE_11_RESILIENCE_HARNESS.md`.
+### 3.A Post-`0.2.0` contracts under the same SPEC-017 stage
+
+| Addition | Stack | Evidence |
+| --- | --- | --- |
+| D-004 Resend EMAIL + browser passwordless `/app` | `0.6.0` | `docs/slices/EMAIL_RESEND.md`; `src/notifications/resend-email.ts`; `/app/join` + challenge/verify |
+| D-033 native mobile client surface | `0.3.0` | Specs `MOBILE_SURFACE.md`; sibling `suas-android` / `suas-ios` `/api/v0` MVP categories including `PEER_SUPPORT` |
+| D-034 on-device retention | open | Android `SessionStore` memory-only; iOS clears stale UserDefaults keys; no claim D-034 closed |
+| Wave C fail-closed (G-I rows) | not a bump | Specs `WAVE_C_CONSERVATIVE_DEFAULTS.md` owner-accepted; runtime chat/metrics/on-duty unavailable |
+| Case open JSON | parity docs | `POST /api/v0/cases`; `D033_CASE_OPEN.md` |
+| Android test harness honesty | living | `MainActivity` banner `TEST HARNESS ONLY` |
 
 ## 4. Cross-cutting conformance
 
 ### 4.1 Version identities and provenance
 
 Spec stack, application version, API version (`/api/v0`), event schema (`0.1.0`),
-and DB schema version (`11`) are kept as separate identities (`VERSIONING.md` §3;
-`src/release/pins.ts`, `src/db/schema-version.ts`). Build provenance reports
-stack, manifest, specs commit, environment class, schema version, and
-`provenance_complete`, and never emits secret material (`build-info` unit tests).
+and DB schema version (`14`) stay separate (`VERSIONING.md` §3; `pins.ts`,
+`schema-version.ts`). Build provenance reports stack, manifest, specs commit,
+environment class, and schema version without secret material.
 
 ### 4.2 Availability boundaries and pending decisions
 
-Configuration can only further disable a feature; it cannot enable any surface the
-manifest or decision ledger marks unavailable/future (`ENVIRONMENT.md` §4;
-`config` unit tests, which name D-011, D-012, D-017–D-020, D-025 in their
-rejections). Confirmed against the released ledgers: **D-017 `DECIDED`** (v0.1.2)
-and **D-018 `DECIDED`** (v0.1.3); **D-012 `DECIDED`** (v0.1.5, `SAFETY_COPY.md`);
-**D-011 `DECIDED`** (v0.2.0, `SIGNAL_SCORING.md` `qv-001` + `sv-001`);
-**D-019** (food adapter) and **D-020**
-(external peer-support adapter) remain `DECISION_PENDING`. The slice records additionally
-rely on still-open D-001, D-007, D-009, D-010, D-014, D-015, D-021, D-022, D-023,
-D-024, and D-025 (§5 below).
+Configuration may only further disable a feature; it cannot enable a surface the
+manifest or ledger marks unavailable. Confirmed against released ledgers:
+
+- **Closed:** D-004 (v0.6.0), D-033 (v0.3.0), D-011 (v0.2.0), D-012 (v0.1.5),
+  D-017 (v0.1.2), D-018 (v0.1.3).
+- **Open (production surface stays unavailable / manual / memory-only):** D-002,
+  D-003, D-006, D-007, D-009, D-010, D-013, D-014, D-019–D-025, D-034, and
+  inherited launch residuals.
+
+Wave C fillings are fail-closed product rules, not readiness advances: on-duty,
+chat, dashboard numbers, Quick Share stay unavailable / `NOT_COMPUTABLE`; no
+PARTIAL command; person does not pick a tenant; auth timing seconds unpublished.
 
 ### 4.3 Provider fulfillment (D-017 / D-018)
 
-Per-capability provider disclosure is no longer globally absent. Uber
-(`TransportationPort`) and Amadeus (`TemporaryShelterPort`) ship as adapter-local
-realizations behind the Provider Router, with released field-level disclosure
-projections registered in `src/privacy/projection.ts`, deterministic ranking,
-provider health/fallback, and SUAS-side idempotency
-(`src/fulfillment/{uber-guest-rides,amadeus-lodging,temporary-shelter,registry}.ts`;
-`uber-guest-rides`, `amadeus-lodging` unit tests). Manual adapters remain
-mandatory, Amadeus reservation is `BLOCKED_BY_PAYMENT_ARCHITECTURE`, and no real
-credential use, booking, reservation, webhook handling, or veteran-data disclosure
-is authorized until SPEC-018 (`RELEASE_DECISIONS-0.1.2.md`,
-`RELEASE_DECISIONS-0.1.3.md`). `FOOD_SUPPORT` and `PEER_SUPPORT` remain
-projection-absent and manual/fake only (D-019, D-020 pending).
+Uber transportation and Amadeus temporary-shelter adapters remain adapter-local
+behind the Provider Router with disclosure projections. Manual adapters remain
+mandatory. Amadeus reservation stays `BLOCKED_BY_PAYMENT_ARCHITECTURE`. No real
+credential use, booking, or veteran-data disclosure is authorized until SPEC-018.
+`FOOD_SUPPORT` and external `PEER_SUPPORT` adapters stay open (D-019, D-020);
+native clients may still submit MVP category requests for manual coordination.
 
-### 4.4 Correctness invariants
+### 4.4 Auth / tenancy (D-004 + G-I-35)
 
-Persistent command idempotency, append-only event stores enforced by database
-triggers, at-least-once delivery with per-consumer dedupe, outbox-recovered
-publication, one-winner concurrent claims, and cross-instance session revocation
-are exercised against PostgreSQL 17 with two in-process instances (`idempotency`,
-`events`, `coordination`, `resilience-drills` integration tests). Tenant scope is
-a required argument on domain reads and is carried through jobs, events, and
-idempotency keys.
+Browser `/app` passwordless EMAIL OTP uses the Resend path when
+`SUAS_BROWSER_AUTH_MODE=email_otp` and environment rules allow. JSON `/api/v0`
+sign-in resolves tenant from the enrolled email (`tenant_id` optional on the
+wire). Clients may send a build-pinned synthetic tenant as a filter; the person
+does not pick an organization.
 
 ### 4.5 Safety and privacy
 
-D-012 approved crisis copy is released in `SAFETY_COPY.md` (v0.1.5). The veteran
-crisis slot renders the 911/988 wording when `SUAS_SAFETY_COPY_MODE=approved` and
-a labelled placeholder otherwise (`ui-surfaces`, `ui-contract`, `truthfulness`
-tests). No automated emergency dispatch, diagnosis, suicide prediction, or
-safety-critical generative behavior exists. Disclosure uses use-time consent
-evaluation and minimum-necessary projection (`consent`, `projection` tests).
-LOCAL/TEST/STAGING fail closed on real external effects and refuse production
-data resources (`config` tests; `ENVIRONMENT.md` §5).
+D-012 approved crisis copy remains the rule under `SUAS_SAFETY_COPY_MODE=approved`.
+No automated emergency dispatch, diagnosis, or suicide prediction. LOCAL/TEST/
+STAGING fail closed on real external effects per `ENVIRONMENT.md`.
 
-### 4.6 Test evidence
+### 4.6 Test evidence (this session)
 
-`npm run verify` — Prettier format check, ESLint, `tsc --noEmit`, and the full
-suite — passes: **684 tests across 32 files**, integration suites against
-PostgreSQL 17.
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | pass |
+| `npm run lint` | pass |
+| `npm run test:unit` | 609 passed / 45 files |
+| Full `npm run verify` (integration + OpenAPI + staging contract) | not re-run here; prior slice/integration evidence retained |
 
 ## 5. Material gap ledger (returned to specs)
 
-Every gap each slice returned to specs is consolidated here by disposition. None
-changes a released product/domain rule; each is safe today because the
-corresponding production surface remains unavailable, manual-only, or
-information-only. Item numbers reference the `## 10` section of each slice record.
+### 5.A Closed since the `0.2.0` audit by a later released decision or Wave C
 
-### 5.A Closed since authoring by a later released decision
+- **D-004** — Resend sole EMAIL provider; browser passwordless transport for
+  enrolled accounts (v0.6.0).
+- **D-033** — Native mobile client surface enabled for implementation, not
+  production (v0.3.0).
+- **Wave C C3/C4/C1/C2/C5** — Owner `ACCEPT_AS_SPECIFIED` fail-closed defaults
+  for G-I-30…33, G-I-34…35, G-I-6…8, G-I-15/19/20, G-I-37…38. Runtime matches
+  unavailable / not-computable behavior. See specs
+  `WAVE_C_OWNER_CONFIRMATION_PACKET.md`.
 
-- **Per-capability disclosure projection** (Slice 4 item 1; Slice 7 item 1) — was
-  the load-bearing blocker at `0.1.1`. D-017 (v0.1.2) released the `TRANSPORTATION`
-  contract and D-018 (v0.1.3) released the `TEMPORARY_SHELTER` contract; both are
-  implemented (§4.3). `FOOD_SUPPORT` and `PEER_SUPPORT` remain open (D-019, D-020).
+### 5.B Still blocked on named unreleased decisions
 
-### 5.B Blocked pending a named, unreleased decision
+Production surface stays unavailable/manual-only, so deferral remains safe.
 
-The production surface stays unavailable/manual-only, so deferral is safe.
+- **D-019 / D-020** — food and external peer-support adapters.
+- **D-021 / D-023 / D-024** — workload / SLO / recovery envelopes; harness
+  refuses invented numeric targets.
+- **D-007** — retention reaper.
+- **D-009 / D-014** — coverage hours / location basis.
+- **D-022** — durable production queue vendor.
+- **D-001** — hosting/staging ownership for shared evidence hosts.
+- **D-025** — sensitive aggregate reporting.
+- **D-003 / D-006 / D-010 / D-013** — SMS, health-scope, payment, counsel review.
+- **D-034** — on-device protection beyond memory-only minimum.
+- Provider webhook authentication without a released webhook contract.
 
-- **D-011** — **closed in v0.2.0.** `SIGNAL_SCORING.md` releases `qv-001` +
-  `sv-001` and GV-001–GV-014. Implementation registers a `released: true` engine.
-  TEST/CI stay on `SUAS_SUPPORT_SIGNAL_MODE=fixture`. G-I-28 remains open.
-- **D-012** — **closed in v0.1.5.** Approved copy and destinations are in
-  `SAFETY_COPY.md`; implementation renders them under `SUAS_SAFETY_COPY_MODE=approved`.
-- **D-019 / D-020** — food and external peer-support adapters; manual/fake only.
-- **D-021 / D-023 / D-024** — workload envelope, performance SLOs, and recovery
-  objectives; the resilience harness refuses to emit a numeric target and records
-  the restore rehearsal `BLOCKED` (Slice 11 items 1–4, 8).
-- **D-007** — idempotency/event retention window; `expires_at` columns exist but
-  no reaper runs (Slice 2 item 2).
-- **D-009 / D-014 / D-015** — coverage hours, location basis, and veteran-visible
-  field sets; conservative/absent renderings (Slices 5, 6, 10).
-- **D-022** — durable production queue vendor; the durable-job seam supplies a
-  declared non-durable fake in LOCAL/TEST and refuses in STAGING/PRODUCTION
-  (Slice 8 item 1).
-- **D-001** — hosting/staging; drills run in `TEST`, no staging deployment exists
-  (Slice 11 items 5, 9, 10).
-- **D-025** — sensitive aggregate reporting stays disabled.
-- **Provider webhook authentication** (Slice 7 item 4; Slice 8 item 6) — no
-  signature scheme without a released provider webhook contract; callback handlers
-  dedupe and refuse regressions but are not exposed as authenticated endpoints.
+### 5.C Implementation-mechanism choices still awaiting later D-id / confirmation
 
-### 5.C Implementation-mechanism choices awaiting spec confirmation
-
-Made under `HANDOFF.md` §11 where the released text is silent; documented in code
-and in the cited slice records. Representative items:
-
-- Production-data detection deny-list; `/health` and `/admin/build-info` surfaces
-  not in the released API contract; PRODUCTION boot refusal (Slice 1 items 1–4).
-- Concurrent in-flight idempotency retry answered as `409 IDEMPOTENCY_CONFLICT`;
-  caller-owned terminal-vs-retryable classification; payload/result size bounds
-  (Slice 2 items 1, 3, 4).
-- Tenant-at-sign-in resolution; `suas_admin_grants` representation; all auth
-  constants `INFERRED` pending released values (Slice 3 items 1, 2, 3).
-- Closed system-basis list; purpose-matching not mechanical; no cascade on
-  trusted-contact removal (Slice 4 items 3, 5, 7).
-- "Blocking" Service Request definition; `ACTIVATE` command naming; org-admin
-  scoping on case edges (Slice 5 items 1, 2, 6).
-- `RESCHEDULED`/`ESCALATED` transition readings; `responsible_type` enum;
-  Settlement summary shape (Slice 6 items 1, 3, 4, 6).
-- Capability vocabulary reconciliation; `PARTIAL` fulfillment trigger; freshness
-  bands; inactive-not-assignable at the router (Slice 7 items 2, 3, 6, 7).
-- Notification template/policy/dedupe-scope vocabulary; retry/backoff bounds
-  (Slice 8 items 2, 3, 4, 5).
-- Effective-signal selection rule; questionnaire scoping; signal-driven case
-  creation / G-I-28 (Slice 9 items 2, 6, 7). Incomplete-input behavior closed
-  in v0.2.0 (Slice 12).
-- `RESPONDER_NOTIFIED` linkage; structured `contact_method`; responder on-duty
-  store; chat/thread domain; pinned visual baseline; metric definitions (Slice 10
-  items 1–4, 6–8).
-- Rate-limited-to-manual routing rule; ambiguous-timeout drill; tenant fairness;
-  real worker-restart drill (Slice 11 items 6, 7, 8, 10).
+Representative items from slice §10 lists remain mechanism choices, not invented
+product: auth timing constants unpublished (aligned with Wave C G-I-34);
+production-data deny-list; concurrent idempotency `409`; notification
+template/dedupe vocabulary; rate-limited-to-manual routing. Wave C removed the
+need to invent on-duty, chat, metrics, PARTIAL, or tenant-pick behavior.
 
 ## 6. Readiness gates
 
 All twelve gates in the released `STATUS.md` remain `NOT_READY`: `AUTH`,
 `CONSENT`, `CHECK-IN`, `COORDINATION`, `EXTERNAL_FULFILLMENT`, `UI_CONFORMANCE`,
 `SAFETY`, `PRIVACY`, `SCALE`, `RESILIENCE`, `OPERATIONS`, `REPORTING`. A gate
-changes only with reproducible evidence under the specs' `TESTING.md`, recorded in
-`STATUS.md` — not by this audit. Slices 10 and 11 document specifically why
-`UI_CONFORMANCE`, `SCALE`, and `RESILIENCE` cannot advance (human accessibility
-review and a pinned visual baseline; unreleased workload/SLO/recovery envelopes).
+changes only with reproducible evidence under `TESTING.md`, recorded in
+`STATUS.md` — not by this audit. Truthful-unavailable pages do not advance
+`UI_CONFORMANCE`.
 
 ## 7. Completion determination
 
-Against the `0.2.0` cut:
+Against the `0.6.0` cut:
 
-- **Every planned slice is implemented** with conformance records and a passing
-  quality gate (§3, §4.6).
-- **Every material gap is either fixed or returned to specs** (§5): the former
-  load-bearing disclosure-projection blocker is now released and implemented for
-  transportation and shelter; all remaining gaps are blocked on named unreleased
-  decisions whose production surfaces stay unavailable, or are documented
-  mechanism choices awaiting spec confirmation.
+- **Every planned slice is implemented** with conformance records (§3).
+- **Post-`0.2.0` released contracts under SPEC-017 are implemented or honestly
+  bounded** (§3.A, §4.3–§4.4): D-004 Resend/browser auth; D-033 native `/api/v0`
+  clients with MVP categories; D-034 left open with memory-only practice.
+- **Every material gap is fixed, returned to specs, or fail-closed by Wave C**
+  (§5). Remaining gaps sit on named open decisions whose production surfaces stay
+  unavailable.
 - **No availability boundary is upgraded and no gate advances** (§4.2, §6).
+- **Quality gate unit/lint/typecheck pass in this session** (§4.6).
 
 This satisfies the `SPEC017_PLAN.md` completion criterion as implementation
-evidence. It is **not** a readiness declaration: the owner records SPEC-017
-completion and any gate change in `STATUS.md` on accepted evidence, and SPEC-018
-remains the required go/no-go stage before any real pilot or production operation.
+evidence against pin `0.6.0`. It is **not** a readiness declaration: the owner
+records SPEC-017 completion and any gate change in `STATUS.md` on accepted
+evidence, and SPEC-018 remains the required go/no-go stage before any real pilot
+or production operation.
 
-### Recommended owner follow-ups (spec-side, not implementation)
+### Recommended owner follow-ups (not this audit)
 
-- Confirm or correct the §5.C mechanism choices so they become released rules
-  rather than implementation inferences.
-- Prioritize the decisions that unblock the most implementation: G-I-28
-  (signal-driven Support Case action) and D-019/D-020 (remaining capability
-  disclosure contracts).
-- For gate movement, supply the `TESTING.md` evidence artifacts the harness cannot
-  produce without released envelopes (D-021/D-023/D-024) and a pinned MVP visual
-  baseline.
+- Accept or reject this audit via [SPEC017_EVIDENCE_PACK.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC017_EVIDENCE_PACK.md).
+- Prioritize open decisions that unblock real adapters or measurable gates
+  (D-019/D-020, D-021/D-023/D-024, D-034) only when ready for SPEC-018 evidence.
+- Do not invent chat, duty matching, dashboard formulas, or PARTIAL commands.
