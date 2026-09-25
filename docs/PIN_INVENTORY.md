@@ -2,13 +2,13 @@
 
 Live runtime pin from `src/release/pins.ts`:
 
-| Identity | Value |
-|---|---|
-| `SPEC_VERSION` | `0.6.0` |
-| `RELEASE_MANIFEST` | `RELEASE_MANIFEST-0.6.0.md` |
-| `SPECS_COMMIT` | `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` |
-| `API_VERSION` | `v0` |
-| `EVENT_SCHEMA_VERSION` | `0.1.0` |
+| Identity               | Value                                      |
+| ---------------------- | ------------------------------------------ |
+| `SPEC_VERSION`         | `0.6.0`                                    |
+| `RELEASE_MANIFEST`     | `RELEASE_MANIFEST-0.6.0.md`                |
+| `SPECS_COMMIT`         | `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` |
+| `API_VERSION`          | `v0`                                       |
+| `EVENT_SCHEMA_VERSION` | `0.1.0`                                    |
 
 `.env.example`, wrangler vars, and CI match.
 

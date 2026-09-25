@@ -122,10 +122,7 @@ export async function findUserByDestination(
 }
 
 /** Destinations may exist in more than one tenant. Sign-in picks with selectUserForSignIn. */
-export async function findUsersByDestination(
-  db: Queryable,
-  destination: string,
-): Promise<User[]> {
+export async function findUsersByDestination(db: Queryable, destination: string): Promise<User[]> {
   const normalized = normalizeDestination(destination);
   const result = await db.query<UserRow>(
     `SELECT ${USER_COLUMNS} FROM users
