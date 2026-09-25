@@ -32,5 +32,5 @@ Funding overlay, Google Cloud evidence project, credit spend, production launch,
 
 1. Keep phones and web on `/api/v0` only. Do not re-implement Android/iOS sign-in / case-open / MVP categories; that work is already on sibling mains.
 2. Android leftover from specs `GAP_ANALYSIS.md`: dummy `MainActivity` stays for tests and must not imply live fulfillment (now labeled test harness).
-3. Owner confirm Wave C via [WAVE_C_OWNER_CONFIRMATION_PACKET.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/WAVE_C_OWNER_CONFIRMATION_PACKET.md), then SPEC-017 evidence acceptance before any `STATUS.md` completion claim.
+3. Owner mark [SPEC017_EVIDENCE_PACK.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC017_EVIDENCE_PACK.md) evidence accepted `YES` or `NO`. Wave C is already `ACCEPT_AS_SPECIFIED`.
 4. SPEC-018 / production / store distribution stay blocked.
