@@ -11,15 +11,15 @@ Prefer [SUAS-specs `REMAINING.md`](https://github.com/scrimshawlife-ctrl/suas-sp
 
 ## Already shipped (OBSERVED)
 
-| Surface | What it does |
-|---|---|
-| Web sign-in | `/app/join` plus email code when `SUAS_BROWSER_AUTH_MODE=email_otp` |
-| JSON sign-in tenant | Worker resolves enrolled email → tenant; `tenant_id` on the wire is optional |
-| Chat tab | `/app/chat` says chat is unavailable |
-| Responder summary tiles | `/app/responder` says the numbers have no definition |
-| Open a Case from JSON | `POST /api/v0/cases` — one non-closed Case per Veteran |
-| Android `/api/v0` | Sign-in, `POST /cases`, ride / food / shelter / peer-support submit (see sibling `suas-android`) |
-| iOS `/api/v0` | Staging HTTPS (`suasqrf.com`), typed email code, `POST /cases`, ride / food / shelter / peer-support; `/dev/*` refused off localhost |
+| Surface                 | What it does                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Web sign-in             | `/app/join` plus email code when `SUAS_BROWSER_AUTH_MODE=email_otp`                                                                  |
+| JSON sign-in tenant     | Worker resolves enrolled email → tenant; `tenant_id` on the wire is optional                                                         |
+| Chat tab                | `/app/chat` says chat is unavailable                                                                                                 |
+| Responder summary tiles | `/app/responder` says the numbers have no definition                                                                                 |
+| Open a Case from JSON   | `POST /api/v0/cases` — one non-closed Case per Veteran                                                                               |
+| Android `/api/v0`       | Sign-in, `POST /cases`, ride / food / shelter / peer-support submit (see sibling `suas-android`)                                     |
+| iOS `/api/v0`           | Staging HTTPS (`suasqrf.com`), typed email code, `POST /cases`, ride / food / shelter / peer-support; `/dev/*` refused off localhost |
 
 Phone rules for those surfaces: [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md), [D033_CHAT_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_CHAT_PARITY.md), [D033_METRICS_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_METRICS_PARITY.md), [D033_CASE_OPEN.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_CASE_OPEN.md).
 

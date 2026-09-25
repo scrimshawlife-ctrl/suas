@@ -22,7 +22,10 @@ describe('selectUserForSignIn', () => {
   it('does not guess when the email exists in two tenants', () => {
     expect(
       selectUserForSignIn(
-        [user('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), user('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')],
+        [
+          user('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+          user('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+        ],
         undefined,
       ),
     ).toBeUndefined();

@@ -6,7 +6,7 @@
 **Decision ledgers:** `RELEASE_DECISIONS-0.6.0.md` (D-004); `RELEASE_DECISIONS-0.3.0.md` (D-033 / opens D-034); `RELEASE_DECISIONS-0.2.0.md` (D-011); `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise  
 **Wave C:** owner-accepted fail-closed `ACCEPT_AS_SPECIFIED` (2026-09-25) — not a stack bump  
 **Stage:** `SPEC-017` implementation conformance  
-**Pilot / production readiness:** `NOT_READY` (unchanged by this audit)  
+**Pilot / production readiness:** `NOT_READY` (unchanged by this audit)
 
 **Supersedes:** the prior completion audit filed against stack `0.2.0` in this path. Slice records that keep older stack headers remain historical; this document is the current-cut cross-check.
 
@@ -64,31 +64,31 @@ All twelve `SPEC017_PLAN.md` slices remain `IMPLEMENTED` (Slice 11 drills-only;
 Slice 7 manual paths for open D-019/D-020). Primary evidence pointers are
 unchanged from the slice records.
 
-| Slice | Status | Primary evidence |
-| --- | --- | --- |
-| 1 — Foundation | `IMPLEMENTED` | `docs/slices/SLICE_01_FOUNDATION.md` |
-| 2 — Event / idempotency | `IMPLEMENTED` | `docs/slices/SLICE_02_EVENT_IDEMPOTENCY.md` |
-| 3 — Identity / tenancy / authz | `IMPLEMENTED` | `docs/slices/SLICE_03_IDENTITY_TENANCY.md`; tenant-from-email `5d7d58b` |
-| 4 — Consent / privacy | `IMPLEMENTED` | `docs/slices/SLICE_04_CONSENT_PRIVACY.md` |
-| 5 — Coordination | `IMPLEMENTED` | `docs/slices/SLICE_05_COORDINATION.md` |
-| 6 — Follow-Up / Settlement | `IMPLEMENTED` | `docs/slices/SLICE_06_FOLLOWUP_SETTLEMENT.md` |
-| 7 — Resources / fulfillment | `IMPLEMENTED (manual paths)` | `docs/slices/SLICE_07_RESOURCES_FULFILLMENT.md` |
-| 8 — Notifications | `IMPLEMENTED` | `docs/slices/SLICE_08_NOTIFICATIONS.md` |
-| 9 — Check-In / Support Signal | `IMPLEMENTED` | `docs/slices/SLICE_09_CHECKINS_SIGNALS.md` |
-| 10 — MVP UI + HTML commands | `IMPLEMENTED` | `SLICE_10_MVP_UI.md`, `SLICE_10_UI_COMMANDS.md` |
-| 11 — Scale / resilience harness | `IMPLEMENTED (drills only)` | `docs/slices/SLICE_11_RESILIENCE_HARNESS.md` |
-| 12 — D-011 scoring | `IMPLEMENTED` | `docs/slices/SLICE_12_SIGNAL_SCORING.md` |
+| Slice                           | Status                       | Primary evidence                                                        |
+| ------------------------------- | ---------------------------- | ----------------------------------------------------------------------- |
+| 1 — Foundation                  | `IMPLEMENTED`                | `docs/slices/SLICE_01_FOUNDATION.md`                                    |
+| 2 — Event / idempotency         | `IMPLEMENTED`                | `docs/slices/SLICE_02_EVENT_IDEMPOTENCY.md`                             |
+| 3 — Identity / tenancy / authz  | `IMPLEMENTED`                | `docs/slices/SLICE_03_IDENTITY_TENANCY.md`; tenant-from-email `5d7d58b` |
+| 4 — Consent / privacy           | `IMPLEMENTED`                | `docs/slices/SLICE_04_CONSENT_PRIVACY.md`                               |
+| 5 — Coordination                | `IMPLEMENTED`                | `docs/slices/SLICE_05_COORDINATION.md`                                  |
+| 6 — Follow-Up / Settlement      | `IMPLEMENTED`                | `docs/slices/SLICE_06_FOLLOWUP_SETTLEMENT.md`                           |
+| 7 — Resources / fulfillment     | `IMPLEMENTED (manual paths)` | `docs/slices/SLICE_07_RESOURCES_FULFILLMENT.md`                         |
+| 8 — Notifications               | `IMPLEMENTED`                | `docs/slices/SLICE_08_NOTIFICATIONS.md`                                 |
+| 9 — Check-In / Support Signal   | `IMPLEMENTED`                | `docs/slices/SLICE_09_CHECKINS_SIGNALS.md`                              |
+| 10 — MVP UI + HTML commands     | `IMPLEMENTED`                | `SLICE_10_MVP_UI.md`, `SLICE_10_UI_COMMANDS.md`                         |
+| 11 — Scale / resilience harness | `IMPLEMENTED (drills only)`  | `docs/slices/SLICE_11_RESILIENCE_HARNESS.md`                            |
+| 12 — D-011 scoring              | `IMPLEMENTED`                | `docs/slices/SLICE_12_SIGNAL_SCORING.md`                                |
 
 ### 3.A Post-`0.2.0` contracts under the same SPEC-017 stage
 
-| Addition | Stack | Evidence |
-| --- | --- | --- |
-| D-004 Resend EMAIL + browser passwordless `/app` | `0.6.0` | `docs/slices/EMAIL_RESEND.md`; `src/notifications/resend-email.ts`; `/app/join` + challenge/verify |
-| D-033 native mobile client surface | `0.3.0` | Specs `MOBILE_SURFACE.md`; sibling `suas-android` / `suas-ios` `/api/v0` MVP categories including `PEER_SUPPORT` |
-| D-034 on-device retention | open | Android `SessionStore` memory-only; iOS clears stale UserDefaults keys; no claim D-034 closed |
-| Wave C fail-closed (G-I rows) | not a bump | Specs `WAVE_C_CONSERVATIVE_DEFAULTS.md` owner-accepted; runtime chat/metrics/on-duty unavailable |
-| Case open JSON | parity docs | `POST /api/v0/cases`; `D033_CASE_OPEN.md` |
-| Android test harness honesty | living | `MainActivity` banner `TEST HARNESS ONLY` |
+| Addition                                         | Stack       | Evidence                                                                                                         |
+| ------------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| D-004 Resend EMAIL + browser passwordless `/app` | `0.6.0`     | `docs/slices/EMAIL_RESEND.md`; `src/notifications/resend-email.ts`; `/app/join` + challenge/verify               |
+| D-033 native mobile client surface               | `0.3.0`     | Specs `MOBILE_SURFACE.md`; sibling `suas-android` / `suas-ios` `/api/v0` MVP categories including `PEER_SUPPORT` |
+| D-034 on-device retention                        | open        | Android `SessionStore` memory-only; iOS clears stale UserDefaults keys; no claim D-034 closed                    |
+| Wave C fail-closed (G-I rows)                    | not a bump  | Specs `WAVE_C_CONSERVATIVE_DEFAULTS.md` owner-accepted; runtime chat/metrics/on-duty unavailable                 |
+| Case open JSON                                   | parity docs | `POST /api/v0/cases`; `D033_CASE_OPEN.md`                                                                        |
+| Android test harness honesty                     | living      | `MainActivity` banner `TEST HARNESS ONLY`                                                                        |
 
 ## 4. Cross-cutting conformance
 
@@ -139,11 +139,11 @@ STAGING fail closed on real external effects per `ENVIRONMENT.md`.
 
 ### 4.6 Test evidence (this session)
 
-| Check | Result |
-| --- | --- |
-| `npm run typecheck` | pass |
-| `npm run lint` | pass |
-| `npm run test:unit` | 609 passed / 45 files |
+| Check                                                            | Result                                                     |
+| ---------------------------------------------------------------- | ---------------------------------------------------------- |
+| `npm run typecheck`                                              | pass                                                       |
+| `npm run lint`                                                   | pass                                                       |
+| `npm run test:unit`                                              | 609 passed / 45 files                                      |
 | Full `npm run verify` (integration + OpenAPI + staging contract) | not re-run here; prior slice/integration evidence retained |
 
 ## 5. Material gap ledger (returned to specs)
