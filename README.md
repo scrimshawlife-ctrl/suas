@@ -21,7 +21,7 @@ Canonical released specs:
 - specification stack: `0.6.0`
 - specs merge pin: `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` (`src/release/pins.ts`)
 - manifest: `RELEASE_MANIFEST-0.6.0.md`
-- current stage: `SPEC-017` implementation conformance
+- current stage: `SPEC-018` (blocked); SPEC-017 evidence recorded against pin `0.6.0`
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - pilot readiness: `NOT_READY`
 - production readiness: `NOT_READY`
