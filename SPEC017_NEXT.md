@@ -3,7 +3,7 @@
 **Date:** `2026-09-25`  
 **Pin:** `0.6.0` / `RELEASE_MANIFEST-0.6.0.md`  
 **Still not ready:** production, pilot, `UI_CONFORMANCE`  
-**SPEC-017 status:** implementation evidence recorded against `0.6.0` — [docs/SPEC017_COMPLETION_AUDIT.md](docs/SPEC017_COMPLETION_AUDIT.md); owner evidence mark follows on specs
+**SPEC-017 status:** recorded against `0.6.0`; evidence YES on specs ([SPEC017_EVIDENCE_PACK.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC017_EVIDENCE_PACK.md)). Next is SPEC-018 prep only when owner opens launch decisions — do not start SPEC-018 work inventing product.
 
 Slices 1–12 are recorded in [SPEC017_PLAN.md](SPEC017_PLAN.md). That does not mean the product is finished or ready for veterans.
 
@@ -33,5 +33,5 @@ Funding overlay, Google Cloud evidence project, credit spend, production launch,
 
 1. Keep phones and web on `/api/v0` only. Do not re-implement Android/iOS sign-in / case-open / MVP categories; that work is already on sibling mains.
 2. Android leftover: dummy `MainActivity` stays for tests and must not imply live fulfillment (labeled test harness).
-3. Owner evidence pack on specs may mark SPEC-017 STATUS claim after this `0.6.0` audit. Do not flip readiness gates.
-4. SPEC-018 / production / store distribution stay blocked until their own evidence.
+3. SPEC-017 evidence is YES on specs for the `0.6.0` audit. Do not flip readiness gates.
+4. SPEC-018 / production / store distribution stay blocked until their own evidence. Do not invent product for open D-ids.
