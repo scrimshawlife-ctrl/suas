@@ -52,7 +52,7 @@ Specs are authority. Implementation gaps return to specs.
 - release manifest: `RELEASE_MANIFEST-0.6.0.md`
 - specs merge pin: `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` (`src/release/pins.ts`)
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
-- current implementation stage: `SPEC-017`
+- current implementation stage: `SPEC-018` (blocked); SPEC-017 evidence recorded against pin `0.6.0`
 - production/pilot readiness: `NOT_READY`
 - pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
 
