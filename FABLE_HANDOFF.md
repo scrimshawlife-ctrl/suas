@@ -7,7 +7,7 @@ Build against `scrimshawlife-ctrl/SUAS-specs` release **v0.6.0**.
 - Specs merge pin: `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` (`src/release/pins.ts`)
 - Manifest: `RELEASE_MANIFEST-0.6.0.md`
 - Decision ledger: `RELEASE_DECISIONS-0.6.0.md` (D-004); inherited `RELEASE_DECISIONS-0.5.0.md` / `0.4.0.md` (D-035); `RELEASE_DECISIONS-0.3.0.md` (D-033); `RELEASE_DECISIONS-0.2.0.md` (D-011); `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise.
-- Current stage: SPEC-017 implementation conformance
+- Current stage: SPEC-018 (blocked); SPEC-017 evidence recorded against pin `0.6.0`
 - Production/pilot readiness: `NOT_READY`
 - Pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
 

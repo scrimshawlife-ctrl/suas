@@ -3,7 +3,7 @@
 **Status:** `ACTIVE`  
 **Released specification:** `0.6.0`  
 **Implementation authority:** `RELEASED_FOR_IMPLEMENTATION`  
-**Current stage:** `SPEC-017`
+**Current stage:** `SPEC-018` (blocked). SPEC-017 evidence recorded against pin `0.6.0`.
 
 ## Canonical source
 
@@ -19,7 +19,7 @@
 1. Read `FABLE_HANDOFF.md`, `CONTEXT.md`, AGENTS, `SPEC017_PLAN.md`, and `SPEC017_NEXT.md` here.
 2. Read the released `0.6.0` manifest, HANDOFF, ENVIRONMENT, STATUS, PRODUCT, GLOSSARY in specs.
 3. Create a change map from every implementation package/file to released spec sections.
-4. Execute the current SPEC-017 residual in `SPEC017_NEXT.md`. Slices 1–12 are already recorded; do not restart at Foundation.
+4. Read `SPEC017_NEXT.md` and specs `REMAINING.md`. SPEC-017 evidence is recorded; do not restart at Foundation. Do not invent SPEC-018 product.
 5. Keep typed configuration/startup validation, build provenance, and schema/migration/test harness intact.
 6. Keep persistent idempotency/replay-safe events intact before externally consequential flows.
 7. Implement Manual/Fake provider and notification seams before any newly authorized real provider integration.
@@ -42,4 +42,4 @@ LOCAL/TEST/STAGING are synthetic-only and real-external-effect forbidden under `
 
 ## Definition of SPEC-017 start
 
-Implementation continues against the pinned `0.6.0` stack and records conformance evidence per residual. SPEC-017 completion still does not authorize production; SPEC-018 remains the go/no-go stage.
+Implementation stays on the pinned `0.6.0` stack. SPEC-017 evidence is recorded and does not authorize production; SPEC-018 remains the blocked go/no-go stage.
