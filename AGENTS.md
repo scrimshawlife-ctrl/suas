@@ -4,6 +4,7 @@ Released stack: `0.6.0`
 Manifest: `RELEASE_MANIFEST-0.6.0.md` in `SUAS-specs`  
 Authority: `RELEASED_FOR_IMPLEMENTATION`  
 Stage: `SPEC-018` (blocked). SPEC-017 evidence recorded against pin `0.6.0`.
+SPEC-018 owner packet: specs `SPEC018_OWNER_LAUNCH_PACKET.md` (awaiting owner; silence ≠ open).
 Operator calls: specs `OPERATOR_CALLS_2026-09-25.md` (Neon preferred; no HIPAA-compliant claim; D-036 Option C).
 
 Read `FABLE_HANDOFF.md` and `CONTEXT.md` first. Pin inventory: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md).
