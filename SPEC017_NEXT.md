@@ -35,4 +35,4 @@ Funding overlay, Google Cloud evidence project, credit spend, production launch,
 2. Android leftover: dummy `MainActivity` stays for tests and must not imply live fulfillment (labeled test harness).
 3. SPEC-017 evidence is YES on specs for the `0.6.0` audit. Do not flip readiness gates.
 4. Follow specs [OPERATOR_CALLS_2026-09-25.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/OPERATOR_CALLS_2026-09-25.md) (Neon preferred for D-005; D-006 still counsel; D-036 Option C; Lyft deferred).
-5. SPEC-018 / production / store distribution stay blocked. Owner launch packet: specs [SPEC018_OWNER_LAUNCH_PACKET.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC018_OWNER_LAUNCH_PACKET.md) (awaiting owner). Do not invent product for `KEEP_PENDING` D-ids. Do not claim HIPAA compliant.
+5. SPEC-018 / production / store distribution stay blocked. Owner settled `KEEP_BLOCKED` on specs [SPEC018_OWNER_LAUNCH_PACKET.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC018_OWNER_LAUNCH_PACKET.md). Do not invent product for `KEEP_PENDING` D-ids. Do not claim HIPAA compliant.
