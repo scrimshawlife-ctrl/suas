@@ -4,7 +4,8 @@ Observed 2026-09-30. This file does not itself change GitHub settings.
 
 ```text
 SPEC_018 = KEEP_BLOCKED
-PRODUCTION_DEPLOYMENT = workflow_dispatch only, environment suas-synthetic-staging
+SYNTHETIC_STAGING_DEPLOYMENT = workflow_dispatch only, environment suas-synthetic-staging
+PRODUCTION_DEPLOYMENT = PROHIBITED
 ```
 
 ## Observed
@@ -24,7 +25,7 @@ enforce_admins: false
 
 `enforce_admins` is false, so an admin can still bypass. That is an observed gap. Turning it on is a separate operator choice, because a solo maintainer cannot approve their own pull request and a red `verify` check would otherwise have no bypass.
 
-`worker-deploy.yml` does not run on push. It requires the typed confirmation `deploy` and the GitHub Environment `suas-synthetic-staging`. That workflow is synthetic staging, not production authority.
+`worker-deploy.yml` is a synthetic-staging deployment. It does not run on push. It requires the typed confirmation `deploy` and the GitHub Environment `suas-synthetic-staging`. Production deployment is prohibited.
 
 ## Target, where the operator can apply it
 
