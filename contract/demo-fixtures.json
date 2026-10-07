@@ -1,0 +1,640 @@
+{
+  "_note": "Synthetic demo fixtures captured from the LOCAL suas demo Worker (npm run dev:demo, then npm run demo:fixtures). No real person, provider, or contact. Emails use example.invalid; phones use 555-0100..555-0199. Identifiers are rewritten to fixed demo UUIDs. Not a contract change: the source of truth is docs/openapi/v0.json in scrimshawlife-ctrl/suas.",
+  "spec": "0.6.0",
+  "tenant_id": "00000000-0000-4000-8000-000000000001",
+  "demo_code": "246810",
+  "enrolled": [
+    {
+      "email": "veteran@example.invalid",
+      "me": {
+        "user_id": "de000000-0000-4000-8000-000000000001",
+        "status": "ACTIVE",
+        "enrolled_channels": {
+          "email": true,
+          "phone": false
+        },
+        "open_case": {
+          "case_id": "de000000-0000-4000-8000-000000000002",
+          "status": "ASSIGNED",
+          "priority_signal_level": null
+        },
+        "active_qrf": {
+          "service_request_id": "de000000-0000-4000-8000-000000000003",
+          "state": "REQUESTED",
+          "headline": "Your request is recorded.",
+          "cancellable": true
+        },
+        "categories": [
+          {
+            "label": "Housing",
+            "disposition": "OPERATIONAL",
+            "category": "SHELTER",
+            "note": "Temporary shelter. Long-term housing placement is not available yet."
+          },
+          {
+            "label": "Food",
+            "disposition": "OPERATIONAL",
+            "category": "FOOD",
+            "note": null
+          },
+          {
+            "label": "Transportation",
+            "disposition": "OPERATIONAL",
+            "category": "TRANSPORTATION",
+            "note": null
+          },
+          {
+            "label": "Counseling",
+            "disposition": "COMING_SOON",
+            "category": null,
+            "note": "Not available yet. This does not create a request."
+          },
+          {
+            "label": "Activities",
+            "disposition": "INFORMATION_ONLY",
+            "category": null,
+            "note": "Community listings only. This does not create a request."
+          },
+          {
+            "label": "Job Training",
+            "disposition": "COMING_SOON",
+            "category": null,
+            "note": "Not available yet. This does not create a request."
+          }
+        ]
+      },
+      "service_requests": [
+        {
+          "service_request_id": "de000000-0000-4000-8000-000000000004",
+          "case_id": "de000000-0000-4000-8000-000000000002",
+          "category": "SHELTER",
+          "status": "CANCELLED"
+        },
+        {
+          "service_request_id": "de000000-0000-4000-8000-000000000005",
+          "case_id": "de000000-0000-4000-8000-000000000002",
+          "category": "FOOD",
+          "status": "FULFILLED"
+        },
+        {
+          "service_request_id": "de000000-0000-4000-8000-000000000006",
+          "case_id": "de000000-0000-4000-8000-000000000002",
+          "category": "TRANSPORTATION",
+          "status": "MATCHING"
+        },
+        {
+          "service_request_id": "de000000-0000-4000-8000-000000000003",
+          "case_id": "de000000-0000-4000-8000-000000000002",
+          "category": "PEER_SUPPORT",
+          "status": "CREATED"
+        }
+      ],
+      "follow_ups": [
+        {
+          "follow_up_id": "de000000-0000-4000-8000-000000000007",
+          "case_id": "de000000-0000-4000-8000-000000000002",
+          "service_request_id": null,
+          "due_at": "2026-01-15T17:00:00.000Z",
+          "schedule_version": 1,
+          "responsible_type": "VETERAN",
+          "responsible_id": "de000000-0000-4000-8000-000000000001",
+          "status": "SCHEDULED",
+          "coordination_attempt_count": 0,
+          "resolution_disposition": null
+        }
+      ]
+    },
+    {
+      "email": "veteran3@example.invalid",
+      "me": {
+        "user_id": "de000000-0000-4000-8000-000000000008",
+        "status": "ACTIVE",
+        "enrolled_channels": {
+          "email": true,
+          "phone": false
+        },
+        "open_case": null,
+        "active_qrf": null,
+        "categories": [
+          {
+            "label": "Housing",
+            "disposition": "OPERATIONAL",
+            "category": "SHELTER",
+            "note": "Temporary shelter. Long-term housing placement is not available yet."
+          },
+          {
+            "label": "Food",
+            "disposition": "OPERATIONAL",
+            "category": "FOOD",
+            "note": null
+          },
+          {
+            "label": "Transportation",
+            "disposition": "OPERATIONAL",
+            "category": "TRANSPORTATION",
+            "note": null
+          },
+          {
+            "label": "Counseling",
+            "disposition": "COMING_SOON",
+            "category": null,
+            "note": "Not available yet. This does not create a request."
+          },
+          {
+            "label": "Activities",
+            "disposition": "INFORMATION_ONLY",
+            "category": null,
+            "note": "Community listings only. This does not create a request."
+          },
+          {
+            "label": "Job Training",
+            "disposition": "COMING_SOON",
+            "category": null,
+            "note": "Not available yet. This does not create a request."
+          }
+        ]
+      },
+      "service_requests": [],
+      "follow_ups": []
+    }
+  ],
+  "resources": [
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000009",
+      "service_name": "Sample Pantry Network (synthetic)",
+      "category": "FOOD",
+      "counties": [
+        "Sample County"
+      ],
+      "hours": "Monday, Wednesday, Friday 10:00 to 14:00",
+      "cost": "No cost",
+      "contact_method": "demo-pantry@example.invalid",
+      "contact_method_kind": "EMAIL",
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000010",
+      "service_name": "Demo Harbor Food Bank (synthetic)",
+      "category": "FOOD",
+      "counties": [
+        "Example County"
+      ],
+      "hours": "Weekdays 9:00 to 16:00",
+      "cost": "No cost",
+      "contact_method": "+1-555-555-0110",
+      "contact_method_kind": "PHONE",
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000011",
+      "service_name": "Example Community Food Pantry (synthetic)",
+      "category": "FOOD",
+      "counties": [
+        "Example County"
+      ],
+      "hours": "Weekdays, morning to afternoon",
+      "cost": "No cost",
+      "contact_method": "+1-555-555-0101",
+      "contact_method_kind": "PHONE",
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000012",
+      "service_name": "Sample Mobility Desk (synthetic)",
+      "category": "TRANSPORTATION",
+      "counties": [
+        "Sample County"
+      ],
+      "hours": "Weekdays 8:00 to 17:00",
+      "cost": "Varies by trip; responders confirm before booking",
+      "contact_method": "Ask your responder to arrange",
+      "contact_method_kind": null,
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000013",
+      "service_name": "Demo Ride Coordination (synthetic)",
+      "category": "TRANSPORTATION",
+      "counties": [
+        "Example County"
+      ],
+      "hours": "Weekdays 7:00 to 18:00",
+      "cost": "No cost for eligible rides",
+      "contact_method": "+1-555-555-0111",
+      "contact_method_kind": "PHONE",
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000014",
+      "service_name": "Example Volunteer Rides (synthetic)",
+      "category": "TRANSPORTATION",
+      "counties": [
+        "Example County"
+      ],
+      "hours": "By appointment",
+      "cost": "No cost",
+      "contact_method": "Request through a responder",
+      "contact_method_kind": null,
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000015",
+      "service_name": "Sample Temporary Shelter (synthetic)",
+      "category": "SHELTER",
+      "counties": [
+        "Sample County"
+      ],
+      "hours": "Intake 16:00 to 19:00 daily",
+      "cost": "No cost",
+      "contact_method": "Ask your responder to arrange",
+      "contact_method_kind": null,
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000016",
+      "service_name": "Demo Overnight Shelter (synthetic)",
+      "category": "SHELTER",
+      "counties": [
+        "Example County"
+      ],
+      "hours": "Check-in 17:00 to 20:00 daily",
+      "cost": "No cost",
+      "contact_method": "+1-555-555-0112",
+      "contact_method_kind": "PHONE",
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000017",
+      "service_name": "Example Emergency Shelter (synthetic)",
+      "category": "SHELTER",
+      "counties": [
+        "Example County"
+      ],
+      "hours": "Daily, evening intake",
+      "cost": "No cost",
+      "contact_method": "Walk-in intake at the front desk",
+      "contact_method_kind": null,
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000018",
+      "service_name": "Sample Peer Line (synthetic)",
+      "category": "PEER_SUPPORT",
+      "counties": [
+        "Sample County"
+      ],
+      "hours": "Weekdays 12:00 to 15:00",
+      "cost": "No cost",
+      "contact_method": "Ask your responder to arrange",
+      "contact_method_kind": null,
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000019",
+      "service_name": "Demo Peer Circle (synthetic)",
+      "category": "PEER_SUPPORT",
+      "counties": [
+        "Example County"
+      ],
+      "hours": "Tuesdays and Thursdays 18:00 to 19:30",
+      "cost": "No cost",
+      "contact_method": "+1-555-555-0113",
+      "contact_method_kind": "PHONE",
+      "freshness": "FRESH",
+      "stale_warning": false
+    },
+    {
+      "resource_id": "de000000-0000-4000-8000-000000000020",
+      "service_name": "Example Peer Support Circle (synthetic)",
+      "category": "PEER_SUPPORT",
+      "counties": [
+        "Example County"
+      ],
+      "hours": "Weekly meeting",
+      "cost": "No cost",
+      "contact_method": "peer-support@example.invalid",
+      "contact_method_kind": "EMAIL",
+      "freshness": "FRESH",
+      "stale_warning": false
+    }
+  ],
+  "consents": [
+    {
+      "consent_grant_id": "de000000-0000-4000-8000-000000000021",
+      "permission": "can_view",
+      "scope": "current_requests",
+      "purpose": "Coordinate the veteran's active support requests (synthetic seed).",
+      "grantee_type": "RESPONDER",
+      "grantee_id": "de000000-0000-4000-8000-000000000022",
+      "consent_template_version": "local-seed-consent@1",
+      "status": "ACTIVE",
+      "granted_at": "2026-01-15T17:00:00.000Z",
+      "expires_at": null,
+      "revoked_at": null
+    }
+  ],
+  "notifications": [
+    {
+      "notification_id": "de000000-0000-4000-8000-000000000023",
+      "reason": "case.status_changed",
+      "channel": "IN_APP",
+      "delivery_status": "QUEUED",
+      "attempt_count": 0,
+      "subject_type": "ServiceRequest",
+      "subject_id": "de000000-0000-4000-8000-000000000003",
+      "sent_at": null,
+      "cancelled_at": null
+    },
+    {
+      "notification_id": "de000000-0000-4000-8000-000000000024",
+      "reason": "qrf.veteran_ack",
+      "channel": "IN_APP",
+      "delivery_status": "QUEUED",
+      "attempt_count": 0,
+      "subject_type": "ServiceRequest",
+      "subject_id": "de000000-0000-4000-8000-000000000003",
+      "sent_at": null,
+      "cancelled_at": null
+    }
+  ],
+  "immediate_resources": {
+    "state": "PLACEHOLDER",
+    "basis": "SAFETY.md §2 and §9; SUAS_SAFETY_COPY_MODE=placeholder_test_only",
+    "placeholder": "Approved immediate-resource information is not available in this build. This section is reserved and will show the approved resources once they are released.",
+    "resources": []
+  },
+  "check_in": {
+    "check_in_id": "de000000-0000-4000-8000-000000000025",
+    "questionnaire_version": "qv-001",
+    "status": "COMPLETED",
+    "completed_at": "2026-01-15T17:00:00.000Z",
+    "questions": [
+      {
+        "question_id": "de000000-0000-4000-8000-000000000026",
+        "question_key": "sleep_manage_7d",
+        "prompt": "During the past 7 days, how much has sleep made it harder to manage your daily needs?",
+        "dimension": "sleep",
+        "required": true,
+        "options": [
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000027",
+            "option_key": "NOT_AT_ALL",
+            "label": "Not at all"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000028",
+            "option_key": "A_LITTLE",
+            "label": "A little"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000029",
+            "option_key": "A_LOT",
+            "label": "A lot"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000030",
+            "option_key": "UNABLE_TO_MANAGE",
+            "label": "I have been unable to manage"
+          }
+        ]
+      },
+      {
+        "question_id": "de000000-0000-4000-8000-000000000031",
+        "question_key": "reliable_connection_now",
+        "prompt": "How connected do you feel to people or services you can rely on right now?",
+        "dimension": "connection",
+        "required": true,
+        "options": [
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000032",
+            "option_key": "WELL_CONNECTED",
+            "label": "Well connected"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000033",
+            "option_key": "SOMEWHAT_CONNECTED",
+            "label": "Somewhat connected"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000034",
+            "option_key": "BARELY_CONNECTED",
+            "label": "Barely connected"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000035",
+            "option_key": "NOT_CONNECTED",
+            "label": "Not connected"
+          }
+        ]
+      },
+      {
+        "question_id": "de000000-0000-4000-8000-000000000036",
+        "question_key": "stress_manage_7d",
+        "prompt": "During the past 7 days, how much has stress made it harder to handle what needs your attention?",
+        "dimension": "stress",
+        "required": true,
+        "options": [
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000037",
+            "option_key": "NOT_AT_ALL",
+            "label": "Not at all"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000038",
+            "option_key": "A_LITTLE",
+            "label": "A little"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000039",
+            "option_key": "A_LOT",
+            "label": "A lot"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000040",
+            "option_key": "UNABLE_TO_MANAGE",
+            "label": "I have been unable to manage"
+          }
+        ]
+      },
+      {
+        "question_id": "de000000-0000-4000-8000-000000000041",
+        "question_key": "basic_needs_48h",
+        "prompt": "How secure are your food, shelter, transportation, and essential supplies for the next 48 hours?",
+        "dimension": "basic_needs",
+        "required": true,
+        "options": [
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000042",
+            "option_key": "SECURE",
+            "label": "Secure"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000043",
+            "option_key": "ONE_MANAGEABLE_CONCERN",
+            "label": "One manageable concern"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000044",
+            "option_key": "IMPORTANT_GAP",
+            "label": "An important gap"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000045",
+            "option_key": "IMMEDIATE_NEED",
+            "label": "An immediate need"
+          }
+        ]
+      },
+      {
+        "question_id": "de000000-0000-4000-8000-000000000046",
+        "question_key": "basic_need_urgency",
+        "prompt": "How soon do you need help with your most important basic need?",
+        "dimension": "basic_needs",
+        "required": false,
+        "options": [
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000047",
+            "option_key": "NO_HELP_NEEDED",
+            "label": "No help needed"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000048",
+            "option_key": "AFTER_48_HOURS",
+            "label": "After 48 hours"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000049",
+            "option_key": "WITHIN_48_HOURS",
+            "label": "Within 48 hours"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000050",
+            "option_key": "TODAY",
+            "label": "Today"
+          }
+        ]
+      },
+      {
+        "question_id": "de000000-0000-4000-8000-000000000051",
+        "question_key": "coping_24h",
+        "prompt": "How able do you feel to get through the next 24 hours with the support available to you?",
+        "dimension": "coping",
+        "required": true,
+        "options": [
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000052",
+            "option_key": "ABLE",
+            "label": "Able"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000053",
+            "option_key": "MOSTLY_ABLE",
+            "label": "Mostly able"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000054",
+            "option_key": "STRUGGLING",
+            "label": "Struggling"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000055",
+            "option_key": "UNABLE",
+            "label": "Unable"
+          }
+        ]
+      },
+      {
+        "question_id": "de000000-0000-4000-8000-000000000056",
+        "question_key": "support_reachable",
+        "prompt": "If things become harder, can you reach a person or service that can support you?",
+        "dimension": "coping",
+        "required": false,
+        "options": [
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000057",
+            "option_key": "YES",
+            "label": "Yes"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000058",
+            "option_key": "PROBABLY",
+            "label": "Probably"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000059",
+            "option_key": "NOT_SURE",
+            "label": "Not sure"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000060",
+            "option_key": "NO",
+            "label": "No"
+          }
+        ]
+      },
+      {
+        "question_id": "de000000-0000-4000-8000-000000000061",
+        "question_key": "safe_now",
+        "prompt": "Do you feel safe right now?",
+        "dimension": "safety",
+        "required": true,
+        "options": [
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000062",
+            "option_key": "YES",
+            "label": "Yes"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000063",
+            "option_key": "MOSTLY_WITH_CONCERN",
+            "label": "Mostly, but I have a concern"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000064",
+            "option_key": "NO_SUPPORT_SOON",
+            "label": "No; I need support soon"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000065",
+            "option_key": "NO_IMMEDIATE_HELP",
+            "label": "No; I need immediate help"
+          }
+        ]
+      },
+      {
+        "question_id": "de000000-0000-4000-8000-000000000066",
+        "question_key": "immediate_danger",
+        "prompt": "Are you in immediate danger or do you need emergency help now?",
+        "dimension": "safety",
+        "required": false,
+        "options": [
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000067",
+            "option_key": "NO",
+            "label": "No"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000068",
+            "option_key": "NOT_SURE",
+            "label": "Not sure"
+          },
+          {
+            "answer_option_id": "de000000-0000-4000-8000-000000000069",
+            "option_key": "YES",
+            "label": "Yes"
+          }
+        ]
+      }
+    ]
+  }
+}

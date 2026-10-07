@@ -9,7 +9,14 @@ export default tseslint.config(
     // `docs/` is the GitHub Pages poster (HTML/CSS plus a browser click-through
     // script). It is not in the TypeScript project. Type-checked lint must not
     // discover those files.
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**', '.local-secrets/**', 'docs/**'],
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      '.local-secrets/**',
+      'docs/**',
+      '.wrangler/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
