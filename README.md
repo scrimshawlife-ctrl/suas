@@ -26,6 +26,8 @@ Canonical released specs:
 - pilot readiness: `NOT_READY`
 - production readiness: `NOT_READY`
 - pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
+- application version: `0.2.0` (`package.json`), implements SUAS-specs `0.6.0`; see [CHANGELOG.md](CHANGELOG.md) and [RELEASING.md](RELEASING.md)
+- work tracking: [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6) (all four repositories)
 
 ## Product surfaces
 
@@ -117,6 +119,19 @@ staging or any shared database.
 `contract/demo-fixtures.json` is owned here. `npm run demo:fixtures` regenerates
 it from the running LOCAL demo Worker; the Android and iOS apps keep copies of
 this export and must not hand-edit them.
+
+The native apps have matching demo modes that use the same accounts and code:
+
+| Client  | No server (in-memory fixture)                               | Real client against this LOCAL Worker                    |
+| ------- | ----------------------------------------------------------- | -------------------------------------------------------- |
+| Android | debug launcher "SUAS Demo (no server)" (`DemoRootActivity`) | debug launcher "SUAS Local Worker" (`LocalRootActivity`) |
+| iOS     | shared Xcode scheme `Demo` (`-SUASDemoMode`, DEBUG)         | shared Xcode scheme `Local` (`-SUASLocal`, DEBUG)        |
+
+Details live in the
+[suas-android README](https://github.com/scrimshawlife-ctrl/suas-android#demo-modes-debug-builds-only)
+and the [suas-ios README](https://github.com/scrimshawlife-ctrl/suas-ios#demo-modes-debug-builds-only).
+Release builds of both apps contain neither the fixture nor the demo entry
+points.
 
 Seeded for the demo Veteran: one open case with TRANSPORTATION (MATCHING), FOOD
 (FULFILLED, ready to confirm), SHELTER (CANCELLED) and PEER_SUPPORT (CREATED)
@@ -236,6 +251,23 @@ production readiness. The shared synthetic topology (GitHub + Worker + Neon) is 
 [docs/decision-packets/D-001-005-staging-hosting.md](docs/decision-packets/D-001-005-staging-hosting.md);
 owner-authorized publish uses Actions `worker-deploy` (`workflow_dispatch` only)
 or `npx wrangler deploy` — see
+[docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
+
+### Synthetic STAGING deploys
+
+Synthetic STAGING (`https://suasqrf.com`) is deployed only by running the
+`worker-deploy` workflow by hand (`workflow_dispatch`, environment
+`suas-synthetic-staging`). The Worker never deploys on a merge or a tag. As of
+2026-10-07 staging runs `0f7aeae` (#187), which includes the path-parameter fix
+(worker-deploy run
+[37685578663](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37685578663)).
+
+After each successful `worker-deploy`, the `staging-path-param-check` workflow
+signs in with the existing synthetic test bearers and calls path-parameter
+routes such as `GET /api/v0/cases/{id}/service-requests`. It fails on any
+`400`. The first run passed with `200` on both routes (run
+[37686583961](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37686583961)).
+It can also be started by hand. Steps and checks:
 [docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
 
 Pinned formal STAGING evidence is under
