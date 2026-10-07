@@ -23,10 +23,13 @@ concurrency:
 jobs:
   deploy:
     if: github.event.inputs.confirm == 'deploy'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: suas-synthetic-staging
     permissions:
       contents: read
+    env:
+      # Exact wrangler version; matches scripts/dev-demo.ts. Bump deliberately.
+      WRANGLER_VERSION: 4.148.0
     steps:
       - uses: actions/checkout@v5
 
@@ -62,9 +65,9 @@ jobs:
           sed -e "s/YOUR_HYPERDRIVE_ID/$SUAS_HYPERDRIVE_ID/" \
             -e 's/"name": "suas"/"name": "suas-synthetic-staging",\n  "workers_dev": false/' \
             wrangler.jsonc > .wrangler.suas-synthetic-ci.jsonc
-          printf '%s' "$RESEND_API_KEY" | npx wrangler secret put RESEND_API_KEY \
+          printf '%s' "$RESEND_API_KEY" | npx --yes "wrangler@${WRANGLER_VERSION}" secret put RESEND_API_KEY \
             --config .wrangler.suas-synthetic-ci.jsonc
-          printf '%s' "$SUAS_SESSION_SECRET" | npx wrangler secret put SUAS_SESSION_SECRET \
+          printf '%s' "$SUAS_SESSION_SECRET" | npx --yes "wrangler@${WRANGLER_VERSION}" secret put SUAS_SESSION_SECRET \
             --config .wrangler.suas-synthetic-ci.jsonc
           SUAS_ENV=STAGING \
           SUAS_SPEC_VERSION=0.6.0 \
@@ -86,7 +89,7 @@ jobs:
           SUAS_SENSITIVE_AGGREGATE_REPORTING=disabled \
           npm run auth:staging:provision
           STAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          npx wrangler deploy \
+          npx --yes "wrangler@${WRANGLER_VERSION}" deploy \
             --config .wrangler.suas-synthetic-ci.jsonc \
             --route "${DEPLOY_DOMAIN}/*" \
             --var "SUAS_EMAIL_FROM:${SUAS_EMAIL_FROM}" \

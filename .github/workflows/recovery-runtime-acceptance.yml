@@ -23,7 +23,7 @@ concurrency:
 jobs:
   deploy-and-verify:
     if: github.event.inputs.confirm == 'deploy-isolated-recovery'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: suas-synthetic-staging
     permissions:

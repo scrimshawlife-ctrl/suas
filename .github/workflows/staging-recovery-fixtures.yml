@@ -20,7 +20,7 @@ concurrency:
 jobs:
   install:
     if: github.event.inputs.confirm == 'install-recovery-fixtures'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: suas-synthetic-staging
     permissions:
