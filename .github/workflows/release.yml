@@ -1,0 +1,30 @@
+# Creates a GitHub Release when a vX.Y.Z tag is pushed. The notes are the
+# matching section of CHANGELOG.md. It does not build, deploy, or publish
+# anything else. Tags are pushed by hand after an approved merge (RELEASING.md).
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create GitHub Release from CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          awk -v v="$version" 'index($0, "## [" v "]") == 1 {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "CHANGELOG.md has no section for $version" >&2
+            exit 1
+          fi
+          gh release create "$TAG" --verify-tag --title "${GITHUB_REPOSITORY#*/} $TAG" --notes-file notes.md

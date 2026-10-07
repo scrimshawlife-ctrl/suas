@@ -143,7 +143,10 @@ modules).
 
 `find-my-way` ships a `patches/find-my-way+9.8.0.patch` (applied via
 `postinstall` / `patch-package`) so prefix matching does not call
-`new Function` under the Workers isolate. Wrangler also sets
+`new Function` under the Workers isolate. Since #187 the patch also builds
+route params without `new Function`; before that, path-parameter routes such as
+`GET /api/v0/cases/{id}/service-requests` got null params on Workers and
+answered `400 VALIDATION_FAILED`. Wrangler also sets
 `allow_eval_during_startup` for remaining constraint compilers that fall
 back safely when codegen is denied.
 
@@ -190,6 +193,27 @@ curl -sS -o /dev/null -w "%{http_code}\n" "$WORKER_BASE_URL/app"
 ```
 
 Expect health JSON without secrets; `/app` HTML for the reference surfaces.
+
+### Deploy record and post-deploy path-parameter check
+
+Deploys are manual: an owner runs the `worker-deploy` workflow
+(`workflow_dispatch` only) from the Actions tab or with
+`gh workflow run worker-deploy -R scrimshawlife-ctrl/suas --ref main -f confirm=deploy`
+(the `confirm` input must be `deploy`). Merges
+and tags never deploy.
+
+| Date (PT)  | Commit    | worker-deploy run | Post-deploy check                                        |
+| ---------- | --------- | ----------------- | -------------------------------------------------------- |
+| 2026-10-07 | `0f7aeae` | `37685578663`     | `staging-path-param-check` run `37686583961`: PASS, 200s |
+
+`staging-path-param-check` (`.github/workflows/staging-path-param-check.yml`)
+runs after every successful `worker-deploy` and on `workflow_dispatch`. It
+uses the `suas-synthetic-staging` environment and its existing synthetic
+bearers, calls path-parameter GET routes on the deployed host, fails on any
+`400`, and uploads a status-only evidence artifact. It never deploys, migrates,
+or calls `/api/v0/dev/*`. Known follow-up: `worker-deploy` runs `npx wrangler`
+without a pinned version (tracked on the
+[SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6)).
 
 ### Browser-auth delivery evidence
 
