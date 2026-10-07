@@ -54,6 +54,12 @@ import {
 } from '../signals/index.js';
 import { createFollowUp } from '../settlement/index.js';
 import { clearDemoSignInRateLimits } from './demo-rate-limits.js';
+import { DEMO_FIXED_CODE, DEMO_FIXED_CODE_DESTINATION } from '../auth/demo-fixed-code.js';
+
+/** demo@example.invalid: the primary demo Veteran (open case, four requests, fixed code). */
+const DEMO_VETERAN_LOCAL_PART = 'demo';
+/** newvet@example.invalid: enrolled, no case yet. */
+const FRESH_VETERAN_LOCAL_PART = 'newvet';
 
 type SeedUser = Awaited<ReturnType<typeof getOrCreateUser>>;
 
@@ -425,7 +431,7 @@ async function main(): Promise<void> {
 
   const pool = createPool(config);
   try {
-    const base = await runLocalSeed(pool);
+    const base = await runLocalSeed(pool, { veteranLocalPart: DEMO_VETERAN_LOCAL_PART });
 
     // LOCAL demo only: re-seeding clears the sign-in rate-limit windows for the synthetic
     // example.invalid accounts, so a presenter is not locked out by the pilot limit of three
@@ -442,7 +448,7 @@ async function main(): Promise<void> {
       demoResourceIds.push(resourceId);
     }
 
-    const fresh = await getOrCreateUser(pool, 'veteran3');
+    const fresh = await getOrCreateUser(pool, FRESH_VETERAN_LOCAL_PART);
 
     const caseId = base.qrf.supportCase.caseId;
     const serviceRequests = await ensureDemoRequests(pool, caseId, base.veteran, base.responder);
@@ -454,7 +460,7 @@ async function main(): Promise<void> {
       userId: base.veteran.userId,
     });
 
-    const veteran3Session = await createSession(pool, config.sessionSecret, {
+    const newvetSession = await createSession(pool, config.sessionSecret, {
       tenantId: TENANT_ID,
       userId: fresh.userId,
     });
@@ -480,8 +486,9 @@ async function main(): Promise<void> {
       demo: true,
       signIn: {
         method: 'EMAIL_OTP',
-        veteranEmail: syntheticEmail('veteran'),
-        freshVeteranEmail: syntheticEmail('veteran3'),
+        veteranEmail: syntheticEmail(DEMO_VETERAN_LOCAL_PART),
+        freshVeteranEmail: syntheticEmail(FRESH_VETERAN_LOCAL_PART),
+        fixedCode: `${DEMO_FIXED_CODE} for ${DEMO_FIXED_CODE_DESTINATION} (LOCAL, SUAS_DEMO_FIXED_CODE=enabled)`,
         codeSource: 'GET /api/v0/dev/last-challenge?destination=<email> (LOCAL only)',
       },
       users: {
@@ -489,7 +496,7 @@ async function main(): Promise<void> {
         responder: { userId: base.responder.userId, email: base.responder.email ?? null },
         veteran: { userId: base.veteran.userId, email: base.veteran.email ?? null },
         veteran2: { userId: base.veteranTwo.userId, email: base.veteranTwo.email ?? null },
-        veteran3: { userId: fresh.userId, email: fresh.email ?? null },
+        newvet: { userId: fresh.userId, email: fresh.email ?? null },
       },
       openCase: {
         caseId,
@@ -507,7 +514,7 @@ async function main(): Promise<void> {
       },
       sessions: {
         veteranBearer: veteranSession.credential,
-        veteran3Bearer: veteran3Session.credential,
+        newvetBearer: newvetSession.credential,
         responderBearer: responderSession.credential,
         adminBearer: adminSession.credential,
       },

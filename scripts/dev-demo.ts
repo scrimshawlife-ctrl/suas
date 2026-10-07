@@ -201,6 +201,10 @@ function buildDemoEnv(
 ): Record<string, string> {
   return {
     SUAS_ENV: 'LOCAL',
+    // LOCAL demo only: demo@example.invalid always gets the sign-in code 123456. The config
+    // rejects this outside SUAS_ENV=LOCAL, and this launcher has already refused any
+    // non-loopback database URL.
+    SUAS_DEMO_FIXED_CODE: 'enabled',
     SUAS_SPEC_VERSION: SPEC_VERSION,
     SUAS_RELEASE_MANIFEST: RELEASE_MANIFEST,
     SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
@@ -515,11 +519,11 @@ function printBanner(options: BannerOptions): void {
     `Base URL:        ${baseUrl}`,
     `Health:          ${baseUrl}/api/v0/health`,
     `Web app:         ${baseUrl}/app`,
-    `Veteran email:   ${options.veteranEmail}`,
-    `Fresh veteran:   ${options.freshVeteranEmail}`,
+    `Demo sign-in:    ${options.veteranEmail}, code 123456 (LOCAL demo only)`,
+    `New veteran:     ${options.freshVeteranEmail} (no case yet)`,
     '',
-    'One-time sign-in code (LOCAL only, this route returns 404 on staging):',
-    `  curl "${baseUrl}/api/v0/dev/last-challenge?destination=${options.veteranEmail}"`,
+    'Code for any other account (LOCAL only, this route returns 404 on staging):',
+    `  curl "${baseUrl}/api/v0/dev/last-challenge?destination=${options.freshVeteranEmail}"`,
     '',
     `Bearer tokens:    .local-secrets/${SEED_JSON_FILE} (never printed)`,
     `Android emulator: http://10.0.2.2:${options.port}`,
@@ -547,6 +551,8 @@ async function startServer(
     '127.0.0.1',
     '--var',
     'SUAS_ENV:LOCAL',
+    '--var',
+    'SUAS_DEMO_FIXED_CODE:enabled',
     '--var',
     'SUAS_EMAIL_MODE:fake',
     '--var',
@@ -622,8 +628,8 @@ async function main(): Promise<void> {
   await ensureDatabase(target, flags.reset);
 
   const seed = await runMigrationsAndSeed(env);
-  const veteranEmail = readSignInEmail(seed, 'veteranEmail', 'veteran@example.invalid');
-  const freshVeteranEmail = readSignInEmail(seed, 'freshVeteranEmail', 'veteran3@example.invalid');
+  const veteranEmail = readSignInEmail(seed, 'veteranEmail', 'demo@example.invalid');
+  const freshVeteranEmail = readSignInEmail(seed, 'freshVeteranEmail', 'newvet@example.invalid');
 
   printBanner({
     runtime: flags.node ? 'Node runtime (src/main.ts)' : 'Cloudflare Worker via wrangler dev',

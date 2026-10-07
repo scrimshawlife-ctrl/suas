@@ -39,6 +39,7 @@ import { registerVeteranRoutes } from './routes/veterans.js';
 import { registerVaSandboxOAuthRoutes } from './routes/va-sandbox-oauth.js';
 import { registerDevRoutes } from './routes/dev.js';
 import { BROWSER_SECURITY_HEADERS, requiresNoStore } from './security-headers.js';
+import { demoFixedCodeFor } from '../auth/demo-fixed-code.js';
 
 export interface ServerDependencies {
   readonly config: SuasConfig;
@@ -251,6 +252,13 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       sessionSecret: deps.config.sessionSecret,
       delivery: deps.challengeDelivery,
       mfa: deps.mfa,
+      // LOCAL demo only: undefined unless SUAS_ENV=LOCAL, SUAS_DEMO_FIXED_CODE=enabled, and a
+      // local database. Every other environment keeps random codes.
+      fixedOtpCodeFor: demoFixedCodeFor({
+        environment: deps.config.environment,
+        demoFixedCode: deps.config.demoFixedCode,
+        databaseUrl: deps.config.database.url,
+      }),
     });
 
     // LOCAL-only developer harness for the iOS app (code retrieval + status

@@ -70,6 +70,7 @@ export interface WorkerBindings {
   readonly SUAS_HTTP_PORT?: string | undefined;
   readonly SUAS_HTTP_HOST?: string | undefined;
   readonly SUAS_LOG_LEVEL?: string | undefined;
+  readonly SUAS_DEMO_FIXED_CODE?: string | undefined;
   readonly SUAS_BUILD_COMMIT?: string | undefined;
   readonly SUAS_BUILD_TIMESTAMP?: string | undefined;
 }

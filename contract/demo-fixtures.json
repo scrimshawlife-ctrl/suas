@@ -2,10 +2,10 @@
   "_note": "Synthetic demo fixtures captured from the LOCAL suas demo Worker (npm run dev:demo, then npm run demo:fixtures). No real person, provider, or contact. Emails use example.invalid; phones use 555-0100..555-0199. Identifiers are rewritten to fixed demo UUIDs. Not a contract change: the source of truth is docs/openapi/v0.json in scrimshawlife-ctrl/suas.",
   "spec": "0.6.0",
   "tenant_id": "00000000-0000-4000-8000-000000000001",
-  "demo_code": "246810",
+  "demo_code": "123456",
   "enrolled": [
     {
-      "email": "veteran@example.invalid",
+      "email": "demo@example.invalid",
       "me": {
         "user_id": "de000000-0000-4000-8000-000000000001",
         "status": "ACTIVE",
@@ -105,7 +105,7 @@
       ]
     },
     {
-      "email": "veteran3@example.invalid",
+      "email": "newvet@example.invalid",
       "me": {
         "user_id": "de000000-0000-4000-8000-000000000008",
         "status": "ACTIVE",

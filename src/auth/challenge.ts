@@ -42,6 +42,7 @@ import {
   hashCredential,
   normalizeDestination,
 } from './secrets.js';
+import type { FixedOtpCodeFor } from './demo-fixed-code.js';
 
 export type ChallengeStatus = 'ISSUED' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
 
@@ -82,6 +83,11 @@ export interface ChallengeServiceDeps {
   readonly pool: Pool;
   readonly sessionSecret: string | undefined;
   readonly delivery: ChallengeDeliveryPort;
+  /**
+   * LOCAL demo only (src/auth/demo-fixed-code.ts): returns a fixed one-time code for
+   * the synthetic demo destination. Absent in every other environment class.
+   */
+  readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
 }
 
 /**
@@ -128,7 +134,10 @@ export async function issueChallenge(
     return { issued: false, challengeId: undefined, expiresAt: undefined };
   }
 
-  const secret = input.method === 'MAGIC_LINK' ? generateOpaqueToken() : generateOtpCode();
+  const secret =
+    input.method === 'MAGIC_LINK'
+      ? generateOpaqueToken()
+      : (deps.fixedOtpCodeFor?.(destination) ?? generateOtpCode());
   const challengeId = randomUUID();
   const expiresAt = new Date(Date.now() + CHALLENGE_TTL_SECONDS.value * 1000);
 

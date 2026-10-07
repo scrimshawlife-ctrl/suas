@@ -2,7 +2,7 @@ import type { Queryable } from '../db/transaction.js';
 
 /**
  * Suffix shared by every synthetic demo account, for example
- * `veteran@example.invalid`. Only the LOCAL demo seed targets this domain, and
+ * `demo@example.invalid`. Only the LOCAL demo seed targets this domain, and
  * `@` and `.` are not LIKE wildcards (`_` and `%` are, and the domain has
  * neither), so a suffix match cannot reach a real destination.
  */

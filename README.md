@@ -85,15 +85,26 @@ a session secret and the seed summary to the gitignored `.local-secrets/`, then
 starts `wrangler@4.148.0 dev` with `SUAS_ENV=LOCAL`, fake email and SMS, and
 Hyperdrive pointed at the local database.
 
-| Item                  | Value                                                                                        |
-| --------------------- | -------------------------------------------------------------------------------------------- |
-| Base URL              | `http://127.0.0.1:3000` (`/api/v0`, web `/app`)                                              |
-| Android emulator      | `http://10.0.2.2:3000`                                                                       |
-| iOS Simulator         | `http://localhost:3000`                                                                      |
-| Demo Veteran          | `veteran@example.invalid` (open case, four service requests)                                 |
-| Fresh demo Veteran    | `veteran3@example.invalid` (enrolled, no case yet)                                           |
-| Sign-in method        | `EMAIL_OTP`                                                                                  |
-| One-time code (LOCAL) | `curl "http://127.0.0.1:3000/api/v0/dev/last-challenge?destination=veteran@example.invalid"` |
+| Item             | Value                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| Base URL         | `http://127.0.0.1:3000` (`/api/v0`, web `/app`)                                             |
+| Android emulator | `http://10.0.2.2:3000`                                                                      |
+| iOS Simulator    | `http://localhost:3000`                                                                     |
+| Demo sign-in     | `demo@example.invalid`, code `123456` (open case, four service requests)                    |
+| New Veteran      | `newvet@example.invalid` (enrolled, no case yet)                                            |
+| Sign-in method   | `EMAIL_OTP`                                                                                 |
+| Other codes      | `curl "http://127.0.0.1:3000/api/v0/dev/last-challenge?destination=newvet@example.invalid"` |
+
+The fixed code `123456` works only for `demo@example.invalid`, and only on the
+LOCAL demo Worker. Three gates must all pass (`src/auth/demo-fixed-code.ts`):
+`SUAS_ENV=LOCAL`, the opt-in `SUAS_DEMO_FIXED_CODE=enabled` that only
+`npm run dev:demo` sets, and a local database URL (loopback, or the
+`*.hyperdrive.local` proxy that `wrangler dev` exposes after the launcher has
+refused any non-loopback upstream). The config rejects
+`SUAS_DEMO_FIXED_CODE=enabled` outside LOCAL, so staging and production refuse
+to start with it. Every other account, and every other environment, still gets
+a random code. The same `123456` is the code for the Android and iOS no-server
+demo modes.
 
 `/api/v0/dev/*` exists only when `SUAS_ENV=LOCAL` and returns 404 on staging.
 The pilot sign-in limit (three codes per account per 15 minutes) still applies;
@@ -117,7 +128,10 @@ Chat has no released message store, so `/app/chat` shows its unavailable state
 `npm run demo:fixtures -- --out contract/demo-fixtures.json` captures the same
 seeded `/api/v0` responses into the deterministic fixture file the iOS and
 Android no-server demo modes load. Identifiers and timestamps are rewritten,
-and the script refuses any non-synthetic email or phone number.
+and the script refuses any non-synthetic email or phone number. Export from a
+fresh seed (`npm run dev:demo -- --reset`, then `npm run demo:fixtures` before
+`npm run smoke:demo`), because the smoke test creates and cancels an extra
+request.
 
 ### Local demo workflow
 
