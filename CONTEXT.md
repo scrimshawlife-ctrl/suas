@@ -1,4 +1,4 @@
-# CONTEXT.md — SUAS implementation context
+# CONTEXT.md: SUAS implementation context
 
 Read this before implementation work.
 
@@ -16,7 +16,7 @@ MVP categories:
 
 - `FOOD`
 - `TRANSPORTATION`
-- `SHELTER` — temporary shelter/accommodation, not permanent housing
+- `SHELTER`: temporary shelter/accommodation, not permanent housing
 - `PEER_SUPPORT`
 
 ## What SUAS is not
@@ -46,6 +46,8 @@ If you change `/api/v0`, auth, environment class, or a Veteran journey, consider
 
 Specs are authority. Implementation gaps return to specs.
 
+Every SUAS repository has a `CONTEXT.md`: [suas-ios](https://github.com/scrimshawlife-ctrl/suas-ios/blob/main/CONTEXT.md), [suas-android](https://github.com/scrimshawlife-ctrl/suas-android/blob/main/CONTEXT.md), [SUAS-specs](https://github.com/scrimshawlife-ctrl/SUAS-specs/blob/main/CONTEXT.md). Work across all four is tracked on the [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6).
+
 ## Released implementation contract
 
 - spec version: `0.6.0`
@@ -58,7 +60,18 @@ Specs are authority. Implementation gaps return to specs.
 
 Use `FABLE_HANDOFF.md`, `AGENTS.md`, `SPEC017_PLAN.md`, and `SPEC017_NEXT.md` in this repo, then the released `HANDOFF.md` and `ENVIRONMENT.md` in `SUAS-specs`.
 
-## Current handoff state · 2026-08-29
+## Current state: 2026-10-07
+
+- Application version: `0.2.0` (`package.json`, reported as `app_version` by build-info). Implements SUAS-specs `0.6.0`. Tags `v0.1.0` (baseline, `e3a9a16`) and `v0.2.0` (`a68eb12`) have GitHub Releases. Versions stay below 1.0.0 while SPEC-018 is blocked (SUAS-specs `VERSIONING.md` section 8).
+- Release flow: record changes in [CHANGELOG.md](CHANGELOG.md), follow [RELEASING.md](RELEASING.md), tag `vX.Y.Z` on `main` only after an approved merge. `.github/workflows/release.yml` creates the GitHub Release from the CHANGELOG section. A tag never deploys.
+- LOCAL demo: `npm run dev:demo` applies migrations, loads the synthetic demo seed, and starts `wrangler dev` on `http://127.0.0.1:3000`. `npm run smoke:demo` checks the main `/api/v0` endpoints. Sign in as `demo@example.invalid` with code `123456`; `newvet@example.invalid` is enrolled with no case. The fixed code needs `SUAS_ENV=LOCAL`, `SUAS_DEMO_FIXED_CODE=enabled` (rejected by config outside LOCAL), and a local database (`src/auth/demo-fixed-code.ts`). Every other account and environment gets a random code.
+- Demo fixtures: this repo owns `contract/demo-fixtures.json` and regenerates it with `npm run demo:fixtures`. `suas-android` and `suas-ios` hold copies that are not hand-edited.
+- `/api/v0/dev/*` exists only when `SUAS_ENV=LOCAL` and returns 404 on staging.
+- Path-parameter fix (#187): under Workers, routes such as `GET /api/v0/cases/{id}/service-requests` used to get null params and answer `400`. `patches/find-my-way+9.8.0.patch` now builds params without `new Function`.
+- Synthetic STAGING is `https://suasqrf.com`, running `0f7aeae` since 2026-10-07. It is deployed only when an owner runs the `worker-deploy` workflow by hand (`workflow_dispatch`, confirm input `deploy`, environment `suas-synthetic-staging`). After each successful deploy, `staging-path-param-check` calls path-parameter routes with the synthetic bearers and fails on any `400`; its first run passed with `200`s.
+- Runbook: [docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md). Board: [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6).
+
+## Handoff state: 2026-08-29 (D-007 evidence packet)
 
 The repository contains a **synthetic-STAGING evidence packet only**. It is not a pilot or production release, and it has no real-world effects.
 
@@ -67,7 +80,7 @@ The repository contains a **synthetic-STAGING evidence packet only**. It is not 
 - The D-007 stage-1 owner record is deliberately `DEFER_REQUIRED` at `docs/readiness/evidence/synthetic-staging-2026-08-29/d007/pre-execution/owner-decision-defer-required.md`.
 - No D-007 dry run has executed. Do not convert the record to `ACCEPT` or run it without a complete accountable owner identity, selected decision, owner-generated UTC signing timestamp, positively identified synthetic-STAGING deployment ID, and independent verification of every frozen hash.
 - Stage 2 evidence acceptance is separate from Stage 1 authorization. Its template is `d007/pre-execution/post-execution-acceptance-template.md`.
-- The former shared-account Cloudflare Workers host is retired for SUAS. Do not use it for browser acceptance, deployment evidence, VA OAuth callback registration, or any new integration. A new independently owned SUAS Cloudflare account/subdomain or custom staging hostname must be provisioned outside the repository before STAGING deployment work resumes.
+- The former shared-account Cloudflare Workers host is retired for SUAS. (Since then, synthetic STAGING runs on the independently owned `https://suasqrf.com`; see Current state.) Do not use it for browser acceptance, deployment evidence, VA OAuth callback registration, or any new integration. A new independently owned SUAS Cloudflare account/subdomain or custom staging hostname must be provisioned outside the repository before STAGING deployment work resumes.
 - Browser acceptance has no committed hostname default. Its `SUAS_E2E_BASE_URL` and deployment credentials belong only in GitHub Environment `suas-synthetic-staging` after the independent hostname is provisioned and verified.
 
 The following controls remain mandatory and must stay unchanged absent separate authorization:

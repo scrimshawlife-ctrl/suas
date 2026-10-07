@@ -13,6 +13,10 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
+### Changed
+
+- `CONTEXT.md` refreshed: demo mode, path-parameter fix, staging deploy and check, versioning, board link.
+
 ### CI
 
 - Moved Node 20 actions to their current Node 24 majors (`actions/checkout@v7`,
