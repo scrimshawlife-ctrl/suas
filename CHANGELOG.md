@@ -23,7 +23,8 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
   `actions/setup-python@v7`, `actions/upload-artifact@v7`,
   `actions/configure-pages@v6`, `actions/upload-pages-artifact@v5`,
   `actions/deploy-pages@v5`), pinned every `ubuntu-latest` job to
-  `ubuntu-24.04`, and pinned `worker-deploy` to wrangler `4.148.0`. No behavior
+  `ubuntu-24.04`, and pinned `worker-deploy` and
+  `recovery-runtime-acceptance` to wrangler `4.148.0`. No behavior
   change.
 
 ## [0.2.0] - 2026-10-07
