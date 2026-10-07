@@ -53,6 +53,7 @@ import {
   completeCheckIn,
 } from '../signals/index.js';
 import { createFollowUp } from '../settlement/index.js';
+import { clearDemoSignInRateLimits } from './demo-rate-limits.js';
 
 type SeedUser = Awaited<ReturnType<typeof getOrCreateUser>>;
 
@@ -428,8 +429,12 @@ async function main(): Promise<void> {
 
     // LOCAL demo only: re-seeding clears the sign-in rate-limit windows for the synthetic
     // example.invalid accounts, so a presenter is not locked out by the pilot limit of three
-    // challenges per account per 15 minutes. Real destinations are never touched.
-    await pool.query(`DELETE FROM auth_rate_limits WHERE subject LIKE '%@example.invalid'`);
+    // challenges per account per 15 minutes. The helper refuses anything other than LOCAL on a
+    // loopback postgres database, and real destinations are never touched.
+    await clearDemoSignInRateLimits(pool, {
+      environment: config.environment,
+      databaseUrl: process.env.DATABASE_URL,
+    });
 
     const demoResourceIds: string[] = [];
     for (const spec of DEMO_RESOURCES) {

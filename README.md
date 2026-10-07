@@ -98,7 +98,14 @@ Hyperdrive pointed at the local database.
 `/api/v0/dev/*` exists only when `SUAS_ENV=LOCAL` and returns 404 on staging.
 The pilot sign-in limit (three codes per account per 15 minutes) still applies;
 re-running `npm run dev:demo` or `npm run seed:demo` clears the window for the
-synthetic `@example.invalid` accounts only.
+synthetic `@example.invalid` accounts only. That reset is strictly LOCAL:
+`src/cli/demo-rate-limits.ts` refuses unless `SUAS_ENV=LOCAL` and the database
+host is loopback (`localhost`, `127.0.0.1`, `::1`), so it can never run against
+staging or any shared database.
+
+`contract/demo-fixtures.json` is owned here. `npm run demo:fixtures` regenerates
+it from the running LOCAL demo Worker; the Android and iOS apps keep copies of
+this export and must not hand-edit them.
 
 Seeded for the demo Veteran: one open case with TRANSPORTATION (MATCHING), FOOD
 (FULFILLED, ready to confirm), SHELTER (CANCELLED) and PEER_SUPPORT (CREATED)
