@@ -1,0 +1,103 @@
+# Path-parameter acceptance against the synthetic STAGING Worker.
+#
+# Regression cover for the find-my-way path-parameter bug: SUAS #187 fixed
+# GET /api/v0/cases/{id}/service-requests locally and staging was never verified.
+# This job signs in with the existing synthetic test-account bearers and fails
+# when a path-parameter route answers 400 VALIDATION_FAILED.
+#
+# STAGING only: the same `suas-synthetic-staging` host and sessions as
+# staging-acceptance.yml, never production. It does not deploy, migrate, or call
+# /api/v0/dev/* (LOCAL only; that path 404s on staging).
+#
+# Environment `suas-synthetic-staging` must expose, under the names the existing
+# workflows already use: vars SUAS_E2E_BASE_URL; secrets SUAS_E2E_VETERAN_BEARER,
+# SUAS_E2E_RESPONDER_BEARER (optional), STAGING_DATABASE_URL, SUAS_SESSION_SECRET.
+
+name: staging-path-param-check
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['worker-deploy']
+    types: [completed]
+
+concurrency:
+  group: staging-path-param-check
+  cancel-in-progress: true
+
+jobs:
+  path-params:
+    # On request, or after a successful synthetic deploy. Never after a failed one.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # This environment must contain only the independently owned SUAS
+    # synthetic-STAGING host, synthetic sessions, and no production secrets.
+    environment: suas-synthetic-staging
+    permissions:
+      contents: read
+    env:
+      CI: 'true'
+      SUAS_ENV: STAGING
+      SUAS_E2E_BASE_URL: ${{ vars.SUAS_E2E_BASE_URL }}
+      SUAS_E2E_VETERAN_BEARER: ${{ secrets.SUAS_E2E_VETERAN_BEARER }}
+      SUAS_E2E_RESPONDER_BEARER: ${{ secrets.SUAS_E2E_RESPONDER_BEARER }}
+      SUAS_PATH_PARAM_OUTPUT_PATH: artifacts/staging-path-params/summary.json
+      SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false'
+      REAL_WORLD_EFFECTS: disabled
+      PILOT_LAUNCH: blocked
+      PRODUCTION_LAUNCH: blocked
+      D007_DELETION_EXECUTION: disabled
+      D007_EXPORT_DELIVERY: disabled
+      D025_REPORTING: disabled
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refresh synthetic staging sessions
+        # Same mechanism as staging-acceptance.yml: mints fresh bearer tokens from
+        # the deployed Worker's session secret and writes masked values to
+        # $GITHUB_ENV, overriding the job-level env, so the check never runs on an
+        # expired synthetic session.
+        env:
+          SUAS_SPEC_VERSION: '0.6.0'
+          SUAS_RELEASE_MANIFEST: RELEASE_MANIFEST-0.6.0.md
+          SUAS_MIGRATIONS_MODE: validate
+          SUAS_BROWSER_AUTH_MODE: disabled
+          SUAS_EMAIL_MODE: sink
+          SUAS_SMS_MODE: sink
+          SUAS_TRANSPORTATION_ADAPTER_MODE: fake
+          SUAS_SHELTER_ADAPTER_MODE: fake
+          SUAS_FOOD_ADAPTER_MODE: fake
+          SUAS_PEER_SUPPORT_ADAPTER_MODE: manual
+          SUAS_SUPPORT_SIGNAL_MODE: fixture
+          SUAS_SAFETY_COPY_MODE: placeholder_test_only
+          SUAS_SENSITIVE_AGGREGATE_REPORTING: disabled
+          DATABASE_POOL_MAX: '1'
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUAS_SESSION_SECRET: ${{ secrets.SUAS_SESSION_SECRET }}
+        run: npm run seed:staging:sessions
+
+      - name: Check path-parameter routes on deployed STAGING
+        # Read-only GETs. Fails the job on 400 VALIDATION_FAILED, on any other
+        # non-200 path-parameter read, or when no synthetic case is discoverable.
+        run: npm run check:staging:path-params
+
+      - name: Upload path-parameter evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: staging-path-param-evidence-${{ github.run_id }}
+          path: artifacts/staging-path-params/summary.json
+          if-no-files-found: warn
+          retention-days: 14
