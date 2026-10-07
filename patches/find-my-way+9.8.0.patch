@@ -1,7 +1,8 @@
 diff --git a/node_modules/find-my-way/lib/constrainer.js b/node_modules/find-my-way/lib/constrainer.js
+index abb4f0a..fb6aa93 100644
 --- a/node_modules/find-my-way/lib/constrainer.js
 +++ b/node_modules/find-my-way/lib/constrainer.js
-@@ -169,7 +169,17 @@
+@@ -169,7 +169,17 @@ class Constrainer {
  
      lines.push('}')
  
@@ -21,9 +22,10 @@ diff --git a/node_modules/find-my-way/lib/constrainer.js b/node_modules/find-my-
  }
  
 diff --git a/node_modules/find-my-way/lib/handler-storage.js b/node_modules/find-my-way/lib/handler-storage.js
+index 20a0acc..8575cf2 100644
 --- a/node_modules/find-my-way/lib/handler-storage.js
 +++ b/node_modules/find-my-way/lib/handler-storage.js
-@@ -75,7 +75,12 @@
+@@ -75,7 +75,20 @@ class HandlerStorage {
  
      fnBody.push('return fn')
  
@@ -31,13 +33,21 @@ diff --git a/node_modules/find-my-way/lib/handler-storage.js b/node_modules/find
 +    try {
 +      return new Function('NullObject', fnBody.join('\n'))(NullObject)  // eslint-disable-line
 +    } catch (err) {
-+      // Workers forbid codegen; fall back to linear constraint matching.
-+      return function noCompiledHandlers () { return null }
++      // Workers forbid codegen outside startup: build the same params object without eval.
++      // Returning null here would drop every path parameter (for example :caseId).
++      const names = params.slice()
++      return function _createParamsObject (paramsArray) {
++        const result = new NullObject()
++        for (let i = 0; i < names.length; i++) {
++          result[names[i]] = paramsArray[i]
++        }
++        return result
++      }
 +    }
    }
  
    _getHandlerMatchingConstraints () {
-@@ -168,7 +173,11 @@
+@@ -168,7 +181,11 @@ class HandlerStorage {
      // Return the highest set bit index in the candidates bitmask.
      lines.push('return this.handlers[31 - Math.clz32(candidates)]')
  
@@ -51,9 +61,10 @@ diff --git a/node_modules/find-my-way/lib/handler-storage.js b/node_modules/find
  }
  
 diff --git a/node_modules/find-my-way/lib/node.js b/node_modules/find-my-way/lib/node.js
+index d4eb79e..65cdcce 100644
 --- a/node_modules/find-my-way/lib/node.js
 +++ b/node_modules/find-my-way/lib/node.js
-@@ -212,12 +212,14 @@
+@@ -212,12 +212,14 @@ class StaticNode extends ParentNode {
        return
      }
  

@@ -22,6 +22,7 @@
  * Usage: npm run seed   (requires PostgreSQL running and .env exported)
  */
 
+import { pathToFileURL } from 'node:url';
 import type { Pool, PoolClient } from 'pg';
 import {
   assertSyntheticEnvironment,
@@ -84,7 +85,7 @@ import {
 } from '../settlement/index.js';
 
 /** Fixed synthetic tenant so re-runs converge rather than multiply. */
-const TENANT_ID = '00000000-0000-4000-8000-000000000001';
+export const TENANT_ID = '00000000-0000-4000-8000-000000000001';
 const ORG_NAME = 'Example Veteran Support Org (synthetic)';
 
 interface OrgRow {
@@ -94,7 +95,7 @@ interface ResourceRow {
   resource_id: string;
 }
 
-async function getOrCreateUser(pool: Pool, localPart: string): Promise<User> {
+export async function getOrCreateUser(pool: Pool, localPart: string): Promise<User> {
   const email = syntheticEmail(localPart);
   const existing = await findUserByDestination(pool, TENANT_ID, email);
   if (existing !== undefined) {
@@ -134,7 +135,7 @@ async function ensureMembership(pool: Pool, userId: string, organizationId: stri
   await setMembershipStatus(pool, TENANT_ID, membership.membershipId, 'ACTIVE');
 }
 
-interface ResourceSpec {
+export interface ResourceSpec {
   readonly serviceName: string;
   readonly category: string;
   readonly counties: readonly string[];
@@ -190,7 +191,11 @@ const RESOURCE_SPECS: readonly ResourceSpec[] = [
   },
 ];
 
-async function ensureResource(pool: Pool, spec: ResourceSpec, actorId: string): Promise<string> {
+export async function ensureResource(
+  pool: Pool,
+  spec: ResourceSpec,
+  actorId: string,
+): Promise<string> {
   const found = await pool.query<ResourceRow>(
     `SELECT resource_id FROM resources
      WHERE tenant_id = $1 AND service_name = $2 AND category = $3::suas_service_category
@@ -517,6 +522,66 @@ async function ensureSettledCase(
   };
 }
 
+/** Everything the base LOCAL seed converges on. Reused by the demo seed. */
+export interface LocalSeedResult {
+  readonly org: Organization;
+  readonly admin: User;
+  readonly responder: User;
+  readonly veteran: User;
+  readonly veteranTwo: User;
+  readonly resourceIds: readonly string[];
+  readonly qrf: { supportCase: SupportCase; serviceRequestId: string };
+  readonly consentGrantId: string;
+  readonly trustedContactId: string;
+  readonly notificationCount: number;
+  readonly settled: { caseId: string; status: CaseStatus; settlementId: string | undefined };
+}
+
+/**
+ * Converge the base LOCAL synthetic dataset. Idempotent. The caller owns the
+ * pool and the LOCAL environment check.
+ */
+export async function runLocalSeed(pool: Pool): Promise<LocalSeedResult> {
+  const org = await getOrCreateOrg(pool);
+
+  const admin = await getOrCreateUser(pool, 'admin');
+  const responder = await getOrCreateUser(pool, 'responder');
+  const veteran = await getOrCreateUser(pool, 'veteran');
+  const veteranTwo = await getOrCreateUser(pool, 'veteran2');
+
+  if (!(await isSuasAdmin(pool, admin.userId))) {
+    await grantSuasAdmin(pool, admin.userId, admin.userId);
+  }
+  await ensurePublishedQv001(pool, admin.userId);
+  await ensureMembership(pool, responder.userId, org.organizationId);
+  await seedManualAdapterConfigurations(pool, TENANT_ID);
+
+  const resourceIds: string[] = [];
+  for (const spec of RESOURCE_SPECS) {
+    resourceIds.push(await ensureResource(pool, spec, admin.userId));
+  }
+
+  const qrf = await ensureActiveQrf(pool, veteran, responder);
+  const consentGrantId = await ensureConsent(pool, veteran, responder);
+  const trustedContactId = await ensureTrustedContact(pool, veteran);
+  const notificationCount = await ensureVeteranNotifications(pool, veteran, qrf.serviceRequestId);
+  const settled = await ensureSettledCase(pool, veteranTwo, responder);
+
+  return {
+    org,
+    admin,
+    responder,
+    veteran,
+    veteranTwo,
+    resourceIds,
+    qrf,
+    consentGrantId,
+    trustedContactId,
+    notificationCount,
+    settled,
+  };
+}
+
 async function main(): Promise<void> {
   const config = loadConfig(process.env);
 
@@ -532,30 +597,19 @@ async function main(): Promise<void> {
 
   const pool = createPool(config);
   try {
-    const org = await getOrCreateOrg(pool);
-
-    const admin = await getOrCreateUser(pool, 'admin');
-    const responder = await getOrCreateUser(pool, 'responder');
-    const veteran = await getOrCreateUser(pool, 'veteran');
-    const veteranTwo = await getOrCreateUser(pool, 'veteran2');
-
-    if (!(await isSuasAdmin(pool, admin.userId))) {
-      await grantSuasAdmin(pool, admin.userId, admin.userId);
-    }
-    await ensurePublishedQv001(pool, admin.userId);
-    await ensureMembership(pool, responder.userId, org.organizationId);
-    await seedManualAdapterConfigurations(pool, TENANT_ID);
-
-    const resourceIds: string[] = [];
-    for (const spec of RESOURCE_SPECS) {
-      resourceIds.push(await ensureResource(pool, spec, admin.userId));
-    }
-
-    const qrf = await ensureActiveQrf(pool, veteran, responder);
-    const consentGrantId = await ensureConsent(pool, veteran, responder);
-    const trustedContactId = await ensureTrustedContact(pool, veteran);
-    const notificationCount = await ensureVeteranNotifications(pool, veteran, qrf.serviceRequestId);
-    const settled = await ensureSettledCase(pool, veteranTwo, responder);
+    const {
+      org,
+      admin,
+      responder,
+      veteran,
+      veteranTwo,
+      resourceIds,
+      qrf,
+      consentGrantId,
+      trustedContactId,
+      notificationCount,
+      settled,
+    } = await runLocalSeed(pool);
 
     // Sessions are minted fresh each run so the printed credentials are live.
     const secret = config.sessionSecret;
@@ -624,7 +678,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+// Run only as a CLI entry point, so the demo seed can import runLocalSeed.
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}

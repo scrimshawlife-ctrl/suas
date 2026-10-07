@@ -59,6 +59,59 @@ npm run dev
 `SUAS_SESSION_SECRET` is required in every environment class and startup fails
 closed without it. It ships empty in `.env.example` and must never be committed.
 
+### One-command demo (`npm run dev:demo`)
+
+Brings up the real Worker locally from a clean clone with migrations applied and
+the synthetic demo seed loaded. LOCAL only: it refuses non-loopback database
+hosts, never targets staging or any production host, and all data is synthetic
+(`@example.invalid` emails, 555-0100 to 555-0199 phone numbers).
+
+Requirements: Node.js 22+ and PostgreSQL 17 on localhost with a `suas` / `suas`
+role that can create databases. If Postgres is not reachable and Docker is
+running, the script starts the `suas-postgres17-local` container; otherwise it
+prints install steps.
+
+```bash
+npm ci
+npm run dev:demo            # wrangler dev (src/worker.ts) on http://127.0.0.1:3000
+npm run dev:demo -- --reset # drop and recreate the suas_demo database first
+npm run dev:demo -- --node  # Node runtime (src/main.ts) instead of wrangler dev
+npm run smoke:demo          # second terminal: end-to-end smoke over /api/v0
+```
+
+What it does: creates `suas_demo` (override with `SUAS_DEMO_DATABASE_URL`),
+runs `migrate apply` and `migrate validate`, runs `src/cli/seed-demo.ts`, writes
+a session secret and the seed summary to the gitignored `.local-secrets/`, then
+starts `wrangler@4.148.0 dev` with `SUAS_ENV=LOCAL`, fake email and SMS, and
+Hyperdrive pointed at the local database.
+
+| Item                  | Value                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------- |
+| Base URL              | `http://127.0.0.1:3000` (`/api/v0`, web `/app`)                                              |
+| Android emulator      | `http://10.0.2.2:3000`                                                                       |
+| iOS Simulator         | `http://localhost:3000`                                                                      |
+| Demo Veteran          | `veteran@example.invalid` (open case, four service requests)                                 |
+| Fresh demo Veteran    | `veteran3@example.invalid` (enrolled, no case yet)                                           |
+| Sign-in method        | `EMAIL_OTP`                                                                                  |
+| One-time code (LOCAL) | `curl "http://127.0.0.1:3000/api/v0/dev/last-challenge?destination=veteran@example.invalid"` |
+
+`/api/v0/dev/*` exists only when `SUAS_ENV=LOCAL` and returns 404 on staging.
+The pilot sign-in limit (three codes per account per 15 minutes) still applies;
+re-running `npm run dev:demo` or `npm run seed:demo` clears the window for the
+synthetic `@example.invalid` accounts only.
+
+Seeded for the demo Veteran: one open case with TRANSPORTATION (MATCHING), FOOD
+(FULFILLED, ready to confirm), SHELTER (CANCELLED) and PEER_SUPPORT (CREATED)
+requests; synthetic resources in all four categories; an ACTIVE consent grant,
+a trusted contact, notifications, a completed Check-In and a Veteran follow-up.
+Chat has no released message store, so `/app/chat` shows its unavailable state
+(SUAS-specs D033_CHAT_PARITY.md); nothing is seeded for it.
+
+`npm run demo:fixtures -- --out contract/demo-fixtures.json` captures the same
+seeded `/api/v0` responses into the deterministic fixture file the iOS and
+Android no-server demo modes load. Identifiers and timestamps are rewritten,
+and the script refuses any non-synthetic email or phone number.
+
 ### Local demo workflow
 
 The repeatable LOCAL workflow uses the isolated `suas-postgres17-local` Docker
@@ -116,6 +169,10 @@ Commands:
 | `npm run provenance`              | print the build-info object                            |
 | `npm run privacy:deletion-drill`  | synthetic deletion path against the TEST database      |
 | `npm run worker:dev`              | Wrangler local Worker (`src/worker.ts`, no `listen()`) |
+| `npm run dev:demo`                | one-command LOCAL demo Worker with migrations and seed |
+| `npm run smoke:demo`              | smoke over the main `/api/v0` endpoints (LOCAL only)   |
+| `npm run seed:demo`               | re-run the synthetic demo seed against `.env`          |
+| `npm run demo:fixtures`           | capture native demo fixtures from the LOCAL Worker     |
 
 Integration tests use two databases, created once:
 
