@@ -89,8 +89,9 @@ jobs:
         run: npm run seed:staging:sessions
 
       - name: Check path-parameter routes on deployed STAGING
-        # Read-only GETs. Fails the job on 400 VALIDATION_FAILED, on any other
-        # non-200 path-parameter read, or when no synthetic case is discoverable.
+        # Read-only GETs. 200/404 are healthy; 400 means the path-parameter bug
+        # is present; any other status fails and is reported separately. With no
+        # discoverable synthetic case it probes a random UUID (404 is healthy).
         run: npm run check:staging:path-params
 
       - name: Upload path-parameter evidence

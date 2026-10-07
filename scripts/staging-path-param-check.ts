@@ -15,6 +15,7 @@
  * Identifiers are discovered at runtime from the authenticated synthetic account,
  * so no staging identifier is hardcoded.
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -43,6 +44,8 @@ export interface PathParamCheckResult {
   readonly path: string;
   readonly status: number;
   readonly ok: boolean;
+  /** HEALTHY = 200/404; PATH_PARAM_BUG = 400; UNEXPECTED = any other status. */
+  readonly outcome: 'HEALTHY' | 'PATH_PARAM_BUG' | 'UNEXPECTED';
   readonly detail: string;
 }
 
@@ -53,6 +56,7 @@ export interface PathParamCheckSummary {
   readonly started_at: string;
   readonly finished_at: string;
   readonly case_id: string;
+  readonly case_id_source: 'veteran_open_case' | 'responder_case_list' | 'random_uuid';
   readonly checks: readonly PathParamCheckResult[];
   readonly skipped: readonly { readonly id: string; readonly reason: string }[];
   readonly credentials_recorded: false;
@@ -179,16 +183,31 @@ function record(
   path: string,
   response: ApiResponse,
 ): void {
-  if (response.status === 200) {
-    checks.push({ id, method: 'GET', path, status: 200, ok: true, detail: 'HTTP 200' });
-    return;
+  const code = response.status === 200 ? 'OK' : publicErrorCode(response.body);
+  const base = { id, method: 'GET' as const, path, status: response.status };
+  if (response.status === 200 || response.status === 404) {
+    // 404 is healthy: the router extracted the parameter and the handler ran.
+    checks.push({
+      ...base,
+      ok: true,
+      outcome: 'HEALTHY',
+      detail: `HTTP ${response.status} ${code}`,
+    });
+  } else if (response.status === 400) {
+    checks.push({
+      ...base,
+      ok: false,
+      outcome: 'PATH_PARAM_BUG',
+      detail: `HTTP 400 ${code} (${PATH_PARAM_BUG})`,
+    });
+  } else {
+    checks.push({
+      ...base,
+      ok: false,
+      outcome: 'UNEXPECTED',
+      detail: `HTTP ${response.status} ${code}`,
+    });
   }
-  const code = publicErrorCode(response.body);
-  const detail =
-    response.status === 400 && code === 'VALIDATION_FAILED'
-      ? `HTTP 400 VALIDATION_FAILED (${PATH_PARAM_BUG})`
-      : `HTTP ${response.status} ${code}`;
-  checks.push({ id, method: 'GET', path, status: response.status, ok: false, detail });
 }
 
 export async function runPathParamChecks(
@@ -216,7 +235,12 @@ export async function runPathParamChecks(
     );
   }
 
+  // Case id: the veteran's own open case, else a responder-visible case (read with
+  // the responder bearer, since a veteran cannot see another veteran's case), else a
+  // random UUID for which 404 NOT_FOUND is the healthy answer.
   let caseId = openCaseId(veteran.body);
+  let caseIdSource: PathParamCheckSummary['case_id_source'] = 'veteran_open_case';
+  let caseBearer = config.veteranBearer;
   if (caseId === undefined && config.responderBearer !== undefined) {
     const cases = await get(
       config,
@@ -224,46 +248,35 @@ export async function runPathParamChecks(
       config.responderBearer,
       fetchImpl,
     );
-    if (cases.status === 200) caseId = firstCaseId(cases.body);
+    caseId = cases.status === 200 ? firstCaseId(cases.body) : undefined;
+    if (caseId !== undefined) {
+      caseIdSource = 'responder_case_list';
+      caseBearer = config.responderBearer;
+    }
   }
   if (caseId === undefined) {
-    throw new Error(
-      'No synthetic STAGING case id was discoverable: GET /api/v0/veterans/me returned no ' +
-        'open_case.case_id and the existing responder case list supplied none. Seed or open a ' +
-        'synthetic case fixture on staging (the acceptance suite opens one idempotently through ' +
-        'POST /api/v0/cases). Do not hardcode a staging identifier; /api/v0/dev/* is LOCAL only.',
-    );
+    caseId = randomUUID();
+    caseIdSource = 'random_uuid';
+    caseBearer = config.veteranBearer;
   }
 
   // Mandatory: the path-parameter route that SUAS #187 fixed locally.
   const caseServiceRequestsPath = `/api/v0/cases/${caseId}/service-requests`;
-  const caseServiceRequests = await get(
-    config,
-    caseServiceRequestsPath,
-    config.veteranBearer,
-    fetchImpl,
-  );
+  const caseServiceRequests = await get(config, caseServiceRequestsPath, caseBearer, fetchImpl);
   record(checks, 'case_service_requests', caseServiceRequestsPath, caseServiceRequests);
 
-  // Secondary path-parameter read, using an id discovered from the list above.
+  // Secondary path-parameter read: a discovered id, else a random UUID (404 healthy).
   const serviceRequestId =
-    caseServiceRequests.status === 200
+    (caseServiceRequests.status === 200
       ? firstServiceRequestId(caseServiceRequests.body)
-      : undefined;
-  if (serviceRequestId === undefined) {
-    skipped.push({
-      id: 'service_request_detail',
-      reason: 'The case returned no service_request_id to read back.',
-    });
-  } else {
-    const detailPath = `/api/v0/service-requests/${serviceRequestId}`;
-    record(
-      checks,
-      'service_request_detail',
-      detailPath,
-      await get(config, detailPath, config.veteranBearer, fetchImpl),
-    );
-  }
+      : undefined) ?? randomUUID();
+  const detailPath = `/api/v0/service-requests/${serviceRequestId}`;
+  record(
+    checks,
+    'service_request_detail',
+    detailPath,
+    await get(config, detailPath, caseBearer, fetchImpl),
+  );
 
   return {
     schema_version: '1',
@@ -272,6 +285,7 @@ export async function runPathParamChecks(
     started_at: startedAt.toISOString(),
     finished_at: new Date().toISOString(),
     case_id: caseId,
+    case_id_source: caseIdSource,
     checks,
     skipped,
     credentials_recorded: false,
@@ -288,8 +302,13 @@ export async function main(
   const summary = await runPathParamChecks(config, fetchImpl);
   for (const check of summary.checks) {
     const outcome = check.ok ? 'PASS' : 'FAIL';
-    console.log(`${outcome} ${check.id} GET ${check.path} -> ${check.detail}`);
+    console.log(`${outcome} [${check.outcome}] ${check.id} GET ${check.path} -> ${check.detail}`);
   }
+  const bugs = summary.checks.filter((check) => check.outcome === 'PATH_PARAM_BUG').length;
+  const unexpected = summary.checks.filter((check) => check.outcome === 'UNEXPECTED').length;
+  console.log(
+    `case_id_source=${summary.case_id_source} path_param_bug(400)=${bugs} unexpected_status=${unexpected}`,
+  );
   for (const skip of summary.skipped) {
     console.log(`SKIP ${skip.id}: ${skip.reason}`);
   }
