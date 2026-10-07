@@ -21,12 +21,15 @@ import { findUsersByDestination, selectUserForSignIn } from '../../identity/inde
 import { API_PREFIX } from '../../release/pins.js';
 import { authenticate } from '../authenticate.js';
 import { UnauthenticatedError } from '../../authz/index.js';
+import type { FixedOtpCodeFor } from '../../auth/demo-fixed-code.js';
 
 export interface AuthRouteDeps {
   readonly pool: Pool;
   readonly sessionSecret: string | undefined;
   readonly delivery: ChallengeDeliveryPort;
   readonly mfa: MfaPort;
+  /** LOCAL demo only; see src/auth/demo-fixed-code.ts. */
+  readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
 }
 
 const UNKNOWN_TENANT = '00000000-0000-4000-8000-000000000000';
@@ -68,6 +71,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         pool: deps.pool,
         sessionSecret: deps.sessionSecret,
         delivery: deps.delivery,
+        fixedOtpCodeFor: deps.fixedOtpCodeFor,
       },
       {
         tenantId,

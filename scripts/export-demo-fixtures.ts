@@ -19,6 +19,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { DEMO_FIXED_CODE, DEMO_FIXED_CODE_DESTINATION } from '../src/auth/demo-fixed-code.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -26,11 +27,15 @@ const TENANT_ID = '00000000-0000-4000-8000-000000000001';
 const DEMO_UUID_PREFIX = 'de000000-0000-4000-8000-';
 const FIXED_TIMESTAMP = '2026-01-15T17:00:00.000Z';
 
-const PRIMARY_EMAIL = 'veteran@example.invalid';
-const FRESH_EMAIL = 'veteran3@example.invalid';
+const PRIMARY_EMAIL = DEMO_FIXED_CODE_DESTINATION;
+const FRESH_EMAIL = 'newvet@example.invalid';
 
-/** Fixed code the no-server native demo modes accept. Not a server value. */
-const DEMO_CODE = '246810';
+/**
+ * Fixed code the no-server native demo modes accept. It is the same code the LOCAL demo
+ * Worker issues to demo@example.invalid (SUAS_DEMO_FIXED_CODE=enabled), so one code works
+ * everywhere in the demo.
+ */
+const DEMO_CODE = DEMO_FIXED_CODE;
 
 const NOTE =
   'Synthetic demo fixtures captured from the LOCAL suas demo Worker (npm run dev:demo, then ' +
@@ -277,6 +282,23 @@ async function signIn(base: URL, email: string): Promise<string> {
     expect: 202,
   });
 
+  // The primary demo account signs in with the fixed LOCAL demo code, exactly as a presenter would.
+  const code =
+    email === DEMO_FIXED_CODE_DESTINATION ? DEMO_FIXED_CODE : await lastChallengeCode(base, email);
+
+  const verified = await apiJson(base, 'POST', '/api/v0/auth/challenges/commands/verify', {
+    body: { destination: email, code },
+    expect: 201,
+  });
+  const token = readString(verified, 'session_credential');
+  if (token === undefined) {
+    throw new Error('The verify response did not include a session credential.');
+  }
+
+  return token;
+}
+
+async function lastChallengeCode(base: URL, email: string): Promise<string> {
   const challenge = await apiJson(
     base,
     'GET',
@@ -289,17 +311,7 @@ async function signIn(base: URL, email: string): Promise<string> {
       'The LOCAL dev challenge helper did not return a code. Is `npm run dev:demo` still running?',
     );
   }
-
-  const verified = await apiJson(base, 'POST', '/api/v0/auth/challenges/commands/verify', {
-    body: { destination: email, code },
-    expect: 201,
-  });
-  const token = readString(verified, 'session_credential');
-  if (token === undefined) {
-    throw new Error('The verify response did not include a session credential.');
-  }
-
-  return token;
+  return code;
 }
 
 async function logout(base: URL, token: string): Promise<void> {

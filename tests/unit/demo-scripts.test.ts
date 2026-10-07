@@ -81,7 +81,7 @@ describe('rewriteIdentifiers', () => {
 describe('assertSyntheticFixture', () => {
   const good = JSON.stringify({
     tenant_id: TENANT_ID,
-    email: 'veteran@example.invalid',
+    email: 'demo@example.invalid',
     phone: '+1-555-555-0110',
     tag: 'local-seed-consent@1',
     at: '2026-10-07T19:45:54Z',
@@ -130,9 +130,13 @@ describe('contract/demo-fixtures.json', () => {
       tenant_id?: string;
       enrolled?: { email?: string }[];
     };
-    expect(doc.demo_code).toBe('246810');
+    expect(doc.demo_code).toBe('123456');
     expect(doc.tenant_id).toBe(TENANT_ID);
     expect(doc.enrolled).toHaveLength(2);
+    expect((doc.enrolled ?? []).map((entry) => entry.email)).toEqual([
+      'demo@example.invalid',
+      'newvet@example.invalid',
+    ]);
     for (const entry of doc.enrolled ?? []) {
       expect(entry.email ?? '').toMatch(/@example\.invalid$/);
     }

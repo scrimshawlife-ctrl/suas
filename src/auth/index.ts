@@ -60,6 +60,13 @@ export {
   type VerifyChallengeInput,
 } from './challenge.js';
 export {
+  DEMO_FIXED_CODE,
+  DEMO_FIXED_CODE_DESTINATION,
+  demoFixedCodeFor,
+  isLocalDemoDatabaseUrl,
+  type FixedOtpCodeFor,
+} from './demo-fixed-code.js';
+export {
   clearElevation,
   createSession,
   elevateSession,

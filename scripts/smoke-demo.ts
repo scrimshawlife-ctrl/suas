@@ -16,6 +16,7 @@
  * and names are obviously fictional.
  */
 import { pathToFileURL } from 'node:url';
+import { DEMO_FIXED_CODE, DEMO_FIXED_CODE_DESTINATION } from '../src/auth/demo-fixed-code.js';
 
 export type ApiResult = { status: number; json: unknown; text: string };
 
@@ -188,6 +189,12 @@ export async function authAndCaseSteps(ctx: SmokeContext, email: string): Promis
       ctx.expect(res.status === 200, `expected 200, got ${res.status}`);
       const code = str(res.json, 'code');
       ctx.expect(typeof code === 'string' && code.length > 0, 'expected a non-empty code string');
+      if (email === DEMO_FIXED_CODE_DESTINATION) {
+        // LOCAL demo: the Worker issues the fixed, memorable code to demo@example.invalid.
+        ctx.expect(code === DEMO_FIXED_CODE, 'expected the fixed LOCAL demo code');
+        challengeCode = DEMO_FIXED_CODE;
+        return 'fixed LOCAL demo code issued';
+      }
       challengeCode = code;
       return 'code retrieved (value not logged)';
     });
@@ -632,7 +639,7 @@ if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
     const baseUrl = assertLoopbackBaseUrl(
       process.argv[2] ?? process.env.SUAS_DEMO_BASE_URL ?? 'http://127.0.0.1:3000',
     );
-    const email = process.env.SUAS_DEMO_VETERAN_EMAIL ?? 'veteran@example.invalid';
+    const email = process.env.SUAS_DEMO_VETERAN_EMAIL ?? DEMO_FIXED_CODE_DESTINATION;
     const summary = await runSmoke(baseUrl, { email, log });
     log(`smoke: ${summary.passed} passed, ${summary.failed} failed`);
     if (summary.failed > 0) {

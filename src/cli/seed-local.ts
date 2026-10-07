@@ -541,12 +541,23 @@ export interface LocalSeedResult {
  * Converge the base LOCAL synthetic dataset. Idempotent. The caller owns the
  * pool and the LOCAL environment check.
  */
-export async function runLocalSeed(pool: Pool): Promise<LocalSeedResult> {
+export interface LocalSeedOptions {
+  /**
+   * Local part of the primary Veteran's synthetic address. Defaults to `veteran`
+   * (veteran@example.invalid); the LOCAL demo seed passes `demo`.
+   */
+  readonly veteranLocalPart?: string;
+}
+
+export async function runLocalSeed(
+  pool: Pool,
+  options: LocalSeedOptions = {},
+): Promise<LocalSeedResult> {
   const org = await getOrCreateOrg(pool);
 
   const admin = await getOrCreateUser(pool, 'admin');
   const responder = await getOrCreateUser(pool, 'responder');
-  const veteran = await getOrCreateUser(pool, 'veteran');
+  const veteran = await getOrCreateUser(pool, options.veteranLocalPart ?? 'veteran');
   const veteranTwo = await getOrCreateUser(pool, 'veteran2');
 
   if (!(await isSuasAdmin(pool, admin.userId))) {

@@ -238,6 +238,9 @@ const rawConfigSchema = z.object({
   SUAS_HTTP_PORT: optionalRaw,
   SUAS_HTTP_HOST: optionalRaw,
   SUAS_LOG_LEVEL: optionalRaw,
+  // LOCAL demo only: "enabled" gives demo@example.invalid the fixed sign-in code 123456
+  // (src/auth/demo-fixed-code.ts). Rejected in every other environment class.
+  SUAS_DEMO_FIXED_CODE: optionalRaw,
 });
 
 /** Log levels. Implementation mechanism; ENVIRONMENT.md §6 governs what may be logged. */
@@ -311,6 +314,8 @@ export interface SuasConfig {
     readonly port: number;
   };
   readonly logLevel: LogLevel;
+  /** LOCAL demo only: fixed sign-in code for demo@example.invalid. Always false off LOCAL. */
+  readonly demoFixedCode: boolean;
 }
 
 function parsePositiveInt(
@@ -403,6 +408,24 @@ function validateProviderEndpoint(
  */
 export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   const environment = raw.SUAS_ENV;
+
+  if (
+    raw.SUAS_DEMO_FIXED_CODE !== undefined &&
+    raw.SUAS_DEMO_FIXED_CODE !== 'enabled' &&
+    raw.SUAS_DEMO_FIXED_CODE !== 'disabled'
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SUAS_DEMO_FIXED_CODE must be exactly "enabled" or "disabled" when set.',
+    });
+  }
+  if (raw.SUAS_DEMO_FIXED_CODE === 'enabled' && environment !== 'LOCAL') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'SUAS_DEMO_FIXED_CODE=enabled is a LOCAL demo aid and is forbidden outside SUAS_ENV=LOCAL.',
+    });
+  }
 
   const vaSandboxEnabled = raw.SUAS_VA_SANDBOX_OAUTH_ENABLED === 'true';
   if (
@@ -740,6 +763,7 @@ export function shapeConfig(
       ),
     },
     logLevel: resolveLogLevel(raw.SUAS_LOG_LEVEL, raw.SUAS_ENV, ctx),
+    demoFixedCode: raw.SUAS_ENV === 'LOCAL' && raw.SUAS_DEMO_FIXED_CODE === 'enabled',
   };
 }
 

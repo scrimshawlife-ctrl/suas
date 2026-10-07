@@ -137,6 +137,7 @@ import {
   authenticate,
   BROWSER_SESSION_COOKIE,
 } from '../authenticate.js';
+import { demoFixedCodeFor } from '../../auth/demo-fixed-code.js';
 
 export interface UiRouteDependencies {
   readonly pool: Pool;
@@ -412,7 +413,17 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     }
 
     await issueChallenge(
-      { pool, sessionSecret, delivery: deps.challengeDelivery },
+      {
+        pool,
+        sessionSecret,
+        delivery: deps.challengeDelivery,
+        // LOCAL demo only; undefined in every other environment class.
+        fixedOtpCodeFor: demoFixedCodeFor({
+          environment: deps.config.environment,
+          demoFixedCode: deps.config.demoFixedCode,
+          databaseUrl: deps.config.database.url,
+        }),
+      },
       {
         tenantId,
         destination: body.destination,
