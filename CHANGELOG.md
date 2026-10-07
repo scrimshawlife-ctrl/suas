@@ -15,6 +15,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Changed
 
+- `SPEC017_NEXT.md` aligned with HEAD: LOCAL demo and native demo modes listed as shipped, Android harness item cites `MainActivityHarnessTest` (suas-android #16).
 - `CONTEXT.md` refreshed: demo mode, path-parameter fix, staging deploy and check, versioning, board link.
 
 ### CI
