@@ -38,7 +38,7 @@ concurrency:
 jobs:
   soak:
     if: github.event.inputs.confirm == 'synthetic-staging-read-only'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     environment: suas-synthetic-staging
     permissions:
@@ -107,7 +107,7 @@ jobs:
 
       - name: Upload sanitized aggregate results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: synthetic-staging-soak-${{ github.run_id }}
           path: artifacts/soak/synthetic-staging-soak-summary.json

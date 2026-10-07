@@ -13,6 +13,19 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
+### Changed
+
+- `CONTEXT.md` refreshed: demo mode, path-parameter fix, staging deploy and check, versioning, board link.
+
+### CI
+
+- Moved Node 20 actions to their current Node 24 majors (`actions/checkout@v7`,
+  `actions/setup-python@v7`, `actions/upload-artifact@v7`,
+  `actions/configure-pages@v6`, `actions/upload-pages-artifact@v5`,
+  `actions/deploy-pages@v5`), pinned every `ubuntu-latest` job to
+  `ubuntu-24.04`, and pinned `worker-deploy` to wrangler `4.148.0`. No behavior
+  change.
+
 ## [0.2.0] - 2026-10-07
 
 Implements SUAS-specs `0.6.0` (pin `fb27e54`). API selector `/api/v0` and event
