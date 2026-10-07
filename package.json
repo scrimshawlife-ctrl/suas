@@ -2,7 +2,7 @@
   "name": "suas",
   "version": "0.1.0",
   "private": true,
-  "description": "SUAS implementation \u2014 conforms to SUAS-specs released stack 0.6.0",
+  "description": "SUAS implementation — conforms to SUAS-specs released stack 0.6.0",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
@@ -49,7 +49,8 @@
     "migrate:rehearse": "tsx scripts/migration-restore-rehearsal.ts",
     "settle:check": "tsx scripts/check-spec-018-settlement.ts",
     "privacy:deletion-drill": "tsx scripts/deletion-drill.ts",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "check:staging:path-params": "tsx scripts/staging-path-param-check.ts"
   },
   "dependencies": {
     "fastify": "^5.2.1",
