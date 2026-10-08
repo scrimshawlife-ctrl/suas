@@ -205,15 +205,20 @@ and tags never deploy.
 | Date (PT)  | Commit    | worker-deploy run | Post-deploy check                                        |
 | ---------- | --------- | ----------------- | -------------------------------------------------------- |
 | 2026-10-07 | `0f7aeae` | `37685578663`     | `staging-path-param-check` run `37686583961`: PASS, 200s |
+| 2026-10-08 | `7783284` | `37740829891`     | `staging-path-param-check` run `37740903276`: PASS       |
+| 2026-10-08 | `80c27e7` | `37746194370`     | `staging-path-param-check` run `37746257527`: PASS       |
+
+`80c27e7` is the Worker on `https://suasqrf.com`. That deploy sets
+`SUAS_DEMO_FIXED_CODE=enabled`. The sign-in page shows `demo@example.invalid`
+and code `123456`.
 
 `staging-path-param-check` (`.github/workflows/staging-path-param-check.yml`)
 runs after every successful `worker-deploy` and on `workflow_dispatch`. It
 uses the `suas-synthetic-staging` environment and its existing synthetic
 bearers, calls path-parameter GET routes on the deployed host, fails on any
 `400`, and uploads a status-only evidence artifact. It never deploys, migrates,
-or calls `/api/v0/dev/*`. Known follow-up: `worker-deploy` runs `npx wrangler`
-without a pinned version (tracked on the
-[SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6)).
+or calls `/api/v0/dev/*`. `worker-deploy` pins wrangler `4.148.0`
+(`WRANGLER_VERSION` in `.github/workflows/worker-deploy.yml`).
 
 ### Browser-auth delivery evidence
 

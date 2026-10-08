@@ -260,16 +260,19 @@ or `npx wrangler deploy` — see
 Synthetic STAGING (`https://suasqrf.com`) is deployed only by running the
 `worker-deploy` workflow by hand (`workflow_dispatch`, environment
 `suas-synthetic-staging`). The Worker never deploys on a merge or a tag. As of
-2026-10-07 staging runs `0f7aeae` (#187), which includes the path-parameter fix
-(worker-deploy run
-[37685578663](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37685578663)).
+2026-10-08 staging runs `80c27e7` (#196). That deploy sets
+`SUAS_DEMO_FIXED_CODE=enabled` (worker-deploy run
+[37746194370](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37746194370)).
+The sign-in page shows `demo@example.invalid` and code `123456`.
 
 After each successful `worker-deploy`, the `staging-path-param-check` workflow
 signs in with the existing synthetic test bearers and calls path-parameter
 routes such as `GET /api/v0/cases/{id}/service-requests`. It fails on any
-`400`. The first run passed with `200` on both routes (run
+`400`. The check after the current deploy passed (run
+[37746257527](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37746257527)).
+The first check, after `0f7aeae`, passed with `200` on both routes (run
 [37686583961](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37686583961)).
-It can also be started by hand. Steps and checks:
+It can also be started by hand. The deploy record is in
 [docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
 
 Pinned formal STAGING evidence is under

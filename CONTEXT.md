@@ -60,7 +60,7 @@ Every SUAS repository has a `CONTEXT.md`: [suas-ios](https://github.com/scrimsha
 
 Use `FABLE_HANDOFF.md`, `AGENTS.md`, `SPEC017_PLAN.md`, and `SPEC017_NEXT.md` in this repo, then the released `HANDOFF.md` and `ENVIRONMENT.md` in `SUAS-specs`.
 
-## Current state: 2026-10-07
+## Current state: 2026-10-08
 
 - Application version: `0.2.0` (`package.json`, reported as `app_version` by build-info). Implements SUAS-specs `0.6.0`. Tags `v0.1.0` (baseline, `e3a9a16`) and `v0.2.0` (`a68eb12`) have GitHub Releases. Versions stay below 1.0.0 while SPEC-018 is blocked (SUAS-specs `VERSIONING.md` section 8).
 - Release flow: record changes in [CHANGELOG.md](CHANGELOG.md), follow [RELEASING.md](RELEASING.md), tag `vX.Y.Z` on `main` only after an approved merge. `.github/workflows/release.yml` creates the GitHub Release from the CHANGELOG section. A tag never deploys.
@@ -68,7 +68,7 @@ Use `FABLE_HANDOFF.md`, `AGENTS.md`, `SPEC017_PLAN.md`, and `SPEC017_NEXT.md` in
 - Demo fixtures: this repo owns `contract/demo-fixtures.json` and regenerates it with `npm run demo:fixtures`. `suas-android` and `suas-ios` hold copies that are not hand-edited.
 - `/api/v0/dev/*` exists only when `SUAS_ENV=LOCAL` and returns 404 on staging.
 - Path-parameter fix (#187): under Workers, routes such as `GET /api/v0/cases/{id}/service-requests` used to get null params and answer `400`. `patches/find-my-way+9.8.0.patch` now builds params without `new Function`.
-- Synthetic STAGING is `https://suasqrf.com`, running `0f7aeae` since 2026-10-07. It is deployed only when an owner runs the `worker-deploy` workflow by hand (`workflow_dispatch`, confirm input `deploy`, environment `suas-synthetic-staging`). After each successful deploy, `staging-path-param-check` calls path-parameter routes with the synthetic bearers and fails on any `400`; its first run passed with `200`s.
+- Synthetic STAGING is `https://suasqrf.com`, running `80c27e7` since 2026-10-08. It is deployed only when an owner runs the `worker-deploy` workflow by hand (`workflow_dispatch`, confirm input `deploy`, environment `suas-synthetic-staging`). That deploy sets `SUAS_DEMO_FIXED_CODE=enabled`, so the sign-in page accepts `demo@example.invalid` with code `123456`. After each successful deploy, `staging-path-param-check` calls path-parameter routes with the synthetic bearers and fails on any `400`. The check after `80c27e7` passed (run `37746257527`). Earlier deploys are in the runbook.
 - Runbook: [docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md). Board: [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6).
 - Mac device work (Simulator, emulator, screenshots, local-runner CI): SUAS-specs [docs/handoffs/MAC_DEVICE_WORK.md](https://github.com/scrimshawlife-ctrl/SUAS-specs/blob/main/docs/handoffs/MAC_DEVICE_WORK.md)
 
