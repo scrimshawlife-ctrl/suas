@@ -232,6 +232,7 @@ describe('PROVIDER_INTEGRATIONS.md §2 rule 8 — manual coordination is first-c
       });
 
       expect(result.outcome.status).toBe('MANUAL_PENDING');
+      expect(result.attempt.adapterId).toBe('manual');
     },
   );
 });
@@ -749,6 +750,32 @@ describe('FULFILLMENT.md §6 — confirmation requires a human', () => {
       'DISPUTED',
     );
   });
+
+  it.each(['CANCELLED', 'FAILED'] as const)(
+    'refuses to confirm a %s fulfillment',
+    async (state) => {
+      const { tenantId, request } = await requestScenario();
+      await withTransaction(pool, (tx) =>
+        upsertFulfillment(tx, {
+          tenantId,
+          serviceRequestId: request.serviceRequestId,
+          state,
+        }),
+      );
+
+      await expect(
+        withTransaction(pool, (tx) =>
+          confirmFulfillment(tx, {
+            tenantId,
+            serviceRequestId: request.serviceRequestId,
+            veteranConfirmed: true,
+          }),
+        ),
+      ).rejects.toThrow(FulfillmentNotConfirmableError);
+
+      expect((await findFulfillment(pool, tenantId, request.serviceRequestId))?.state).toBe(state);
+    },
+  );
 
   it('does not fulfil the request merely because a provider accepted', async () => {
     const { tenantId, veteran, responder, caseId, request } = await requestScenario();
