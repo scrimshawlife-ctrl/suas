@@ -70,6 +70,7 @@ Use `FABLE_HANDOFF.md`, `AGENTS.md`, `SPEC017_PLAN.md`, and `SPEC017_NEXT.md` in
 - Path-parameter fix (#187): under Workers, routes such as `GET /api/v0/cases/{id}/service-requests` used to get null params and answer `400`. `patches/find-my-way+9.8.0.patch` now builds params without `new Function`.
 - Synthetic STAGING is `https://suasqrf.com`, running `0f7aeae` since 2026-10-07. It is deployed only when an owner runs the `worker-deploy` workflow by hand (`workflow_dispatch`, confirm input `deploy`, environment `suas-synthetic-staging`). After each successful deploy, `staging-path-param-check` calls path-parameter routes with the synthetic bearers and fails on any `400`; its first run passed with `200`s.
 - Runbook: [docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md). Board: [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6).
+- Mac device work (Simulator, emulator, screenshots, local-runner CI): SUAS-specs [docs/handoffs/MAC_DEVICE_WORK.md](https://github.com/scrimshawlife-ctrl/SUAS-specs/blob/main/docs/handoffs/MAC_DEVICE_WORK.md)
 
 ## Handoff state: 2026-08-29 (D-007 evidence packet)
 
