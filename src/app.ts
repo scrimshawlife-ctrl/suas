@@ -177,7 +177,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     mfa,
     jobQueue,
     // Pino's default transport uses worker_threads, which Workers do not run.
-    ...(runtime === 'worker' ? { logger: false } : {}),
+    ...(runtime === 'worker' ? { logger: false, workerRuntime: true } : {}),
   });
 
   if (options.listen !== false) {

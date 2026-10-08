@@ -137,7 +137,12 @@ import {
   authenticate,
   BROWSER_SESSION_COOKIE,
 } from '../authenticate.js';
-import { demoFixedCodeFor } from '../../auth/demo-fixed-code.js';
+import {
+  DEMO_FIXED_CODE_DESTINATION,
+  demoFixedCodeFor,
+  type FixedOtpCodeFor,
+} from '../../auth/demo-fixed-code.js';
+import { normalizeDestination } from '../../auth/secrets.js';
 
 export interface UiRouteDependencies {
   readonly pool: Pool;
@@ -148,6 +153,16 @@ export interface UiRouteDependencies {
   readonly supportSignalMode: SupportSignalMode;
   readonly jobQueue?: DurableJobQueuePort;
   readonly challengeDelivery?: ChallengeDeliveryPort;
+  /** True only when this server is the Cloudflare Worker isolate. */
+  readonly workerRuntime?: boolean;
+}
+
+function demoSignInFrom(
+  fixedOtpCodeFor: FixedOtpCodeFor | undefined,
+): { readonly email: string; readonly code: string } | undefined {
+  const code = fixedOtpCodeFor?.(DEMO_FIXED_CODE_DESTINATION);
+  if (code === undefined) return undefined;
+  return { email: DEMO_FIXED_CODE_DESTINATION, code };
 }
 
 const HTML = 'text/html; charset=utf-8';
@@ -350,6 +365,13 @@ async function loadOwnedCheckIn(
 
 export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies): void {
   const { config, pool, sessionSecret, safetyCopyMode, supportSignalMode } = deps;
+  const fixedOtpCodeFor = demoFixedCodeFor({
+    environment: config.environment,
+    demoFixedCode: config.demoFixedCode,
+    databaseUrl: config.database.url,
+    workerRuntime: deps.workerRuntime === true,
+  });
+  const demoSignIn = demoSignInFrom(fixedOtpCodeFor);
   registerHtmlFormParser(app);
 
   const adminContext = async (request: Parameters<typeof authenticate>[2], reason: string) => {
@@ -373,6 +395,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         shell: shell('Shut Up and Serve', { showMobileNav: false }),
         // §7.4: mission framing with no statistic or clinical efficacy claim.
         missionLine: 'Veteran peer support, coordinated by people who served.',
+        ...(demoSignIn === undefined ? {} : { demoSignIn }),
       }),
     );
   });
@@ -386,6 +409,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         selectedRole: query.role,
         contactChannelRequirement:
           'Use the email address already enrolled for this environment. We send a sign-in code; this does not create a new account.',
+        ...(demoSignIn === undefined ? {} : { demoSignIn }),
       }),
     );
   });
@@ -417,12 +441,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         pool,
         sessionSecret,
         delivery: deps.challengeDelivery,
-        // LOCAL demo only; undefined in every other environment class.
-        fixedOtpCodeFor: demoFixedCodeFor({
-          environment: deps.config.environment,
-          demoFixedCode: deps.config.demoFixedCode,
-          databaseUrl: deps.config.database.url,
-        }),
+        fixedOtpCodeFor,
       },
       {
         tenantId,
@@ -432,11 +451,15 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       },
     );
 
+    const showDemoCode =
+      demoSignIn !== undefined &&
+      normalizeDestination(body.destination) === DEMO_FIXED_CODE_DESTINATION;
     return reply.type(HTML).send(
       renderEmailOtp({
         shell: shell('Check your email', { showMobileNav: false }),
         destination: body.destination,
         selectedRole: body.role,
+        ...(showDemoCode ? { demoCode: demoSignIn.code } : {}),
       }),
     );
   });
@@ -465,7 +488,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
     try {
       const issued = await verifyAndCreateSession(
-        { pool, sessionSecret, delivery: deps.challengeDelivery },
+        { pool, sessionSecret, delivery: deps.challengeDelivery, fixedOtpCodeFor },
         {
           tenantId,
           destination: body.destination,
@@ -489,6 +512,10 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
             destination: body.destination,
             selectedRole: body.role,
             error: 'The sign-in code is invalid or has expired.',
+            ...(demoSignIn !== undefined &&
+            normalizeDestination(body.destination) === DEMO_FIXED_CODE_DESTINATION
+              ? { demoCode: demoSignIn.code }
+              : {}),
           }),
         );
     }

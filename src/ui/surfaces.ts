@@ -328,6 +328,12 @@ export function renderLanding(model: LandingViewModel): string {
       h2({ id: 'take-action', class: 'kicker' }, 'TAKE ACTION'),
       a({ class: 'action', href: '/app/join?role=veteran' }, 'I NEED SUPPORT'),
       a({ class: 'action', href: '/app/join?role=responder' }, 'I WANT TO SERVE'),
+      model.demoSignIn === undefined
+        ? undefined
+        : p(
+            {},
+            `Synthetic demo sign-in: ${model.demoSignIn.email}, code ${model.demoSignIn.code}.`,
+          ),
     ),
   ]);
   return assertSurface('LANDING', markup);
@@ -344,6 +350,12 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
       p({ class: 'kicker' }, roleLabel),
       // §7.1: replaces the reference's "No email" promise with the truth.
       p({}, model.contactChannelRequirement),
+      model.demoSignIn === undefined
+        ? undefined
+        : p(
+            {},
+            `Synthetic demo: ${model.demoSignIn.email}, code ${model.demoSignIn.code}. No email is sent for this account.`,
+          ),
       // 3.3.2 labels; 1.3.5 autocomplete.
       model.authEnabled === true
         ? form(
@@ -357,6 +369,7 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
               autocomplete: 'email',
               autocapitalize: 'none',
               required: true,
+              ...(model.demoSignIn === undefined ? {} : { value: model.demoSignIn.email }),
             }),
             button({ class: 'action', type: 'submit' }, 'Send sign-in code'),
           )
@@ -369,7 +382,12 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
 export function renderEmailOtp(model: EmailOtpViewModel): string {
   return document(model.shell, [
     h1({}, 'Enter the code'),
-    p({}, `If this email is enrolled, a one-time sign-in code was sent to ${model.destination}.`),
+    model.demoCode === undefined
+      ? p(
+          {},
+          `If this email is enrolled, a one-time sign-in code was sent to ${model.destination}.`,
+        )
+      : p({}, `Enter ${model.demoCode}. This demo account does not send email.`),
     model.error === undefined ? undefined : p({ class: 'error' }, model.error),
     form(
       { method: 'post', action: '/app/auth/verify' },

@@ -46,6 +46,8 @@ export interface LandingViewModel {
    * copy. No statistic field exists here on purpose.
    */
   readonly missionLine: string;
+  /** Present only when this environment offers the synthetic demo sign-in. */
+  readonly demoSignIn?: { readonly email: string; readonly code: string };
 }
 
 export interface EnrollmentViewModel {
@@ -57,6 +59,8 @@ export interface EnrollmentViewModel {
   readonly contactChannelRequirement: string;
   readonly authEnabled?: boolean;
   readonly selectedRole?: 'veteran' | 'responder';
+  /** Present only when this environment offers the synthetic demo sign-in. */
+  readonly demoSignIn?: { readonly email: string; readonly code: string };
 }
 
 export interface EmailOtpViewModel {
@@ -64,6 +68,8 @@ export interface EmailOtpViewModel {
   readonly destination: string;
   readonly selectedRole: 'veteran' | 'responder';
   readonly error?: string;
+  /** Shown instead of a "check your email" line for the synthetic demo account. */
+  readonly demoCode?: string;
 }
 
 export interface QrfCardViewModel {

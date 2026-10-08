@@ -79,6 +79,7 @@ jobs:
           SUAS_BROWSER_AUTH_MODE=email_otp \
           SUAS_BROWSER_TENANT_ID=00000000-0000-4000-8000-000000000001 \
           SUAS_EMAIL_MODE=sink \
+          SUAS_DEMO_FIXED_CODE=enabled \
           SUAS_SMS_MODE=sink \
           SUAS_TRANSPORTATION_ADAPTER_MODE=fake \
           SUAS_SHELTER_ADAPTER_MODE=fake \
@@ -101,5 +102,6 @@ jobs:
             --var "REAL_WORLD_EFFECTS:disabled" \
             --var "PILOT_LAUNCH:blocked" \
             --var "PRODUCTION_LAUNCH:blocked" \
+            --var "SUAS_DEMO_FIXED_CODE:enabled" \
             --var "SUAS_BUILD_COMMIT:${GITHUB_SHA}" \
             --var "SUAS_BUILD_TIMESTAMP:${STAMP}"

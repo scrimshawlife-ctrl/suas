@@ -28,6 +28,7 @@ import {
   CHALLENGE_VERIFY_LIMIT,
   CHALLENGE_VERIFY_WINDOW_SECONDS,
 } from './constants.js';
+import { DEMO_SHARED_ACCOUNT_LIMIT } from './demo-fixed-code.js';
 import {
   channelForMethod,
   ChannelUnavailableError,
@@ -103,6 +104,7 @@ export async function issueChallenge(
 ): Promise<IssueChallengeResult> {
   const destination = normalizeDestination(input.destination);
   const channel = channelForMethod(input.method);
+  const fixedCode = input.method === 'EMAIL_OTP' ? deps.fixedOtpCodeFor?.(destination) : undefined;
 
   // AUTH.md §9: an unavailable channel is reported, never faked.
   if (!deps.delivery.availableChannels().includes(channel)) {
@@ -110,11 +112,13 @@ export async function issueChallenge(
   }
 
   // AUTH.md §3: rate limited by destination, in shared persistent state.
+  // The shared synthetic demo account uses a higher budget so the public
+  // sign-in page is not locked after three visitors.
   await enforceRateLimit(
     deps.pool,
     {
       bucket: 'auth.challenge.issue',
-      limit: CHALLENGE_ISSUE_LIMIT.value,
+      limit: fixedCode === undefined ? CHALLENGE_ISSUE_LIMIT.value : DEMO_SHARED_ACCOUNT_LIMIT,
       windowSeconds: CHALLENGE_ISSUE_WINDOW_SECONDS.value,
     },
     destination,
@@ -135,9 +139,7 @@ export async function issueChallenge(
   }
 
   const secret =
-    input.method === 'MAGIC_LINK'
-      ? generateOpaqueToken()
-      : (deps.fixedOtpCodeFor?.(destination) ?? generateOtpCode());
+    input.method === 'MAGIC_LINK' ? generateOpaqueToken() : (fixedCode ?? generateOtpCode());
   const challengeId = randomUUID();
   const expiresAt = new Date(Date.now() + CHALLENGE_TTL_SECONDS.value * 1000);
 
@@ -178,13 +180,28 @@ export async function issueChallenge(
 
   // Delivery happens after commit: a delivery failure must not leave a phantom
   // challenge, and the challenge must exist before a code can arrive.
-  await deps.delivery.deliver({
-    channel,
-    destination,
-    method: input.method,
-    secret,
-    expiresAt,
-  });
+  // The synthetic demo code is shown on the sign-in page. A vendor rejection
+  // (example.invalid is not a mailbox) does not remove that challenge and is
+  // not reported as a successful email send.
+  try {
+    await deps.delivery.deliver({
+      channel,
+      destination,
+      method: input.method,
+      secret,
+      expiresAt,
+    });
+  } catch (error: unknown) {
+    if (fixedCode === undefined) throw error;
+    const errorName = error instanceof Error ? error.name : 'unknown';
+    console.error(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'demo_fixed_code_delivery_not_accepted',
+        error_name: errorName,
+      }),
+    );
+  }
 
   return { issued: true, challengeId, expiresAt };
 }
@@ -218,14 +235,15 @@ export async function verifyChallenge(
   input: VerifyChallengeInput,
 ): Promise<User> {
   const destination = normalizeDestination(input.destination);
+  const fixedCode = deps.fixedOtpCodeFor?.(destination);
 
-  // A shared verify budget per destination, so rotating challenges — or app
-  // instances — does not reset an attacker's attempts (AUTH.md §11).
+  // A shared verify budget per destination, so rotating challenges or app
+  // instances does not reset an attacker's attempts (AUTH.md §11).
   await enforceRateLimit(
     deps.pool,
     {
       bucket: 'auth.challenge.verify',
-      limit: CHALLENGE_VERIFY_LIMIT.value,
+      limit: fixedCode === undefined ? CHALLENGE_VERIFY_LIMIT.value : DEMO_SHARED_ACCOUNT_LIMIT,
       windowSeconds: CHALLENGE_VERIFY_WINDOW_SECONDS.value,
     },
     destination,

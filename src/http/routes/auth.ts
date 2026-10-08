@@ -93,6 +93,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         pool: deps.pool,
         sessionSecret: deps.sessionSecret,
         delivery: deps.delivery,
+        fixedOtpCodeFor: deps.fixedOtpCodeFor,
       },
       {
         tenantId,

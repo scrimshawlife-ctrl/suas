@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  ChallengeDeliveryFailedError,
   ChallengeVerificationFailedError,
   issueChallenge,
   RecordingChallengeDelivery,
@@ -117,5 +118,25 @@ describe('demo fixed code', () => {
         ).rejects.toBeInstanceOf(ChallengeVerificationFailedError);
       }
     }
+  });
+
+  it('still verifies the fixed code when delivery rejects the synthetic mailbox', async () => {
+    const tenantId = syntheticTenantId();
+    const demo = await createUser(pool, {
+      tenantId,
+      email: DEMO_FIXED_CODE_DESTINATION,
+      status: 'ACTIVE',
+    });
+    const delivery = new RecordingChallengeDelivery('fake', ['EMAIL']);
+    delivery.deliver = () => Promise.reject(new ChallengeDeliveryFailedError('EMAIL'));
+    await issueChallenge(
+      { pool, sessionSecret: TEST_SESSION_SECRET, delivery, fixedOtpCodeFor },
+      { tenantId, destination: DEMO_FIXED_CODE_DESTINATION, method: 'EMAIL_OTP' },
+    );
+    const user = await verifyChallenge(
+      { pool, sessionSecret: TEST_SESSION_SECRET, delivery, fixedOtpCodeFor },
+      { tenantId, destination: DEMO_FIXED_CODE_DESTINATION, secret: DEMO_FIXED_CODE },
+    );
+    expect(user.userId).toBe(demo.userId);
   });
 });

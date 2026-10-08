@@ -1,10 +1,14 @@
 /**
- * Local demo only helpers for the email OTP sign-in flow. Sign-in normally
- * issues a random six digit code; for the local demo a presenter can pin the
- * code for the single synthetic account `demo@example.invalid`.
+ * Demo helpers for the email OTP sign-in flow. Sign-in normally issues a
+ * random six digit code. One synthetic account, `demo@example.invalid`, can
+ * receive a fixed code when every gate below passes.
  *
- * Three independent gates must all pass before a fixed code is offered, and
- * callers must fall back to a random code whenever these helpers return
+ * LOCAL still requires the explicit opt-in and a local database URL.
+ * Synthetic STAGING can use the same account only inside the Worker runtime,
+ * which has no path to a database except the Hyperdrive binding.
+ * TEST and PRODUCTION never receive a fixed code.
+ *
+ * Callers must fall back to a random code whenever these helpers return
  * `undefined`.
  */
 
@@ -13,6 +17,13 @@ export const DEMO_FIXED_CODE = '123456';
 
 /** The exact normalized destination that may receive the fixed code. */
 export const DEMO_FIXED_CODE_DESTINATION = 'demo@example.invalid';
+
+/**
+ * Issue and verify budget for the one shared demo account, per 15 minute
+ * window. The pilot limit of three issuances would lock a public sign-in
+ * page. Sixty is enough for a demo and still stops a tight loop.
+ */
+export const DEMO_SHARED_ACCOUNT_LIMIT = 60;
 
 /**
  * Resolves a normalized destination to a fixed OTP code, or `undefined` when the
@@ -52,23 +63,26 @@ export function isLocalDemoDatabaseUrl(databaseUrl: string | undefined): boolean
 }
 
 /**
- * Builds a fixed code resolver, or `undefined` unless every gate passes: the
- * environment class is exactly `LOCAL`, the explicit `enabled` opt in was parsed
- * to `true` by config (which already rejects it outside LOCAL), and the database
- * URL is local.
+ * Builds a fixed code resolver, or `undefined` unless every gate passes.
+ *
+ * LOCAL: explicit opt-in plus a local database URL (loopback, or the
+ * `*.hyperdrive.local` proxy `wrangler dev` exposes).
+ * STAGING: explicit opt-in plus `workerRuntime`, so a Node process that was
+ * handed the remote staging URL cannot mint the known code.
+ * Any other environment class returns `undefined` even if the flag is set.
  */
 export function demoFixedCodeFor(opts: {
   readonly environment: string;
   readonly demoFixedCode: boolean;
   readonly databaseUrl: string | undefined;
+  readonly workerRuntime?: boolean;
 }): FixedOtpCodeFor | undefined {
-  if (opts.environment !== 'LOCAL') {
-    return undefined;
-  }
   if (!opts.demoFixedCode) {
     return undefined;
   }
-  if (!isLocalDemoDatabaseUrl(opts.databaseUrl)) {
+  const localDemo = opts.environment === 'LOCAL' && isLocalDemoDatabaseUrl(opts.databaseUrl);
+  const stagingWorker = opts.environment === 'STAGING' && opts.workerRuntime === true;
+  if (!localDemo && !stagingWorker) {
     return undefined;
   }
   return (normalizedDestination) =>
