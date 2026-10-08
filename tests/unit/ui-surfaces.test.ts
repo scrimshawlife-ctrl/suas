@@ -718,8 +718,23 @@ describe('HTML command targets stay on registered /app routes', () => {
     });
     expect(markup).toContain('Sign in to continue');
     expect(markup).toContain('Veteran');
+    expect(markup).not.toContain('demo@example.invalid');
     expect(markup).not.toContain('href="/app/join?role=veteran"');
     expect(markup).not.toContain('href="/app/join?role=responder"');
+  });
+
+  it('shows the synthetic demo sign-in when the environment offers it', () => {
+    const markup = renderEnrollment({
+      shell: { title: 'Join the Mission', viewport: 'MOBILE', showMobileNav: false },
+      contactChannelRequirement: 'Use the enrolled email.',
+      authEnabled: true,
+      selectedRole: 'veteran',
+      demoSignIn: { email: 'demo@example.invalid', code: '123456' },
+    });
+    expect(markup).toContain('demo@example.invalid');
+    expect(markup).toContain('123456');
+    expect(markup).toContain('value="demo@example.invalid"');
+    expect(markup).toContain('No email is sent for this account.');
   });
 
   it('does not post On Duty to /app/responder/availability', () => {

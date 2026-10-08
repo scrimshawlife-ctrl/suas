@@ -238,8 +238,9 @@ const rawConfigSchema = z.object({
   SUAS_HTTP_PORT: optionalRaw,
   SUAS_HTTP_HOST: optionalRaw,
   SUAS_LOG_LEVEL: optionalRaw,
-  // LOCAL demo only: "enabled" gives demo@example.invalid the fixed sign-in code 123456
-  // (src/auth/demo-fixed-code.ts). Rejected in every other environment class.
+  // "enabled" gives demo@example.invalid the fixed sign-in code 123456
+  // (src/auth/demo-fixed-code.ts). Allowed for LOCAL and synthetic STAGING.
+  // Rejected for TEST and PRODUCTION.
   SUAS_DEMO_FIXED_CODE: optionalRaw,
 });
 
@@ -314,7 +315,11 @@ export interface SuasConfig {
     readonly port: number;
   };
   readonly logLevel: LogLevel;
-  /** LOCAL demo only: fixed sign-in code for demo@example.invalid. Always false off LOCAL. */
+  /**
+   * Fixed sign-in code for demo@example.invalid. True only when the flag is
+   * enabled and the environment is LOCAL or STAGING. Issuing the code still
+   * requires the gates in src/auth/demo-fixed-code.ts.
+   */
   readonly demoFixedCode: boolean;
 }
 
@@ -419,11 +424,15 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
       message: 'SUAS_DEMO_FIXED_CODE must be exactly "enabled" or "disabled" when set.',
     });
   }
-  if (raw.SUAS_DEMO_FIXED_CODE === 'enabled' && environment !== 'LOCAL') {
+  if (
+    raw.SUAS_DEMO_FIXED_CODE === 'enabled' &&
+    environment !== 'LOCAL' &&
+    environment !== 'STAGING'
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message:
-        'SUAS_DEMO_FIXED_CODE=enabled is a LOCAL demo aid and is forbidden outside SUAS_ENV=LOCAL.',
+        'SUAS_DEMO_FIXED_CODE=enabled is forbidden outside SUAS_ENV=LOCAL and SUAS_ENV=STAGING.',
     });
   }
 
@@ -763,7 +772,9 @@ export function shapeConfig(
       ),
     },
     logLevel: resolveLogLevel(raw.SUAS_LOG_LEVEL, raw.SUAS_ENV, ctx),
-    demoFixedCode: raw.SUAS_ENV === 'LOCAL' && raw.SUAS_DEMO_FIXED_CODE === 'enabled',
+    demoFixedCode:
+      (raw.SUAS_ENV === 'LOCAL' || raw.SUAS_ENV === 'STAGING') &&
+      raw.SUAS_DEMO_FIXED_CODE === 'enabled',
   };
 }
 

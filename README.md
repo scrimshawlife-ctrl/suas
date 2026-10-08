@@ -97,16 +97,18 @@ Hyperdrive pointed at the local database.
 | Sign-in method   | `EMAIL_OTP`                                                                                 |
 | Other codes      | `curl "http://127.0.0.1:3000/api/v0/dev/last-challenge?destination=newvet@example.invalid"` |
 
-The fixed code `123456` works only for `demo@example.invalid`, and only on the
-LOCAL demo Worker. Three gates must all pass (`src/auth/demo-fixed-code.ts`):
-`SUAS_ENV=LOCAL`, the opt-in `SUAS_DEMO_FIXED_CODE=enabled` that only
+The fixed code `123456` works only for `demo@example.invalid`. On the LOCAL
+demo Worker three gates must all pass (`src/auth/demo-fixed-code.ts`):
+`SUAS_ENV=LOCAL`, the opt-in `SUAS_DEMO_FIXED_CODE=enabled` that
 `npm run dev:demo` sets, and a local database URL (loopback, or the
 `*.hyperdrive.local` proxy that `wrangler dev` exposes after the launcher has
-refused any non-loopback upstream). The config rejects
-`SUAS_DEMO_FIXED_CODE=enabled` outside LOCAL, so staging and production refuse
-to start with it. Every other account, and every other environment, still gets
-a random code. The same `123456` is the code for the Android and iOS no-server
-demo modes.
+refused any non-loopback upstream). Synthetic STAGING may use the same account
+when the Worker deploy sets `SUAS_DEMO_FIXED_CODE=enabled`. That path exists
+only in the Worker runtime. The sign-in page shows the email and code, and no
+email is required. TEST and PRODUCTION reject the flag, and a Node process
+pointed at the staging database cannot mint the code. Every other account
+still gets a random code. The same `123456` is the code for the Android and
+iOS no-server demo modes.
 
 `/api/v0/dev/*` exists only when `SUAS_ENV=LOCAL` and returns 404 on staging.
 The pilot sign-in limit (three codes per account per 15 minutes) still applies;

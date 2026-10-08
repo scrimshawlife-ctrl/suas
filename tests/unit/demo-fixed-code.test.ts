@@ -42,9 +42,29 @@ describe('demoFixedCodeFor', () => {
     expect(localProvider(databaseUrl)?.(DEMO_FIXED_CODE_DESTINATION)).toBe(DEMO_FIXED_CODE);
   });
 
-  it.each(['STAGING', 'PRODUCTION', 'TEST'])('never returns a fixed code in %s', (environment) => {
+  it.each(['PRODUCTION', 'TEST'])('never returns a fixed code in %s', (environment) => {
     const resolve = demoFixedCodeFor({
       environment,
+      demoFixedCode: true,
+      databaseUrl: LOCAL_DATABASE_URL,
+      workerRuntime: true,
+    });
+    expect(resolve).toBeUndefined();
+  });
+
+  it('returns the fixed code for the synthetic STAGING worker', () => {
+    const resolve = demoFixedCodeFor({
+      environment: 'STAGING',
+      demoFixedCode: true,
+      databaseUrl: 'postgresql://u:p@db.internal.invalid:5432/x',
+      workerRuntime: true,
+    });
+    expect(resolve?.(DEMO_FIXED_CODE_DESTINATION)).toBe(DEMO_FIXED_CODE);
+  });
+
+  it('returns undefined for STAGING when the process is not the worker', () => {
+    const resolve = demoFixedCodeFor({
+      environment: 'STAGING',
       demoFixedCode: true,
       databaseUrl: LOCAL_DATABASE_URL,
     });

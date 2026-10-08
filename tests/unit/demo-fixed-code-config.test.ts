@@ -37,15 +37,16 @@ describe('SUAS_DEMO_FIXED_CODE', () => {
     expect(mentionsDemoFixedCode(issues, '=enabled')).toBe(true);
   });
 
-  it('rejects enabled outside LOCAL under STAGING', () => {
-    const issues = issuesFor(
+  it('enables the fixed code for synthetic STAGING when set to enabled', () => {
+    const config = loadConfig(
       validEnv({
         SUAS_ENV: 'STAGING',
         SUAS_SESSION_SECRET: 'a'.repeat(48),
         SUAS_DEMO_FIXED_CODE: 'enabled',
       }),
     );
-    expect(mentionsDemoFixedCode(issues, '=enabled')).toBe(true);
+    expect(config.environment).toBe('STAGING');
+    expect(config.demoFixedCode).toBe(true);
   });
 
   it('allows disabled under TEST', () => {

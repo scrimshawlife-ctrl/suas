@@ -12,7 +12,13 @@ describe('GitHub Pages product surface', () => {
   it('keeps the Product UI preview and allow-listed demo links as product entry points', () => {
     const index = readRepoFile('docs/index.html');
     expect(index).toContain('aria-label="Product preview"');
+    expect(index).toContain('aria-label="App demos"');
+    expect(index).toContain('https://suasqrf.com/app');
+    expect(index).toContain('LIVE WEB APP');
+    expect(index).toContain('href="app.html"');
     expect(index).toContain('PRODUCT UI PREVIEW');
+    expect(index).toContain('href="ios-operator.html"');
+    expect(index).toContain('iOS OPERATOR DEMO');
     expect(index).not.toContain('demo.html');
 
     const actionsNav = index.match(/<nav class="actions"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? '';

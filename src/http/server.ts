@@ -55,6 +55,11 @@ export interface ServerDependencies {
    * worker_threads). Default keeps the Node structured logger.
    */
   readonly logger?: boolean;
+  /**
+   * True only for the Cloudflare Worker isolate. Synthetic STAGING may offer
+   * the fixed demo code on that runtime and nowhere else.
+   */
+  readonly workerRuntime?: boolean;
 }
 
 export interface RegisteredApiRoute {
@@ -243,6 +248,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
         ? { challengeDelivery: deps.challengeDelivery }
         : {}),
       ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
+      ...(deps.workerRuntime === true ? { workerRuntime: true } : {}),
     });
   }
 
@@ -252,12 +258,13 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       sessionSecret: deps.config.sessionSecret,
       delivery: deps.challengeDelivery,
       mfa: deps.mfa,
-      // LOCAL demo only: undefined unless SUAS_ENV=LOCAL, SUAS_DEMO_FIXED_CODE=enabled, and a
-      // local database. Every other environment keeps random codes.
+      // Undefined unless the LOCAL gates pass, or this is the synthetic STAGING
+      // Worker with SUAS_DEMO_FIXED_CODE=enabled. Every other path keeps random codes.
       fixedOtpCodeFor: demoFixedCodeFor({
         environment: deps.config.environment,
         demoFixedCode: deps.config.demoFixedCode,
         databaseUrl: deps.config.database.url,
+        workerRuntime: deps.workerRuntime === true,
       }),
     });
 

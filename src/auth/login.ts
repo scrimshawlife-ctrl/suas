@@ -3,6 +3,7 @@ import { withTransaction } from '../db/index.js';
 import { appendAuditEvent } from '../events/index.js';
 import { revokeLiveChallenges, verifyChallenge } from './challenge.js';
 import type { ChallengeDeliveryPort } from './delivery.js';
+import type { FixedOtpCodeFor } from './demo-fixed-code.js';
 import { createSession, type IssuedSession } from './session.js';
 
 export interface VerifyAndCreateSessionInput {
@@ -18,6 +19,7 @@ export async function verifyAndCreateSession(
     readonly pool: Pool;
     readonly sessionSecret: string | undefined;
     readonly delivery: ChallengeDeliveryPort;
+    readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
   },
   input: VerifyAndCreateSessionInput,
 ): Promise<IssuedSession> {

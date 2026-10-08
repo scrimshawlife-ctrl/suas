@@ -1,5 +1,8 @@
 /** Provision owner-approved STAGING browser-auth test identities. */
 
+import type { Pool } from 'pg';
+
+import { DEMO_FIXED_CODE_DESTINATION } from '../auth/demo-fixed-code.js';
 import { loadConfig } from '../config/index.js';
 import { createPool } from '../db/index.js';
 import { createUser, findUserByDestination, setUserStatus } from '../identity/index.js';
@@ -36,16 +39,31 @@ async function main(): Promise<void> {
   const pool = createPool(config);
   try {
     for (const email of emails) {
-      const existing = await findUserByDestination(pool, TENANT_ID, email);
-      if (existing === undefined) {
-        await createUser(pool, { tenantId: TENANT_ID, email, status: 'ACTIVE' });
-      } else if (existing.status !== 'ACTIVE') {
-        await setUserStatus(pool, TENANT_ID, existing.userId, 'ACTIVE');
-      }
+      await ensureActiveUser(pool, email);
     }
-    console.log(JSON.stringify({ provisioned: emails.length, tenantId: TENANT_ID }));
+    // The public synthetic demo account is not one of the owner-approved
+    // addresses and does not count against that list's cap of 10.
+    if (config.demoFixedCode) {
+      await ensureActiveUser(pool, DEMO_FIXED_CODE_DESTINATION);
+    }
+    console.log(
+      JSON.stringify({
+        provisioned: emails.length,
+        demoAccount: config.demoFixedCode,
+        tenantId: TENANT_ID,
+      }),
+    );
   } finally {
     await pool.end();
+  }
+}
+
+async function ensureActiveUser(pool: Pool, email: string): Promise<void> {
+  const existing = await findUserByDestination(pool, TENANT_ID, email);
+  if (existing === undefined) {
+    await createUser(pool, { tenantId: TENANT_ID, email, status: 'ACTIVE' });
+  } else if (existing.status !== 'ACTIVE') {
+    await setUserStatus(pool, TENANT_ID, existing.userId, 'ACTIVE');
   }
 }
 

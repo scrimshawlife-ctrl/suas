@@ -19,6 +19,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Changed
 
+- Synthetic staging sign-in accepts `demo@example.invalid` with code `123456` when the Worker deploy sets `SUAS_DEMO_FIXED_CODE=enabled`. The sign-in page shows that account. TEST and PRODUCTION still reject the flag.
 - The public site homepage links the live web app, the product UI preview, and the iOS operator demo.
 - `CONTEXT.md` links the Mac device handoff in SUAS-specs (`docs/handoffs/MAC_DEVICE_WORK.md`).
 - `SPEC017_NEXT.md` aligned with HEAD: LOCAL demo and native demo modes listed as shipped, Android harness item cites `MainActivityHarnessTest` (suas-android #16).
