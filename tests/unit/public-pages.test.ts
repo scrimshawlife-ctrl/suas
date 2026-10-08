@@ -9,11 +9,15 @@ function readRepoFile(relativePath: string): string {
 }
 
 describe('GitHub Pages product surface', () => {
-  it("uses the Product UI preview as the poster's only product entry point", () => {
+  it('keeps the Product UI preview and allow-listed demo links as product entry points', () => {
     const index = readRepoFile('docs/index.html');
     expect(index).toContain('aria-label="Product preview"');
     expect(index).toContain('PRODUCT UI PREVIEW');
     expect(index).not.toContain('demo.html');
+
+    const actionsNav = index.match(/<nav class="actions"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? '';
+    const hrefs = [...actionsNav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+    expect(hrefs).toEqual(['https://suasqrf.com/app', 'app.html', 'ios-operator.html']);
   });
 
   it('keeps the former demo URL as a compatibility redirect', () => {

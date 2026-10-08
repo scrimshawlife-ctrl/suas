@@ -13,6 +13,10 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored `aria-label="Product preview"` on the homepage product UI preview link and allow-listed the live web app and iOS operator demo links in the public-pages unit test.
+
 ### Changed
 
 - The public site homepage links the live web app, the product UI preview, and the iOS operator demo.
