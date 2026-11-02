@@ -23,6 +23,7 @@ type Evidence = {
     protected_api_status: number;
     browser_cookie_api_status: number;
     invalid_cookie_write_status: number;
+    headerless_cookie_write_status: number;
     cross_origin_write_status: number;
   }>;
   challenge: {
@@ -82,8 +83,18 @@ async function inspectHost(base: string): Promise<Evidence['hosts'][number]> {
   const browserCookieApi = await request(`${base}/api/v0/veterans/me`, {
     headers: { cookie: '__Secure-suas_session=synthetic-invalid-evidence-value' },
   });
-  // No browser headers: the origin policy allows it, so authentication rejects the cookie.
+  // A same-origin browser write passes the origin policy, so authentication rejects the
+  // invalid cookie.
   const invalidCookieWrite = await request(`${base}/app/qrf/deploy`, {
+    method: 'POST',
+    headers: {
+      cookie: '__Secure-suas_session=synthetic-invalid-evidence-value',
+      'sec-fetch-site': 'same-origin',
+    },
+  });
+  // A cookie-authenticated write with neither Sec-Fetch-Site nor Origin is denied by the
+  // origin policy (proposed SUAS-specs D-038, AUTH.md section 9.3), before authentication.
+  const headerlessCookieWrite = await request(`${base}/app/qrf/deploy`, {
     method: 'POST',
     headers: { cookie: '__Secure-suas_session=synthetic-invalid-evidence-value' },
   });
@@ -106,6 +117,7 @@ async function inspectHost(base: string): Promise<Evidence['hosts'][number]> {
     protected_api_status: protectedApi.status,
     browser_cookie_api_status: browserCookieApi.status,
     invalid_cookie_write_status: invalidCookieWrite.status,
+    headerless_cookie_write_status: headerlessCookieWrite.status,
     cross_origin_write_status: crossOriginWrite.status,
   };
 }
@@ -230,6 +242,11 @@ function assertHost(result: Evidence['hosts'][number]): void {
   }
   if (result.invalid_cookie_write_status !== 401) {
     throw new Error(`${result.origin} write with an invalid browser cookie did not fail closed.`);
+  }
+  if (result.headerless_cookie_write_status !== 403) {
+    throw new Error(
+      `${result.origin} cookie-authenticated write with no browser headers was not rejected with 403.`,
+    );
   }
   if (result.cross_origin_write_status !== 403) {
     throw new Error(`${result.origin} cross-origin browser write was not rejected with 403.`);
