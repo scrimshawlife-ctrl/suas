@@ -43,10 +43,12 @@ export function readCredential(request: FastifyRequest): string | undefined {
 
 function readBrowserCredential(request: FastifyRequest): string | undefined {
   if (!request.url.split('?')[0]?.startsWith('/app')) return undefined;
-  // No Origin / Sec-Fetch-Site check: /app pages are served with
-  // `referrer-policy: no-referrer`, so browsers send `Origin: null` on their own
-  // same-origin form posts. The cookie stays `SameSite=Strict`, so cross-site
-  // requests do not carry it.
+  // No Origin / Sec-Fetch-Site check here. The cookie is `SameSite=None`, so it can
+  // ride on cross-site requests; CSRF is blocked earlier by the global origin policy
+  // (`registerOriginPolicy`), which rejects unsafe browser requests that are not
+  // same-origin or allowlisted. /app pages send `referrer-policy: no-referrer`, so
+  // browsers send `Origin: null` on same-origin form posts, which that policy
+  // accepts via `Sec-Fetch-Site: same-origin`.
   return readCookie(request, BROWSER_SESSION_COOKIE);
 }
 
