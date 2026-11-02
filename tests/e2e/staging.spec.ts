@@ -152,7 +152,9 @@ test.describe('deployed public boundary', () => {
     });
   });
 
-  test('@public cross-origin browser-auth submissions fail closed', async ({ request }) => {
+  test('@public cross-origin browser-auth submissions from an unlisted origin fail closed', async ({
+    request,
+  }) => {
     const response = await request.post('/app/auth/challenges', {
       form: { destination: 'unknown-cross-origin@invalid.example', role: 'veteran' },
       headers: {
@@ -160,8 +162,9 @@ test.describe('deployed public boundary', () => {
         'sec-fetch-site': 'cross-site',
       },
     });
-    expect(response.status()).toBe(401);
-    expect(await response.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
+    expect(response.status()).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+    expect(response.headers()['access-control-allow-origin']).toBeUndefined();
   });
 
   test('@public oversized browser-auth submissions fail before processing', async ({ request }) => {

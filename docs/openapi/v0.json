@@ -3,7 +3,7 @@
   "info": {
     "title": "SUAS API",
     "version": "0.2.0",
-    "description": "Machine-readable contract for the implemented `/api/v0` surface. Paths document what the runtime registers today; draft APIS.md Plane A paths that are not yet implemented are intentionally absent."
+    "description": "Machine-readable contract for the implemented `/api/v0` surface. Authentication is an opaque Bearer credential; this API never reads cookies. Browser callers on origins listed in `SUAS_CORS_ALLOWED_ORIGINS` receive CORS headers and preflight answers (proposed D-038, draft); other browser-originated unsafe requests receive `403 FORBIDDEN`. Paths document what the runtime registers today; draft APIS.md Plane A paths that are not yet implemented are intentionally absent."
   },
   "servers": [
     {

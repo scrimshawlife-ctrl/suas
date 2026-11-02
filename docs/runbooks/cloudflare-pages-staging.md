@@ -12,8 +12,9 @@ would incorrectly put persistence and durable-job concerns on a request path.
 The supported synthetic STAGING topology remains the existing Cloudflare Worker
 for `/app` and `/api/v0`. GitHub Pages `docs/` remains a static poster only. A
 future Pages frontend is possible only as a separately approved static client
-that calls an explicitly authorized synthetic API, with an API/CORS/auth design
-review first.
+that calls an explicitly authorized synthetic API. The API/CORS/auth design is
+proposed SUAS-specs D-038 (draft): the frontend's exact origin must be added to
+`SUAS_CORS_ALLOWED_ORIGINS` on the Worker, which is an owner-run deploy change.
 
 ## Observed implementation facts
 

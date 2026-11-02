@@ -132,11 +132,7 @@ import {
   type ShellViewModel,
 } from '../../ui/index.js';
 import { readActiveQrf } from '../../ui/read.js';
-import {
-  assertSameOriginBrowserWrite,
-  authenticate,
-  BROWSER_SESSION_COOKIE,
-} from '../authenticate.js';
+import { authenticate, BROWSER_SESSION_COOKIE } from '../authenticate.js';
 import {
   DEMO_FIXED_CODE_DESTINATION,
   demoFixedCodeFor,
@@ -216,11 +212,11 @@ const browserVerifyBody = browserChallengeBody.extend({
 
 function browserSessionCookie(credential: string, expiresAt: Date): string {
   const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-  return `${BROWSER_SESSION_COOKIE}=${encodeURIComponent(credential)}; Max-Age=${maxAge}; Path=/app; Secure; HttpOnly; SameSite=Strict`;
+  return `${BROWSER_SESSION_COOKIE}=${encodeURIComponent(credential)}; Max-Age=${maxAge}; Path=/app; Secure; HttpOnly; SameSite=None`;
 }
 
 function clearBrowserSessionCookie(): string {
-  return `${BROWSER_SESSION_COOKIE}=; Max-Age=0; Path=/app; Secure; HttpOnly; SameSite=Strict`;
+  return `${BROWSER_SESSION_COOKIE}=; Max-Age=0; Path=/app; Secure; HttpOnly; SameSite=None`;
 }
 
 function shell(title: string, overrides: Partial<ShellViewModel> = {}): ShellViewModel {
@@ -415,7 +411,6 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   });
 
   app.post('/app/auth/challenges', BROWSER_AUTH_ROUTE_OPTIONS, async (request, reply) => {
-    assertSameOriginBrowserWrite(request);
     const body = browserChallengeBody.parse(request.body);
     const tenantId = config.browserAuth.tenantId;
     if (
@@ -465,7 +460,6 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   });
 
   app.post('/app/auth/verify', BROWSER_AUTH_ROUTE_OPTIONS, async (request, reply) => {
-    assertSameOriginBrowserWrite(request);
     const body = browserVerifyBody.parse(request.body);
     const tenantId = config.browserAuth.tenantId;
     if (

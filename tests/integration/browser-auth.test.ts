@@ -10,6 +10,9 @@ import { BROWSER_AUTH_BODY_LIMIT_BYTES } from '../../src/http/routes/ui.js';
 import { validEnv } from '../helpers/env.js';
 
 const TENANT_ID = '11111111-1111-4111-8111-111111111111';
+/** Allowlisted cross-origin frontend (proposed SUAS-specs D-038). */
+const ALLOWED_ORIGIN = 'https://app.example.org';
+const FORM = 'application/x-www-form-urlencoded';
 let app: StartedApp;
 
 beforeAll(async () => {
@@ -18,6 +21,7 @@ beforeAll(async () => {
       SUAS_MIGRATIONS_MODE: 'apply',
       SUAS_BROWSER_AUTH_MODE: 'email_otp',
       SUAS_BROWSER_TENANT_ID: TENANT_ID,
+      SUAS_CORS_ALLOWED_ORIGINS: ALLOWED_ORIGIN,
     }),
     listen: false,
   });
@@ -66,13 +70,13 @@ describe('HTML passwordless sign-in', () => {
     expect(delivery().lastFor(email.toLowerCase())?.secret).toMatch(/^\d{6}$/);
   });
 
-  it('rejects cross-origin challenge requests before sending email', async () => {
+  it('rejects a cross-site challenge from a non-allowlisted origin before sending email', async () => {
     const email = await enrolledEmail();
     const response = await app.server.inject({
       method: 'POST',
       url: '/app/auth/challenges',
       headers: {
-        'content-type': 'application/x-www-form-urlencoded',
+        'content-type': FORM,
         host: 'suas.example',
         origin: 'https://attacker.example',
         'sec-fetch-site': 'cross-site',
@@ -80,22 +84,22 @@ describe('HTML passwordless sign-in', () => {
       payload: form({ destination: email, role: 'veteran' }),
     });
 
-    expect(response.statusCode).toBe(401);
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
     expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
   });
 
-  it('accepts a same-origin form post that carries Origin: null', async () => {
-    // /app pages send `referrer-policy: no-referrer`, so a browser sends `Origin: null`
-    // on its own same-origin form posts. `Sec-Fetch-Site: same-origin` marks them.
+  it('accepts a cross-site challenge from an allowlisted origin and answers with CORS headers', async () => {
     const email = await enrolledEmail();
     const response = await app.server.inject({
       method: 'POST',
       url: '/app/auth/challenges',
       headers: {
-        'content-type': 'application/x-www-form-urlencoded',
+        'content-type': FORM,
         host: 'suas.example',
-        origin: 'null',
-        'sec-fetch-site': 'same-origin',
+        origin: ALLOWED_ORIGIN,
+        'sec-fetch-site': 'cross-site',
       },
       payload: form({ destination: email, role: 'veteran' }),
     });
@@ -103,29 +107,71 @@ describe('HTML passwordless sign-in', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('If this email is enrolled');
     expect(delivery().lastFor(email.toLowerCase())?.secret).toMatch(/^\d{6}$/);
+    expect(response.headers['access-control-allow-origin']).toBe(ALLOWED_ORIGIN);
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+    expect(String(response.headers.vary)).toContain('Origin');
   });
 
-  it('still rejects Origin: null without a same-origin Fetch Metadata signal', async () => {
-    for (const headers of [
-      { origin: 'null' },
-      { origin: 'null', 'sec-fetch-site': 'cross-site' },
-      { origin: 'null', 'sec-fetch-site': 'same-site' },
-    ]) {
-      const email = await enrolledEmail();
-      const response = await app.server.inject({
-        method: 'POST',
-        url: '/app/auth/challenges',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          host: 'suas.example',
-          ...headers,
-        },
-        payload: form({ destination: email, role: 'veteran' }),
-      });
+  it('accepts the Origin: null a browser sends on a same-origin form post', async () => {
+    // /app pages use referrer-policy no-referrer, so browsers send `Origin: null`.
+    const email = await enrolledEmail();
+    const headers = {
+      'content-type': FORM,
+      host: 'suas.example',
+      origin: 'null',
+      'sec-fetch-site': 'same-origin',
+    };
 
-      expect(response.statusCode, JSON.stringify(headers)).toBe(401);
-      expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
-    }
+    const challenge = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers,
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    expect(challenge.statusCode).toBe(200);
+
+    const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
+    const verified = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers,
+      payload: form({ destination: email, role: 'veteran', code }),
+    });
+    expect(verified.statusCode).toBe(303);
+    expect(verified.headers.location).toBe('/app/home');
+  });
+
+  it.each([
+    ['Origin: null on a cross-site request', 'null', 'cross-site'],
+    ['a sibling same-site origin that is not allowlisted', 'https://sibling.example', 'same-site'],
+    ['Origin: null with no Sec-Fetch-Site', 'null', undefined],
+    ['a foreign Origin with no Sec-Fetch-Site', 'https://attacker.example', undefined],
+  ])('rejects %s', async (_label, origin, fetchSite) => {
+    const email = await enrolledEmail();
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: {
+        'content-type': FORM,
+        host: 'suas.example',
+        origin,
+        ...(fetchSite === undefined ? {} : { 'sec-fetch-site': fetchSite }),
+      },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    expect(response.statusCode).toBe(403);
+    expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
+  });
+
+  it('accepts a same-host Origin with no Sec-Fetch-Site (older browsers)', async () => {
+    const email = await enrolledEmail();
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': FORM, host: 'suas.example', origin: 'https://suas.example' },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    expect(response.statusCode).toBe(200);
   });
 
   it('rejects oversized challenge bodies before sending email', async () => {
@@ -159,12 +205,12 @@ describe('HTML passwordless sign-in', () => {
     expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
   });
 
-  it('rejects cross-origin verification requests before consuming a code', async () => {
+  it('rejects cross-site verification from a non-allowlisted origin without consuming the code', async () => {
     const email = await enrolledEmail();
     await app.server.inject({
       method: 'POST',
       url: '/app/auth/challenges',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: { 'content-type': FORM },
       payload: form({ destination: email, role: 'veteran' }),
     });
     const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
@@ -173,22 +219,53 @@ describe('HTML passwordless sign-in', () => {
       method: 'POST',
       url: '/app/auth/verify',
       headers: {
-        'content-type': 'application/x-www-form-urlencoded',
+        'content-type': FORM,
         host: 'suas.example',
         origin: 'https://attacker.example',
         'sec-fetch-site': 'cross-site',
       },
       payload: form({ destination: email, role: 'veteran', code }),
     });
-    expect(rejected.statusCode).toBe(401);
+    expect(rejected.statusCode).toBe(403);
 
     const accepted = await app.server.inject({
       method: 'POST',
       url: '/app/auth/verify',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: { 'content-type': FORM },
       payload: form({ destination: email, role: 'veteran', code }),
     });
     expect(accepted.statusCode).toBe(303);
+  });
+
+  it('sets the session cookie as SameSite=None; Secure; HttpOnly; Path=/app for an allowlisted origin', async () => {
+    const email = await enrolledEmail();
+    await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': FORM },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
+
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: {
+        'content-type': FORM,
+        host: 'suas.example',
+        origin: ALLOWED_ORIGIN,
+        'sec-fetch-site': 'cross-site',
+      },
+      payload: form({ destination: email, role: 'veteran', code }),
+    });
+    expect(response.statusCode).toBe(303);
+    expect(response.headers['access-control-allow-origin']).toBe(ALLOWED_ORIGIN);
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+    const setCookie = String(response.headers['set-cookie']);
+    expect(setCookie).toContain('SameSite=None');
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toContain('Secure');
+    expect(setCookie).toContain('Path=/app');
   });
 
   it('rejects oversized verification bodies without consuming a code', async () => {
@@ -274,7 +351,7 @@ describe('HTML passwordless sign-in', () => {
     expect(setCookie).toContain('Path=/app');
     expect(setCookie).toContain('Secure');
     expect(setCookie).toContain('HttpOnly');
-    expect(setCookie).toContain('SameSite=Strict');
+    expect(setCookie).toContain('SameSite=None');
 
     const cookie = setCookie.split(';')[0] ?? '';
     const home = await app.server.inject({
@@ -286,19 +363,19 @@ describe('HTML passwordless sign-in', () => {
     expect(home.body).toContain('Deploy QRF');
   });
 
-  it('rejects a cross-origin state-changing request using the browser cookie', async () => {
+  it('applies the origin policy to cookie-authenticated writes', async () => {
     const email = await enrolledEmail();
     await app.server.inject({
       method: 'POST',
       url: '/app/auth/challenges',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: { 'content-type': FORM },
       payload: form({ destination: email, role: 'veteran' }),
     });
     const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
     const verified = await app.server.inject({
       method: 'POST',
       url: '/app/auth/verify',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: { 'content-type': FORM },
       payload: form({ destination: email, role: 'veteran', code }),
     });
     const cookie = String(verified.headers['set-cookie']).split(';')[0] ?? '';
@@ -313,7 +390,58 @@ describe('HTML passwordless sign-in', () => {
         'sec-fetch-site': 'cross-site',
       },
     });
-    expect(rejected.statusCode).toBe(401);
+    expect(rejected.statusCode).toBe(403);
+
+    const accepted = await app.server.inject({
+      method: 'POST',
+      url: '/app/qrf/deploy',
+      headers: {
+        cookie,
+        origin: ALLOWED_ORIGIN,
+        host: 'suas.example',
+        'sec-fetch-site': 'cross-site',
+      },
+    });
+    expect(accepted.statusCode).toBe(303);
+    expect(accepted.headers.location).toBe('/app/home');
+  });
+
+  it('applies the same policy to the /api/v0 sign-in endpoint', async () => {
+    const email = await enrolledEmail();
+    const json = { 'content-type': 'application/json', host: 'suas.example' };
+
+    const rejectedForm = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/challenges',
+      headers: {
+        'content-type': FORM,
+        host: 'suas.example',
+        origin: 'https://attacker.example',
+        'sec-fetch-site': 'cross-site',
+      },
+      payload: form({ destination: email, method: 'EMAIL_OTP' }),
+    });
+    expect(rejectedForm.statusCode).toBe(403);
+    expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
+
+    const allowed = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/challenges',
+      headers: { ...json, origin: ALLOWED_ORIGIN, 'sec-fetch-site': 'cross-site' },
+      payload: { destination: email, method: 'EMAIL_OTP' },
+    });
+    expect(allowed.statusCode).toBe(202);
+    expect(allowed.headers['access-control-allow-origin']).toBe(ALLOWED_ORIGIN);
+    // /api/v0 is Bearer-only: no credentials are advertised.
+    expect(allowed.headers['access-control-allow-credentials']).toBeUndefined();
+
+    const native = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/challenges',
+      headers: json,
+      payload: { destination: email, method: 'EMAIL_OTP' },
+    });
+    expect(native.statusCode).toBe(202);
   });
 
   it('accepts a same-origin cookie write that carries Origin: null', async () => {
@@ -378,6 +506,8 @@ describe('HTML passwordless sign-in', () => {
     expect(logout.statusCode).toBe(303);
     expect(logout.headers.location).toBe('/app');
     expect(String(logout.headers['set-cookie'])).toContain('Max-Age=0');
+    expect(String(logout.headers['set-cookie'])).toContain('SameSite=None');
+    expect(String(logout.headers['set-cookie'])).toContain('Secure');
 
     const rejected = await app.server.inject({
       method: 'GET',

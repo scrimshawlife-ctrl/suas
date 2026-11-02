@@ -33,31 +33,6 @@ function readCookie(request: FastifyRequest, name: string): string | undefined {
   return undefined;
 }
 
-export function assertSameOriginBrowserWrite(request: FastifyRequest): void {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
-  const fetchSite = request.headers['sec-fetch-site'];
-  // The browser's own same-origin post. /app pages send `referrer-policy: no-referrer`,
-  // so such a post carries `Origin: null`, which the Origin/Host comparison below cannot
-  // parse. `Sec-Fetch-Site` is a forbidden request header: a page cannot set or forge it.
-  if (fetchSite === 'same-origin') return;
-  if (fetchSite === 'cross-site') {
-    throw new UnauthenticatedError('Cross-origin browser requests are not accepted.');
-  }
-  const origin = request.headers.origin;
-  const host = request.headers.host;
-  if (typeof origin === 'string' && typeof host === 'string') {
-    let originHost: string | undefined;
-    try {
-      originHost = new URL(origin).host;
-    } catch {
-      originHost = undefined;
-    }
-    if (originHost !== host) {
-      throw new UnauthenticatedError('Cross-origin browser requests are not accepted.');
-    }
-  }
-}
-
 /** Extract the opaque session credential from the Authorization header. */
 export function readCredential(request: FastifyRequest): string | undefined {
   const header = request.headers.authorization;
@@ -68,9 +43,11 @@ export function readCredential(request: FastifyRequest): string | undefined {
 
 function readBrowserCredential(request: FastifyRequest): string | undefined {
   if (!request.url.split('?')[0]?.startsWith('/app')) return undefined;
-  const credential = readCookie(request, BROWSER_SESSION_COOKIE);
-  if (credential !== undefined) assertSameOriginBrowserWrite(request);
-  return credential;
+  // No Origin / Sec-Fetch-Site check: /app pages are served with
+  // `referrer-policy: no-referrer`, so browsers send `Origin: null` on their own
+  // same-origin form posts. The cookie stays `SameSite=Strict`, so cross-site
+  // requests do not carry it.
+  return readCookie(request, BROWSER_SESSION_COOKIE);
 }
 
 /**

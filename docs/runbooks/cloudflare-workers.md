@@ -234,7 +234,7 @@ npm run evidence:staging:browser-auth
 ```
 
 The command checks redirects and enrollment on both hosts, confirms that API
-routes remain bearer-only, rejects a cross-origin browser write, compares the
+routes remain bearer-only, confirms an invalid browser cookie is rejected, confirms a cross-site write from an unlisted origin gets `403`, compares the
 normalized public responses for approved and unknown accounts, and observes
 Resend delivery metadata without requesting the email body or OTP. Its JSON
 output contains statuses and counts only; it never prints an address, API key,

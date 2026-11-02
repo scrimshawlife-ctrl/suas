@@ -22,6 +22,7 @@ type Evidence = {
     join_status: number;
     protected_api_status: number;
     browser_cookie_api_status: number;
+    invalid_cookie_write_status: number;
     cross_origin_write_status: number;
   }>;
   challenge: {
@@ -81,6 +82,13 @@ async function inspectHost(base: string): Promise<Evidence['hosts'][number]> {
   const browserCookieApi = await request(`${base}/api/v0/veterans/me`, {
     headers: { cookie: '__Secure-suas_session=synthetic-invalid-evidence-value' },
   });
+  // No browser headers: the origin policy allows it, so authentication rejects the cookie.
+  const invalidCookieWrite = await request(`${base}/app/qrf/deploy`, {
+    method: 'POST',
+    headers: { cookie: '__Secure-suas_session=synthetic-invalid-evidence-value' },
+  });
+  // A cross-site origin that is not allowlisted is rejected by the origin policy
+  // (proposed SUAS-specs D-038) before authentication.
   const crossOriginWrite = await request(`${base}/app/qrf/deploy`, {
     method: 'POST',
     headers: {
@@ -97,6 +105,7 @@ async function inspectHost(base: string): Promise<Evidence['hosts'][number]> {
     join_status: join.status,
     protected_api_status: protectedApi.status,
     browser_cookie_api_status: browserCookieApi.status,
+    invalid_cookie_write_status: invalidCookieWrite.status,
     cross_origin_write_status: crossOriginWrite.status,
   };
 }
@@ -219,8 +228,11 @@ function assertHost(result: Evidence['hosts'][number]): void {
   if (result.protected_api_status !== 401 || result.browser_cookie_api_status !== 401) {
     throw new Error(`${result.origin} protected API did not remain bearer-only.`);
   }
-  if (result.cross_origin_write_status !== 401) {
-    throw new Error(`${result.origin} cross-origin browser write did not fail closed.`);
+  if (result.invalid_cookie_write_status !== 401) {
+    throw new Error(`${result.origin} write with an invalid browser cookie did not fail closed.`);
+  }
+  if (result.cross_origin_write_status !== 403) {
+    throw new Error(`${result.origin} cross-origin browser write was not rejected with 403.`);
   }
 }
 
@@ -267,8 +279,8 @@ async function main(): Promise<void> {
   }
 
   const crossOrigin = await submitCrossOriginChallenge(workerOrigin, crossOriginAddress);
-  if (crossOrigin.status !== 401) {
-    throw new Error('Cross-origin browser-auth challenge did not fail closed with 401.');
+  if (crossOrigin.status !== 403) {
+    throw new Error('Cross-origin browser-auth challenge was not rejected with 403.');
   }
 
   const oversized = await submitOversizedChallenge(canonicalOrigin, oversizedAddress);

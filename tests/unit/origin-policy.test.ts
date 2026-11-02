@@ -1,0 +1,179 @@
+/** Browser origin policy and CORS helpers (proposed SUAS-specs D-038). */
+
+import { describe, expect, it } from 'vitest';
+import { MAX_CORS_ALLOWED_ORIGINS, parseAllowedOrigins } from '../../src/config/cors-origins.js';
+import {
+  allowedRequestOrigin,
+  corsFallbackHeaders,
+  corsResponseHeaders,
+  evaluateBrowserRequest,
+  type BrowserRequestVerdict,
+} from '../../src/http/origin-policy.js';
+
+const ALLOWED = 'https://app.example.org';
+const allowlist = new Set([ALLOWED, 'http://localhost:5173']);
+const HOST = 'suas.example';
+
+type Row = [
+  label: string,
+  secFetchSite: string | undefined,
+  origin: string | undefined,
+  verdict: BrowserRequestVerdict,
+];
+
+describe('evaluateBrowserRequest', () => {
+  const rows: Row[] = [
+    [
+      'same-origin, Origin: null (browser form post under no-referrer)',
+      'same-origin',
+      'null',
+      'allow',
+    ],
+    ['same-origin, same Origin', 'same-origin', `https://${HOST}`, 'allow'],
+    ['same-origin, no Origin', 'same-origin', undefined, 'allow'],
+    ['none (user-initiated)', 'none', undefined, 'allow'],
+    ['cross-site, allowlisted', 'cross-site', ALLOWED, 'allow'],
+    ['cross-site, allowlisted loopback http', 'cross-site', 'http://localhost:5173', 'allow'],
+    ['same-site, allowlisted', 'same-site', ALLOWED, 'allow'],
+    ['cross-site, not allowlisted', 'cross-site', 'https://attacker.example', 'deny'],
+    ['same-site, not allowlisted', 'same-site', 'https://sibling.example', 'deny'],
+    ['cross-site, Origin: null', 'cross-site', 'null', 'deny'],
+    ['cross-site, no Origin', 'cross-site', undefined, 'deny'],
+    ['cross-site, malformed Origin', 'cross-site', 'not a url', 'deny'],
+    ['cross-site, non-http Origin', 'cross-site', 'file://', 'deny'],
+    [
+      'cross-site, allowlisted host but wrong scheme',
+      'cross-site',
+      'http://app.example.org',
+      'deny',
+    ],
+    [
+      'cross-site, allowlisted host but wrong port',
+      'cross-site',
+      'https://app.example.org:8443',
+      'deny',
+    ],
+    [
+      'unrecognised Sec-Fetch-Site is treated as cross-site',
+      'bogus',
+      'https://attacker.example',
+      'deny',
+    ],
+    ['unrecognised Sec-Fetch-Site, allowlisted origin', 'bogus', ALLOWED, 'allow'],
+    ['no headers at all (curl, Postman, native app)', undefined, undefined, 'allow'],
+    ['no Sec-Fetch-Site, same-host Origin', undefined, `https://${HOST}`, 'allow'],
+    ['no Sec-Fetch-Site, allowlisted Origin', undefined, ALLOWED, 'allow'],
+    ['no Sec-Fetch-Site, foreign Origin', undefined, 'https://attacker.example', 'deny'],
+    ['no Sec-Fetch-Site, Origin: null', undefined, 'null', 'deny'],
+    ['no Sec-Fetch-Site, malformed Origin', undefined, 'garbage', 'deny'],
+    ['Sec-Fetch-Site is case-insensitive', 'SAME-ORIGIN', 'null', 'allow'],
+  ];
+
+  it.each(rows)('%s', (_label, secFetchSite, origin, verdict) => {
+    expect(evaluateBrowserRequest({ secFetchSite, origin, host: HOST }, allowlist)).toBe(verdict);
+  });
+
+  it('denies every cross-site browser request when the allowlist is empty', () => {
+    expect(
+      evaluateBrowserRequest(
+        { secFetchSite: 'cross-site', origin: ALLOWED, host: HOST },
+        new Set(),
+      ),
+    ).toBe('deny');
+  });
+});
+
+describe('CORS response headers', () => {
+  it('returns nothing for a non-allowlisted, absent, null, or malformed Origin', () => {
+    for (const origin of ['https://attacker.example', undefined, 'null', 'nope']) {
+      expect(corsResponseHeaders(origin, '/api/v0/health', allowlist)).toEqual({});
+      expect(allowedRequestOrigin(origin, allowlist)).toBeUndefined();
+    }
+  });
+
+  it('echoes the exact allowlisted origin, never a wildcard', () => {
+    const headers = corsResponseHeaders(ALLOWED, '/api/v0/health', allowlist);
+    expect(headers['access-control-allow-origin']).toBe(ALLOWED);
+    expect(headers['access-control-expose-headers']).toBe('x-request-id, retry-after, location');
+  });
+
+  it('advertises credentials for /app only', () => {
+    expect(
+      corsResponseHeaders(ALLOWED, '/app/home', allowlist)['access-control-allow-credentials'],
+    ).toBe('true');
+    expect(
+      corsResponseHeaders(ALLOWED, '/app', allowlist)['access-control-allow-credentials'],
+    ).toBe('true');
+    expect(
+      corsResponseHeaders(ALLOWED, '/api/v0/cases', allowlist)['access-control-allow-credentials'],
+    ).toBeUndefined();
+    expect(
+      corsResponseHeaders(ALLOWED, '/application', allowlist)['access-control-allow-credentials'],
+    ).toBeUndefined();
+  });
+
+  it('adds Vary: Origin to fallback responses whenever the allowlist is non-empty', () => {
+    expect(corsFallbackHeaders('https://attacker.example', '/app', allowlist)).toEqual({
+      vary: 'Origin',
+    });
+    expect(corsFallbackHeaders(ALLOWED, '/app', allowlist).vary).toBe('Origin');
+    expect(corsFallbackHeaders(ALLOWED, '/app', new Set())).toEqual({});
+  });
+});
+
+describe('parseAllowedOrigins', () => {
+  it('treats unset and blank as an empty allowlist', () => {
+    expect(parseAllowedOrigins(undefined, 'STAGING')).toEqual({ origins: [], issues: [] });
+    expect(parseAllowedOrigins('  ', 'STAGING')).toEqual({ origins: [], issues: [] });
+  });
+
+  it('normalises, trims, and de-duplicates exact origins', () => {
+    const parsed = parseAllowedOrigins(
+      ' https://App.Example.org/ , https://app.example.org,https://other.example:8443 ',
+      'STAGING',
+    );
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.origins).toEqual(['https://app.example.org', 'https://other.example:8443']);
+  });
+
+  it.each([
+    ['a wildcard', '*'],
+    ['the null origin', 'null'],
+    ['a bare host', 'app.example.org'],
+    ['a path', 'https://app.example.org/path'],
+    ['a query', 'https://app.example.org?x=1'],
+    ['a fragment', 'https://app.example.org#x'],
+    ['userinfo', 'https://user:pass@app.example.org'],
+    ['a non-http scheme', 'ftp://app.example.org'],
+    ['plain http on a public host', 'http://app.example.org'],
+  ])('rejects %s', (_label, value) => {
+    const parsed = parseAllowedOrigins(value, 'STAGING');
+    expect(parsed.issues.length).toBeGreaterThan(0);
+    expect(parsed.origins).toEqual([]);
+  });
+
+  it('allows http only for loopback hosts in LOCAL and TEST', () => {
+    for (const environment of ['LOCAL', 'TEST']) {
+      expect(
+        parseAllowedOrigins(
+          'http://localhost:5173,http://127.0.0.1:3001,http://[::1]:8080',
+          environment,
+        ),
+      ).toEqual({
+        origins: ['http://localhost:5173', 'http://127.0.0.1:3001', 'http://[::1]:8080'],
+        issues: [],
+      });
+    }
+    for (const environment of ['STAGING', 'PRODUCTION']) {
+      expect(parseAllowedOrigins('http://localhost:5173', environment).issues).toHaveLength(1);
+    }
+  });
+
+  it(`rejects more than ${MAX_CORS_ALLOWED_ORIGINS} origins`, () => {
+    const many = Array.from(
+      { length: MAX_CORS_ALLOWED_ORIGINS + 1 },
+      (_v, i) => `https://o${i}.example`,
+    );
+    expect(parseAllowedOrigins(many.join(','), 'STAGING').issues).toHaveLength(1);
+  });
+});
