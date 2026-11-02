@@ -19,6 +19,8 @@ describe('SUAS_CORS_ALLOWED_ORIGINS', () => {
 
   it.each([
     ['a wildcard', '*'],
+    ['a subdomain wildcard', 'https://*.example.org'],
+    ['a trailing-dot host', 'https://app.example.org.'],
     ['a path', 'https://app.example.org/x'],
     ['plain http on a public host', 'http://app.example.org'],
   ])('fails startup closed for %s', (_label, value) => {

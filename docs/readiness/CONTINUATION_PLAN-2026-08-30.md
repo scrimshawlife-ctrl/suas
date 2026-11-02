@@ -159,4 +159,4 @@ Stop and report rather than improvising if any of these occur:
 - Recovery work would require an unapproved database target or production data.
 - Work requires production effects, destructive D-007 execution, D-025 reporting, Android implementation, or another unreleased owner decision.
 
-> **Update (proposed D-038, draft):** the 2026-08-30 "cross-origin writes return `401`" evidence is superseded. Unlisted cross-site browser writes now return `403 FORBIDDEN` under the origin policy in `src/http/origin-policy.ts`, and the `/app` cookie is `SameSite=None`. The historical runs above are unchanged.
+> **Update (proposed D-038, draft):** the 2026-08-30 "cross-origin writes return `401`" evidence is superseded. Unlisted cross-site browser writes now return `403 FORBIDDEN` under the origin policy in `src/http/origin-policy.ts`, and the `/app` cookie is `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty (`SameSite=Strict` otherwise). The historical runs above are unchanged.

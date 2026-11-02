@@ -163,7 +163,19 @@ describe('HTML passwordless sign-in', () => {
     expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
   });
 
-  it('accepts a same-host Origin with no Sec-Fetch-Site (older browsers)', async () => {
+  it('accepts a same-scheme, same-host Origin with no Sec-Fetch-Site (older browsers)', async () => {
+    // inject() is plain http in TEST, so the server's own origin is http://suas.example.
+    const email = await enrolledEmail();
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': FORM, host: 'suas.example', origin: 'http://suas.example' },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('rejects a same-host Origin on a different scheme with no Sec-Fetch-Site', async () => {
     const email = await enrolledEmail();
     const response = await app.server.inject({
       method: 'POST',
@@ -171,7 +183,8 @@ describe('HTML passwordless sign-in', () => {
       headers: { 'content-type': FORM, host: 'suas.example', origin: 'https://suas.example' },
       payload: form({ destination: email, role: 'veteran' }),
     });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(403);
+    expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
   });
 
   it('rejects oversized challenge bodies before sending email', async () => {
@@ -406,6 +419,52 @@ describe('HTML passwordless sign-in', () => {
     expect(accepted.headers.location).toBe('/app/home');
   });
 
+  it('rejects a cookie-authenticated write that sends neither Sec-Fetch-Site nor Origin', async () => {
+    const email = await enrolledEmail();
+    await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': FORM },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
+    const verified = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: { 'content-type': FORM },
+      payload: form({ destination: email, role: 'veteran', code }),
+    });
+    const cookie = String(verified.headers['set-cookie']).split(';')[0] ?? '';
+    const credential = decodeURIComponent(cookie.slice(cookie.indexOf('=') + 1));
+
+    const noMetadata = await app.server.inject({
+      method: 'POST',
+      url: '/app/qrf/deploy',
+      headers: { cookie },
+    });
+    expect(noMetadata.statusCode).toBe(403);
+    expect(noMetadata.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+
+    const noMetadataLogout = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/logout',
+      headers: { cookie },
+    });
+    expect(noMetadataLogout.statusCode).toBe(403);
+
+    // A non-browser client on Bearer is unaffected.
+    const bearer = await app.server.inject({
+      method: 'POST',
+      url: '/app/qrf/deploy',
+      headers: { authorization: `Bearer ${credential}` },
+    });
+    expect(bearer.statusCode).toBe(303);
+
+    // The session survived the denied logout.
+    const home = await app.server.inject({ method: 'GET', url: '/app/home', headers: { cookie } });
+    expect(home.statusCode).toBe(200);
+  });
+
   it('applies the same policy to the /api/v0 sign-in endpoint', async () => {
     const email = await enrolledEmail();
     const json = { 'content-type': 'application/json', host: 'suas.example' };
@@ -501,7 +560,7 @@ describe('HTML passwordless sign-in', () => {
     const logout = await app.server.inject({
       method: 'POST',
       url: '/app/auth/logout',
-      headers: { cookie },
+      headers: { cookie, 'sec-fetch-site': 'same-origin', origin: 'null' },
     });
     expect(logout.statusCode).toBe(303);
     expect(logout.headers.location).toBe('/app');
@@ -515,5 +574,65 @@ describe('HTML passwordless sign-in', () => {
       headers: { cookie },
     });
     expect(rejected.statusCode).toBe(401);
+  });
+});
+
+describe('HTML sign-in with an empty CORS allowlist (0.6.0 cookie)', () => {
+  let strictApp: StartedApp;
+
+  beforeAll(async () => {
+    strictApp = await startApp({
+      env: validEnv({
+        SUAS_MIGRATIONS_MODE: 'apply',
+        SUAS_BROWSER_AUTH_MODE: 'email_otp',
+        SUAS_BROWSER_TENANT_ID: TENANT_ID,
+      }),
+      listen: false,
+    });
+  });
+
+  afterAll(async () => {
+    await strictApp.close();
+  });
+
+  it('sets and clears the session cookie with SameSite=Strict', async () => {
+    const email = syntheticEmail(`browser-strict-${randomUUID().slice(0, 8)}`);
+    if (strictApp.pool === undefined) throw new Error('test database absent');
+    await createUser(strictApp.pool, { tenantId: TENANT_ID, email, status: 'ACTIVE' });
+    const strictDelivery = strictApp.challengeDelivery as RecordingChallengeDelivery;
+
+    await strictApp.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': FORM },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    const code = strictDelivery.lastFor(email.toLowerCase())?.secret ?? '';
+    const verified = await strictApp.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: { 'content-type': FORM, 'sec-fetch-site': 'same-origin', origin: 'null' },
+      payload: form({ destination: email, role: 'veteran', code }),
+    });
+    expect(verified.statusCode).toBe(303);
+    expect(verified.headers['access-control-allow-origin']).toBeUndefined();
+    const setCookie = String(verified.headers['set-cookie']);
+    expect(setCookie).toContain('SameSite=Strict');
+    expect(setCookie).not.toContain('SameSite=None');
+    expect(setCookie).toContain('Secure');
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toContain('Path=/app');
+
+    const cookie = setCookie.split(';')[0] ?? '';
+    const logout = await strictApp.server.inject({
+      method: 'POST',
+      url: '/app/auth/logout',
+      headers: { cookie, 'sec-fetch-site': 'same-origin', origin: 'null' },
+    });
+    expect(logout.statusCode).toBe(303);
+    const cleared = String(logout.headers['set-cookie']);
+    expect(cleared).toContain('Max-Age=0');
+    expect(cleared).toContain('SameSite=Strict');
+    expect(cleared).not.toContain('SameSite=None');
   });
 });

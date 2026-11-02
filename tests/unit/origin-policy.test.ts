@@ -70,16 +70,76 @@ describe('evaluateBrowserRequest', () => {
   ];
 
   it.each(rows)('%s', (_label, secFetchSite, origin, verdict) => {
-    expect(evaluateBrowserRequest({ secFetchSite, origin, host: HOST }, allowlist)).toBe(verdict);
+    expect(
+      evaluateBrowserRequest(
+        { secFetchSite, origin, host: HOST, selfScheme: 'https:', cookieSession: false },
+        allowlist,
+      ),
+    ).toBe(verdict);
   });
 
   it('denies every cross-site browser request when the allowlist is empty', () => {
     expect(
       evaluateBrowserRequest(
-        { secFetchSite: 'cross-site', origin: ALLOWED, host: HOST },
+        {
+          secFetchSite: 'cross-site',
+          origin: ALLOWED,
+          host: HOST,
+          selfScheme: 'https:',
+          cookieSession: false,
+        },
         new Set(),
       ),
     ).toBe('deny');
+  });
+
+  it('denies a cookie-authenticated write that sends neither Sec-Fetch-Site nor Origin', () => {
+    const base = { secFetchSite: undefined, origin: undefined, host: HOST, selfScheme: 'https:' };
+    expect(evaluateBrowserRequest({ ...base, cookieSession: true }, allowlist)).toBe('deny');
+    expect(evaluateBrowserRequest({ ...base, cookieSession: true }, new Set())).toBe('deny');
+    // Bearer or unauthenticated non-browser clients stay unaffected.
+    expect(evaluateBrowserRequest({ ...base, cookieSession: false }, allowlist)).toBe('allow');
+  });
+
+  it('still judges a cookie-authenticated write by its metadata when it sends any', () => {
+    const cookie = { host: HOST, selfScheme: 'https:', cookieSession: true };
+    expect(
+      evaluateBrowserRequest({ ...cookie, secFetchSite: 'same-origin', origin: 'null' }, allowlist),
+    ).toBe('allow');
+    expect(
+      evaluateBrowserRequest(
+        { ...cookie, secFetchSite: undefined, origin: `https://${HOST}` },
+        allowlist,
+      ),
+    ).toBe('allow');
+    expect(
+      evaluateBrowserRequest({ ...cookie, secFetchSite: 'cross-site', origin: ALLOWED }, allowlist),
+    ).toBe('allow');
+  });
+
+  it('compares scheme as well as host in the no-Sec-Fetch-Site fallback', () => {
+    const base = { secFetchSite: undefined, host: HOST, cookieSession: false };
+    expect(
+      evaluateBrowserRequest(
+        { ...base, origin: `http://${HOST}`, selfScheme: 'https:' },
+        allowlist,
+      ),
+    ).toBe('deny');
+    expect(
+      evaluateBrowserRequest(
+        { ...base, origin: `https://${HOST}`, selfScheme: 'https:' },
+        allowlist,
+      ),
+    ).toBe('allow');
+    expect(
+      evaluateBrowserRequest(
+        { ...base, origin: `https://${HOST}`, selfScheme: 'http:' },
+        allowlist,
+      ),
+    ).toBe('deny');
+    expect(
+      evaluateBrowserRequest({ ...base, origin: `http://${HOST}`, selfScheme: 'http:' }, allowlist),
+    ).toBe('allow');
   });
 });
 
@@ -138,6 +198,9 @@ describe('parseAllowedOrigins', () => {
 
   it.each([
     ['a wildcard', '*'],
+    ['a subdomain wildcard', 'https://*.example.org'],
+    ['a wildcard port', 'https://app.example.org:*'],
+    ['a trailing-dot host', 'https://app.example.org.'],
     ['the null origin', 'null'],
     ['a bare host', 'app.example.org'],
     ['a path', 'https://app.example.org/path'],
@@ -150,6 +213,19 @@ describe('parseAllowedOrigins', () => {
     const parsed = parseAllowedOrigins(value, 'STAGING');
     expect(parsed.issues.length).toBeGreaterThan(0);
     expect(parsed.origins).toEqual([]);
+  });
+
+  it('requires https outside the LOCAL/TEST loopback exception, in every environment', () => {
+    for (const environment of ['LOCAL', 'TEST', 'STAGING', 'PRODUCTION']) {
+      expect(parseAllowedOrigins('http://app.example.org', environment).origins).toEqual([]);
+      expect(parseAllowedOrigins('ws://app.example.org', environment).origins).toEqual([]);
+    }
+  });
+
+  it('keeps an explicit non-default port and drops the default one', () => {
+    expect(
+      parseAllowedOrigins('https://app.example.org:443,https://app.example.org:8443', 'STAGING'),
+    ).toEqual({ origins: ['https://app.example.org', 'https://app.example.org:8443'], issues: [] });
   });
 
   it('allows http only for loopback hosts in LOCAL and TEST', () => {

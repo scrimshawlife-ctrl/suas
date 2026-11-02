@@ -11,18 +11,20 @@
  *
  * 1. Request policy. Every browser-originated *unsafe* request (POST/PUT/PATCH/
  *    DELETE) must be same-origin or come from an allowlisted origin. This is the
- *    CSRF defence for the `SameSite=None` session cookie and for the sign-in
- *    forms. It runs before body parsing, authentication, rate limiting, and email
+ *    CSRF defence for the session cookie (`SameSite=None` only when the allowlist
+ *    is non-empty) and for the sign-in forms. It runs before body parsing, authentication, rate limiting, and email
  *    delivery, so a denied request has no side effect.
  * 2. CORS. Allowlisted origins get `Access-Control-*` response headers and
  *    preflight answers. An empty allowlist means no CORS headers at all.
  *
  * Non-browser clients (curl, Postman, the native iOS and Android apps) send neither
- * `Origin` nor `Sec-Fetch-Site` and are not affected.
+ * `Origin` nor `Sec-Fetch-Site`, use Bearer, and are not affected. A request that
+ * carries the `/app` session cookie with neither header is denied.
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ForbiddenError } from '../authz/index.js';
+import { usesBrowserCookie } from './authenticate.js';
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -40,6 +42,16 @@ export interface BrowserRequestHeaders {
   readonly secFetchSite: string | undefined;
   readonly origin: string | undefined;
   readonly host: string | undefined;
+  /**
+   * The server's own scheme, with the trailing colon (`https:` or `http:`). The
+   * no-Sec-Fetch-Site fallback matches `Origin` against scheme and host.
+   */
+  readonly selfScheme: string;
+  /**
+   * True when the request would be authenticated by the `/app` session cookie (an
+   * `/app` request carrying the cookie and no `Authorization` header).
+   */
+  readonly cookieSession: boolean;
 }
 
 export type BrowserRequestVerdict = 'allow' | 'deny';
@@ -48,7 +60,12 @@ type OriginState =
   | { readonly kind: 'absent' }
   | { readonly kind: 'null' }
   | { readonly kind: 'invalid' }
-  | { readonly kind: 'origin'; readonly origin: string; readonly host: string };
+  | {
+      readonly kind: 'origin';
+      readonly origin: string;
+      readonly protocol: string;
+      readonly host: string;
+    };
 
 function classifyOrigin(origin: string | undefined): OriginState {
   if (origin === undefined) return { kind: 'absent' };
@@ -56,7 +73,7 @@ function classifyOrigin(origin: string | undefined): OriginState {
   try {
     const url = new URL(origin);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return { kind: 'invalid' };
-    return { kind: 'origin', origin: url.origin, host: url.host };
+    return { kind: 'origin', origin: url.origin, protocol: url.protocol, host: url.host };
   } catch {
     return { kind: 'invalid' };
   }
@@ -70,8 +87,9 @@ function classifyOrigin(origin: string | undefined): OriginState {
  * | same-origin, none      | any (including "null")           | allow   |
  * | same-site, cross-site  | allowlisted                      | allow   |
  * | same-site, cross-site  | "null", absent, or not listed    | deny    |
- * | absent                 | absent (non-browser client)      | allow   |
- * | absent                 | same host as Host, or allowlisted| allow   |
+ * | absent                 | absent, /app cookie session      | deny    |
+ * | absent                 | absent, no cookie (non-browser)  | allow   |
+ * | absent                 | same scheme+host, or allowlisted | allow   |
  * | absent                 | "null" or any other origin       | deny    |
  *
  * An unrecognised Sec-Fetch-Site value is treated as cross-site (fail closed).
@@ -86,9 +104,15 @@ export function evaluateBrowserRequest(
   const origin = classifyOrigin(headers.origin);
 
   if (site === undefined || site === '') {
-    if (origin.kind === 'absent') return 'allow';
+    // Non-browser clients use Bearer. A cookie-carrying write with no metadata at all is
+    // a browser that sends none (for example an old one) and is not trusted.
+    if (origin.kind === 'absent') return headers.cookieSession ? 'deny' : 'allow';
     if (origin.kind === 'origin') {
-      return origin.host === headers.host || allowlist.has(origin.origin) ? 'allow' : 'deny';
+      const sameOrigin =
+        origin.protocol === headers.selfScheme &&
+        headers.host !== undefined &&
+        origin.host === headers.host.toLowerCase();
+      return sameOrigin || allowlist.has(origin.origin) ? 'allow' : 'deny';
     }
     return 'deny';
   }
@@ -175,6 +199,19 @@ function requestedHeadersAllowed(requested: string | undefined): string | undefi
 
 export interface OriginPolicyOptions {
   readonly allowlist: ReadonlySet<string>;
+  /** `SUAS_ENV`. STAGING and PRODUCTION are always served over https. */
+  readonly environment: string;
+}
+
+const HTTPS_ONLY_ENVIRONMENTS = new Set(['STAGING', 'PRODUCTION']);
+
+/**
+ * The scheme this server is reached on. Shared deployments are always https (the
+ * session cookie is `Secure`); LOCAL and TEST use the connection's own protocol.
+ */
+function selfSchemeOf(request: FastifyRequest, environment: string): string {
+  if (HTTPS_ONLY_ENVIRONMENTS.has(environment)) return 'https:';
+  return request.protocol === 'https' ? 'https:' : 'http:';
 }
 
 /**
@@ -182,7 +219,7 @@ export interface OriginPolicyOptions {
  * headers. Call once from `createServer`.
  */
 export function registerOriginPolicy(app: FastifyInstance, options: OriginPolicyOptions): void {
-  const { allowlist } = options;
+  const { allowlist, environment } = options;
 
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     const origin = firstHeader(request.headers.origin);
@@ -229,6 +266,8 @@ export function registerOriginPolicy(app: FastifyInstance, options: OriginPolicy
         secFetchSite: firstHeader(request.headers['sec-fetch-site']),
         origin,
         host: firstHeader(request.headers.host),
+        selfScheme: selfSchemeOf(request, environment),
+        cookieSession: usesBrowserCookie(request),
       },
       allowlist,
     );

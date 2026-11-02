@@ -3,7 +3,9 @@
  * it without importing the HTTP layer.
  *
  * Spec citations (DRAFT, proposed D-038): SUAS-specs ENVIRONMENT.md §3 and AUTH.md
- * proposed §9.3. Exact origins only; no wildcard; fails closed.
+ * proposed §9.3. Exact origins only: `https` (loopback `http` in LOCAL/TEST only), one
+ * exact host, `*` anywhere rejected, trailing-dot hosts rejected, a port only when written
+ * and not the scheme default. Fails closed.
  */
 
 export const MAX_CORS_ALLOWED_ORIGINS = 20;
@@ -31,8 +33,10 @@ export function parseAllowedOrigins(raw: string | undefined, environment: string
     .filter((entry) => entry !== '');
 
   for (const entry of entries) {
-    if (entry === '*' || entry.toLowerCase() === 'null') {
-      issues.push(`SUAS_CORS_ALLOWED_ORIGINS entry "${entry}" is not allowed. List exact origins.`);
+    if (entry.includes('*') || entry.toLowerCase() === 'null') {
+      issues.push(
+        `SUAS_CORS_ALLOWED_ORIGINS entry "${entry}" is not allowed. List exact origins; wildcards are not supported.`,
+      );
       continue;
     }
     let url: URL;
@@ -51,6 +55,12 @@ export function parseAllowedOrigins(raw: string | undefined, environment: string
     ) {
       issues.push(
         `SUAS_CORS_ALLOWED_ORIGINS entry "${entry}" must be an origin only: no credentials, path, query, or fragment.`,
+      );
+      continue;
+    }
+    if (url.hostname === '' || url.hostname.endsWith('.')) {
+      issues.push(
+        `SUAS_CORS_ALLOWED_ORIGINS entry "${entry}" must name one exact host without a trailing dot.`,
       );
       continue;
     }
