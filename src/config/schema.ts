@@ -15,7 +15,7 @@
  */
 
 import { z } from 'zod';
-import { parseAllowedOrigins } from './cors-origins.js';
+import { corsPinIssue, parseAllowedOrigins } from './cors-origins.js';
 import { RELEASE_MANIFEST, SPEC_018_PRODUCTION_AUTHORIZED, SPEC_VERSION } from '../release/pins.js';
 
 /** ENVIRONMENT.md §2. Exactly these logical environment classes exist. */
@@ -446,8 +446,13 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
     });
   }
 
-  for (const message of parseAllowedOrigins(raw.SUAS_CORS_ALLOWED_ORIGINS, environment).issues) {
+  const corsOrigins = parseAllowedOrigins(raw.SUAS_CORS_ALLOWED_ORIGINS, environment);
+  for (const message of corsOrigins.issues) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  }
+  const corsPin = corsPinIssue(corsOrigins.origins, SPEC_VERSION, environment);
+  if (corsPin !== undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: corsPin });
   }
 
   const vaSandboxEnabled = raw.SUAS_VA_SANDBOX_OAUTH_ENABLED === 'true';

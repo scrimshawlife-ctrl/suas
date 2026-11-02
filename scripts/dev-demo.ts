@@ -229,6 +229,7 @@ function buildDemoEnv(
     SUAS_VA_SANDBOX_OAUTH_ENABLED: 'false',
     // Optional: exact origins allowed to call the demo cross-origin, for local frontends.
     // Example: SUAS_CORS_ALLOWED_ORIGINS=http://localhost:5173 npm run dev:demo
+    // (refused at startup while this build pins a spec below 0.7.0; see corsPinIssue).
     ...corsAllowedOriginsFromShell(),
   };
 }

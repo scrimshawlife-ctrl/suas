@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ConfigurationError, loadConfig } from '../../src/config/index.js';
+import { SPEC_VERSION } from '../../src/release/pins.js';
 import { validEnv } from '../helpers/env.js';
 
 describe('SUAS_CORS_ALLOWED_ORIGINS', () => {
@@ -21,6 +22,8 @@ describe('SUAS_CORS_ALLOWED_ORIGINS', () => {
     ['a wildcard', '*'],
     ['a subdomain wildcard', 'https://*.example.org'],
     ['a trailing-dot host', 'https://app.example.org.'],
+    ['a percent-encoded wildcard', 'https://%2a.example.org'],
+    ['an empty host label', 'https://app..example.org'],
     ['a path', 'https://app.example.org/x'],
     ['plain http on a public host', 'http://app.example.org'],
   ])('fails startup closed for %s', (_label, value) => {
@@ -38,5 +41,25 @@ describe('SUAS_CORS_ALLOWED_ORIGINS', () => {
         }),
       ),
     ).toThrow(ConfigurationError);
+  });
+
+  it('fails startup in LOCAL with a non-empty allowlist while this build pins spec 0.6.0', () => {
+    expect(SPEC_VERSION).toBe('0.6.0');
+    expect(() =>
+      loadConfig(
+        validEnv({ SUAS_ENV: 'LOCAL', SUAS_CORS_ALLOWED_ORIGINS: 'http://localhost:5173' }),
+      ),
+    ).toThrow(/0\.7\.0/);
+    expect(
+      loadConfig(validEnv({ SUAS_ENV: 'LOCAL', SUAS_CORS_ALLOWED_ORIGINS: '' })).corsAllowedOrigins,
+    ).toEqual([]);
+  });
+
+  it('fails startup for an https loopback origin in STAGING', () => {
+    expect(() =>
+      loadConfig(
+        validEnv({ SUAS_ENV: 'STAGING', SUAS_CORS_ALLOWED_ORIGINS: 'https://localhost:8443' }),
+      ),
+    ).toThrow(/loopback names and IP literals/);
   });
 });

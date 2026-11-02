@@ -1,7 +1,12 @@
 /** Browser origin policy and CORS helpers (proposed SUAS-specs D-038). */
 
 import { describe, expect, it } from 'vitest';
-import { MAX_CORS_ALLOWED_ORIGINS, parseAllowedOrigins } from '../../src/config/cors-origins.js';
+import {
+  CORS_MIN_SPEC_VERSION,
+  corsPinIssue,
+  MAX_CORS_ALLOWED_ORIGINS,
+  parseAllowedOrigins,
+} from '../../src/config/cors-origins.js';
 import {
   allowedRequestOrigin,
   corsFallbackHeaders,
@@ -201,6 +206,10 @@ describe('parseAllowedOrigins', () => {
     ['a subdomain wildcard', 'https://*.example.org'],
     ['a wildcard port', 'https://app.example.org:*'],
     ['a trailing-dot host', 'https://app.example.org.'],
+    ['a percent-encoded wildcard', 'https://%2a.example.org'],
+    ['an upper-case percent-encoded wildcard', 'https://%2A.example.org'],
+    ['an empty host label', 'https://app..example.org'],
+    ['a leading empty host label', 'https://.example.org'],
     ['the null origin', 'null'],
     ['a bare host', 'app.example.org'],
     ['a path', 'https://app.example.org/path'],
@@ -220,6 +229,42 @@ describe('parseAllowedOrigins', () => {
       expect(parseAllowedOrigins('http://app.example.org', environment).origins).toEqual([]);
       expect(parseAllowedOrigins('ws://app.example.org', environment).origins).toEqual([]);
     }
+  });
+
+  it.each([
+    ['localhost', 'https://localhost'],
+    ['localhost with a port', 'https://localhost:8443'],
+    ['a .localhost name', 'https://app.localhost'],
+    ['an IPv4 literal', 'https://127.0.0.1'],
+    ['a public IPv4 literal', 'https://203.0.113.7'],
+    ['a hex IPv4 literal', 'https://0x7f000001'],
+    ['a shortened IPv4 literal', 'https://127.1'],
+    ['an IPv6 loopback literal', 'https://[::1]'],
+    ['an IPv6 literal', 'https://[2001:db8::1]'],
+  ])('rejects %s over https in STAGING and PRODUCTION', (_label, value) => {
+    for (const environment of ['STAGING', 'PRODUCTION']) {
+      const parsed = parseAllowedOrigins(value, environment);
+      expect(parsed.origins).toEqual([]);
+      expect(parsed.issues).toHaveLength(1);
+    }
+  });
+
+  it('keeps https loopback and IP-literal origins usable in LOCAL and TEST', () => {
+    for (const environment of ['LOCAL', 'TEST']) {
+      expect(
+        parseAllowedOrigins('https://localhost:8443,https://127.0.0.1,https://[::1]', environment),
+      ).toEqual({
+        origins: ['https://localhost:8443', 'https://127.0.0.1', 'https://[::1]'],
+        issues: [],
+      });
+    }
+  });
+
+  it('still accepts a DNS name that merely contains "localhost"', () => {
+    expect(parseAllowedOrigins('https://localhost-app.example.org', 'PRODUCTION')).toEqual({
+      origins: ['https://localhost-app.example.org'],
+      issues: [],
+    });
   });
 
   it('keeps an explicit non-default port and drops the default one', () => {
@@ -251,5 +296,36 @@ describe('parseAllowedOrigins', () => {
       (_v, i) => `https://o${i}.example`,
     );
     expect(parseAllowedOrigins(many.join(','), 'STAGING').issues).toHaveLength(1);
+  });
+});
+
+describe('corsPinIssue', () => {
+  const origins = ['https://app.example.org'];
+
+  it('refuses a non-empty allowlist while pinned below the D-038 release', () => {
+    for (const environment of ['LOCAL', 'STAGING', 'PRODUCTION']) {
+      expect(corsPinIssue(origins, '0.6.0', environment)).toContain(CORS_MIN_SPEC_VERSION);
+      expect(corsPinIssue(origins, '0.6.9', environment)).toBeDefined();
+    }
+  });
+
+  it('allows an empty allowlist at any pin', () => {
+    for (const environment of ['LOCAL', 'STAGING', 'PRODUCTION', 'TEST']) {
+      expect(corsPinIssue([], '0.6.0', environment)).toBeUndefined();
+    }
+  });
+
+  it('allows a non-empty allowlist from the D-038 release on', () => {
+    for (const version of ['0.7.0', '0.7.1', '0.10.0', '1.0.0']) {
+      expect(corsPinIssue(origins, version, 'PRODUCTION')).toBeUndefined();
+    }
+  });
+
+  it('fails closed on an unparseable pin', () => {
+    expect(corsPinIssue(origins, 'next', 'PRODUCTION')).toBeDefined();
+  });
+
+  it('exempts TEST so CI can exercise the draft path with synthetic data', () => {
+    expect(corsPinIssue(origins, '0.6.0', 'TEST')).toBeUndefined();
   });
 });
