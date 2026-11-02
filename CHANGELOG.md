@@ -15,6 +15,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
+- Browser sign-in no longer fails with `401 "Cross-origin browser requests are not accepted."` on a same-origin form post. `/app` pages send `referrer-policy: no-referrer`, so browsers send `Origin: null` on those posts; `assertSameOriginBrowserWrite` now accepts `Sec-Fetch-Site: same-origin` before comparing `Origin` to `Host`. Cross-site posts, and `Origin: null` without a same-origin signal, are still rejected. SUAS-specs `AUTH.md` section 9.1 (spec 0.6.0) is unchanged.
 - Restored `aria-label="Product preview"` on the homepage product UI preview link and allow-listed the live web app and iOS operator demo links in the public-pages unit test.
 
 ### Changed

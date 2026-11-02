@@ -36,6 +36,10 @@ function readCookie(request: FastifyRequest, name: string): string | undefined {
 export function assertSameOriginBrowserWrite(request: FastifyRequest): void {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
   const fetchSite = request.headers['sec-fetch-site'];
+  // The browser's own same-origin post. /app pages send `referrer-policy: no-referrer`,
+  // so such a post carries `Origin: null`, which the Origin/Host comparison below cannot
+  // parse. `Sec-Fetch-Site` is a forbidden request header: a page cannot set or forge it.
+  if (fetchSite === 'same-origin') return;
   if (fetchSite === 'cross-site') {
     throw new UnauthenticatedError('Cross-origin browser requests are not accepted.');
   }
