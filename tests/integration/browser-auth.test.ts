@@ -84,6 +84,50 @@ describe('HTML passwordless sign-in', () => {
     expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
   });
 
+  it('accepts a same-origin form post that carries Origin: null', async () => {
+    // /app pages send `referrer-policy: no-referrer`, so a browser sends `Origin: null`
+    // on its own same-origin form posts. `Sec-Fetch-Site: same-origin` marks them.
+    const email = await enrolledEmail();
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        host: 'suas.example',
+        origin: 'null',
+        'sec-fetch-site': 'same-origin',
+      },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('If this email is enrolled');
+    expect(delivery().lastFor(email.toLowerCase())?.secret).toMatch(/^\d{6}$/);
+  });
+
+  it('still rejects Origin: null without a same-origin Fetch Metadata signal', async () => {
+    for (const headers of [
+      { origin: 'null' },
+      { origin: 'null', 'sec-fetch-site': 'cross-site' },
+      { origin: 'null', 'sec-fetch-site': 'same-site' },
+    ]) {
+      const email = await enrolledEmail();
+      const response = await app.server.inject({
+        method: 'POST',
+        url: '/app/auth/challenges',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          host: 'suas.example',
+          ...headers,
+        },
+        payload: form({ destination: email, role: 'veteran' }),
+      });
+
+      expect(response.statusCode, JSON.stringify(headers)).toBe(401);
+      expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
+    }
+  });
+
   it('rejects oversized challenge bodies before sending email', async () => {
     const email = await enrolledEmail();
     const response = await app.server.inject({
@@ -270,6 +314,43 @@ describe('HTML passwordless sign-in', () => {
       },
     });
     expect(rejected.statusCode).toBe(401);
+  });
+
+  it('accepts a same-origin cookie write that carries Origin: null', async () => {
+    const email = await enrolledEmail();
+    await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
+    const verified = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/verify',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        host: 'suas.example',
+        origin: 'null',
+        'sec-fetch-site': 'same-origin',
+      },
+      payload: form({ destination: email, role: 'veteran', code }),
+    });
+    expect(verified.statusCode).toBe(303);
+    const cookie = String(verified.headers['set-cookie']).split(';')[0] ?? '';
+
+    const logout = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/logout',
+      headers: {
+        cookie,
+        host: 'suas.example',
+        origin: 'null',
+        'sec-fetch-site': 'same-origin',
+      },
+    });
+    expect(logout.statusCode).toBe(303);
+    expect(logout.headers.location).toBe('/app');
   });
 
   it('revokes the authoritative session and clears the browser cookie on sign out', async () => {
