@@ -5,13 +5,21 @@
  * SUAS-specs API.md §2, §6; ENVIRONMENT.md §5, §9.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ConfigurationError } from '../../src/config/index.js';
 import { startApp } from '../../src/app.js';
 import { dispatchToFastify } from '../../src/http/dispatch.js';
 import type { WorkerBindings } from '../../src/worker/env.js';
 import { handleWorkerFetch, resetWorkerIsolateForTests } from '../../src/worker/test-fetch.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+
+// The released pin is 0.6.0, and the D-038 startup guard refuses a non-empty allowlist
+// below 0.7.0 in every environment. Mock only the guard's pin so this file can exercise
+// the draft path; SPEC_VERSION and SUAS_SPEC_VERSION stay 0.6.0.
+vi.mock('../../src/release/pins.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  CORS_GUARD_SPEC_VERSION: '0.7.0',
+}));
 
 function workerBindings(overrides: Partial<WorkerBindings> = {}): WorkerBindings {
   return {

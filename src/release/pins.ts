@@ -14,6 +14,13 @@
 /** Specification stack version this build implements. VERSIONING.md §2. */
 export const SPEC_VERSION = '0.6.0' as const;
 
+/**
+ * Spec version the proposed D-038 CORS startup guard compares (`corsPinIssue`). Always
+ * `SPEC_VERSION` in a build and never read from the environment. It is a separate export
+ * only so the CORS tests can `vi.mock` it to 0.7.0 while the reported pin stays 0.6.0.
+ */
+export const CORS_GUARD_SPEC_VERSION: string = SPEC_VERSION;
+
 /** Release manifest identifier this build claims. RELEASE_MANIFEST-0.6.0.md. */
 export const RELEASE_MANIFEST = 'RELEASE_MANIFEST-0.6.0.md' as const;
 

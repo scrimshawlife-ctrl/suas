@@ -47,15 +47,15 @@ function compareVersions(a: string, b: string): number {
 /**
  * Refuse a non-empty allowlist while this build is pinned to a released spec stack
  * below `CORS_MIN_SPEC_VERSION`: the 0.6.0 contract has no cross-origin allowlist, so an
- * operator cannot switch the draft on early. TEST is exempt so CI can exercise the draft
- * code path with synthetic data; LOCAL, STAGING, and PRODUCTION are not.
+ * operator cannot switch the draft on early. No environment is exempt, TEST included
+ * (SUAS-specs ENVIRONMENT.md). Tests reach the draft path by mocking
+ * `CORS_GUARD_SPEC_VERSION` in `src/release/pins.ts`, never through configuration.
  */
 export function corsPinIssue(
   origins: readonly string[],
   pinnedSpecVersion: string,
-  environment: string,
 ): string | undefined {
-  if (origins.length === 0 || environment === 'TEST') return undefined;
+  if (origins.length === 0) return undefined;
   const order = compareVersions(pinnedSpecVersion, CORS_MIN_SPEC_VERSION);
   if (order >= 0) return undefined;
   return (

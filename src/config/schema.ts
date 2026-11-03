@@ -16,7 +16,12 @@
 
 import { z } from 'zod';
 import { corsPinIssue, parseAllowedOrigins } from './cors-origins.js';
-import { RELEASE_MANIFEST, SPEC_018_PRODUCTION_AUTHORIZED, SPEC_VERSION } from '../release/pins.js';
+import {
+  CORS_GUARD_SPEC_VERSION,
+  RELEASE_MANIFEST,
+  SPEC_018_PRODUCTION_AUTHORIZED,
+  SPEC_VERSION,
+} from '../release/pins.js';
 
 /** ENVIRONMENT.md §2. Exactly these logical environment classes exist. */
 export const ENVIRONMENT_CLASSES = ['LOCAL', 'TEST', 'STAGING', 'PRODUCTION'] as const;
@@ -450,7 +455,7 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   for (const message of corsOrigins.issues) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message });
   }
-  const corsPin = corsPinIssue(corsOrigins.origins, SPEC_VERSION, environment);
+  const corsPin = corsPinIssue(corsOrigins.origins, CORS_GUARD_SPEC_VERSION);
   if (corsPin !== undefined) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: corsPin });
   }

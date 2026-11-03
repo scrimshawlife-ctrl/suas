@@ -1,13 +1,21 @@
 /** Browser EMAIL OTP evidence for AUTH.md §9.1 and D-004 (spec 0.6.0). */
 
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import type { RecordingChallengeDelivery } from '../../src/auth/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { BROWSER_AUTH_BODY_LIMIT_BYTES } from '../../src/http/routes/ui.js';
 import { validEnv } from '../helpers/env.js';
+
+// The released pin is 0.6.0, and the D-038 startup guard refuses a non-empty allowlist
+// below 0.7.0 in every environment. Mock only the guard's pin so this file can exercise
+// the draft path; SPEC_VERSION and SUAS_SPEC_VERSION stay 0.6.0.
+vi.mock('../../src/release/pins.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  CORS_GUARD_SPEC_VERSION: '0.7.0',
+}));
 
 const TENANT_ID = '11111111-1111-4111-8111-111111111111';
 /** Allowlisted cross-origin frontend (proposed SUAS-specs D-038). */

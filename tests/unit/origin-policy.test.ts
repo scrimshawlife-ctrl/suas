@@ -303,29 +303,21 @@ describe('corsPinIssue', () => {
   const origins = ['https://app.example.org'];
 
   it('refuses a non-empty allowlist while pinned below the D-038 release', () => {
-    for (const environment of ['LOCAL', 'STAGING', 'PRODUCTION']) {
-      expect(corsPinIssue(origins, '0.6.0', environment)).toContain(CORS_MIN_SPEC_VERSION);
-      expect(corsPinIssue(origins, '0.6.9', environment)).toBeDefined();
-    }
+    expect(corsPinIssue(origins, '0.6.0')).toContain(CORS_MIN_SPEC_VERSION);
+    expect(corsPinIssue(origins, '0.6.9')).toBeDefined();
   });
 
   it('allows an empty allowlist at any pin', () => {
-    for (const environment of ['LOCAL', 'STAGING', 'PRODUCTION', 'TEST']) {
-      expect(corsPinIssue([], '0.6.0', environment)).toBeUndefined();
-    }
+    expect(corsPinIssue([], '0.6.0')).toBeUndefined();
   });
 
   it('allows a non-empty allowlist from the D-038 release on', () => {
     for (const version of ['0.7.0', '0.7.1', '0.10.0', '1.0.0']) {
-      expect(corsPinIssue(origins, version, 'PRODUCTION')).toBeUndefined();
+      expect(corsPinIssue(origins, version)).toBeUndefined();
     }
   });
 
   it('fails closed on an unparseable pin', () => {
-    expect(corsPinIssue(origins, 'next', 'PRODUCTION')).toBeDefined();
-  });
-
-  it('exempts TEST so CI can exercise the draft path with synthetic data', () => {
-    expect(corsPinIssue(origins, '0.6.0', 'TEST')).toBeUndefined();
+    expect(corsPinIssue(origins, 'next')).toBeDefined();
   });
 });

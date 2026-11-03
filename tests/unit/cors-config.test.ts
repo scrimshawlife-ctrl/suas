@@ -1,9 +1,16 @@
 /** SUAS_CORS_ALLOWED_ORIGINS configuration rules (proposed SUAS-specs D-038). */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ConfigurationError, loadConfig } from '../../src/config/index.js';
-import { SPEC_VERSION } from '../../src/release/pins.js';
 import { validEnv } from '../helpers/env.js';
+
+// The released pin is 0.6.0, and the D-038 startup guard refuses a non-empty allowlist
+// below 0.7.0 in every environment. Mock only the guard's pin so this file can exercise
+// the draft path; SPEC_VERSION and SUAS_SPEC_VERSION stay 0.6.0.
+vi.mock('../../src/release/pins.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  CORS_GUARD_SPEC_VERSION: '0.7.0',
+}));
 
 describe('SUAS_CORS_ALLOWED_ORIGINS', () => {
   it('defaults to no allowed origins', () => {
@@ -41,18 +48,6 @@ describe('SUAS_CORS_ALLOWED_ORIGINS', () => {
         }),
       ),
     ).toThrow(ConfigurationError);
-  });
-
-  it('fails startup in LOCAL with a non-empty allowlist while this build pins spec 0.6.0', () => {
-    expect(SPEC_VERSION).toBe('0.6.0');
-    expect(() =>
-      loadConfig(
-        validEnv({ SUAS_ENV: 'LOCAL', SUAS_CORS_ALLOWED_ORIGINS: 'http://localhost:5173' }),
-      ),
-    ).toThrow(/0\.7\.0/);
-    expect(
-      loadConfig(validEnv({ SUAS_ENV: 'LOCAL', SUAS_CORS_ALLOWED_ORIGINS: '' })).corsAllowedOrigins,
-    ).toEqual([]);
   });
 
   it('fails startup for an https loopback origin in STAGING', () => {
