@@ -13,10 +13,11 @@ The supported synthetic STAGING topology remains the existing Cloudflare Worker
 for `/app` and `/api/v0`. GitHub Pages `docs/` remains a static poster only. A
 future Pages frontend is possible only as a separately approved static client
 that calls an explicitly authorized synthetic API. The API/CORS/auth design is
-proposed SUAS-specs D-038 (draft): the frontend's exact origin must be added to
-`SUAS_CORS_ALLOWED_ORIGINS` on the Worker, which is an owner-run deploy change. A
-Worker pinned below spec 0.7.0 rejects a non-empty value at startup, so this waits
-for D-038 to be released and the Worker to be re-pinned.
+SUAS-specs D-038 (released in v0.7.0): the frontend's exact origin must be added to
+`SUAS_CORS_ALLOWED_ORIGINS`, set as the `SUAS_CORS_ALLOWED_ORIGINS` variable on the
+`suas-synthetic-staging` GitHub Environment and applied by the next `worker-deploy`
+run. Unset or empty keeps cross-origin access off. Only owner-controlled origins may
+be listed. A Worker pinned below spec 0.7.0 rejects a non-empty value at startup.
 
 ## Observed implementation facts
 
