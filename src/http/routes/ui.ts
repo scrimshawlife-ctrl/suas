@@ -212,7 +212,7 @@ const browserVerifyBody = browserChallengeBody.extend({
 
 /**
  * `SameSite` for the `/app` session cookie. Released 0.6.0 (AUTH.md §9.1) is `Strict`.
- * Proposed D-038 (AUTH.md §9.3, DRAFT) uses `None` only when a CORS allowlist is
+ * D-038 (AUTH.md §9.3, released in 0.7.0) uses `None` only when a CORS allowlist is
  * configured; with an empty allowlist the cookie can never be used cross-site, so it
  * stays `Strict`.
  */

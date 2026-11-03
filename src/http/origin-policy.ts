@@ -1,8 +1,8 @@
 /**
  * Browser origin policy and CORS.
  *
- * Spec citations (DRAFT, proposed D-038; not yet released — see CHANGELOG.md):
- * - SUAS-specs AUTH.md §9.1 / proposed §9.3 — cross-origin request policy for the
+ * Spec citations (D-038, released in SUAS-specs 0.7.0):
+ * - SUAS-specs AUTH.md §9.1 / §9.3 — cross-origin request policy for the
  *   browser surface and the JSON API.
  * - SUAS-specs ENVIRONMENT.md §3 — `SUAS_CORS_ALLOWED_ORIGINS`.
  * - SUAS-specs API.md §6 — canonical error body (`FORBIDDEN`, 403).

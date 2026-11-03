@@ -1,16 +1,16 @@
-# PIN_INVENTORY.md — SPEC-017 pin audit 2026-09-17
+# PIN_INVENTORY.md — SPEC-017 pin audit 2026-09-17 (re-pinned to 0.7.0 on 2026-11-02)
 
 Live runtime pin from `src/release/pins.ts`:
 
 | Identity               | Value                                      |
 | ---------------------- | ------------------------------------------ |
-| `SPEC_VERSION`         | `0.6.0`                                    |
-| `RELEASE_MANIFEST`     | `RELEASE_MANIFEST-0.6.0.md`                |
-| `SPECS_COMMIT`         | `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` |
+| `SPEC_VERSION`         | `0.7.0`                                    |
+| `RELEASE_MANIFEST`     | `RELEASE_MANIFEST-0.7.0.md`                |
+| `SPECS_COMMIT`         | `2572520fa98ca62e038ae127096a5a9123479127` |
 | `API_VERSION`          | `v0`                                       |
 | `EVENT_SCHEMA_VERSION` | `0.1.0`                                    |
 
-`.env.example`, wrangler vars, and CI match.
+`.env.example` and CI `verify` match. The Worker deploy configuration (`wrangler.jsonc` vars, `worker-deploy.yml`, and the staging workflows) still sets `0.6.0` and is owner-controlled; it must be re-pinned to `0.7.0` before the next staging deploy of this build.
 
 ## Living docs repaired the same day
 

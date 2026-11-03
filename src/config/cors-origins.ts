@@ -2,13 +2,13 @@
  * `SUAS_CORS_ALLOWED_ORIGINS` parsing. Dependency-free so the config schema can use
  * it without importing the HTTP layer.
  *
- * Spec citations (DRAFT, proposed D-038): SUAS-specs ENVIRONMENT.md §3 and AUTH.md
- * proposed §9.3. Exact origins only: `https` (loopback `http` in LOCAL/TEST only), one
+ * Spec citations (D-038, released in SUAS-specs 0.7.0): SUAS-specs ENVIRONMENT.md §3 and
+ * AUTH.md §9.3. Exact origins only: `https` (loopback `http` in LOCAL/TEST only), one
  * exact host, `*` anywhere rejected (also percent-encoded `%2a`), trailing-dot hosts and
  * empty host labels rejected, no loopback names or IP literals in STAGING/PRODUCTION, a port
  * only when written and not the scheme default. Fails closed.
  *
- * The allowlist is a DRAFT D-038 feature. A build pinned to a released spec stack below
+ * The allowlist is a D-038 (0.7.0) feature. A build pinned to a released spec stack below
  * `CORS_MIN_SPEC_VERSION` refuses a non-empty allowlist at startup (`corsPinIssue`).
  */
 
@@ -47,9 +47,8 @@ function compareVersions(a: string, b: string): number {
 /**
  * Refuse a non-empty allowlist while this build is pinned to a released spec stack
  * below `CORS_MIN_SPEC_VERSION`: the 0.6.0 contract has no cross-origin allowlist, so an
- * operator cannot switch the draft on early. No environment is exempt, TEST included
- * (SUAS-specs ENVIRONMENT.md). Tests reach the draft path by mocking
- * `CORS_GUARD_SPEC_VERSION` in `src/release/pins.ts`, never through configuration.
+ * operator cannot switch the allowlist on under an older pin. No environment is exempt,
+ * TEST included (SUAS-specs ENVIRONMENT.md §3).
  */
 export function corsPinIssue(
   origins: readonly string[],
@@ -60,7 +59,7 @@ export function corsPinIssue(
   if (order >= 0) return undefined;
   return (
     `SUAS_CORS_ALLOWED_ORIGINS must be empty: this build pins spec ${pinnedSpecVersion}, and the ` +
-    `cross-origin allowlist (proposed D-038) needs a released spec of ${CORS_MIN_SPEC_VERSION} or later.`
+    `cross-origin allowlist (D-038) needs a released spec of ${CORS_MIN_SPEC_VERSION} or later.`
   );
 }
 
