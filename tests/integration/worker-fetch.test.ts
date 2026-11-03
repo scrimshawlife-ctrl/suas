@@ -17,8 +17,8 @@ function workerBindings(overrides: Partial<WorkerBindings> = {}): WorkerBindings
   return {
     HYPERDRIVE: { connectionString: testDatabaseUrl() },
     SUAS_ENV: 'TEST',
-    SUAS_SPEC_VERSION: '0.6.0',
-    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.6.0.md',
+    SUAS_SPEC_VERSION: '0.7.0',
+    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.7.0.md',
     SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
     SUAS_MIGRATIONS_MODE: 'validate',
     SUAS_SESSION_SECRET: TEST_SESSION_SECRET,
@@ -47,6 +47,62 @@ afterAll(async () => {
 });
 
 describe('dispatchToFastify', () => {
+  it('answers a CORS preflight and decorates responses on the Worker dispatch path', async () => {
+    const app = await startApp({
+      env: validEnv({
+        SUAS_MIGRATIONS_MODE: 'validate',
+        SUAS_CORS_ALLOWED_ORIGINS: 'https://app.example.org',
+      }),
+      listen: false,
+      runtime: 'worker',
+    });
+    try {
+      const preflight = await dispatchToFastify(
+        app.server,
+        new Request('http://suas.test/api/v0/cases', {
+          method: 'OPTIONS',
+          headers: {
+            origin: 'https://app.example.org',
+            'access-control-request-method': 'POST',
+            'access-control-request-headers': 'authorization, idempotency-key',
+          },
+        }),
+      );
+      expect(preflight.status).toBe(204);
+      expect(preflight.headers.get('access-control-allow-origin')).toBe('https://app.example.org');
+      expect(preflight.headers.get('access-control-allow-headers')).toBe(
+        'authorization, idempotency-key',
+      );
+
+      const health = await dispatchToFastify(
+        app.server,
+        new Request('http://suas.test/api/v0/health', {
+          headers: { origin: 'https://app.example.org' },
+        }),
+      );
+      expect(health.status).toBe(200);
+      expect(health.headers.get('access-control-allow-origin')).toBe('https://app.example.org');
+      expect(health.headers.get('vary')).toContain('Origin');
+
+      const foreign = await dispatchToFastify(
+        app.server,
+        new Request('http://suas.test/api/v0/auth/challenges', {
+          method: 'POST',
+          headers: {
+            origin: 'https://attacker.example',
+            'sec-fetch-site': 'cross-site',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ destination: 'x@example.invalid', method: 'EMAIL_OTP' }),
+        }),
+      );
+      expect(foreign.status).toBe(403);
+      expect(foreign.headers.get('access-control-allow-origin')).toBeNull();
+    } finally {
+      await app.close();
+    }
+  });
+
   it('serves liveness and the public /app HTML without listen()', async () => {
     const app = await startApp({
       env: validEnv({ SUAS_MIGRATIONS_MODE: 'validate' }),

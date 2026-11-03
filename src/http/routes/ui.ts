@@ -132,11 +132,7 @@ import {
   type ShellViewModel,
 } from '../../ui/index.js';
 import { readActiveQrf } from '../../ui/read.js';
-import {
-  assertSameOriginBrowserWrite,
-  authenticate,
-  BROWSER_SESSION_COOKIE,
-} from '../authenticate.js';
+import { authenticate, BROWSER_SESSION_COOKIE } from '../authenticate.js';
 import {
   DEMO_FIXED_CODE_DESTINATION,
   demoFixedCodeFor,
@@ -214,13 +210,27 @@ const browserVerifyBody = browserChallengeBody.extend({
   code: z.string().min(1).max(512),
 });
 
-function browserSessionCookie(credential: string, expiresAt: Date): string {
-  const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-  return `${BROWSER_SESSION_COOKIE}=${encodeURIComponent(credential)}; Max-Age=${maxAge}; Path=/app; Secure; HttpOnly; SameSite=Strict`;
+/**
+ * `SameSite` for the `/app` session cookie. Released 0.6.0 (AUTH.md §9.1) is `Strict`.
+ * D-038 (AUTH.md §9.3, released in 0.7.0) uses `None` only when a CORS allowlist is
+ * configured; with an empty allowlist the cookie can never be used cross-site, so it
+ * stays `Strict`.
+ */
+export function browserCookieSameSite(corsAllowedOrigins: readonly string[]): 'Strict' | 'None' {
+  return corsAllowedOrigins.length > 0 ? 'None' : 'Strict';
 }
 
-function clearBrowserSessionCookie(): string {
-  return `${BROWSER_SESSION_COOKIE}=; Max-Age=0; Path=/app; Secure; HttpOnly; SameSite=Strict`;
+function browserSessionCookie(
+  credential: string,
+  expiresAt: Date,
+  sameSite: 'Strict' | 'None',
+): string {
+  const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+  return `${BROWSER_SESSION_COOKIE}=${encodeURIComponent(credential)}; Max-Age=${maxAge}; Path=/app; Secure; HttpOnly; SameSite=${sameSite}`;
+}
+
+function clearBrowserSessionCookie(sameSite: 'Strict' | 'None'): string {
+  return `${BROWSER_SESSION_COOKIE}=; Max-Age=0; Path=/app; Secure; HttpOnly; SameSite=${sameSite}`;
 }
 
 function shell(title: string, overrides: Partial<ShellViewModel> = {}): ShellViewModel {
@@ -415,7 +425,6 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   });
 
   app.post('/app/auth/challenges', BROWSER_AUTH_ROUTE_OPTIONS, async (request, reply) => {
-    assertSameOriginBrowserWrite(request);
     const body = browserChallengeBody.parse(request.body);
     const tenantId = config.browserAuth.tenantId;
     if (
@@ -465,7 +474,6 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   });
 
   app.post('/app/auth/verify', BROWSER_AUTH_ROUTE_OPTIONS, async (request, reply) => {
-    assertSameOriginBrowserWrite(request);
     const body = browserVerifyBody.parse(request.body);
     const tenantId = config.browserAuth.tenantId;
     if (
@@ -498,7 +506,11 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       );
       void reply.header(
         'set-cookie',
-        browserSessionCookie(issued.credential, issued.session.expiresAt),
+        browserSessionCookie(
+          issued.credential,
+          issued.session.expiresAt,
+          browserCookieSameSite(config.corsAllowedOrigins),
+        ),
       );
       return reply.redirect(body.role === 'responder' ? '/app/responder' : '/app/home', 303);
     } catch (error: unknown) {
@@ -539,7 +551,10 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         correlationId: String(request.id),
       });
     });
-    void reply.header('set-cookie', clearBrowserSessionCookie());
+    void reply.header(
+      'set-cookie',
+      clearBrowserSessionCookie(browserCookieSameSite(config.corsAllowedOrigins)),
+    );
     return reply.redirect('/app', 303);
   });
 

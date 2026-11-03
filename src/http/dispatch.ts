@@ -68,6 +68,8 @@ function applyInjectHeaders(headers: Record<string, unknown>, target: Headers): 
 /**
  * Dispatch one Fetch request through a Fastify instance that is not listening.
  */
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
+
 export async function dispatchToFastify(
   server: FastifyInstance,
   request: Request,
@@ -97,7 +99,10 @@ export async function dispatchToFastify(
   const responseHeaders = new Headers();
   applyInjectHeaders({ ...result.headers }, responseHeaders);
 
-  return new Response(result.rawPayload, {
+  // The Fetch spec forbids a body on null-body statuses; `new Response(buffer, { status: 204 })`
+  // throws. A CORS preflight answers 204.
+  const body = NULL_BODY_STATUSES.has(result.statusCode) ? null : result.rawPayload;
+  return new Response(body, {
     status: result.statusCode,
     headers: responseHeaders,
   });

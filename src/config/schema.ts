@@ -15,7 +15,13 @@
  */
 
 import { z } from 'zod';
-import { RELEASE_MANIFEST, SPEC_018_PRODUCTION_AUTHORIZED, SPEC_VERSION } from '../release/pins.js';
+import { corsPinIssue, parseAllowedOrigins } from './cors-origins.js';
+import {
+  CORS_GUARD_SPEC_VERSION,
+  RELEASE_MANIFEST,
+  SPEC_018_PRODUCTION_AUTHORIZED,
+  SPEC_VERSION,
+} from '../release/pins.js';
 
 /** ENVIRONMENT.md §2. Exactly these logical environment classes exist. */
 export const ENVIRONMENT_CLASSES = ['LOCAL', 'TEST', 'STAGING', 'PRODUCTION'] as const;
@@ -242,6 +248,9 @@ const rawConfigSchema = z.object({
   // (src/auth/demo-fixed-code.ts). Allowed for LOCAL and synthetic STAGING.
   // Rejected for TEST and PRODUCTION.
   SUAS_DEMO_FIXED_CODE: optionalRaw,
+  // Comma-separated exact origins allowed to call the server cross-origin
+  // (src/http/origin-policy.ts). Unset or empty means no CORS headers at all.
+  SUAS_CORS_ALLOWED_ORIGINS: optionalRaw,
 });
 
 /** Log levels. Implementation mechanism; ENVIRONMENT.md §6 governs what may be logged. */
@@ -321,6 +330,12 @@ export interface SuasConfig {
    * requires the gates in src/auth/demo-fixed-code.ts.
    */
   readonly demoFixedCode: boolean;
+  /**
+   * Exact origins allowed to make cross-origin requests (CORS and browser writes).
+   * Empty means the feature is off. Parsed and validated from
+   * SUAS_CORS_ALLOWED_ORIGINS.
+   */
+  readonly corsAllowedOrigins: readonly string[];
 }
 
 function parsePositiveInt(
@@ -434,6 +449,15 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
       message:
         'SUAS_DEMO_FIXED_CODE=enabled is forbidden outside SUAS_ENV=LOCAL and SUAS_ENV=STAGING.',
     });
+  }
+
+  const corsOrigins = parseAllowedOrigins(raw.SUAS_CORS_ALLOWED_ORIGINS, environment);
+  for (const message of corsOrigins.issues) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  }
+  const corsPin = corsPinIssue(corsOrigins.origins, CORS_GUARD_SPEC_VERSION);
+  if (corsPin !== undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: corsPin });
   }
 
   const vaSandboxEnabled = raw.SUAS_VA_SANDBOX_OAUTH_ENABLED === 'true';
@@ -775,6 +799,7 @@ export function shapeConfig(
     demoFixedCode:
       (raw.SUAS_ENV === 'LOCAL' || raw.SUAS_ENV === 'STAGING') &&
       raw.SUAS_DEMO_FIXED_CODE === 'enabled',
+    corsAllowedOrigins: parseAllowedOrigins(raw.SUAS_CORS_ALLOWED_ORIGINS, raw.SUAS_ENV).origins,
   };
 }
 

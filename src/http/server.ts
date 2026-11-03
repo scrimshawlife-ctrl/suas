@@ -39,6 +39,7 @@ import { registerVeteranRoutes } from './routes/veterans.js';
 import { registerVaSandboxOAuthRoutes } from './routes/va-sandbox-oauth.js';
 import { registerDevRoutes } from './routes/dev.js';
 import { BROWSER_SECURITY_HEADERS, requiresNoStore } from './security-headers.js';
+import { registerOriginPolicy } from './origin-policy.js';
 import { demoFixedCodeFor } from '../auth/demo-fixed-code.js';
 
 export interface ServerDependencies {
@@ -157,6 +158,13 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       void reply.header('cache-control', 'no-store');
     }
     done(null, payload);
+  });
+
+  // Unsafe-request origin policy, preflight, and CORS response headers
+  // (SUAS-specs D-038, released in 0.7.0). Registered before any route so it covers all of them.
+  registerOriginPolicy(app, {
+    allowlist: new Set(deps.config.corsAllowedOrigins),
+    environment: deps.config.environment,
   });
 
   // API.md §6 canonical error body.

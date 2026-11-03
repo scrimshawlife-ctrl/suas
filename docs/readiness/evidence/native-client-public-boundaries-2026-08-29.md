@@ -53,3 +53,5 @@ This closes the runtime/public-Worker integration loop for the D-033 native case
 - No iOS or Android build/device acceptance claim.
 - No screen-reader or human workflow sign-off claim.
 - No CORS/browser-client support claim.
+
+> **Superseded in part (D-038, released in spec 0.7.0):** the `OPTIONS` row above is a 2026-08-29 observation. The server now answers CORS preflights for origins listed in `SUAS_CORS_ALLOWED_ORIGINS`. Native clients are unchanged: they use native HTTP and must not use a WebView or browser fetch.

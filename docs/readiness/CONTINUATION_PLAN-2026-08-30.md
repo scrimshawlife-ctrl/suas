@@ -133,18 +133,18 @@ Automated Chromium coverage is necessary but does not close human usability or a
 
 ## Verification matrix
 
-| Requirement                                                           | Current evidence                                                  | Remaining closure                                |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------ |
-| Both public hosts serve the same application                          | Canonical deployments, Chromium acceptance, direct HTTPS checks   | Recheck after every deployment-affecting change. |
-| Approved challenge reaches Resend                                     | Post-hardening run 33297787796 observed `sent`                    | Re-run after release-affecting auth changes.     |
-| Unknown and rejected challenges do not send                           | Run 33297787796 observed zero negative-path provider messages     | Re-run after release-affecting auth changes.     |
-| Cross-origin, oversized, and non-form writes fail before side effects | Integration tests and deployed Chromium acceptance                | Preserve in every release-affecting auth change. |
-| Authentication rate limits are persistent and actionable              | Database-backed integration plus deployed `429` and `Retry-After` | Network-signal threshold remains decision-gated. |
-| Cookie hardening and logout revocation                                | Integration suite                                                 | Owner-observed deployed sign-in and logout.      |
-| API remains bearer-only                                               | Integration and sanitized deployed evidence                       | Preserve after auth changes.                     |
-| Database remains synthetic and canonical                              | Hyperdrive inspection, migration workflow, staging provisioning   | Isolated backup restore remains blocked.         |
-| UI and accessibility are acceptable                                   | Automated rendering and reflow coverage                           | Human workflow and screen-reader sign-off.       |
-| No production authorization is implied                                | Fail-closed variables, docs, and workflows                        | Preserve all gates.                              |
+| Requirement                                              | Current evidence                                                  | Remaining closure                                |
+| -------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------ |
+| Both public hosts serve the same application             | Canonical deployments, Chromium acceptance, direct HTTPS checks   | Recheck after every deployment-affecting change. |
+| Approved challenge reaches Resend                        | Post-hardening run 33297787796 observed `sent`                    | Re-run after release-affecting auth changes.     |
+| Unknown and rejected challenges do not send              | Run 33297787796 observed zero negative-path provider messages     | Re-run after release-affecting auth changes.     |
+| Oversized and non-form writes fail before side effects   | Integration tests and deployed Chromium acceptance                | Preserve in every release-affecting auth change. |
+| Authentication rate limits are persistent and actionable | Database-backed integration plus deployed `429` and `Retry-After` | Network-signal threshold remains decision-gated. |
+| Cookie hardening and logout revocation                   | Integration suite                                                 | Owner-observed deployed sign-in and logout.      |
+| API remains bearer-only                                  | Integration and sanitized deployed evidence                       | Preserve after auth changes.                     |
+| Database remains synthetic and canonical                 | Hyperdrive inspection, migration workflow, staging provisioning   | Isolated backup restore remains blocked.         |
+| UI and accessibility are acceptable                      | Automated rendering and reflow coverage                           | Human workflow and screen-reader sign-off.       |
+| No production authorization is implied                   | Fail-closed variables, docs, and workflows                        | Preserve all gates.                              |
 
 ## Stop conditions
 
@@ -158,3 +158,5 @@ Stop and report rather than improvising if any of these occur:
 - Network/IP throttling would require inventing an unreleased threshold, trust policy, or retention rule.
 - Recovery work would require an unapproved database target or production data.
 - Work requires production effects, destructive D-007 execution, D-025 reporting, Android implementation, or another unreleased owner decision.
+
+> **Update (D-038, released in spec 0.7.0):** the 2026-08-30 "cross-origin writes return `401`" evidence is superseded. Unlisted cross-site browser writes now return `403 FORBIDDEN` under the origin policy in `src/http/origin-policy.ts`, and the `/app` cookie is `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty (`SameSite=Strict` otherwise). The historical runs above are unchanged.

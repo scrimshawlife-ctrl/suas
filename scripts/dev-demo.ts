@@ -227,7 +227,16 @@ function buildDemoEnv(
     SUAS_HTTP_PORT: String(port),
     SUAS_LOG_LEVEL: 'info',
     SUAS_VA_SANDBOX_OAUTH_ENABLED: 'false',
+    // Optional: exact origins allowed to call the demo cross-origin, for local frontends.
+    // Example: SUAS_CORS_ALLOWED_ORIGINS=http://localhost:5173 npm run dev:demo
+    // (refused at startup while this build pins a spec below 0.7.0; see corsPinIssue).
+    ...corsAllowedOriginsFromShell(),
   };
+}
+
+function corsAllowedOriginsFromShell(): Record<string, string> {
+  const value = process.env.SUAS_CORS_ALLOWED_ORIGINS?.trim();
+  return value ? { SUAS_CORS_ALLOWED_ORIGINS: value } : {};
 }
 
 function buildEnv(demo: Record<string, string>): Record<string, string> {
@@ -563,6 +572,10 @@ async function startServer(
     `SUAS_BROWSER_TENANT_ID:${TENANT_ID}`,
     '--var',
     `SUAS_SESSION_SECRET:${sessionSecret}`,
+    ...Object.entries(corsAllowedOriginsFromShell()).flatMap(([name, value]) => [
+      '--var',
+      `${name}:${value}`,
+    ]),
   ];
 
   const cmd = flags.node ? process.execPath : 'npx';

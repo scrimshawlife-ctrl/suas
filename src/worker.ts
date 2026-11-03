@@ -16,8 +16,10 @@ import { handleAsNodeRequest } from 'cloudflare:node';
 import { env as workerEnv } from 'cloudflare:workers';
 import { startApp, type StartedApp } from './app.js';
 import { ConfigurationError } from './config/index.js';
+import { parseAllowedOrigins } from './config/cors-origins.js';
 import { SchemaStateError } from './db/index.js';
 import { configSourceFromWorkerEnv, type WorkerBindings } from './worker/env.js';
+import { corsFallbackHeaders } from './http/origin-policy.js';
 
 export type { WorkerBindings, WorkerHyperdrive } from './worker/env.js';
 export { configSourceFromWorkerEnv } from './worker/env.js';
@@ -39,6 +41,28 @@ async function getIsolateApp(bindings: WorkerBindings): Promise<StartedApp> {
     throw error;
   });
   return isolateApp;
+}
+
+/**
+ * CORS headers for the 500 this entry builds itself (it bypasses Fastify). Best
+ * effort: an invalid allowlist yields none. The 503 NOT_READY response deliberately
+ * carries none, because startup validation failed and the allowlist cannot be trusted.
+ */
+function fallbackCorsHeaders(request: Request): Record<string, string> {
+  try {
+    const { origins, issues } = parseAllowedOrigins(
+      (workerEnv as WorkerBindings).SUAS_CORS_ALLOWED_ORIGINS,
+      (workerEnv as WorkerBindings).SUAS_ENV ?? '',
+    );
+    if (issues.length > 0) return {};
+    return corsFallbackHeaders(
+      request.headers.get('origin') ?? undefined,
+      new URL(request.url).pathname,
+      new Set(origins),
+    );
+  } catch {
+    return {};
+  }
 }
 
 function notReadyResponse(error: unknown): Response {
@@ -89,7 +113,7 @@ export default {
               message: 'Unexpected internal failure.',
             },
           },
-          { status: 500 },
+          { status: 500, headers: fallbackCorsHeaders(request) },
         );
       }
     } catch (error: unknown) {

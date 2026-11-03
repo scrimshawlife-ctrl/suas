@@ -33,31 +33,6 @@ function readCookie(request: FastifyRequest, name: string): string | undefined {
   return undefined;
 }
 
-export function assertSameOriginBrowserWrite(request: FastifyRequest): void {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
-  const fetchSite = request.headers['sec-fetch-site'];
-  // The browser's own same-origin post. /app pages send `referrer-policy: no-referrer`,
-  // so such a post carries `Origin: null`, which the Origin/Host comparison below cannot
-  // parse. `Sec-Fetch-Site` is a forbidden request header: a page cannot set or forge it.
-  if (fetchSite === 'same-origin') return;
-  if (fetchSite === 'cross-site') {
-    throw new UnauthenticatedError('Cross-origin browser requests are not accepted.');
-  }
-  const origin = request.headers.origin;
-  const host = request.headers.host;
-  if (typeof origin === 'string' && typeof host === 'string') {
-    let originHost: string | undefined;
-    try {
-      originHost = new URL(origin).host;
-    } catch {
-      originHost = undefined;
-    }
-    if (originHost !== host) {
-      throw new UnauthenticatedError('Cross-origin browser requests are not accepted.');
-    }
-  }
-}
-
 /** Extract the opaque session credential from the Authorization header. */
 export function readCredential(request: FastifyRequest): string | undefined {
   const header = request.headers.authorization;
@@ -68,9 +43,22 @@ export function readCredential(request: FastifyRequest): string | undefined {
 
 function readBrowserCredential(request: FastifyRequest): string | undefined {
   if (!request.url.split('?')[0]?.startsWith('/app')) return undefined;
-  const credential = readCookie(request, BROWSER_SESSION_COOKIE);
-  if (credential !== undefined) assertSameOriginBrowserWrite(request);
-  return credential;
+  // No Origin / Sec-Fetch-Site check here. With a non-empty CORS allowlist the cookie
+  // is `SameSite=None` and can ride on cross-site requests; CSRF is blocked earlier by
+  // the global origin policy (`registerOriginPolicy`), which rejects unsafe browser
+  // requests that are not same-origin or allowlisted, and cookie-carrying writes that
+  // send neither header. /app pages send `referrer-policy: no-referrer`, so
+  // browsers send `Origin: null` on same-origin form posts, which that policy
+  // accepts via `Sec-Fetch-Site: same-origin`.
+  return readCookie(request, BROWSER_SESSION_COOKIE);
+}
+
+/**
+ * True when `authenticate` would use the `/app` session cookie for this request: an
+ * `/app` request with the cookie and no Bearer credential.
+ */
+export function usesBrowserCookie(request: FastifyRequest): boolean {
+  return readCredential(request) === undefined && readBrowserCredential(request) !== undefined;
 }
 
 /**

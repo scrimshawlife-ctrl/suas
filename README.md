@@ -18,26 +18,26 @@ The former `demo.html` URL remains as a compatibility redirect to the Product UI
 
 Canonical released specs:
 
-- specification stack: `0.6.0`
-- specs merge pin: `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` (`src/release/pins.ts`)
-- manifest: `RELEASE_MANIFEST-0.6.0.md`
+- specification stack: `0.7.0`
+- specs merge pin: `2572520fa98ca62e038ae127096a5a9123479127` (`src/release/pins.ts`)
+- manifest: `RELEASE_MANIFEST-0.7.0.md`
 - current stage: `SPEC-018` (blocked); SPEC-017 evidence recorded against pin `0.6.0`
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - pilot readiness: `NOT_READY`
 - production readiness: `NOT_READY`
 - pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
-- application version: `0.2.0` (`package.json`), implements SUAS-specs `0.6.0`; see [CHANGELOG.md](CHANGELOG.md) and [RELEASING.md](RELEASING.md)
+- application version: `0.2.0` (`package.json`). Tag `v0.2.0` implements SUAS-specs `0.6.0`; `main` pins `0.7.0` (unreleased, see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`); see [CHANGELOG.md](CHANGELOG.md) and [RELEASING.md](RELEASING.md)
 - work tracking: [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6) (all four repositories)
 
 ## Product surfaces
 
 `SUAS-specs` is canonical. This repository is the web and API implementation. Keep all three implementation repositories in future considerations:
 
-| Repository                                                                              | Role                                                                                                                                                                                                                                          |
-| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | TypeScript Cloudflare Worker. JSON API `/api/v0`. HTML `/app`. OpenAPI document `docs/openapi/v0.json` (not served live). Auth is an opaque Bearer session credential, not cookies. Observed synthetic STAGING origin: `https://suasqrf.com`. |
-| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                        |
-| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                  |
+| Repository                                                                              | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | TypeScript Cloudflare Worker. JSON API `/api/v0`. HTML `/app`. OpenAPI document `docs/openapi/v0.json` (not served live). `/api/v0` auth is an opaque Bearer session credential; `/app` also accepts a session cookie (`SameSite=Strict`; `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty). Cross-origin access follows `SUAS_CORS_ALLOWED_ORIGINS` (D-038, released in spec 0.7.0). Observed synthetic STAGING origin: `https://suasqrf.com`. |
+| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 Native client contract: [`MOBILE_SURFACE.md`](https://github.com/scrimshawlife-ctrl/SUAS-specs/blob/main/MOBILE_SURFACE.md) (D-033).
 
@@ -379,7 +379,7 @@ Logical classes are `LOCAL`, `TEST`, `STAGING`, `PRODUCTION`. LOCAL/TEST/STAGING
 
 ## Release boundary
 
-v0.6.0 authorizes implementation but not production operation.
+v0.7.0 authorizes implementation but not production operation.
 
 Production-unavailable until later decision/evidence closure:
 

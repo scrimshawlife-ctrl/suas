@@ -1,7 +1,7 @@
 # AGENTS.md — SUAS implementation rules
 
-Released stack: `0.6.0`  
-Manifest: `RELEASE_MANIFEST-0.6.0.md` in `SUAS-specs`  
+Released stack: `0.7.0`  
+Manifest: `RELEASE_MANIFEST-0.7.0.md` in `SUAS-specs`  
 Authority: `RELEASED_FOR_IMPLEMENTATION`  
 Stage: `SPEC-018` (blocked). SPEC-017 evidence recorded against pin `0.6.0`.
 SPEC-018 owner packet: specs `SPEC018_OWNER_LAUNCH_PACKET.md` — settled `KEEP_BLOCKED` (`2026-09-26`).
@@ -9,17 +9,17 @@ Operator calls: specs `OPERATOR_CALLS_2026-09-25.md` (Neon preferred; no HIPAA-c
 
 Read `FABLE_HANDOFF.md` and `CONTEXT.md` first. Pin inventory: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md).
 
-Application version: `0.2.0` (`package.json`), implementing SUAS-specs `0.6.0`. Record changes in [CHANGELOG.md](CHANGELOG.md) and follow [RELEASING.md](RELEASING.md); do not tag without Danny's yes. Work is tracked on the [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6).
+Application version: `0.2.0` (`package.json`). Tag `v0.2.0` implements SUAS-specs `0.6.0`; `main` pins `0.7.0` (unreleased, see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`). Record changes in [CHANGELOG.md](CHANGELOG.md) and follow [RELEASING.md](RELEASING.md); do not tag without Danny's yes. Work is tracked on the [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6).
 
 ## Product surfaces
 
 `SUAS-specs` is canonical. This repository is the web and API implementation. Keep all three implementation repositories in future considerations:
 
-| Repository                                                                              | Role                                                                                                                                                                                                                                          |
-| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | TypeScript Cloudflare Worker. JSON API `/api/v0`. HTML `/app`. OpenAPI document `docs/openapi/v0.json` (not served live). Auth is an opaque Bearer session credential, not cookies. Observed synthetic STAGING origin: `https://suasqrf.com`. |
-| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                        |
-| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                  |
+| Repository                                                                              | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | TypeScript Cloudflare Worker. JSON API `/api/v0`. HTML `/app`. OpenAPI document `docs/openapi/v0.json` (not served live). `/api/v0` auth is an opaque Bearer session credential; `/app` also accepts a session cookie (`SameSite=Strict`; `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty). Cross-origin access follows `SUAS_CORS_ALLOWED_ORIGINS` (D-038, released in spec 0.7.0). Observed synthetic STAGING origin: `https://suasqrf.com`. |
+| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 Native client contract: `MOBILE_SURFACE.md` (D-033) in [`scrimshawlife-ctrl/SUAS-specs`](https://github.com/scrimshawlife-ctrl/SUAS-specs).
 

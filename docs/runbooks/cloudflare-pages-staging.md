@@ -12,8 +12,22 @@ would incorrectly put persistence and durable-job concerns on a request path.
 The supported synthetic STAGING topology remains the existing Cloudflare Worker
 for `/app` and `/api/v0`. GitHub Pages `docs/` remains a static poster only. A
 future Pages frontend is possible only as a separately approved static client
-that calls an explicitly authorized synthetic API, with an API/CORS/auth design
-review first.
+that calls an explicitly authorized synthetic API. The API/CORS/auth design is
+SUAS-specs D-038 (released in v0.7.0): the frontend's exact origin must be added to
+`SUAS_CORS_ALLOWED_ORIGINS`, set as the `SUAS_CORS_ALLOWED_ORIGINS` variable on the
+`suas-synthetic-staging` GitHub Environment and applied by the next `worker-deploy`
+run. Unset or empty keeps cross-origin access off. A Worker pinned below spec 0.7.0
+rejects a non-empty value at startup.
+
+**Which origin may be listed.** Only an owner-controlled custom domain that the owner
+operates under the same security standard as SUAS. Never list a Cloudflare Pages
+preview or `*.pages.dev` origin, or any other shared-hosting, preview, third-party, or
+user-content origin (SUAS-specs `AUTH.md` §9.3 trust boundary). Every listed origin gets
+credentialed, full read and write on the `/app` session of any signed-in user who visits
+it, so an XSS or takeover there is a full `/app` session compromise. A non-empty value
+also switches the `/app` session cookie from `SameSite=Strict` to `SameSite=None` at the
+next `worker-deploy`; Safari blocks and Firefox partitions third-party cookies, so a
+cross-site frontend should use Bearer.
 
 ## Observed implementation facts
 
@@ -44,7 +58,8 @@ Cloudflare credentials and explicitly approves a static frontend boundary.
 | Preview URL      | Cloudflare-generated preview URL | unknown until owner creation |
 | Custom domain    | none                             | not authorized               |
 
-Do not point a Pages preview at a pilot or production API. Do not publish
+Do not point a Pages preview at a pilot or production API, and never add a Pages
+preview URL to `SUAS_CORS_ALLOWED_ORIGINS`. Do not publish
 secrets through `VITE_*`, `NEXT_PUBLIC_*`, `PUBLIC_*`, or similar prefixes.
 
 ## Synthetic STAGING safety contract

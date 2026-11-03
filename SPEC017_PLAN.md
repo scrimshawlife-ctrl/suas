@@ -1,6 +1,6 @@
 # SPEC017_PLAN.md — Implementation conformance plan
 
-**Released spec (current pin):** `0.6.0` (`src/release/pins.ts`, `RELEASE_MANIFEST-0.6.0.md`)  
+**Released spec (current pin):** `0.7.0` (`src/release/pins.ts`, `RELEASE_MANIFEST-0.7.0.md`)  
 **Plan opened against:** `0.1.1`; slices 1–12 were recorded while the stack moved `0.1.1` → `0.6.0`  
 **Status:** `AUDITED` against pin `0.6.0` — see [docs/SPEC017_COMPLETION_AUDIT.md](docs/SPEC017_COMPLETION_AUDIT.md)  
 **Implementation repository:** `scrimshawlife-ctrl/SUAS`  
@@ -39,7 +39,7 @@ D-017 (Uber) and D-018 (Amadeus) stay adapter-local. Amadeus reservation stays b
 
 ## Objective
 
-Build against the current `0.6.0` contracts. Prove conformance. Do not turn on a production-blocked feature because code exists.
+Build against the current `0.7.0` contracts. Prove conformance. Do not turn on a production-blocked feature because code exists.
 
 ## Slice 1 — Foundation
 

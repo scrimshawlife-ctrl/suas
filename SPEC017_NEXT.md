@@ -1,7 +1,7 @@
 # What to build next
 
 **Date:** `2026-10-07`  
-**Pin:** `0.6.0` / `RELEASE_MANIFEST-0.6.0.md`  
+**Pin:** `0.7.0` / `RELEASE_MANIFEST-0.7.0.md`  
 **Still not ready:** production, pilot, `UI_CONFORMANCE`  
 **SPEC-017 status:** recorded against `0.6.0`; evidence YES on specs ([SPEC017_EVIDENCE_PACK.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC017_EVIDENCE_PACK.md)). Next is SPEC-018 prep only when owner opens launch decisions — do not start SPEC-018 work inventing product.
 
