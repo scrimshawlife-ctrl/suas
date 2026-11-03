@@ -10,7 +10,7 @@ import { BROWSER_AUTH_BODY_LIMIT_BYTES } from '../../src/http/routes/ui.js';
 import { validEnv } from '../helpers/env.js';
 
 const TENANT_ID = '11111111-1111-4111-8111-111111111111';
-/** Allowlisted cross-origin frontend (proposed SUAS-specs D-038). */
+/** Allowlisted cross-origin frontend (SUAS-specs D-038, released in 0.7.0). */
 const ALLOWED_ORIGIN = 'https://app.example.org';
 const FORM = 'application/x-www-form-urlencoded';
 let app: StartedApp;

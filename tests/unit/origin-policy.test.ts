@@ -1,4 +1,4 @@
-/** Browser origin policy and CORS helpers (proposed SUAS-specs D-038). */
+/** Browser origin policy and CORS helpers (SUAS-specs D-038, released in 0.7.0). */
 
 import { describe, expect, it } from 'vitest';
 import {

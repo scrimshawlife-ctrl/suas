@@ -93,13 +93,13 @@ async function inspectHost(base: string): Promise<Evidence['hosts'][number]> {
     },
   });
   // A cookie-authenticated write with neither Sec-Fetch-Site nor Origin is denied by the
-  // origin policy (proposed SUAS-specs D-038, AUTH.md section 9.3), before authentication.
+  // origin policy (SUAS-specs D-038, AUTH.md section 9.3, released in 0.7.0), before authentication.
   const headerlessCookieWrite = await request(`${base}/app/qrf/deploy`, {
     method: 'POST',
     headers: { cookie: '__Secure-suas_session=synthetic-invalid-evidence-value' },
   });
   // A cross-site origin that is not allowlisted is rejected by the origin policy
-  // (proposed SUAS-specs D-038) before authentication.
+  // (SUAS-specs D-038, released in 0.7.0) before authentication.
   const crossOriginWrite = await request(`${base}/app/qrf/deploy`, {
     method: 'POST',
     headers: {

@@ -1,5 +1,5 @@
 /**
- * CORS and preflight for every endpoint (proposed SUAS-specs D-038).
+ * CORS and preflight for every endpoint (SUAS-specs D-038, released in 0.7.0).
  * Default-off behaviour is covered by the second describe block.
  */
 

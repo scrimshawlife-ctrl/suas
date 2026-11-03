@@ -161,7 +161,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
   });
 
   // Unsafe-request origin policy, preflight, and CORS response headers
-  // (proposed SUAS-specs D-038). Registered before any route so it covers all of them.
+  // (SUAS-specs D-038, released in 0.7.0). Registered before any route so it covers all of them.
   registerOriginPolicy(app, {
     allowlist: new Set(deps.config.corsAllowedOrigins),
     environment: deps.config.environment,

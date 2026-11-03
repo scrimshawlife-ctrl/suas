@@ -1,4 +1,4 @@
-/** SUAS_CORS_ALLOWED_ORIGINS configuration rules (proposed SUAS-specs D-038). */
+/** SUAS_CORS_ALLOWED_ORIGINS configuration rules (SUAS-specs D-038, released in 0.7.0). */
 
 import { describe, expect, it } from 'vitest';
 import { ConfigurationError, loadConfig } from '../../src/config/index.js';

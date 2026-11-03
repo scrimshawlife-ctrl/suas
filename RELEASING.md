@@ -6,7 +6,7 @@ permission to deploy to production, run a pilot, or use real Veteran data.
 
 The application version is separate from the SUAS-specs stack version. Every
 release states the stack it implements, for example "Implements SUAS-specs
-0.6.0" (SUAS-specs `VERSIONING.md` sections 3 and 8). The spec pin itself lives
+0.7.0" (SUAS-specs `VERSIONING.md` sections 3 and 8). The spec pin itself lives
 in `src/release/pins.ts`.
 
 ## Version rules (pre-1.0)
@@ -33,7 +33,7 @@ in `src/release/pins.ts`.
 
    ```bash
    git checkout main && git pull
-   git tag -a v0.3.0 -m "suas v0.3.0 (implements SUAS-specs 0.6.0)"
+   git tag -a v0.3.0 -m "suas v0.3.0 (implements SUAS-specs 0.7.0)"
    git push origin v0.3.0
    ```
 

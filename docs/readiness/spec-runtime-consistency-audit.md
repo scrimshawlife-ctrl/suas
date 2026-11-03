@@ -1,10 +1,10 @@
 # Spec / runtime consistency audit
 
-Living pin row audited 2026-09-17. Historical D-011 identity stays `0.2.0`.
+Living pin row re-audited 2026-11-02 (0.7.0 re-pin). Historical D-011 identity stays `0.2.0`.
 
 | Pin            | Runtime                                           | Specs                     | Status                                               |
 | -------------- | ------------------------------------------------- | ------------------------- | ---------------------------------------------------- |
-| Spec stack     | `SUAS_SPEC_VERSION=0.6.0` (`src/release/pins.ts`) | RELEASE_MANIFEST-0.6.0.md | Aligned 2026-09-17                                   |
+| Spec stack     | `SUAS_SPEC_VERSION=0.7.0` (`src/release/pins.ts`) | RELEASE_MANIFEST-0.7.0.md | Aligned 2026-11-02                                   |
 | API selector   | `/api/v0`                                         | API.md §2                 | Aligned                                              |
 | Questionnaire  | `qv-001` required at scoring                      | SIGNAL_SCORING.md B5      | Aligned (#59)                                        |
 | Signal version | `sv-001`                                          | D-011 / released at 0.2.0 | Aligned; inherited by 0.6.0                          |

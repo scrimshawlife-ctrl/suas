@@ -19,7 +19,7 @@ const HTTP_ALLOWED_ENVIRONMENTS = new Set(['LOCAL', 'TEST']);
 const SHARED_ENVIRONMENTS = new Set(['STAGING', 'PRODUCTION']);
 const IPV4_LITERAL = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 
-/** First released spec stack that would carry D-038 (proposed). */
+/** First released spec stack that carries D-038 (SUAS-specs 0.7.0). */
 export const CORS_MIN_SPEC_VERSION = '0.7.0';
 
 /** True when `hostname` (as normalised by URL) is a loopback name or an IP literal. */

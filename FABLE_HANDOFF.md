@@ -2,11 +2,11 @@
 
 ## Canonical release
 
-Build against `scrimshawlife-ctrl/SUAS-specs` release **v0.6.0**.
+Build against `scrimshawlife-ctrl/SUAS-specs` release **v0.7.0**.
 
-- Specs merge pin: `fb27e54114c003c15f7bc74254e0c26c0da1ec0a` (`src/release/pins.ts`)
-- Manifest: `RELEASE_MANIFEST-0.6.0.md`
-- Decision ledger: `RELEASE_DECISIONS-0.6.0.md` (D-004); inherited `RELEASE_DECISIONS-0.5.0.md` / `0.4.0.md` (D-035); `RELEASE_DECISIONS-0.3.0.md` (D-033); `RELEASE_DECISIONS-0.2.0.md` (D-011); `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise.
+- Specs merge pin: `2572520fa98ca62e038ae127096a5a9123479127` (`src/release/pins.ts`)
+- Manifest: `RELEASE_MANIFEST-0.7.0.md`
+- Decision ledger: `RELEASE_DECISIONS-0.7.0.md` (D-038, with the D-037 record); inherited `RELEASE_DECISIONS-0.6.0.md` (D-004); `RELEASE_DECISIONS-0.5.0.md` / `0.4.0.md` (D-035); `RELEASE_DECISIONS-0.3.0.md` (D-033); `RELEASE_DECISIONS-0.2.0.md` (D-011); `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise.
 - Current stage: SPEC-018 (blocked); SPEC-017 evidence recorded against pin `0.6.0`
 - Production/pilot readiness: `NOT_READY`
 - Pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
@@ -19,7 +19,7 @@ Build against `scrimshawlife-ctrl/SUAS-specs` release **v0.6.0**.
 4. `SPEC017_PLAN.md` and `SPEC017_NEXT.md`.
 5. In `SUAS-specs`: `HANDOFF.md`.
 6. `ENVIRONMENT.md`.
-7. `RELEASE_MANIFEST-0.6.0.md`.
+7. `RELEASE_MANIFEST-0.7.0.md`.
 8. `STATUS.md`, `PRODUCT.md`, `GLOSSARY.md`.
 9. `ARCHITECTURE.md`, `DOMAIN_MODEL.md`, `DATA_MODEL.md`, `API.md`, `APIS.md`, `TESTING.md`.
 10. Domain files for the slice you are implementing.
@@ -57,7 +57,7 @@ Slices 1–12 are already recorded. Do not restart at Slice 1. Follow [SPEC017_N
 
 Keep these separate:
 
-- spec stack: `0.6.0`;
+- spec stack: `0.7.0`;
 - application version: implementation-owned;
 - API version: `/api/v0`;
 - event schema: `0.1.0` until revised;
