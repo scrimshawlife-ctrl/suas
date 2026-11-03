@@ -143,6 +143,7 @@ describe('HTML passwordless sign-in', () => {
 
   it.each([
     ['Origin: null on a cross-site request', 'null', 'cross-site'],
+    ['Origin: null on a same-site request', 'null', 'same-site'],
     ['a sibling same-site origin that is not allowlisted', 'https://sibling.example', 'same-site'],
     ['Origin: null with no Sec-Fetch-Site', 'null', undefined],
     ['a foreign Origin with no Sec-Fetch-Site', 'https://attacker.example', undefined],
