@@ -33,6 +33,8 @@ export interface ServiceRequest {
   readonly category: ServiceCategory;
   readonly status: ServiceRequestStatus;
   readonly details: JsonObject;
+  /** The user who created the request (DISPATCH.md §4 "creator"). */
+  readonly createdBy: string;
 }
 
 interface RequestRow {
@@ -42,9 +44,11 @@ interface RequestRow {
   category: ServiceCategory;
   status: ServiceRequestStatus;
   details: JsonObject;
+  created_by: string;
 }
 
-const REQUEST_COLUMNS = 'service_request_id, tenant_id, case_id, category, status, details';
+const REQUEST_COLUMNS =
+  'service_request_id, tenant_id, case_id, category, status, details, created_by';
 
 function toRequest(row: RequestRow): ServiceRequest {
   return {
@@ -54,6 +58,7 @@ function toRequest(row: RequestRow): ServiceRequest {
     category: row.category,
     status: row.status,
     details: row.details,
+    createdBy: row.created_by,
   };
 }
 

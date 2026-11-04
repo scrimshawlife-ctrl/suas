@@ -11,12 +11,13 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
-import { assertResponder, ResourceNotVisibleError } from '../../authz/index.js';
+import { assertResponder, ForbiddenError, ResourceNotVisibleError } from '../../authz/index.js';
 import type { AuthContext } from '../../authz/index.js';
 import { requireDisclosure } from '../../consent/index.js';
 import {
   createServiceRequest,
   executeServiceRequestCommandInTx,
+  findActiveAssignment,
   findCase,
   findServiceRequest,
   listCaseServiceRequests,
@@ -25,6 +26,7 @@ import {
   type ServiceRequest,
   type ServiceRequestCommand,
 } from '../../coordination/index.js';
+import type { Queryable } from '../../db/index.js';
 import type { JsonObject } from '../../jobs/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
@@ -75,6 +77,29 @@ async function assertCaseAccess(
   const owner = supportCase.veteranUserId === context.userId;
   if (!owner) assertResponder(context);
   return { owner };
+}
+
+/**
+ * DISPATCH.md §4 names the *assigned* Responder as the actor for every
+ * responder transition. The one wider row is `CREATED → SUBMITTED`, whose actor
+ * is "creator / assigned Responder", so the responder who created the request
+ * may also submit it. A tenant RESPONDER role alone is not enough.
+ *
+ * Runs inside the command transaction: CASES.md §5 requires authorization to
+ * be re-checked at mutation time, not trusted from an earlier read.
+ */
+async function assertAssignedResponder(
+  db: Queryable,
+  context: AuthContext,
+  serviceRequest: ServiceRequest,
+  command: ServiceRequestCommand,
+): Promise<void> {
+  const assignment = await findActiveAssignment(db, serviceRequest.caseId);
+  if (assignment?.responderUserId === context.userId) return;
+  if (command === 'SUBMIT' && serviceRequest.createdBy === context.userId) return;
+  throw new ForbiddenError(
+    'Only the responder assigned to this case may run this command (SUAS-specs DISPATCH.md §4).',
+  );
 }
 
 function actorTypeFor(context: AuthContext, owner: boolean): 'VETERAN' | 'RESPONDER' {
@@ -196,6 +221,9 @@ export function registerServiceRequestRoutes(
         requestFingerprint: fingerprint,
       },
       async (tx) => {
+        if (actorType === 'RESPONDER') {
+          await assertAssignedResponder(tx, context, serviceRequest, command);
+        }
         const updated = await executeServiceRequestCommandInTx(
           tx,
           {

@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  ALERTS_UNAVAILABLE_REASON,
   assertRequiredElementsPresent,
   auditAccessibility,
   CATEGORY_CARDS,
@@ -413,7 +414,7 @@ describe('MVP_REFERENCE.md §9 — no fabricated responder metrics', () => {
     shell,
     duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
     activeNeeds: [],
-    alerts: [],
+    alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
     quickShareCategories: [],
     metrics: [
       { label: 'Responses', state: 'NOT_COMPUTABLE', reason: 'No released definition' },
@@ -457,7 +458,7 @@ describe('API.md §5 — responder HTML queue cursors', () => {
         },
       ],
       activeNextCursor: 'cursor-active-2',
-      alerts: [],
+      alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
       quickShareCategories: [],
       metrics: [],
     });
@@ -473,7 +474,7 @@ describe('API.md §5 — responder HTML queue cursors', () => {
       duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
       unassignedNeeds: [],
       activeNeeds: [],
-      alerts: [],
+      alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
       quickShareCategories: [],
       metrics: [],
     });
@@ -506,13 +507,31 @@ describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty is not a recorded fact', () 
     shell,
     duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
     activeNeeds: [],
-    alerts: [],
+    alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
     quickShareCategories: [],
     metrics: [],
   });
   const availability = renderResponderAvailability({
     shell: { title: 'On Duty', viewport: 'MOBILE', showMobileNav: true },
     duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
+  });
+
+  it('says alerts are unavailable instead of claiming there are none', () => {
+    expect(dashboard).toContain(ALERTS_UNAVAILABLE_REASON);
+    expect(dashboard).not.toContain('No alerts.');
+  });
+
+  it('renders "No alerts." only for an available, empty alert list', () => {
+    const empty = renderResponderDashboard({
+      shell,
+      duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
+      activeNeeds: [],
+      alerts: { status: 'AVAILABLE', items: [] },
+      quickShareCategories: [],
+      metrics: [],
+    });
+    expect(empty).toContain('No alerts.');
+    expect(empty).not.toContain(ALERTS_UNAVAILABLE_REASON);
   });
 
   it('keeps the On Duty landmark on both responder surfaces', () => {
@@ -742,7 +761,7 @@ describe('HTML command targets stay on registered /app routes', () => {
       shell,
       duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
       activeNeeds: [],
-      alerts: [],
+      alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
       quickShareCategories: [],
       metrics: [],
     });

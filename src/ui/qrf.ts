@@ -18,7 +18,7 @@
  * reads as still searching.
  */
 
-import type { ServiceRequestStatus } from '../coordination/index.js';
+import { findRequestTransition, type ServiceRequestStatus } from '../coordination/index.js';
 
 /** MVP_REFERENCE.md §7.2, verbatim. */
 export const QRF_UI_STATES = [
@@ -55,13 +55,40 @@ export interface QrfFacts {
   readonly matchingExhausted: boolean;
 }
 
+/**
+ * Statuses that are only reachable through `ACCEPTED`. DISPATCH.md §2 orders
+ * the spine `ACCEPTED → IN_PROGRESS → FULFILLED → CONFIRMED → CLOSED`, so each
+ * of these carries the acceptance evidence the §7.2 `RESPONDER_ACCEPTED` row
+ * rests on. Falling through to `SEARCHING` would tell a veteran whose request
+ * was fulfilled that SUAS is still looking for a responder.
+ */
+const ACCEPTANCE_RECORDED: readonly ServiceRequestStatus[] = [
+  'ACCEPTED',
+  'IN_PROGRESS',
+  'FULFILLED',
+  'CONFIRMED',
+  'CLOSED',
+];
+
+/**
+ * Whether the veteran may still cancel: true exactly when DISPATCH.md §4
+ * documents a `CANCEL` edge from this status. Offering cancel anywhere else
+ * shows an action the domain would refuse with `ILLEGAL_TRANSITION`.
+ */
+function isCancellable(status: ServiceRequestStatus): boolean {
+  return findRequestTransition('CANCEL', status) !== undefined;
+}
+
 export interface QrfPresentation {
   readonly state: QrfUiState;
   /** Short, direct veteran-facing line. §4.2 low cognitive load. */
   readonly headline: string;
   /** The canonical fact this label rests on, for audit and review. */
   readonly basis: string;
-  /** Whether the veteran may still cancel. §7.2 preserves cancel. */
+  /**
+   * Whether the veteran may still cancel. §7.2 preserves cancel; DISPATCH.md §4
+   * decides from which statuses it exists.
+   */
   readonly cancellable: boolean;
 }
 
@@ -73,21 +100,23 @@ export interface QrfPresentation {
  * requires the *truthful* state to be the visible one.
  */
 export function presentQrfState(facts: QrfFacts): QrfPresentation {
+  const cancellable = isCancellable(facts.requestStatus);
+
   if (facts.requestStatus === 'CANCELLED') {
     return {
       state: 'CANCELLED',
       headline: 'Request cancelled.',
       basis: 'Service Request status CANCELLED',
-      cancellable: false,
+      cancellable,
     };
   }
 
-  if (facts.requestStatus === 'ACCEPTED' || facts.requestStatus === 'IN_PROGRESS') {
+  if (ACCEPTANCE_RECORDED.includes(facts.requestStatus)) {
     return {
       state: 'RESPONDER_ACCEPTED',
       headline: 'A responder accepted your request.',
       basis: `Service Request status ${facts.requestStatus}`,
-      cancellable: true,
+      cancellable,
     };
   }
 
@@ -96,7 +125,7 @@ export function presentQrfState(facts: QrfFacts): QrfPresentation {
       state: 'DEGRADED',
       headline: 'We are having trouble coordinating right now. Your request is still recorded.',
       basis: 'A coordination dependency failed closed',
-      cancellable: true,
+      cancellable,
     };
   }
 
@@ -113,7 +142,7 @@ export function presentQrfState(facts: QrfFacts): QrfPresentation {
         facts.requestStatus === 'MATCHING'
           ? 'Matching completed with no available responder'
           : `Service Request status ${facts.requestStatus}`,
-      cancellable: true,
+      cancellable,
     };
   }
 
@@ -122,7 +151,7 @@ export function presentQrfState(facts: QrfFacts): QrfPresentation {
       state: 'RESPONDER_NOTIFIED',
       headline: 'A responder has been notified.',
       basis: 'Active assignment plus a recorded notification delivery',
-      cancellable: true,
+      cancellable,
     };
   }
 
@@ -131,7 +160,7 @@ export function presentQrfState(facts: QrfFacts): QrfPresentation {
       state: 'REQUESTED',
       headline: 'Your request is recorded.',
       basis: `Service Request status ${facts.requestStatus}`,
-      cancellable: true,
+      cancellable,
     };
   }
 
@@ -143,7 +172,7 @@ export function presentQrfState(facts: QrfFacts): QrfPresentation {
     basis: facts.responderAssigned
       ? 'Active assignment with no recorded notification delivery'
       : `Service Request status ${facts.requestStatus}`,
-    cancellable: true,
+    cancellable,
   };
 }
 

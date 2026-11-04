@@ -149,6 +149,47 @@ describe('MVP_REFERENCE.md §7.2 — QRF truthfulness', () => {
     expect(presentation.cancellable).toBe(false);
   });
 
+  it.each(['FULFILLED', 'CONFIRMED', 'CLOSED'] as const)(
+    'keeps a %s request on RESPONDER_ACCEPTED instead of falling back to SEARCHING',
+    (requestStatus) => {
+      const presentation = presentQrfState(facts({ requestStatus, responderAssigned: true }));
+      expect(presentation.state).toBe('RESPONDER_ACCEPTED');
+      expect(presentation.headline).not.toContain('Looking for');
+    },
+  );
+
+  it('offers cancel exactly where DISPATCH.md §4 documents a CANCEL edge', () => {
+    const cancellable = [
+      'CREATED',
+      'SUBMITTED',
+      'TRIAGED',
+      'MATCHING',
+      'ASSIGNED',
+      'ACCEPTED',
+      'IN_PROGRESS',
+    ] as const;
+    const notCancellable = [
+      'FULFILLED',
+      'CONFIRMED',
+      'CLOSED',
+      'CANCELLED',
+      'DECLINED',
+      'EXPIRED',
+      'UNFULFILLABLE',
+      'ESCALATED',
+    ] as const;
+    for (const requestStatus of cancellable) {
+      expect(presentQrfState(facts({ requestStatus })).cancellable, requestStatus).toBe(true);
+    }
+    for (const requestStatus of notCancellable) {
+      expect(presentQrfState(facts({ requestStatus })).cancellable, requestStatus).toBe(false);
+    }
+    // A degraded path or an exhausted match does not change the domain's edges.
+    expect(
+      presentQrfState(facts({ requestStatus: 'MATCHING', coordinationDegraded: true })).cancellable,
+    ).toBe(true);
+  });
+
   it('maps every released request status to a label without falling through', () => {
     const statuses = [
       'CREATED',

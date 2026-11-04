@@ -187,8 +187,18 @@ describe('CASES.md §5 — atomic claim', () => {
       claimCase(pool, { tenantId, caseId: supportCase.caseId, responderUserId: responder.userId }),
     ]);
 
-    const winners = outcomes.filter((outcome) => outcome.status === 'fulfilled');
-    expect(winners).toHaveLength(1);
+    // CASES.md §5 item 5: the responder's repeated claim is a replay of the same
+    // logical command, so it may also succeed, but only ever with the one
+    // winning assignment.
+    const winningIds = new Set(
+      outcomes.flatMap((outcome) =>
+        outcome.status === 'fulfilled' ? [outcome.value.assignment.caseAssignmentId] : [],
+      ),
+    );
+    expect(winningIds.size).toBe(1);
+    const otherWon = outcomes[1].status === 'fulfilled';
+    const responderWon = outcomes[0].status === 'fulfilled' || outcomes[2].status === 'fulfilled';
+    expect(otherWon !== responderWon).toBe(true);
 
     const assignments = await pool.query(
       `SELECT 1 FROM case_assignments WHERE case_id = $1 AND status = 'ACTIVE'`,
@@ -204,6 +214,36 @@ describe('CASES.md §5 — atomic claim', () => {
       claimCase(pool, { tenantId, caseId: supportCase.caseId, responderUserId: other.userId }),
     ]);
 
+    const events = await listAggregateEvents(pool, {
+      tenantId,
+      aggregateType: 'SupportCase',
+      aggregateId: supportCase.caseId,
+    });
+    expect(events.filter((event) => event.eventType === 'CASE_ASSIGNED')).toHaveLength(1);
+  });
+
+  it('replays a repeated claim by the holding responder with the original result', async () => {
+    const { tenantId, responder, supportCase } = await scenario();
+    const first = await claimCase(pool, {
+      tenantId,
+      caseId: supportCase.caseId,
+      responderUserId: responder.userId,
+      expectedStatus: 'OPEN',
+    });
+    // Same logical command, same expectedStatus, after the case moved on.
+    const again = await claimCase(pool, {
+      tenantId,
+      caseId: supportCase.caseId,
+      responderUserId: responder.userId,
+      expectedStatus: 'OPEN',
+    });
+    expect(again.assignment.caseAssignmentId).toBe(first.assignment.caseAssignmentId);
+    expect(again.supportCase.status).toBe(first.supportCase.status);
+
+    const assignments = await pool.query(`SELECT 1 FROM case_assignments WHERE case_id = $1`, [
+      supportCase.caseId,
+    ]);
+    expect(assignments.rowCount).toBe(1);
     const events = await listAggregateEvents(pool, {
       tenantId,
       aggregateType: 'SupportCase',

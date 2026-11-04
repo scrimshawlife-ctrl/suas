@@ -15,6 +15,14 @@ import {
 import { authenticate } from '../authenticate.js';
 
 const COOKIE = '__Host-suas-va-pkce';
+
+/**
+ * Where a completed callback returns the veteran: the veteran home
+ * (`GET /app/home`). VETERAN_VERIFICATION.md requires that the "callback return
+ * restores understandable context", so this must name a registered `/app`
+ * route, never a path that answers 404.
+ */
+export const VA_SANDBOX_RETURN_PATH = '/app/home';
 const MAX_AGE_SECONDS = 10 * 60;
 
 function cookieVerifier(request: { headers: { cookie?: string | undefined } }): string | undefined {
@@ -164,7 +172,7 @@ export function registerVaSandboxOAuthRoutes(
         .header('cache-control', 'no-store')
         .header('referrer-policy', 'no-referrer')
         .header('set-cookie', `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`)
-        .redirect('/app/veteran?va_sandbox_verification=recorded');
+        .redirect(`${VA_SANDBOX_RETURN_PATH}?va_sandbox_verification=recorded`);
     } catch {
       return reply
         .status(502)

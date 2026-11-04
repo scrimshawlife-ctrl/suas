@@ -270,3 +270,22 @@ describe('CASE_COMMANDS over /api/v0', () => {
     expect(foreign.statusCode).toBe(404);
   });
 });
+
+describe('CASES.md §5 item 5 — claim replay over /api/v0', () => {
+  it('returns the original assignment to the holding responder and 409 to anyone else', async () => {
+    const { tenantId, supportCase } = await openRedCase();
+    const responder = await membership(tenantId, 'RESPONDER');
+    const other = await membership(tenantId, 'RESPONDER', responder.organizationId);
+    const url = `/api/v0/cases/${supportCase.caseId}/commands/claim`;
+
+    const first = await app.server.inject({ method: 'POST', url, headers: responder.headers });
+    expect(first.statusCode).toBe(200);
+    const replay = await app.server.inject({ method: 'POST', url, headers: responder.headers });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json().assignment_id).toBe(first.json().assignment_id);
+    expect(replay.json().status).toBe(first.json().status);
+
+    const loser = await app.server.inject({ method: 'POST', url, headers: other.headers });
+    expect(loser.statusCode).toBe(409);
+  });
+});

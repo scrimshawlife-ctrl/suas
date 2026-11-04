@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ConfigurationError } from '../../src/config/index.js';
 import { startApp, type StartedApp } from '../../src/app.js';
+import { VA_SANDBOX_RETURN_PATH } from '../../src/http/routes/va-sandbox-oauth.js';
 import { createSession } from '../../src/auth/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -83,6 +84,23 @@ describe('D-035 disabled configuration', () => {
 });
 
 describe('D-035 VA sandbox routes', () => {
+  it('returns a completed callback to a page that exists', async () => {
+    const auth = await freshCredential();
+    const home = await app.server.inject({
+      method: 'GET',
+      url: `${VA_SANDBOX_RETURN_PATH}?va_sandbox_verification=recorded`,
+      headers: { authorization: `Bearer ${auth}` },
+    });
+    expect(home.statusCode).toBe(200);
+    // The path the callback used to send veterans to has no handler.
+    const old = await app.server.inject({
+      method: 'GET',
+      url: '/app/veteran?va_sandbox_verification=recorded',
+      headers: { authorization: `Bearer ${auth}` },
+    });
+    expect(old.statusCode).toBe(404);
+  });
+
   it('requires authentication for onboarding and callback', async () => {
     for (const url of ['/auth/va/onboarding', '/auth/va/callback']) {
       const response = await app.server.inject({ method: 'GET', url });
