@@ -320,7 +320,7 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
             openedLabel: 'Opened 20 minutes ago',
           },
         ],
-        alerts: ['One request is waiting for acknowledgement.'],
+        alerts: { status: 'AVAILABLE', items: ['One request is waiting for acknowledgement.'] },
         quickShareCategories: OPERATIONAL_CARDS,
         metrics: UNDEFINED_METRICS,
       }),

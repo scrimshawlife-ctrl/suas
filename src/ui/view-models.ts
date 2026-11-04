@@ -375,6 +375,19 @@ export type DutyAvailability = {
 export const DUTY_UNAVAILABLE_REASON =
   'On-duty is not a recorded fact. This build does not store responder availability.';
 
+/**
+ * Responder Alerts. MVP_REFERENCE.md §4.8 requires operational states to be
+ * visible and truthful: no released alert source exists (D-043 is not
+ * released), so the live dashboard says alerts are unavailable rather than
+ * "No alerts.", which would claim there is nothing to see.
+ */
+export type ResponderAlerts =
+  | { readonly status: 'UNAVAILABLE'; readonly reason: string }
+  | { readonly status: 'AVAILABLE'; readonly items: readonly string[] };
+
+/** Live and fixture copy for the unavailable alerts state. */
+export const ALERTS_UNAVAILABLE_REASON = 'Alerts are not available yet.';
+
 export interface ResponderDashboardViewModel {
   readonly shell: ShellViewModel;
   readonly duty: DutyAvailability;
@@ -391,7 +404,7 @@ export interface ResponderDashboardViewModel {
    * is complete. Surfaces link it as `active_cursor`.
    */
   readonly activeNextCursor?: string;
-  readonly alerts: readonly string[];
+  readonly alerts: ResponderAlerts;
   /** §9.3 Quick Resource Share covers the released MVP capabilities only. */
   readonly quickShareCategories: readonly CategoryCard[];
   readonly metrics: readonly ResponderMetricViewModel[];

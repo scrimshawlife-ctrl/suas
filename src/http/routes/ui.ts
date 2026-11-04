@@ -104,6 +104,7 @@ import { cancelQrf, deployQrf } from '../../ui/commands.js';
 import { D_012_APPROVED_SAFETY_COPY } from '../../ui/safety.js';
 import {
   CATEGORY_CARDS,
+  ALERTS_UNAVAILABLE_REASON,
   DUTY_UNAVAILABLE_REASON,
   categoryForCard,
   NonOperationalCategoryError,
@@ -1015,7 +1016,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
           : {}),
         activeNeeds: mine.cases.map((supportCase) => toNeed(supportCase, false)),
         ...(mine.nextCursor !== undefined ? { activeNextCursor: mine.nextCursor } : {}),
-        alerts: [],
+        alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
         quickShareCategories: CATEGORY_CARDS.filter((card) => card.disposition === 'OPERATIONAL'),
         // §9: no released definition for these, so no value is displayed.
         metrics: [

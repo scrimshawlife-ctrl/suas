@@ -101,6 +101,7 @@ export {
 } from './surfaces.js';
 export { MIN_TARGET_PX, PRIMARY_TARGET_PX, STYLESHEET } from './theme.js';
 export {
+  ALERTS_UNAVAILABLE_REASON,
   DUTY_UNAVAILABLE_REASON,
   VIEWPORT_CLASSES,
   type ActiveNeedsViewModel,

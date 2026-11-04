@@ -758,12 +758,14 @@ export function renderResponderDashboard(model: ResponderDashboardViewModel): st
     section(
       { 'aria-labelledby': 'alerts' },
       h2({ id: 'alerts' }, 'Alerts'),
-      model.alerts.length === 0
-        ? p({ class: 'muted' }, 'No alerts.')
-        : ul(
-            {},
-            model.alerts.map((alert) => li({}, alert)),
-          ),
+      model.alerts.status === 'UNAVAILABLE'
+        ? p({ class: 'muted' }, model.alerts.reason)
+        : model.alerts.items.length === 0
+          ? p({ class: 'muted' }, 'No alerts.')
+          : ul(
+              {},
+              model.alerts.items.map((alert) => li({}, alert)),
+            ),
     ),
     // §9.3: Quick Resource Share covers released capabilities only.
     section(
