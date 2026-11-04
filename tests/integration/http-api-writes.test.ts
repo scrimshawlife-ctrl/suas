@@ -175,6 +175,81 @@ describe('Service Request create + SUBMIT', () => {
   });
 });
 
+describe('DISPATCH.md §4 — responder commands need the assigned Responder', () => {
+  async function command(
+    srId: string,
+    name: string,
+    headers: Record<string, string>,
+  ): Promise<{ statusCode: number; json: () => { status?: string; error?: { code: string } } }> {
+    return app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${srId}/commands/${name}`,
+      headers: { ...headers, 'idempotency-key': `sr-${name}-${randomUUID()}` },
+      payload: {},
+    });
+  }
+
+  async function submittedRequest() {
+    const opened = await openRedCase();
+    const created = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${opened.supportCase.caseId}/service-requests`,
+      headers: { ...opened.headers, 'idempotency-key': `sr-create-${randomUUID()}` },
+      payload: { category: 'FOOD' },
+    });
+    expect(created.statusCode).toBe(201);
+    const srId = created.json().service_request_id as string;
+    expect((await command(srId, 'SUBMIT', opened.headers)).statusCode).toBe(200);
+    return { ...opened, srId };
+  }
+
+  it('refuses an unassigned responder and leaves the request unchanged', async () => {
+    const { tenantId, srId, headers } = await submittedRequest();
+    const outsider = await responderFor(tenantId);
+    const refused = await command(srId, 'TRIAGE', outsider.headers);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().error?.code).toBe('FORBIDDEN');
+    const read = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/service-requests/${srId}`,
+      headers,
+    });
+    expect(read.json()).toMatchObject({ status: 'SUBMITTED' });
+  });
+
+  it('lets the responder who claimed the case run the command', async () => {
+    const { tenantId, srId, supportCase } = await submittedRequest();
+    const assigned = await responderFor(tenantId);
+    const claimed = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${supportCase.caseId}/commands/claim`,
+      headers: assigned.headers,
+    });
+    expect(claimed.statusCode).toBe(200);
+    const triaged = await command(srId, 'TRIAGE', assigned.headers);
+    expect(triaged.statusCode).toBe(200);
+    expect(triaged.json()).toMatchObject({ status: 'TRIAGED' });
+  });
+
+  it('lets the creating responder submit, but not another unassigned responder', async () => {
+    const { tenantId, supportCase } = await openRedCase();
+    const creator = await responderFor(tenantId);
+    const other = await responderFor(tenantId);
+    const created = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
+      headers: { ...creator.headers, 'idempotency-key': `sr-create-${randomUUID()}` },
+      payload: { category: 'FOOD' },
+    });
+    expect(created.statusCode).toBe(201);
+    const srId = created.json().service_request_id as string;
+    expect((await command(srId, 'SUBMIT', other.headers)).statusCode).toBe(403);
+    const submitted = await command(srId, 'SUBMIT', creator.headers);
+    expect(submitted.statusCode).toBe(200);
+    expect(submitted.json()).toMatchObject({ status: 'SUBMITTED' });
+  });
+});
+
 describe('Follow-Ups', () => {
   it('lets a responder create and complete a follow-up', async () => {
     const { tenantId, supportCase } = await openRedCase();
