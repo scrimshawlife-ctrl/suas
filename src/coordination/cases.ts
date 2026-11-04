@@ -290,10 +290,26 @@ export interface AssignmentResult {
  */
 export async function claimCase(pool: Pool, input: ClaimCaseInput): Promise<AssignmentResult> {
   return withTransaction(pool, async (tx) => {
-    const supportCase = await lockCase(tx, input.tenantId, input.caseId, input.expectedStatus);
+    // Lock without the expected-status check: a replay carries the same
+    // expectedStatus as the original claim, which the winning claim has already
+    // moved past.
+    const supportCase = await lockCase(tx, input.tenantId, input.caseId);
+
+    // CASES.md §5 item 5: replay by the same logical command returns the
+    // original winning result. The responder who already holds the active
+    // assignment gets it back, with no new write and no second CASE_ASSIGNED
+    // (§5 item 6).
+    const held = await findActiveAssignment(tx, input.caseId);
+    if (held?.responderUserId === input.responderUserId) {
+      return { supportCase, assignment: held };
+    }
+
+    if (input.expectedStatus !== undefined && supportCase.status !== input.expectedStatus) {
+      throw new StaleCaseStateError(input.expectedStatus, supportCase.status);
+    }
     const transition = resolveCaseTransition('CLAIM_CASE', supportCase.status);
 
-    if (await findActiveAssignment(tx, input.caseId)) {
+    if (held !== undefined) {
       throw new CaseAlreadyClaimedError();
     }
 
