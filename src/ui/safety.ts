@@ -4,8 +4,7 @@
  * Spec citations:
  * - SUAS-specs SAFETY.md §2 (approved on-screen safety copy is released by D-012
  *   in SAFETY_COPY.md; implementations render it and must not invent alternative
- *   crisis wording presented as official; authorized destinations are 911, 988
- *   call or text, and Veterans Crisis Line text 838255)
+ *   crisis wording presented as official; authorized destinations are 911 / 988)
  * - SUAS-specs SAFETY.md §3.1 (show the veteran the *approved* crisis-resource list)
  * - SUAS-specs SAFETY.md §5.1 / SAFETY_COPY.md §5 (state truthfulness)
  * - SUAS-specs SAFETY.md §9 (`RED` surfaces the approved-resource slot and does
@@ -40,18 +39,17 @@ export interface ApprovedCrisisResource {
 }
 
 /**
- * SAFETY_COPY.md §0 approved crisis destinations. 911 and 988 (call or text)
- * are D-012. The Veterans Crisis Line text number 838255 is approved alongside
- * them. Veterans can also reach the Veterans Crisis Line via 988, press 1.
- * Owner decision 2026-11-05, recorded in suas-specs DECISIONS.md.
- * No other hotline number, URL, or agency contact is approved.
+ * Pinned spec 0.7.0 SAFETY_COPY released destinations: 911 and 988 (call or text)
+ * only. No tracking parameters and no other released number.
  */
-export const APPROVED_CRISIS_DESTINATIONS = [
-  'tel:911',
-  'tel:988',
-  'sms:988',
-  'sms:838255',
-] as const;
+export const APPROVED_CRISIS_DESTINATIONS = ['tel:911', 'tel:988', 'sms:988'] as const;
+
+/**
+ * 838255 (sms:838255, Text 838255): owner-decided as D-050 on 2026-11-05,
+ * pending a spec release; the pinned spec 0.7.0 SAFETY_COPY authorizes only
+ * 911 and 988.
+ */
+export const PENDING_RELEASE_CRISIS_DESTINATIONS = ['sms:838255'] as const;
 
 /**
  * SAFETY_COPY.md §1.1 primary actions (D-012).
