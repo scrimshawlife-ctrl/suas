@@ -295,7 +295,8 @@ describe('accepter-only commands', () => {
     const triage = (who: Person) =>
       app.server.inject({
         method: 'POST',
-        url: `/api/v0/service-requests/${serviceRequestId}/commands/TRIAGE`,
+        // Accepting moved the request to ACCEPTED; START is the accepter's next command.
+        url: `/api/v0/service-requests/${serviceRequestId}/commands/START`,
         headers: keyed(who),
         payload: {},
       });
@@ -305,7 +306,7 @@ describe('accepter-only commands', () => {
     expect((await triage(requester)).statusCode).toBe(403);
     const done = await triage(accepter);
     expect(done.statusCode).toBe(200);
-    expect(done.json().status).toBe('TRIAGED');
+    expect(done.json().status).toBe('IN_PROGRESS');
 
     const logContact = (who: Person) =>
       app.server.inject({
