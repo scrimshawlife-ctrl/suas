@@ -97,7 +97,7 @@ export const DRILLS: readonly DrillDefinition[] = [
   },
   {
     id: 'REVOKE_THEN_REQUEST_ON_ANOTHER_INSTANCE',
-    description: '§17.11 session/membership revoke followed by request on another app instance',
+    description: '§17.11 session revoke followed by request on another app instance',
     invariant: '§18 session revocation remains authoritative across instances',
   },
   {

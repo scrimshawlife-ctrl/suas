@@ -52,7 +52,7 @@ export type DenialReason =
   | 'NO_MATCHING_GRANT'
   /** A system basis was claimed but does not apply to this disclosure. */
   | 'SYSTEM_BASIS_NOT_APPLICABLE'
-  /** Responder case-assignment basis could not be verified. */
+  /** Case-assignment basis (the person who accepted the case) could not be verified. */
   | 'ASSIGNMENT_NOT_VERIFIABLE'
   /** The veteran is not enrolled and active. */
   | 'VETERAN_NOT_ENROLLED';
@@ -87,15 +87,14 @@ export type ConsentDecision =
 
 export interface ConsentEvaluationDeps {
   /**
-   * Confirms an active case assignment, for `RESPONDER_CASE_ASSIGNMENT`.
+   * Confirms an active case assignment, for `CASE_ASSIGNMENT`.
    *
-   * CaseAssignment arrives in SPEC017_PLAN.md Slice 5. Until a verifier is
-   * supplied, that basis cannot be established and evaluation denies rather than
-   * assuming an assignment exists.
+   * Until a verifier is supplied, that basis cannot be established and evaluation
+   * denies rather than assuming an assignment exists.
    */
   readonly verifyActiveAssignment?: (params: {
     tenantId: string;
-    responderUserId: string;
+    acceptedByUserId: string;
     veteranUserId: string;
   }) => Promise<boolean>;
 }
@@ -117,7 +116,7 @@ async function veteranIsEnrolled(
  * Validate a claimed system basis.
  *
  * CONSENT.md §3.5 permits internal system action that discloses to no third
- * party. §3.6 permits an assigned Responder's least-privilege case access. Both
+ * party. §3.6 permits the accepter's least-privilege case access. Both
  * still require the veteran to be enrolled and the action to be in product scope.
  */
 async function evaluateSystemBasis(
@@ -134,8 +133,8 @@ async function evaluateSystemBasis(
     return { allowed: true, basis };
   }
 
-  // RESPONDER_CASE_ASSIGNMENT
-  if (request.granteeType !== 'RESPONDER') {
+  // CASE_ASSIGNMENT
+  if (request.granteeType !== 'USER') {
     return { allowed: false, reason: 'SYSTEM_BASIS_NOT_APPLICABLE' };
   }
   if (deps.verifyActiveAssignment === undefined) {
@@ -143,7 +142,7 @@ async function evaluateSystemBasis(
   }
   const assigned = await deps.verifyActiveAssignment({
     tenantId: request.tenantId,
-    responderUserId: request.granteeId,
+    acceptedByUserId: request.granteeId,
     veteranUserId: request.veteranUserId,
   });
   return assigned

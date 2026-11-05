@@ -3,11 +3,11 @@
  *
  * Spec citations:
  * - SUAS-specs AUTH.md §5 — sessions are server-revocable opaque credentials;
- *   any healthy instance must observe revocation and membership/user status
+ *   any healthy instance must observe revocation and user status
  *   changes; session validity cannot depend on the issuing process; in-flight
  *   authorization after revocation re-evaluates authoritative state.
  * - SUAS-specs AUTH.md §5 "Invalidation triggers" — logout, user
- *   SUSPENDED/REVOKED, membership revoke, MFA reset, admin force logout, idle and
+ *   SUSPENDED/REVOKED, MFA reset, admin force logout, idle and
  *   absolute timeout.
  * - SUAS-specs SECURITY.md §2 — revocable sessions, no long-lived unrevocable
  *   bearer credentials (AUTH.md §10).
@@ -31,7 +31,6 @@ export interface Session {
   readonly sessionId: string;
   readonly tenantId: string;
   readonly userId: string;
-  readonly organizationId: string | undefined;
   readonly mfaElevatedAt: Date | undefined;
   readonly issuedAt: Date;
   readonly lastSeenAt: Date;
@@ -45,21 +44,10 @@ export interface IssuedSession {
   readonly credential: string;
 }
 
-export class InvalidSessionOrganizationError extends Error {
-  readonly code = 'FORBIDDEN';
-  readonly httpStatus = 403;
-
-  constructor() {
-    super('A session organization must be an active organization membership.');
-    this.name = 'InvalidSessionOrganizationError';
-  }
-}
-
 interface SessionRow {
   session_id: string;
   tenant_id: string;
   user_id: string;
-  organization_id: string | null;
   mfa_elevated_at: Date | null;
   issued_at: Date;
   last_seen_at: Date;
@@ -68,7 +56,7 @@ interface SessionRow {
 }
 
 const SESSION_COLUMNS = `
-  session_id, tenant_id, user_id, organization_id, mfa_elevated_at,
+  session_id, tenant_id, user_id, mfa_elevated_at,
   issued_at, last_seen_at, expires_at, revoked_at
 `;
 
@@ -77,7 +65,6 @@ function toSession(row: SessionRow): Session {
     sessionId: row.session_id,
     tenantId: row.tenant_id,
     userId: row.user_id,
-    organizationId: row.organization_id ?? undefined,
     mfaElevatedAt: row.mfa_elevated_at ?? undefined,
     issuedAt: row.issued_at,
     lastSeenAt: row.last_seen_at,
@@ -89,33 +76,18 @@ function toSession(row: SessionRow): Session {
 export async function createSession(
   db: Queryable,
   sessionSecret: string | undefined,
-  input: { tenantId: string; userId: string; organizationId?: string },
+  input: { tenantId: string; userId: string },
 ): Promise<IssuedSession> {
-  if (input.organizationId !== undefined) {
-    const membership = await db.query(
-      `SELECT 1
-       FROM organization_memberships m
-       JOIN organizations o ON o.organization_id = m.organization_id
-       WHERE m.tenant_id = $1 AND m.user_id = $2 AND m.organization_id = $3
-         AND m.status = 'ACTIVE' AND o.status = 'ACTIVE'`,
-      [input.tenantId, input.userId, input.organizationId],
-    );
-    if ((membership.rowCount ?? 0) === 0) {
-      throw new InvalidSessionOrganizationError();
-    }
-  }
-
   const credential = generateOpaqueToken();
   const result = await db.query<SessionRow>(
     `INSERT INTO sessions
-       (session_id, tenant_id, user_id, organization_id, credential_hash, expires_at)
-     VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))
+       (session_id, tenant_id, user_id, credential_hash, expires_at)
+     VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))
      RETURNING ${SESSION_COLUMNS}`,
     [
       randomUUID(),
       input.tenantId,
       input.userId,
-      input.organizationId ?? null,
       hashCredential(sessionSecret, credential),
       SESSION_ABSOLUTE_TTL_SECONDS.value,
     ],
@@ -146,7 +118,7 @@ export async function resolveSession(
   credential: string,
 ): Promise<SessionResolution> {
   const result = await db.query<SessionRow & { user_status: UserStatus; user_deleted: boolean }>(
-    `SELECT s.session_id, s.tenant_id, s.user_id, s.organization_id, s.mfa_elevated_at,
+    `SELECT s.session_id, s.tenant_id, s.user_id, s.mfa_elevated_at,
             s.issued_at, s.last_seen_at, s.expires_at, s.revoked_at,
             u.status AS user_status,
             (u.deleted_at IS NOT NULL) AS user_deleted
@@ -195,8 +167,8 @@ export async function revokeSession(
 
 /**
  * Revoke every live session for a user.
- * AUTH.md §5: the trigger for logout-everywhere, status change, membership
- * revoke, MFA reset, and admin force logout.
+ * AUTH.md §5: the trigger for logout-everywhere, status change, MFA
+ * reset, and admin force logout.
  */
 export async function revokeAllUserSessions(
   db: Queryable,

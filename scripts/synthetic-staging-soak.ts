@@ -55,8 +55,8 @@ const FIXED_READ_ONLY_REQUESTS: readonly FixedRequest[] = Object.freeze([
   { id: 'resource_catalog', path: '/api/v0/resources?limit=20', credential: 'veteran' },
   { id: 'veteran_self', path: '/api/v0/veterans/me', credential: 'veteran' },
   {
-    id: 'responder_unassigned_cases',
-    path: '/api/v0/cases?ownership=unassigned&limit=20',
+    id: 'open_service_requests',
+    path: '/api/v0/service-requests?ownership=open&limit=20',
     credential: 'responder',
   },
 ]);

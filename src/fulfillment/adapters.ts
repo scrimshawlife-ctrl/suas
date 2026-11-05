@@ -36,7 +36,7 @@ const ALL_CAPABILITIES: readonly ServiceCategory[] = [
 /**
  * Manual coordination.
  *
- * A responder does the work by phone or in person. Nothing is transmitted, so
+ * The accepter does the work by phone or in person. Nothing is transmitted, so
  * this adapter needs no disclosure projection — and that is exactly why manual
  * paths stay available while the released capability projections are undefined.
  *

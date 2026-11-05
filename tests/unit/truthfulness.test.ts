@@ -27,8 +27,8 @@ function facts(overrides: TruthfulnessFacts = {}): TruthfulnessFacts {
 function qrf(overrides: Partial<QrfFacts> = {}): QrfFacts {
   return {
     requestStatus: 'SUBMITTED',
-    responderAssigned: false,
-    responderNotificationDelivered: false,
+    assigned: false,
+    assignedNotificationDelivered: false,
     coordinationDegraded: false,
     matchingExhausted: false,
     ...overrides,

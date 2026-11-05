@@ -31,7 +31,8 @@ export async function resetKernelTables(pool: Pool): Promise<void> {
              service_providers, follow_ups, settlements, service_requests,
              contact_attempts, case_notes, case_assignments, support_cases,
              sessions, auth_challenges, auth_rate_limits,
-             suas_admin_grants, organization_memberships, organizations, users
+             suas_admin_grants, chat_messages, chat_threads, service_request_drafts,
+             resource_drafts, users
     RESTART IDENTITY CASCADE
   `);
 }

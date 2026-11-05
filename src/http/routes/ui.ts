@@ -35,35 +35,9 @@ import {
   verifyAndCreateSession,
   type ChallengeDeliveryPort,
 } from '../../auth/index.js';
-import {
-  assertMfaElevated,
-  assertResponder,
-  assertSuasAdmin,
-  hasTenantRole,
-  ResourceNotVisibleError,
-} from '../../authz/index.js';
+import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
 import type { SafetyCopyMode, SupportSignalMode, SuasConfig } from '../../config/index.js';
-import {
-  CaseAlreadyClaimedError,
-  CaseNotFoundError,
-  claimCase,
-  ClosedCaseError,
-  CONTACT_CHANNELS,
-  CONTACT_OUTCOMES,
-  createServiceRequest,
-  DEFAULT_PAGE_SIZE,
-  findActiveAssignment,
-  findCase,
-  findNonClosedCase,
-  IllegalCaseTransitionError,
-  listCaseServiceRequests,
-  listContactAttempts,
-  MAX_PAGE_SIZE,
-  NoActiveAssignmentError,
-  readCaseQueue,
-  recordContact,
-  SERVICE_CATEGORIES,
-} from '../../coordination/index.js';
+import { findNonClosedCase, SERVICE_CATEGORIES } from '../../coordination/index.js';
 import { withTransaction } from '../../db/index.js';
 import { appendAuditEvent } from '../../events/index.js';
 import {
@@ -104,11 +78,8 @@ import { cancelQrf, deployQrf } from '../../ui/commands.js';
 import { D_012_APPROVED_SAFETY_COPY } from '../../ui/safety.js';
 import {
   CATEGORY_CARDS,
-  ALERTS_UNAVAILABLE_REASON,
-  DUTY_UNAVAILABLE_REASON,
   categoryForCard,
   NonOperationalCategoryError,
-  renderActiveNeeds,
   renderAdminOverview,
   renderAdminPlannedSurface,
   renderChat,
@@ -124,11 +95,7 @@ import {
   renderTrustedContactsList,
   renderResourceCategories,
   renderResourceList,
-  renderResponderAvailability,
-  renderResponderCase,
-  renderResponderDashboard,
   renderVeteranHome,
-  type ActiveNeedViewModel,
   type ResourceRowViewModel,
   type ShellViewModel,
 } from '../../ui/index.js';
@@ -201,11 +168,11 @@ const BROWSER_AUTH_ROUTE_OPTIONS = {
 } as const;
 
 const joinQuery = z.object({
-  role: z.enum(['veteran', 'responder']).optional().default('veteran'),
+  role: z.enum(['veteran']).optional().default('veteran'),
 });
 const browserChallengeBody = z.object({
   destination: z.string().email().max(320),
-  role: z.enum(['veteran', 'responder']),
+  role: z.enum(['veteran']),
 });
 const browserVerifyBody = browserChallengeBody.extend({
   code: z.string().min(1).max(512),
@@ -513,7 +480,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
           browserCookieSameSite(config.corsAllowedOrigins),
         ),
       );
-      return reply.redirect(body.role === 'responder' ? '/app/responder' : '/app/home', 303);
+      return reply.redirect('/app/home', 303);
     } catch (error: unknown) {
       if (!(error instanceof ChallengeVerificationFailedError)) throw error;
       return reply
@@ -846,16 +813,6 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       .max(RESOURCE_MAX_PAGE_SIZE)
       .default(RESOURCE_DEFAULT_PAGE_SIZE),
   });
-  const responderQueueQuery = z.object({
-    unassigned_cursor: z.string().min(1).max(512).optional(),
-    active_cursor: z.string().min(1).max(512).optional(),
-    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
-  });
-  const activeNeedsQuery = z.object({
-    cursor: z.string().min(1).max(512).optional(),
-    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
-  });
-
   app.get('/app/resources', async (request, reply) => {
     await authenticate(pool, sessionSecret, request);
     await reply
@@ -948,272 +905,9 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         availability: {
           status: 'UNAVAILABLE',
           reason:
-            'Messaging is not available yet. Your responder will contact you through ' +
+            'Messaging is not available yet. The person who accepts your request will contact you through ' +
             'the channels you have consented to.',
         },
-      }),
-    );
-  });
-
-  // --- Responder surfaces ----------------------------------------------------
-
-  function toNeed(
-    supportCase: {
-      caseId: string;
-      status: string;
-      prioritySignalLevel?: string | undefined;
-    },
-    claimable: boolean,
-  ): ActiveNeedViewModel {
-    return {
-      caseId: supportCase.caseId,
-      caseStatus: supportCase.status,
-      category: 'Support Case',
-      openedLabel: 'Opened',
-      ...(supportCase.prioritySignalLevel !== undefined
-        ? { prioritySignalLevel: supportCase.prioritySignalLevel }
-        : {}),
-      ...(claimable ? { claimable: true } : {}),
-    };
-  }
-
-  app.get('/app/responder', async (request, reply) => {
-    const context = await authenticate(pool, sessionSecret, request);
-    const query = responderQueueQuery.parse(request.query ?? {});
-    const isResponder = hasTenantRole(context, ['RESPONDER']);
-    const unassigned = isResponder
-      ? await readCaseQueue(
-          pool,
-          context.tenantId,
-          { ownership: 'unassigned' },
-          {
-            limit: query.limit,
-            ...(query.unassigned_cursor !== undefined ? { cursor: query.unassigned_cursor } : {}),
-          },
-        )
-      : { cases: [], nextCursor: undefined };
-    const mine = isResponder
-      ? await readCaseQueue(
-          pool,
-          context.tenantId,
-          { ownership: 'mine', responderUserId: context.userId },
-          {
-            limit: query.limit,
-            ...(query.active_cursor !== undefined ? { cursor: query.active_cursor } : {}),
-          },
-        )
-      : { cases: [], nextCursor: undefined };
-
-    await reply.type(HTML).send(
-      renderResponderDashboard({
-        shell: shell('Responder', { viewport: 'DESKTOP' }),
-        // G-I-30: on-duty is not a recorded fact. State unavailability rather
-        // than inventing a roster or posting a no-op that would look like a write.
-        duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-        unassignedNeeds: unassigned.cases.map((supportCase) => toNeed(supportCase, true)),
-        ...(unassigned.nextCursor !== undefined
-          ? { unassignedNextCursor: unassigned.nextCursor }
-          : {}),
-        activeNeeds: mine.cases.map((supportCase) => toNeed(supportCase, false)),
-        ...(mine.nextCursor !== undefined ? { activeNextCursor: mine.nextCursor } : {}),
-        alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
-        quickShareCategories: CATEGORY_CARDS.filter((card) => card.disposition === 'OPERATIONAL'),
-        // §9: no released definition for these, so no value is displayed.
-        metrics: [
-          { label: 'Responses', state: 'NOT_COMPUTABLE', reason: 'No released definition' },
-          { label: 'Avg Response', state: 'NOT_COMPUTABLE', reason: 'No released definition' },
-        ],
-      }),
-    );
-  });
-
-  app.get('/app/responder/availability', async (request, reply) => {
-    const context = await authenticate(pool, sessionSecret, request);
-    assertResponder(context);
-    // G-I-30: on-duty is not a recorded fact. GET is display-only; POST stays 404.
-    await reply.type(HTML).send(
-      renderResponderAvailability({
-        shell: shell('On Duty', { viewport: 'DESKTOP' }),
-        duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-      }),
-    );
-  });
-
-  const logContactBody = z.object({
-    channel: z.enum(CONTACT_CHANNELS),
-    outcome: z.enum(CONTACT_OUTCOMES),
-  });
-
-  const createServiceRequestBody = z.object({
-    category: z.enum(SERVICE_CATEGORIES),
-  });
-
-  app.get<{ Params: { id: string } }>('/app/responder/cases/:id', async (request, reply) => {
-    const context = await authenticate(pool, sessionSecret, request);
-    assertResponder(context);
-    const caseId = pathParams(request, 'case-id').id;
-    if (caseId === undefined) throw new ResourceNotVisibleError();
-    const supportCase = await findCase(pool, context.tenantId, caseId);
-    if (supportCase === undefined) {
-      throw new ResourceNotVisibleError();
-    }
-    const claimable = supportCase.status === 'OPEN' || supportCase.status === 'TRIAGED';
-    const assignment = await findActiveAssignment(pool, supportCase.caseId);
-    const canLogContact = assignment?.responderUserId === context.userId;
-    const canCreateServiceRequest = supportCase.status !== 'CLOSED';
-    // Sequential reads: Worker Hyperdrive Client-per-query is safer than
-    // parallel pool.query under nodejs_compat.
-    const attempts = await listContactAttempts(pool, context.tenantId, supportCase.caseId, 50);
-    const serviceRequests = await listCaseServiceRequests(
-      pool,
-      context.tenantId,
-      supportCase.caseId,
-      50,
-    );
-    await reply.type(HTML).send(
-      renderResponderCase({
-        shell: shell('Case', { viewport: 'DESKTOP' }),
-        need: toNeed(supportCase, claimable),
-        contactAttempts: attempts.map((attempt) => ({
-          channel: attempt.channel,
-          outcome: attempt.outcome,
-          attemptedAtLabel: new Date(attempt.attemptedAt).toISOString(),
-        })),
-        serviceRequests: serviceRequests.map((request) => ({
-          category: request.category,
-          status: request.status,
-        })),
-        ...(canLogContact ? { canLogContact: true } : {}),
-        ...(canCreateServiceRequest ? { canCreateServiceRequest: true } : {}),
-      }),
-    );
-  });
-
-  app.post<{ Params: { id: string } }>(
-    '/app/responder/cases/:id/service-requests',
-    async (request, reply) => {
-      const context = await authenticate(pool, sessionSecret, request);
-      assertResponder(context);
-      const caseId = pathParams(request, 'case-id').id;
-      if (caseId === undefined) throw new ResourceNotVisibleError();
-      const supportCase = await findCase(pool, context.tenantId, caseId);
-      if (supportCase === undefined) {
-        throw new ResourceNotVisibleError();
-      }
-      const body = createServiceRequestBody.parse(request.body ?? {});
-      try {
-        await withTransaction(pool, (tx) =>
-          createServiceRequest(tx, {
-            tenantId: context.tenantId,
-            caseId,
-            category: body.category,
-            createdBy: context.userId,
-            actorType: 'RESPONDER',
-            correlationId: String(request.id),
-          }),
-        );
-      } catch (error) {
-        if (error instanceof CaseNotFoundError || error instanceof ClosedCaseError) {
-          throw new ResourceNotVisibleError();
-        }
-        throw error;
-      }
-      return reply.redirect(`/app/responder/cases/${caseId}`, 303);
-    },
-  );
-
-  app.post<{ Params: { id: string } }>(
-    '/app/responder/cases/:id/commands/log-contact-attempt',
-    async (request, reply) => {
-      const context = await authenticate(pool, sessionSecret, request);
-      assertResponder(context);
-      const caseId = pathParams(request, 'case-id').id;
-      if (caseId === undefined) throw new ResourceNotVisibleError();
-      const supportCase = await findCase(pool, context.tenantId, caseId);
-      if (supportCase === undefined) {
-        throw new ResourceNotVisibleError();
-      }
-      const body = logContactBody.parse(request.body ?? {});
-      try {
-        await recordContact(pool, {
-          tenantId: context.tenantId,
-          caseId,
-          responderUserId: context.userId,
-          command: 'log-contact-attempt',
-          channel: body.channel,
-          outcome: body.outcome,
-          correlationId: String(request.id),
-        });
-      } catch (error) {
-        if (error instanceof NoActiveAssignmentError) {
-          throw new ResourceNotVisibleError();
-        }
-        throw error;
-      }
-      return reply.redirect(`/app/responder/cases/${caseId}`, 303);
-    },
-  );
-
-  app.post<{ Params: { id: string } }>(
-    '/app/responder/cases/:id/commands/claim',
-    async (request, reply) => {
-      const context = await authenticate(pool, sessionSecret, request);
-      assertResponder(context);
-      const caseId = pathParams(request, 'case-id').id;
-      if (caseId === undefined) throw new ResourceNotVisibleError();
-      const existing = await findCase(pool, context.tenantId, caseId);
-      if (existing === undefined) {
-        throw new ResourceNotVisibleError();
-      }
-      // CLAIM_CASE is documented from OPEN/TRIAGED only. A same-responder
-      // replay arrives when the case is already ASSIGNED, so treat "already
-      // mine" as success rather than an illegal edge.
-      const held = await findActiveAssignment(pool, caseId);
-      if (held !== undefined) {
-        if (held.responderUserId === context.userId) {
-          return reply.redirect('/app/responder', 303);
-        }
-        throw new CaseAlreadyClaimedError();
-      }
-      try {
-        await claimCase(pool, {
-          tenantId: context.tenantId,
-          caseId,
-          responderUserId: context.userId,
-          correlationId: String(request.id),
-        });
-      } catch (error) {
-        if (
-          !(error instanceof CaseAlreadyClaimedError) &&
-          !(error instanceof IllegalCaseTransitionError)
-        ) {
-          throw error;
-        }
-        const assignment = await findActiveAssignment(pool, caseId);
-        if (assignment?.responderUserId !== context.userId) throw error;
-      }
-      return reply.redirect('/app/responder', 303);
-    },
-  );
-
-  app.get('/app/responder/needs', async (request, reply) => {
-    const context = await authenticate(pool, sessionSecret, request);
-    const query = activeNeedsQuery.parse(request.query ?? {});
-    const queue = await readCaseQueue(
-      pool,
-      context.tenantId,
-      { ownership: 'mine', responderUserId: context.userId },
-      {
-        limit: query.limit,
-        ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
-      },
-    );
-
-    await reply.type(HTML).send(
-      renderActiveNeeds({
-        shell: shell('Active Needs', { viewport: 'DESKTOP' }),
-        needs: queue.cases.map((supportCase) => toNeed(supportCase, false)),
-        ...(queue.nextCursor !== undefined ? { nextCursor: queue.nextCursor } : {}),
       }),
     );
   });
@@ -1291,7 +985,6 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   });
 
   const plannedAdminRoutes = [
-    ['/app/admin/organizations', 'Organizations'],
     ['/app/admin/access', 'Access'],
     ['/app/admin/artifacts', 'Published artifacts'],
     ['/app/admin/providers', 'Provider adapters'],

@@ -33,7 +33,7 @@ export const FOLLOW_UP_STATUSES = [
 ] as const;
 export type FollowUpStatus = (typeof FOLLOW_UP_STATUSES)[number];
 
-export const RESPONSIBLE_TYPES = ['RESPONDER', 'VETERAN', 'ORG_ADMIN', 'SYSTEM'] as const;
+export const RESPONSIBLE_TYPES = ['USER', 'VETERAN', 'SYSTEM'] as const;
 export type ResponsibleType = (typeof RESPONSIBLE_TYPES)[number];
 
 /** SETTLEMENT.md §4. `undefined` means unclassified, which blocks resolution. */
@@ -129,7 +129,7 @@ export interface CreateFollowUpInput {
   readonly serviceRequestId?: string;
   readonly resolutionDisposition?: ResolutionDisposition;
   readonly actorId: string;
-  readonly actorType: 'RESPONDER' | 'ORG_ADMIN' | 'SYSTEM';
+  readonly actorType: 'USER' | 'SYSTEM';
   readonly correlationId?: string;
 }
 
@@ -363,7 +363,7 @@ export interface CompleteFollowUpInput {
   readonly tenantId: string;
   readonly followUpId: string;
   readonly actorId: string;
-  readonly actorType: 'RESPONDER' | 'VETERAN' | 'ORG_ADMIN' | 'SYSTEM';
+  readonly actorType: 'USER' | 'VETERAN' | 'SYSTEM';
   readonly correlationId?: string;
 }
 
@@ -445,7 +445,7 @@ export async function rescheduleFollowUp(
     newDueAt: Date;
     reason: string;
     actorId: string;
-    actorType: 'RESPONDER' | 'ORG_ADMIN' | 'SYSTEM';
+    actorType: 'USER' | 'SYSTEM';
   },
 ): Promise<FollowUp> {
   if (input.reason.trim() === '') {
@@ -568,7 +568,7 @@ export async function setResolutionDisposition(
 /**
  * Record a coordination attempt.
  *
- * FOLLOWUP.md §4: this counter means a responder tried the required check-back
+ * FOLLOWUP.md §4: this counter means the accepter tried the required check-back
  * and could not complete it. Notification send retries, webhook retries, queue
  * redelivery, and worker replay must never reach this function.
  */
@@ -607,7 +607,7 @@ async function recordFollowUpAudit(
     aggregateType: 'FollowUp',
     aggregateId: input.followUpId,
     tenantId: input.tenantId,
-    actorType: input.actorId === undefined ? 'SYSTEM' : 'RESPONDER',
+    actorType: input.actorId === undefined ? 'SYSTEM' : 'USER',
     actorId: input.actorId ?? 'follow-up-scheduler',
     payload: input.payload,
   });

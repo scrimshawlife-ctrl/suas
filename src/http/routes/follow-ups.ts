@@ -11,8 +11,8 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
-import { assertResponder, ResourceNotVisibleError } from '../../authz/index.js';
-import { findCase } from '../../coordination/index.js';
+import { ResourceNotVisibleError } from '../../authz/index.js';
+import { assertAccepter, resolveCaseAccess } from '../case-access.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import {
@@ -57,31 +57,22 @@ function publicFollowUp(followUp: FollowUp) {
   };
 }
 
-async function assertCaseAccess(pool: Pool, tenantId: string, userId: string, caseId: string) {
-  const supportCase = await findCase(pool, tenantId, caseId);
-  if (supportCase === undefined) throw new ResourceNotVisibleError();
-  const owner = supportCase.veteranUserId === userId;
-  return { supportCase, owner };
-}
-
 export function registerFollowUpRoutes(app: FastifyInstance, deps: FollowUpRouteDeps): void {
   app.get(`${API_PREFIX}/cases/:caseId/follow-ups`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { caseId } = caseIdParams.parse(request.params);
-    const { owner } = await assertCaseAccess(deps.pool, context.tenantId, context.userId, caseId);
-    if (!owner) assertResponder(context);
+    await resolveCaseAccess(deps.pool, context, caseId);
     const open = await listOpenFollowUps(deps.pool, context.tenantId, caseId);
     return { follow_ups: open.map(publicFollowUp) };
   });
 
   app.post(`${API_PREFIX}/follow-ups`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    assertResponder(context);
     const body = createBody.parse(request.body);
-    await assertCaseAccess(deps.pool, context.tenantId, context.userId, body.case_id);
-    // Responder already asserted; case must exist in tenant (assertCaseAccess).
-    const supportCase = await findCase(deps.pool, context.tenantId, body.case_id);
-    if (supportCase === undefined) throw new ResourceNotVisibleError();
+    assertAccepter(
+      await resolveCaseAccess(deps.pool, context, body.case_id),
+      'Creating a Follow-Up',
+    );
 
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({
@@ -115,7 +106,7 @@ export function registerFollowUpRoutes(app: FastifyInstance, deps: FollowUpRoute
           responsibleType: body.responsible_type,
           responsibleId: body.responsible_id,
           actorId: context.userId,
-          actorType: 'RESPONDER',
+          actorType: 'USER',
           ...(body.service_request_id !== undefined
             ? { serviceRequestId: body.service_request_id }
             : {}),
@@ -143,14 +134,8 @@ export function registerFollowUpRoutes(app: FastifyInstance, deps: FollowUpRoute
     const { id } = idParams.parse(request.params);
     const followUp = await findFollowUp(deps.pool, context.tenantId, id);
     if (followUp === undefined) throw new ResourceNotVisibleError();
-    const { owner } = await assertCaseAccess(
-      deps.pool,
-      context.tenantId,
-      context.userId,
-      followUp.caseId,
-    );
-    if (!owner) assertResponder(context);
-    const actorType = owner ? 'VETERAN' : 'RESPONDER';
+    const { owner } = await resolveCaseAccess(deps.pool, context, followUp.caseId);
+    const actorType = owner ? 'VETERAN' : 'USER';
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({
       follow_up_id: id,

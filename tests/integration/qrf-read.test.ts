@@ -58,7 +58,7 @@ async function assignedQrf() {
   await claimCase(pool, {
     tenantId,
     caseId: opened.supportCase.caseId,
-    responderUserId: responder.userId,
+    acceptedByUserId: responder.userId,
   });
   return { tenantId, veteran, responder, request };
 }
@@ -69,8 +69,8 @@ describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED requires a recorded deli
 
     const qrf = await readActiveQrf(pool, tenantId, veteran.userId);
     expect(qrf?.serviceRequestId).toBe(request.serviceRequestId);
-    expect(qrf?.facts.responderAssigned).toBe(true);
-    expect(qrf?.facts.responderNotificationDelivered).toBe(false);
+    expect(qrf?.facts.assigned).toBe(true);
+    expect(qrf?.facts.assignedNotificationDelivered).toBe(false);
   });
 
   it('reports the delivery once a notification to the responder is linked to the request', async () => {
@@ -83,13 +83,13 @@ describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED requires a recorded deli
       `INSERT INTO notifications
          (notification_id, tenant_id, recipient_user_id, reason, channel, consent_basis,
           template_version, subject_type, subject_id, delivery_status)
-       VALUES ($1, $2, $3, 'qrf.responder_notified', 'IN_APP', 'RESPONDER_CASE_ASSIGNMENT',
+       VALUES ($1, $2, $3, 'qrf.responder_notified', 'IN_APP', 'CASE_ASSIGNMENT',
                'test@1', 'ServiceRequest', $4, 'SENT')`,
       [randomUUID(), tenantId, responder.userId, request.serviceRequestId],
     );
 
     const qrf = await readActiveQrf(pool, tenantId, veteran.userId);
-    expect(qrf?.facts.responderNotificationDelivered).toBe(true);
+    expect(qrf?.facts.assignedNotificationDelivered).toBe(true);
   });
 
   it('does not count a notification to someone other than the active responder', async () => {
@@ -100,12 +100,12 @@ describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED requires a recorded deli
       `INSERT INTO notifications
          (notification_id, tenant_id, recipient_user_id, reason, channel, consent_basis,
           template_version, subject_type, subject_id, delivery_status)
-       VALUES ($1, $2, $3, 'qrf.responder_notified', 'IN_APP', 'RESPONDER_CASE_ASSIGNMENT',
+       VALUES ($1, $2, $3, 'qrf.responder_notified', 'IN_APP', 'CASE_ASSIGNMENT',
                'test@1', 'ServiceRequest', $4, 'SENT')`,
       [randomUUID(), tenantId, bystander.userId, request.serviceRequestId],
     );
 
     const qrf = await readActiveQrf(pool, tenantId, veteran.userId);
-    expect(qrf?.facts.responderNotificationDelivered).toBe(false);
+    expect(qrf?.facts.assignedNotificationDelivered).toBe(false);
   });
 });

@@ -95,7 +95,12 @@ describe('synthetic STAGING soak runner', () => {
     expect(calls.length).toBeGreaterThanOrEqual(16);
     expect(new Set(calls.map((call) => call.method))).toEqual(new Set(['GET']));
     expect(new Set(calls.map((call) => new URL(call.url).pathname))).toEqual(
-      new Set(['/api/v0/health', '/api/v0/resources', '/api/v0/veterans/me', '/api/v0/cases']),
+      new Set([
+        '/api/v0/health',
+        '/api/v0/resources',
+        '/api/v0/veterans/me',
+        '/api/v0/service-requests',
+      ]),
     );
     expect(calls.some((call) => call.authorization === 'Bearer synthetic-veteran-secret')).toBe(
       true,
@@ -135,7 +140,7 @@ describe('synthetic STAGING soak runner', () => {
       if (path === '/api/v0/resources' && attempt === 1) {
         return Promise.resolve(new Response(null, { status: 503 }));
       }
-      if (path === '/api/v0/cases' && attempt === 1) {
+      if (path === '/api/v0/service-requests' && attempt === 1) {
         return Promise.resolve(new Response(null, { status: 500 }));
       }
       return Promise.resolve(new Response(null, { status: 200 }));

@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertServiceCategory,
+  CASE_COMMANDS,
   CASE_STATUSES,
   CASE_TRANSITIONS,
   findCaseTransition,
@@ -118,18 +119,17 @@ describe('CASES.md §4.2 — reopen', () => {
   });
 });
 
-describe('CASES.md §4 — reassignment edges', () => {
-  it.each(['ASSIGNED', 'ACTIVE', 'FOLLOWUP'] as CaseStatus[])(
-    'allows ASSIGN_CASE from %s and lands on ASSIGNED',
-    (from) => {
-      expect(resolveCaseTransition('ASSIGN_CASE', from).to).toBe('ASSIGNED');
-    },
-  );
+describe('V1_PROJECT_PLAN.md §2.1 — nobody assigns a case', () => {
+  it('has no ASSIGN_CASE command', () => {
+    expect(CASE_COMMANDS as readonly string[]).not.toContain('ASSIGN_CASE');
+  });
 
-  it('does not allow reassignment of a resolved case', () => {
-    expect(() => resolveCaseTransition('ASSIGN_CASE', 'RESOLVED')).toThrow(
-      IllegalCaseTransitionError,
-    );
+  it('allows only CLAIM_CASE into ASSIGNED, from OPEN or TRIAGED', () => {
+    const into = CASE_TRANSITIONS.filter((transition) => transition.to === 'ASSIGNED');
+    expect(into.map((transition) => `${transition.command}:${transition.from}`).sort()).toEqual([
+      'CLAIM_CASE:OPEN',
+      'CLAIM_CASE:TRIAGED',
+    ]);
   });
 });
 
