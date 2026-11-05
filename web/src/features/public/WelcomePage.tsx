@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useMe } from '../../api/me';
 import { useUpdateCounty, useUpdateProfile } from '../../api/profile';
@@ -12,6 +12,7 @@ import { Select } from '../../components/Select';
 import { TextField } from '../../components/TextField';
 import { AlertCircleIcon } from '../../components/icons';
 import { isApiError } from '../../api/errors';
+import { useFocusFirstInvalid } from './focus-invalid';
 import { afterSignInPath, safeFrom } from './signin-flow';
 import { COUNTY_OPTIONS, isCounty, validateWelcome, type WelcomeErrors } from './welcome-form';
 
@@ -26,9 +27,14 @@ function WelcomeForm({ me }: { me: Me }) {
   const [errors, setErrors] = useState<WelcomeErrors>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const formRef = useRef<HTMLFormElement>(null);
+  // Errors and the attempt count are set in one batch, so the attempt alone is the signal.
+  useFocusFirstInvalid(formRef, String(attempt));
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    setAttempt((count) => count + 1);
     const found = validateWelcome(displayName, county);
     setErrors(found);
     setSaveError(null);
@@ -67,7 +73,7 @@ function WelcomeForm({ me }: { me: Me }) {
           <h2 id="profile" className="heading text-32">
             Set up your profile
           </h2>
-          <form noValidate onSubmit={submit} className="flex flex-col gap-6">
+          <form ref={formRef} noValidate onSubmit={submit} className="flex flex-col gap-6">
             <TextField
               label="Name other veterans will see"
               helper="First name and last initial, like Marcus T."

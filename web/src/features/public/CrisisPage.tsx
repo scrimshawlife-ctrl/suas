@@ -119,7 +119,7 @@ export default function CrisisPage() {
               </Button>
               <Button
                 variant="secondary"
-                href={signedIn ? continueTo : '/sign-in?role=need'}
+                href={signedIn ? '/home' : '/sign-in?role=need'}
                 className="max-sm:w-full"
               >
                 Request practical support

@@ -20,11 +20,13 @@ export function homePathForMode(mode: Mode): string {
   return mode === 'serve' ? '/serve' : '/home';
 }
 
-/** Only same-origin paths are followed: "/x" yes, "//evil.test" and "https://…" no. */
+/** Only same-origin paths are followed: "/x" yes; "//evil.test", "https://…", backslashes and control characters no. */
 export function safeFrom(value: unknown): string | null {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')
-    ? value
-    : null;
+  if (typeof value !== 'string') return null;
+  if (!value.startsWith('/') || value.startsWith('//')) return null;
+  // A backslash or control character can turn "/x" into another origin in some browsers.
+  // eslint-disable-next-line no-control-regex
+  return /[\\\u0000-\u001f\u007f]/.test(value) ? null : value;
 }
 
 /** Where to go once signed in: the page the person was heading to, else their mode's home. */
@@ -52,7 +54,10 @@ export function validateCode(code: string): string | null {
 }
 
 function waitPhrase(seconds: number): string {
-  if (seconds < 60) return `${Math.max(1, Math.ceil(seconds))} seconds`;
+  if (seconds < 60) {
+    const whole = Math.max(1, Math.ceil(seconds));
+    return whole === 1 ? '1 second' : `${whole} seconds`;
+  }
   const minutes = Math.ceil(seconds / 60);
   return minutes === 1 ? '1 minute' : `${minutes} minutes`;
 }

@@ -46,6 +46,10 @@ describe('where to go after sign-in', () => {
   it('ignores a from that leaves the app', () => {
     expect(safeFrom('//evil.test')).toBeNull();
     expect(safeFrom('https://evil.test')).toBeNull();
+    expect(safeFrom('/\\evil.test')).toBeNull();
+    expect(safeFrom('/ok\\path')).toBeNull();
+    expect(safeFrom('/ok\npath')).toBeNull();
+    expect(safeFrom('/ok\u007f')).toBeNull();
     expect(afterSignInPath('//evil.test', 'support')).toBe('/home');
   });
 
@@ -64,6 +68,12 @@ describe('sign-in errors in plain words', () => {
     expect(signInErrorMessage(limited)).toBe('Too many tries. Try again in 5 minutes.');
     expect(signInErrorMessage(new ApiError(429, 'RATE_LIMITED', 'x', 30))).toBe(
       'Too many tries. Try again in 30 seconds.',
+    );
+    expect(signInErrorMessage(new ApiError(429, 'RATE_LIMITED', 'x', 1))).toBe(
+      'Too many tries. Try again in 1 second.',
+    );
+    expect(signInErrorMessage(new ApiError(429, 'RATE_LIMITED', 'x', 60))).toBe(
+      'Too many tries. Try again in 1 minute.',
     );
   });
 

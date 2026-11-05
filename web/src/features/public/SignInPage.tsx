@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useStartChallenge } from '../../api/auth';
 import { useSessionToken } from '../../api/token-store';
@@ -8,6 +8,7 @@ import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
 import { RadioCardGroup } from '../../components/RadioCardGroup';
 import { TextField } from '../../components/TextField';
+import { useFocusFirstInvalid } from './focus-invalid';
 import {
   afterSignInPath,
   modeToRole,
@@ -45,12 +46,18 @@ export default function SignInPage() {
   );
   const [email, setEmail] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const error = fieldError ?? (start.isError ? signInErrorMessage(start.error) : null);
+  useFocusFirstInvalid(formRef, `${attempt}|${error ?? ''}`);
 
   // Already signed in: nothing to do here.
   if (token !== null) return <Navigate to={afterSignInPath(from, getMode())} replace />;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    setAttempt((count) => count + 1);
     const invalid = validateEmail(email);
     setFieldError(invalid);
     if (invalid || start.isPending) return;
@@ -63,8 +70,6 @@ export default function SignInPage() {
     setMode(roleToMode(role));
     await navigate('/sign-in/code', { state: { email: destination, from } });
   };
-
-  const error = fieldError ?? (start.isError ? signInErrorMessage(start.error) : null);
 
   return (
     <Page className="pt-16 pb-20 max-sm:pt-8">
@@ -94,7 +99,7 @@ export default function SignInPage() {
               We need an email address to send your sign-in code. There is no password.
             </p>
           </div>
-          <form noValidate onSubmit={submit} className="flex flex-col gap-6">
+          <form ref={formRef} noValidate onSubmit={submit} className="flex flex-col gap-6">
             <div aria-live="polite">
               <TextField
                 label="Email address"

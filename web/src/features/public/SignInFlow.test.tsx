@@ -51,6 +51,7 @@ describe('Sign in', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Send sign-in code' }));
     expect(screen.getByText('Enter your email address.')).toBeInTheDocument();
     expect(client.POST).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Email address')).toHaveFocus();
   });
 
   it('sends the code, stores the role as the mode and carries the email to the code step', async () => {
@@ -80,9 +81,35 @@ describe('Enter code', () => {
     data: { session_credential: 'tok', expires_at: '2026-11-05T00:00:00Z', mfa_elevated: false },
   };
 
-  it('sends a visitor with no email back to sign in', () => {
-    renderAt('/sign-in/code');
-    expect(screen.getByRole('heading', { name: 'Join the mission' })).toBeInTheDocument();
+  it('sends a visitor with no email back to sign in', async () => {
+    const router = renderAt('/sign-in/code');
+    expect(await screen.findByRole('heading', { name: 'Join the mission' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/sign-in');
+  });
+
+  it('marks the code field required, as the board does', () => {
+    renderAt({ pathname: '/sign-in/code', state: { email: 'a@example.invalid' } });
+    expect(screen.getByLabelText('6-digit code')).toBeRequired();
+  });
+
+  it('ignores a from that leaves the app', async () => {
+    client.POST.mockResolvedValue(session);
+    renderAt({
+      pathname: '/sign-in/code',
+      state: { email: 'a@example.invalid', from: '//evil.test' },
+    });
+    await userEvent.type(screen.getByLabelText('6-digit code'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
+    await waitFor(() => expect(screen.getByText('home page')).toBeInTheDocument());
+  });
+
+  it('says how long to wait when the code step is rate limited', async () => {
+    client.POST.mockRejectedValue(new ApiError(429, 'RATE_LIMITED', 'slow down', 90));
+    renderAt({ pathname: '/sign-in/code', state: { email: 'a@example.invalid' } });
+    await userEvent.type(screen.getByLabelText('6-digit code'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
+    expect(await screen.findByText('Too many tries. Try again in 2 minutes.')).toBeInTheDocument();
+    expect(tokenStore.getToken()).toBeNull();
   });
 
   it('refuses a short code without calling the API', async () => {
@@ -91,6 +118,7 @@ describe('Enter code', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
     expect(screen.getByText('Enter all 6 digits.')).toBeInTheDocument();
     expect(client.POST).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('6-digit code')).toHaveFocus();
   });
 
   it('shows the API message for a wrong or expired code and stores no session', async () => {

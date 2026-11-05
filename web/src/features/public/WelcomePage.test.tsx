@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
 import { tokenStore } from '../../api/token-store';
 import type { Me } from '../../api/types';
@@ -24,7 +25,7 @@ const base: Me = {
   categories: [],
 };
 
-function renderWelcome(me: Me) {
+function renderWelcome(me: Me, from?: string) {
   tokenStore.setToken('tok');
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(queryKeys.me, me);
@@ -32,8 +33,9 @@ function renderWelcome(me: Me) {
     [
       { path: '/welcome', element: <WelcomePage /> },
       { path: '/home', element: <p>home page</p> },
+      { path: '/requests/abc', element: <p>request abc page</p> },
     ],
-    { initialEntries: ['/welcome'] },
+    { initialEntries: [{ pathname: '/welcome', state: from ? { from } : null }] },
   );
   render(
     <QueryClientProvider client={queryClient}>
@@ -55,6 +57,57 @@ describe('Welcome', () => {
     expect(screen.getByText('Enter the name other veterans will see.')).toBeInTheDocument();
     expect(screen.getByText('Choose your county.')).toBeInTheDocument();
     expect(client.PUT).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Name other veterans will see')).toHaveFocus();
+  });
+
+  it('moves focus to the county when only the county is missing', async () => {
+    renderWelcome({ ...base, display_name: 'Marcus T.' });
+    await userEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    expect(screen.getByLabelText('County')).toHaveFocus();
+  });
+
+  it('refuses a name over 40 characters', async () => {
+    renderWelcome(base);
+    await userEvent.type(screen.getByLabelText('Name other veterans will see'), 'a'.repeat(41));
+    await userEvent.selectOptions(screen.getByLabelText('County'), 'Merced');
+    await userEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    expect(screen.getByText('Use 40 characters or fewer.')).toBeInTheDocument();
+    expect(client.PUT).not.toHaveBeenCalled();
+  });
+
+  it('keeps the form when the county save fails, and a retry saves again', async () => {
+    client.PUT.mockResolvedValueOnce({ data: undefined })
+      .mockRejectedValueOnce(new ApiError(422, 'VALIDATION', 'That county is not available.'))
+      .mockResolvedValue({ data: undefined });
+    client.GET.mockResolvedValue({
+      data: { ...base, display_name: 'Marcus T.', county: 'MERCED' },
+    });
+    renderWelcome(base);
+    await userEvent.type(screen.getByLabelText('Name other veterans will see'), 'Marcus T.');
+    await userEvent.selectOptions(screen.getByLabelText('County'), 'Merced');
+    await userEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    expect(await screen.findByText('That county is not available.')).toBeInTheDocument();
+    expect(screen.queryByText('home page')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Name other veterans will see')).toHaveValue('Marcus T.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    await waitFor(() => expect(screen.getByText('home page')).toBeInTheDocument());
+    expect(client.PUT.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+      '/api/v0/veterans/me/profile',
+      '/api/v0/veterans/me/county',
+      '/api/v0/veterans/me/profile',
+      '/api/v0/veterans/me/county',
+    ]);
+  });
+
+  it('continues to state.from after saving', async () => {
+    client.PUT.mockResolvedValue({ data: undefined });
+    client.GET.mockResolvedValue({
+      data: { ...base, display_name: 'Marcus T.', county: 'MERCED' },
+    });
+    renderWelcome({ ...base, display_name: 'Marcus T.', county: 'MERCED' }, '/requests/abc');
+    await userEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    await waitFor(() => expect(screen.getByText('request abc page')).toBeInTheDocument());
   });
 
   it('pre-fills from me', () => {

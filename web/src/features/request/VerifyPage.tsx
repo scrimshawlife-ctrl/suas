@@ -182,7 +182,7 @@ export default function VerifyPage() {
               Loading…
             </p>
           </Card>
-        ) : status.isError ? (
+        ) : status.isError && status.data === undefined ? (
           <Card padding="lg" className="flex flex-col gap-4">
             <Notice>We could not load your check status.</Notice>
             <div>
