@@ -107,6 +107,13 @@ describe('mfaReturnPath', () => {
   it('returns an admin page it came from, otherwise the overview', () => {
     expect(mfaReturnPath({ from: '/admin/drafts/abc' })).toBe('/admin/drafts/abc');
     expect(mfaReturnPath({ from: '/admin/mfa' })).toBe('/admin');
+    expect(mfaReturnPath({ from: '/admin?x=1' })).toBe('/admin?x=1');
+    expect(mfaReturnPath({ from: '/admin/drafts?status=PUBLISHED' })).toBe(
+      '/admin/drafts?status=PUBLISHED',
+    );
+    expect(mfaReturnPath({ from: '/admin/mfa?x' })).toBe('/admin');
+    expect(mfaReturnPath({ from: '/administrator' })).toBe('/admin');
+    expect(mfaReturnPath({ from: 42 })).toBe('/admin');
     expect(mfaReturnPath({ from: '/home' })).toBe('/admin');
     expect(mfaReturnPath({ from: '//evil.example' })).toBe('/admin');
     expect(mfaReturnPath(null)).toBe('/admin');

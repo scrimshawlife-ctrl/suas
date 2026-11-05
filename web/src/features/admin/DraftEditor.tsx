@@ -49,7 +49,16 @@ const options = <T extends string>(values: readonly T[], labels: Record<T, strin
  * the verification act, so it and Discard sit behind a confirm step. Publish and Discard
  * act on the saved draft, so they wait while there are unsaved changes.
  */
-export function DraftEditor({ draft, onSaved }: { draft: ResourceDraft; onSaved: () => void }) {
+export function DraftEditor({
+  draft,
+  onSaved,
+  onEdit,
+}: {
+  draft: ResourceDraft;
+  onSaved: () => void;
+  /** Called when the person changes a field, so a stale "Changes saved." can go. */
+  onEdit: () => void;
+}) {
   const id = draft.resource_draft_id;
   const edit = useEditDraft(id);
   const publish = usePublishDraft(id);
@@ -60,8 +69,10 @@ export function DraftEditor({ draft, onSaved }: { draft: ResourceDraft; onSaved:
 
   const payload = buildEditPayload(draft, values);
   const dirty = payload !== null;
-  const set = <K extends keyof DraftFormValues>(field: K, value: DraftFormValues[K]) =>
+  const set = <K extends keyof DraftFormValues>(field: K, value: DraftFormValues[K]) => {
+    onEdit();
     setValues((current) => ({ ...current, [field]: value }));
+  };
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -94,7 +105,7 @@ export function DraftEditor({ draft, onSaved }: { draft: ResourceDraft; onSaved:
           value={values.service_name}
           onChange={(event) => set('service_name', event.target.value)}
           error={errors.service_name}
-          maxLength={LIMITS.serviceName + 50}
+          maxLength={LIMITS.serviceName}
         />
         <Select
           label="Category"

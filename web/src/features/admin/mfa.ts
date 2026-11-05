@@ -28,14 +28,10 @@ export function mfaIsUnavailable(error: unknown): boolean {
  */
 export function mfaReturnPath(state: unknown): string {
   const from = (state as { from?: unknown } | null)?.from;
-  if (
-    typeof from === 'string' &&
-    (from === paths.admin || from.startsWith(`${paths.admin}/`)) &&
-    from !== paths.adminMfa &&
-    !from.startsWith('//')
-  )
-    return from;
-  return paths.admin;
+  if (typeof from !== 'string') return paths.admin;
+  const path = from.split(/[?#]/)[0] ?? '';
+  const inAdmin = path === paths.admin || path.startsWith(`${paths.admin}/`);
+  return inAdmin && path !== paths.adminMfa ? from : paths.admin;
 }
 
 /** Dev-build hint: the test factor accepts "ok-" plus the challenge id (src/auth/mfa.ts). */

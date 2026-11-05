@@ -10,7 +10,7 @@ export function renderAt(
   initialEntries: (string | { pathname: string; state?: unknown })[],
 ) {
   const router = createMemoryRouter(routes, { initialEntries });
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   const view = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />

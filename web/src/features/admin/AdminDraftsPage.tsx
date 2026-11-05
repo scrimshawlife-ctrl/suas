@@ -30,47 +30,33 @@ const EMPTY: Record<DraftStatus, string> = {
   REJECTED: 'No drafts have been discarded.',
 };
 
-function DraftTable({ drafts }: { drafts: ResourceDraft[] }) {
+/** One layout at every width: name first, then category and counties, then status and date. */
+function DraftList({ drafts }: { drafts: ResourceDraft[] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-16">
-        <thead>
-          <tr>
-            {['Service', 'Category', 'Counties', 'Status', 'Updated'].map((heading) => (
-              <th
-                key={heading}
-                scope="col"
-                className="border-b border-line px-4 py-2.5 text-left font-bold whitespace-nowrap text-slate"
-              >
-                {heading}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {drafts.map((draft) => (
-            <tr key={draft.resource_draft_id} className="border-b border-line last:border-b-0">
-              <td className="min-w-48 px-4 py-3 font-bold">
-                <Link
-                  to={paths.adminDraft(draft.resource_draft_id)}
-                  className="inline-flex min-h-11 items-center"
-                >
-                  {draft.service_name}
-                </Link>
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap">{CATEGORY_LABELS[draft.category]}</td>
-              <td className="min-w-40 px-4 py-3">{countiesLabel(draft.counties)}</td>
-              <td className="px-4 py-3">
-                <DraftStatusChip status={draft.status} />
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap text-slate">
-                {formatDate.format(new Date(draft.updated_at))}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ul>
+      {drafts.map((draft) => (
+        <li
+          key={draft.resource_draft_id}
+          className="flex flex-col gap-1.5 border-b border-line px-4 py-3 last:border-b-0"
+        >
+          <Link
+            to={paths.adminDraft(draft.resource_draft_id)}
+            className="inline-flex min-h-11 items-center self-start font-bold break-words"
+          >
+            {draft.service_name}
+          </Link>
+          <p className="text-16">
+            {CATEGORY_LABELS[draft.category]}. {countiesLabel(draft.counties)}.
+          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <DraftStatusChip status={draft.status} />
+            <span className="text-16 text-slate">
+              Updated {formatDate.format(new Date(draft.updated_at))}
+            </span>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -130,7 +116,7 @@ export default function AdminDraftsPage() {
         </div>
 
         <Card as="div" padding="none" aria-busy={query.isFetching}>
-          {query.isPending ? (
+          {query.isPending || query.isPlaceholderData ? (
             <p role="status" className="p-4 text-slate">
               Loading…
             </p>
@@ -141,7 +127,7 @@ export default function AdminDraftsPage() {
           ) : drafts.length === 0 ? (
             <p className="p-4 text-slate">{EMPTY[status]}</p>
           ) : (
-            <DraftTable drafts={drafts} />
+            <DraftList drafts={drafts} />
           )}
         </Card>
 

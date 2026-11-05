@@ -45,8 +45,11 @@ export function ExtractForm({ builderAvailable }: { builderAvailable: boolean })
       {
         onSuccess: (drafts) => {
           setCreated(drafts);
-          setText('');
-          setLink('');
+          // With nothing found, keep the text so the admin can adjust it and retry.
+          if (drafts.length > 0) {
+            setText('');
+            setLink('');
+          }
         },
       },
     );

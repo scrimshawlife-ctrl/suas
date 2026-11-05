@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
@@ -7,7 +7,7 @@ import { useResourceDraft } from './api';
 import { DraftEditor, draftErrorMessage } from './DraftEditor';
 import { DraftStatusChip } from './AdminDraftsPage';
 import { isHttpUrl, type ResourceDraft } from './draft-form';
-import { CATEGORY_LABELS, CONTACT_KIND_LABELS, countiesLabel } from './labels';
+import { CATEGORY_LABELS, CONTACT_KIND_LABELS, countiesLabel, type DraftStatus } from './labels';
 import { QueryNotice } from './QueryNotice';
 import { isApiError } from '../../api/errors';
 
@@ -16,7 +16,7 @@ const formatDateTime = new Intl.DateTimeFormat('en-US', {
   timeStyle: 'short',
 });
 
-function SourceLink({ link }: { link: string }) {
+export function SourceLink({ link }: { link: string }) {
   if (!isHttpUrl(link)) return <span className="break-all">{link}</span>;
   return (
     <a href={link} target="_blank" rel="noopener noreferrer" className="break-all">
@@ -54,8 +54,18 @@ function ReadOnlyFields({ draft }: { draft: ResourceDraft }) {
 export default function AdminDraftPage() {
   const { id = '' } = useParams();
   const query = useResourceDraft(id);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const draft = query.data;
+  const statusRef = useRef<HTMLParagraphElement>(null);
+  const previousStatus = useRef<DraftStatus | undefined>(undefined);
+  // A draft leaving "to review" (publish, discard, or someone else's change) swaps the form
+  // for the read-only view, so focus moves to its status line instead of being lost.
+  useEffect(() => {
+    const now = draft?.status;
+    if (previousStatus.current === 'DRAFT' && now !== undefined && now !== 'DRAFT')
+      statusRef.current?.focus();
+    previousStatus.current = now;
+  }, [draft?.status]);
   const backTo =
     draft !== undefined && draft.status !== 'DRAFT'
       ? `${paths.adminDrafts}?status=${draft.status}`
@@ -95,7 +105,7 @@ export default function AdminDraftPage() {
           <Card as="section" aria-label="Draft details" padding="lg" className="max-w-2xl">
             {draft.status === 'DRAFT' ? (
               <div className="flex flex-col gap-4">
-                {savedAt !== null ? (
+                {saved ? (
                   <p role="status" className="font-bold">
                     Changes saved.
                   </p>
@@ -103,12 +113,13 @@ export default function AdminDraftPage() {
                 <DraftEditor
                   key={draft.updated_at}
                   draft={draft}
-                  onSaved={() => setSavedAt(new Date().toISOString())}
+                  onSaved={() => setSaved(true)}
+                  onEdit={() => setSaved(false)}
                 />
               </div>
             ) : (
               <div className="flex flex-col gap-5">
-                <p role="status" className="font-bold">
+                <p ref={statusRef} tabIndex={-1} role="status" className="font-bold">
                   {draft.status === 'PUBLISHED'
                     ? 'Published as a verified Resource.'
                     : 'Discarded. This draft was not published.'}

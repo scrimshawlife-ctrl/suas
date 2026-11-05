@@ -29,36 +29,29 @@ function CapabilitiesCard() {
       ) : rows.length === 0 ? (
         <p className="px-4 pb-4 text-slate">This build did not report any capabilities.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-16 max-sm:block max-sm:[&_tbody]:block max-sm:[&_thead]:sr-only">
-            <thead>
-              <tr>
-                {['Capability', 'Status', 'Note'].map((heading) => (
-                  <th
-                    key={heading}
-                    scope="col"
-                    className="border-b border-line px-4 py-2.5 text-left font-bold whitespace-nowrap text-slate"
-                  >
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr
-                  key={row.name}
-                  className="border-b border-line last:border-b-0 max-sm:flex max-sm:flex-col max-sm:items-start max-sm:gap-1.5 max-sm:px-4 max-sm:py-3"
-                >
-                  <td className="px-4 py-3 max-sm:p-0 max-sm:font-bold">{row.name}</td>
-                  <td className="px-4 py-3 max-sm:p-0">
-                    <StatusChip kind={row.kind}>{row.status}</StatusChip>
-                  </td>
-                  <td className="px-4 py-3 text-slate max-sm:p-0">{row.note}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div>
+          <p
+            aria-hidden="true"
+            className="grid grid-cols-[1fr_1fr_1.5fr] gap-x-4 border-b border-line px-4 py-2.5 text-16 font-bold text-slate max-sm:hidden"
+          >
+            <span>Capability</span>
+            <span>Status</span>
+            <span>Note</span>
+          </p>
+          <dl>
+            {rows.map((row) => (
+              <div
+                key={row.name}
+                className="grid grid-cols-[1fr_1fr_1.5fr] items-center gap-x-4 gap-y-1.5 border-b border-line px-4 py-3 text-16 last:border-b-0 max-sm:grid-cols-1 max-sm:items-start"
+              >
+                <dt className="max-sm:font-bold">{row.name}</dt>
+                <dd className="m-0">
+                  <StatusChip kind={row.kind}>{row.status}</StatusChip>
+                </dd>
+                <dd className="m-0 text-slate">{row.note}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       )}
     </Card>
@@ -151,18 +144,7 @@ export default function AdminOverviewPage() {
       </div>
       <CapabilitiesCard />
       <AdaptersSection />
-      <div className="grid grid-cols-2 gap-4 max-[700px]:grid-cols-1">
-        <Card as="section" aria-labelledby="open" padding="sm" className="flex flex-col gap-2.5">
-          <h2 id="open" className="text-19 font-bold">
-            Open decisions
-          </h2>
-          <ul className="flex flex-col gap-2 text-16">
-            <li>D-007 retention durations</li>
-            <li>D-047 to D-049 veterans-only model, one API, chat</li>
-          </ul>
-        </Card>
-        <ReadinessCard />
-      </div>
+      <ReadinessCard />
     </>
   );
 }
