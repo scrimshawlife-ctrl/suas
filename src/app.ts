@@ -40,6 +40,7 @@ import { buildInfo, type BuildInfo } from './provenance/build-info.js';
 import { RELEASE_MANIFEST, SPEC_VERSION } from './release/pins.js';
 import { createFulfillmentAdapterRegistry, type AdapterRegistry } from './fulfillment/index.js';
 import { createChannelRegistry } from './notifications/index.js';
+import { createModelInferencePort, type ModelInferencePort } from './inference/index.js';
 
 export interface StartedApp {
   readonly config: SuasConfig;
@@ -49,6 +50,7 @@ export interface StartedApp {
   readonly challengeDelivery: ChallengeDeliveryPort;
   readonly mfa: MfaPort;
   readonly fulfillmentAdapters: AdapterRegistry;
+  readonly modelInference: ModelInferencePort;
   readonly buildInfo: BuildInfo;
   close(): Promise<void>;
 }
@@ -159,6 +161,10 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   // never displaces the mandatory manual transportation path.
   const fulfillmentAdapters = createFulfillmentAdapterRegistry(config);
 
+  // 5b. Model inference (Intake Assistant, catalog builder). The unavailable port
+  // when no model is configured, so callers fall back to the plain form.
+  const modelInference = createModelInferencePort(config);
+
   // 6. Build provenance.
   const resolveBuildInfo = (): BuildInfo =>
     buildInfo({
@@ -176,6 +182,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     challengeDelivery,
     mfa,
     jobQueue,
+    modelInference,
     // Pino's default transport uses worker_threads, which Workers do not run.
     ...(runtime === 'worker' ? { logger: false, workerRuntime: true } : {}),
   });
@@ -200,6 +207,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     challengeDelivery,
     mfa,
     fulfillmentAdapters,
+    modelInference,
     buildInfo: resolveBuildInfo(),
     close: async () => {
       await server.close();

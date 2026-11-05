@@ -2384,6 +2384,995 @@
           }
         }
       }
+    },
+    "/api/v0/intake/status": {
+      "get": {
+        "tags": ["intake"],
+        "summary": "Whether the Intake Assistant is available",
+        "description": "Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "operationId": "getIntakeStatus",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Availability and the plain request form to use otherwise",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "assistant_available": {
+                      "type": "boolean"
+                    },
+                    "request_form": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "enum": ["POST"]
+                        },
+                        "path": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/intake/drafts": {
+      "post": {
+        "tags": ["intake"],
+        "summary": "Send the first intake message",
+        "description": "Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "operationId": "createIntakeDraft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["text"],
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Assistant unavailable or failed: show the plain request form",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": ["DRAFT_READY", "NO_DRAFT", "FALLBACK_FORM"],
+                      "description": "FALLBACK_FORM: the assistant did not answer and nothing was stored; show the plain request form (`request_form`)."
+                    },
+                    "assistant_message": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "not_available_yet": {
+                      "type": "boolean"
+                    },
+                    "notice": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "draft": {
+                      "type": "object",
+                      "properties": {
+                        "draft_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 280
+                        },
+                        "timing": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 120
+                        },
+                        "service_request_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "submitted_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "resources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "Veteran-facing projection of a published Resource (same fields as GET /resources).",
+                        "properties": {
+                          "resource_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "service_name": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "counties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "hours": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "cost": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contact_method": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contact_method_kind": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "freshness": {
+                            "type": "string"
+                          },
+                          "stale_warning": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "request_form": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "enum": ["POST"]
+                        },
+                        "path": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Draft created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": ["DRAFT_READY", "NO_DRAFT", "FALLBACK_FORM"],
+                      "description": "FALLBACK_FORM: the assistant did not answer and nothing was stored; show the plain request form (`request_form`)."
+                    },
+                    "assistant_message": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "not_available_yet": {
+                      "type": "boolean"
+                    },
+                    "notice": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "draft": {
+                      "type": "object",
+                      "properties": {
+                        "draft_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 280
+                        },
+                        "timing": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 120
+                        },
+                        "service_request_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "submitted_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "resources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "Veteran-facing projection of a published Resource (same fields as GET /resources).",
+                        "properties": {
+                          "resource_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "service_name": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "counties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "hours": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "cost": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contact_method": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contact_method_kind": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "freshness": {
+                            "type": "string"
+                          },
+                          "stale_warning": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "request_form": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "enum": ["POST"]
+                        },
+                        "path": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/intake/drafts/{id}": {
+      "get": {
+        "tags": ["intake"],
+        "summary": "Read one of your drafts",
+        "description": "Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "operationId": "getIntakeDraft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Draft with the text you typed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "draft_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 280
+                        },
+                        "timing": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 120
+                        },
+                        "service_request_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "submitted_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "intake_text": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "tags": ["intake"],
+        "summary": "Edit a draft",
+        "description": "The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "operationId": "updateIntakeDraft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": false,
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT"]
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 280
+                  },
+                  "timing": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "draft_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
+                    },
+                    "category": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
+                    },
+                    "summary": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 280
+                    },
+                    "timing": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 120
+                    },
+                    "service_request_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "submitted_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/intake/drafts/{id}/messages": {
+      "post": {
+        "tags": ["intake"],
+        "summary": "Send a follow-up intake message",
+        "description": "Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "operationId": "addIntakeMessage",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["text"],
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Assistant result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": ["DRAFT_READY", "NO_DRAFT", "FALLBACK_FORM"],
+                      "description": "FALLBACK_FORM: the assistant did not answer and nothing was stored; show the plain request form (`request_form`)."
+                    },
+                    "assistant_message": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "not_available_yet": {
+                      "type": "boolean"
+                    },
+                    "notice": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "draft": {
+                      "type": "object",
+                      "properties": {
+                        "draft_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 280
+                        },
+                        "timing": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 120
+                        },
+                        "service_request_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "submitted_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      },
+                      "nullable": true
+                    },
+                    "resources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "Veteran-facing projection of a published Resource (same fields as GET /resources).",
+                        "properties": {
+                          "resource_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "service_name": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "counties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "hours": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "cost": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contact_method": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contact_method_kind": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "freshness": {
+                            "type": "string"
+                          },
+                          "stale_warning": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "request_form": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "enum": ["POST"]
+                        },
+                        "path": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/intake/drafts/{id}/submit": {
+      "post": {
+        "tags": ["intake"],
+        "summary": "Submit a draft as a Service Request",
+        "description": "The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
+        "operationId": "submitIntakeDraft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Idempotent replay"
+          },
+          "201": {
+            "description": "Service Request created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service_request": {
+                      "type": "object",
+                      "properties": {
+                        "service_request_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "case_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "category": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "draft": {
+                      "type": "object",
+                      "properties": {
+                        "draft_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 280
+                        },
+                        "timing": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 120
+                        },
+                        "service_request_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "submitted_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/service-requests": {
+      "post": {
+        "tags": ["intake"],
+        "summary": "Plain request form: create a Service Request",
+        "description": "Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
+        "operationId": "createServiceRequestForm",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["category", "summary"],
+                "additionalProperties": false,
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT"]
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 280
+                  },
+                  "timing": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent replay"
+          },
+          "201": {
+            "description": "Service Request created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service_request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "case_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
