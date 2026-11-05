@@ -15,6 +15,7 @@ import type { ScriptedModelInference } from '../../src/inference/index.js';
 import { grantSuasAdmin, createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 const SOURCE_LINK = 'https://pantry.example.invalid/hours';
 const SOURCE_TEXT =
@@ -59,6 +60,8 @@ async function credential(
     status: 'ACTIVE',
   });
   if (options.admin) await grantSuasAdmin(pool(target), user.userId, undefined);
+  // Listing Resources needs a passed scan (the onboarding gate).
+  else await markVerifiedVeteran(pool(target), tenantId, user.userId);
   const session = await createSession(pool(target), TEST_SESSION_SECRET, {
     tenantId,
     userId: user.userId,
