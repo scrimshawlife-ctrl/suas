@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryKeys } from '../api/keys';
 import type { Me as MeResponse } from '../api/types';
 import { tokenStore } from '../api/token-store';
@@ -20,45 +20,73 @@ const admin = {
   is_admin: true,
 } as MeResponse;
 
-/** Every route in the table, with the heading its placeholder page renders. */
-const table: [path: string, heading: string][] = [
-  ['/', 'Landing'],
-  ['/sign-in', 'Sign in'],
-  ['/sign-in/code', 'Enter code'],
-  ['/welcome', 'Profile setup'],
-  ['/verify', 'Confirm you served'],
-  ['/crisis', 'Immediate resources'],
-  ['/home', 'Home'],
-  ['/request', 'Request help'],
-  ['/requests/abc', 'Request status'],
-  ['/resources/FOOD', 'Resources'],
-  ['/check-in', 'Check-In'],
-  ['/consents', 'Consents'],
-  ['/trusted-contacts', 'Trusted contacts'],
-  ['/notifications', 'Notifications'],
-  ['/serve', 'Serve'],
-  ['/serve/requests/abc', 'Case'],
-  ['/chat', 'Chat'],
-  ['/chat/abc', 'Chat'],
-  ['/admin', 'Overview'],
-  ['/admin/drafts', 'Resource drafts'],
-  ['/admin/drafts/abc', 'Resource draft'],
-  ['/admin/mfa', 'Confirm it is you'],
-  ['/nowhere', 'We could not find that page.'],
+/**
+ * Every registered route: it must resolve to its own page (no redirect) and never to the
+ * not-found or route-error screens. Page content is each feature's own tests' job, so this
+ * table survives pages replacing their placeholders. `/sign-in` and `/sign-in/code` are left
+ * out: they send a signed-in visitor onwards by design (covered in features/public).
+ */
+const paths: string[] = [
+  '/',
+  '/welcome',
+  '/verify',
+  '/crisis',
+  '/home',
+  '/request',
+  '/requests/abc',
+  '/resources/food',
+  '/check-in',
+  '/consents',
+  '/trusted-contacts',
+  '/notifications',
+  '/serve',
+  '/serve/requests/abc',
+  '/chat',
+  '/chat/abc',
+  '/admin',
+  '/admin/drafts',
+  '/admin/drafts/abc',
+  '/admin/mfa',
 ];
 
+function renderAt(path: string) {
+  tokenStore.setToken('tok', { mfaElevated: true });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient.setQueryData(queryKeys.me, admin);
+  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  return router;
+}
+
 describe('route table', () => {
-  it.each(table)('renders %s for a verified, MFA-elevated admin', async (path, heading) => {
-    tokenStore.setToken('tok', { mfaElevated: true });
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    queryClient.setQueryData(queryKeys.me, admin);
-    const router = createMemoryRouter(routes, { initialEntries: [path] });
-    render(
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
+  beforeEach(() => {
+    // Pages fetch on mount; keep them pending so the test checks routing, not data.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>(() => {})),
     );
-    expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each(paths)('resolves %s to its page for a verified, MFA-elevated admin', async (path) => {
+    const router = renderAt(path);
+    await waitFor(() => expect(router.state.navigation.state).toBe('idle'));
+    await waitFor(() => expect(document.querySelector('main')).not.toBeNull());
     expect(router.state.location.pathname).toBe(path);
+    expect(screen.queryByText('We could not find that page.')).toBeNull();
+    expect(screen.queryByText('Something went wrong.')).toBeNull();
+  });
+
+  it('shows the not-found page for an unknown path', async () => {
+    renderAt('/nowhere');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'We could not find that page.' }),
+    ).toBeInTheDocument();
   });
 });
