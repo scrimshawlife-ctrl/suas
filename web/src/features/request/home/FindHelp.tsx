@@ -26,31 +26,9 @@ const OFF_STATUS: Record<CategoryCard['disposition'], string> = {
   INFORMATION_ONLY: 'Info only',
 };
 
-/**
- * Grid cell. On a phone the NeedTileOff chip may wrap, so two columns fit at 390 px.
- */
-const TILE_ITEM =
-  'flex max-sm:[&>a>span:last-child]:block [&>a]:min-w-0 [&>a]:grow max-sm:[&_.rounded-pill]:px-2.5 max-sm:[&_.rounded-pill]:whitespace-normal max-sm:[&_.rounded-pill]:text-center max-sm:[&_.rounded-pill]:leading-tight';
-
-/** First sentence of the API note, as the short tag the Phone board shows under the title. */
+/** First sentence of the API note: the short line the Phone board shows under the title. */
 export function phoneTag(note: string): string {
   return (note.split(/(?<=\.)\s/)[0] ?? note).replace(/\.$/, '');
-}
-
-/**
- * NeedTile hides its description on phones. The wrapper below it is shown again by
- * `TILE_ITEM` on phones, and the full words give way to the short tag.
- */
-function tileDescription(card: CategoryCard) {
-  const full = card.note ?? (card.category ? DESCRIPTIONS[card.category] : undefined);
-  if (!full) return undefined;
-  if (!card.note) return full;
-  return (
-    <>
-      <span className="max-sm:hidden">{full}</span>
-      <span className="font-bold text-white sm:hidden">{phoneTag(card.note)}</span>
-    </>
-  );
 }
 
 function slug(label: string): string {
@@ -73,19 +51,24 @@ export function FindHelp({ categories }: { categories: readonly CategoryCard[] }
           if (card.disposition === 'OPERATIONAL') {
             if (card.category === null) return null;
             return (
-              <li key={card.label} className={TILE_ITEM}>
+              <li key={card.label} className="flex">
                 <NeedTile
                   category={card.category}
                   title={card.label}
                   to={`/resources/${card.category.toLowerCase()}`}
-                  description={tileDescription(card)}
+                  description={
+                    card.note ?? (card.category ? DESCRIPTIONS[card.category] : undefined)
+                  }
+                  {...(card.note ? { phoneTag: phoneTag(card.note) } : {})}
+                  className="grow"
                 />
               </li>
             );
           }
           return (
-            <li key={card.label} className={TILE_ITEM}>
+            <li key={card.label} className="flex">
               <NeedTileOff
+                className="grow"
                 icon={OFF_ICONS[card.label] ?? FlagIcon}
                 title={card.label}
                 status={OFF_STATUS[card.disposition]}

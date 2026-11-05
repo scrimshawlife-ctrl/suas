@@ -102,6 +102,17 @@ describe('resolveRequestCard', () => {
     ).toBe('ACCEPTED');
   });
 
+  it('lets a dead-end status win over a stale active_qrf, but not over DEGRADED', () => {
+    for (const status of ['EXPIRED', 'UNFULFILLABLE', 'DECLINED'] as const) {
+      expect(resolveRequestCard({ requestId: ID, status, activeQrf: active('SEARCHING') })).toBe(
+        'UNAVAILABLE',
+      );
+    }
+    expect(
+      resolveRequestCard({ requestId: ID, status: 'EXPIRED', activeQrf: active('DEGRADED') }),
+    ).toBe('DEGRADED');
+  });
+
   it('falls back to the status for a state it does not know', () => {
     expect(
       resolveRequestCard({
@@ -131,6 +142,16 @@ describe('canCancel', () => {
     }
   });
 
+  it('offers no cancel once fulfilled, whatever a stale active_qrf says', () => {
+    expect(
+      canCancel({
+        requestId: ID,
+        status: 'FULFILLED',
+        activeQrf: { service_request_id: ID, state: 'RESPONDER_ACCEPTED', cancellable: true },
+      }),
+    ).toBe(false);
+  });
+
   it('defers to the server for the active request', () => {
     expect(
       canCancel({
@@ -149,10 +170,18 @@ describe('progressSteps', () => {
     expect(states('RECEIVED')).toEqual(['now', 'todo', 'todo', 'todo']);
     expect(states('MATCHING')).toEqual(['done', 'now', 'todo', 'todo']);
     expect(states('NOTIFIED')).toEqual(['done', 'done', 'now', 'todo']);
-    expect(states('ACCEPTED')).toEqual(['done', 'done', 'done', 'done']);
   });
 
-  it('has no track for the cards that end the search', () => {
+  it('never ticks "A veteran was notified" without a recorded notification', () => {
+    const notified = (card: RequestCard) =>
+      progressSteps(card, '7:42 PM').find((s) => s.label === 'A veteran was notified')?.state;
+    expect(notified('RECEIVED')).toBe('todo');
+    expect(notified('MATCHING')).toBe('todo');
+    expect(notified('NOTIFIED')).toBe('now');
+  });
+
+  it('has no track for the accepted card or the cards that end the search', () => {
+    expect(progressSteps('ACCEPTED')).toEqual([]);
     expect(progressSteps('UNAVAILABLE')).toEqual([]);
     expect(progressSteps('DEGRADED')).toEqual([]);
     expect(progressSteps('CANCELLED')).toEqual([]);

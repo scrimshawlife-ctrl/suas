@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useIdempotencyKey } from '../../api/idempotency';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
@@ -12,15 +12,17 @@ import { requestErrorMessage } from './errors';
 export function CancelRequest({ requestId }: { requestId: string }) {
   const [open, setOpen] = useState(false);
   const keepId = useId();
+  // Button does not forward a ref, so the dialog is handed a ref-shaped lookup by id.
+  const keepRef = useMemo(
+    () => ({
+      get current() {
+        return document.getElementById(keepId);
+      },
+    }),
+    [keepId],
+  );
   const key = useIdempotencyKey();
   const cancel = useRequestCommand(requestId, 'CANCEL');
-
-  // The dialog moves focus to its first control (Close) in its own effect, so wait one tick.
-  useEffect(() => {
-    if (!open) return;
-    const timer = window.setTimeout(() => document.getElementById(keepId)?.focus(), 0);
-    return () => window.clearTimeout(timer);
-  }, [open, keepId]);
 
   const close = () => {
     if (!cancel.isPending) setOpen(false);
@@ -39,7 +41,7 @@ export function CancelRequest({ requestId }: { requestId: string }) {
       <Button variant="secondary" onClick={() => setOpen(true)}>
         Cancel request
       </Button>
-      <Dialog open={open} onClose={close} title="Cancel this request?">
+      <Dialog open={open} onClose={close} title="Cancel this request?" initialFocusRef={keepRef}>
         <p>Canceling stops SUAS from seeking additional support for this request.</p>
         <p>
           It does not cancel services that you have already arranged directly with another provider.

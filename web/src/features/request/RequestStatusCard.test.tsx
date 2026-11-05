@@ -1,9 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import { RequestStatusCard, type RequestStatusCardProps } from './RequestStatusCard';
 import type { RequestCard } from './request-card';
+
+const CARDS: RequestCard[] = [
+  'RECEIVED',
+  'MATCHING',
+  'NOTIFIED',
+  'ACCEPTED',
+  'UNAVAILABLE',
+  'DEGRADED',
+  'CANCELLED',
+];
 
 function show(props: Partial<RequestStatusCardProps> & { card: RequestCard }) {
   render(
@@ -34,9 +44,30 @@ describe('RequestStatusCard', () => {
     expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
   });
 
-  it('FULFILLED offers "Confirm it\'s done", and CONFIRMED does not', () => {
+  it('offers "Confirm it\'s done" for FULFILLED only', () => {
     show({ card: 'ACCEPTED', status: 'FULFILLED', counterpartName: 'Dee R.' });
     expect(screen.getByRole('button', { name: "Confirm it's done" })).toBeInTheDocument();
+  });
+
+  it.each(['ACCEPTED', 'IN_PROGRESS', 'CONFIRMED', 'CLOSED'] as const)(
+    'hides Confirm for %s',
+    (status) => {
+      show({ card: 'ACCEPTED', status, counterpartName: 'Dee R.' });
+      expect(screen.queryByRole('button', { name: "Confirm it's done" })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(CARDS)('%s has a role=status chip', (card) => {
+    show({ card });
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('shows no progress track on the accepted card, and one on the matching card at home', () => {
+    show({ variant: 'home', card: 'ACCEPTED', status: 'ACCEPTED' });
+    expect(screen.queryByRole('list', { name: 'Request progress' })).not.toBeInTheDocument();
+    cleanup();
+    show({ variant: 'home', card: 'MATCHING', status: 'MATCHING' });
+    expect(screen.getByRole('list', { name: 'Request progress' })).toBeInTheDocument();
   });
 
   it('MATCHING shows no Message button and no later-state words', () => {

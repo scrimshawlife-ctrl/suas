@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { isApiError } from '../../api/errors';
-import { queryKeys, resourceKeys } from '../../api/keys';
+import { queryKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { serviceRequestQueryOptions } from '../../api/service-requests';
 import { useSessionToken } from '../../api/token-store';
@@ -16,13 +16,11 @@ export type IntakeResource = Schemas['IntakeResource'];
 /** Detail polling while a request is open: "every ~15 s" (sprint 2 brief). */
 export const REQUEST_POLL_MS = 15_000;
 
-const intakeKeys = resourceKeys('intake');
-
 /** GET /intake/status: whether to offer the assistant. */
 export function useIntakeStatus() {
   const token = useSessionToken();
   return useQuery({
-    queryKey: intakeKeys.detail('status'),
+    queryKey: queryKeys.intake.detail('status'),
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/intake/status');
       return requireData(data, 'assistant status');
