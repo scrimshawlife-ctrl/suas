@@ -320,8 +320,9 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
     for (const file of files) {
       const text = readFileSync(file, 'utf8');
       for (const match of text.matchAll(/href="((?:tel|sms):[^"]+)"/g)) {
-        hrefs.push(match[1]);
-        expect(allowed.has(match[1]), `${file} ${match[1]}`).toBe(true);
+        const href = match[1] ?? '';
+        hrefs.push(href);
+        expect(allowed.has(href), `${file} ${href}`).toBe(true);
       }
     }
     expect(hrefs).toEqual(expect.arrayContaining(['tel:911', 'tel:988', 'sms:988', 'sms:838255']));
