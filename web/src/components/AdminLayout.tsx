@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Button } from './Button';
 import { Logo } from './Logo';
+import { SkipLink } from './SkipLink';
 import { cn } from '../lib/cn';
 
 export interface AdminNavItem {
@@ -36,11 +37,12 @@ export function AdminLayout({
 }: AdminLayoutProps) {
   return (
     <div className={cn('flex flex-wrap bg-mist text-17', !embedded && 'min-h-screen')}>
+      <SkipLink />
       <aside className="flex flex-[1_1_260px] flex-col gap-6 bg-harbor px-4 py-6 text-white max-w-75 max-[700px]:max-w-none">
         <Link
           to="/admin"
           aria-label="SUAS Admin home"
-          className="inline-flex items-center gap-2.5 text-white hover:text-white"
+          className="inline-flex items-center gap-2.5 text-white no-underline hover:text-white"
         >
           <Logo tone="white" className="max-sm:h-8" />
           <span className="border-l-2 border-harbor-tint pl-3 font-display text-20 font-semibold text-harbor-tint">
@@ -91,7 +93,10 @@ export function AdminLayout({
           Sign out
         </Button>
       </aside>
-      <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-6 px-9 pt-8 pb-14 max-sm:px-4">
+      <main
+        id="main"
+        className="flex min-w-0 flex-[999_1_560px] flex-col gap-6 px-9 pt-8 pb-14 max-sm:px-4"
+      >
         {children}
       </main>
     </div>

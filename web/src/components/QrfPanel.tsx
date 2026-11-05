@@ -6,7 +6,10 @@ export interface QrfPanelProps {
   /** Where "Request peer support" goes. */
   href?: string;
   title?: string;
+  /** Desktop line. */
   description?: ReactNode;
+  /** Phone line (640 px and below). */
+  shortDescription?: ReactNode;
   /** Truthfulness line under the button. Always keep it: this is not an emergency request. */
   note?: ReactNode;
 }
@@ -18,7 +21,8 @@ export interface QrfPanelProps {
 export function QrfPanel({
   href = '/request?category=PEER_SUPPORT',
   title = 'Talk to someone who served.',
-  description = "Verified veterans on SUAS get your request. You'll see every real update right here.",
+  description = "Veterans in your county get your request. You'll see every real update right here.",
+  shortDescription = 'Sends a peer support request to veterans in your county.',
   note = 'This sends a peer support request. It does not contact emergency services.',
 }: QrfPanelProps) {
   return (
@@ -32,7 +36,8 @@ export function QrfPanel({
       <h2 id="qrf-title" className="heading max-w-[14ch] text-54 max-sm:text-34">
         {title}
       </h2>
-      <p className="max-w-[40ch] text-20 max-sm:text-17">{description}</p>
+      <p className="max-w-[40ch] text-20 max-sm:hidden">{description}</p>
+      <p className="text-17 sm:hidden">{shortDescription}</p>
       <div className="flex max-sm:flex-col">
         <Button variant="peer" href={href} icon={<UsersIcon size={28} />}>
           Request peer support

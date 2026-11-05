@@ -46,7 +46,7 @@ export function ModeSwitch({
             aria-current={current ? 'page' : undefined}
             onClick={() => onSelect?.(segment.mode)}
             className={cn(
-              'inline-flex min-h-10 items-center justify-center rounded-pill px-4 text-16 font-bold no-underline',
+              'inline-flex min-h-11 items-center justify-center rounded-pill px-4 text-16 font-bold no-underline',
               fullWidth && 'flex-1',
               current
                 ? harbor

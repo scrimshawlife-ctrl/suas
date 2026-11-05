@@ -23,7 +23,7 @@ export function NeedTile({ category, to, title, description, appearance = 'tile'
     return (
       <Link
         to={to}
-        className="flex min-h-18 items-center gap-3.5 rounded-12 border border-line bg-white px-4.5 py-4 font-bold text-ink hover:border-ink hover:text-ink"
+        className="flex min-h-18 items-center gap-3.5 no-underline rounded-12 border border-line bg-white px-4.5 py-4 font-bold text-ink hover:border-ink hover:text-ink"
       >
         <span className={cn('grid size-10 place-items-center rounded-10 text-white', need.fill)}>
           <Icon />
@@ -37,7 +37,7 @@ export function NeedTile({ category, to, title, description, appearance = 'tile'
     <Link
       to={to}
       className={cn(
-        'flex min-h-43 flex-col gap-3 rounded-12 border p-5.5 text-white hover:text-white hover:shadow-[inset_0_0_0_3px_#fff,0_0_0_2px_#101828] max-sm:min-h-30 max-sm:gap-2.5 max-sm:p-4',
+        'flex min-h-43 flex-col gap-3 rounded-12 border p-5.5 no-underline text-white hover:text-white hover:shadow-[inset_0_0_0_3px_#fff,0_0_0_2px_#101828] max-sm:min-h-30 max-sm:gap-2.5 max-sm:p-4',
         need.fill,
         need.border,
       )}

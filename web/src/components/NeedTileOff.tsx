@@ -18,7 +18,7 @@ export function NeedTileOff({ icon: Icon, title, description, status, to }: Need
   return (
     <Link
       to={to}
-      className="flex min-h-43 flex-col gap-3 rounded-12 border border-dashed border-slate bg-mist p-5.5 text-ink hover:border-ink hover:text-ink max-sm:min-h-30 max-sm:gap-2.5 max-sm:p-4"
+      className="flex min-h-43 flex-col gap-3 rounded-12 border border-dashed no-underline border-slate bg-mist p-5.5 text-ink hover:border-ink hover:text-ink max-sm:min-h-30 max-sm:gap-2.5 max-sm:p-4"
     >
       <span className="flex items-start justify-between gap-2">
         <span className="grid size-12.5 place-items-center rounded-10 bg-white text-slate max-sm:size-10.5">

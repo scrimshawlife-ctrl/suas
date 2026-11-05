@@ -11,6 +11,7 @@ Stack: Vite, React, TypeScript (strict), React Router (data router), TanStack Qu
 #    SUAS_ENV=LOCAL, SUAS_HTTP_PORT=3120, SUAS_EMAIL_MODE=fake, SUAS_ID_VERIFICATION_MODE=fake,
 #    SUAS_MODEL_INFERENCE_MODE=fake, SUAS_CHAT_PUSH_MODE=local, SUAS_CHAT_LOCAL_WS_PORT=3121,
 #    SUAS_SAFETY_COPY_MODE=approved, DATABASE_SSL_MODE=disable and a local DATABASE_URL.
+#    New-email sign-up also needs SUAS_BROWSER_TENANT_ID set to a tenant UUID (any UUID in LOCAL).
 npm run migrate -- apply && npm run seed && npm run dev
 
 # 2. Web (this folder): Vite on 5123, proxying /api to 127.0.0.1:${SUAS_API_PORT:-3120}
@@ -28,6 +29,8 @@ Sign-in codes in fake email mode come from `GET /api/v0/dev/last-challenge?desti
 | `npm test`          | Vitest                                                          |
 | `npm run gen:api`   | Regenerate `src/api/schema.d.ts` from `../docs/openapi/v0.json` |
 | `npm run check`     | lint, typecheck, test, build (CI runs this)                     |
+
+Fonts are self-hosted through `@fontsource/public-sans` (600, 700) and `@fontsource/atkinson-hyperlegible` (400, 400 italic, 700), so the app makes no third-party requests and works under a strict CSP.
 
 Optional env: `VITE_SUAS_ENV_LABEL` (shows the EnvChip, for example "Synthetic demo data"), `VITE_SUAS_API_BASE_URL` (API origin when not same-origin), `SUAS_API_PORT` (dev proxy target).
 
@@ -56,6 +59,16 @@ Each route points at a lazy `features/<area>/<Screen>Page.tsx` with a default ex
   - on 401 for a signed-in request: clears the token and goes to `/sign-in` (a wrong sign-in code is a 401 too and is left alone).
 - Because errors throw, `const { data } = await api.GET(...)` is enough; use `isApiError` and `GATE_CODES` (`VERIFICATION_REQUIRED`, `COUNTY_REQUIRED`, `MFA_REQUIRED`, `FORBIDDEN`) to branch.
 - `src/api/supplement.ts` is a temporary typed supplement for fields the OpenAPI document does not describe yet (auth bodies, `display_name`, `is_admin`, `PUT /veterans/me/profile`). Delete it, and the `Omit` in `client-types.ts`, once the document has them and `npm run gen:api` has been re-run.
+
+### Writes and idempotency
+
+Every POST, PUT and PATCH carries an `Idempotency-Key`. If the caller passes none, the client adds a random one per request, which only protects a single request.
+
+A screen that creates something must make one user action map to one key:
+
+- Hold one key per submit with `useIdempotencyKey()` (`src/api/idempotency.ts`) and pass `headers: key.headers()` to `api.POST(...)`.
+- Call `key.renew()` only after the action succeeded. A retry after an error or a dropped response reuses the same key, so the server replays instead of creating twice.
+- Disable the submit button while the mutation is pending (`isPending`), so a double click cannot start a second action.
 
 ## Query keys
 

@@ -106,6 +106,7 @@
 
   a {
     color: var(--color-service-blue);
+    text-decoration: underline;
   }
 
   a:hover {

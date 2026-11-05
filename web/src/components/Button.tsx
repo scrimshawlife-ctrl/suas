@@ -105,19 +105,21 @@ export function Button(props: ButtonProps) {
 
   if (href !== undefined) {
     if (isDisabled) {
+      // A link that cannot be followed is a real disabled button, not a bare span.
       return (
-        <span className={classes} aria-disabled="true">
+        <button type="button" disabled aria-disabled="true" className={classes}>
           {content}
-        </span>
+        </button>
       );
     }
     const anchor = element as AnchorHTMLAttributes<HTMLAnchorElement>;
+    const onLinkClick = onClick as unknown as AnchorHTMLAttributes<HTMLAnchorElement>['onClick'];
     return isInternal(href) ? (
-      <Link to={href} className={classes} {...anchor}>
+      <Link to={href} className={classes} onClick={onLinkClick} {...anchor}>
         {content}
       </Link>
     ) : (
-      <a href={href} className={classes} {...anchor}>
+      <a href={href} className={classes} onClick={onLinkClick} {...anchor}>
         {content}
       </a>
     );

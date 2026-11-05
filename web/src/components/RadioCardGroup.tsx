@@ -39,8 +39,10 @@ export function RadioCardGroup({
           value={option.value}
           title={option.title}
           description={option.description}
-          checked={value === undefined ? undefined : value === option.value}
-          onChange={onValueChange ? () => onValueChange(option.value) : undefined}
+          // Controlled only when `value` is given; the handler is always present so a
+          // read-only controlled group does not warn.
+          {...(value === undefined ? {} : { checked: value === option.value })}
+          onChange={() => onValueChange?.(option.value)}
         />
       ))}
     </fieldset>
