@@ -246,6 +246,40 @@ export async function listTrustedCircle(
   return result.rows.map(toContact);
 }
 
+export interface EmailableContact {
+  readonly trustedContactId: string;
+  readonly contactUserId: string | undefined;
+  readonly inviteEmail: string;
+}
+
+/**
+ * ACCEPTED contacts of a veteran that have an invite email, with that address.
+ * Membership only: callers still evaluate a Consent Grant per contact. Kept
+ * apart from `TrustedContact` so destinations do not travel with ordinary reads.
+ */
+export async function listAcceptedContactsWithEmail(
+  db: Queryable,
+  tenantId: string,
+  veteranUserId: string,
+): Promise<EmailableContact[]> {
+  const result = await db.query<{
+    trusted_contact_id: string;
+    contact_user_id: string | null;
+    invite_email: string;
+  }>(
+    `SELECT trusted_contact_id, contact_user_id, invite_email FROM trusted_contacts
+     WHERE tenant_id = $1 AND veteran_user_id = $2 AND status = 'ACCEPTED'
+       AND invite_email IS NOT NULL
+     ORDER BY invited_at, trusted_contact_id`,
+    [tenantId, veteranUserId],
+  );
+  return result.rows.map((row) => ({
+    trustedContactId: row.trusted_contact_id,
+    contactUserId: row.contact_user_id ?? undefined,
+    inviteEmail: row.invite_email,
+  }));
+}
+
 /**
  * Whether a contact's membership permits any use at all, before grants are even
  * considered. TRUSTED_CIRCLE.md §6: "evaluate membership first".

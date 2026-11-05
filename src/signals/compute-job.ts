@@ -11,10 +11,11 @@
 
 import type { Pool } from 'pg';
 import type { SuasConfig } from '../config/index.js';
-import type { JsonObject } from '../jobs/index.js';
+import type { DurableJobQueuePort, JsonObject } from '../jobs/index.js';
 import { findNonClosedCase } from '../coordination/cases.js';
 import { canonicalInputFor, findCheckIn } from './check-ins.js';
 import { computeSignal } from './engine.js';
+import { alertTrustedContactsOfRed } from './red-alert.js';
 import { MissingRequiredSafetyInputError, QV_001_VERSION, SV_001_VERSION } from './sv-001.js';
 import { settlePrimarySignal, type SupportSignal } from './settlement.js';
 
@@ -42,6 +43,7 @@ export async function runSupportSignalComputeJob(
   pool: Pool,
   config: SuasConfig,
   input: { tenantId: string; checkInId: string },
+  deps: { jobQueue?: DurableJobQueuePort | undefined } = {},
 ): Promise<SupportSignalComputeResult> {
   if (config.supportSignalMode === 'disabled') {
     return { status: 'SKIPPED', reason: 'MODE_DISABLED' };
@@ -81,6 +83,11 @@ export async function runSupportSignalComputeJob(
       inputQuestionnaireVersion: QV_001_VERSION,
       basis: computation.basis,
     });
+    // Also on a replayed settlement: if the first run died after settling, the
+    // retry must still alert. Per-contact dedupe keys keep it to one alert each.
+    if (settled.signal.level === 'RED') {
+      await alertTrustedContactsOfRed(pool, settled.signal, { jobQueue: deps.jobQueue });
+    }
     return { status: 'SETTLED', signal: settled.signal };
   } catch (error) {
     if (error instanceof MissingRequiredSafetyInputError) {
