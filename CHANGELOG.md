@@ -13,6 +13,10 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
+### Added
+
+- **AWS capability ports and adapters** (local v1 plan, `V1_PROJECT_PLAN.md` sections 2.2 and 4.1; not a released spec). `SUAS_EMAIL_MODE=ses` sends through Amazon SES next to Resend. New SUAS-owned ports: model inference (Bedrock Converse adapter, unavailable until `SUAS_BEDROCK_MODEL_ID` is set), object storage (S3 adapter), and ID scan + selfie verification (fake adapter only; no provider chosen). Each has a fake for LOCAL/TEST. Real AWS modes are refused in LOCAL/TEST and need `SUAS_AWS_REGION`; fake inference, storage and ID verification are refused in PRODUCTION. New variables are optional and default to `disabled`.
+
 ### Fixed
 
 - **Job outbox.** `job-worker` had no handler for `notification.send`, so those jobs were retried until they dead-lettered. It now delivers the Notification through `attemptSend`, which re-checks consent and skips a Notification already sent, so a replayed job cannot send twice. The job payload now carries the disclosure to re-check; a job without it fails closed. Inline dispatch (`DispatchingJobQueue`) now marks the outbox row `SUCCEEDED` after the handler succeeds, so the worker no longer reruns it; a failed inline run still leaves the row for the worker.

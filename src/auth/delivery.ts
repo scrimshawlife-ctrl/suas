@@ -26,6 +26,7 @@ import type {
   OutboundMessage,
 } from '../notifications/channels.js';
 import { RESEND_IMPLEMENTATION } from '../notifications/resend-email.js';
+import { SES_IMPLEMENTATION } from '../notifications/ses-email.js';
 import { renderEmailTemplate } from '../notifications/templates.js';
 
 export type ChallengeMethod = 'MAGIC_LINK' | 'EMAIL_OTP' | 'PHONE_OTP';
@@ -234,11 +235,17 @@ function reportedDeliveryMode(
   return channels.length === 0 ? 'disabled' : 'sink';
 }
 
+function isProviderBacked(port: NotificationChannelPort | undefined): boolean {
+  return (
+    port?.implementation === RESEND_IMPLEMENTATION || port?.implementation === SES_IMPLEMENTATION
+  );
+}
+
 /**
  * Build the delivery port for this configuration.
  *
- * When a caller supplies an EMAIL port whose implementation is `resend`,
- * challenges use that same port.
+ * When a caller supplies an EMAIL port whose implementation is `resend` or
+ * `ses`, challenges use that same port.
  */
 export function createChallengeDelivery(
   config: SuasConfig,
@@ -248,10 +255,7 @@ export function createChallengeDelivery(
   const mode = reportedDeliveryMode(config, channels);
   const email = channelPorts?.get('EMAIL');
   const sms = channelPorts?.get('SMS');
-  if (
-    email?.implementation === RESEND_IMPLEMENTATION ||
-    sms?.implementation === RESEND_IMPLEMENTATION
-  ) {
+  if (isProviderBacked(email) || isProviderBacked(sms)) {
     return new ChannelBackedChallengeDelivery(mode, email, sms);
   }
   return new RecordingChallengeDelivery(mode, channels);
