@@ -38,7 +38,7 @@ function Row({ item }: { item: ServiceRequestListItem }) {
         >
           <Icon />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 flex-[1_1_9rem] flex-col">
           <span className="font-bold break-words">{item.summary ?? need.label}</span>
           <span className="text-16 text-slate">{subLine(item)}</span>
         </span>

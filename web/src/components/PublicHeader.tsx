@@ -15,7 +15,7 @@ export function PublicHeader({ onSignOut, hideSignIn = false }: PublicHeaderProp
   return (
     <header className="border-b border-line bg-white">
       <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-7 gap-y-3 px-6 py-3.5 max-sm:gap-x-3 max-sm:px-4 max-sm:py-2.5">
-        <Link to="/" aria-label="SUAS home" className="inline-flex items-center">
+        <Link to="/" aria-label="SUAS home" className="inline-flex min-h-11 items-center">
           <Logo />
         </Link>
         <EnvChip />

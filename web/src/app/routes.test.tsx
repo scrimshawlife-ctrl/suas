@@ -83,6 +83,11 @@ describe('route table', () => {
     expect(screen.queryByText('Something went wrong.')).toBeNull();
   });
 
+  it('sets a page title for a screen that is still loading', async () => {
+    renderAt('/consents');
+    await waitFor(() => expect(document.title).toBe('What you share · SUAS'));
+  });
+
   it('shows the not-found page for an unknown path', async () => {
     renderAt('/nowhere');
     expect(

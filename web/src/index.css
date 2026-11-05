@@ -113,10 +113,30 @@
     color: var(--color-harbor);
   }
 
+  /* Tailwind's default placeholder is the text colour at 50%, which is under 4.5:1 on white. */
+  ::placeholder {
+    color: var(--color-slate);
+    opacity: 1;
+  }
+
   :focus-visible {
     outline: 2px solid var(--color-service-blue);
     outline-offset: 2px;
     box-shadow: 0 0 0 2px #fff;
+  }
+
+  /* Where focus lands after a route change. Not controls, so no ring (see RouteFocus). */
+  main:focus,
+  h1[tabindex='-1']:focus {
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* The fixed bottom tab bar (phones) must not cover the control that has keyboard focus. */
+  @media (max-width: 640px) {
+    html {
+      scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    }
   }
 }
 

@@ -49,7 +49,7 @@ function AppHeader({
       )}
     >
       <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-6 gap-y-3 px-6 py-3 max-sm:flex-nowrap max-sm:justify-between max-sm:gap-x-3 max-sm:px-4 max-sm:py-2.5">
-        <Link to={homeTo} aria-label="SUAS home" className="inline-flex items-center">
+        <Link to={homeTo} aria-label="SUAS home" className="inline-flex min-h-11 items-center">
           <Logo tone={harbor ? 'white' : 'color'} />
         </Link>
         <nav aria-label="Primary" className="flex gap-1 max-sm:hidden">
@@ -70,6 +70,7 @@ function AppHeader({
             Chat
             {chatUnread > 0 ? (
               <span
+                role="img"
                 aria-label={`${chatUnread} unread`}
                 className="inline-grid h-6 min-w-6 place-items-center rounded-full bg-service-blue px-1.5 text-16 font-bold text-white"
               >

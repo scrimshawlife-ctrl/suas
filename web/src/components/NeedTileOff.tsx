@@ -28,7 +28,7 @@ export function NeedTileOff({
     <Link
       to={to}
       className={cn(
-        'flex min-h-43 flex-col gap-3 rounded-12 border border-dashed no-underline border-slate bg-mist p-5.5 text-ink hover:border-ink hover:text-ink max-sm:min-h-30 max-sm:gap-2.5 max-sm:p-4',
+        'flex min-h-43 min-w-0 flex-col gap-3 rounded-12 border border-dashed no-underline border-slate bg-mist p-5.5 text-ink hover:border-ink hover:text-ink max-sm:min-h-30 max-sm:gap-2.5 max-sm:p-4',
         className,
       )}
     >
@@ -41,7 +41,7 @@ export function NeedTileOff({
           <StatusChip kind="off">{status}</StatusChip>
         </span>
       </span>
-      <span className="text-21 font-bold">{title}</span>
+      <span className="text-21 font-bold break-words hyphens-auto">{title}</span>
       <span className="text-16 text-slate max-sm:hidden">{description}</span>
       <span className="hidden text-16 font-bold text-slate max-sm:block">{status}</span>
     </Link>

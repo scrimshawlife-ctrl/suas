@@ -236,6 +236,18 @@ describe('RequestPage without the assistant, and the plain form', () => {
     expect(await screen.findByLabelText('What kind of help do you need?')).toHaveValue('');
   });
 
+  it('puts focus on the first field with a problem and links its message to it', async () => {
+    renderScreen(<RequestPage />, '/request?category=FOOD');
+    await userEvent.click(await screen.findByLabelText('Short summary'));
+    await userEvent.paste('Groceries');
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    const meetingPlace = await screen.findByLabelText('Where should the helper meet you?');
+    expect(meetingPlace).toHaveFocus();
+    expect(meetingPlace).toHaveAttribute('aria-invalid', 'true');
+    const message = screen.getByText('Tell us where the helper should meet you.');
+    expect(meetingPlace.getAttribute('aria-describedby')?.split(' ')).toContain(message.id);
+  });
+
   it('asks for a meeting place on a food request before sending anything', async () => {
     renderScreen(<RequestPage />, '/request?category=FOOD');
     await userEvent.click(await screen.findByLabelText('Short summary'));

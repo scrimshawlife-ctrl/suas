@@ -8,7 +8,7 @@ import { fieldClass, FieldShell } from '../../components/FieldShell';
 import { Page } from '../../components/Page';
 import { ChevronLeftIcon } from '../../components/icons';
 import { cn } from '../../lib/cn';
-import { useFocusFirstInvalid } from './focus-invalid';
+import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import {
   afterSignInPath,
   cleanCode,

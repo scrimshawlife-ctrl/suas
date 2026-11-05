@@ -51,7 +51,7 @@ export function NeedTile({
     <Link
       to={to}
       className={cn(
-        'flex min-h-43 flex-col gap-3 rounded-12 border p-5.5 no-underline text-white hover:text-white hover:shadow-[inset_0_0_0_3px_#fff,0_0_0_2px_#101828] max-sm:min-h-30 max-sm:gap-2.5 max-sm:p-4',
+        'flex min-h-43 min-w-0 flex-col gap-3 rounded-12 border p-5.5 no-underline text-white hover:text-white hover:shadow-[inset_0_0_0_3px_#fff,0_0_0_2px_#101828] max-sm:min-h-30 max-sm:gap-2.5 max-sm:p-4',
         need.fill,
         need.border,
         className,
@@ -60,7 +60,7 @@ export function NeedTile({
       <span className="grid size-12.5 place-items-center rounded-10 bg-white/15 max-sm:size-10.5">
         <Icon size={26} />
       </span>
-      <span className="text-21 font-bold">{name}</span>
+      <span className="text-21 font-bold break-words hyphens-auto">{name}</span>
       {description ? <span className="text-16 max-sm:hidden">{description}</span> : null}
       {phoneTag ? <span className="hidden text-16 font-bold max-sm:block">{phoneTag}</span> : null}
     </Link>
