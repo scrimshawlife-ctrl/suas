@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession, revokeSession } from '../../src/auth/index.js';
+import { createSession, revokeSession, SESSION_IDLE_TTL_SECONDS } from '../../src/auth/index.js';
 import {
   createChatConnectionLifecycle,
   issueConnectTicket,
@@ -425,7 +425,7 @@ describe('push failure and gone connections', () => {
     expect(await listConnectionIds(pool(), s.tenantId, s.requester.userId)).toEqual(['aws-live']);
   });
 
-  it('sends nothing to a connection whose session was revoked', async () => {
+  it('sends nothing to a connection whose session was revoked or went idle', async () => {
     const s = await scenario({ accepted: true });
     const liveSession = await createSession(pool(), TEST_SESSION_SECRET, {
       tenantId: s.tenantId,
@@ -443,6 +443,28 @@ describe('push failure and gone connections', () => {
       });
     }
     await revokeSession(pool(), s.requester.sessionId, 'LOGOUT');
+
+    // A session idle past the idle TTL is dead too, the same as in resolveSession.
+    const idleSession = await createSession(pool(), TEST_SESSION_SECRET, {
+      tenantId: s.tenantId,
+      userId: s.requester.userId,
+    });
+    await registerConnection(pool(), {
+      connectionId: 'idle-conn',
+      tenantId: s.tenantId,
+      userId: s.requester.userId,
+      sessionId: idleSession.session.sessionId,
+    });
+    const idleTicket = await issueConnectTicket(pool(), {
+      tenantId: s.tenantId,
+      userId: s.requester.userId,
+      sessionId: idleSession.session.sessionId,
+    });
+    await pool().query(
+      `UPDATE sessions SET last_seen_at = now() - make_interval(secs => $2)
+        WHERE session_id = $1`,
+      [idleSession.session.sessionId, SESSION_IDLE_TTL_SECONDS.value + 60],
+    );
 
     const sentTo: string[] = [];
     const recording: ConnectionPushPort = {
@@ -465,6 +487,7 @@ describe('push failure and gone connections', () => {
       message(access, s.accepter.userId),
     );
     expect(sentTo).toEqual(['live-conn']);
+    expect(await redeemConnectTicket(pool(), idleTicket.ticket)).toBeUndefined();
 
     // A ticket issued before the revocation cannot be redeemed either.
     const late = await issueConnectTicket(pool(), {
