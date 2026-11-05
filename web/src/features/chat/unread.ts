@@ -82,14 +82,9 @@ tokenStore.subscribe(() => {
   if (tokenStore.getToken() === null) seenStore.reset();
 });
 
-/** The server tells us when the newest message is the person's own (`last_message_from_me`). */
-function lastMessageIsMine(thread: ChatThread): boolean {
-  return (thread as ChatThread & { last_message_from_me?: boolean }).last_message_from_me === true;
-}
-
 export function countUnread(threads: readonly ChatThread[], state: SeenState): number {
   return threads.filter((thread) => {
-    if (thread.last_message_at === null || lastMessageIsMine(thread)) return false;
+    if (thread.last_message_at === null || thread.last_message_from_me === true) return false;
     const last = Date.parse(thread.last_message_at);
     return last > (state.seen[thread.service_request_id] ?? state.baseline);
   }).length;
@@ -103,9 +98,8 @@ export const UNREAD_REFETCH_MS = 60_000;
  * for the header badge: `import { useChatUnreadCount } from '../features/chat/unread'`.
  * It reads the thread list through its own observer that refetches every minute (TanStack
  * skips interval refetches while the tab is hidden); the chat screen's live socket keeps the
- * same list current while it is open. A thread whose newest message is the person's own does
- * not count once the server sends `last_message_from_me`; until then a message sent from
- * another device shows as unread.
+ * same list current while it is open. A thread whose newest message is the person's own
+ * (`last_message_from_me`) does not count, including one sent from another device.
  */
 export function useChatUnreadCount(): number {
   const token = useSessionToken();

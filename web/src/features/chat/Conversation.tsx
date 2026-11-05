@@ -4,7 +4,7 @@ import type { ChatThread } from '../../api/types';
 import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
 import { Button } from '../../components/Button';
-import { useChatMessages, useIsRequester } from './api';
+import { useChatMessages } from './api';
 import { Composer } from './Composer';
 import {
   conversationErrorText,
@@ -26,7 +26,6 @@ export interface ConversationProps {
 /** Header, message column and composer for one request's chat. */
 export function Conversation({ serviceRequestId, thread, meUserId }: ConversationProps) {
   const messagesQuery = useChatMessages(serviceRequestId);
-  const isRequester = useIsRequester(serviceRequestId);
   const outbox = useOutbox(serviceRequestId);
   const name = counterpartName(thread);
   const messages = toOldestFirst(messagesQuery.data);
@@ -55,10 +54,11 @@ export function Conversation({ serviceRequestId, thread, meUserId }: Conversatio
     }
   }, [newestId, newestIsMine, name]);
 
+  // The thread says which side the person is on: requesters see /requests/:id, accepters the case.
   const requestHref =
-    isRequester === undefined
+    thread === undefined
       ? undefined
-      : isRequester
+      : thread.role === 'REQUESTER'
         ? paths.requestDetail(serviceRequestId)
         : paths.case(serviceRequestId);
 

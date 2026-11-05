@@ -28,6 +28,8 @@ const threads = {
       last_message_body: 'Perfect, see you then.',
       last_message_at: '2026-11-04T20:02:00.000Z',
       closed: false,
+      role: 'REQUESTER',
+      last_message_from_me: false,
     },
     {
       service_request_id: CLOSED,
@@ -37,6 +39,8 @@ const threads = {
       last_message_body: 'Thanks again.',
       last_message_at: '2026-11-03T20:14:00.000Z',
       closed: true,
+      role: 'ACCEPTER',
+      last_message_from_me: false,
     },
   ],
 };
@@ -51,24 +55,24 @@ const message = (n: number, sender: string, body: string) => ({
 
 interface Routes_ {
   messages?: (query: { cursor?: string }) => unknown;
-  requested?: string[];
+  /** The person's side of the open conversation; the closed one is always the other side. */
+  role?: 'REQUESTER' | 'ACCEPTER';
   /** Issue connect tickets (the test supplies a WebSocket) instead of answering 503. */
   realtime?: boolean;
 }
 
-function mockApi({ messages, requested = [REQ], realtime = false }: Routes_ = {}) {
+function mockApi({ messages, role = 'REQUESTER', realtime = false }: Routes_ = {}) {
   client.GET.mockImplementation(
     (path: string, init?: { params?: { query?: { cursor?: string } } }) => {
       switch (path) {
         case '/api/v0/veterans/me':
           return Promise.resolve({ data: { user_id: ME } });
         case '/api/v0/chat/threads':
-          return Promise.resolve({ data: threads });
-        case '/api/v0/service-requests':
           return Promise.resolve({
             data: {
-              service_requests: requested.map((id) => ({ service_request_id: id })),
-              next_cursor: null,
+              threads: threads.threads.map((t) =>
+                t.service_request_id === REQ ? { ...t, role } : t,
+              ),
             },
           });
         case '/api/v0/service-requests/{id}/chat/messages': {
@@ -184,7 +188,7 @@ describe('conversation', () => {
     ).toHaveAttribute('href', `/requests/${REQ}`);
     first.unmount();
 
-    mockApi({ messages: () => page2, requested: [] });
+    mockApi({ messages: () => page2, role: 'ACCEPTER' });
     renderChat(`/chat/${REQ}`);
     expect(
       await screen.findByRole('link', { name: 'Ride to a clinic appointment' }),
