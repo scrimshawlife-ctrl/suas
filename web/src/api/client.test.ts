@@ -141,6 +141,20 @@ describe('api client middleware', () => {
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
 
+  it('does not end the session on a wrong MFA response', async () => {
+    const { client, store, onUnauthorized } = setup(() =>
+      json(401, { error: { code: 'UNAUTHENTICATED', message: 'The MFA response is not valid.' } }),
+    );
+    store.setToken('still-valid');
+    await expect(
+      client.POST('/api/v0/auth/mfa/challenges/commands/verify', {
+        body: { challenge_id: 'mfa-test-1', response: 'wrong' },
+      }),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(store.getToken()).toBe('still-valid');
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
   it('does not redirect on a 401 from logout (sign-out ends on "/" itself)', async () => {
     const { client, store, onUnauthorized } = setup(() =>
       json(401, { error: { code: 'UNAUTHENTICATED', message: 'Gone.' } }),
