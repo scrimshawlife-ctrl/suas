@@ -15,6 +15,7 @@ import type { ScriptedModelInference } from '../../src/inference/index.js';
 import { grantSuasAdmin, createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 const SOURCE_LINK = 'https://pantry.example.invalid/hours';
 const SOURCE_TEXT =
@@ -207,6 +208,8 @@ describe('edit, discard and publish', () => {
     const tenantId = randomUUID();
     const admin = await credential(app, tenantId, { admin: true, elevate: true });
     const veteran = await credential(app, tenantId, { admin: false, elevate: false });
+    // Listing resources needs a passed scan (requireVerifiedVeteran); only this Veteran.
+    await markVerifiedVeteran(pool(), tenantId, veteran.userId);
     const draft = await oneDraft(admin.headers);
     const second = await oneDraft(admin.headers);
 
@@ -215,6 +218,7 @@ describe('edit, discard and publish', () => {
       url: '/api/v0/resources',
       headers: veteran.headers,
     });
+    expect(before.statusCode).toBe(200);
     expect(before.json().resources).toEqual([]);
 
     const edited = await app.server.inject({
@@ -250,6 +254,7 @@ describe('edit, discard and publish', () => {
       url: '/api/v0/resources',
       headers: veteran.headers,
     });
+    expect(after.statusCode).toBe(200);
     const listed = after.json().resources as { resource_id: string; hours: string }[];
     // Only the published one: the second draft is still a draft.
     expect(listed.map((r) => r.resource_id)).toEqual([resourceId]);
