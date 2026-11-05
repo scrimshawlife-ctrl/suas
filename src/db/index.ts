@@ -6,6 +6,7 @@ export {
   readAppliedMigrations,
   readSchemaVersion,
   runMigrations,
+  runMigrationsOnClient,
   SchemaStateError,
   type AppliedMigration,
   type MigrationPlan,
