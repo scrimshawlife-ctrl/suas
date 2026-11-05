@@ -7,8 +7,8 @@
 --   version mechanism rather than the application version.
 -- - SUAS-specs VERSIONING.md §3.5 "Database migration/schema version".
 --
--- This baseline introduces no domain tables. Domain schema arrives with the slices
--- that own it (SPEC017_PLAN.md Slices 2-9), each citing DATA_MODEL.md.
+-- This file introduces no domain tables. The v1 baseline replaces the earlier 0001-0014
+-- set (V1_PROJECT_PLAN.md §4.2); the domain schema follows in 0002-0013, ordered by area.
 --
 -- Destructive-change note (ENVIRONMENT.md §9): this migration is additive only and
 -- has no destructive step; forward-fix is a later numbered migration.

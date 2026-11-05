@@ -35,8 +35,8 @@ import {
 function facts(overrides: Partial<QrfFacts> = {}): QrfFacts {
   return {
     requestStatus: 'SUBMITTED',
-    responderAssigned: false,
-    responderNotificationDelivered: false,
+    assigned: false,
+    assignedNotificationDelivered: false,
     coordinationDegraded: false,
     matchingExhausted: false,
     ...overrides,
@@ -45,7 +45,7 @@ function facts(overrides: Partial<QrfFacts> = {}): QrfFacts {
 
 describe('MVP_REFERENCE.md §5 — required surface inventory', () => {
   it('declares every surface the released table lists', () => {
-    expect(REQUIRED_SURFACES).toHaveLength(14);
+    expect(REQUIRED_SURFACES).toHaveLength(10);
   });
 
   it('refuses a surface that is not in the released inventory', () => {
@@ -113,9 +113,7 @@ describe('MVP_REFERENCE.md §7.2 — QRF truthfulness', () => {
   });
 
   it('does not claim a responder was notified from an assignment alone', () => {
-    const presentation = presentQrfState(
-      facts({ requestStatus: 'ASSIGNED', responderAssigned: true }),
-    );
+    const presentation = presentQrfState(facts({ requestStatus: 'ASSIGNED', assigned: true }));
     expect(presentation.state).toBe('SEARCHING');
     expect(presentation.basis).toContain('no recorded notification delivery');
   });
@@ -124,8 +122,8 @@ describe('MVP_REFERENCE.md §7.2 — QRF truthfulness', () => {
     const presentation = presentQrfState(
       facts({
         requestStatus: 'ASSIGNED',
-        responderAssigned: true,
-        responderNotificationDelivered: true,
+        assigned: true,
+        assignedNotificationDelivered: true,
       }),
     );
     expect(presentation.state).toBe('RESPONDER_NOTIFIED');
@@ -152,7 +150,7 @@ describe('MVP_REFERENCE.md §7.2 — QRF truthfulness', () => {
   it.each(['FULFILLED', 'CONFIRMED', 'CLOSED'] as const)(
     'keeps a %s request on RESPONDER_ACCEPTED instead of falling back to SEARCHING',
     (requestStatus) => {
-      const presentation = presentQrfState(facts({ requestStatus, responderAssigned: true }));
+      const presentation = presentQrfState(facts({ requestStatus, assigned: true }));
       expect(presentation.state).toBe('RESPONDER_ACCEPTED');
       expect(presentation.headline).not.toContain('Looking for');
     },

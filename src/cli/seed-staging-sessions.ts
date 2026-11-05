@@ -32,7 +32,6 @@ import { createPool } from '../db/index.js';
 import { loadConfig } from '../config/index.js';
 import { createSession } from '../auth/index.js';
 import { findUserByDestination } from '../identity/users.js';
-import { listActiveMemberships } from '../identity/organizations.js';
 import { syntheticEmail } from '../testing/fixture-boundary.js';
 
 /** Fixed synthetic tenant — must match seed-local.ts. */
@@ -51,10 +50,10 @@ async function main(): Promise<void> {
   const pool = createPool(config);
   try {
     const veteranEmail = syntheticEmail('veteran');
-    const responderEmail = syntheticEmail('responder');
+    const accepterEmail = syntheticEmail('accepter');
 
     const veteran = await findUserByDestination(pool, TENANT_ID, veteranEmail);
-    const responder = await findUserByDestination(pool, TENANT_ID, responderEmail);
+    const accepter = await findUserByDestination(pool, TENANT_ID, accepterEmail);
 
     if (veteran === undefined) {
       throw new Error(
@@ -62,36 +61,33 @@ async function main(): Promise<void> {
           `Run the initial seed against the STAGING database first.`,
       );
     }
-    if (responder === undefined) {
+    if (accepter === undefined) {
       throw new Error(
-        `Synthetic responder user (${responderEmail}) not found in STAGING database. ` +
+        `Synthetic accepter user (${accepterEmail}) not found in STAGING database. ` +
           `Run the initial seed against the STAGING database first.`,
       );
     }
-
-    // Responder sessions are scoped to the active organization membership.
-    const memberships = await listActiveMemberships(pool, responder.userId, TENANT_ID);
-    const organizationId = memberships[0]?.organizationId;
 
     const veteranSession = await createSession(pool, config.sessionSecret, {
       tenantId: TENANT_ID,
       userId: veteran.userId,
     });
-    const responderSession = await createSession(pool, config.sessionSecret, {
+    const accepterSession = await createSession(pool, config.sessionSecret, {
       tenantId: TENANT_ID,
-      userId: responder.userId,
-      ...(organizationId !== undefined ? { organizationId } : {}),
+      userId: accepter.userId,
     });
 
     const githubEnvPath = process.env['GITHUB_ENV'];
     if (githubEnvPath !== undefined) {
       // Mask both credentials so they never appear in the Actions log.
       process.stdout.write(`::add-mask::${veteranSession.credential}\n`);
-      process.stdout.write(`::add-mask::${responderSession.credential}\n`);
+      process.stdout.write(`::add-mask::${accepterSession.credential}\n`);
       appendFileSync(
         githubEnvPath,
         `SUAS_E2E_VETERAN_BEARER=${veteranSession.credential}\n` +
-          `SUAS_E2E_RESPONDER_BEARER=${responderSession.credential}\n`,
+          // The variable keeps its pre-v1 name: the workflows and secrets that read it
+          // live outside this repo's code.
+          `SUAS_E2E_RESPONDER_BEARER=${accepterSession.credential}\n`,
       );
     }
 
@@ -104,11 +100,10 @@ async function main(): Promise<void> {
             sessionId: veteranSession.session.sessionId,
             expiresAt: veteranSession.session.expiresAt.toISOString(),
           },
-          responder: {
-            userId: responder.userId,
-            sessionId: responderSession.session.sessionId,
-            organizationId: organizationId ?? null,
-            expiresAt: responderSession.session.expiresAt.toISOString(),
+          accepter: {
+            userId: accepter.userId,
+            sessionId: accepterSession.session.sessionId,
+            expiresAt: accepterSession.session.expiresAt.toISOString(),
           },
           githubEnvWritten: githubEnvPath !== undefined,
         },

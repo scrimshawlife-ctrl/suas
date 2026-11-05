@@ -10,8 +10,8 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { findActiveAssignment, findNonClosedCase } from '../../src/coordination/index.js';
-import { createMembership, createOrganization, createUser } from '../../src/identity/index.js';
+import { claimCase, findNonClosedCase } from '../../src/coordination/index.js';
+import { createUser } from '../../src/identity/index.js';
 import { presentQrfState, VETERAN_QRF_CANCEL_REASON } from '../../src/ui/index.js';
 import { readActiveQrf } from '../../src/ui/read.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -55,32 +55,21 @@ async function veteranSession(): Promise<{
   return { credential: session.credential, tenantId, userId: user.userId };
 }
 
-async function responderSession(tenantId: string): Promise<{
+async function accepterSession(tenantId: string): Promise<{
   credential: string;
   userId: string;
 }> {
-  const org = await createOrganization(pool(), {
+  const accepter = await createUser(pool(), {
     tenantId,
-    name: `Org ${randomUUID().slice(0, 8)}`,
+    email: syntheticEmail(`acc-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
-  });
-  const responder = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`resp-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
-  await createMembership(pool(), {
-    tenantId,
-    organizationId: org.organizationId,
-    userId: responder.userId,
-    role: 'RESPONDER',
-    status: 'ACTIVE',
+    county: 'SANTA_CLARA',
   });
   const session = await createSession(pool(), TEST_SESSION_SECRET, {
     tenantId,
-    userId: responder.userId,
+    userId: accepter.userId,
   });
-  return { credential: session.credential, userId: responder.userId };
+  return { credential: session.credential, userId: accepter.userId };
 }
 
 async function countPeerSupport(tenantId: string): Promise<number> {
@@ -219,66 +208,21 @@ describe('POST /app/qrf/cancel — veteran cancel', () => {
   });
 });
 
-describe('POST /app/responder/cases/:id/commands/claim — HTML claim', () => {
-  it('refuses an unauthenticated claim', async () => {
-    const response = await app.server.inject({
-      method: 'POST',
-      url: `/app/responder/cases/${randomUUID()}/commands/claim`,
-    });
-    expect(response.statusCode).toBe(401);
-  });
-
-  it('refuses a veteran without responder membership', async () => {
+describe('the HTML pages no longer include accepting', () => {
+  it('has no /app/responder routes', async () => {
     const veteran = await veteranSession();
-    await app.server.inject({
-      method: 'POST',
-      url: '/app/qrf/deploy',
-      headers: authorized(veteran.credential),
-    });
-    const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
-    if (supportCase === undefined) throw new Error('expected a case after deploy');
-
-    const response = await app.server.inject({
-      method: 'POST',
-      url: `/app/responder/cases/${supportCase.caseId}/commands/claim`,
-      headers: authorized(veteran.credential),
-    });
-    expect(response.statusCode).toBe(403);
-  });
-
-  it('lets a responder claim and treats a same-responder replay as success', async () => {
-    const veteran = await veteranSession();
-    await app.server.inject({
-      method: 'POST',
-      url: '/app/qrf/deploy',
-      headers: authorized(veteran.credential),
-    });
-    const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
-    if (supportCase === undefined) throw new Error('expected a case after deploy');
-    const responder = await responderSession(veteran.tenantId);
-
-    const claimed = await app.server.inject({
-      method: 'POST',
-      url: `/app/responder/cases/${supportCase.caseId}/commands/claim`,
-      headers: authorized(responder.credential),
-    });
-    expect(claimed.statusCode).toBe(303);
-    expect(claimed.headers.location).toBe('/app/responder');
-
-    const assignment = await findActiveAssignment(pool(), supportCase.caseId);
-    expect(assignment?.responderUserId).toBe(responder.userId);
-
-    const replay = await app.server.inject({
-      method: 'POST',
-      url: `/app/responder/cases/${supportCase.caseId}/commands/claim`,
-      headers: authorized(responder.credential),
-    });
-    expect(replay.statusCode).toBe(303);
-    expect(replay.headers.location).toBe('/app/responder');
+    for (const url of ['/app/responder', '/app/responder/availability', '/app/responder/needs']) {
+      const response = await app.server.inject({
+        method: 'GET',
+        url,
+        headers: authorized(veteran.credential),
+      });
+      expect(response.statusCode).toBe(404);
+    }
   });
 });
 
-describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED on the home', () => {
+describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
   it('stays off RESPONDER_NOTIFIED when only an assignment exists', async () => {
     const veteran = await veteranSession();
     await app.server.inject({
@@ -288,11 +232,11 @@ describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED on the home', () => {
     });
     const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
-    const responder = await responderSession(veteran.tenantId);
-    await app.server.inject({
-      method: 'POST',
-      url: `/app/responder/cases/${supportCase.caseId}/commands/claim`,
-      headers: authorized(responder.credential),
+    const responder = await accepterSession(veteran.tenantId);
+    await claimCase(pool(), {
+      tenantId: veteran.tenantId,
+      caseId: supportCase.caseId,
+      acceptedByUserId: responder.userId,
     });
 
     const home = await app.server.inject({
@@ -317,11 +261,11 @@ describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED on the home', () => {
     });
     const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
-    const responder = await responderSession(veteran.tenantId);
-    await app.server.inject({
-      method: 'POST',
-      url: `/app/responder/cases/${supportCase.caseId}/commands/claim`,
-      headers: authorized(responder.credential),
+    const responder = await accepterSession(veteran.tenantId);
+    await claimCase(pool(), {
+      tenantId: veteran.tenantId,
+      caseId: supportCase.caseId,
+      acceptedByUserId: responder.userId,
     });
     const qrf = await readActiveQrf(pool(), veteran.tenantId, veteran.userId);
     if (qrf === undefined) throw new Error('expected an in-flight request');
@@ -330,7 +274,7 @@ describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED on the home', () => {
       `INSERT INTO notifications
          (notification_id, tenant_id, recipient_user_id, reason, channel, consent_basis,
           template_version, subject_type, subject_id, delivery_status)
-       VALUES ($1, $2, $3, 'qrf.responder_notified', 'IN_APP', 'RESPONDER_CASE_ASSIGNMENT',
+       VALUES ($1, $2, $3, 'qrf.responder_notified', 'IN_APP', 'CASE_ASSIGNMENT',
                'test@1', 'ServiceRequest', $4, 'SENT')`,
       [randomUUID(), veteran.tenantId, responder.userId, qrf.serviceRequestId],
     );
@@ -342,7 +286,7 @@ describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED on the home', () => {
     });
     expect(home.statusCode).toBe(200);
     expect(home.body).toContain('RESPONDER NOTIFIED');
-    expect(home.body).toContain('A responder has been notified.');
+    expect(home.body).toContain('Someone has been notified.');
   });
 
   it('does not treat a notification without a Service Request subject as delivery', async () => {
@@ -354,18 +298,18 @@ describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED on the home', () => {
     });
     const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
-    const responder = await responderSession(veteran.tenantId);
-    await app.server.inject({
-      method: 'POST',
-      url: `/app/responder/cases/${supportCase.caseId}/commands/claim`,
-      headers: authorized(responder.credential),
+    const responder = await accepterSession(veteran.tenantId);
+    await claimCase(pool(), {
+      tenantId: veteran.tenantId,
+      caseId: supportCase.caseId,
+      acceptedByUserId: responder.userId,
     });
 
     await pool().query(
       `INSERT INTO notifications
          (notification_id, tenant_id, recipient_user_id, reason, channel, consent_basis,
           template_version, delivery_status)
-       VALUES ($1, $2, $3, 'qrf.responder_notified', 'IN_APP', 'RESPONDER_CASE_ASSIGNMENT',
+       VALUES ($1, $2, $3, 'qrf.responder_notified', 'IN_APP', 'CASE_ASSIGNMENT',
                'test@1', 'SENT')`,
       [randomUUID(), veteran.tenantId, responder.userId],
     );

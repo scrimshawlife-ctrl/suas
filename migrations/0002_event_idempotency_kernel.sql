@@ -16,19 +16,20 @@
 --
 -- Destructive-change note (ENVIRONMENT.md §9): additive only; no destructive step.
 --
--- tenant_id carries no foreign key yet. Organizations arrive in SPEC017_PLAN.md
--- Slice 3; the column is present now because tenant scope is part of the released
--- envelope (EVENT_MODEL.md §2) and tenant isolation must survive jobs and events
--- (ARCHITECTURE.md §3 invariant 11).
+-- tenant_id carries no foreign key. It is the deployment scope of the released
+-- envelope (EVENT_MODEL.md §2); v1 has no Organizations, so isolation inside a tenant
+-- is per person and per relationship (requester, accepter), enforced in code.
 
 -- ---------------------------------------------------------------------------
 -- Shared envelope enumerations (EVENT_MODEL.md §2)
 -- ---------------------------------------------------------------------------
 
+-- v1 (V1_PROJECT_PLAN.md §2.1): no Responder and no Org Admin. VETERAN is the
+-- requester; USER is any other signed-in person acting on a request they accepted.
+-- The accepter has no agreed role name yet (plan §8 #19), so none is invented here.
 CREATE TYPE suas_actor_type AS ENUM (
     'VETERAN',
-    'RESPONDER',
-    'ORG_ADMIN',
+    'USER',
     'SUAS_ADMIN',
     'TRUSTED_CONTACT',
     'SERVICE_PROVIDER',

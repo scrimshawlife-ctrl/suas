@@ -285,7 +285,7 @@ export async function overrideSignal(
       aggregateType: 'SupportSignal',
       aggregateId: row.support_signal_id,
       tenantId: input.tenantId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
       actorId: input.actorId,
       payload: {
         support_signal_id: row.support_signal_id,

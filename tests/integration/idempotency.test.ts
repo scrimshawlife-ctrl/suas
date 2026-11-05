@@ -184,7 +184,7 @@ describe('ARCHITECTURE.md §9, §10 — atomicity and contention', () => {
         aggregateType: 'SupportCase',
         aggregateId,
         tenantId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
         actorId: 'responder-1',
         payload: { category: 'FOOD' },
       });
@@ -222,7 +222,7 @@ describe('ARCHITECTURE.md §9, §10 — atomicity and contention', () => {
           aggregateType: 'SupportCase',
           aggregateId,
           tenantId,
-          actorType: 'RESPONDER',
+          actorType: 'USER',
           actorId: 'responder-1',
           payload: { category: 'FOOD' },
         });

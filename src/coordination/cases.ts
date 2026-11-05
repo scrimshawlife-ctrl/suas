@@ -7,6 +7,7 @@
  *   (resolution and closure)
  * - SUAS-specs RESPONDER_WORKFLOWS.md §2 (named actions), §3 (idempotency and
  *   stale-state protection)
+ * - V1_PROJECT_PLAN.md §2.1 (any signed-in person accepts; first accept wins)
  * - SUAS-specs EVENT_MODEL.md §3 (`CASE_CREATED`, `CASE_ASSIGNED`,
  *   `CASE_ESCALATED`, `CASE_RESOLVED`)
  * - SUAS-specs DATA_MODEL.md §14 rule 6 (one active assignment where required)
@@ -39,7 +40,7 @@ export interface CaseAssignment {
   readonly caseAssignmentId: string;
   readonly tenantId: string;
   readonly caseId: string;
-  readonly responderUserId: string;
+  readonly acceptedByUserId: string;
   readonly status: 'ACTIVE' | 'RELEASED' | 'REASSIGNED';
 }
 
@@ -55,12 +56,12 @@ interface AssignmentRow {
   case_assignment_id: string;
   tenant_id: string;
   case_id: string;
-  responder_user_id: string;
+  accepted_by_user_id: string;
   status: 'ACTIVE' | 'RELEASED' | 'REASSIGNED';
 }
 
 const CASE_COLUMNS = 'case_id, tenant_id, veteran_user_id, status, priority_signal_level';
-const ASSIGNMENT_COLUMNS = 'case_assignment_id, tenant_id, case_id, responder_user_id, status';
+const ASSIGNMENT_COLUMNS = 'case_assignment_id, tenant_id, case_id, accepted_by_user_id, status';
 
 function toCase(row: CaseRow): SupportCase {
   return {
@@ -77,7 +78,7 @@ function toAssignment(row: AssignmentRow): CaseAssignment {
     caseAssignmentId: row.case_assignment_id,
     tenantId: row.tenant_id,
     caseId: row.case_id,
-    responderUserId: row.responder_user_id,
+    acceptedByUserId: row.accepted_by_user_id,
     status: row.status,
   };
 }
@@ -180,7 +181,7 @@ export interface OpenCaseInput {
   readonly tenantId: string;
   readonly veteranUserId: string;
   readonly prioritySignalLevel?: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED';
-  readonly actorType: 'VETERAN' | 'RESPONDER' | 'SYSTEM';
+  readonly actorType: 'VETERAN' | 'USER' | 'SYSTEM';
   readonly actorId: string;
   readonly correlationId?: string;
 }
@@ -258,7 +259,7 @@ async function lockCase(
   if (row === undefined) throw new CaseNotFoundError();
 
   const supportCase = toCase(row);
-  // RESPONDER_WORKFLOWS.md §3.1: the queue may be stale; the mutation-time check
+  // RESPONDER_WORKFLOWS.md §3.1: a list may be stale; the mutation-time check
   // is authoritative.
   if (expectedStatus !== undefined && supportCase.status !== expectedStatus) {
     throw new StaleCaseStateError(expectedStatus, supportCase.status);
@@ -269,9 +270,21 @@ async function lockCase(
 export interface ClaimCaseInput {
   readonly tenantId: string;
   readonly caseId: string;
-  readonly responderUserId: string;
-  /** Status the caller believed the case was in, from a possibly stale queue. */
+  readonly acceptedByUserId: string;
+  /** Status the caller believed the case was in, from a possibly stale list. */
   readonly expectedStatus?: CaseStatus;
+  /**
+   * Eligibility check run inside the case row lock, after the replay shortcut and
+   * before anything is written. It throws to refuse. The accept flow uses it so
+   * "may this person accept?" and "did someone else win?" are one atomic decision.
+   */
+  readonly guard?: (tx: PoolClient, supportCase: SupportCase) => Promise<void>;
+  /**
+   * Runs inside the same transaction after the assignment is written, so anything the
+   * accept must also create (such as the chat thread) commits or rolls back with it.
+   * Not run on a replay, which writes nothing.
+   */
+  readonly afterClaim?: (tx: PoolClient, result: AssignmentResult) => Promise<void>;
   readonly correlationId?: string;
 }
 
@@ -281,12 +294,12 @@ export interface AssignmentResult {
 }
 
 /**
- * `CLAIM_CASE`. RESPONDER_WORKFLOWS.md §2, §5; CASES.md §5.
+ * `CLAIM_CASE`, the "accept" of V1_PROJECT_PLAN.md §2.1. RESPONDER_WORKFLOWS.md §2, §5;
+ * CASES.md §5.
  *
  * The row lock serializes contenders: the first commits an assignment and moves
- * the case to `ASSIGNED`, and the second then finds a status with no documented
- * `CLAIM_CASE` edge and conflicts. Exactly one wins, and the loser writes
- * nothing.
+ * the case to `ASSIGNED`, and the second then finds the active assignment and
+ * conflicts. Exactly one wins, and the loser writes nothing.
  */
 export async function claimCase(pool: Pool, input: ClaimCaseInput): Promise<AssignmentResult> {
   return withTransaction(pool, async (tx) => {
@@ -296,12 +309,21 @@ export async function claimCase(pool: Pool, input: ClaimCaseInput): Promise<Assi
     const supportCase = await lockCase(tx, input.tenantId, input.caseId);
 
     // CASES.md §5 item 5: replay by the same logical command returns the
-    // original winning result. The responder who already holds the active
+    // original winning result. The person who already holds the active
     // assignment gets it back, with no new write and no second CASE_ASSIGNED
     // (§5 item 6).
     const held = await findActiveAssignment(tx, input.caseId);
-    if (held?.responderUserId === input.responderUserId) {
+    if (held?.acceptedByUserId === input.acceptedByUserId) {
       return { supportCase, assignment: held };
+    }
+
+    // First accept wins: anyone else finds the case already held and conflicts.
+    if (held !== undefined) {
+      throw new CaseAlreadyClaimedError();
+    }
+
+    if (input.guard !== undefined) {
+      await input.guard(tx, supportCase);
     }
 
     if (input.expectedStatus !== undefined && supportCase.status !== input.expectedStatus) {
@@ -309,15 +331,11 @@ export async function claimCase(pool: Pool, input: ClaimCaseInput): Promise<Assi
     }
     const transition = resolveCaseTransition('CLAIM_CASE', supportCase.status);
 
-    if (held !== undefined) {
-      throw new CaseAlreadyClaimedError();
-    }
-
     const assignment = await insertAssignment(tx, {
       tenantId: input.tenantId,
       caseId: input.caseId,
-      responderUserId: input.responderUserId,
-      assignedBy: input.responderUserId,
+      acceptedByUserId: input.acceptedByUserId,
+      assignedBy: input.acceptedByUserId,
     });
 
     const updated = await setCaseStatus(tx, input.tenantId, input.caseId, transition.to);
@@ -327,77 +345,21 @@ export async function claimCase(pool: Pool, input: ClaimCaseInput): Promise<Assi
       aggregateType: 'SupportCase',
       aggregateId: input.caseId,
       tenantId: input.tenantId,
-      actorType: 'RESPONDER',
-      actorId: input.responderUserId,
+      actorType: 'USER',
+      actorId: input.acceptedByUserId,
       payload: {
         case_assignment_id: assignment.caseAssignmentId,
-        responder_user_id: input.responderUserId,
+        accepted_by_user_id: input.acceptedByUserId,
         command: 'CLAIM_CASE',
       },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
 
-    return { supportCase: updated, assignment };
-  });
-}
-
-export interface AssignCaseInput {
-  readonly tenantId: string;
-  readonly caseId: string;
-  readonly responderUserId: string;
-  readonly assignedBy: string;
-  readonly expectedStatus?: CaseStatus;
-  readonly correlationId?: string;
-}
-
-/**
- * `ASSIGN_CASE`, covering both first assignment and reassignment.
- *
- * CASES.md §5.7: reassignment releases the prior active assignment and creates
- * the successor in one transaction, so the case is never briefly ownerless and
- * never briefly doubly owned.
- */
-export async function assignCase(pool: Pool, input: AssignCaseInput): Promise<AssignmentResult> {
-  return withTransaction(pool, async (tx) => {
-    const supportCase = await lockCase(tx, input.tenantId, input.caseId, input.expectedStatus);
-    const transition = resolveCaseTransition('ASSIGN_CASE', supportCase.status);
-
-    const current = await findActiveAssignment(tx, input.caseId);
-    if (current !== undefined) {
-      await tx.query(
-        `UPDATE case_assignments
-           SET status = 'REASSIGNED', released_at = now(), release_reason = 'REASSIGNED'
-         WHERE case_assignment_id = $1`,
-        [current.caseAssignmentId],
-      );
+    const result = { supportCase: updated, assignment };
+    if (input.afterClaim !== undefined) {
+      await input.afterClaim(tx, result);
     }
-
-    const assignment = await insertAssignment(tx, {
-      tenantId: input.tenantId,
-      caseId: input.caseId,
-      responderUserId: input.responderUserId,
-      assignedBy: input.assignedBy,
-    });
-
-    const updated = await setCaseStatus(tx, input.tenantId, input.caseId, transition.to);
-
-    await appendDomainEvent(tx, {
-      eventType: 'CASE_ASSIGNED',
-      aggregateType: 'SupportCase',
-      aggregateId: input.caseId,
-      tenantId: input.tenantId,
-      actorType: 'ORG_ADMIN',
-      actorId: input.assignedBy,
-      payload: {
-        case_assignment_id: assignment.caseAssignmentId,
-        responder_user_id: input.responderUserId,
-        command: 'ASSIGN_CASE',
-        ...(current !== undefined ? { released_assignment_id: current.caseAssignmentId } : {}),
-      },
-      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
-    });
-
-    return { supportCase: updated, assignment };
+    return result;
   });
 }
 
@@ -406,16 +368,16 @@ async function insertAssignment(
   input: {
     tenantId: string;
     caseId: string;
-    responderUserId: string;
+    acceptedByUserId: string;
     assignedBy: string;
   },
 ): Promise<CaseAssignment> {
   const result = await tx.query<AssignmentRow>(
     `INSERT INTO case_assignments
-       (case_assignment_id, tenant_id, case_id, responder_user_id, assigned_by)
+       (case_assignment_id, tenant_id, case_id, accepted_by_user_id, assigned_by)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING ${ASSIGNMENT_COLUMNS}`,
-    [randomUUID(), input.tenantId, input.caseId, input.responderUserId, input.assignedBy],
+    [randomUUID(), input.tenantId, input.caseId, input.acceptedByUserId, input.assignedBy],
   );
   const row = result.rows[0];
   if (row === undefined) throw new Error('Assignment insert returned no row.');
@@ -449,7 +411,7 @@ export interface CaseCommandInput {
   readonly caseId: string;
   readonly command: Exclude<CaseCommand, 'CLAIM_CASE' | 'ASSIGN_CASE' | 'RESOLVE'>;
   readonly actorId: string;
-  readonly actorType: 'RESPONDER' | 'ORG_ADMIN' | 'SYSTEM';
+  readonly actorType: 'USER' | 'SUAS_ADMIN' | 'SYSTEM';
   readonly reason?: string;
   readonly expectedStatus?: CaseStatus;
   readonly correlationId?: string;
@@ -460,7 +422,7 @@ export interface CaseCommandInput {
  *
  * Commands that require an active assignment are refused when none exists,
  * which is what stops the CASES.md §4.1 mistake: an unassigned `OPEN` or
- * `TRIAGED` case has no assigned responder, so it cannot be escalated.
+ * `TRIAGED` case has no assigned person, so it cannot be escalated.
  */
 export async function executeCaseCommand(
   pool: Pool,
@@ -478,16 +440,16 @@ export async function executeCaseCommand(
         throw new NoActiveAssignmentError(input.command);
       }
       if (
-        transition.actors.includes('ASSIGNED_RESPONDER') &&
-        input.actorType === 'RESPONDER' &&
-        assignment.responderUserId !== input.actorId
+        transition.actors.includes('ASSIGNED_USER') &&
+        input.actorType === 'USER' &&
+        assignment.acceptedByUserId !== input.actorId
       ) {
-        throw new NotAssignedResponderError();
+        throw new NotAssignedError();
       }
     }
 
     // Closing ends the case cycle, so ownership ends with it. Otherwise a
-    // reopened case would return to OPEN still owned by the previous responder,
+    // reopened case would return to OPEN still owned by the previous accepter,
     // and could never be claimed for the new cycle — CASES.md §4 has no
     // OPEN-with-active-assignment state. The assignment row is retained as
     // history (§7: closure retains all history). The released text does not say
@@ -530,33 +492,33 @@ export class NoActiveAssignmentError extends Error {
   constructor(command: string) {
     super(
       `"${command}" requires an active case assignment. An unassigned case has no assigned ` +
-        `responder to perform it (SUAS-specs CASES.md §4.1; RESPONDER_WORKFLOWS.md §8).`,
+        `accepter to perform it (SUAS-specs CASES.md §4.1; RESPONDER_WORKFLOWS.md §8).`,
     );
     this.name = 'NoActiveAssignmentError';
   }
 }
 
-export class NotAssignedResponderError extends Error {
+export class NotAssignedError extends Error {
   readonly code = 'FORBIDDEN';
   readonly httpStatus = 403;
 
   constructor() {
-    super('This action is reserved for the responder currently assigned to the case.');
-    this.name = 'NotAssignedResponderError';
+    super('This action is reserved for the person who accepted the case.');
+    this.name = 'NotAssignedError';
   }
 }
 
 /**
- * Whether a responder currently holds an active assignment for a veteran's case.
+ * Whether a person currently holds an active assignment for a veteran's case.
  *
- * This is the verifier CONSENT.md §3.6 needs: an assigned Responder's
+ * This is the verifier CONSENT.md §3.6 needs: the accepter's
  * least-privilege access is a documented basis, and Slice 4 denies it until
  * something can confirm the assignment. This is that something.
  */
 export function createAssignmentVerifier(pool: Pool) {
   return async (params: {
     tenantId: string;
-    responderUserId: string;
+    acceptedByUserId: string;
     veteranUserId: string;
   }): Promise<boolean> => {
     const result = await pool.query(
@@ -564,11 +526,11 @@ export function createAssignmentVerifier(pool: Pool) {
        FROM case_assignments a
        JOIN support_cases c ON c.case_id = a.case_id
        WHERE a.tenant_id = $1
-         AND a.responder_user_id = $2
+         AND a.accepted_by_user_id = $2
          AND a.status = 'ACTIVE'
          AND c.veteran_user_id = $3
          AND c.status <> 'CLOSED'`,
-      [params.tenantId, params.responderUserId, params.veteranUserId],
+      [params.tenantId, params.acceptedByUserId, params.veteranUserId],
     );
     return (result.rowCount ?? 0) > 0;
   };

@@ -231,7 +231,7 @@ export async function findTrustedContact(
   return row === undefined ? undefined : toContact(row);
 }
 
-/** The veteran's circle. Responders do not receive this roster by default (§8). */
+/** The veteran's circle. Nobody who accepts a request receives this roster by default (§8). */
 export async function listTrustedCircle(
   db: Queryable,
   tenantId: string,

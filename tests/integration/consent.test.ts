@@ -542,10 +542,10 @@ describe('CONSENT.md §3.5-§3.6 — system basis', () => {
       veteranUserId: subject.userId,
       permission: 'can_view',
       scope: 'current_requests',
-      granteeType: 'RESPONDER',
+      granteeType: 'USER',
       granteeId: randomUUID(),
       purpose: 'Coordinate an assigned case',
-      systemBasis: 'RESPONDER_CASE_ASSIGNMENT',
+      systemBasis: 'CASE_ASSIGNMENT',
     });
 
     expect(decision.allowed).toBe(false);
@@ -563,15 +563,15 @@ describe('CONSENT.md §3.5-§3.6 — system basis', () => {
         veteranUserId: subject.userId,
         permission: 'can_view',
         scope: 'current_requests',
-        granteeType: 'RESPONDER',
+        granteeType: 'USER',
         granteeId: randomUUID(),
         purpose: 'Coordinate an assigned case',
-        systemBasis: 'RESPONDER_CASE_ASSIGNMENT',
+        systemBasis: 'CASE_ASSIGNMENT',
       },
       { verifyActiveAssignment: () => Promise.resolve(true) },
     );
 
-    expect(decision).toMatchObject({ allowed: true, basis: 'RESPONDER_CASE_ASSIGNMENT' });
+    expect(decision).toMatchObject({ allowed: true, basis: 'CASE_ASSIGNMENT' });
   });
 
   it('denies when the verifier reports no active assignment', async () => {
@@ -585,10 +585,10 @@ describe('CONSENT.md §3.5-§3.6 — system basis', () => {
         veteranUserId: subject.userId,
         permission: 'can_view',
         scope: 'current_requests',
-        granteeType: 'RESPONDER',
+        granteeType: 'USER',
         granteeId: randomUUID(),
         purpose: 'Coordinate an unassigned case',
-        systemBasis: 'RESPONDER_CASE_ASSIGNMENT',
+        systemBasis: 'CASE_ASSIGNMENT',
       },
       { verifyActiveAssignment: () => Promise.resolve(false) },
     );

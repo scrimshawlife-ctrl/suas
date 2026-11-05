@@ -1,19 +1,19 @@
--- 0003_identity_tenancy.sql — users, organizations, memberships, auth, sessions
+-- 0003_identity.sql — users, counties, SUAS admin grants, auth, sessions
 --
 -- Released contract implemented:
--- - SUAS-specs DOMAIN_MODEL.md §2 (User, Organization, OrganizationMembership
---   lifecycles and required fields).
--- - SUAS-specs DATA_MODEL.md §2 (identity, authentication, organization),
---   §13 (required access paths), §14 rules 1, 3, 4.
--- - SUAS-specs AUTH.md §3 (challenge contract), §5 (session model), §6
---   (membership/role inputs).
--- - SUAS-specs SECURITY.md §2 (tenant isolation, RBAC, sessions, rate limits,
---   secrets, soft-delete).
+-- - SUAS-specs DOMAIN_MODEL.md §2 (User lifecycle and required fields).
+-- - SUAS-specs DATA_MODEL.md §2 (identity, authentication), §13 (required access
+--   paths), §14 rules 1, 3, 4.
+-- - SUAS-specs AUTH.md §3 (challenge contract), §5 (session model).
+-- - SUAS-specs SECURITY.md §2 (RBAC, sessions, rate limits, secrets, soft-delete).
+-- - V1_PROJECT_PLAN.md §2.1 (county chosen at sign-up; no Organizations) and §4.2.
+--
+-- v1 removes Organizations and organization memberships. Staff are SUAS System
+-- Administrators (suas_admin_grants); every other person is a User who may request
+-- help and may accept another person's request.
 --
 -- Retention remains D-007 DECISION_PENDING, so nothing here purges
 -- (SECURITY.md §2 "Retention"). Deletion is soft-delete only.
---
--- Destructive-change note (ENVIRONMENT.md §9): additive only; no destructive step.
 
 -- ---------------------------------------------------------------------------
 -- Lifecycles (DOMAIN_MODEL.md §2)
@@ -21,18 +21,23 @@
 
 CREATE TYPE suas_user_status AS ENUM ('INVITED', 'ACTIVE', 'SUSPENDED', 'REVOKED');
 
-CREATE TYPE suas_organization_status AS ENUM ('PENDING', 'ACTIVE', 'SUSPENDED', 'ARCHIVED');
-
--- AUTH.md §6: org-scoped roles. Global SUAS_ADMIN is deliberately absent here.
-CREATE TYPE suas_membership_role AS ENUM ('RESPONDER', 'ORG_ADMIN', 'SERVICE_PROVIDER_USER');
-
-CREATE TYPE suas_membership_status AS ENUM ('INVITED', 'ACTIVE', 'SUSPENDED', 'REVOKED');
-
 CREATE TYPE suas_auth_challenge_method AS ENUM ('MAGIC_LINK', 'EMAIL_OTP', 'PHONE_OTP');
 
 CREATE TYPE suas_auth_challenge_status AS ENUM ('ISSUED', 'CONSUMED', 'EXPIRED', 'REVOKED');
 
 CREATE TYPE suas_admin_grant_status AS ENUM ('ACTIVE', 'REVOKED');
+
+-- V1_PROJECT_PLAN.md §2.1: the seven launch counties, chosen from a list. A closed
+-- enum, so an unknown county cannot be stored. Adding a county is a later migration.
+CREATE TYPE suas_county AS ENUM (
+    'SANTA_CLARA',
+    'SAN_MATEO',
+    'ALAMEDA',
+    'SANTA_CRUZ',
+    'SAN_BENITO',
+    'MERCED',
+    'STANISLAUS'
+);
 
 -- ---------------------------------------------------------------------------
 -- Users (DOMAIN_MODEL.md §2 "User"; DATA_MODEL.md §2 "users")
@@ -44,6 +49,9 @@ CREATE TABLE users (
     status     suas_user_status NOT NULL DEFAULT 'INVITED',
     email      text,
     phone      text,
+    -- Null until the person picks a county at sign-up. A person with no county
+    -- cannot see the open-request list; they can change it later.
+    county     suas_county,
     created_at timestamptz      NOT NULL DEFAULT now(),
     updated_at timestamptz      NOT NULL DEFAULT now(),
     -- SECURITY.md §2 "Deletion": soft-delete plus process; historical actor ids
@@ -69,64 +77,17 @@ CREATE UNIQUE INDEX users_tenant_phone_key
 
 CREATE INDEX users_tenant_status_idx ON users (tenant_id, status);
 
--- ---------------------------------------------------------------------------
--- Organizations (DOMAIN_MODEL.md §2 "Organization")
--- ---------------------------------------------------------------------------
-
-CREATE TABLE organizations (
-    organization_id uuid                    PRIMARY KEY,
-    tenant_id       uuid                    NOT NULL,
-    name            text                    NOT NULL,
-    status          suas_organization_status NOT NULL DEFAULT 'PENDING',
-    created_at      timestamptz             NOT NULL DEFAULT now(),
-    updated_at      timestamptz             NOT NULL DEFAULT now(),
-
-    UNIQUE (organization_id, tenant_id)
-);
-
-CREATE INDEX organizations_tenant_status_idx ON organizations (tenant_id, status);
-
--- ---------------------------------------------------------------------------
--- Memberships (DOMAIN_MODEL.md §2; AUTH.md §6)
--- ---------------------------------------------------------------------------
-
-CREATE TABLE organization_memberships (
-    membership_id   uuid                   PRIMARY KEY,
-    tenant_id       uuid                   NOT NULL,
-    user_id         uuid                   NOT NULL,
-    organization_id uuid                   NOT NULL,
-    role            suas_membership_role   NOT NULL,
-    status          suas_membership_status NOT NULL DEFAULT 'INVITED',
-    created_at      timestamptz            NOT NULL DEFAULT now(),
-    updated_at      timestamptz            NOT NULL DEFAULT now(),
-    revoked_at      timestamptz,
-
-    -- Tenant consistency is enforced by the database: a membership cannot link a
-    -- user and an organization from different tenants (DATA_MODEL.md §14 rule 1).
-    FOREIGN KEY (user_id, tenant_id) REFERENCES users (user_id, tenant_id),
-    FOREIGN KEY (organization_id, tenant_id)
-        REFERENCES organizations (organization_id, tenant_id),
-
-    -- One membership per user per organization; role changes update it in place
-    -- rather than creating a competing second membership.
-    UNIQUE (user_id, organization_id)
-);
-
-CREATE INDEX organization_memberships_org_status_idx
-    ON organization_memberships (organization_id, status, role);
-CREATE INDEX organization_memberships_user_idx
-    ON organization_memberships (user_id, status);
+-- County matching path: the open-request list joins requesters by county.
+CREATE INDEX users_tenant_county_idx ON users (tenant_id, county) WHERE county IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- SUAS System Administrator grants
 -- ---------------------------------------------------------------------------
 --
--- AUTH.md §6 and ONBOARDING.md §49: SUAS-admin is globally bound, not org-bound,
--- and org-admin cannot become SUAS-admin by self-service role mutation. The
--- released data model does not name a table for this global role, so it is
--- modelled here as an explicit, auditable, revocable grant rather than as a
--- boolean column. See the Slice 3 conformance record, which returns the
--- representation question to specs.
+-- AUTH.md §6 and ONBOARDING.md §49: SUAS-admin is globally bound and cannot be
+-- self-granted. The released data model does not name a table for this global role,
+-- so it is modelled here as an explicit, auditable, revocable grant rather than as
+-- a boolean column.
 
 CREATE TABLE suas_admin_grants (
     admin_grant_id uuid                    PRIMARY KEY,
@@ -182,8 +143,6 @@ CREATE TABLE sessions (
     -- Opaque credential, stored hashed. The raw value is returned once, at
     -- creation, and never persisted (SECURITY.md §2 "Secrets").
     credential_hash text        NOT NULL UNIQUE,
-    -- Organization context for org-scoped work, when the session has one.
-    organization_id uuid,
     -- AUTH.md §5: privilege/MFA elevation state. Null means not elevated.
     mfa_elevated_at timestamptz,
     issued_at       timestamptz NOT NULL DEFAULT now(),
@@ -192,9 +151,7 @@ CREATE TABLE sessions (
     revoked_at      timestamptz,
     revoked_reason  text,
 
-    FOREIGN KEY (user_id, tenant_id) REFERENCES users (user_id, tenant_id),
-    FOREIGN KEY (organization_id, tenant_id)
-        REFERENCES organizations (organization_id, tenant_id)
+    FOREIGN KEY (user_id, tenant_id) REFERENCES users (user_id, tenant_id)
 );
 
 -- Revocation sweep path: every live session for a user (AUTH.md §5 triggers).

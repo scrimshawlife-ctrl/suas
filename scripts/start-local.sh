@@ -50,8 +50,8 @@ if [[ -z "$ROLE" ]]; then
   exec npm run dev
 fi
 case "$ROLE" in
-  veteran|responder|admin) ;;
-  *) echo 'Usage: scripts/start-local.sh [veteran|responder|admin]' >&2; exit 2 ;;
+  veteran|admin) ;;
+  *) echo 'Usage: scripts/start-local.sh [veteran|admin]' >&2; exit 2 ;;
 esac
 
 npm run dev > .local-secrets/server.log 2>&1 &

@@ -3,12 +3,16 @@
  *
  * Spec citations:
  * - SUAS-specs AUTH.md §1, §6 — authorization is role + tenant + row +
- *   consent/system basis; org-admin cannot cross tenant or self-elevate to
- *   SUAS-admin.
- * - SUAS-specs SECURITY.md §2 — RBAC, tenant isolation, row-level authorization,
- *   MFA for privileged roles.
- * - SUAS-specs SECURITY.md §5 — broken access control, cross-tenant leakage, and
- *   responder overreach are named threats; deny by default.
+ *   consent/system basis; no one self-elevates to SUAS-admin.
+ * - SUAS-specs SECURITY.md §2 — tenant isolation, row-level authorization, MFA for
+ *   privileged roles.
+ * - SUAS-specs SECURITY.md §5 — broken access control and cross-person leakage are
+ *   named threats; deny by default.
+ * - V1_PROJECT_PLAN.md §2.1 — no Organizations or Responders. The only global role is
+ *   SUAS System Administrator. Everything else is a row check: the requester owns
+ *   their Support Case and Service Requests, and the person who accepted a request
+ *   acts on it. Those checks sit next to the data they guard (coordination module and
+ *   routes), not in a role table.
  * - SUAS-specs API.md §4 — cross-tenant hidden resources return 404 or a scoped
  *   denial without existence leakage; missing consent returns 403 CONSENT_DENIED.
  *
@@ -18,9 +22,8 @@
  * a role check never implies a disclosure is consented.
  */
 
-import type { MembershipRole } from '../identity/organizations.js';
 import { MfaRequiredError } from '../auth/mfa.js';
-import { rolesInOrganization, type AuthContext } from './context.js';
+import type { AuthContext } from './context.js';
 
 export class UnauthenticatedError extends Error {
   readonly code = 'UNAUTHENTICATED';
@@ -63,76 +66,6 @@ export function assertTenant(context: AuthContext, tenantId: string): void {
   }
 }
 
-/**
- * Deny unless the actor holds one of `roles` in the organization.
- *
- * A SUAS-admin does not implicitly satisfy an org role: ADMIN.md §2 reserves
- * cross-org action for audited break-glass paths, not routine responder
- * ownership. Callers that intend an admin path ask for it explicitly.
- */
-export function assertOrganizationRole(
-  context: AuthContext,
-  organizationId: string,
-  roles: readonly MembershipRole[],
-): void {
-  const held = rolesInOrganization(context, organizationId);
-  if (!held.some((role) => roles.includes(role))) {
-    throw new ForbiddenError(
-      `This action requires one of ${roles.join(', ')} in the organization.`,
-    );
-  }
-}
-
-/**
- * Check a role without widening the request to another tenant or organization.
- * This is intentionally separate from `assertOrganizationRole`: some released
- * coordination commands are tenant-scoped because SupportCase does not yet carry
- * an organization link. Callers must not implement this check with
- * `context.memberships.some(...)`, which would make a membership in another
- * tenant confer authority.
- */
-export function assertTenantRole(context: AuthContext, roles: readonly MembershipRole[]): void {
-  if (!hasTenantRole(context, roles)) {
-    throw new ForbiddenError(`This action requires one of ${roles.join(', ')} in the tenant.`);
-  }
-}
-
-/** Return whether the active request scope holds one of the supplied roles. */
-export function hasTenantRole(context: AuthContext, roles: readonly MembershipRole[]): boolean {
-  return context.memberships.some(
-    (membership) =>
-      membership.tenantId === context.tenantId &&
-      (context.session.organizationId === undefined ||
-        membership.organizationId === context.session.organizationId) &&
-      roles.includes(membership.role),
-  );
-}
-
-/** Return whether the session has an explicit organization-scoped role. */
-export function hasScopedOrganizationRole(
-  context: AuthContext,
-  roles: readonly MembershipRole[],
-): boolean {
-  return context.session.organizationId !== undefined && hasTenantRole(context, roles);
-}
-
-/** Org Admin actions cannot run from an unscoped tenant session. */
-export function assertScopedOrganizationRole(
-  context: AuthContext,
-  roles: readonly MembershipRole[],
-): void {
-  if (!hasScopedOrganizationRole(context, roles)) {
-    throw new ForbiddenError(
-      `This action requires one of ${roles.join(', ')} in an organization-scoped session.`,
-    );
-  }
-}
-
-/** Deny unless the actor holds an active RESPONDER membership in this tenant. */
-export function assertResponder(context: AuthContext): void {
-  assertTenantRole(context, ['RESPONDER']);
-}
-
 /** Deny unless the actor holds the global SUAS-admin grant. */
 export function assertSuasAdmin(context: AuthContext): void {
   if (!context.isSuasAdmin) {
@@ -150,9 +83,6 @@ export function assertMfaElevated(context: AuthContext, action: string): void {
 export interface AuthorizationRequirement {
   /** Tenant that owns the row being acted on. */
   readonly tenantId?: string;
-  /** Organization scope plus the roles that satisfy it. */
-  readonly organizationId?: string;
-  readonly roles?: readonly MembershipRole[];
   readonly requireSuasAdmin?: boolean;
   readonly requireMfaElevation?: boolean;
   /** Human-readable action name, used in denial messages. */
@@ -160,7 +90,7 @@ export interface AuthorizationRequirement {
 }
 
 /**
- * Evaluate role + tenant + row in one place. Deny by default: a requirement that
+ * Evaluate tenant + global role in one place. Deny by default: a requirement that
  * names no authority at all is refused rather than treated as public.
  */
 export function authorize(context: AuthContext, requirement: AuthorizationRequirement): void {
@@ -172,16 +102,7 @@ export function authorize(context: AuthContext, requirement: AuthorizationRequir
 
   if (requirement.requireSuasAdmin === true) {
     assertSuasAdmin(context);
-  }
-
-  if (requirement.organizationId !== undefined) {
-    if (requirement.roles === undefined || requirement.roles.length === 0) {
-      throw new ForbiddenError(`${action} names an organization scope but no roles.`);
-    }
-    assertOrganizationRole(context, requirement.organizationId, requirement.roles);
-  }
-
-  if (requirement.requireSuasAdmin !== true && requirement.organizationId === undefined) {
+  } else {
     throw new ForbiddenError(
       `${action} did not specify an authority to check; access is denied by default ` +
         `(SUAS-specs SECURITY.md §5).`,

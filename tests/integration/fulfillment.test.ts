@@ -89,18 +89,18 @@ async function requestScenario() {
     openCase(tx, {
       tenantId,
       veteranUserId: veteran.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
       actorId: responder.userId,
     }),
   );
   const caseId = opened.supportCase.caseId;
-  await claimCase(pool, { tenantId, caseId, responderUserId: responder.userId });
+  await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
   await executeCaseCommand(pool, {
     tenantId,
     caseId,
     command: 'ACTIVATE',
     actorId: responder.userId,
-    actorType: 'RESPONDER',
+    actorType: 'USER',
   });
   const request = await withTransaction(pool, (tx) =>
     createServiceRequest(tx, {
@@ -108,7 +108,7 @@ async function requestScenario() {
       caseId,
       category: 'TRANSPORTATION',
       createdBy: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     }),
   );
   return { tenantId, veteran, responder, caseId, request };
@@ -200,14 +200,14 @@ describe('PROVIDER_INTEGRATIONS.md §2 rule 8 — manual coordination is first-c
         openCase(tx, {
           tenantId,
           veteranUserId: veteran.userId,
-          actorType: 'RESPONDER',
+          actorType: 'USER',
           actorId: responder.userId,
         }),
       );
       await claimCase(pool, {
         tenantId,
         caseId: opened.supportCase.caseId,
-        responderUserId: responder.userId,
+        acceptedByUserId: responder.userId,
       });
       const request = await withTransaction(pool, (tx) =>
         createServiceRequest(tx, {
@@ -215,7 +215,7 @@ describe('PROVIDER_INTEGRATIONS.md §2 rule 8 — manual coordination is first-c
           caseId: opened.supportCase.caseId,
           category: capability,
           createdBy: responder.userId,
-          actorType: 'RESPONDER',
+          actorType: 'USER',
         }),
       );
       await configureAdapter(tenantId, 'manual', { capability });
@@ -354,7 +354,7 @@ describe('PROVIDER_INTEGRATIONS.md §13 — disclosure is gated before any adapt
         caseId,
         category: 'TRANSPORTATION',
         createdBy: responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
     );
 
@@ -686,7 +686,7 @@ describe('FULFILLMENT.md §6 — confirmation requires a human', () => {
         confirmFulfillment(tx, {
           tenantId,
           serviceRequestId: request.serviceRequestId,
-          responderConfirmedBy: responder.userId,
+          acceptedByUserId: responder.userId,
         }),
       ),
     ).rejects.toThrow(ConfirmationReasonRequiredError);
@@ -711,7 +711,7 @@ describe('FULFILLMENT.md §6 — confirmation requires a human', () => {
       confirmFulfillment(tx, {
         tenantId,
         serviceRequestId: request.serviceRequestId,
-        responderConfirmedBy: responder.userId,
+        acceptedByUserId: responder.userId,
         reason: 'veteran unreachable by phone for three days',
       }),
     );
@@ -1104,7 +1104,7 @@ describe('REFERRALS.md — consented handoff', () => {
       permission: 'can_share',
       scope: 'service_request_fulfillment',
       purpose: 'refer for food assistance',
-      granteeType: 'ORGANIZATION',
+      granteeType: 'SERVICE_PROVIDER',
       granteeId: referral.destinationId,
       consentTemplateVersion: versionKey,
     });
