@@ -1,34 +1,26 @@
 /**
  * Authorization policy evidence.
  *
- * SUAS-specs AUTH.md §1 (authentication is not authorization), §6 (role/tenant
- * inputs; org-admin cannot self-elevate); SECURITY.md §2, §5 (deny by default,
- * cross-tenant leakage, responder overreach); API.md §4 (no existence leakage).
+ * SUAS-specs AUTH.md §1 (authentication is not authorization), §6 (no one
+ * self-elevates to SUAS-admin); SECURITY.md §2, §5 (deny by default, cross-tenant
+ * leakage); API.md §4 (no existence leakage). V1_PROJECT_PLAN.md §2.1: no
+ * Organizations or Responders, so the only global role is SUAS System Administrator.
  */
 
 import { describe, expect, it } from 'vitest';
 import { MfaRequiredError } from '../../src/auth/index.js';
 import {
   assertMfaElevated,
-  assertOrganizationRole,
-  assertScopedOrganizationRole,
-  assertResponder,
   assertSuasAdmin,
   assertTenant,
-  assertTenantRole,
   authorize,
   ForbiddenError,
-  hasTenantRole,
   ResourceNotVisibleError,
-  rolesInOrganization,
   type AuthContext,
 } from '../../src/authz/index.js';
-import type { MembershipRole } from '../../src/identity/index.js';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
-const ORG_A = '33333333-3333-4333-8333-333333333333';
-const ORG_B = '44444444-4444-4444-8444-444444444444';
 
 function context(overrides: Partial<AuthContext> = {}): AuthContext {
   return {
@@ -36,7 +28,6 @@ function context(overrides: Partial<AuthContext> = {}): AuthContext {
       sessionId: 'session-1',
       tenantId: TENANT_A,
       userId: 'user-1',
-      organizationId: undefined,
       mfaElevatedAt: undefined,
       issuedAt: new Date(),
       lastSeenAt: new Date(),
@@ -45,21 +36,9 @@ function context(overrides: Partial<AuthContext> = {}): AuthContext {
     },
     tenantId: TENANT_A,
     userId: 'user-1',
-    memberships: [],
     isSuasAdmin: false,
     mfaElevated: false,
     ...overrides,
-  };
-}
-
-function membership(organizationId: string, role: MembershipRole) {
-  return {
-    membershipId: `m-${role}`,
-    tenantId: TENANT_A,
-    userId: 'user-1',
-    organizationId,
-    role,
-    status: 'ACTIVE' as const,
   };
 }
 
@@ -79,90 +58,9 @@ describe('SECURITY.md §2 — tenant isolation', () => {
   });
 });
 
-describe('AUTH.md §6 — role inputs', () => {
-  it('grants an action to a held role', () => {
-    const ctx = context({ memberships: [membership(ORG_A, 'RESPONDER')] });
-    expect(() => assertOrganizationRole(ctx, ORG_A, ['RESPONDER'])).not.toThrow();
-  });
-
-  it('denies a role held in a different organization', () => {
-    const ctx = context({ memberships: [membership(ORG_B, 'ORG_ADMIN')] });
-    expect(() => assertOrganizationRole(ctx, ORG_A, ['ORG_ADMIN'])).toThrow(ForbiddenError);
-  });
-
-  it('denies a role the actor does not hold', () => {
-    const ctx = context({ memberships: [membership(ORG_A, 'RESPONDER')] });
-    expect(() => assertOrganizationRole(ctx, ORG_A, ['ORG_ADMIN'])).toThrow(ForbiddenError);
-  });
-
-  it('does not let a membership from another tenant confer a tenant-scoped role', () => {
-    const ctx = context({
-      memberships: [
-        {
-          ...membership(ORG_B, 'ORG_ADMIN'),
-          tenantId: TENANT_B,
-        },
-      ],
-    });
-    expect(() => assertTenantRole(ctx, ['ORG_ADMIN'])).toThrow(ForbiddenError);
-    expect(() =>
-      assertResponder({
-        ...ctx,
-        memberships: [{ ...membership(ORG_B, 'RESPONDER'), tenantId: TENANT_B }],
-      }),
-    ).toThrow(ForbiddenError);
-  });
-
-  it('narrows tenant role checks to the organization selected by the session', () => {
-    const ctx = context({
-      session: {
-        ...context().session,
-        organizationId: ORG_A,
-      },
-      memberships: [membership(ORG_A, 'RESPONDER'), membership(ORG_B, 'ORG_ADMIN')],
-    });
-    expect(hasTenantRole(ctx, ['RESPONDER'])).toBe(true);
-    expect(hasTenantRole(ctx, ['ORG_ADMIN'])).toBe(false);
-    expect(() => assertOrganizationRole(ctx, ORG_B, ['ORG_ADMIN'])).toThrow(ForbiddenError);
-    expect(rolesInOrganization(ctx, ORG_B)).toEqual([]);
-  });
-
-  it('denies Org Admin authority when the session has no organization scope', () => {
-    const ctx = context({ memberships: [membership(ORG_A, 'ORG_ADMIN')] });
-    expect(() => assertScopedOrganizationRole(ctx, ['ORG_ADMIN'])).toThrow(ForbiddenError);
-  });
-
-  it('reports only the roles held in the named organization', () => {
-    const ctx = context({
-      memberships: [membership(ORG_A, 'RESPONDER'), membership(ORG_B, 'ORG_ADMIN')],
-    });
-    expect(rolesInOrganization(ctx, ORG_A)).toEqual(['RESPONDER']);
-  });
-});
-
-describe('RESPONDER_WORKFLOWS.md — responder membership', () => {
-  it('allows an active responder', () => {
-    expect(() =>
-      assertResponder(context({ memberships: [membership(ORG_A, 'RESPONDER')] })),
-    ).not.toThrow();
-  });
-
-  it('denies a veteran with no membership', () => {
-    expect(() => assertResponder(context())).toThrow(ForbiddenError);
-  });
-});
-
-describe('ADMIN.md §1 — Org Admin is not SUAS Admin', () => {
-  it('denies the global role to an org admin', () => {
-    const ctx = context({ memberships: [membership(ORG_A, 'ORG_ADMIN')] });
-    expect(() => assertSuasAdmin(ctx)).toThrow(ForbiddenError);
-  });
-
-  it('does not let the global role stand in for an org role', () => {
-    // ADMIN.md §2 reserves cross-org action for audited break-glass paths, not
-    // routine responder ownership.
-    const ctx = context({ isSuasAdmin: true });
-    expect(() => assertOrganizationRole(ctx, ORG_A, ['RESPONDER'])).toThrow(ForbiddenError);
+describe('AUTH.md §6 — the SUAS System Administrator grant', () => {
+  it('denies the global role to a person without the grant', () => {
+    expect(() => assertSuasAdmin(context())).toThrow(ForbiddenError);
   });
 
   it('grants the global role to a holder of the grant', () => {
@@ -189,43 +87,22 @@ describe('SECURITY.md §5 — deny by default', () => {
     expect(() => authorize(context({ isSuasAdmin: true }), {})).toThrow(ForbiddenError);
   });
 
-  it('refuses an organization scope with no roles listed', () => {
-    const ctx = context({ memberships: [membership(ORG_A, 'ORG_ADMIN')] });
-    expect(() => authorize(ctx, { organizationId: ORG_A })).toThrow(ForbiddenError);
-  });
-
-  it('checks tenant, role, and elevation together', () => {
-    const ctx = context({
-      memberships: [membership(ORG_A, 'ORG_ADMIN')],
-      mfaElevated: true,
-    });
+  it('checks tenant, admin grant, and elevation together', () => {
+    const ctx = context({ isSuasAdmin: true, mfaElevated: true });
     expect(() =>
       authorize(ctx, {
         tenantId: TENANT_A,
-        organizationId: ORG_A,
-        roles: ['ORG_ADMIN'],
+        requireSuasAdmin: true,
         requireMfaElevation: true,
-        action: 'Inviting a member',
+        action: 'Publishing a Resource',
       }),
     ).not.toThrow();
   });
 
   it('fails the tenant check before the role check, so a foreign row stays hidden', () => {
-    const ctx = context({ memberships: [membership(ORG_A, 'ORG_ADMIN')] });
-    expect(() =>
-      authorize(ctx, { tenantId: TENANT_B, organizationId: ORG_A, roles: ['ORG_ADMIN'] }),
-    ).toThrow(ResourceNotVisibleError);
-  });
-});
-
-describe('AUTH.md §1 — consent is a separate fourth input', () => {
-  it('does not let a role check stand in for a consent decision', () => {
-    // Passing role, tenant, and row says nothing about whether the veteran
-    // consented to a disclosure. Use-time evaluation lives in src/consent and is
-    // exercised by tests/integration/consent.test.ts.
-    const ctx = context({ memberships: [membership(ORG_A, 'RESPONDER')] });
-    expect(() =>
-      authorize(ctx, { tenantId: TENANT_A, organizationId: ORG_A, roles: ['RESPONDER'] }),
-    ).not.toThrow();
+    const ctx = context({ isSuasAdmin: true });
+    expect(() => authorize(ctx, { tenantId: TENANT_B, requireSuasAdmin: true })).toThrow(
+      ResourceNotVisibleError,
+    );
   });
 });

@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('veteran', 'responder', 'admin')]
+  [ValidateSet('veteran', 'admin')]
   [string]$Role
 )
 

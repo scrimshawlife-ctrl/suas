@@ -15,7 +15,8 @@
 -- PUSH is `FUTURE` (§2) and is deliberately not an enum value, so it cannot be
 -- selected before a released decision adds it.
 --
--- Destructive-change note (ENVIRONMENT.md §9): additive only.
+-- subject_type / subject_id let a delivery be joined back to the workflow entity it
+-- was sent for (DATA_MODEL.md §9; MVP_REFERENCE.md §7.2, accepted gap proposal P-12).
 
 CREATE TYPE suas_notification_channel AS ENUM ('EMAIL', 'SMS', 'IN_APP');
 
@@ -82,6 +83,9 @@ CREATE TABLE notifications (
     -- Recorded when a revoked basis cancels a queued send (§4.3).
     cancelled_at      timestamptz,
     cancel_reason     text,
+    -- The workflow entity (Support Case, Service Request, Referral) this send is for.
+    subject_type      text,
+    subject_id        uuid,
     created_at        timestamptz               NOT NULL DEFAULT now(),
     updated_at        timestamptz               NOT NULL DEFAULT now(),
 
@@ -107,6 +111,11 @@ CREATE INDEX notifications_undeliverable_idx
 
 CREATE INDEX notifications_recipient_idx
     ON notifications (tenant_id, recipient_user_id, created_at DESC);
+
+-- Look up the sends made for one workflow entity (e.g. a Service Request).
+CREATE INDEX notifications_subject_idx
+    ON notifications (tenant_id, subject_type, subject_id)
+    WHERE subject_type IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- Delivery callbacks (NOTIFICATIONS.md §6)

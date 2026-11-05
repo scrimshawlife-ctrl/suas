@@ -1,4 +1,9 @@
--- 0014_va_sandbox_oauth_evidence.sql — D-035 sandbox-only OAuth evidence.
+-- 0012_veteran_verification.sql — VA sandbox OAuth evidence (D-035) and Veteran
+-- verification results, including the v1 ID scan + selfie method
+-- (V1_PROJECT_PLAN.md §2.1, §4.2). The scan provider is chosen later; a port with a
+-- fake adapter fills this table until then.
+--
+-- VA sandbox evidence (sandbox-only).
 -- This schema deliberately stores neither authorization codes, access tokens,
 -- ID tokens, raw VA payloads, nor VA identifiers. PKCE verifier/state values
 -- are represented only by SHA-256 hashes. The verifier itself stays in a
@@ -22,7 +27,7 @@ CREATE INDEX va_oauth_transactions_live_state_idx
     WHERE consumed_at IS NULL;
 
 CREATE TYPE suas_veteran_verification_method AS ENUM
-    ('VA_VETERAN_STATUS', 'SELF_ATTESTATION', 'MANUAL_REVIEW');
+    ('VA_VETERAN_STATUS', 'SELF_ATTESTATION', 'MANUAL_REVIEW', 'ID_SCAN_SELFIE');
 CREATE TYPE suas_veteran_verification_status AS ENUM
     ('VERIFIED', 'NOT_CONFIRMED', 'PENDING', 'UNAVAILABLE', 'REVOKED');
 CREATE TYPE suas_va_not_confirmed_reason AS ENUM

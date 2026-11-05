@@ -4,6 +4,7 @@ export {
   findUsersByDestination,
   findUserById,
   NoEnrolledChannelError,
+  setUserCounty,
   setUserStatus,
   softDeleteUser,
   UserTerminalError,
@@ -12,6 +13,7 @@ export {
   type User,
   type UserStatus,
 } from './users.js';
+export { listBorderingCounties, SERVICE_COUNTIES, type ServiceCounty } from './counties.js';
 export {
   findLatestIdScan,
   hasPassedIdScan,
@@ -23,7 +25,6 @@ export {
   type IdScanView,
 } from './id-scan.js';
 export {
-  CountyRequiredError,
   requireCounty,
   requireVerifiedVeteran,
   VeteranVerificationRequiredError,
@@ -39,25 +40,6 @@ export {
 } from './id-verification.js';
 export { FakeIdVerification } from './fake-id-verification.js';
 export { selectUserForSignIn } from './signin-tenant.js';
-export {
-  createMembership,
-  createOrganization,
-  findOrganization,
-  listActiveMemberships,
-  MEMBERSHIP_ROLES,
-  MEMBERSHIP_STATUSES,
-  MembershipTerminalError,
-  ORGANIZATION_STATUSES,
-  OrganizationTerminalError,
-  setMembershipRole,
-  setMembershipStatus,
-  setOrganizationStatus,
-  type MembershipRole,
-  type MembershipStatus,
-  type Organization,
-  type OrganizationMembership,
-  type OrganizationStatus,
-} from './organizations.js';
 export { grantSuasAdmin, isSuasAdmin, revokeSuasAdmin, type SuasAdminGrant } from './admins.js';
 export {
   DisabledVeteranVerificationAdapter,

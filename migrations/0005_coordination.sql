@@ -7,6 +7,9 @@
 -- - SUAS-specs DISPATCH.md §2 (states), §4 (transitions), §7 (categories).
 -- - SUAS-specs RESPONDER_WORKFLOWS.md §2 (named actions), §7 (contact log).
 -- - SUAS-specs DOMAIN_MODEL.md §5; DATA_MODEL.md §6, §7, §13, §14 rules 1, 6.
+-- - V1_PROJECT_PLAN.md §2.1: one person accepts a request; first accept wins.
+--   There is no Responder: the person who accepted is recorded as
+--   accepted_by_user_id, with no role name (plan §8 #19).
 --
 -- Retention remains D-007 DECISION_PENDING: nothing purges, and CASES.md §7
 -- requires closure to retain all history.
@@ -28,7 +31,7 @@ CREATE TYPE suas_case_status AS ENUM (
     'CLOSED'
 );
 
--- DOMAIN_MODEL.md §5 "CaseAssignment".
+-- DOMAIN_MODEL.md §5 "CaseAssignment". An assignment records who accepted the case.
 CREATE TYPE suas_case_assignment_status AS ENUM ('ACTIVE', 'RELEASED', 'REASSIGNED');
 
 -- DISPATCH.md §2. Happy path plus exception states. Provider integration
@@ -100,8 +103,8 @@ CREATE UNIQUE INDEX support_cases_one_active_per_veteran
     ON support_cases (tenant_id, veteran_user_id)
     WHERE status <> 'CLOSED';
 
--- CASES.md §9 / RESPONDER_WORKFLOWS.md §4: queue paths are tenant + status +
--- priority, and must never scan another tenant.
+-- CASES.md §9: list paths are tenant + status + priority, and must never scan
+-- another tenant.
 CREATE INDEX support_cases_queue_idx
     ON support_cases (tenant_id, status, priority_signal_level, created_at DESC);
 CREATE INDEX support_cases_veteran_idx ON support_cases (tenant_id, veteran_user_id);
@@ -114,7 +117,7 @@ CREATE TABLE case_assignments (
     case_assignment_id uuid                        PRIMARY KEY,
     tenant_id          uuid                        NOT NULL,
     case_id            uuid                        NOT NULL,
-    responder_user_id  uuid                        NOT NULL,
+    accepted_by_user_id uuid                       NOT NULL,
     status             suas_case_assignment_status NOT NULL DEFAULT 'ACTIVE',
     assigned_at        timestamptz                 NOT NULL DEFAULT now(),
     assigned_by        uuid                        REFERENCES users (user_id),
@@ -122,17 +125,17 @@ CREATE TABLE case_assignments (
     release_reason     text,
 
     FOREIGN KEY (case_id, tenant_id) REFERENCES support_cases (case_id, tenant_id),
-    FOREIGN KEY (responder_user_id, tenant_id) REFERENCES users (user_id, tenant_id)
+    FOREIGN KEY (accepted_by_user_id, tenant_id) REFERENCES users (user_id, tenant_id)
 );
 
 -- CASES.md §5.3 / DATA_MODEL.md §14 rule 6: at most one active exclusive owner.
--- Two concurrent claims cannot both win.
+-- Two concurrent accepts cannot both win.
 CREATE UNIQUE INDEX case_assignments_one_active_per_case
     ON case_assignments (case_id)
     WHERE status = 'ACTIVE';
 
-CREATE INDEX case_assignments_responder_idx
-    ON case_assignments (tenant_id, responder_user_id, status);
+CREATE INDEX case_assignments_accepted_by_idx
+    ON case_assignments (tenant_id, accepted_by_user_id, status);
 CREATE INDEX case_assignments_history_idx ON case_assignments (case_id, assigned_at DESC);
 
 -- ---------------------------------------------------------------------------
@@ -166,7 +169,8 @@ CREATE TABLE contact_attempts (
     contact_attempt_id uuid                  PRIMARY KEY,
     tenant_id          uuid                  NOT NULL,
     case_id            uuid                  NOT NULL,
-    responder_user_id  uuid                  NOT NULL,
+    -- The person who accepted the case and logged this attempt.
+    logged_by_user_id  uuid                  NOT NULL,
     -- Contact timestamp, distinct from when the row was written.
     attempted_at       timestamptz           NOT NULL,
     channel            suas_contact_channel  NOT NULL,
@@ -175,7 +179,7 @@ CREATE TABLE contact_attempts (
     created_at         timestamptz           NOT NULL DEFAULT now(),
 
     FOREIGN KEY (case_id, tenant_id) REFERENCES support_cases (case_id, tenant_id),
-    FOREIGN KEY (responder_user_id, tenant_id) REFERENCES users (user_id, tenant_id)
+    FOREIGN KEY (logged_by_user_id, tenant_id) REFERENCES users (user_id, tenant_id)
 );
 
 CREATE INDEX contact_attempts_case_idx ON contact_attempts (case_id, attempted_at DESC);
@@ -199,6 +203,9 @@ CREATE TABLE service_requests (
     terminal_at        timestamptz,
     -- Reason recorded for the exception transitions that require one.
     status_reason      text,
+    -- Set once, by the widening job (V1_PROJECT_PLAN.md F6), when an unaccepted
+    -- request opens to bordering counties. Null means county-only.
+    widened_at         timestamptz,
 
     FOREIGN KEY (case_id, tenant_id) REFERENCES support_cases (case_id, tenant_id),
     FOREIGN KEY (created_by, tenant_id) REFERENCES users (user_id, tenant_id),
@@ -209,3 +216,8 @@ CREATE TABLE service_requests (
 CREATE INDEX service_requests_case_idx ON service_requests (case_id, created_at DESC);
 CREATE INDEX service_requests_queue_idx
     ON service_requests (tenant_id, status, category, created_at DESC);
+
+-- Widening pickup: submitted requests that have not widened yet.
+CREATE INDEX service_requests_widening_idx
+    ON service_requests (submitted_at)
+    WHERE widened_at IS NULL AND status IN ('SUBMITTED', 'TRIAGED', 'MATCHING');

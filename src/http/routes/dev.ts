@@ -17,8 +17,8 @@
  * - `POST /api/v0/dev/service-requests/:id/simulate` advances a Service Request
  *   one legal step along the released fulfillment path (SUBMIT -> TRIAGE ->
  *   START_MATCHING -> ASSIGN -> ACCEPT -> START -> FULFILL -> CONFIRM) using the
- *   same released coordination commands the responder surfaces use. It is a
- *   LOCAL stand-in for a responder/provider actually working the queue so the
+ *   same released coordination commands the accepter's routes use. It is a
+ *   LOCAL stand-in for an accepter/provider actually working the request so the
  *   app's live status screen visibly progresses. No real provider is contacted
  *   and no real-world effect occurs.
  *

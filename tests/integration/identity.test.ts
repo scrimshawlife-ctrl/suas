@@ -2,28 +2,22 @@
  * Identity and tenancy integration evidence (requires PostgreSQL).
  *
  * SUAS-specs DOMAIN_MODEL.md §2; DATA_MODEL.md §2, §14 rule 1;
- * AUTH.md §6; ADMIN.md §1-§2; SECURITY.md §2 (tenant isolation, soft-delete).
+ * AUTH.md §6; ADMIN.md §1-§2; V1_PROJECT_PLAN.md §2.1; SECURITY.md §2 (tenant isolation, soft-delete).
  */
 
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import {
-  createMembership,
-  createOrganization,
   createUser,
-  findOrganization,
   findUserByDestination,
   findUserById,
   grantSuasAdmin,
   isSuasAdmin,
-  listActiveMemberships,
-  MembershipTerminalError,
+  listBorderingCounties,
   NoEnrolledChannelError,
-  OrganizationTerminalError,
   revokeSuasAdmin,
-  setMembershipStatus,
-  setOrganizationStatus,
+  setUserCounty,
   setUserStatus,
   softDeleteUser,
   UserTerminalError,
@@ -135,115 +129,64 @@ describe('DOMAIN_MODEL.md §2 — users', () => {
   });
 });
 
-describe('DATA_MODEL.md §14 rule 1 — tenant consistency is enforced by the database', () => {
-  it('refuses a membership linking a user and an organization from different tenants', async () => {
-    const tenantA = syntheticTenantId();
-    const tenantB = syntheticTenantId();
-    const user = await activeUser(tenantA);
-    const org = await createOrganization(pool, { tenantId: tenantB, name: 'Other Tenant Org' });
+describe('V1_PROJECT_PLAN.md §2.1 — county', () => {
+  it('has no county until the person picks one', async () => {
+    const user = await activeUser(syntheticTenantId());
+    expect(user.county).toBeUndefined();
+  });
 
+  it('stores a launch county and lets the person change it', async () => {
+    const tenantId = syntheticTenantId();
+    const user = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail('county-01'),
+      county: 'SANTA_CLARA',
+    });
+    expect(user.county).toBe('SANTA_CLARA');
+
+    const moved = await setUserCounty(pool, tenantId, user.userId, 'ALAMEDA');
+    expect(moved?.county).toBe('ALAMEDA');
+  });
+
+  it('refuses a county outside the launch list', async () => {
     await expect(
-      createMembership(pool, {
-        tenantId: tenantA,
-        userId: user.userId,
-        organizationId: org.organizationId,
-        role: 'RESPONDER',
-      }),
+      pool.query(`INSERT INTO users (user_id, tenant_id, county) VALUES ($1, $2, 'MARIN')`, [
+        randomUUID(),
+        syntheticTenantId(),
+      ]),
     ).rejects.toThrow();
   });
 
-  it('accepts a membership inside one tenant', async () => {
-    const tenantId = syntheticTenantId();
-    const user = await activeUser(tenantId);
-    const org = await createOrganization(pool, { tenantId, name: 'In Tenant Org' });
-
-    const membership = await createMembership(pool, {
-      tenantId,
-      userId: user.userId,
-      organizationId: org.organizationId,
-      role: 'RESPONDER',
-      status: 'ACTIVE',
-    });
-    expect(membership.role).toBe('RESPONDER');
-  });
-});
-
-describe('AUTH.md §6 — active membership confers authority', () => {
-  async function activeMembership(role: 'RESPONDER' | 'ORG_ADMIN' = 'RESPONDER') {
-    const tenantId = syntheticTenantId();
-    const user = await activeUser(tenantId);
-    const org = await createOrganization(pool, {
-      tenantId,
-      name: 'Active Org',
-      status: 'ACTIVE',
-    });
-    const membership = await createMembership(pool, {
-      tenantId,
-      userId: user.userId,
-      organizationId: org.organizationId,
-      role,
-      status: 'ACTIVE',
-    });
-    return { tenantId, user, org, membership };
-  }
-
-  it('lists an active membership in an active organization', async () => {
-    const { tenantId, user } = await activeMembership();
-    expect(await listActiveMemberships(pool, user.userId, tenantId)).toHaveLength(1);
+  it('seeds bordering counties in both directions, water borders included', async () => {
+    expect(await listBorderingCounties(pool, 'SANTA_CLARA')).toEqual([
+      'SAN_MATEO',
+      'ALAMEDA',
+      'SANTA_CRUZ',
+      'SAN_BENITO',
+      'MERCED',
+      'STANISLAUS',
+    ]);
+    // San Mateo and Alameda meet only across San Francisco Bay; a water border counts.
+    expect(await listBorderingCounties(pool, 'SAN_MATEO')).toEqual([
+      'SANTA_CLARA',
+      'ALAMEDA',
+      'SANTA_CRUZ',
+    ]);
+    expect(await listBorderingCounties(pool, 'ALAMEDA')).toContain('SAN_MATEO');
+    // Symmetry: every row has its mirror.
+    const unmatched = await pool.query(
+      `SELECT 1 FROM county_adjacency a
+        WHERE NOT EXISTS (SELECT 1 FROM county_adjacency b
+                           WHERE b.county = a.adjacent_county AND b.adjacent_county = a.county)`,
+    );
+    expect(unmatched.rowCount).toBe(0);
   });
 
-  it('drops a revoked membership immediately', async () => {
-    const { tenantId, user, membership } = await activeMembership();
-    await setMembershipStatus(pool, tenantId, membership.membershipId, 'REVOKED');
-    expect(await listActiveMemberships(pool, user.userId, tenantId)).toEqual([]);
-  });
-
-  it('refuses to reactivate a REVOKED membership (terminal)', async () => {
-    const { tenantId, membership } = await activeMembership();
-    await setMembershipStatus(pool, tenantId, membership.membershipId, 'REVOKED');
-    await expect(
-      setMembershipStatus(pool, tenantId, membership.membershipId, 'ACTIVE'),
-    ).rejects.toThrow(MembershipTerminalError);
-  });
-
-  it('drops authority when the organization itself is suspended', async () => {
-    const { tenantId, user, org } = await activeMembership();
-    await setOrganizationStatus(pool, tenantId, org.organizationId, 'SUSPENDED');
-    expect(await listActiveMemberships(pool, user.userId, tenantId)).toEqual([]);
-  });
-
-  it('refuses to reactivate an ARCHIVED organization (terminal)', async () => {
-    const { tenantId, org } = await activeMembership();
-    await setOrganizationStatus(pool, tenantId, org.organizationId, 'ARCHIVED');
-    await expect(
-      setOrganizationStatus(pool, tenantId, org.organizationId, 'ACTIVE'),
-    ).rejects.toThrow(OrganizationTerminalError);
-    expect((await findOrganization(pool, tenantId, org.organizationId))?.status).toBe('ARCHIVED');
-  });
-
-  it('does not treat an invited membership as active', async () => {
-    const tenantId = syntheticTenantId();
-    const user = await activeUser(tenantId);
-    const org = await createOrganization(pool, { tenantId, name: 'Org', status: 'ACTIVE' });
-    await createMembership(pool, {
-      tenantId,
-      userId: user.userId,
-      organizationId: org.organizationId,
-      role: 'RESPONDER',
-    });
-    expect(await listActiveMemberships(pool, user.userId, tenantId)).toEqual([]);
-  });
-
-  it('keeps one membership per user per organization', async () => {
-    const { tenantId, user, org } = await activeMembership();
-    await expect(
-      createMembership(pool, {
-        tenantId,
-        userId: user.userId,
-        organizationId: org.organizationId,
-        role: 'ORG_ADMIN',
-      }),
-    ).rejects.toThrow();
+  it('stores the widening delay as a setting, 30 minutes by default', async () => {
+    const result = await pool.query<{ value: number }>(
+      `SELECT value FROM app_settings WHERE setting_key = 'widening_delay_minutes'`,
+    );
+    expect(result.rows[0]?.value).toBe(30);
   });
 });
 
@@ -277,17 +220,9 @@ describe('AUTH.md §6, ADMIN.md §1 — the global SUAS-admin role', () => {
     expect(await isSuasAdmin(pool, user.userId)).toBe(false);
   });
 
-  it('is not conferred by any organization role', async () => {
+  it('is not conferred by being a signed-in person', async () => {
     const tenantId = syntheticTenantId();
     const user = await activeUser(tenantId);
-    const org = await createOrganization(pool, { tenantId, name: 'Org', status: 'ACTIVE' });
-    await createMembership(pool, {
-      tenantId,
-      userId: user.userId,
-      organizationId: org.organizationId,
-      role: 'ORG_ADMIN',
-      status: 'ACTIVE',
-    });
     expect(await isSuasAdmin(pool, user.userId)).toBe(false);
   });
 });

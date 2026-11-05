@@ -1,5 +1,5 @@
 /**
- * Case queue, released case commands, resolve, and Settlement reads.
+ * Support Case create, accept, case commands, resolve, and Settlement reads.
  *
  * Spec citations:
  * - SUAS-specs API.md §3 (`/cases`), §8 commands, §9 resolve/settlements
@@ -14,27 +14,15 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
+import { assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
 import {
-  assertResponder,
-  assertScopedOrganizationRole,
-  ForbiddenError,
-  hasScopedOrganizationRole,
-  ResourceNotVisibleError,
-  type AuthContext,
-} from '../../authz/index.js';
-import {
-  assignCase,
-  claimCase,
-  DEFAULT_PAGE_SIZE,
   executeCaseCommand,
-  findActiveAssignment,
   findCase,
-  MAX_PAGE_SIZE,
   openCase,
-  readCaseQueue,
   type CaseCommand,
   type SupportCase,
 } from '../../coordination/index.js';
+import { assertAccepter, resolveCaseAccess } from '../case-access.js';
 import { findUserById, requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import type { JsonObject } from '../../jobs/index.js';
@@ -48,56 +36,27 @@ import {
 } from '../../settlement/index.js';
 
 /**
- * Released CASES.md §4 commands that share `executeCaseCommand`.
- * CLAIM_CASE / ASSIGN_CASE / RESOLVE have dedicated handlers below.
+ * CASES.md §4 commands that share `executeCaseCommand`. `accept` and `resolve` have
+ * dedicated handlers. `triage` and `reopen` are staff actions (SUAS System
+ * Administrators); the rest belong to the person who accepted the case.
  */
 const EXECUTE_CASE_HTTP = [
-  {
-    kebab: 'triage',
-    command: 'TRIAGE',
-    auth: 'responder_or_admin',
-    reasonRequired: false,
-  },
-  {
-    kebab: 'activate',
-    command: 'ACTIVATE',
-    auth: 'assigned_responder',
-    reasonRequired: false,
-  },
+  { kebab: 'triage', command: 'TRIAGE', auth: 'suas_admin', reasonRequired: false },
+  { kebab: 'activate', command: 'ACTIVATE', auth: 'accepter', reasonRequired: false },
   {
     kebab: 'move-to-followup',
     command: 'MOVE_TO_FOLLOWUP',
-    auth: 'assigned_responder',
+    auth: 'accepter',
     reasonRequired: true,
   },
-  {
-    kebab: 'resume-active',
-    command: 'RESUME_ACTIVE',
-    auth: 'assigned_responder',
-    reasonRequired: false,
-  },
-  {
-    kebab: 'escalate',
-    command: 'ESCALATE',
-    auth: 'assigned_responder',
-    reasonRequired: true,
-  },
-  {
-    kebab: 'close',
-    command: 'CLOSE',
-    auth: 'assigned_or_admin',
-    reasonRequired: false,
-  },
-  {
-    kebab: 'reopen',
-    command: 'REOPEN',
-    auth: 'org_admin',
-    reasonRequired: true,
-  },
+  { kebab: 'resume-active', command: 'RESUME_ACTIVE', auth: 'accepter', reasonRequired: false },
+  { kebab: 'escalate', command: 'ESCALATE', auth: 'accepter', reasonRequired: true },
+  { kebab: 'close', command: 'CLOSE', auth: 'accepter_or_suas_admin', reasonRequired: false },
+  { kebab: 'reopen', command: 'REOPEN', auth: 'suas_admin', reasonRequired: true },
 ] as const satisfies ReadonlyArray<{
   kebab: string;
-  command: Exclude<CaseCommand, 'CLAIM_CASE' | 'ASSIGN_CASE' | 'RESOLVE'>;
-  auth: 'responder_or_admin' | 'assigned_responder' | 'assigned_or_admin' | 'org_admin';
+  command: Exclude<CaseCommand, 'CLAIM_CASE' | 'RESOLVE'>;
+  auth: 'suas_admin' | 'accepter' | 'accepter_or_suas_admin';
   reasonRequired: boolean;
 }>;
 
@@ -111,23 +70,13 @@ const settlementParams = z.object({
   id: z.string().uuid(),
   settlement_id: z.string().uuid(),
 });
-const listQuery = z.object({
-  ownership: z.enum(['unassigned', 'mine']).default('unassigned'),
-  // API.md §5: cursor + limit, default 20, maximum 100. The bounds come from the
-  // queue module so the route cannot drift from the keyset reader it calls.
-  cursor: z.string().min(1).max(512).optional(),
-  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
-});
-const assignBody = z.object({
-  responder_user_id: z.string().uuid(),
-});
 const resolveBody = z.object({
   requested: z.record(z.unknown()),
   occurred: z.record(z.unknown()),
   fulfilled: z.record(z.unknown()),
   unresolved: z.record(z.unknown()),
   authored_by: z.string().uuid(),
-  responder_confirmed_by: z.string().uuid(),
+  accepted_by_user_id: z.string().uuid(),
   veteran_confirmed_by: z.string().uuid().optional(),
   expected_status: z.enum(['ACTIVE', 'FOLLOWUP']).optional(),
 });
@@ -151,32 +100,10 @@ function publicSettlement(settlement: Settlement) {
     unresolved: settlement.unresolvedSummary,
     remaining_follow_ups: settlement.remainingFollowUps,
     authored_by: settlement.authoredBy,
-    responder_confirmed_by: settlement.responderConfirmedBy,
+    accepted_by_user_id: settlement.acceptedByUserId,
     veteran_confirmed_by: settlement.veteranConfirmedBy ?? null,
     settled_at: settlement.settledAt.toISOString(),
   };
-}
-
-function assertOrgAdmin(context: AuthContext): void {
-  assertScopedOrganizationRole(context, ['ORG_ADMIN']);
-}
-
-async function assertAssignedResponder(
-  pool: Pool,
-  caseId: string,
-  userId: string,
-  action: string,
-): Promise<void> {
-  const assignment = await findActiveAssignment(pool, caseId);
-  if (assignment === undefined || assignment.responderUserId !== userId) {
-    throw new ForbiddenError(
-      `${action} requires the active assigned responder (SUAS-specs CASES.md §4).`,
-    );
-  }
-}
-
-function isOrgAdmin(context: AuthContext): boolean {
-  return hasScopedOrganizationRole(context, ['ORG_ADMIN']);
 }
 
 const optionalReasonBody = z.object({
@@ -238,107 +165,11 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     return { ...run.result, replayed: run.replayed };
   });
 
-  app.get(`${API_PREFIX}/cases`, async (request) => {
-    const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    assertResponder(context);
-    const query = listQuery.parse(request.query);
-    const page = await readCaseQueue(
-      deps.pool,
-      context.tenantId,
-      query.ownership === 'mine'
-        ? { ownership: 'mine', responderUserId: context.userId }
-        : { ownership: 'unassigned' },
-      { limit: query.limit, ...(query.cursor !== undefined ? { cursor: query.cursor } : {}) },
-    );
-    return {
-      cases: page.cases.map(publicCase),
-      next_cursor: page.nextCursor ?? null,
-    };
-  });
-
   app.get(`${API_PREFIX}/cases/:id`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
-    const supportCase = await findCase(deps.pool, context.tenantId, id);
-    if (supportCase === undefined) throw new ResourceNotVisibleError();
-    const owner = supportCase.veteranUserId === context.userId;
-    if (!owner) assertResponder(context);
+    const { supportCase } = await resolveCaseAccess(deps.pool, context, id);
     return publicCase(supportCase);
-  });
-
-  app.post(`${API_PREFIX}/cases/:id/commands/claim`, async (request) => {
-    const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    assertResponder(context);
-    const { id } = idParams.parse(request.params);
-    const existing = await findCase(deps.pool, context.tenantId, id);
-    if (existing === undefined) throw new ResourceNotVisibleError();
-    const result = await claimCase(deps.pool, {
-      tenantId: context.tenantId,
-      caseId: id,
-      responderUserId: context.userId,
-      correlationId: String(request.id),
-    });
-    return {
-      ...publicCase(result.supportCase),
-      assignment_id: result.assignment.caseAssignmentId,
-    };
-  });
-
-  /**
-   * CASES.md §5.7 `ASSIGN_CASE` — org-admin first assignment or reassignment.
-   * Distinct from responder `CLAIM_CASE`.
-   */
-  app.post(`${API_PREFIX}/cases/:id/commands/assign`, async (request) => {
-    const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    assertOrgAdmin(context);
-    const { id } = idParams.parse(request.params);
-    const body = assignBody.parse(request.body);
-    const existing = await findCase(deps.pool, context.tenantId, id);
-    if (existing === undefined) throw new ResourceNotVisibleError();
-
-    const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
-    const fingerprint = fingerprintRequest({
-      case_id: id,
-      responder_user_id: body.responder_user_id,
-      command: 'ASSIGN_CASE',
-      actor_id: context.userId,
-    });
-    const scope = commandScope({
-      command: 'POST /cases/{id}/commands/assign',
-      aggregateType: 'SupportCase',
-      aggregateId: id,
-      actorId: context.userId,
-    });
-
-    const run = await runIdempotentCommand(
-      deps.pool,
-      {
-        tenantId: context.tenantId,
-        commandScope: scope,
-        idempotencyKey,
-        requestFingerprint: fingerprint,
-      },
-      async () => {
-        const result = await assignCase(deps.pool, {
-          tenantId: context.tenantId,
-          caseId: id,
-          responderUserId: body.responder_user_id,
-          assignedBy: context.userId,
-          correlationId: String(request.id),
-        });
-        return {
-          result: {
-            ...publicCase(result.supportCase),
-            assignment_id: result.assignment.caseAssignmentId,
-            responder_user_id: result.assignment.responderUserId,
-          },
-          aggregateType: 'SupportCase',
-          aggregateId: id,
-        };
-      },
-    );
-
-    return { ...run.result, replayed: run.replayed };
   });
 
   for (const entry of EXECUTE_CASE_HTTP) {
@@ -348,27 +179,22 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
       const body = entry.reasonRequired
         ? requiredReasonBody.parse(request.body ?? {})
         : optionalReasonBody.parse(request.body ?? {});
-      const existing = await findCase(deps.pool, context.tenantId, id);
-      if (existing === undefined) throw new ResourceNotVisibleError();
-
-      const admin = isOrgAdmin(context);
-      if (entry.auth === 'org_admin') {
-        assertOrgAdmin(context);
-      } else if (entry.auth === 'responder_or_admin') {
-        if (!admin) assertResponder(context);
-      } else if (entry.auth === 'assigned_or_admin') {
-        if (admin) {
-          // org admin close path
-        } else {
-          assertResponder(context);
-          await assertAssignedResponder(deps.pool, id, context.userId, entry.command);
-        }
+      let actorType: 'USER' | 'SUAS_ADMIN';
+      if (entry.auth === 'suas_admin') {
+        assertSuasAdmin(context);
+        actorType = 'SUAS_ADMIN';
+      } else if (entry.auth === 'accepter_or_suas_admin' && context.isSuasAdmin) {
+        actorType = 'SUAS_ADMIN';
       } else {
-        assertResponder(context);
-        await assertAssignedResponder(deps.pool, id, context.userId, entry.command);
+        assertAccepter(await resolveCaseAccess(deps.pool, context, id), entry.command);
+        actorType = 'USER';
+      }
+      // An admin acts across people, so confirm the case exists in the tenant.
+      if (actorType === 'SUAS_ADMIN') {
+        const existing = await findCase(deps.pool, context.tenantId, id);
+        if (existing === undefined) throw new ResourceNotVisibleError();
       }
 
-      const actorType = admin && entry.auth !== 'assigned_responder' ? 'ORG_ADMIN' : 'RESPONDER';
       const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
       const fingerprint = fingerprintRequest({
         case_id: id,
@@ -422,12 +248,9 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
    */
   app.post(`${API_PREFIX}/cases/:id/commands/resolve`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    assertResponder(context);
     const { id } = idParams.parse(request.params);
     const body = resolveBody.parse(request.body ?? {});
-    const existing = await findCase(deps.pool, context.tenantId, id);
-    if (existing === undefined) throw new ResourceNotVisibleError();
-    await assertAssignedResponder(deps.pool, id, context.userId, 'RESOLVE');
+    assertAccepter(await resolveCaseAccess(deps.pool, context, id), 'RESOLVE');
 
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const content = {
@@ -436,7 +259,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
       fulfilled: body.fulfilled as JsonObject,
       unresolved: body.unresolved as JsonObject,
       authoredBy: body.authored_by,
-      responderConfirmedBy: body.responder_confirmed_by,
+      acceptedByUserId: body.accepted_by_user_id,
       ...(body.veteran_confirmed_by !== undefined
         ? { veteranConfirmedBy: body.veteran_confirmed_by }
         : {}),
@@ -464,10 +287,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
   app.get(`${API_PREFIX}/cases/:id/settlements`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
-    const supportCase = await findCase(deps.pool, context.tenantId, id);
-    if (supportCase === undefined) throw new ResourceNotVisibleError();
-    const owner = supportCase.veteranUserId === context.userId;
-    if (!owner) assertResponder(context);
+    const { owner } = await resolveCaseAccess(deps.pool, context, id);
 
     const settlements = await listSettlements(deps.pool, context.tenantId, id);
     return {
@@ -480,10 +300,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
   app.get(`${API_PREFIX}/cases/:id/settlements/:settlement_id`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id, settlement_id: settlementId } = settlementParams.parse(request.params);
-    const supportCase = await findCase(deps.pool, context.tenantId, id);
-    if (supportCase === undefined) throw new ResourceNotVisibleError();
-    const owner = supportCase.veteranUserId === context.userId;
-    if (!owner) assertResponder(context);
+    const { owner } = await resolveCaseAccess(deps.pool, context, id);
 
     const settlement = await findSettlement(deps.pool, context.tenantId, settlementId);
     if (settlement === undefined || settlement.caseId !== id) {

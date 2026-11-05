@@ -346,6 +346,9 @@ describe('crisis screen', () => {
     expect(signedOut.statusCode).toBe(200);
     expect(['APPROVED', 'PLACEHOLDER']).toContain(signedOut.json<{ state: string }>().state);
 
+    const page = await app.server.inject({ method: 'GET', url: '/app/immediate-resources' });
+    expect(page.statusCode).toBe(200);
+
     const { headers } = await person();
     const unverified = await app.server.inject({
       method: 'GET',

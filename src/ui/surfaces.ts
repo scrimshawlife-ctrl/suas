@@ -7,7 +7,6 @@
  * - SUAS-specs MVP_REFERENCE.md §5 (required surface inventory)
  * - SUAS-specs MVP_REFERENCE.md §7 (mandatory production divergences)
  * - SUAS-specs MVP_REFERENCE.md §8 (resource-screen fidelity)
- * - SUAS-specs MVP_REFERENCE.md §9 (responder dashboard fidelity)
  * - SUAS-specs MVP_REFERENCE.md §10 (WCAG 2.2 AA)
  *
  * Every function is pure: view model in, markup out. Each ends by asserting its
@@ -61,14 +60,8 @@ import {
 } from './safety.js';
 import type { SafetyCopyMode } from '../config/index.js';
 import { STYLESHEET } from './theme.js';
-import {
-  CONTACT_CHANNEL_OPTIONS,
-  CONTACT_OUTCOME_OPTIONS,
-  SERVICE_CATEGORY_OPTIONS,
-} from './view-models.js';
+import {} from './view-models.js';
 import type {
-  ActiveNeedsViewModel,
-  ActiveNeedViewModel,
   AdminOverviewViewModel,
   AdminPlannedSurfaceViewModel,
   ChatViewModel,
@@ -82,14 +75,10 @@ import type {
   ResourceCategoriesViewModel,
   ResourceListViewModel,
   ResourceRowViewModel,
-  DutyAvailability,
   ConsentsListViewModel,
   NotificationPreferencesViewModel,
   NotificationsInboxViewModel,
   TrustedContactsListViewModel,
-  ResponderAvailabilityViewModel,
-  ResponderCaseViewModel,
-  ResponderDashboardViewModel,
   ShellViewModel,
   VeteranHomeViewModel,
 } from './view-models.js';
@@ -184,14 +173,6 @@ function stateBlock(label_: string, headline: string, detail?: string): Renderab
     p({}, headline),
     detail === undefined ? undefined : p({ class: 'muted' }, detail),
   );
-}
-
-/**
- * §9.1 keeps the On Duty landmark. G-I-30: the landmark is not a stored
- * on/off fact, so the block states unavailability the way chat does.
- */
-function dutyUnavailability(duty: DutyAvailability): Renderable {
-  return stateBlock('Unavailable', duty.reason);
 }
 
 /**
@@ -327,7 +308,6 @@ export function renderLanding(model: LandingViewModel): string {
       // §3.1 / §5: the action block is immediate and dominant.
       h2({ id: 'take-action', class: 'kicker' }, 'TAKE ACTION'),
       a({ class: 'action', href: '/app/join?role=veteran' }, 'I NEED SUPPORT'),
-      a({ class: 'action', href: '/app/join?role=responder' }, 'I WANT TO SERVE'),
       model.demoSignIn === undefined
         ? undefined
         : p(
@@ -341,7 +321,7 @@ export function renderLanding(model: LandingViewModel): string {
 
 export function renderEnrollment(model: EnrollmentViewModel): string {
   const role = model.selectedRole ?? 'veteran';
-  const roleLabel = role === 'responder' ? 'Responder or Peer Counselor' : 'Veteran';
+  const roleLabel = 'Veteran';
   const markup = document(model.shell, [
     h1({}, 'Join the Mission'),
     section(
@@ -376,7 +356,7 @@ export function renderEnrollment(model: EnrollmentViewModel): string {
         : p({ class: 'muted' }, 'Email sign-in is not available in this environment.'),
     ),
   ]);
-  return assertSurface('ENROLLMENT', markup, role === 'responder' ? 'RESPONDER' : 'VETERAN');
+  return assertSurface('ENROLLMENT', markup, 'VETERAN');
 }
 
 export function renderEmailOtp(model: EmailOtpViewModel): string {
@@ -583,248 +563,6 @@ export function renderResourceList(model: ResourceListViewModel): string {
   return assertSurface('RESOURCE_LIST', markup);
 }
 
-function needRow(need: ActiveNeedViewModel, level: HeadingLevel = 3): Renderable {
-  return li(
-    { class: 'card' },
-    cardHeading(level, need.category),
-    p({}, span({ class: 'badge' }, need.caseStatus)),
-    need.prioritySignalLevel === undefined
-      ? undefined
-      : p({}, span({ class: 'badge' }, `Priority ${need.prioritySignalLevel}`)),
-    p({ class: 'muted' }, need.openedLabel),
-    need.claimable === true
-      ? form(
-          { method: 'post', action: `/app/responder/cases/${need.caseId}/commands/claim` },
-          button({ class: 'action', type: 'submit' }, 'Claim'),
-        )
-      : undefined,
-    a({ class: 'action-secondary', href: `/app/responder/cases/${need.caseId}` }, 'Open case'),
-  );
-}
-
-export function renderResponderCase(model: ResponderCaseViewModel): string {
-  const logAction = `/app/responder/cases/${model.need.caseId}/commands/log-contact-attempt`;
-  const markup = document(model.shell, [
-    h1({}, 'Case'),
-    a({ href: '/app/responder' }, 'Back'),
-    ul({ class: 'card-grid' }, needRow(model.need, 2)),
-    section(
-      { 'aria-labelledby': 'contact-attempts' },
-      h2({ id: 'contact-attempts' }, 'Contact attempts'),
-      model.contactAttempts.length === 0
-        ? p({ class: 'muted' }, 'No contact attempts recorded for this case.')
-        : ul(
-            {},
-            model.contactAttempts.map((attempt) =>
-              li({}, `${attempt.channel} · ${attempt.outcome} · ${attempt.attemptedAtLabel}`),
-            ),
-          ),
-      model.canLogContact === true
-        ? form(
-            { method: 'post', action: logAction },
-            h3({}, 'Log contact attempt'),
-            fieldset(
-              { class: 'check-in-options' },
-              legend({}, 'Channel'),
-              CONTACT_CHANNEL_OPTIONS.map((channel) => {
-                const id = `channel-${channel}`;
-                return label(
-                  { for: id, class: 'option' },
-                  input({
-                    id,
-                    type: 'radio',
-                    name: 'channel',
-                    value: channel,
-                    ...(channel === 'PHONE' ? { checked: true } : {}),
-                  }),
-                  channel,
-                );
-              }),
-            ),
-            fieldset(
-              { class: 'check-in-options' },
-              legend({}, 'Outcome'),
-              CONTACT_OUTCOME_OPTIONS.map((outcome) => {
-                const id = `outcome-${outcome}`;
-                return label(
-                  { for: id, class: 'option' },
-                  input({
-                    id,
-                    type: 'radio',
-                    name: 'outcome',
-                    value: outcome,
-                    ...(outcome === 'PENDING' ? { checked: true } : {}),
-                  }),
-                  outcome,
-                );
-              }),
-            ),
-            button({ class: 'action', type: 'submit' }, 'Log contact attempt'),
-          )
-        : undefined,
-    ),
-    section(
-      { 'aria-labelledby': 'service-requests' },
-      h2({ id: 'service-requests' }, 'Service requests'),
-      model.serviceRequests.length === 0
-        ? p({ class: 'muted' }, 'No service requests on this case.')
-        : ul(
-            {},
-            model.serviceRequests.map((request) =>
-              li({}, `${request.category} · ${request.status}`),
-            ),
-          ),
-      model.canCreateServiceRequest === true
-        ? form(
-            {
-              method: 'post',
-              action: `/app/responder/cases/${model.need.caseId}/service-requests`,
-            },
-            h3({}, 'Create service request'),
-            fieldset(
-              { class: 'check-in-options' },
-              legend({}, 'Category'),
-              SERVICE_CATEGORY_OPTIONS.map((category) => {
-                const id = `category-${category}`;
-                return label(
-                  { for: id, class: 'option' },
-                  input({
-                    id,
-                    type: 'radio',
-                    name: 'category',
-                    value: category,
-                    ...(category === 'FOOD' ? { checked: true } : {}),
-                  }),
-                  category,
-                );
-              }),
-            ),
-            button({ class: 'action', type: 'submit' }, 'Create service request'),
-          )
-        : undefined,
-    ),
-  ]);
-  return assertSurface('RESPONDER_CASE', markup);
-}
-
-export function renderResponderDashboard(model: ResponderDashboardViewModel): string {
-  const markup = document(model.shell, [
-    h1({}, 'Responder'),
-    // §9.1: on-duty is a primary landmark. G-I-30: it is not a stored fact,
-    // so the block states unavailability rather than posting a 404 form.
-    section(
-      { 'aria-labelledby': 'duty' },
-      h2({ id: 'duty' }, 'On Duty'),
-      dutyUnavailability(model.duty),
-    ),
-    section(
-      { 'aria-labelledby': 'unassigned' },
-      h2({ id: 'unassigned' }, 'Unassigned'),
-      (model.unassignedNeeds ?? []).length === 0
-        ? p({ class: 'muted' }, 'No unassigned cases in this tenant.')
-        : ul(
-            { class: 'card-grid' },
-            (model.unassignedNeeds ?? []).map((need) => needRow(need)),
-          ),
-      model.unassignedNextCursor === undefined
-        ? undefined
-        : a(
-            {
-              class: 'action-secondary',
-              href: `?unassigned_cursor=${encodeURIComponent(model.unassignedNextCursor)}`,
-            },
-            'Show more unassigned',
-          ),
-    ),
-    section(
-      { 'aria-labelledby': 'needs' },
-      h2({ id: 'needs' }, 'Active Needs'),
-      model.activeNeeds.length === 0
-        ? p({ class: 'muted' }, 'No active needs assigned to you.')
-        : ul(
-            { class: 'card-grid' },
-            model.activeNeeds.map((need) => needRow(need)),
-          ),
-      model.activeNextCursor === undefined
-        ? undefined
-        : a(
-            {
-              class: 'action-secondary',
-              href: `?active_cursor=${encodeURIComponent(model.activeNextCursor)}`,
-            },
-            'Show more active needs',
-          ),
-    ),
-    section(
-      { 'aria-labelledby': 'alerts' },
-      h2({ id: 'alerts' }, 'Alerts'),
-      model.alerts.status === 'UNAVAILABLE'
-        ? p({ class: 'muted' }, model.alerts.reason)
-        : model.alerts.items.length === 0
-          ? p({ class: 'muted' }, 'No alerts.')
-          : ul(
-              {},
-              model.alerts.items.map((alert) => li({}, alert)),
-            ),
-    ),
-    // §9.3: Quick Resource Share covers released capabilities only.
-    section(
-      { 'aria-labelledby': 'quick-share' },
-      h2({ id: 'quick-share' }, 'Quick Resource Share'),
-      categoryGrid(model.quickShareCategories),
-    ),
-    section(
-      { 'aria-labelledby': 'metrics' },
-      h2({ id: 'metrics' }, 'Summary'),
-      // §9: a metric with no released definition says so rather than showing 0.
-      dl(
-        {},
-        model.metrics.flatMap((metric) => [
-          dt({}, metric.label),
-          dd(
-            {},
-            metric.state === 'AVAILABLE'
-              ? (metric.value ?? '')
-              : span({ class: 'muted' }, metric.reason ?? 'Not available'),
-          ),
-        ]),
-      ),
-    ),
-  ]);
-  return assertSurface('RESPONDER_DASHBOARD', markup);
-}
-
-export function renderResponderAvailability(model: ResponderAvailabilityViewModel): string {
-  const markup = document(model.shell, [
-    h1({}, 'On Duty'),
-    dutyUnavailability(model.duty),
-    // D-009 coverage hours stay absent. A window here would invent hours.
-  ]);
-  return assertSurface('RESPONDER_AVAILABILITY', markup);
-}
-
-export function renderActiveNeeds(model: ActiveNeedsViewModel): string {
-  const markup = document(model.shell, [
-    h1({}, 'Active Needs'),
-    model.needs.length === 0
-      ? p({ class: 'muted' }, 'No active needs assigned to you.')
-      : ul(
-          { class: 'card-grid' },
-          model.needs.map((need) => needRow(need, 2)),
-        ),
-    model.nextCursor === undefined
-      ? undefined
-      : a(
-          {
-            class: 'action-secondary',
-            href: `?cursor=${encodeURIComponent(model.nextCursor)}`,
-          },
-          'Show more active needs',
-        ),
-  ]);
-  return assertSurface('ACTIVE_NEEDS', markup);
-}
-
 export function renderChat(model: ChatViewModel): string {
   const markup = document(model.shell, [
     h1({}, 'Chat'),
@@ -956,7 +694,6 @@ export function renderAdminOverview(model: AdminOverviewViewModel): string {
       ul(
         { class: 'card-grid' },
         [
-          ['/app/admin/organizations', 'Organizations'],
           ['/app/admin/access', 'Access'],
           ['/app/admin/artifacts', 'Published artifacts'],
           ['/app/admin/providers', 'Provider adapters'],

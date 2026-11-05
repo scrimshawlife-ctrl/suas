@@ -14,7 +14,6 @@
 -- (SUPPORT_SIGNALS.md §2). This migration therefore ships no questionnaire
 -- content and no scoring data — only the structures that hold them.
 --
--- Destructive-change note (ENVIRONMENT.md §9): additive only.
 
 -- ---------------------------------------------------------------------------
 -- Vocabulary

@@ -17,12 +17,14 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createUser } from '../../src/identity/index.js';
+import { createUser, setUserCounty } from '../../src/identity/index.js';
 import {
   claimCase,
   executeCaseCommand,
+  createServiceRequest,
+  executeServiceRequestCommand,
   openCase,
-  readCaseQueue,
+  readRequestList,
   MAX_PAGE_SIZE,
 } from '../../src/coordination/index.js';
 import { appendDomainEvent, publishPendingEvents } from '../../src/events/index.js';
@@ -323,11 +325,11 @@ describe('RESILIENCE.md §17.10 — stale scheduled work is suppressed', () => {
     const followUp = await createFollowUp(poolA(), {
       tenantId,
       caseId: opened.supportCase.caseId,
-      responsibleType: 'RESPONDER',
+      responsibleType: 'USER',
       responsibleId: userId,
       dueAt: new Date(Date.now() - 60_000),
       actorId: userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     // A worker claims the due job and holds its schedule version.
@@ -343,7 +345,7 @@ describe('RESILIENCE.md §17.10 — stale scheduled work is suppressed', () => {
       newDueAt: new Date(Date.now() + 3_600_000),
       reason: 'Veteran asked to be contacted later',
       actorId: userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     // The in-flight job must not transition the Follow-Up it no longer owns.
@@ -363,28 +365,50 @@ describe('RESILIENCE.md §17.10 — stale scheduled work is suppressed', () => {
 });
 
 describe('SCALING.md §10 — growing lists are bounded', () => {
-  it('caps a queue page regardless of what the caller asks for', async () => {
+  it('caps an open-request page regardless of what the caller asks for', async () => {
     const { tenantId, userId } = await enrolledUser();
+    await setUserCounty(poolA(), tenantId, userId, 'SANTA_CLARA');
 
-    // A backlog larger than one page.
+    // A backlog of open requests larger than one page.
     for (let index = 0; index < MAX_PAGE_SIZE + 5; index += 1) {
       const veteran = await createUser(poolA(), {
         tenantId,
         email: syntheticEmail(`backlog-${randomUUID().slice(0, 8)}`),
         status: 'ACTIVE',
+        county: 'SANTA_CLARA',
       });
-      await withTransaction(poolA(), (tx) =>
-        openCase(tx, {
+      const created = await withTransaction(poolA(), async (tx) => {
+        const opened = await openCase(tx, {
           tenantId,
           veteranUserId: veteran.userId,
           actorType: 'SYSTEM',
           actorId: userId,
-        }),
-      );
+        });
+        return createServiceRequest(tx, {
+          tenantId,
+          caseId: opened.supportCase.caseId,
+          category: 'FOOD',
+          createdBy: veteran.userId,
+          actorType: 'VETERAN',
+        });
+      });
+      await executeServiceRequestCommand(poolA(), {
+        tenantId,
+        serviceRequestId: created.serviceRequestId,
+        command: 'SUBMIT',
+        actorId: veteran.userId,
+        actorType: 'VETERAN',
+      });
     }
 
-    const page = await readCaseQueue(poolA(), tenantId, {}, { limit: 10_000 });
-    expect(page.cases.length).toBeLessThanOrEqual(MAX_PAGE_SIZE);
+    const page = await readRequestList(
+      poolA(),
+      tenantId,
+      userId,
+      { ownership: 'open' },
+      { limit: 10_000 },
+    );
+    expect(page.requests.length).toBeLessThanOrEqual(MAX_PAGE_SIZE);
     expect(page.nextCursor).toBeDefined();
 
     record({
@@ -528,14 +552,14 @@ describe('RESILIENCE.md §17.9 — concurrent Settlement resolve', () => {
     await claimCase(poolA(), {
       tenantId,
       caseId: opened.supportCase.caseId,
-      responderUserId: userId,
+      acceptedByUserId: userId,
     });
     await executeCaseCommand(poolA(), {
       tenantId,
       caseId: opened.supportCase.caseId,
       command: 'ACTIVATE',
       actorId: userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     const content = {
@@ -544,7 +568,7 @@ describe('RESILIENCE.md §17.9 — concurrent Settlement resolve', () => {
       fulfilled: {},
       unresolved: {},
       authoredBy: userId,
-      responderConfirmedBy: userId,
+      acceptedByUserId: userId,
     };
 
     // A genuine race across both instances, with distinct idempotency keys so

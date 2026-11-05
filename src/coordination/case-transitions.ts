@@ -27,11 +27,10 @@ export const CASE_STATUSES = [
 ] as const;
 export type CaseStatus = (typeof CASE_STATUSES)[number];
 
-/** Named responder/admin actions. RESPONDER_WORKFLOWS.md §2. */
+/** Named case actions. RESPONDER_WORKFLOWS.md §2. */
 export const CASE_COMMANDS = [
   'TRIAGE',
   'CLAIM_CASE',
-  'ASSIGN_CASE',
   'ACTIVATE',
   'MOVE_TO_FOLLOWUP',
   'RESUME_ACTIVE',
@@ -43,7 +42,11 @@ export const CASE_COMMANDS = [
 export type CaseCommand = (typeof CASE_COMMANDS)[number];
 
 /** Who may perform an edge. Enforced by the authorization layer, recorded here. */
-export type CaseActorRole = 'RESPONDER' | 'ASSIGNED_RESPONDER' | 'ORG_ADMIN' | 'SYSTEM';
+/**
+ * v1 has no Responder or Org Admin (V1_PROJECT_PLAN.md §2.1): `USER` is any signed-in
+ * person, `ASSIGNED_USER` the one who accepted the case, `SUAS_ADMIN` staff.
+ */
+export type CaseActorRole = 'USER' | 'ASSIGNED_USER' | 'SUAS_ADMIN' | 'SYSTEM';
 
 export interface CaseTransition {
   readonly from: CaseStatus;
@@ -58,6 +61,9 @@ export interface CaseTransition {
 /**
  * The released transition table from CASES.md §4, plus §4.2 reopen.
  *
+ * v1 drops `ASSIGN_CASE` and the reassignment edges: nobody assigns a case, a person
+ * accepts it (V1_PROJECT_PLAN.md §2.1), and releasing one is undecided (plan §8 #11).
+ *
  * Note what is absent: there is no `OPEN → ACTIVE`, and no `ESCALATE` edge from
  * `OPEN` or `TRIAGED`. CASES.md §4.1 and §10 name that specific edge as one an
  * implementation must not permit, because no assignment exists to authorize it.
@@ -67,7 +73,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'OPEN',
     to: 'TRIAGED',
     command: 'TRIAGE',
-    actors: ['RESPONDER', 'ORG_ADMIN'],
+    actors: ['SUAS_ADMIN'],
     requiresActiveAssignment: false,
     requiresReason: false,
   },
@@ -75,7 +81,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'OPEN',
     to: 'ASSIGNED',
     command: 'CLAIM_CASE',
-    actors: ['RESPONDER'],
+    actors: ['USER'],
     requiresActiveAssignment: false,
     requiresReason: false,
   },
@@ -83,56 +89,15 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'TRIAGED',
     to: 'ASSIGNED',
     command: 'CLAIM_CASE',
-    actors: ['RESPONDER'],
+    actors: ['USER'],
     requiresActiveAssignment: false,
-    requiresReason: false,
-  },
-  {
-    from: 'OPEN',
-    to: 'ASSIGNED',
-    command: 'ASSIGN_CASE',
-    actors: ['ORG_ADMIN'],
-    requiresActiveAssignment: false,
-    requiresReason: false,
-  },
-  {
-    from: 'TRIAGED',
-    to: 'ASSIGNED',
-    command: 'ASSIGN_CASE',
-    actors: ['ORG_ADMIN'],
-    requiresActiveAssignment: false,
-    requiresReason: false,
-  },
-  // Reassignment edges. CASES.md §4 rows for ASSIGNED/ACTIVE/FOLLOWUP → ASSIGNED.
-  {
-    from: 'ASSIGNED',
-    to: 'ASSIGNED',
-    command: 'ASSIGN_CASE',
-    actors: ['ASSIGNED_RESPONDER', 'ORG_ADMIN'],
-    requiresActiveAssignment: true,
-    requiresReason: false,
-  },
-  {
-    from: 'ACTIVE',
-    to: 'ASSIGNED',
-    command: 'ASSIGN_CASE',
-    actors: ['ASSIGNED_RESPONDER', 'ORG_ADMIN'],
-    requiresActiveAssignment: true,
-    requiresReason: false,
-  },
-  {
-    from: 'FOLLOWUP',
-    to: 'ASSIGNED',
-    command: 'ASSIGN_CASE',
-    actors: ['ASSIGNED_RESPONDER', 'ORG_ADMIN'],
-    requiresActiveAssignment: true,
     requiresReason: false,
   },
   {
     from: 'ASSIGNED',
     to: 'ACTIVE',
     command: 'ACTIVATE',
-    actors: ['ASSIGNED_RESPONDER'],
+    actors: ['ASSIGNED_USER'],
     requiresActiveAssignment: true,
     requiresReason: false,
   },
@@ -140,7 +105,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'ACTIVE',
     to: 'FOLLOWUP',
     command: 'MOVE_TO_FOLLOWUP',
-    actors: ['ASSIGNED_RESPONDER'],
+    actors: ['ASSIGNED_USER'],
     requiresActiveAssignment: true,
     requiresReason: true,
   },
@@ -148,7 +113,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'FOLLOWUP',
     to: 'ACTIVE',
     command: 'RESUME_ACTIVE',
-    actors: ['ASSIGNED_RESPONDER'],
+    actors: ['ASSIGNED_USER'],
     requiresActiveAssignment: true,
     requiresReason: false,
   },
@@ -157,7 +122,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'ASSIGNED',
     to: 'ACTIVE',
     command: 'ESCALATE',
-    actors: ['ASSIGNED_RESPONDER'],
+    actors: ['ASSIGNED_USER'],
     requiresActiveAssignment: true,
     requiresReason: true,
   },
@@ -165,7 +130,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'ACTIVE',
     to: 'ACTIVE',
     command: 'ESCALATE',
-    actors: ['ASSIGNED_RESPONDER'],
+    actors: ['ASSIGNED_USER'],
     requiresActiveAssignment: true,
     requiresReason: true,
   },
@@ -173,7 +138,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'FOLLOWUP',
     to: 'ACTIVE',
     command: 'ESCALATE',
-    actors: ['ASSIGNED_RESPONDER'],
+    actors: ['ASSIGNED_USER'],
     requiresActiveAssignment: true,
     requiresReason: true,
   },
@@ -181,7 +146,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'ACTIVE',
     to: 'RESOLVED',
     command: 'RESOLVE',
-    actors: ['ASSIGNED_RESPONDER'],
+    actors: ['ASSIGNED_USER'],
     requiresActiveAssignment: true,
     requiresReason: false,
   },
@@ -189,7 +154,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'FOLLOWUP',
     to: 'RESOLVED',
     command: 'RESOLVE',
-    actors: ['ASSIGNED_RESPONDER'],
+    actors: ['ASSIGNED_USER'],
     requiresActiveAssignment: true,
     requiresReason: false,
   },
@@ -197,7 +162,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'RESOLVED',
     to: 'CLOSED',
     command: 'CLOSE',
-    actors: ['ASSIGNED_RESPONDER', 'ORG_ADMIN'],
+    actors: ['ASSIGNED_USER', 'SUAS_ADMIN'],
     requiresActiveAssignment: false,
     requiresReason: false,
   },
@@ -206,7 +171,7 @@ export const CASE_TRANSITIONS: readonly CaseTransition[] = [
     from: 'CLOSED',
     to: 'OPEN',
     command: 'REOPEN',
-    actors: ['ORG_ADMIN'],
+    actors: ['SUAS_ADMIN'],
     requiresActiveAssignment: false,
     requiresReason: true,
   },

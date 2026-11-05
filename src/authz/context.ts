@@ -5,10 +5,10 @@
  * - SUAS-specs AUTH.md §1 — "Authentication is not authorization. Authorization
  *   remains role + tenant + row + consent/system basis."
  * - SUAS-specs AUTH.md §5 — in-flight authorization after revocation re-evaluates
- *   authoritative user/membership/session state rather than trusting stale client
- *   claims.
- * - SUAS-specs AUTH.md §6 — active user, active membership with the needed role,
- *   server-derived tenant context.
+ *   authoritative user/session state rather than trusting stale client claims.
+ * - V1_PROJECT_PLAN.md §2.1 — no Organizations or Responders. A person owns what
+ *   they requested, acts on what they accepted, and SUAS System Administrators act
+ *   through admin grants. Those row checks live in the routes and domain modules.
  * - SUAS-specs API.md §4 — the server derives tenant and actor authority; clients
  *   cannot choose an arbitrary tenant scope.
  *
@@ -18,7 +18,6 @@
 
 import type { Pool } from 'pg';
 import { isSuasAdmin } from '../identity/admins.js';
-import { listActiveMemberships, type OrganizationMembership } from '../identity/organizations.js';
 import {
   isElevated,
   resolveSession,
@@ -31,7 +30,6 @@ export interface AuthContext {
   /** Server-derived tenant scope. Never read from the request body or query. */
   readonly tenantId: string;
   readonly userId: string;
-  readonly memberships: readonly OrganizationMembership[];
   readonly isSuasAdmin: boolean;
   /** MFA elevation, evaluated against the elevation TTL at resolution time. */
   readonly mfaElevated: boolean;
@@ -44,7 +42,7 @@ export type AuthResolution =
 /**
  * Resolve a credential into a full authorization context.
  *
- * Session validity, user status, memberships, and the global admin grant are all
+ * Session validity, user status, and the global admin grant are all
  * read now — not cached from issue time — so a revoke observed on one instance is
  * enforced on every other.
  */
@@ -58,10 +56,7 @@ export async function resolveAuthContext(
     return { ok: false, reason: resolved.reason };
   }
 
-  const [memberships, admin] = await Promise.all([
-    listActiveMemberships(pool, resolved.session.userId, resolved.session.tenantId),
-    isSuasAdmin(pool, resolved.session.userId),
-  ]);
+  const admin = await isSuasAdmin(pool, resolved.session.userId);
 
   return {
     ok: true,
@@ -69,25 +64,8 @@ export async function resolveAuthContext(
       session: resolved.session,
       tenantId: resolved.session.tenantId,
       userId: resolved.session.userId,
-      memberships,
       isSuasAdmin: admin,
       mfaElevated: isElevated(resolved.session),
     },
   };
-}
-
-/** Active roles held in one organization. */
-export function rolesInOrganization(
-  context: AuthContext,
-  organizationId: string,
-): OrganizationMembership['role'][] {
-  return context.memberships
-    .filter(
-      (membership) =>
-        membership.tenantId === context.tenantId &&
-        membership.organizationId === organizationId &&
-        (context.session.organizationId === undefined ||
-          context.session.organizationId === organizationId),
-    )
-    .map((membership) => membership.role);
 }

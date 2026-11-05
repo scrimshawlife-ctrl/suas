@@ -1,7 +1,8 @@
 /**
- * Trusted-contact accept + responder contact-log commands.
+ * Trusted-contact accept + the accepter's contact-log commands.
  *
- * TRUSTED_CIRCLE.md §3.4; RESPONDER_WORKFLOWS.md §2 / §7; API.md §4 / §7.
+ * TRUSTED_CIRCLE.md §3.4; RESPONDER_WORKFLOWS.md §2 / §7; API.md §4 / §7;
+ * V1_PROJECT_PLAN.md §2.1.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -9,10 +10,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { findNonClosedCase } from '../../src/coordination/index.js';
-import { createMembership, createOrganization, createUser } from '../../src/identity/index.js';
+import { createUser } from '../../src/identity/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -42,14 +44,10 @@ interface QuestionJson {
   options: { answer_option_id: string; option_key: string }[];
 }
 
-async function bearer(tenantId: string, userId: string, organizationId?: string) {
+async function bearer(tenantId: string, userId: string) {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
-  const session = await createSession(pool, TEST_SESSION_SECRET, {
-    tenantId,
-    userId,
-    ...(organizationId !== undefined ? { organizationId } : {}),
-  });
+  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId });
   return { authorization: `Bearer ${session.credential}` };
 }
 
@@ -57,10 +55,11 @@ async function openRedCase() {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
   const tenantId = randomUUID();
-  const veteran = await createUser(pool, {
+  const veteran = await createVerifiedUser(pool, {
     tenantId,
     email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
+    county: 'SANTA_CLARA',
   });
   await ensurePublishedQv001(pool, veteran.userId);
   const headers = await bearer(tenantId, veteran.userId);
@@ -99,34 +98,37 @@ async function openRedCase() {
   return { pool, tenantId, veteran, headers, supportCase };
 }
 
-async function responderFor(tenantId: string, organizationId?: string) {
+/** A signed-in person in the launch county who can accept requests. */
+async function accepterFor(tenantId: string) {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
-  const org =
-    organizationId === undefined
-      ? await createOrganization(pool, {
-          tenantId,
-          name: `Org ${randomUUID().slice(0, 8)}`,
-          status: 'ACTIVE',
-        })
-      : { organizationId };
-  const responder = await createUser(pool, {
+  const accepter = await createUser(pool, {
     tenantId,
-    email: syntheticEmail(`resp-${randomUUID().slice(0, 8)}`),
+    email: syntheticEmail(`acc-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
+    county: 'SANTA_CLARA',
   });
-  await createMembership(pool, {
-    tenantId,
-    organizationId: org.organizationId,
-    userId: responder.userId,
-    role: 'RESPONDER',
-    status: 'ACTIVE',
+  return { accepter, headers: await bearer(tenantId, accepter.userId) };
+}
+
+/** The Veteran submits a request on the case, so someone can accept it. */
+async function submitRequest(veteranHeaders: Record<string, string>, caseId: string) {
+  const created = await app.server.inject({
+    method: 'POST',
+    url: `/api/v0/cases/${caseId}/service-requests`,
+    headers: { ...veteranHeaders, 'idempotency-key': `sr-${randomUUID()}` },
+    payload: { category: 'PEER_SUPPORT' },
   });
-  return {
-    responder,
-    organizationId: org.organizationId,
-    headers: await bearer(tenantId, responder.userId, org.organizationId),
-  };
+  expect(created.statusCode).toBe(201);
+  const id: string = created.json().service_request_id;
+  const submitted = await app.server.inject({
+    method: 'POST',
+    url: `/api/v0/service-requests/${id}/commands/SUBMIT`,
+    headers: { ...veteranHeaders, 'idempotency-key': `submit-${randomUUID()}` },
+    payload: {},
+  });
+  expect(submitted.statusCode).toBe(200);
+  return id;
 }
 
 describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
@@ -134,7 +136,7 @@ describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
     const pool = app.pool;
     if (pool === undefined) throw new Error('no pool');
     const tenantId = randomUUID();
-    const veteran = await createUser(pool, {
+    const veteran = await createVerifiedUser(pool, {
       tenantId,
       email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
       status: 'ACTIVE',
@@ -192,7 +194,7 @@ describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
     if (pool === undefined) throw new Error('no pool');
     const tenantA = randomUUID();
     const tenantB = randomUUID();
-    const veteran = await createUser(pool, {
+    const veteran = await createVerifiedUser(pool, {
       tenantId: tenantA,
       email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
       status: 'ACTIVE',
@@ -226,12 +228,13 @@ describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
 });
 
 describe('Contact log commands', () => {
-  it('records attempt and complete-contact after claim', async () => {
-    const { tenantId, supportCase } = await openRedCase();
-    const { headers } = await responderFor(tenantId);
+  it('records attempt and complete-contact after accepting', async () => {
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { headers } = await accepterFor(tenantId);
+    const requestId = await submitRequest(veteranHeaders, supportCase.caseId);
     const claimed = await app.server.inject({
       method: 'POST',
-      url: `/api/v0/cases/${supportCase.caseId}/commands/claim`,
+      url: `/api/v0/service-requests/${requestId}/accept`,
       headers,
     });
     expect(claimed.statusCode).toBe(200);
@@ -282,9 +285,9 @@ describe('Contact log commands', () => {
     expect(listed.json().contact_attempts.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('forbids contact log without assignment and hides foreign cases', async () => {
+  it('forbids contact log without accepting and hides cases of people you have no relationship with', async () => {
     const a = await openRedCase();
-    const { headers } = await responderFor(a.tenantId);
+    const { headers } = await accepterFor(a.tenantId);
     const unclaimed = await app.server.inject({
       method: 'POST',
       url: `/api/v0/cases/${a.supportCase.caseId}/commands/log-contact-attempt`,
@@ -304,74 +307,18 @@ describe('Contact log commands', () => {
   });
 });
 
-describe('POST /api/v0/cases/:id/commands/assign', () => {
-  it('denies an org admin when the session has no explicit organization scope', async () => {
-    const { pool, tenantId, supportCase } = await openRedCase();
-    const org = await createOrganization(pool, {
-      tenantId,
-      name: `Admin Org ${randomUUID().slice(0, 8)}`,
-      status: 'ACTIVE',
-    });
-    const admin = await createUser(pool, {
-      tenantId,
-      email: syntheticEmail(`admin-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    await createMembership(pool, {
-      tenantId,
-      organizationId: org.organizationId,
-      userId: admin.userId,
-      role: 'ORG_ADMIN',
-      status: 'ACTIVE',
-    });
-    const { responder } = await responderFor(tenantId, org.organizationId);
-
-    const denied = await app.server.inject({
-      method: 'POST',
-      url: `/api/v0/cases/${supportCase.caseId}/commands/assign`,
-      headers: {
-        ...(await bearer(tenantId, admin.userId)),
-        'idempotency-key': `unscoped-assign-${randomUUID()}`,
-      },
-      payload: { responder_user_id: responder.userId },
-    });
-    expect(denied.statusCode).toBe(403);
-  });
-
-  it('lets an org admin assign a responder', async () => {
-    const { pool, tenantId, supportCase } = await openRedCase();
-    const org = await createOrganization(pool, {
-      tenantId,
-      name: `Admin Org ${randomUUID().slice(0, 8)}`,
-      status: 'ACTIVE',
-    });
-    const admin = await createUser(pool, {
-      tenantId,
-      email: syntheticEmail(`admin-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    await createMembership(pool, {
-      tenantId,
-      organizationId: org.organizationId,
-      userId: admin.userId,
-      role: 'ORG_ADMIN',
-      status: 'ACTIVE',
-    });
-    const { responder } = await responderFor(tenantId, org.organizationId);
-    const assigned = await app.server.inject({
-      method: 'POST',
-      url: `/api/v0/cases/${supportCase.caseId}/commands/assign`,
-      headers: {
-        ...(await bearer(tenantId, admin.userId, org.organizationId)),
-        'idempotency-key': `assign-${randomUUID()}`,
-      },
-      payload: { responder_user_id: responder.userId },
-    });
-    expect(assigned.statusCode).toBe(200);
-    expect(assigned.json()).toMatchObject({
-      case_id: supportCase.caseId,
-      responder_user_id: responder.userId,
-      replayed: false,
-    });
+describe('v1 has no assignment by staff', () => {
+  it('has no assign or claim route; accepting goes through the service request', async () => {
+    const { tenantId, supportCase } = await openRedCase();
+    const { accepter, headers } = await accepterFor(tenantId);
+    for (const command of ['assign', 'claim']) {
+      const response = await app.server.inject({
+        method: 'POST',
+        url: `/api/v0/cases/${supportCase.caseId}/commands/${command}`,
+        headers: { ...headers, 'idempotency-key': `${command}-${randomUUID()}` },
+        payload: { accepted_by_user_id: accepter.userId },
+      });
+      expect(response.statusCode).toBe(404);
+    }
   });
 });

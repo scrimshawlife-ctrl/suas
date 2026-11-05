@@ -15,19 +15,9 @@ import {
   elevateSession,
   type RecordingChallengeDelivery,
 } from '../../src/auth/index.js';
-import {
-  createMembership,
-  createOrganization,
-  createUser,
-  grantSuasAdmin,
-} from '../../src/identity/index.js';
+import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
 import { createResource, setResourceActive, verifyResource } from '../../src/fulfillment/index.js';
-import {
-  claimCase,
-  createServiceRequest,
-  openCase,
-  recordContact,
-} from '../../src/coordination/index.js';
+import { createServiceRequest, openCase } from '../../src/coordination/index.js';
 import {
   consentTemplateVersionKey,
   createConsentTemplateVersion,
@@ -37,8 +27,9 @@ import {
 } from '../../src/consent/index.js';
 import { withTransaction } from '../../src/db/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { auditAccessibility, DUTY_UNAVAILABLE_REASON } from '../../src/ui/index.js';
+import { auditAccessibility } from '../../src/ui/index.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
+import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -65,7 +56,7 @@ async function signIn(
 
   const tenantId = randomUUID();
   const email = syntheticEmail(`veteran-${randomUUID().slice(0, 8)}`);
-  const user = await createUser(targetPool, { tenantId, email, status: 'ACTIVE' });
+  const user = await createVerifiedUser(targetPool, { tenantId, email, status: 'ACTIVE' });
 
   const issued = await target.server.inject({
     method: 'POST',
@@ -113,7 +104,6 @@ async function adminSignIn(target: StartedApp = app) {
 }
 
 const plannedAdminSurfacePaths = [
-  '/app/admin/organizations',
   '/app/admin/access',
   '/app/admin/artifacts',
   '/app/admin/providers',
@@ -127,7 +117,7 @@ describe('MVP_REFERENCE.md §5 — public surfaces', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('text/html');
-    for (const action of ['TAKE ACTION', 'I NEED SUPPORT', 'I WANT TO SERVE']) {
+    for (const action of ['TAKE ACTION', 'I NEED SUPPORT']) {
       expect(response.body, action).toContain(action);
     }
   });
@@ -149,17 +139,13 @@ describe('MVP_REFERENCE.md §5 — public surfaces', () => {
 });
 
 describe('API.md §4 — authenticated surfaces require a session', () => {
-  it.each([
-    '/app/home',
-    '/app/check-ins',
-    '/app/resources',
-    '/app/chat',
-    '/app/responder',
-    '/app/admin',
-  ])('refuses %s without a credential', async (url) => {
-    const response = await app.server.inject({ method: 'GET', url });
-    expect(response.statusCode).toBe(401);
-  });
+  it.each(['/app/home', '/app/check-ins', '/app/resources', '/app/chat', '/app/admin'])(
+    'refuses %s without a credential',
+    async (url) => {
+      const response = await app.server.inject({ method: 'GET', url });
+      expect(response.statusCode).toBe(401);
+    },
+  );
 
   it('serves the veteran home to a session holder', async () => {
     const { credential } = await signIn();
@@ -812,405 +798,20 @@ describe('NOTIFICATIONS.md — /app/notifications inbox', () => {
   });
 });
 
-describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty HTML is not a stored fact', () => {
-  it('keeps the On Duty landmark and states unavailability', async () => {
+describe('V1_PROJECT_PLAN.md §2.1 — no Responder or Organization pages', () => {
+  it.each([
+    '/app/responder',
+    '/app/responder/availability',
+    '/app/responder/needs',
+    '/app/admin/organizations',
+  ])('does not serve %s', async (url) => {
     const { credential } = await signIn();
     const response = await app.server.inject({
       method: 'GET',
-      url: '/app/responder',
+      url,
       headers: authorized(credential),
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('On Duty');
-    expect(response.body).toContain(DUTY_UNAVAILABLE_REASON);
-    expect(response.body).not.toContain('action="/app/responder/availability"');
-    expect(response.body).not.toContain('Go on duty');
-    expect(response.body).not.toContain('You are receiving requests.');
-    expect(response.body).not.toContain('You are not receiving requests.');
-    expect(auditAccessibility(response.body)).toEqual([]);
-  });
-
-  it('does not accept a duty POST — a no-op write would be a lie', async () => {
-    const { credential } = await signIn();
-    const response = await app.server.inject({
-      method: 'POST',
-      url: '/app/responder/availability',
-      headers: authorized(credential),
-      payload: { onDuty: 'true' },
     });
     expect(response.statusCode).toBe(404);
-  });
-
-  it('serves GET /app/responder/availability as display-only UNAVAILABLE', async () => {
-    const tenantId = randomUUID();
-    const org = await createOrganization(pool(), {
-      tenantId,
-      name: `Org ${randomUUID().slice(0, 8)}`,
-      status: 'ACTIVE',
-    });
-    const responder = await createUser(pool(), {
-      tenantId,
-      email: syntheticEmail(`duty-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    await createMembership(pool(), {
-      tenantId,
-      organizationId: org.organizationId,
-      userId: responder.userId,
-      role: 'RESPONDER',
-      status: 'ACTIVE',
-    });
-    const session = await createSession(pool(), TEST_SESSION_SECRET, {
-      tenantId,
-      userId: responder.userId,
-    });
-
-    const response = await app.server.inject({
-      method: 'GET',
-      url: '/app/responder/availability',
-      headers: authorized(session.credential),
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('On Duty');
-    expect(response.body).toContain(DUTY_UNAVAILABLE_REASON);
-    expect(response.body).not.toContain('Go on duty');
-    expect(auditAccessibility(response.body)).toEqual([]);
-  });
-});
-
-describe('RESPONDER_WORKFLOWS.md §2 — HTML log-contact-attempt', () => {
-  it('lets the assigned responder log a contact attempt from the case page', async () => {
-    const tenantId = randomUUID();
-    const org = await createOrganization(pool(), {
-      tenantId,
-      name: `Org ${randomUUID().slice(0, 8)}`,
-      status: 'ACTIVE',
-    });
-    const veteran = await createUser(pool(), {
-      tenantId,
-      email: syntheticEmail(`log-vet-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    const responder = await createUser(pool(), {
-      tenantId,
-      email: syntheticEmail(`log-resp-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    await createMembership(pool(), {
-      tenantId,
-      organizationId: org.organizationId,
-      userId: responder.userId,
-      role: 'RESPONDER',
-      status: 'ACTIVE',
-    });
-    const opened = await withTransaction(pool(), (tx) =>
-      openCase(tx, {
-        tenantId,
-        veteranUserId: veteran.userId,
-        actorType: 'SYSTEM',
-        actorId: veteran.userId,
-      }),
-    );
-    await claimCase(pool(), {
-      tenantId,
-      caseId: opened.supportCase.caseId,
-      responderUserId: responder.userId,
-      correlationId: randomUUID(),
-    });
-    const session = await createSession(pool(), TEST_SESSION_SECRET, {
-      tenantId,
-      userId: responder.userId,
-    });
-
-    const page = await app.server.inject({
-      method: 'GET',
-      url: `/app/responder/cases/${opened.supportCase.caseId}`,
-      headers: authorized(session.credential),
-    });
-    expect(page.statusCode).toBe(200);
-    expect(page.body).toContain(
-      `action="/app/responder/cases/${opened.supportCase.caseId}/commands/log-contact-attempt"`,
-    );
-
-    const logged = await app.server.inject({
-      method: 'POST',
-      url: `/app/responder/cases/${opened.supportCase.caseId}/commands/log-contact-attempt`,
-      headers: {
-        ...authorized(session.credential),
-        'content-type': 'application/x-www-form-urlencoded',
-      },
-      payload: 'channel=PHONE&outcome=NO_ANSWER',
-    });
-    expect(logged.statusCode).toBe(303);
-    expect(logged.headers.location).toBe(`/app/responder/cases/${opened.supportCase.caseId}`);
-
-    const after = await app.server.inject({
-      method: 'GET',
-      url: `/app/responder/cases/${opened.supportCase.caseId}`,
-      headers: authorized(session.credential),
-    });
-    expect(after.statusCode).toBe(200);
-    expect(after.body).toContain('PHONE');
-    expect(after.body).toContain('NO_ANSWER');
-  });
-});
-
-describe('DISPATCH.md §4 — HTML create service request', () => {
-  it('lets a responder create a service request from the case page', async () => {
-    const tenantId = randomUUID();
-    const org = await createOrganization(pool(), {
-      tenantId,
-      name: `Org ${randomUUID().slice(0, 8)}`,
-      status: 'ACTIVE',
-    });
-    const veteran = await createUser(pool(), {
-      tenantId,
-      email: syntheticEmail(`sr-vet-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    const responder = await createUser(pool(), {
-      tenantId,
-      email: syntheticEmail(`sr-resp-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    await createMembership(pool(), {
-      tenantId,
-      organizationId: org.organizationId,
-      userId: responder.userId,
-      role: 'RESPONDER',
-      status: 'ACTIVE',
-    });
-    const opened = await withTransaction(pool(), (tx) =>
-      openCase(tx, {
-        tenantId,
-        veteranUserId: veteran.userId,
-        actorType: 'SYSTEM',
-        actorId: veteran.userId,
-      }),
-    );
-    const session = await createSession(pool(), TEST_SESSION_SECRET, {
-      tenantId,
-      userId: responder.userId,
-    });
-
-    const page = await app.server.inject({
-      method: 'GET',
-      url: `/app/responder/cases/${opened.supportCase.caseId}`,
-      headers: authorized(session.credential),
-    });
-    expect(page.statusCode).toBe(200);
-    expect(page.body).toContain(
-      `action="/app/responder/cases/${opened.supportCase.caseId}/service-requests"`,
-    );
-
-    const created = await app.server.inject({
-      method: 'POST',
-      url: `/app/responder/cases/${opened.supportCase.caseId}/service-requests`,
-      headers: {
-        ...authorized(session.credential),
-        'content-type': 'application/x-www-form-urlencoded',
-      },
-      payload: 'category=TRANSPORTATION',
-    });
-    expect(created.statusCode).toBe(303);
-    expect(created.headers.location).toBe(`/app/responder/cases/${opened.supportCase.caseId}`);
-
-    const after = await app.server.inject({
-      method: 'GET',
-      url: `/app/responder/cases/${opened.supportCase.caseId}`,
-      headers: authorized(session.credential),
-    });
-    expect(after.statusCode).toBe(200);
-    expect(after.body).toContain('TRANSPORTATION');
-  });
-});
-
-describe('MVP_REFERENCE.md §9 — /app/responder/cases/:id lists contact + service requests', () => {
-  it('renders bounded contact attempts and service requests without notes or details', async () => {
-    const tenantId = randomUUID();
-    const org = await createOrganization(pool(), {
-      tenantId,
-      name: `Org ${randomUUID().slice(0, 8)}`,
-      status: 'ACTIVE',
-    });
-    const veteran = await createUser(pool(), {
-      tenantId,
-      email: syntheticEmail(`case-vet-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    const responder = await createUser(pool(), {
-      tenantId,
-      email: syntheticEmail(`case-resp-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    await createMembership(pool(), {
-      tenantId,
-      organizationId: org.organizationId,
-      userId: responder.userId,
-      role: 'RESPONDER',
-      status: 'ACTIVE',
-    });
-    const opened = await withTransaction(pool(), (tx) =>
-      openCase(tx, {
-        tenantId,
-        veteranUserId: veteran.userId,
-        actorType: 'SYSTEM',
-        actorId: veteran.userId,
-      }),
-    );
-    await claimCase(pool(), {
-      tenantId,
-      caseId: opened.supportCase.caseId,
-      responderUserId: responder.userId,
-      correlationId: randomUUID(),
-    });
-    await recordContact(pool(), {
-      tenantId,
-      caseId: opened.supportCase.caseId,
-      responderUserId: responder.userId,
-      command: 'log-contact-attempt',
-      channel: 'PHONE',
-      outcome: 'NO_ANSWER',
-      note: 'secret note must not appear in HTML',
-    });
-    await withTransaction(pool(), (tx) =>
-      createServiceRequest(tx, {
-        tenantId,
-        caseId: opened.supportCase.caseId,
-        category: 'TRANSPORTATION',
-        createdBy: responder.userId,
-        actorType: 'RESPONDER',
-        details: { destination: 'secret-detail-must-not-appear' },
-      }),
-    );
-    const session = await createSession(pool(), TEST_SESSION_SECRET, {
-      tenantId,
-      userId: responder.userId,
-    });
-
-    const response = await app.server.inject({
-      method: 'GET',
-      url: `/app/responder/cases/${opened.supportCase.caseId}`,
-      headers: authorized(session.credential),
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('Contact attempts');
-    expect(response.body).toContain('PHONE');
-    expect(response.body).toContain('NO_ANSWER');
-    expect(response.body).toContain('Service requests');
-    expect(response.body).toContain('TRANSPORTATION');
-    expect(response.body).not.toContain('secret note');
-    expect(response.body).not.toContain('secret-detail');
-    expect(auditAccessibility(response.body)).toEqual([]);
-  });
-});
-
-/**
- * HTML responder queue pagination.
- *
- * After #88 the JSON API accepts cursor/limit. These routes must accept the
- * same bounds so `/app` cannot hard-cap the queue at 20 with no page two
- * (API.md §5; MVP_REFERENCE.md §9 active-work emphasis).
- */
-describe('API.md §5 — /app/responder queue cursor', () => {
-  async function responderOn(tenantId: string): Promise<{ credential: string; userId: string }> {
-    const org = await createOrganization(pool(), {
-      tenantId,
-      name: `Org ${randomUUID().slice(0, 8)}`,
-      status: 'ACTIVE',
-    });
-    const responder = await createUser(pool(), {
-      tenantId,
-      email: syntheticEmail(`resp-${randomUUID().slice(0, 8)}`),
-      status: 'ACTIVE',
-    });
-    await createMembership(pool(), {
-      tenantId,
-      organizationId: org.organizationId,
-      userId: responder.userId,
-      role: 'RESPONDER',
-      status: 'ACTIVE',
-    });
-    const session = await createSession(pool(), TEST_SESSION_SECRET, {
-      tenantId,
-      userId: responder.userId,
-    });
-    return { credential: session.credential, userId: responder.userId };
-  }
-
-  /** Distinct veterans: CASES.md §3.1 allows one active case each. */
-  async function openCasesFor(tenantId: string, count: number): Promise<string[]> {
-    const caseIds: string[] = [];
-    for (let index = 0; index < count; index += 1) {
-      const veteran = await createUser(pool(), {
-        tenantId,
-        email: syntheticEmail(`vet-html-page-${randomUUID().slice(0, 8)}`),
-        status: 'ACTIVE',
-      });
-      const opened = await withTransaction(pool(), (tx) =>
-        openCase(tx, {
-          tenantId,
-          veteranUserId: veteran.userId,
-          actorType: 'SYSTEM',
-          actorId: veteran.userId,
-        }),
-      );
-      caseIds.push(opened.supportCase.caseId);
-    }
-    return caseIds;
-  }
-
-  it('walks every unassigned case across HTML pages', async () => {
-    const tenantId = randomUUID();
-    const opened = await openCasesFor(tenantId, 5);
-    const responder = await responderOn(tenantId);
-
-    const seen: string[] = [];
-    let url = '/app/responder?limit=2';
-    let pages = 0;
-
-    for (;;) {
-      const response = await app.server.inject({
-        method: 'GET',
-        url,
-        headers: authorized(responder.credential),
-      });
-      expect(response.statusCode).toBe(200);
-      for (const caseId of opened) {
-        if (response.body.includes(caseId) && !seen.includes(caseId)) {
-          seen.push(caseId);
-        }
-      }
-      pages += 1;
-      const match = response.body.match(/unassigned_cursor=([^"&]+)/);
-      if (match === null) break;
-      if (pages > 10) throw new Error('HTML cursor did not terminate');
-      url = `/app/responder?limit=2&unassigned_cursor=${match[1]}`;
-    }
-
-    expect(pages).toBe(3);
-    expect([...seen].sort()).toEqual([...opened].sort());
-  });
-
-  it('rejects a malformed unassigned cursor and an oversized limit', async () => {
-    const tenantId = randomUUID();
-    await openCasesFor(tenantId, 1);
-    const responder = await responderOn(tenantId);
-
-    const badCursor = await app.server.inject({
-      method: 'GET',
-      url: '/app/responder?unassigned_cursor=not-a-cursor',
-      headers: authorized(responder.credential),
-    });
-    expect(badCursor.statusCode).toBe(400);
-
-    const oversized = await app.server.inject({
-      method: 'GET',
-      url: '/app/responder?limit=101',
-      headers: authorized(responder.credential),
-    });
-    expect(oversized.statusCode).toBe(400);
   });
 });
 

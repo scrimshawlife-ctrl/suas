@@ -143,7 +143,7 @@ export interface FulfillmentAdapter {
   /**
    * Whether this adapter transmits veteran data outside SUAS.
    *
-   * False for manual coordination, where a responder acts by phone and nothing
+   * False for manual coordination, where the accepter acts by phone and nothing
    * crosses the boundary automatically. The router requires a consent-evaluated
    * projection only when this is true.
    */

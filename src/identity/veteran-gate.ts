@@ -17,6 +17,7 @@
 
 import type { AuthContext } from '../authz/context.js';
 import type { Queryable } from '../db/transaction.js';
+import { CountyRequiredError } from '../coordination/open-requests.js';
 import { hasPassedIdScan } from './id-scan.js';
 import { findUserById } from './users.js';
 
@@ -27,16 +28,6 @@ export class VeteranVerificationRequiredError extends Error {
   constructor() {
     super('Verify your ID with a scan and selfie before using this.');
     this.name = 'VeteranVerificationRequiredError';
-  }
-}
-
-export class CountyRequiredError extends Error {
-  readonly code = 'COUNTY_REQUIRED';
-  readonly httpStatus = 422;
-
-  constructor() {
-    super('Choose your county before using this.');
-    this.name = 'CountyRequiredError';
   }
 }
 

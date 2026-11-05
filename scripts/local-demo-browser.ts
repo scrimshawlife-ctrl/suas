@@ -15,19 +15,17 @@ import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 
-const ROLES = ['veteran', 'responder', 'admin'] as const;
+const ROLES = ['veteran', 'admin'] as const;
 type DemoRole = (typeof ROLES)[number];
 
 const ROLE_CONFIG: Record<DemoRole, { envName: string; path: string }> = {
   veteran: { envName: 'SUAS_E2E_VETERAN_BEARER', path: '/app/home' },
-  responder: { envName: 'SUAS_E2E_RESPONDER_BEARER', path: '/app/responder' },
   admin: { envName: 'SUAS_E2E_ADMIN_BEARER', path: '/app/admin' },
 };
 
 interface SeedSessions {
   sessions?: {
     veteranBearer?: unknown;
-    responderBearer?: unknown;
     adminBearer?: unknown;
   };
 }
@@ -90,8 +88,7 @@ async function readSeedCredential(role: DemoRole): Promise<string> {
   } catch {
     fail(`${filePath} is not valid seed output.`);
   }
-  const key =
-    role === 'veteran' ? 'veteranBearer' : role === 'responder' ? 'responderBearer' : 'adminBearer';
+  const key = role === 'veteran' ? 'veteranBearer' : 'adminBearer';
   const credential = parsed.sessions?.[key];
   if (typeof credential !== 'string' || credential.length < 32) {
     fail(`the selected synthetic ${role} credential is missing from ${filePath}.`);

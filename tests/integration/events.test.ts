@@ -45,7 +45,7 @@ function caseCreated(tenantId: string, aggregateId: string, idempotencyKey?: str
     aggregateType: 'SupportCase',
     aggregateId,
     tenantId,
-    actorType: 'RESPONDER' as const,
+    actorType: 'USER' as const,
     actorId: 'responder-1',
     payload: { category: 'FOOD' },
     ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
@@ -70,7 +70,7 @@ describe('EVENT_MODEL.md §2 — envelope', () => {
     expect(stored?.eventType).toBe('CASE_CREATED');
     expect(stored?.aggregateType).toBe('SupportCase');
     expect(stored?.tenantId).toBe(tenantId);
-    expect(stored?.actorType).toBe('RESPONDER');
+    expect(stored?.actorType).toBe('USER');
     expect(stored?.schemaVersion).toBe('0.1.0');
     expect(stored?.payload).toEqual({ category: 'FOOD' });
     expect(stored?.occurredAt).toBeInstanceOf(Date);
