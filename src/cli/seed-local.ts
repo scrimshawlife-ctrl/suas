@@ -38,6 +38,7 @@ import {
   grantSuasAdmin,
   isSuasAdmin,
   setUserCounty,
+  setUserDisplayName,
   setUserStatus,
   type User,
 } from '../identity/index.js';
@@ -81,27 +82,42 @@ import {
 
 /** Fixed synthetic tenant so re-runs converge rather than multiply. */
 export const TENANT_ID = '00000000-0000-4000-8000-000000000001';
-/** Synthetic users all live in one launch county so the open-request list has matches. */
+/** Synthetic users and resources all live in one launch county so the lists have matches. */
 const SEED_COUNTY = 'SANTA_CLARA' as const;
 
 interface ResourceRow {
   resource_id: string;
 }
 
-export async function getOrCreateUser(pool: Pool, localPart: string): Promise<User> {
+/** Creates the synthetic user if missing; a given display name is set once, never overwritten. */
+export async function getOrCreateUser(
+  pool: Pool,
+  localPart: string,
+  displayName?: string,
+): Promise<User> {
   const email = syntheticEmail(localPart);
   const existing = await findUserByDestination(pool, TENANT_ID, email);
+  let current: User;
   if (existing !== undefined) {
-    let current = existing;
+    current = existing;
     if (current.status !== 'ACTIVE') {
       current = (await setUserStatus(pool, TENANT_ID, current.userId, 'ACTIVE')) ?? current;
     }
     if (current.county === undefined) {
       current = (await setUserCounty(pool, TENANT_ID, current.userId, SEED_COUNTY)) ?? current;
     }
-    return current;
+  } else {
+    current = await createUser(pool, {
+      tenantId: TENANT_ID,
+      email,
+      status: 'ACTIVE',
+      county: SEED_COUNTY,
+    });
   }
-  return createUser(pool, { tenantId: TENANT_ID, email, status: 'ACTIVE', county: SEED_COUNTY });
+  if (displayName !== undefined && current.displayName === undefined) {
+    current = (await setUserDisplayName(pool, TENANT_ID, current.userId, displayName)) ?? current;
+  }
+  return current;
 }
 
 export interface ResourceSpec {
@@ -120,7 +136,7 @@ const RESOURCE_SPECS: readonly ResourceSpec[] = [
   {
     serviceName: 'Example Community Food Pantry (synthetic)',
     category: 'FOOD',
-    counties: ['Example County'],
+    counties: ['SANTA_CLARA'],
     // Structured PHONE: the veteran resource list renders a direct `tel:` action.
     contactMethod: syntheticPhone(1),
     contactMethodKind: 'PHONE',
@@ -131,7 +147,7 @@ const RESOURCE_SPECS: readonly ResourceSpec[] = [
   {
     serviceName: 'Example Volunteer Rides (synthetic)',
     category: 'TRANSPORTATION',
-    counties: ['Example County'],
+    counties: ['SANTA_CLARA'],
     // Unstructured: shown as text, no action guessed.
     contactMethod: 'Request through the person who accepts your request',
     hours: 'By appointment',
@@ -141,7 +157,7 @@ const RESOURCE_SPECS: readonly ResourceSpec[] = [
   {
     serviceName: 'Example Emergency Shelter (synthetic)',
     category: 'SHELTER',
-    counties: ['Example County'],
+    counties: ['SANTA_CLARA'],
     contactMethod: 'Walk-in intake at the front desk',
     hours: 'Daily, evening intake',
     cost: 'No cost',
@@ -150,7 +166,7 @@ const RESOURCE_SPECS: readonly ResourceSpec[] = [
   {
     serviceName: 'Example Peer Support Circle (synthetic)',
     category: 'PEER_SUPPORT',
-    counties: ['Example County'],
+    counties: ['SANTA_CLARA'],
     // Structured EMAIL: renders a direct `mailto:` action.
     contactMethod: syntheticEmail('peer-support'),
     contactMethodKind: 'EMAIL',
@@ -173,6 +189,12 @@ export async function ensureResource(
   );
   const existingId = found.rows[0]?.resource_id;
   if (existingId !== undefined) {
+    // Seeds written before the counties used the county enum values converge on re-run.
+    await pool.query(
+      `UPDATE resources SET counties = $3::text[]
+       WHERE tenant_id = $1 AND resource_id = $2 AND counties IS DISTINCT FROM $3::text[]`,
+      [TENANT_ID, existingId, [...spec.counties]],
+    );
     await setResourceActive(pool, {
       tenantId: TENANT_ID,
       resourceId: existingId,
@@ -523,10 +545,10 @@ export async function runLocalSeed(
   pool: Pool,
   options: LocalSeedOptions = {},
 ): Promise<LocalSeedResult> {
-  const admin = await getOrCreateUser(pool, 'admin');
-  const accepter = await getOrCreateUser(pool, 'accepter');
-  const veteran = await getOrCreateUser(pool, options.veteranLocalPart ?? 'veteran');
-  const veteranTwo = await getOrCreateUser(pool, 'veteran2');
+  const admin = await getOrCreateUser(pool, 'admin', 'Admin A.');
+  const accepter = await getOrCreateUser(pool, 'accepter', 'Dee R.');
+  const veteran = await getOrCreateUser(pool, options.veteranLocalPart ?? 'veteran', 'Marcus T.');
+  const veteranTwo = await getOrCreateUser(pool, 'veteran2', 'Ray K.');
 
   if (!(await isSuasAdmin(pool, admin.userId))) {
     await grantSuasAdmin(pool, admin.userId, admin.userId);

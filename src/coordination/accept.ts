@@ -13,7 +13,9 @@
  * county, widening)? If not, it reads as not found, the same as a list they never see it
  * in. (2) has someone else already accepted it? Only a person who passed (1) learns that
  * (409), so the answer never reveals a request the caller could not see. (3) is it still
- * in an open state (not cancelled, not already past matching)?
+ * in an open state (not cancelled, not already past matching)? On success the case is
+ * claimed, the chat thread is created and the request moves to `ACCEPTED`, all in one
+ * transaction.
  */
 
 import type { Pool } from 'pg';
@@ -26,7 +28,11 @@ import {
   REQUEST_REQUESTER_FROM,
   visibleToViewerConditions,
 } from './open-requests.js';
-import { findServiceRequest, ServiceRequestNotFoundError } from './requests.js';
+import {
+  findServiceRequest,
+  peerAcceptRequestInTx,
+  ServiceRequestNotFoundError,
+} from './requests.js';
 
 /** A requester tried to accept their own request. */
 export class OwnRequestError extends Error {
@@ -64,6 +70,13 @@ export async function acceptServiceRequest(
         serviceRequestId: input.serviceRequestId,
         requesterUserId: result.supportCase.veteranUserId,
         acceptedByUserId: input.acceptedByUserId,
+      });
+      // The request moves to ACCEPTED with the case (peer accept; see peerAcceptRequestInTx).
+      await peerAcceptRequestInTx(tx, {
+        tenantId: input.tenantId,
+        serviceRequestId: input.serviceRequestId,
+        actorId: input.acceptedByUserId,
+        ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
       });
     },
     visibilityGuard: async (tx, supportCase) => {

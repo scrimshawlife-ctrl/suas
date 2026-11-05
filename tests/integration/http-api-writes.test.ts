@@ -223,9 +223,10 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
     const { tenantId, srId } = await submittedRequest();
     const assigned = await accepterFor(tenantId);
     expect((await acceptRequest(assigned.headers, srId)).statusCode).toBe(200);
-    const triaged = await command(srId, 'TRIAGE', assigned.headers);
-    expect(triaged.statusCode).toBe(200);
-    expect(triaged.json()).toMatchObject({ status: 'TRIAGED' });
+    // Accepting moved the request to ACCEPTED, so the accepter's next command is START.
+    const started = await command(srId, 'START', assigned.headers);
+    expect(started.statusCode).toBe(200);
+    expect(started.json()).toMatchObject({ status: 'IN_PROGRESS' });
   });
 
   it('keeps SUBMIT with the requester, even for a request the accepter created', async () => {

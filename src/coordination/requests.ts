@@ -14,7 +14,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
-import { appendDomainEvent } from '../events/index.js';
+import { appendAuditEvent, appendDomainEvent } from '../events/index.js';
 import type { JsonObject } from '../jobs/index.js';
 import { findCase, CaseNotFoundError } from './cases.js';
 import {
@@ -307,6 +307,72 @@ export async function executeServiceRequestCommandInTx(
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
   }
+
+  return toRequest(updatedRow);
+}
+
+/** Statuses in which a Service Request is still waiting for someone to accept it. */
+const PEER_ACCEPTABLE: readonly ServiceRequestStatus[] = ['SUBMITTED', 'TRIAGED', 'MATCHING'];
+
+/**
+ * Peer accept: the one transition that takes a waiting request straight to `ACCEPTED`.
+ *
+ * V1_PROJECT_PLAN.md §2.1 "Peer flow": the person who accepts is a signed-in peer, not an
+ * outside provider. DISPATCH.md §4 reaches `ACCEPTED` only through `ASSIGN`, which
+ * discloses the Veteran's data to a SERVICE_PROVIDER and so needs a consent evaluation.
+ * A peer accept discloses nothing outside SUAS to a provider, so it is its own explicit path
+ * rather than a relaxed `ASSIGN`: the generic command table and its consent guard are
+ * untouched, and every other caller of `ASSIGN` is still checked.
+ *
+ * Runs in the transaction of the Support Case claim, so the case and the request move
+ * together. The case claim already emitted `CASE_ASSIGNED`; this adds an Audit Event with
+ * ids only (the released Domain Event catalog has no peer-accept event, and the
+ * request text never goes into an event payload). A request that is no longer waiting
+ * (cancelled, already accepted, past matching) reads as not found, as an accept always has.
+ */
+export async function peerAcceptRequestInTx(
+  tx: Queryable,
+  input: {
+    readonly tenantId: string;
+    readonly serviceRequestId: string;
+    readonly actorId: string;
+    readonly correlationId?: string;
+  },
+): Promise<ServiceRequest> {
+  const locked = await tx.query<RequestRow>(
+    `SELECT ${REQUEST_COLUMNS} FROM service_requests
+     WHERE tenant_id = $1 AND service_request_id = $2
+     FOR UPDATE`,
+    [input.tenantId, input.serviceRequestId],
+  );
+  const row = locked.rows[0];
+  if (row === undefined || !PEER_ACCEPTABLE.includes(row.status)) {
+    throw new ServiceRequestNotFoundError();
+  }
+
+  const updated = await tx.query<RequestRow>(
+    `UPDATE service_requests
+        SET status = 'ACCEPTED', updated_at = now()
+      WHERE tenant_id = $1 AND service_request_id = $2
+      RETURNING ${REQUEST_COLUMNS}`,
+    [input.tenantId, input.serviceRequestId],
+  );
+  const updatedRow = updated.rows[0];
+  if (updatedRow === undefined) throw new ServiceRequestNotFoundError();
+
+  await appendAuditEvent(tx, {
+    eventType: 'SERVICE_REQUEST_PEER_ACCEPTED',
+    action: 'PEER_ACCEPT_SERVICE_REQUEST',
+    targetType: 'ServiceRequest',
+    targetId: input.serviceRequestId,
+    aggregateType: 'ServiceRequest',
+    aggregateId: input.serviceRequestId,
+    tenantId: input.tenantId,
+    actorType: 'USER',
+    actorId: input.actorId,
+    payload: { case_id: row.case_id, category: row.category, from_status: row.status },
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+  });
 
   return toRequest(updatedRow);
 }
