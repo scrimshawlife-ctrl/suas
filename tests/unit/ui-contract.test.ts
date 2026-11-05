@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  APPROVED_CRISIS_DESTINATIONS,
   APPROVED_CRISIS_RESOURCES,
   assertApprovedSafetyCopyAvailable,
   CATEGORY_CARDS,
@@ -280,14 +281,29 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
     ]);
   });
 
-  it('authorizes no destination other than 911 and 988', () => {
+  it('approves 911, 988 (call or text), and Veterans Crisis Line text 838255 only', () => {
     const source = readFileSync(new URL('../../src/ui/safety.ts', import.meta.url), 'utf8');
+    expect(source).toContain('Owner decision 2026-11-05, recorded in suas-specs DECISIONS.md');
+    expect(source).toContain('via 988, press 1');
     expect(source).not.toMatch(/\b1-?800-?\d{3}-?\d{4}\b/);
     expect(source).not.toMatch(/https?:\/\//);
+    expect([...APPROVED_CRISIS_DESTINATIONS]).toEqual([
+      'tel:911',
+      'tel:988',
+      'sms:988',
+      'sms:838255',
+    ]);
     expect(APPROVED_CRISIS_RESOURCES.map((resource) => resource.destination)).toEqual([
       'tel:911',
       'tel:988',
     ]);
+    const footer = readFileSync(
+      new URL('../../web/src/components/Footer.tsx', import.meta.url),
+      'utf8',
+    );
+    const hrefs = [...footer.matchAll(/href="((?:tel|sms):[^"]+)"/g)].map((match) => match[1]);
+    expect(new Set(hrefs)).toEqual(new Set(APPROVED_CRISIS_DESTINATIONS));
+    expect(hrefs).toContain('sms:838255');
   });
 
   it('states placeholder unavailability without giving crisis guidance', () => {

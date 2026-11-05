@@ -49,6 +49,7 @@ export {
   type QrfUiState,
 } from './qrf.js';
 export {
+  APPROVED_CRISIS_DESTINATIONS,
   APPROVED_CRISIS_RESOURCES,
   assertApprovedSafetyCopyAvailable,
   CRISIS_BANNER_COMPACT,

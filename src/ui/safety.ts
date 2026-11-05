@@ -4,7 +4,8 @@
  * Spec citations:
  * - SUAS-specs SAFETY.md §2 (approved on-screen safety copy is released by D-012
  *   in SAFETY_COPY.md; implementations render it and must not invent alternative
- *   crisis wording presented as official; authorized destinations are 911 / 988)
+ *   crisis wording presented as official; authorized destinations are 911, 988
+ *   call or text, and Veterans Crisis Line text 838255)
  * - SUAS-specs SAFETY.md §3.1 (show the veteran the *approved* crisis-resource list)
  * - SUAS-specs SAFETY.md §5.1 / SAFETY_COPY.md §5 (state truthfulness)
  * - SUAS-specs SAFETY.md §9 (`RED` surfaces the approved-resource slot and does
@@ -39,11 +40,24 @@ export interface ApprovedCrisisResource {
 }
 
 /**
- * SAFETY_COPY.md §1.1 primary actions and the only authorized destinations
- * (SAFETY_COPY.md §0; RELEASE_MANIFEST-0.1.5.md D-012 authority item 1).
+ * SAFETY_COPY.md §0 approved crisis destinations. 911 and 988 (call or text)
+ * are D-012. The Veterans Crisis Line text number 838255 is approved alongside
+ * them. Veterans can also reach the Veterans Crisis Line via 988, press 1.
+ * Owner decision 2026-11-05, recorded in suas-specs DECISIONS.md.
+ * No other hotline number, URL, or agency contact is approved.
+ */
+export const APPROVED_CRISIS_DESTINATIONS = [
+  'tel:911',
+  'tel:988',
+  'sms:988',
+  'sms:838255',
+] as const;
+
+/**
+ * SAFETY_COPY.md §1.1 primary actions (D-012).
  *
- * Labels are the released primary-action wording, verbatim. Destinations are
- * `tel:911` and `tel:988` — no tracking parameters, no other number or URL.
+ * Labels are the released primary-action wording, verbatim. Those slot
+ * destinations are `tel:911` and `tel:988` — no tracking parameters.
  */
 export const APPROVED_CRISIS_RESOURCES: readonly ApprovedCrisisResource[] = [
   {
