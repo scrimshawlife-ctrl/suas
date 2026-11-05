@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -26,7 +27,7 @@ function Notice({ children }: { children: string }) {
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 id="check" className="heading text-30">
+    <h2 id="check" tabIndex={-1} className="heading text-30">
       {children}
     </h2>
   );
@@ -65,9 +66,22 @@ function StatusCard({
     </div>
   );
 
+  // The button that was pressed leaves with the old view; keep focus in the card, on its new
+  // heading, instead of dropping it to the top of the page.
+  const live = useRef<HTMLDivElement>(null);
+  const shown = useRef(view);
+  useEffect(() => {
+    if (shown.current === view) return;
+    shown.current = view;
+    const active = document.activeElement;
+    if (active === null || active === document.body || live.current?.contains(active)) {
+      live.current?.querySelector<HTMLElement>('#check')?.focus();
+    }
+  }, [view]);
+
   return (
     <Card padding="lg" aria-labelledby="check" className="flex flex-col gap-5">
-      <div aria-live="polite" className="flex flex-col gap-5">
+      <div ref={live} aria-live="polite" className="flex flex-col gap-5">
         {view === 'start' ? (
           <>
             <div className="flex flex-col gap-1.5">

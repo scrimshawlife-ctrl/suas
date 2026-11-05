@@ -54,7 +54,7 @@ export default function LandingPage() {
       <title>SUAS · Veterans helping veterans</title>
       <div className="flex flex-wrap items-center justify-between gap-10">
         <div className="flex max-w-[760px] flex-[1_1_520px] flex-col gap-5">
-          <h1 className="heading max-w-[11ch] text-96 leading-[0.98] tracking-[-0.025em] max-sm:text-60">
+          <h1 className="heading max-w-[11ch] [overflow-wrap:anywhere] text-96 leading-[0.98] tracking-[-0.025em] max-sm:text-60">
             Veterans helping veterans.
           </h1>
           <p className="max-w-[34ch] text-24 leading-[1.4] text-slate">

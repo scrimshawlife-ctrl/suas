@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { isApiError } from '../../api/errors';
 import { paths } from '../../app/paths';
@@ -7,6 +7,7 @@ import { Card } from '../../components/Card';
 import { AlertCircleIcon } from '../../components/icons';
 import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
+import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { useExtractDrafts } from './api';
 import { LIMITS, validateExtract, type ExtractErrors, type ResourceDraft } from './draft-form';
 
@@ -32,12 +33,16 @@ export function ExtractForm({ builderAvailable }: { builderAvailable: boolean })
   const [link, setLink] = useState('');
   const [errors, setErrors] = useState<ExtractErrors>({});
   const [created, setCreated] = useState<ResourceDraft[] | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [attempt, setAttempt] = useState(0);
+  useFocusFirstInvalid(formRef, `${attempt}|${Object.keys(errors).join()}`);
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (extract.isPending) return;
     const found = validateExtract({ source_text: text, source_link: link });
     setErrors(found);
+    setAttempt((count) => count + 1);
     if (Object.keys(found).length > 0) return;
     setCreated(null);
     extract.mutate(
@@ -66,7 +71,7 @@ export function ExtractForm({ builderAvailable }: { builderAvailable: boolean })
           Nothing is shown to veterans until you publish a draft.
         </p>
       </div>
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+      <form ref={formRef} onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <TextArea
           label="Source text"
           rows={8}

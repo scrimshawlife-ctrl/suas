@@ -54,6 +54,7 @@ export function BottomTabBar({
           <ChatIcon />
           {chatUnread > 0 ? (
             <span
+              role="img"
               aria-label={`${chatUnread} unread`}
               className={cn(
                 'absolute -top-2 left-4 inline-grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-16 font-bold',

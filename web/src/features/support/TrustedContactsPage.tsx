@@ -8,6 +8,7 @@ import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
 import { StatusChip, type StatusKind } from '../../components/StatusChip';
 import { TextField } from '../../components/TextField';
+import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import {
   useConsents,
   useInviteTrustedContact,
@@ -31,6 +32,9 @@ function InviteForm() {
   const [label, setLabel] = useState('');
   const [email, setEmail] = useState('');
   const [problem, setProblem] = useState<{ label?: string; email?: string }>({});
+  const formRef = useRef<HTMLFormElement>(null);
+  const [attempt, setAttempt] = useState(0);
+  useFocusFirstInvalid(formRef, `${attempt}|${Object.keys(problem).join()}`);
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -41,6 +45,7 @@ function InviteForm() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail))
       next.email = 'Enter a full email address.';
     setProblem(next);
+    setAttempt((count) => count + 1);
     if (next.label || next.email) return;
     invite.mutate(
       { relationshipLabel: trimmedLabel, email: trimmedEmail, headers: key.headers() },
@@ -56,7 +61,7 @@ function InviteForm() {
 
   return (
     <Card padding="lg">
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+      <form ref={formRef} onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
         <h2 className="heading text-26">Add a trusted contact</h2>
         <TextField
           label="Who is this to you?"

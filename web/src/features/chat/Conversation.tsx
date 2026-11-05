@@ -49,7 +49,7 @@ export function Conversation({ serviceRequestId, thread, meUserId }: Conversatio
     if (live.current !== null) {
       live.current.textContent =
         previous !== undefined && previous !== newestId && !newestIsMine
-          ? `New message from ${name}.`
+          ? `New message from ${name.replace(/\.$/, '')}.`
           : '';
     }
   }, [newestId, newestIsMine, name]);
@@ -69,12 +69,15 @@ export function Conversation({ serviceRequestId, thread, meUserId }: Conversatio
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4 max-sm:px-4">
         <div className="flex min-w-0 flex-col">
-          <h2 id="chat-with" className="text-20 font-bold">
+          <h2 id="chat-with" data-route-focus className="text-20 font-bold">
             {name}
           </h2>
           {thread !== undefined ? (
             requestHref !== undefined ? (
-              <Link to={requestHref} className="text-16 font-bold">
+              <Link
+                to={requestHref}
+                className="-my-2.5 inline-flex min-h-11 items-center self-start text-16 font-bold"
+              >
                 {threadTitle(thread)}
               </Link>
             ) : (

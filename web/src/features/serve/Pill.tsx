@@ -28,7 +28,7 @@ export function PillGroup<T extends string>({
             <label
               key={option.value}
               htmlFor={id}
-              className={`inline-flex min-h-11 cursor-pointer items-center rounded-pill border-2 px-4 text-16 font-bold has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-service-blue ${
+              className={`relative inline-flex min-h-11 cursor-pointer items-center rounded-pill border-2 px-4 text-16 font-bold has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-service-blue has-focus-visible:shadow-[0_0_0_2px_#fff] ${
                 chosen
                   ? 'border-service-blue bg-service-blue text-white'
                   : 'border-line bg-white text-ink hover:border-slate'

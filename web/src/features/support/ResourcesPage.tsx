@@ -135,6 +135,7 @@ export default function ResourcesPage() {
 
   return (
     <Page>
+      <title>{`${need.label} · SUAS`}</title>
       <div className="flex flex-col gap-4.5">
         <div className="flex items-center gap-5">
           <span
@@ -146,8 +147,10 @@ export default function ResourcesPage() {
           >
             <NeedIcon size={34} />
           </span>
-          <div className="flex flex-col gap-1">
-            <h1 className="heading text-56 max-sm:text-40">{need.label}</h1>
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1 className="heading text-56 break-words hyphens-auto max-sm:text-40 max-[380px]:text-30">
+              {need.label}
+            </h1>
             <p className="text-slate">
               Listings for {county ? `${countyName(county)} County` : 'your county'}. Check details
               with the provider before you go.
