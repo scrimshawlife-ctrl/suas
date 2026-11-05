@@ -15,6 +15,7 @@
  */
 
 import { z } from 'zod';
+import { isSyntheticEmail } from '../testing/fixture-boundary.js';
 import { corsPinIssue, parseAllowedOrigins } from './cors-origins.js';
 import {
   CORS_GUARD_SPEC_VERSION,
@@ -61,6 +62,46 @@ export type ObjectStorageMode = (typeof OBJECT_STORAGE_MODES)[number];
 /** No real provider is chosen yet (plan §8 item 2), so only a fake exists. */
 export const ID_VERIFICATION_MODES = ['disabled', 'fake'] as const;
 export type IdVerificationMode = (typeof ID_VERIFICATION_MODES)[number];
+
+/** One provisioned synthetic fixture. Identity is the pair, not the email address. */
+export interface StagingFixturePrincipal {
+  readonly tenantId: string;
+  readonly userId: string;
+}
+
+const FIXTURE_PRINCIPAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function parseStagingFixtureRegistry(value: string | undefined): {
+  readonly principals: readonly StagingFixturePrincipal[];
+  readonly issue: string | undefined;
+} {
+  if (value === undefined) return { principals: [], issue: undefined };
+  const entries = splitCsv(value);
+  if (entries.length > 10) {
+    return {
+      principals: [],
+      issue: 'SUAS_STAGING_FIXTURE_REGISTRY must contain at most 10 principals.',
+    };
+  }
+  const principals: StagingFixturePrincipal[] = [];
+  for (const entry of entries) {
+    const separator = entry.indexOf(':');
+    const tenantId = separator === -1 ? '' : entry.slice(0, separator);
+    const userId = separator === -1 ? '' : entry.slice(separator + 1);
+    if (
+      separator === -1 ||
+      !FIXTURE_PRINCIPAL_ID.test(tenantId) ||
+      !FIXTURE_PRINCIPAL_ID.test(userId)
+    ) {
+      return {
+        principals: [],
+        issue: 'SUAS_STAGING_FIXTURE_REGISTRY entries must be tenant-id:user-id pairs.',
+      };
+    }
+    principals.push({ tenantId: tenantId.toLowerCase(), userId: userId.toLowerCase() });
+  }
+  return { principals, issue: undefined };
+}
 
 const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d$/;
 const S3_BUCKET_PATTERN = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
@@ -117,6 +158,18 @@ const optionalRaw = z.preprocess((value) => {
   const trimmed = value.trim();
   return trimmed === '' ? undefined : trimmed;
 }, z.string().optional());
+
+function splitCsv(value: string | undefined): readonly string[] {
+  if (value === undefined) return [];
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== ''),
+    ),
+  ];
+}
 
 function requiredEnum<const T extends readonly string[]>(
   varName: string,
@@ -200,6 +253,10 @@ const rawConfigSchema = z.object({
     MIGRATIONS_MODES,
     'ENVIRONMENT.md §3 "Data / persistence"; production automatic-migration policy must be explicit in deployment runbooks.',
   ),
+  // D-053. Both stay unset except for an explicit reset of a named synthetic
+  // disposable database. They are not a startup migrations mode.
+  SUAS_MIGRATION_RESET_ALLOWLIST: optionalRaw,
+  SUAS_MIGRATION_RESET_SYNTHETIC_MARKER: optionalRaw,
 
   // --- Auth / sessions. ENVIRONMENT.md §3, §6. ---
   SUAS_SESSION_SECRET: optionalRaw,
@@ -260,6 +317,12 @@ const rawConfigSchema = z.object({
     ID_VERIFICATION_MODES,
     'disabled',
   ),
+  // D-052. Public self sign-up stays off unless LOCAL or TEST sets "enabled".
+  SUAS_PUBLIC_SIGN_UP: optionalRaw,
+  // Addresses the STAGING provision command may create. Not an admission list.
+  SUAS_STAGING_AUTH_EMAILS: optionalRaw,
+  // Explicit tenant-id:user-id pairs STAGING auth admits. Empty admits nobody.
+  SUAS_STAGING_FIXTURE_REGISTRY: optionalRaw,
 
   // --- Fulfillment adapters. ENVIRONMENT.md §3. ---
   SUAS_TRANSPORTATION_ADAPTER_MODE: requiredEnum(
@@ -342,6 +405,10 @@ export interface SuasConfig {
     readonly url: string | undefined;
     readonly poolMax: number;
     readonly migrationsMode: MigrationsMode;
+    /** Names or URLs that may be wiped by `migrate reset`. Empty refuses every reset. */
+    readonly resetAllowlist: readonly string[];
+    /** Substring required in the database name before a reset. Unset refuses every reset. */
+    readonly resetSyntheticMarker: string | undefined;
     readonly ssl: {
       readonly mode: DatabaseSslMode;
       readonly caFile: string | undefined;
@@ -385,6 +452,15 @@ export interface SuasConfig {
   readonly idVerification: {
     readonly mode: IdVerificationMode;
   };
+  /** Public self sign-up. Startup refuses `enabled` outside LOCAL and TEST. */
+  readonly publicSignUp: boolean;
+  /** Normalized emails the STAGING provision command may create. Not admission. */
+  readonly stagingAuthEmails: readonly string[];
+  /**
+   * Explicit, immutable (tenant id, user id) pairs STAGING auth admits.
+   * Empty or absent admits nobody. The demo account is not added implicitly.
+   */
+  readonly stagingFixturePrincipals: readonly StagingFixturePrincipal[];
   readonly adapters: {
     readonly transportation: AdapterMode;
     readonly shelter: AdapterMode;
@@ -519,8 +595,8 @@ function validateProviderEndpoint(
  *
  * - A real AWS mode (`ses`, `bedrock`, `s3`) is refused in LOCAL/TEST, like
  *   Resend (ENVIRONMENT.md §3 rule 3, AGENTS.md rule 4), and needs its region.
- * - A fake mode is refused in PRODUCTION. The ID-verification fake would pass
- *   anyone through the identity gate, so plan §7 requires this refusal.
+ * - A fake mode is refused in PRODUCTION. Fake ID verification is also refused
+ *   in STAGING: it would pass anyone through the identity gate (D-052).
  */
 function validateAwsCapabilities(
   raw: z.output<typeof rawConfigSchema>,
@@ -561,11 +637,21 @@ function validateAwsCapabilities(
     issue('SUAS_S3_BUCKET must be a valid S3 bucket name.');
   }
 
+  if (
+    raw.SUAS_ID_VERIFICATION_MODE === 'fake' &&
+    environment !== 'LOCAL' &&
+    environment !== 'TEST'
+  ) {
+    issue(
+      `SUAS_ID_VERIFICATION_MODE=fake is forbidden in ${environment}. ` +
+        'Fake ID verification is refused outside LOCAL and TEST.',
+    );
+  }
+
   if (environment === 'PRODUCTION') {
     for (const [varName, value] of [
       ['SUAS_MODEL_INFERENCE_MODE', raw.SUAS_MODEL_INFERENCE_MODE],
       ['SUAS_OBJECT_STORAGE_MODE', raw.SUAS_OBJECT_STORAGE_MODE],
-      ['SUAS_ID_VERIFICATION_MODE', raw.SUAS_ID_VERIFICATION_MODE],
     ] as const) {
       if (value === 'fake') {
         issue(`${varName}=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).`);
@@ -587,6 +673,48 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
       message: 'SUAS_DEMO_FIXED_CODE must be exactly "enabled" or "disabled" when set.',
     });
   }
+  if (
+    raw.SUAS_PUBLIC_SIGN_UP !== undefined &&
+    raw.SUAS_PUBLIC_SIGN_UP !== 'enabled' &&
+    raw.SUAS_PUBLIC_SIGN_UP !== 'disabled'
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SUAS_PUBLIC_SIGN_UP must be exactly "enabled" or "disabled" when set.',
+    });
+  }
+  if (raw.SUAS_PUBLIC_SIGN_UP === 'enabled' && environment !== 'LOCAL' && environment !== 'TEST') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'SUAS_PUBLIC_SIGN_UP=enabled is refused outside LOCAL and TEST. ' +
+        'STAGING and PRODUCTION fail closed.',
+    });
+  }
+
+  const stagingPrincipals = splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) =>
+    email.toLowerCase(),
+  );
+  if (stagingPrincipals.length > 10) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SUAS_STAGING_AUTH_EMAILS must contain at most 10 addresses.',
+    });
+  }
+  if (stagingPrincipals.some((email) => !isSyntheticEmail(email))) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SUAS_STAGING_AUTH_EMAILS must contain only synthetic fixture addresses.',
+    });
+  }
+  const registry = parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY);
+  if (registry.issue !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: registry.issue,
+    });
+  }
+
   if (
     raw.SUAS_DEMO_FIXED_CODE === 'enabled' &&
     environment !== 'LOCAL' &&
@@ -932,6 +1060,8 @@ export function shapeConfig(
         ctx,
       ),
       migrationsMode: raw.SUAS_MIGRATIONS_MODE,
+      resetAllowlist: splitCsv(raw.SUAS_MIGRATION_RESET_ALLOWLIST),
+      resetSyntheticMarker: raw.SUAS_MIGRATION_RESET_SYNTHETIC_MARKER,
       ssl: {
         mode: (raw.DATABASE_SSL_MODE ?? 'disable') as DatabaseSslMode,
         caFile: raw.DATABASE_SSL_CA_FILE,
@@ -967,6 +1097,10 @@ export function shapeConfig(
     },
     objectStorage: { mode: raw.SUAS_OBJECT_STORAGE_MODE, bucket: raw.SUAS_S3_BUCKET },
     idVerification: { mode: raw.SUAS_ID_VERIFICATION_MODE },
+    publicSignUp: raw.SUAS_PUBLIC_SIGN_UP === 'enabled',
+    stagingAuthEmails: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) => email.toLowerCase()),
+    stagingFixturePrincipals: parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY)
+      .principals,
     adapters: {
       transportation: raw.SUAS_TRANSPORTATION_ADAPTER_MODE,
       shelter: raw.SUAS_SHELTER_ADAPTER_MODE,

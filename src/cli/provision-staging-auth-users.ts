@@ -19,21 +19,11 @@ async function main(): Promise<void> {
     throw new Error('STAGING browser auth must be enabled for the canonical synthetic tenant.');
   }
 
-  const raw = process.env['SUAS_STAGING_AUTH_EMAILS'];
-  const emails = [
-    ...new Set(
-      (raw ?? '')
-        .split(',')
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  ];
-  if (
-    emails.length === 0 ||
-    emails.length > 10 ||
-    emails.some((email) => !EMAIL_SHAPE.test(email))
-  ) {
-    throw new Error('SUAS_STAGING_AUTH_EMAILS must contain 1-10 comma-separated email addresses.');
+  const emails = config.stagingAuthEmails;
+  if (emails.length === 0 || emails.some((email) => !EMAIL_SHAPE.test(email))) {
+    throw new Error(
+      'SUAS_STAGING_AUTH_EMAILS must contain 1-10 comma-separated synthetic fixture addresses.',
+    );
   }
 
   const pool = createPool(config);
@@ -41,15 +31,12 @@ async function main(): Promise<void> {
     for (const email of emails) {
       await ensureActiveUser(pool, email);
     }
-    // The public synthetic demo account is not one of the owner-approved
-    // addresses and does not count against that list's cap of 10.
-    if (config.demoFixedCode) {
-      await ensureActiveUser(pool, DEMO_FIXED_CODE_DESTINATION);
-    }
+    // The demo account is admitted only when its address is listed explicitly
+    // and its (tenant id, user id) pair is in SUAS_STAGING_FIXTURE_REGISTRY.
     console.log(
       JSON.stringify({
         provisioned: emails.length,
-        demoAccount: config.demoFixedCode,
+        demoAccount: emails.includes(DEMO_FIXED_CODE_DESTINATION),
         tenantId: TENANT_ID,
       }),
     );
