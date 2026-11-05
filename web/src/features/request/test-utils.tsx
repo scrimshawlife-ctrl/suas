@@ -9,8 +9,8 @@ function Where() {
   return <p data-testid="where">{pathname + search}</p>;
 }
 
-/** Renders a screen with a signed-in token, a fresh query cache and a router that shows its path. */
-export function renderScreen(ui: ReactElement, entry = '/request') {
+/** Renders a screen (at `routePath`, so `useParams` works) with a signed-in token, a fresh query cache and a router that shows its path. */
+export function renderScreen(ui: ReactElement, entry = '/request', routePath = '*') {
   tokenStore.setToken('test-token', { mfaElevated: false });
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -19,7 +19,7 @@ export function renderScreen(ui: ReactElement, entry = '/request') {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[entry]}>
         <Routes>
-          <Route path="*" element={ui} />
+          <Route path={routePath} element={ui} />
         </Routes>
         <Where />
       </MemoryRouter>
