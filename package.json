@@ -40,6 +40,7 @@
     "jobs:work": "node --env-file=.env --import tsx/esm src/cli/job-worker.ts",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run staging:contract && npm run test && npm run openapi:check",
     "openapi:check": "tsx scripts/check-openapi-drift.ts",
+    "eval": "tsx eval/run.ts",
     "staging:contract": "tsx scripts/check-synthetic-staging-contract.ts",
     "evidence:staging:browser-auth": "tsx scripts/staging-browser-auth-evidence.ts",
     "evidence:preflight": "tsx scripts/synthetic-staging-evidence-invariants.ts",

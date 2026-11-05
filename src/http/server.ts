@@ -21,6 +21,7 @@ import { API_PREFIX } from '../release/pins.js';
 import type { BuildInfo } from '../provenance/build-info.js';
 import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
+import type { ModelInferencePort } from '../inference/index.js';
 import type { IdVerificationPort } from '../identity/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { authenticate } from './authenticate.js';
@@ -31,6 +32,7 @@ import { registerCheckInRoutes } from './routes/check-ins.js';
 import { registerConsentRoutes } from './routes/consents.js';
 import { registerContactLogRoutes } from './routes/contact-log.js';
 import { registerFollowUpRoutes } from './routes/follow-ups.js';
+import { registerIntakeRoutes } from './routes/intake.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerResourceRoutes } from './routes/resources.js';
 import { registerServiceRequestRoutes } from './routes/service-requests.js';
@@ -52,6 +54,7 @@ export interface ServerDependencies {
   readonly challengeDelivery?: ChallengeDeliveryPort;
   readonly mfa?: MfaPort;
   readonly jobQueue?: DurableJobQueuePort;
+  readonly modelInference?: ModelInferencePort;
   /** ID scan + selfie port; absent when `SUAS_ID_VERIFICATION_MODE=disabled`. */
   readonly idVerification?: IdVerificationPort;
   /**
@@ -349,6 +352,14 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       pool,
       sessionSecret: deps.config.sessionSecret,
     });
+
+    if (deps.modelInference !== undefined) {
+      registerIntakeRoutes(app, {
+        pool,
+        sessionSecret: deps.config.sessionSecret,
+        modelInference: deps.modelInference,
+      });
+    }
 
     registerNotificationRoutes(app, {
       pool,
