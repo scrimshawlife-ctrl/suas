@@ -107,12 +107,15 @@ describe('fake modes in PRODUCTION (plan §7)', () => {
     },
   );
 
-  it('allows the ID verification fake in LOCAL, TEST and STAGING', () => {
-    for (const environment of ['LOCAL', 'TEST', 'STAGING']) {
+  it('allows the ID verification fake in LOCAL and TEST only', () => {
+    for (const environment of ['LOCAL', 'TEST']) {
       const config = loadConfig(
         validEnv({ SUAS_ENV: environment, SUAS_ID_VERIFICATION_MODE: 'fake' }),
       );
       expect(config.idVerification.mode).toBe('fake');
     }
+    expect(
+      issuesFor(validEnv({ SUAS_ENV: 'STAGING', SUAS_ID_VERIFICATION_MODE: 'fake' })),
+    ).toContain('SUAS_ID_VERIFICATION_MODE=fake is forbidden in STAGING');
   });
 });
