@@ -25,6 +25,7 @@ import { UnavailableModelInference, type ModelInferencePort } from '../inference
 import type { IdVerificationPort } from '../identity/index.js';
 import type { ConnectionPushPort } from '../realtime/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
+import { stagingAccessFromConfig } from '../auth/staging-access.js';
 import { authenticate } from './authenticate.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
@@ -147,6 +148,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
         ? supplied
         : randomUUID();
     },
+  });
+
+  const stagingAccess = stagingAccessFromConfig(deps.config);
+  app.addHook('onRequest', (request, _reply, done) => {
+    request.stagingAccess = stagingAccess;
+    done();
   });
 
   app.addHook('onRoute', (route) => {
@@ -285,6 +292,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
         databaseUrl: deps.config.database.url,
         workerRuntime: deps.workerRuntime === true,
       }),
+      stagingAccess,
     });
 
     // LOCAL-only developer harness for the iOS app (code retrieval + status
