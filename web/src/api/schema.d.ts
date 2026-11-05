@@ -493,7 +493,7 @@ export interface paths {
     put?: never;
     /**
      * Execute a released service-request command
-     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not.
+     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED.
      */
     post: operations['executeServiceRequestCommand'];
     delete?: never;
@@ -855,7 +855,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Accept an open service request (first accept wins) */
+    /**
+     * Accept an open service request (first accept wins)
+     * @description Claims the Support Case (ASSIGNED) and moves the Service Request to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). The accepter then runs START, FULFILL; the requester runs CONFIRM.
+     */
     post: operations['acceptServiceRequest'];
     delete?: never;
     options?: never;
@@ -1685,6 +1688,11 @@ export interface components {
       county: components['schemas']['ServiceCounty'] | null;
       /** @description For the requester: the display name of the person who accepted (null until accepted or if unnamed). For the accepter: the requester display name. */
       counterpart_display_name: string | null;
+      /**
+       * @description The caller side of this request.
+       * @enum {string}
+       */
+      viewer_role: 'REQUESTER' | 'ACCEPTER';
     };
     CaseServiceRequestList: {
       service_requests: components['schemas']['ServiceRequestRef'][];
@@ -1958,6 +1966,13 @@ export interface components {
       last_message_at: string | null;
       /** @description The request is in a terminal status. */
       closed: boolean;
+      /**
+       * @description The caller side of the thread.
+       * @enum {string}
+       */
+      role: 'REQUESTER' | 'ACCEPTER';
+      /** @description True when the latest message was sent by the caller; null when there are no messages. */
+      last_message_from_me: boolean | null;
     };
     ChatThreadList: {
       threads: components['schemas']['ChatThread'][];
