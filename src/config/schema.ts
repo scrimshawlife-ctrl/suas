@@ -32,6 +32,14 @@ export const MIGRATIONS_MODES = ['off', 'validate', 'apply'] as const;
 export type MigrationsMode = (typeof MIGRATIONS_MODES)[number];
 
 /**
+ * Database TLS. `verify` encrypts the connection and verifies the server
+ * certificate chain and host name; `disable` is plain TCP for LOCAL/TEST.
+ * Unverified TLS is deliberately not offered.
+ */
+export const DATABASE_SSL_MODES = ['disable', 'verify'] as const;
+export type DatabaseSslMode = (typeof DATABASE_SSL_MODES)[number];
+
+/**
  * ENVIRONMENT.md §3 "Notifications". Resend is the sole released EMAIL
  * provider. SMS remains restricted to the provider-neutral test modes.
  */
@@ -149,6 +157,9 @@ const rawConfigSchema = z.object({
   // --- Data / persistence. ENVIRONMENT.md §3. ---
   DATABASE_URL: optionalRaw,
   DATABASE_POOL_MAX: optionalRaw,
+  DATABASE_SSL_MODE: optionalRaw,
+  // Path to a PEM CA bundle (e.g. the AWS RDS global bundle). Read at pool creation.
+  DATABASE_SSL_CA_FILE: optionalRaw,
   SUAS_MIGRATIONS_MODE: requiredEnum(
     'SUAS_MIGRATIONS_MODE',
     MIGRATIONS_MODES,
@@ -273,6 +284,10 @@ export interface SuasConfig {
     readonly url: string | undefined;
     readonly poolMax: number;
     readonly migrationsMode: MigrationsMode;
+    readonly ssl: {
+      readonly mode: DatabaseSslMode;
+      readonly caFile: string | undefined;
+    };
   };
   readonly sessionSecret: string | undefined;
   readonly browserAuth: {
@@ -638,6 +653,8 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
     }
   }
 
+  validateDatabaseSsl(raw, ctx);
+
   // ENVIRONMENT.md §5 "required secrets are absent for an enabled capability".
   // Authentication became an enabled capability in SPEC017_PLAN.md Slice 3, and it
   // keys challenge and session credential hashing, so the secret is now required
@@ -717,6 +734,47 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   }
 });
 
+/**
+ * TLS is configured in one place. A URL that also carries ssl* parameters would
+ * silently override these settings (node-postgres lets the URL win), so that
+ * combination is refused rather than guessed.
+ */
+function validateDatabaseSsl(raw: z.infer<typeof rawConfigSchema>, ctx: z.RefinementCtx): void {
+  const mode = raw.DATABASE_SSL_MODE;
+  if (mode !== undefined && !(DATABASE_SSL_MODES as readonly string[]).includes(mode)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `DATABASE_SSL_MODE must be one of ${DATABASE_SSL_MODES.join(', ')}; received "${mode}".`,
+    });
+    return;
+  }
+  if (raw.DATABASE_SSL_CA_FILE !== undefined && mode !== 'verify') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'DATABASE_SSL_CA_FILE requires DATABASE_SSL_MODE=verify.',
+    });
+  }
+  if (mode === 'verify' && raw.DATABASE_URL !== undefined) {
+    let params: URLSearchParams | undefined;
+    try {
+      params = new URL(raw.DATABASE_URL).searchParams;
+    } catch {
+      return; // DATABASE_URL reports its own parse error.
+    }
+    const conflicting = [...params.keys()].filter(
+      (key) => key.startsWith('ssl') || key === 'uselibpqcompat',
+    );
+    if (conflicting.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          `DATABASE_URL must not carry ${conflicting.join(', ')} when DATABASE_SSL_MODE=verify; ` +
+          `configure TLS with DATABASE_SSL_MODE and DATABASE_SSL_CA_FILE only.`,
+      });
+    }
+  }
+}
+
 /** Shape the validated raw record into the application configuration object. */
 export function shapeConfig(
   raw: z.infer<typeof rawConfigSchema>,
@@ -739,6 +797,10 @@ export function shapeConfig(
         ctx,
       ),
       migrationsMode: raw.SUAS_MIGRATIONS_MODE,
+      ssl: {
+        mode: (raw.DATABASE_SSL_MODE ?? 'disable') as DatabaseSslMode,
+        caFile: raw.DATABASE_SSL_CA_FILE,
+      },
     },
     sessionSecret: raw.SUAS_SESSION_SECRET,
     browserAuth: {
