@@ -9,6 +9,7 @@
 
 import type { Pool } from 'pg';
 import type { SuasConfig } from '../config/index.js';
+import { appendDomainEvent } from '../events/index.js';
 import {
   attemptSend,
   parseNotificationSendPayload,
@@ -16,7 +17,7 @@ import {
   type NotificationChannelPort,
 } from '../notifications/index.js';
 import { parseComputeJobPayload, runSupportSignalComputeJob } from '../signals/index.js';
-import type { JsonObject } from './port.js';
+import type { DurableJobQueuePort, JsonObject } from './port.js';
 
 export interface JobToHandle {
   readonly jobType: string;
@@ -25,13 +26,21 @@ export interface JobToHandle {
 }
 export type JobWork = (job: JobToHandle) => Promise<void>;
 
-export function supportSignalComputeHandler(pool: Pool, config: SuasConfig): JobWork {
+/**
+ * `getJobQueue` is a thunk because the inline dispatcher that wraps this handler
+ * is itself the queue it needs to enqueue `notification.send` on.
+ */
+export function supportSignalComputeHandler(
+  pool: Pool,
+  config: SuasConfig,
+  getJobQueue: () => DurableJobQueuePort | undefined = () => undefined,
+): JobWork {
   return async (job) => {
     const parsed = parseComputeJobPayload(job.payload, job.tenantId);
     if (parsed === undefined) {
       throw new Error('invalid support-signal.compute payload');
     }
-    await runSupportSignalComputeJob(pool, config, parsed);
+    await runSupportSignalComputeJob(pool, config, parsed, { jobQueue: getJobQueue() });
   };
 }
 
@@ -58,6 +67,24 @@ export function notificationSendHandler(
     });
     if (result.notification.deliveryStatus === 'FAILED') {
       throw new Error(`notification send failed: ${result.reason ?? 'provider refused'}`);
+    }
+    // SAFETY.md §3.4: TRUSTED_CONTACT_ALERTED only when a send actually occurred.
+    // The idempotency key makes a replay after SENT record nothing twice.
+    if (result.outcome === 'SENT' && result.notification.reason === 'trusted_contact_alert') {
+      await appendDomainEvent(pool, {
+        eventType: 'TRUSTED_CONTACT_ALERTED',
+        aggregateType: 'TrustedContact',
+        aggregateId: parsed.disclosure.granteeId,
+        tenantId: job.tenantId,
+        actorType: 'SYSTEM',
+        actorId: 'notifications',
+        payload: {
+          trusted_contact_id: parsed.disclosure.granteeId,
+          notification_id: parsed.notificationId,
+          scope: parsed.disclosure.scope,
+        },
+        idempotencyKey: `trusted-contact-alerted:${parsed.notificationId}`,
+      });
     }
   };
 }

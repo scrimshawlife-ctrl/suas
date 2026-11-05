@@ -9,7 +9,13 @@
 
 import { loadConfig } from '../config/index.js';
 import { createPool } from '../db/index.js';
-import { claimDueJobs, markJobFailed, markJobSucceeded, type JobOutboxRow } from '../jobs/index.js';
+import {
+  claimDueJobs,
+  markJobFailed,
+  markJobSucceeded,
+  PostgresOutboxJobQueue,
+  type JobOutboxRow,
+} from '../jobs/index.js';
 import {
   notificationSendHandler,
   supportSignalComputeHandler,
@@ -40,8 +46,10 @@ function createHandlers(
   pool: ReturnType<typeof createPool>,
   config: ReturnType<typeof loadConfig>,
 ): Readonly<Record<string, JobWork>> {
+  const outbox = new PostgresOutboxJobQueue(pool);
   return {
-    'support-signal.compute': supportSignalComputeHandler(pool, config),
+    // RED alerts enqueue notification.send rows that a later poll delivers.
+    'support-signal.compute': supportSignalComputeHandler(pool, config, () => outbox),
     'notification.send': notificationSendHandler(pool, createChannelRegistry(config)),
   };
 }

@@ -27,7 +27,7 @@ import {
   markJobSucceeded,
   type DurableJobQueuePort,
 } from './jobs/index.js';
-import { supportSignalComputeHandler } from './jobs/handlers.js';
+import { notificationSendHandler, supportSignalComputeHandler } from './jobs/handlers.js';
 import { configureSupportSignalScoring } from './signals/index.js';
 import {
   createChallengeDelivery,
@@ -133,12 +133,19 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
       ? { localImplementation: localImpl }
       : {}),
   });
-  const jobQueue =
+  // Channel ports are shared by notification.send and authentication delivery.
+  const channelRegistry = createChannelRegistry(config);
+  // The compute handler enqueues notification.send on the queue that wraps it,
+  // so it reads that queue lazily.
+  const jobQueue: DurableJobQueuePort =
     pool === undefined
       ? innerQueue
       : new DispatchingJobQueue(
           innerQueue,
-          { 'support-signal.compute': supportSignalComputeHandler(pool, config) },
+          {
+            'support-signal.compute': supportSignalComputeHandler(pool, config, () => jobQueue),
+            'notification.send': notificationSendHandler(pool, channelRegistry),
+          },
           (error, request) => {
             console.error(`[suas] job ${request.jobType} failed`, error);
           },
@@ -151,7 +158,6 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   // 4. Authentication capability ports. EMAIL OTP uses the same EmailPort as
   // notifications. D-004 selects Resend only when the released mode is active;
   // fake/sink remain recording-only.
-  const channelRegistry = createChannelRegistry(config);
   const challengeDelivery = createChallengeDelivery(config, channelRegistry);
   const mfa = createMfaPort(config);
 
