@@ -4,9 +4,12 @@
  * SUAS-specs ENVIRONMENT.md §8; VERSIONING.md §3-§4; HANDOFF.md §6.
  */
 
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
-import { buildInfo, buildInfoSchema } from '../../src/provenance/build-info.js';
+import { buildInfo, buildInfoSchema, readAppVersion } from '../../src/provenance/build-info.js';
 import {
   API_VERSION,
   EVENT_SCHEMA_VERSION,
@@ -81,5 +84,37 @@ describe('ENVIRONMENT.md §6, §8 — no secrets in provenance', () => {
     expect(serialized).not.toContain('sender@example.invalid');
     expect(serialized).toContain('"support_signal_mode":"fixture"');
     expect(serialized).toContain('"sensitive_aggregate_reporting":"disabled"');
+  });
+});
+
+describe('Lambda runtime — provenance without git or the source tree', () => {
+  it('uses stamped commit and timestamp without running git', () => {
+    // A PATH with no git proves the stamped values are enough.
+    const originalPath = process.env.PATH;
+    process.env.PATH = '/nonexistent';
+    try {
+      const result = info({
+        SUAS_BUILD_COMMIT: 'abc1234',
+        SUAS_BUILD_TIMESTAMP: '2026-11-04T00:00:00Z',
+      });
+      expect(result.app_commit).toBe('abc1234');
+      expect(result.provenance_complete).toBe(true);
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
+  it('reads the app version from package.json beside a bundle, and ignores other packages', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'suas-bundle-'));
+    try {
+      const other = join(dir, 'other.json');
+      const ours = join(dir, 'package.json');
+      writeFileSync(other, JSON.stringify({ name: 'not-suas', version: '9.9.9' }));
+      writeFileSync(ours, JSON.stringify({ name: 'suas', version: '1.2.3' }));
+      expect(readAppVersion([join(dir, 'missing.json'), other, ours])).toBe('1.2.3');
+      expect(readAppVersion([join(dir, 'missing.json'), other])).toBe('unknown');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

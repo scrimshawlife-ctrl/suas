@@ -21,12 +21,14 @@ import {
   type SuasConfig,
 } from './config/index.js';
 import { assertExpectedSchemaVersion, createPool, EXPECTED_SCHEMA_VERSION } from './db/index.js';
-import { createJobQueue, DispatchingJobQueue, type DurableJobQueuePort } from './jobs/index.js';
 import {
-  configureSupportSignalScoring,
-  parseComputeJobPayload,
-  runSupportSignalComputeJob,
-} from './signals/index.js';
+  createJobQueue,
+  DispatchingJobQueue,
+  markJobSucceeded,
+  type DurableJobQueuePort,
+} from './jobs/index.js';
+import { supportSignalComputeHandler } from './jobs/handlers.js';
+import { configureSupportSignalScoring } from './signals/index.js';
 import {
   createChallengeDelivery,
   createMfaPort,
@@ -136,16 +138,14 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
       ? innerQueue
       : new DispatchingJobQueue(
           innerQueue,
-          {
-            'support-signal.compute': async (request) => {
-              const parsed = parseComputeJobPayload(request.payload, request.tenantId);
-              if (parsed === undefined) return;
-              await runSupportSignalComputeJob(pool, config, parsed);
-            },
-          },
+          { 'support-signal.compute': supportSignalComputeHandler(pool, config) },
           (error, request) => {
             console.error(`[suas] job ${request.jobType} failed`, error);
           },
+          // A handled outbox row is marked done so the job worker skips it.
+          innerQueue.implementation === 'postgres-outbox'
+            ? (job) => markJobSucceeded(pool, job.jobId)
+            : undefined,
         );
 
   // 4. Authentication capability ports. EMAIL OTP uses the same EmailPort as

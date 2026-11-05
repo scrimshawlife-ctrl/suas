@@ -62,4 +62,26 @@ describe('DispatchingJobQueue', () => {
     expect(result.deduplicated).toBe(false);
     expect(errors).toHaveLength(1);
   });
+
+  it('reports a handled job once, and not when the handler fails or the enqueue is a duplicate', async () => {
+    const handled: string[] = [];
+    const queue = new DispatchingJobQueue(
+      new InMemoryJobQueue(),
+      {
+        ok: () => Promise.resolve(),
+        bad: () => Promise.reject(new Error('refused')),
+      },
+      () => undefined,
+      (job) => {
+        handled.push(job.jobType);
+        return Promise.resolve();
+      },
+    );
+    const tenantId = '00000000-0000-4000-8000-000000000001';
+    const ok = { jobType: 'ok', payload: {}, tenantId, idempotencyKey: 'k' };
+    await queue.enqueue(ok);
+    await queue.enqueue(ok);
+    await queue.enqueue({ jobType: 'bad', payload: {}, tenantId });
+    expect(handled).toEqual(['ok']);
+  });
 });
