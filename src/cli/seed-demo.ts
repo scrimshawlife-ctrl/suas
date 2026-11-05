@@ -305,6 +305,13 @@ async function ensureDemoRequests(
       ],
       actors,
     );
+    // The request ran through the provider path (ASSIGN, ACCEPT), which records no holder.
+    // The accepter holds it, so they can open it and run its commands over the API.
+    await pool.query(
+      `UPDATE service_requests SET accepted_by_user_id = $3
+        WHERE tenant_id = $1 AND service_request_id = $2`,
+      [TENANT_ID, created.serviceRequestId, accepter.userId],
+    );
   }
 
   if (!present.has('SHELTER')) {

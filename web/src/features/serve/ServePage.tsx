@@ -40,8 +40,8 @@ export default function ServePage() {
     const items = open.data?.pages.flatMap((page) => page.service_requests) ?? [];
     return items
       .filter((item) => !hidden.has(item.service_request_id))
-      .map((item) => toOpenCard(item, now));
-  }, [open.data, hidden, now]);
+      .map((item) => toOpenCard(item, now, me.data?.county));
+  }, [open.data, hidden, now, me.data?.county]);
 
   if (hasApiCode(open.error, 'COUNTY_REQUIRED')) return <Navigate to={paths.welcome} replace />;
 

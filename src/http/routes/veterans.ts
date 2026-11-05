@@ -93,6 +93,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
               const presentation = presentQrfState(activeQrf.facts);
               return {
                 service_request_id: activeQrf.serviceRequestId,
+                category: activeQrf.category,
                 state: presentation.state,
                 headline: presentation.headline,
                 cancellable: presentation.cancellable,

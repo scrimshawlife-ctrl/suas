@@ -45,12 +45,40 @@ describe('open request card mapping', () => {
   });
 
   it('marks widened items and names bordering counties only then', () => {
-    expect(toOpenCard(item({ widened: true }), NOW).widened).toBe(true);
-    expect(toOpenCard(item({ widened: undefined }), NOW).widened).toBe(false);
+    expect(toOpenCard(item({ widened: true }), NOW, 'SAN_MATEO').widened).toBe(true);
+    expect(toOpenCard(item({ widened: undefined }), NOW, 'SAN_MATEO').widened).toBe(false);
     expect(boardSubtitle('SANTA_CLARA', false)).toBe('Santa Clara County, newest first');
     expect(boardSubtitle('SAN_MATEO', true)).toBe(
       'San Mateo County and bordering counties, newest first',
     );
+  });
+});
+
+describe('the "Nearby county" mark belongs to the viewer, not the request', () => {
+  const widenedFromSantaClara = item({ widened: true, county: 'SANTA_CLARA' });
+
+  it("is off for a helper in the requester's own county, even after widening", () => {
+    expect(toOpenCard(widenedFromSantaClara, NOW, 'SANTA_CLARA').widened).toBe(false);
+  });
+
+  it('is on for a helper in a bordering county', () => {
+    expect(toOpenCard(widenedFromSantaClara, NOW, 'ALAMEDA').widened).toBe(true);
+  });
+
+  it('is off for a request that has not widened, and when the viewer county is unknown', () => {
+    expect(toOpenCard(item({ widened: false }), NOW, 'ALAMEDA').widened).toBe(false);
+    expect(toOpenCard(widenedFromSantaClara, NOW, null).widened).toBe(false);
+    expect(toOpenCard(widenedFromSantaClara, NOW).widened).toBe(false);
+  });
+
+  it('keeps "and bordering counties" out of the subtitle for own-county helpers only', () => {
+    const cards = [toOpenCard(widenedFromSantaClara, NOW, 'SANTA_CLARA')];
+    expect(
+      boardSubtitle(
+        'SANTA_CLARA',
+        cards.some((card) => card.widened),
+      ),
+    ).toBe('Santa Clara County, newest first');
   });
 });
 

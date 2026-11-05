@@ -35,6 +35,8 @@ export interface ServiceRequest {
   readonly details: JsonObject;
   /** The user who created the request (DISPATCH.md §4 "creator"). */
   readonly createdBy: string;
+  /** The helper who accepted this request; undefined until someone does. Set once. */
+  readonly acceptedByUserId: string | undefined;
 }
 
 interface RequestRow {
@@ -45,10 +47,11 @@ interface RequestRow {
   status: ServiceRequestStatus;
   details: JsonObject;
   created_by: string;
+  accepted_by_user_id: string | null;
 }
 
 const REQUEST_COLUMNS =
-  'service_request_id, tenant_id, case_id, category, status, details, created_by';
+  'service_request_id, tenant_id, case_id, category, status, details, created_by, accepted_by_user_id';
 
 function toRequest(row: RequestRow): ServiceRequest {
   return {
@@ -59,6 +62,7 @@ function toRequest(row: RequestRow): ServiceRequest {
     status: row.status,
     details: row.details,
     createdBy: row.created_by,
+    acceptedByUserId: row.accepted_by_user_id ?? undefined,
   };
 }
 
@@ -324,9 +328,10 @@ const PEER_ACCEPTABLE: readonly ServiceRequestStatus[] = ['SUBMITTED', 'TRIAGED'
  * rather than a relaxed `ASSIGN`: the generic command table and its consent guard are
  * untouched, and every other caller of `ASSIGN` is still checked.
  *
- * Runs in the transaction of the Support Case claim, so the case and the request move
- * together. The case claim already emitted `CASE_ASSIGNED`; this adds an Audit Event with
- * ids only (the released Domain Event catalog has no peer-accept event, and the
+ * It records the accepter on the request (`accepted_by_user_id`): the helper holds this
+ * one request, not the Veteran's case. Runs in the accept transaction, after the case row
+ * lock, so the request, the case and the chat thread move together. It adds an Audit Event
+ * with ids only (the released Domain Event catalog has no peer-accept event, and the
  * request text never goes into an event payload). A request that is no longer waiting
  * (cancelled, already accepted, past matching) reads as not found, as an accept always has.
  */
@@ -346,16 +351,20 @@ export async function peerAcceptRequestInTx(
     [input.tenantId, input.serviceRequestId],
   );
   const row = locked.rows[0];
-  if (row === undefined || !PEER_ACCEPTABLE.includes(row.status)) {
+  if (
+    row === undefined ||
+    row.accepted_by_user_id !== null ||
+    !PEER_ACCEPTABLE.includes(row.status)
+  ) {
     throw new ServiceRequestNotFoundError();
   }
 
   const updated = await tx.query<RequestRow>(
     `UPDATE service_requests
-        SET status = 'ACCEPTED', updated_at = now()
+        SET status = 'ACCEPTED', accepted_by_user_id = $3, updated_at = now()
       WHERE tenant_id = $1 AND service_request_id = $2
       RETURNING ${REQUEST_COLUMNS}`,
-    [input.tenantId, input.serviceRequestId],
+    [input.tenantId, input.serviceRequestId, input.actorId],
   );
   const updatedRow = updated.rows[0];
   if (updatedRow === undefined) throw new ServiceRequestNotFoundError();
@@ -392,26 +401,33 @@ export async function executeServiceRequestCommand(
   return withTransaction(pool, (tx) => executeServiceRequestCommandInTx(tx, input, deps));
 }
 
+/**
+ * A case's requests, newest first. `heldBy` narrows the list to the requests that one
+ * helper accepted, so a helper never learns about the Veteran's other requests.
+ */
 export async function listCaseServiceRequests(
   db: Queryable,
   tenantId: string,
   caseId: string,
   limit = 50,
+  heldBy?: string,
 ): Promise<ServiceRequest[]> {
   const result = await db.query<RequestRow>(
     `SELECT ${REQUEST_COLUMNS} FROM service_requests
      WHERE tenant_id = $1 AND case_id = $2
+       AND ($4::uuid IS NULL OR accepted_by_user_id = $4::uuid)
      ORDER BY created_at DESC
      LIMIT $3`,
-    [tenantId, caseId, Math.min(limit, 100)],
+    [tenantId, caseId, Math.min(limit, 100), heldBy ?? null],
   );
   return result.rows.map(toRequest);
 }
 
 /**
  * When the requester confirmed a request in the case's current resolution cycle, or
- * undefined if they did not. The cycle starts at the latest Settlement, or at the active
- * assignment when there is none, so an old confirmation from before a reopen does not count.
+ * undefined if they did not. The cycle starts at the latest Settlement, so an old
+ * confirmation from before a reopen does not count. A case with no Settlement yet is in
+ * its first cycle, so every confirmation counts.
  *
  * `CLOSED` is reachable only from `CONFIRMED` (DISPATCH.md §4) and only the requester runs
  * `CONFIRM`, so either status is the requester's confirmation. No confirmation time is stored,
@@ -433,7 +449,6 @@ export async function findRequesterConfirmation(
        ) t
       WHERE t.at > COALESCE(
         (SELECT max(settled_at) FROM settlements WHERE tenant_id = $1 AND case_id = $2),
-        (SELECT assigned_at FROM case_assignments WHERE case_id = $2 AND status = 'ACTIVE'),
         '-infinity'::timestamptz)`,
     [tenantId, caseId],
   );

@@ -531,7 +531,10 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get('/app/home', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
-    const active = await readActiveQrf(pool, context.tenantId, context.userId);
+    // The legacy page's card and its Cancel button are about the peer-support request.
+    const active = await readActiveQrf(pool, context.tenantId, context.userId, {
+      category: 'PEER_SUPPORT',
+    });
     const inProgress = await findInProgressCheckIn(pool, context.tenantId, context.userId);
 
     await reply.type(HTML).send(

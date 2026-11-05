@@ -253,8 +253,9 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
     expect(created.statusCode).toBe(201);
     const srId = created.json().service_request_id as string;
     expect((await command(srId, 'SUBMIT', other.headers)).statusCode).toBe(404);
-    // The accepter created it, but submitting is the requester's act.
-    expect((await command(srId, 'SUBMIT', creator.headers)).statusCode).toBe(403);
+    // The helper created it, but submitting is the requester's act. They hold a different
+    // request of the case, not this one, so they have no standing on it at all.
+    expect((await command(srId, 'SUBMIT', creator.headers)).statusCode).toBe(404);
     const submitted = await command(srId, 'SUBMIT', headers);
     expect(submitted.statusCode).toBe(200);
     expect(submitted.json()).toMatchObject({ status: 'SUBMITTED' });

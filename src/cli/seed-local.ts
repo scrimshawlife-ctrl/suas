@@ -52,12 +52,13 @@ import {
 } from '../fulfillment/index.js';
 import { ensurePublishedQv001 } from '../signals/index.js';
 import {
-  claimCase,
+  acceptRequestInTx,
   createServiceRequest,
   executeCaseCommand,
-  findActiveAssignment,
+  executeServiceRequestCommand,
   findCase,
   listCaseServiceRequests,
+  lockCase,
   openCase,
   type CaseStatus,
   type SupportCase,
@@ -243,17 +244,7 @@ async function ensureActiveQrf(
       actorId: veteran.userId,
     }),
   );
-  let supportCase = opened.supportCase;
-
-  const assignment = await findActiveAssignment(pool, supportCase.caseId);
-  if (assignment === undefined && supportCase.status === 'OPEN') {
-    await claimCase(pool, {
-      tenantId: TENANT_ID,
-      caseId: supportCase.caseId,
-      acceptedByUserId: accepter.userId,
-    });
-    supportCase = await refetchCase(pool, supportCase.caseId);
-  }
+  const supportCase = opened.supportCase;
 
   const requests = await listCaseServiceRequests(pool, TENANT_ID, supportCase.caseId);
   const activePeer = requests.find(
@@ -261,20 +252,53 @@ async function ensureActiveQrf(
       r.category === 'PEER_SUPPORT' &&
       !['CLOSED', 'CONFIRMED', 'CANCELLED', 'EXPIRED', 'UNFULFILLABLE'].includes(r.status),
   );
-  if (activePeer !== undefined) {
-    return { supportCase, serviceRequestId: activePeer.serviceRequestId };
-  }
+  const request =
+    activePeer ??
+    (await withTransaction(pool, (tx: PoolClient) =>
+      createServiceRequest(tx, {
+        tenantId: TENANT_ID,
+        caseId: supportCase.caseId,
+        category: 'PEER_SUPPORT',
+        createdBy: veteran.userId,
+        actorType: 'VETERAN',
+      }),
+    ));
 
-  const created = await withTransaction(pool, (tx: PoolClient) =>
-    createServiceRequest(tx, {
+  // The helper accepts the request, not the case: submit it, then record the accept.
+  if (request.status === 'CREATED') {
+    await executeServiceRequestCommand(pool, {
       tenantId: TENANT_ID,
-      caseId: supportCase.caseId,
-      category: 'PEER_SUPPORT',
-      createdBy: veteran.userId,
+      serviceRequestId: request.serviceRequestId,
+      command: 'SUBMIT',
+      actorId: veteran.userId,
       actorType: 'VETERAN',
-    }),
-  );
-  return { supportCase, serviceRequestId: created.serviceRequestId };
+    });
+  }
+  await acceptForSeed(pool, request.serviceRequestId, accepter);
+  return {
+    supportCase: await refetchCase(pool, supportCase.caseId),
+    serviceRequestId: request.serviceRequestId,
+  };
+}
+
+/** Record an accept for a seeded request. Skips one that is already held. */
+async function acceptForSeed(pool: Pool, serviceRequestId: string, accepter: User): Promise<void> {
+  await withTransaction(pool, async (tx: PoolClient) => {
+    const current = await tx.query<{ case_id: string; accepted_by_user_id: string | null }>(
+      `SELECT case_id, accepted_by_user_id FROM service_requests
+        WHERE tenant_id = $1 AND service_request_id = $2`,
+      [TENANT_ID, serviceRequestId],
+    );
+    const row = current.rows[0];
+    if (row === undefined || row.accepted_by_user_id !== null) return;
+    const supportCase = await lockCase(tx, TENANT_ID, row.case_id);
+    await acceptRequestInTx(tx, {
+      tenantId: TENANT_ID,
+      supportCase,
+      serviceRequestId,
+      acceptedByUserId: accepter.userId,
+    });
+  });
 }
 
 async function refetchCase(pool: Pool, caseId: string): Promise<SupportCase> {
@@ -427,15 +451,33 @@ async function ensureSettledCase(
   );
   let supportCase = opened.supportCase;
 
-  if (
-    supportCase.status === 'OPEN' &&
-    (await findActiveAssignment(pool, supportCase.caseId)) === undefined
-  ) {
-    await claimCase(pool, {
-      tenantId: TENANT_ID,
-      caseId: supportCase.caseId,
-      acceptedByUserId: accepter.userId,
-    });
+  if (supportCase.status === 'OPEN') {
+    // The case is held through a request: a finished one the helper accepted.
+    const created = await withTransaction(pool, (tx: PoolClient) =>
+      createServiceRequest(tx, {
+        tenantId: TENANT_ID,
+        caseId: supportCase.caseId,
+        category: 'PEER_SUPPORT',
+        createdBy: veteran.userId,
+        actorType: 'VETERAN',
+        details: { summary: 'Someone to talk with about a hard week (synthetic).' },
+      }),
+    );
+    const requestId = created.serviceRequestId;
+    const run = (command: 'SUBMIT' | 'START' | 'FULFILL' | 'CONFIRM' | 'CLOSE', by: User) =>
+      executeServiceRequestCommand(pool, {
+        tenantId: TENANT_ID,
+        serviceRequestId: requestId,
+        command,
+        actorId: by.userId,
+        actorType: by === veteran ? 'VETERAN' : 'USER',
+      });
+    await run('SUBMIT', veteran);
+    await acceptForSeed(pool, requestId, accepter);
+    await run('START', accepter);
+    await run('FULFILL', accepter);
+    await run('CONFIRM', veteran);
+    await run('CLOSE', accepter);
     supportCase = await refetchCase(pool, supportCase.caseId);
   }
 

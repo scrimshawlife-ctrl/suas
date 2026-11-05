@@ -7,14 +7,16 @@
  *   (resolution and closure)
  * - SUAS-specs RESPONDER_WORKFLOWS.md §2 (named actions), §3 (idempotency and
  *   stale-state protection)
- * - V1_PROJECT_PLAN.md §2.1 (any signed-in person accepts; first accept wins)
+ * - V1_PROJECT_PLAN.md §2.1 (any signed-in person accepts; first accept wins). Accepting
+ *   is per Service Request (decided 2026-11-05), so a case has no single owner: a helper
+ *   acts on a case when they hold at least one of its requests.
  * - SUAS-specs EVENT_MODEL.md §3 (`CASE_CREATED`, `CASE_ASSIGNED`,
  *   `CASE_ESCALATED`, `CASE_RESOLVED`)
- * - SUAS-specs DATA_MODEL.md §14 rule 6 (one active assignment where required)
  *
  * Contested commands hold a row lock on the case for the whole check-and-write,
  * so the state check and the winning write are one atomic unit (CASES.md §5.2).
- * The partial unique indexes are a second line of defence, not the only one.
+ * The partial unique index on the one active case per Veteran is a second line of
+ * defence, not the only one.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -36,14 +38,6 @@ export interface SupportCase {
   readonly prioritySignalLevel: string | undefined;
 }
 
-export interface CaseAssignment {
-  readonly caseAssignmentId: string;
-  readonly tenantId: string;
-  readonly caseId: string;
-  readonly acceptedByUserId: string;
-  readonly status: 'ACTIVE' | 'RELEASED' | 'REASSIGNED';
-}
-
 interface CaseRow {
   case_id: string;
   tenant_id: string;
@@ -52,16 +46,7 @@ interface CaseRow {
   priority_signal_level: string | null;
 }
 
-interface AssignmentRow {
-  case_assignment_id: string;
-  tenant_id: string;
-  case_id: string;
-  accepted_by_user_id: string;
-  status: 'ACTIVE' | 'RELEASED' | 'REASSIGNED';
-}
-
 const CASE_COLUMNS = 'case_id, tenant_id, veteran_user_id, status, priority_signal_level';
-const ASSIGNMENT_COLUMNS = 'case_assignment_id, tenant_id, case_id, accepted_by_user_id, status';
 
 function toCase(row: CaseRow): SupportCase {
   return {
@@ -73,16 +58,6 @@ function toCase(row: CaseRow): SupportCase {
   };
 }
 
-function toAssignment(row: AssignmentRow): CaseAssignment {
-  return {
-    caseAssignmentId: row.case_assignment_id,
-    tenantId: row.tenant_id,
-    caseId: row.case_id,
-    acceptedByUserId: row.accepted_by_user_id,
-    status: row.status,
-  };
-}
-
 export class CaseNotFoundError extends Error {
   readonly code = 'NOT_FOUND';
   readonly httpStatus = 404;
@@ -90,17 +65,6 @@ export class CaseNotFoundError extends Error {
   constructor() {
     super('Resource not found.');
     this.name = 'CaseNotFoundError';
-  }
-}
-
-/** CASES.md §5.4: a losing contender receives a conflict with no partial effect. */
-export class CaseAlreadyClaimedError extends Error {
-  readonly code = 'ALREADY_CLAIMED';
-  readonly httpStatus = 409;
-
-  constructor() {
-    super('This case already has an active assignment.');
-    this.name = 'CaseAlreadyClaimedError';
   }
 }
 
@@ -164,17 +128,40 @@ export async function setCasePrioritySignalLevel(
   return toCase(row);
 }
 
-export async function findActiveAssignment(
+/**
+ * Whether a person holds at least one Service Request of the case: they accepted it.
+ * This is the test for every case-level action (contact log, follow-ups, case commands,
+ * resolve). It counts a request in any status, because a case cannot be resolved until
+ * its requests are finished and the helper who ran them still has to be able to do it.
+ */
+export async function holdsRequestInCase(
   db: Queryable,
+  tenantId: string,
   caseId: string,
-): Promise<CaseAssignment | undefined> {
-  const result = await db.query<AssignmentRow>(
-    `SELECT ${ASSIGNMENT_COLUMNS} FROM case_assignments
-     WHERE case_id = $1 AND status = 'ACTIVE'`,
-    [caseId],
+  userId: string,
+): Promise<boolean> {
+  const result = await db.query(
+    `SELECT 1 FROM service_requests
+      WHERE tenant_id = $1 AND case_id = $2 AND accepted_by_user_id = $3
+      LIMIT 1`,
+    [tenantId, caseId, userId],
   );
-  const row = result.rows[0];
-  return row === undefined ? undefined : toAssignment(row);
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Whether anyone has accepted a Service Request of the case. */
+export async function caseHasAcceptedRequest(
+  db: Queryable,
+  tenantId: string,
+  caseId: string,
+): Promise<boolean> {
+  const result = await db.query(
+    `SELECT 1 FROM service_requests
+      WHERE tenant_id = $1 AND case_id = $2 AND accepted_by_user_id IS NOT NULL
+      LIMIT 1`,
+    [tenantId, caseId],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 export interface OpenCaseInput {
@@ -243,7 +230,7 @@ export async function openCase(tx: PoolClient, input: OpenCaseInput): Promise<Op
 }
 
 /** Lock the case row for a contested command, and confirm the expected state. */
-async function lockCase(
+export async function lockCase(
   tx: PoolClient,
   tenantId: string,
   caseId: string,
@@ -267,131 +254,44 @@ async function lockCase(
   return supportCase;
 }
 
-export interface ClaimCaseInput {
-  readonly tenantId: string;
-  readonly caseId: string;
-  readonly acceptedByUserId: string;
-  /** Status the caller believed the case was in, from a possibly stale list. */
-  readonly expectedStatus?: CaseStatus;
-  /**
-   * Visibility check run inside the case row lock, after the replay shortcut and
-   * before "someone else already holds it". A caller who may not see the case is
-   * refused here, so only a caller who could see it learns that another person won.
-   */
-  readonly visibilityGuard?: (tx: PoolClient, supportCase: SupportCase) => Promise<void>;
-  /**
-   * Eligibility check run inside the case row lock, after the already-claimed check and
-   * before anything is written. It throws to refuse. The accept flow uses it so
-   * "may this person accept?" and "did someone else win?" are one atomic decision.
-   */
-  readonly guard?: (tx: PoolClient, supportCase: SupportCase) => Promise<void>;
-  /**
-   * Runs inside the same transaction after the assignment is written, so anything the
-   * accept must also create (such as the chat thread) commits or rolls back with it.
-   * Not run on a replay, which writes nothing.
-   */
-  readonly afterClaim?: (tx: PoolClient, result: AssignmentResult) => Promise<void>;
-  readonly correlationId?: string;
-}
-
-export interface AssignmentResult {
-  readonly supportCase: SupportCase;
-  readonly assignment: CaseAssignment;
-}
-
 /**
- * `CLAIM_CASE`, the "accept" of V1_PROJECT_PLAN.md §2.1. RESPONDER_WORKFLOWS.md §2, §5;
- * CASES.md §5.
+ * What an accept does to the case. An `OPEN` or `TRIAGED` case becomes `ASSIGNED`
+ * (`CLAIM_CASE`, RESPONDER_WORKFLOWS.md §2; CASES.md §4) and emits `CASE_ASSIGNED`. A case
+ * already past that point (another helper accepted an earlier request) stays as it is:
+ * there is no edge back to `ASSIGNED`, and a second helper must not move the case.
  *
- * The row lock serializes contenders: the first commits an assignment and moves
- * the case to `ASSIGNED`, and the second then finds the active assignment and
- * conflicts. Exactly one wins, and the loser writes nothing.
+ * The caller holds the case row lock (`lockCase`) and has just written the request holder.
  */
-export async function claimCase(pool: Pool, input: ClaimCaseInput): Promise<AssignmentResult> {
-  return withTransaction(pool, async (tx) => {
-    // Lock without the expected-status check: a replay carries the same
-    // expectedStatus as the original claim, which the winning claim has already
-    // moved past.
-    const supportCase = await lockCase(tx, input.tenantId, input.caseId);
-
-    // CASES.md §5 item 5: replay by the same logical command returns the
-    // original winning result. The person who already holds the active
-    // assignment gets it back, with no new write and no second CASE_ASSIGNED
-    // (§5 item 6).
-    const held = await findActiveAssignment(tx, input.caseId);
-    if (held?.acceptedByUserId === input.acceptedByUserId) {
-      return { supportCase, assignment: held };
-    }
-
-    if (input.visibilityGuard !== undefined) {
-      await input.visibilityGuard(tx, supportCase);
-    }
-
-    // First accept wins: anyone else finds the case already held and conflicts.
-    if (held !== undefined) {
-      throw new CaseAlreadyClaimedError();
-    }
-
-    if (input.guard !== undefined) {
-      await input.guard(tx, supportCase);
-    }
-
-    if (input.expectedStatus !== undefined && supportCase.status !== input.expectedStatus) {
-      throw new StaleCaseStateError(input.expectedStatus, supportCase.status);
-    }
-    const transition = resolveCaseTransition('CLAIM_CASE', supportCase.status);
-
-    const assignment = await insertAssignment(tx, {
-      tenantId: input.tenantId,
-      caseId: input.caseId,
-      acceptedByUserId: input.acceptedByUserId,
-      assignedBy: input.acceptedByUserId,
-    });
-
-    const updated = await setCaseStatus(tx, input.tenantId, input.caseId, transition.to);
-
-    await appendDomainEvent(tx, {
-      eventType: 'CASE_ASSIGNED',
-      aggregateType: 'SupportCase',
-      aggregateId: input.caseId,
-      tenantId: input.tenantId,
-      actorType: 'USER',
-      actorId: input.acceptedByUserId,
-      payload: {
-        case_assignment_id: assignment.caseAssignmentId,
-        accepted_by_user_id: input.acceptedByUserId,
-        command: 'CLAIM_CASE',
-      },
-      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
-    });
-
-    const result = { supportCase: updated, assignment };
-    if (input.afterClaim !== undefined) {
-      await input.afterClaim(tx, result);
-    }
-    return result;
-  });
-}
-
-async function insertAssignment(
-  tx: Queryable,
+export async function recordRequestAcceptedOnCase(
+  tx: PoolClient,
   input: {
-    tenantId: string;
-    caseId: string;
-    acceptedByUserId: string;
-    assignedBy: string;
+    readonly tenantId: string;
+    readonly supportCase: SupportCase;
+    readonly serviceRequestId: string;
+    readonly acceptedByUserId: string;
+    readonly correlationId?: string;
   },
-): Promise<CaseAssignment> {
-  const result = await tx.query<AssignmentRow>(
-    `INSERT INTO case_assignments
-       (case_assignment_id, tenant_id, case_id, accepted_by_user_id, assigned_by)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING ${ASSIGNMENT_COLUMNS}`,
-    [randomUUID(), input.tenantId, input.caseId, input.acceptedByUserId, input.assignedBy],
-  );
-  const row = result.rows[0];
-  if (row === undefined) throw new Error('Assignment insert returned no row.');
-  return toAssignment(row);
+): Promise<SupportCase> {
+  if (input.supportCase.status !== 'OPEN' && input.supportCase.status !== 'TRIAGED') {
+    return input.supportCase;
+  }
+  const transition = resolveCaseTransition('CLAIM_CASE', input.supportCase.status);
+  const updated = await setCaseStatus(tx, input.tenantId, input.supportCase.caseId, transition.to);
+  await appendDomainEvent(tx, {
+    eventType: 'CASE_ASSIGNED',
+    aggregateType: 'SupportCase',
+    aggregateId: input.supportCase.caseId,
+    tenantId: input.tenantId,
+    actorType: 'USER',
+    actorId: input.acceptedByUserId,
+    payload: {
+      service_request_id: input.serviceRequestId,
+      accepted_by_user_id: input.acceptedByUserId,
+      command: 'CLAIM_CASE',
+    },
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+  });
+  return updated;
 }
 
 async function setCaseStatus(
@@ -430,9 +330,10 @@ export interface CaseCommandInput {
 /**
  * Execute a documented non-contested case transition.
  *
- * Commands that require an active assignment are refused when none exists,
- * which is what stops the CASES.md §4.1 mistake: an unassigned `OPEN` or
- * `TRIAGED` case has no assigned person, so it cannot be escalated.
+ * Commands that require an assigned person are refused when no request of the case has
+ * been accepted, which is what stops the CASES.md §4.1 mistake: an unassigned `OPEN` or
+ * `TRIAGED` case has no assigned person, so it cannot be escalated. Where the edge is
+ * reserved for the assigned user, the actor must hold a request of the case.
  */
 export async function executeCaseCommand(
   pool: Pool,
@@ -445,34 +346,15 @@ export async function executeCaseCommand(
     });
 
     if (transition.requiresActiveAssignment) {
-      const assignment = await findActiveAssignment(tx, input.caseId);
-      if (assignment === undefined) {
+      if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
         throw new NoActiveAssignmentError(input.command);
       }
       if (
         transition.actors.includes('ASSIGNED_USER') &&
         input.actorType === 'USER' &&
-        assignment.acceptedByUserId !== input.actorId
+        !(await holdsRequestInCase(tx, input.tenantId, input.caseId, input.actorId))
       ) {
         throw new NotAssignedError();
-      }
-    }
-
-    // Closing ends the case cycle, so ownership ends with it. Otherwise a
-    // reopened case would return to OPEN still owned by the previous accepter,
-    // and could never be claimed for the new cycle — CASES.md §4 has no
-    // OPEN-with-active-assignment state. The assignment row is retained as
-    // history (§7: closure retains all history). The released text does not say
-    // this outright; see the Slice 6 conformance record.
-    if (input.command === 'CLOSE') {
-      const active = await findActiveAssignment(tx, input.caseId);
-      if (active !== undefined) {
-        await tx.query(
-          `UPDATE case_assignments
-             SET status = 'RELEASED', released_at = now(), release_reason = 'CASE_CLOSED'
-           WHERE case_assignment_id = $1`,
-          [active.caseAssignmentId],
-        );
       }
     }
 
@@ -501,8 +383,8 @@ export class NoActiveAssignmentError extends Error {
 
   constructor(command: string) {
     super(
-      `"${command}" requires an active case assignment. An unassigned case has no assigned ` +
-        `accepter to perform it (SUAS-specs CASES.md §4.1; RESPONDER_WORKFLOWS.md §8).`,
+      `"${command}" requires an accepted request on the case. A case nobody has accepted has ` +
+        `no accepter to perform it (SUAS-specs CASES.md §4.1; RESPONDER_WORKFLOWS.md §8).`,
     );
     this.name = 'NoActiveAssignmentError';
   }
@@ -513,17 +395,17 @@ export class NotAssignedError extends Error {
   readonly httpStatus = 403;
 
   constructor() {
-    super('This action is reserved for the person who accepted the case.');
+    super('This action is reserved for a person who accepted a request on this case.');
     this.name = 'NotAssignedError';
   }
 }
 
 /**
- * Whether a person currently holds an active assignment for a veteran's case.
+ * Whether a person currently holds a request of a veteran's open case.
  *
  * This is the verifier CONSENT.md §3.6 needs: the accepter's
  * least-privilege access is a documented basis, and Slice 4 denies it until
- * something can confirm the assignment. This is that something.
+ * something can confirm the acceptance. This is that something.
  */
 export function createAssignmentVerifier(pool: Pool) {
   return async (params: {
@@ -533,13 +415,13 @@ export function createAssignmentVerifier(pool: Pool) {
   }): Promise<boolean> => {
     const result = await pool.query(
       `SELECT 1
-       FROM case_assignments a
-       JOIN support_cases c ON c.case_id = a.case_id
-       WHERE a.tenant_id = $1
-         AND a.accepted_by_user_id = $2
-         AND a.status = 'ACTIVE'
+       FROM service_requests r
+       JOIN support_cases c ON c.case_id = r.case_id AND c.tenant_id = r.tenant_id
+       WHERE r.tenant_id = $1
+         AND r.accepted_by_user_id = $2
          AND c.veteran_user_id = $3
-         AND c.status <> 'CLOSED'`,
+         AND c.status <> 'CLOSED'
+       LIMIT 1`,
       [params.tenantId, params.acceptedByUserId, params.veteranUserId],
     );
     return (result.rowCount ?? 0) > 0;
