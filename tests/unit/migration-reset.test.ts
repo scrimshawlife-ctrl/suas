@@ -72,6 +72,30 @@ describe('migration reset refusal', () => {
   it('refuses PRODUCTION even when the name and marker match', () => {
     expect(migrationResetRefusal(policy({ environment: 'PRODUCTION' }))).toMatch(/PRODUCTION/);
   });
+
+  it('refuses STAGING even when the name and marker match', () => {
+    expect(migrationResetRefusal(policy({ environment: 'STAGING' }))).toMatch(/STAGING/);
+  });
+
+  it('refuses a production-like URL', () => {
+    expect(
+      migrationResetRefusal(
+        policy({
+          databaseUrl: 'postgresql://suas:suas@prod-db.example.invalid:5432/suas_migrations_test',
+          allowlist: ['suas_migrations_test'],
+        }),
+      ),
+    ).toMatch(/production marker/);
+  });
+
+  it('refuses a malformed URL or allowlist entry', () => {
+    expect(
+      migrationResetRefusal(policy({ databaseUrl: 'http://example.invalid/suas_migrations_test' })),
+    ).toMatch(/malformed/);
+    expect(
+      migrationResetRefusal(policy({ allowlist: ['suas_migrations_test', 'not a name'] })),
+    ).toMatch(/allowlist entry is malformed/);
+  });
 });
 
 describe('checksum refusal', () => {

@@ -82,6 +82,7 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     object_storage_mode: config.objectStorage.mode,
     id_verification_mode: config.idVerification.mode,
     public_sign_up: config.publicSignUp,
+    staging_auth_email_count: config.stagingAuthEmails.length,
     staging_fixture_principal_count: config.stagingFixturePrincipals.length,
     transportation_adapter_mode: config.adapters.transportation,
     shelter_adapter_mode: config.adapters.shelter,

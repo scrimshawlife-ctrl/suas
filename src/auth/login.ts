@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../db/index.js';
 import { appendAuditEvent } from '../events/index.js';
+import { findUserByDestination } from '../identity/users.js';
 import {
   ChallengeVerificationFailedError,
   revokeLiveChallenges,
@@ -29,19 +30,26 @@ export async function verifyAndCreateSession(
   },
   input: VerifyAndCreateSessionInput,
 ): Promise<IssuedSession> {
+  if (deps.stagingAccess !== undefined) {
+    const enrolled = await findUserByDestination(deps.pool, input.tenantId, input.destination);
+    if (
+      stagingFixturePrincipalRefused(
+        deps.stagingAccess,
+        enrolled === undefined
+          ? undefined
+          : { tenantId: enrolled.tenantId, userId: enrolled.userId },
+      )
+    ) {
+      throw new ChallengeVerificationFailedError();
+    }
+  }
+
   const user = await verifyChallenge(deps, {
     tenantId: input.tenantId,
     destination: input.destination,
     secret: input.code,
     ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
   });
-
-  if (
-    deps.stagingAccess !== undefined &&
-    stagingFixturePrincipalRefused(deps.stagingAccess, user.email)
-  ) {
-    throw new ChallengeVerificationFailedError();
-  }
 
   return withTransaction(deps.pool, async (tx) => {
     await revokeLiveChallenges(tx, user.tenantId, input.destination);

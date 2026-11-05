@@ -141,9 +141,11 @@ export async function issueChallenge(
 
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
   const fixtureRefused =
-    user !== undefined &&
     deps.stagingAccess !== undefined &&
-    stagingFixturePrincipalRefused(deps.stagingAccess, user.email);
+    stagingFixturePrincipalRefused(
+      deps.stagingAccess,
+      user === undefined ? undefined : { tenantId: user.tenantId, userId: user.userId },
+    );
 
   if (
     fixtureRefused ||
