@@ -29,12 +29,13 @@ export function createConnectionPushPort(
   config: SuasConfig,
   lifecycle: ConnectionLifecycle,
 ): ConnectionPushPort | undefined {
-  const { mode, apiGatewayEndpoint } = config.chatPush;
+  const { mode, apiGatewayEndpoint, publicUrl } = config.chatPush;
   if (mode === 'local') return new LocalWebSocketPush(lifecycle);
   if (mode === 'apigw' && apiGatewayEndpoint !== undefined && config.aws.region !== undefined) {
     return new ApiGatewayConnectionPush({
       endpoint: apiGatewayEndpoint,
       region: config.aws.region,
+      ...(publicUrl !== undefined ? { publicUrl } : {}),
     });
   }
   return undefined;
