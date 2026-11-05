@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
     "title": "SUAS API",
     "version": "0.2.0",
@@ -109,11 +109,34 @@
         "summary": "Start an authentication challenge",
         "operationId": "createAuthChallenge",
         "responses": {
-          "200": {
-            "description": "Challenge created"
+          "202": {
+            "description": "Accepted. The same answer for any address, so it cannot be used to find out who is enrolled. A code goes to the address for an enrolled person and, for EMAIL_OTP, to a new address (self sign-up).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthChallengeAccepted"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthChallengeRequest"
+              }
+            }
           }
         }
       }
@@ -124,11 +147,34 @@
         "summary": "Verify an authentication challenge",
         "operationId": "verifyAuthChallenge",
         "responses": {
-          "200": {
-            "description": "Session issued"
+          "201": {
+            "description": "Session created. A code for a new address creates the user (ACTIVE, no county, no display name) first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthVerifyRequest"
+              }
+            }
           }
         }
       }
@@ -145,7 +191,14 @@
         ],
         "responses": {
           "200": {
-            "description": "MFA challenge created"
+            "description": "MFA challenge started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaChallenge"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -165,10 +218,30 @@
         ],
         "responses": {
           "200": {
-            "description": "Session MFA-elevated"
+            "description": "Session elevated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaVerified"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaVerifyRequest"
+              }
+            }
           }
         }
       }
@@ -184,11 +257,21 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Session revoked"
+          "204": {
+            "description": "Session revoked (or every session, with everywhere: true)"
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
           }
         }
       }
@@ -205,7 +288,14 @@
         ],
         "responses": {
           "201": {
-            "description": "Check-In started with questions"
+            "description": "Check-in started with its questions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckInWithQuestions"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -241,7 +331,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Check-In projection"
+            "description": "Check-in with its questions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckInWithQuestions"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -280,7 +377,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Response saved"
+            "description": "Answer saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckIn"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -299,7 +406,17 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "x-requires": ["verified_veteran"]
+        "x-requires": ["verified_veteran"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckInResponseRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v0/check-ins/{id}/commands/complete": {
@@ -319,7 +436,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Check-In completed; RED may open a case"
+            "description": "Check-in completed (or incomplete)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckInCompleted"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -358,10 +482,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Existing or replayed non-closed Support Case"
+            "description": "Existing or replayed non-closed Support Case",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenCaseResult"
+                }
+              }
+            }
           },
           "201": {
-            "description": "Support Case created"
+            "description": "Support Case created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenCaseResult"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/Error"
@@ -413,7 +551,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Case projection"
+            "description": "Case projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportCase"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -475,26 +620,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Bounded active catalog page with next_cursor",
+            "description": "Active Resources",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": ["resources", "limit", "next_cursor"],
-                  "properties": {
-                    "resources": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/CatalogResource"
-                      }
-                    },
-                    "limit": {
-                      "type": "integer"
-                    },
-                    "next_cursor": {
-                      "type": ["string", "null"]
-                    }
-                  }
+                  "$ref": "#/components/schemas/CatalogResourceList"
                 }
               }
             }
@@ -536,7 +666,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Resource projection",
+            "description": "One active Resource",
             "content": {
               "application/json": {
                 "schema": {
@@ -577,38 +707,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": ["state", "basis", "resources", "placeholder"],
-                  "properties": {
-                    "state": {
-                      "type": "string",
-                      "enum": ["APPROVED", "PLACEHOLDER"]
-                    },
-                    "basis": {
-                      "type": "string"
-                    },
-                    "placeholder": {
-                      "type": ["string", "null"]
-                    },
-                    "resources": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": ["label", "destination", "approved_under"],
-                        "properties": {
-                          "label": {
-                            "type": "string"
-                          },
-                          "destination": {
-                            "type": "string"
-                          },
-                          "approved_under": {
-                            "type": "string"
-                          }
-                        }
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/ImmediateResources"
                 }
               }
             }
@@ -628,7 +727,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Build info without secrets"
+            "description": "Build info without secrets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildInfo"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -651,7 +757,23 @@
         ],
         "responses": {
           "200": {
-            "description": "Catalog"
+            "description": "Catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["adapters"],
+                  "properties": {
+                    "adapters": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdapterCatalogEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -674,7 +796,23 @@
         ],
         "responses": {
           "200": {
-            "description": "Configurations"
+            "description": "Configurations for the tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["configurations"],
+                  "properties": {
+                    "configurations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdapterConfiguration"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -682,7 +820,18 @@
           "403": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
       }
     },
     "/api/v0/admin/adapter-configurations/commands/enable": {
@@ -697,13 +846,30 @@
         ],
         "responses": {
           "200": {
-            "description": "Enabled"
+            "description": "Configuration after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdapterConfiguration"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
           },
           "403": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdapterEnableRequest"
+              }
+            }
           }
         }
       }
@@ -720,13 +886,30 @@
         ],
         "responses": {
           "200": {
-            "description": "Disabled"
+            "description": "Configuration after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdapterConfiguration"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
           },
           "403": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdapterDisableRequest"
+              }
+            }
           }
         }
       }
@@ -743,13 +926,30 @@
         ],
         "responses": {
           "200": {
-            "description": "Routing updated"
+            "description": "Configuration after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdapterConfiguration"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
           },
           "403": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdapterRoutingRequest"
+              }
+            }
           }
         }
       }
@@ -766,155 +966,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Self profile without contact literals; open case and QRF when present",
+            "description": "The signed-in person",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "user_id",
-                    "status",
-                    "enrolled_channels",
-                    "county",
-                    "id_verification",
-                    "open_case",
-                    "active_qrf",
-                    "categories"
-                  ],
-                  "properties": {
-                    "user_id": {
-                      "type": "string",
-                      "format": "uuid"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": ["INVITED", "ACTIVE", "SUSPENDED", "REVOKED"]
-                    },
-                    "enrolled_channels": {
-                      "type": "object",
-                      "required": ["email", "phone"],
-                      "properties": {
-                        "email": {
-                          "type": "boolean"
-                        },
-                        "phone": {
-                          "type": "boolean"
-                        }
-                      }
-                    },
-                    "open_case": {
-                      "oneOf": [
-                        {
-                          "type": "null"
-                        },
-                        {
-                          "type": "object",
-                          "required": ["case_id", "status", "priority_signal_level"],
-                          "properties": {
-                            "case_id": {
-                              "type": "string",
-                              "format": "uuid"
-                            },
-                            "status": {
-                              "type": "string"
-                            },
-                            "priority_signal_level": {
-                              "type": ["string", "null"],
-                              "enum": ["GREEN", "YELLOW", "ORANGE", "RED", null]
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "active_qrf": {
-                      "oneOf": [
-                        {
-                          "type": "null"
-                        },
-                        {
-                          "type": "object",
-                          "required": ["service_request_id", "state", "headline", "cancellable"],
-                          "properties": {
-                            "service_request_id": {
-                              "type": "string",
-                              "format": "uuid"
-                            },
-                            "state": {
-                              "type": "string"
-                            },
-                            "headline": {
-                              "type": "string"
-                            },
-                            "cancellable": {
-                              "type": "boolean"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "categories": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": ["label", "disposition", "category", "note"],
-                        "properties": {
-                          "label": {
-                            "type": "string"
-                          },
-                          "disposition": {
-                            "type": "string",
-                            "enum": ["OPERATIONAL", "INFORMATION_ONLY", "COMING_SOON"]
-                          },
-                          "category": {
-                            "type": ["string", "null"],
-                            "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
-                          },
-                          "note": {
-                            "type": ["string", "null"]
-                          }
-                        }
-                      }
-                    },
-                    "county": {
-                      "type": ["string", "null"],
-                      "enum": [
-                        "SANTA_CLARA",
-                        "SAN_MATEO",
-                        "ALAMEDA",
-                        "SANTA_CRUZ",
-                        "SAN_BENITO",
-                        "MERCED",
-                        "STANISLAUS",
-                        null
-                      ],
-                      "description": "The county the person chose; null until they pick one"
-                    },
-                    "id_verification": {
-                      "type": "object",
-                      "required": ["method", "status", "verified_at"],
-                      "properties": {
-                        "method": {
-                          "type": "string",
-                          "enum": ["ID_SCAN_SELFIE"]
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "NOT_STARTED",
-                            "PENDING",
-                            "VERIFIED",
-                            "NOT_CONFIRMED",
-                            "UNAVAILABLE",
-                            "REVOKED"
-                          ]
-                        },
-                        "verified_at": {
-                          "type": ["string", "null"],
-                          "format": "date-time"
-                        }
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/VeteranMe"
                 }
               }
             }
@@ -950,60 +1006,7 @@
                     "consents": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "required": [
-                          "consent_grant_id",
-                          "permission",
-                          "scope",
-                          "purpose",
-                          "grantee_type",
-                          "grantee_id",
-                          "consent_template_version",
-                          "status",
-                          "granted_at",
-                          "expires_at",
-                          "revoked_at"
-                        ],
-                        "properties": {
-                          "consent_grant_id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "permission": {
-                            "type": "string"
-                          },
-                          "scope": {
-                            "type": "string"
-                          },
-                          "purpose": {
-                            "type": "string"
-                          },
-                          "grantee_type": {
-                            "type": "string"
-                          },
-                          "grantee_id": {
-                            "type": "string"
-                          },
-                          "consent_template_version": {
-                            "type": "string"
-                          },
-                          "status": {
-                            "type": "string",
-                            "enum": ["ACTIVE", "REVOKED", "EXPIRED"]
-                          },
-                          "granted_at": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "expires_at": {
-                            "type": ["string", "null"],
-                            "format": "date-time"
-                          },
-                          "revoked_at": {
-                            "type": ["string", "null"],
-                            "format": "date-time"
-                          }
-                        }
+                        "$ref": "#/components/schemas/ConsentGrant"
                       }
                     }
                   }
@@ -1038,21 +1041,29 @@
         ],
         "parameters": [
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Identical idempotent replay"
+            "description": "Identical idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentGrantResult"
+                }
+              }
+            }
           },
           "201": {
-            "description": "Grant created"
+            "description": "Grant created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentGrantResult"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/Error"
@@ -1074,7 +1085,17 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "x-requires": ["verified_veteran"]
+        "x-requires": ["verified_veteran"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantConsentRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v0/cases/{caseId}/service-requests": {
@@ -1100,7 +1121,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Bounded service-request list"
+            "description": "Service Requests of the case",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseServiceRequestList"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1130,21 +1158,29 @@
             }
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Idempotent replay"
+            "description": "Idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestFormResult"
+                }
+              }
+            }
           },
           "201": {
-            "description": "Created"
+            "description": "Service Request created (status CREATED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestFormResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1176,13 +1212,23 @@
             }
           }
         },
-        "x-requires": ["verified_veteran", "county"]
+        "x-requires": ["verified_veteran", "county"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCaseServiceRequestRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v0/service-requests/{id}": {
       "get": {
         "tags": ["cases"],
-        "summary": "Read one service request visible to the actor",
+        "summary": "Read a request (its requester or the person who accepted it only)",
         "operationId": "getServiceRequest",
         "security": [
           {
@@ -1196,7 +1242,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Service request projection"
+            "description": "The request, for its requester or its accepter only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestDetail"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1219,7 +1272,23 @@
         ],
         "responses": {
           "200": {
-            "description": "Trusted contacts without invite channel literals"
+            "description": "Trusted circle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["trusted_contacts"],
+                  "properties": {
+                    "trusted_contacts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TrustedContact"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1248,7 +1317,14 @@
         ],
         "responses": {
           "201": {
-            "description": "Invite recorded"
+            "description": "Invitation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrustedContact"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/Error"
@@ -1267,7 +1343,17 @@
             }
           }
         },
-        "x-requires": ["verified_veteran"]
+        "x-requires": ["verified_veteran"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteTrustedContactRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v0/trusted-contacts/{id}/commands/remove": {
@@ -1287,7 +1373,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Contact removed"
+            "description": "Contact removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrustedContact"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1324,18 +1417,19 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Grant revoked or idempotent replay"
+            "description": "Grant after revoke",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentGrantResult"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/Error"
@@ -1393,18 +1487,22 @@
             }
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Transition applied or replayed"
+            "description": "Request after the command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestCommandResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1424,9 +1522,23 @@
           },
           "409": {
             "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
           }
         },
-        "x-requires": ["verified_veteran"]
+        "x-requires": ["verified_veteran"],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceRequestCommandRequest"
+              }
+            }
+          }
+        },
+        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE)."
       }
     },
     "/api/v0/cases/{caseId}/follow-ups": {
@@ -1452,7 +1564,23 @@
         ],
         "responses": {
           "200": {
-            "description": "Open follow-ups"
+            "description": "Open Follow-Ups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["follow_ups"],
+                  "properties": {
+                    "follow_ups": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/FollowUp"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1475,21 +1603,29 @@
         ],
         "parameters": [
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Idempotent replay"
+            "description": "Idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpResult"
+                }
+              }
+            }
           },
           "201": {
-            "description": "Created"
+            "description": "Follow-Up created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1499,6 +1635,16 @@
           },
           "409": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFollowUpRequest"
+              }
+            }
           }
         }
       }
@@ -1518,18 +1664,19 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Completed or replayed"
+            "description": "Follow-Up completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpCompleted"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1555,7 +1702,26 @@
         ],
         "responses": {
           "200": {
-            "description": "Bounded inbox without destinations"
+            "description": "Bounded inbox without destinations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["notifications", "limit"],
+                  "properties": {
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Notification"
+                      }
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1575,10 +1741,27 @@
         ],
         "responses": {
           "200": {
-            "description": "Preference stored"
+            "description": "Preference stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferenceRequest"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferenceRequest"
+              }
+            }
           }
         }
       }
@@ -1598,18 +1781,19 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Invite accepted"
+            "description": "Invitation accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrustedContactResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1646,7 +1830,23 @@
         ],
         "responses": {
           "200": {
-            "description": "Contact attempts"
+            "description": "Contact attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["contact_attempts"],
+                  "properties": {
+                    "contact_attempts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ContactAttempt"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1681,21 +1881,29 @@
             }
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Idempotent replay"
+            "description": "Replay or duplicate of an earlier attempt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactAttemptResult"
+                }
+              }
+            }
           },
           "201": {
-            "description": "Attempt recorded"
+            "description": "Contact attempt logged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactAttemptResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1708,6 +1916,16 @@
           },
           "422": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogContactAttemptRequest"
+              }
+            }
           }
         }
       }
@@ -1733,21 +1951,29 @@
             }
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Idempotent replay"
+            "description": "Replay or duplicate of an earlier contact",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactAttemptResult"
+                }
+              }
+            }
           },
           "201": {
-            "description": "Contact completed"
+            "description": "Contact recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactAttemptResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1760,6 +1986,16 @@
           },
           "422": {
             "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteContactRequest"
+              }
+            }
           }
         }
       }
@@ -1779,13 +2015,7 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -1793,56 +2023,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": [
-                  "requested",
-                  "occurred",
-                  "fulfilled",
-                  "unresolved",
-                  "authored_by",
-                  "accepted_by_user_id"
-                ],
-                "properties": {
-                  "requested": {
-                    "type": "object",
-                    "additionalProperties": true
-                  },
-                  "occurred": {
-                    "type": "object",
-                    "additionalProperties": true
-                  },
-                  "fulfilled": {
-                    "type": "object",
-                    "additionalProperties": true
-                  },
-                  "unresolved": {
-                    "type": "object",
-                    "additionalProperties": true
-                  },
-                  "authored_by": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "accepted_by_user_id": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "veteran_confirmed_by": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "expected_status": {
-                    "type": "string",
-                    "enum": ["ACTIVE", "FOLLOWUP"]
-                  }
-                }
+                "$ref": "#/components/schemas/ResolveCaseRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Case resolved; Settlement created for this resolution cycle"
+            "description": "Case resolved; Settlement created for this resolution cycle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveCaseResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1879,7 +2074,30 @@
         ],
         "responses": {
           "200": {
-            "description": "Settlement history oldest cycle first"
+            "description": "Settlements. The requester gets VeteranSettlement items (no internal actors); the accepter gets full Settlements.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["settlements"],
+                  "properties": {
+                    "settlements": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "$ref": "#/components/schemas/Settlement"
+                          },
+                          {
+                            "$ref": "#/components/schemas/VeteranSettlement"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1919,7 +2137,21 @@
         ],
         "responses": {
           "200": {
-            "description": "Settlement"
+            "description": "One Settlement (full for the accepter, reduced for the requester)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Settlement"
+                    },
+                    {
+                      "$ref": "#/components/schemas/VeteranSettlement"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1948,13 +2180,7 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -1962,33 +2188,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  },
-                  "expected_status": {
-                    "type": "string",
-                    "enum": [
-                      "OPEN",
-                      "TRIAGED",
-                      "ASSIGNED",
-                      "ACTIVE",
-                      "FOLLOWUP",
-                      "RESOLVED",
-                      "CLOSED"
-                    ]
-                  }
-                }
+                "$ref": "#/components/schemas/CaseCommandRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Case transition applied"
+            "description": "Case after the command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseCommandResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -2023,13 +2237,7 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -2037,33 +2245,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  },
-                  "expected_status": {
-                    "type": "string",
-                    "enum": [
-                      "OPEN",
-                      "TRIAGED",
-                      "ASSIGNED",
-                      "ACTIVE",
-                      "FOLLOWUP",
-                      "RESOLVED",
-                      "CLOSED"
-                    ]
-                  }
-                }
+                "$ref": "#/components/schemas/CaseCommandRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Case transition applied"
+            "description": "Case after the command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseCommandResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -2098,13 +2294,7 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -2112,34 +2302,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  },
-                  "expected_status": {
-                    "type": "string",
-                    "enum": [
-                      "OPEN",
-                      "TRIAGED",
-                      "ASSIGNED",
-                      "ACTIVE",
-                      "FOLLOWUP",
-                      "RESOLVED",
-                      "CLOSED"
-                    ]
-                  }
-                },
-                "required": ["reason"]
+                "$ref": "#/components/schemas/CaseCommandReasonRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Case transition applied"
+            "description": "Case after the command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseCommandResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -2174,13 +2351,7 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -2188,33 +2359,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  },
-                  "expected_status": {
-                    "type": "string",
-                    "enum": [
-                      "OPEN",
-                      "TRIAGED",
-                      "ASSIGNED",
-                      "ACTIVE",
-                      "FOLLOWUP",
-                      "RESOLVED",
-                      "CLOSED"
-                    ]
-                  }
-                }
+                "$ref": "#/components/schemas/CaseCommandRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Case transition applied"
+            "description": "Case after the command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseCommandResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -2249,13 +2408,7 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -2263,34 +2416,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  },
-                  "expected_status": {
-                    "type": "string",
-                    "enum": [
-                      "OPEN",
-                      "TRIAGED",
-                      "ASSIGNED",
-                      "ACTIVE",
-                      "FOLLOWUP",
-                      "RESOLVED",
-                      "CLOSED"
-                    ]
-                  }
-                },
-                "required": ["reason"]
+                "$ref": "#/components/schemas/CaseCommandReasonRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Case transition applied"
+            "description": "Case after the command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseCommandResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -2325,13 +2465,7 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -2339,33 +2473,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  },
-                  "expected_status": {
-                    "type": "string",
-                    "enum": [
-                      "OPEN",
-                      "TRIAGED",
-                      "ASSIGNED",
-                      "ACTIVE",
-                      "FOLLOWUP",
-                      "RESOLVED",
-                      "CLOSED"
-                    ]
-                  }
-                }
+                "$ref": "#/components/schemas/CaseCommandRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Case transition applied"
+            "description": "Case after the command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseCommandResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -2400,13 +2522,7 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -2414,34 +2530,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  },
-                  "expected_status": {
-                    "type": "string",
-                    "enum": [
-                      "OPEN",
-                      "TRIAGED",
-                      "ASSIGNED",
-                      "ACTIVE",
-                      "FOLLOWUP",
-                      "RESOLVED",
-                      "CLOSED"
-                    ]
-                  }
-                },
-                "required": ["reason"]
+                "$ref": "#/components/schemas/CaseCommandReasonRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Case transition applied"
+            "description": "Case after the command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseCommandResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -2464,7 +2567,7 @@
     "/api/v0/service-requests": {
       "get": {
         "tags": ["cases"],
-        "summary": "List service requests: open ones the caller can accept (their county, plus bordering counties once widened) or ones the caller accepted",
+        "summary": "List service requests: open ones the caller can accept (ownership=open), ones the caller accepted (ownership=mine), or the caller own requests (ownership=requested)",
         "operationId": "listServiceRequests",
         "security": [
           {
@@ -2477,7 +2580,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["open", "mine"],
+              "enum": ["open", "mine", "requested"],
               "default": "open"
             }
           },
@@ -2504,7 +2607,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Bounded list of service_request_id, case_id, category, status, county, widened, created_at with next_cursor. Details are not shown before accepting."
+            "description": "Bounded page. ownership=open: requests the caller could accept (category, county, status, summary). ownership=mine: requests the caller accepted, with the requester name. ownership=requested: the caller own requests in any status, newest first (no county needed).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestList"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/Error"
@@ -2536,13 +2646,7 @@
         ],
         "parameters": [
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -2550,58 +2654,28 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": ["category", "summary"],
-                "additionalProperties": false,
-                "properties": {
-                  "category": {
-                    "type": "string",
-                    "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT"]
-                  },
-                  "summary": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 280
-                  },
-                  "timing": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
-                  }
-                }
+                "$ref": "#/components/schemas/ServiceRequestFormRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Idempotent replay"
-          },
-          "201": {
-            "description": "Service Request created",
+            "description": "Idempotent replay",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "service_request_id": {
-                      "type": "string",
-                      "format": "uuid"
-                    },
-                    "case_id": {
-                      "type": "string",
-                      "format": "uuid"
-                    },
-                    "category": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "replayed": {
-                      "type": "boolean"
-                    }
-                  }
+                  "$ref": "#/components/schemas/ServiceRequestFormResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Service Request created and submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestFormResult"
                 }
               }
             }
@@ -2641,7 +2715,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Accepted, or a repeat by the person who already holds it. Returns service_request_id, case_id, case_status, assignment_id."
+            "description": "Accepted (or the same answer again for the person who already holds it)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptServiceRequestResult"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -2697,23 +2778,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": ["county"],
-                "additionalProperties": false,
-                "properties": {
-                  "county": {
-                    "type": "string",
-                    "enum": [
-                      "SANTA_CLARA",
-                      "SAN_MATEO",
-                      "ALAMEDA",
-                      "SANTA_CRUZ",
-                      "SAN_BENITO",
-                      "MERCED",
-                      "STANISLAUS"
-                    ]
-                  }
-                }
+                "$ref": "#/components/schemas/SetCountyRequest"
               }
             }
           }
@@ -2724,23 +2789,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": ["county"],
-                  "properties": {
-                    "county": {
-                      "type": ["string", "null"],
-                      "enum": [
-                        "SANTA_CLARA",
-                        "SAN_MATEO",
-                        "ALAMEDA",
-                        "SANTA_CRUZ",
-                        "SAN_BENITO",
-                        "MERCED",
-                        "STANISLAUS",
-                        null
-                      ]
-                    }
-                  }
+                  "$ref": "#/components/schemas/SetCountyResponse"
                 }
               }
             }
@@ -2769,33 +2818,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Current standing; NOT_STARTED when no check was ever started",
+            "description": "ID scan and selfie status",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": ["method", "status", "verified_at"],
-                  "properties": {
-                    "method": {
-                      "type": "string",
-                      "enum": ["ID_SCAN_SELFIE"]
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "NOT_STARTED",
-                        "PENDING",
-                        "VERIFIED",
-                        "NOT_CONFIRMED",
-                        "UNAVAILABLE",
-                        "REVOKED"
-                      ]
-                    },
-                    "verified_at": {
-                      "type": ["string", "null"],
-                      "format": "date-time"
-                    }
-                  }
+                  "$ref": "#/components/schemas/IdVerification"
                 }
               }
             }
@@ -2818,65 +2845,21 @@
         ],
         "responses": {
           "200": {
-            "description": "An existing check or standing was returned",
+            "description": "A check is already pending",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": ["method", "status", "verified_at"],
-                  "properties": {
-                    "method": {
-                      "type": "string",
-                      "enum": ["ID_SCAN_SELFIE"]
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "NOT_STARTED",
-                        "PENDING",
-                        "VERIFIED",
-                        "NOT_CONFIRMED",
-                        "UNAVAILABLE",
-                        "REVOKED"
-                      ]
-                    },
-                    "verified_at": {
-                      "type": ["string", "null"],
-                      "format": "date-time"
-                    }
-                  }
+                  "$ref": "#/components/schemas/IdVerification"
                 }
               }
             }
           },
           "201": {
-            "description": "A new check was opened",
+            "description": "Check started",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": ["method", "status", "verified_at"],
-                  "properties": {
-                    "method": {
-                      "type": "string",
-                      "enum": ["ID_SCAN_SELFIE"]
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "NOT_STARTED",
-                        "PENDING",
-                        "VERIFIED",
-                        "NOT_CONFIRMED",
-                        "UNAVAILABLE",
-                        "REVOKED"
-                      ]
-                    },
-                    "verified_at": {
-                      "type": ["string", "null"],
-                      "format": "date-time"
-                    }
-                  }
+                  "$ref": "#/components/schemas/IdVerification"
                 }
               }
             }
@@ -2914,25 +2897,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "assistant_available": {
-                      "type": "boolean"
-                    },
-                    "request_form": {
-                      "type": "object",
-                      "nullable": true,
-                      "properties": {
-                        "method": {
-                          "type": "string",
-                          "enum": ["POST"]
-                        },
-                        "path": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/IntakeStatus"
                 }
               }
             }
@@ -2962,16 +2927,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": ["text"],
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  }
-                }
+                "$ref": "#/components/schemas/IntakeMessageRequest"
               }
             }
           }
@@ -2982,132 +2938,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "outcome": {
-                      "type": "string",
-                      "enum": ["DRAFT_READY", "NO_DRAFT", "FALLBACK_FORM"],
-                      "description": "FALLBACK_FORM: the assistant did not answer and nothing was stored; show the plain request form (`request_form`)."
-                    },
-                    "assistant_message": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "not_available_yet": {
-                      "type": "boolean"
-                    },
-                    "notice": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "draft": {
-                      "type": "object",
-                      "properties": {
-                        "draft_id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
-                        },
-                        "category": {
-                          "type": "string",
-                          "nullable": true,
-                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
-                        },
-                        "summary": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 280
-                        },
-                        "timing": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 120
-                        },
-                        "service_request_id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "nullable": true
-                        },
-                        "created_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "updated_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "submitted_at": {
-                          "type": "string",
-                          "format": "date-time",
-                          "nullable": true
-                        }
-                      },
-                      "nullable": true
-                    },
-                    "resources": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "description": "Veteran-facing projection of a published Resource (same fields as GET /resources).",
-                        "properties": {
-                          "resource_id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "service_name": {
-                            "type": "string"
-                          },
-                          "category": {
-                            "type": "string"
-                          },
-                          "counties": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "hours": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "cost": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "contact_method": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "contact_method_kind": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "freshness": {
-                            "type": "string"
-                          },
-                          "stale_warning": {
-                            "type": "boolean"
-                          }
-                        }
-                      }
-                    },
-                    "request_form": {
-                      "type": "object",
-                      "nullable": true,
-                      "properties": {
-                        "method": {
-                          "type": "string",
-                          "enum": ["POST"]
-                        },
-                        "path": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/IntakeTurn"
                 }
               }
             }
@@ -3117,132 +2948,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "outcome": {
-                      "type": "string",
-                      "enum": ["DRAFT_READY", "NO_DRAFT", "FALLBACK_FORM"],
-                      "description": "FALLBACK_FORM: the assistant did not answer and nothing was stored; show the plain request form (`request_form`)."
-                    },
-                    "assistant_message": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "not_available_yet": {
-                      "type": "boolean"
-                    },
-                    "notice": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "draft": {
-                      "type": "object",
-                      "properties": {
-                        "draft_id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
-                        },
-                        "category": {
-                          "type": "string",
-                          "nullable": true,
-                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
-                        },
-                        "summary": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 280
-                        },
-                        "timing": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 120
-                        },
-                        "service_request_id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "nullable": true
-                        },
-                        "created_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "updated_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "submitted_at": {
-                          "type": "string",
-                          "format": "date-time",
-                          "nullable": true
-                        }
-                      },
-                      "nullable": true
-                    },
-                    "resources": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "description": "Veteran-facing projection of a published Resource (same fields as GET /resources).",
-                        "properties": {
-                          "resource_id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "service_name": {
-                            "type": "string"
-                          },
-                          "category": {
-                            "type": "string"
-                          },
-                          "counties": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "hours": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "cost": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "contact_method": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "contact_method_kind": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "freshness": {
-                            "type": "string"
-                          },
-                          "stale_warning": {
-                            "type": "boolean"
-                          }
-                        }
-                      }
-                    },
-                    "request_form": {
-                      "type": "object",
-                      "nullable": true,
-                      "properties": {
-                        "method": {
-                          "type": "string",
-                          "enum": ["POST"]
-                        },
-                        "path": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/IntakeTurn"
                 }
               }
             }
@@ -3281,60 +2987,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "allOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "draft_id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
-                        },
-                        "category": {
-                          "type": "string",
-                          "nullable": true,
-                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
-                        },
-                        "summary": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 280
-                        },
-                        "timing": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 120
-                        },
-                        "service_request_id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "nullable": true
-                        },
-                        "created_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "updated_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "submitted_at": {
-                          "type": "string",
-                          "format": "date-time",
-                          "nullable": true
-                        }
-                      }
-                    }
-                  ],
-                  "properties": {
-                    "intake_text": {
-                      "type": "string"
-                    }
-                  }
+                  "$ref": "#/components/schemas/IntakeDraftWithText"
                 }
               }
             }
@@ -3370,80 +3023,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "minProperties": 1,
-                "additionalProperties": false,
-                "properties": {
-                  "category": {
-                    "type": "string",
-                    "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT"]
-                  },
-                  "summary": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 280
-                  },
-                  "timing": {
-                    "type": "string",
-                    "nullable": true,
-                    "minLength": 1,
-                    "maxLength": 120
-                  }
-                }
+                "$ref": "#/components/schemas/IntakeDraftEditRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Updated draft",
+            "description": "Draft after the edit",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "draft_id": {
-                      "type": "string",
-                      "format": "uuid"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
-                    },
-                    "category": {
-                      "type": "string",
-                      "nullable": true,
-                      "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
-                    },
-                    "summary": {
-                      "type": "string",
-                      "nullable": true,
-                      "maxLength": 280
-                    },
-                    "timing": {
-                      "type": "string",
-                      "nullable": true,
-                      "maxLength": 120
-                    },
-                    "service_request_id": {
-                      "type": "string",
-                      "format": "uuid",
-                      "nullable": true
-                    },
-                    "created_at": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "updated_at": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "submitted_at": {
-                      "type": "string",
-                      "format": "date-time",
-                      "nullable": true
-                    }
-                  }
+                  "$ref": "#/components/schemas/IntakeDraft"
                 }
               }
             }
@@ -3487,152 +3078,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": ["text"],
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  }
-                }
+                "$ref": "#/components/schemas/IntakeMessageRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Assistant result",
+            "description": "Follow-up turn",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "outcome": {
-                      "type": "string",
-                      "enum": ["DRAFT_READY", "NO_DRAFT", "FALLBACK_FORM"],
-                      "description": "FALLBACK_FORM: the assistant did not answer and nothing was stored; show the plain request form (`request_form`)."
-                    },
-                    "assistant_message": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "not_available_yet": {
-                      "type": "boolean"
-                    },
-                    "notice": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "draft": {
-                      "type": "object",
-                      "properties": {
-                        "draft_id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
-                        },
-                        "category": {
-                          "type": "string",
-                          "nullable": true,
-                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
-                        },
-                        "summary": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 280
-                        },
-                        "timing": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 120
-                        },
-                        "service_request_id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "nullable": true
-                        },
-                        "created_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "updated_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "submitted_at": {
-                          "type": "string",
-                          "format": "date-time",
-                          "nullable": true
-                        }
-                      },
-                      "nullable": true
-                    },
-                    "resources": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "description": "Veteran-facing projection of a published Resource (same fields as GET /resources).",
-                        "properties": {
-                          "resource_id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "service_name": {
-                            "type": "string"
-                          },
-                          "category": {
-                            "type": "string"
-                          },
-                          "counties": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "hours": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "cost": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "contact_method": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "contact_method_kind": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "freshness": {
-                            "type": "string"
-                          },
-                          "stale_warning": {
-                            "type": "boolean"
-                          }
-                        }
-                      }
-                    },
-                    "request_form": {
-                      "type": "object",
-                      "nullable": true,
-                      "properties": {
-                        "method": {
-                          "type": "string",
-                          "enum": ["POST"]
-                        },
-                        "path": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/IntakeTurn"
                 }
               }
             }
@@ -3674,95 +3131,26 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "responses": {
           "200": {
-            "description": "Idempotent replay"
-          },
-          "201": {
-            "description": "Service Request created",
+            "description": "Idempotent replay",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "service_request": {
-                      "type": "object",
-                      "properties": {
-                        "service_request_id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "case_id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "category": {
-                          "type": "string"
-                        },
-                        "status": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "draft": {
-                      "type": "object",
-                      "properties": {
-                        "draft_id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
-                        },
-                        "category": {
-                          "type": "string",
-                          "nullable": true,
-                          "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT", null]
-                        },
-                        "summary": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 280
-                        },
-                        "timing": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 120
-                        },
-                        "service_request_id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "nullable": true
-                        },
-                        "created_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "updated_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        },
-                        "submitted_at": {
-                          "type": "string",
-                          "format": "date-time",
-                          "nullable": true
-                        }
-                      }
-                    },
-                    "replayed": {
-                      "type": "boolean"
-                    }
-                  }
+                  "$ref": "#/components/schemas/IntakeSubmitResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Service Request created from the draft. 422 UNPROCESSABLE when the draft is incomplete or a required meeting_place is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeSubmitResult"
                 }
               }
             }
@@ -4128,19 +3516,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": ["messages", "next_cursor"],
-                  "properties": {
-                    "messages": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ChatMessage"
-                      }
-                    },
-                    "next_cursor": {
-                      "type": ["string", "null"]
-                    }
-                  }
+                  "$ref": "#/components/schemas/ChatMessagePage"
                 }
               }
             }
@@ -4180,13 +3556,7 @@
             "$ref": "#/components/parameters/IdPath"
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -4208,48 +3578,22 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "Message stored; the other participant's live connections are notified on a best-effort basis",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ChatMessage"
-                    },
-                    {
-                      "type": "object",
-                      "required": ["replayed"],
-                      "properties": {
-                        "replayed": {
-                          "type": "boolean"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
           "200": {
             "description": "Replay of an earlier send with the same Idempotency-Key",
             "content": {
               "application/json": {
                 "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ChatMessage"
-                    },
-                    {
-                      "type": "object",
-                      "required": ["replayed"],
-                      "properties": {
-                        "replayed": {
-                          "type": "boolean"
-                        }
-                      }
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ChatMessageSent"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Message stored; the other participant's live connections are notified on a best-effort basis",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageSent"
                 }
               }
             }
@@ -4289,24 +3633,11 @@
         ],
         "responses": {
           "201": {
-            "description": "Ticket issued",
+            "description": "One-time WebSocket connect ticket",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": ["ticket", "expires_at", "websocket_url"],
-                  "properties": {
-                    "ticket": {
-                      "type": "string"
-                    },
-                    "expires_at": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "websocket_url": {
-                      "type": "string"
-                    }
-                  }
+                  "$ref": "#/components/schemas/ChatConnectTicket"
                 }
               }
             }
@@ -4326,6 +3657,77 @@
           }
         }
       }
+    },
+    "/api/v0/chat/threads": {
+      "get": {
+        "tags": ["chat"],
+        "summary": "List the caller's chat threads",
+        "operationId": "listChatThreads",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller threads (as requester or accepter), newest activity first, at most 100",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatThreadList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/veterans/me/profile": {
+      "put": {
+        "tags": ["veterans"],
+        "summary": "Set the display name other people see",
+        "description": "Signed-in only; no ID scan needed. Guidance for the form: \"First name and last initial, like Marcus T.\" Only length and emptiness are validated.",
+        "operationId": "putVeteransMeProfile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Display name stored (trimmed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetProfileRequest"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4339,6 +3741,25 @@
     "parameters": {
       "IdPath": {
         "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Client-chosen key that makes a retried command safe (API.md \u00a77). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT.",
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "CaseIdPath": {
+        "name": "caseId",
         "in": "path",
         "required": true,
         "schema": {
@@ -4478,49 +3899,40 @@
             }
           },
           "eligibility": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 1000
           },
           "hours": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 300
           },
           "contact_method": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 300
           },
           "contact_method_kind": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "enum": ["PHONE", "EMAIL", "URL", "FREEFORM", null]
           },
           "referral_method": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 500
           },
           "cost": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 300
           },
           "published_resource_id": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
+            "type": ["string", "null"],
+            "format": "uuid"
           },
           "reviewed_by": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
+            "type": ["string", "null"],
+            "format": "uuid"
           },
           "reviewed_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "created_at": {
             "type": "string",
@@ -4544,8 +3956,7 @@
                 "type": "boolean"
               },
               "message": {
-                "type": "string",
-                "nullable": true
+                "type": ["string", "null"]
               }
             }
           },
@@ -4559,8 +3970,7 @@
             "type": "integer"
           },
           "next_cursor": {
-            "type": "string",
-            "nullable": true
+            "type": ["string", "null"]
           }
         }
       },
@@ -4622,33 +4032,27 @@
             }
           },
           "eligibility": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 1000
           },
           "hours": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 300
           },
           "contact_method": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 300
           },
           "contact_method_kind": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "enum": ["PHONE", "EMAIL", "URL", "FREEFORM", null]
           },
           "referral_method": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 500
           },
           "cost": {
-            "type": "string",
-            "nullable": true,
+            "type": ["string", "null"],
             "maxLength": 300
           }
         }
@@ -4698,11 +4102,2115 @@
             "format": "date-time"
           }
         }
+      },
+      "ServiceCategory": {
+        "type": "string",
+        "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT"]
+      },
+      "ServiceCounty": {
+        "type": "string",
+        "enum": [
+          "SANTA_CLARA",
+          "SAN_MATEO",
+          "ALAMEDA",
+          "SANTA_CRUZ",
+          "SAN_BENITO",
+          "MERCED",
+          "STANISLAUS"
+        ]
+      },
+      "ServiceRequestStatus": {
+        "type": "string",
+        "enum": [
+          "CREATED",
+          "SUBMITTED",
+          "TRIAGED",
+          "MATCHING",
+          "ASSIGNED",
+          "ACCEPTED",
+          "IN_PROGRESS",
+          "FULFILLED",
+          "CONFIRMED",
+          "CLOSED",
+          "CANCELLED",
+          "DECLINED",
+          "EXPIRED",
+          "UNFULFILLABLE",
+          "ESCALATED"
+        ]
+      },
+      "CaseStatus": {
+        "type": "string",
+        "enum": ["OPEN", "TRIAGED", "ASSIGNED", "ACTIVE", "FOLLOWUP", "RESOLVED", "CLOSED"]
+      },
+      "SignalLevel": {
+        "type": "string",
+        "enum": ["GREEN", "YELLOW", "ORANGE", "RED"]
+      },
+      "AuthChallengeRequest": {
+        "type": "object",
+        "required": ["destination", "method"],
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Legacy filter; people do not choose an organization."
+          },
+          "destination": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 320
+          },
+          "method": {
+            "type": "string",
+            "enum": ["MAGIC_LINK", "EMAIL_OTP", "PHONE_OTP"]
+          }
+        }
+      },
+      "AuthChallengeAccepted": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["accepted"]
+          }
+        }
+      },
+      "AuthVerifyRequest": {
+        "type": "object",
+        "required": ["destination", "code"],
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "destination": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 320
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      },
+      "AuthSession": {
+        "type": "object",
+        "required": ["session_credential", "expires_at", "mfa_elevated"],
+        "properties": {
+          "session_credential": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "mfa_elevated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LogoutRequest": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "everywhere": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MfaChallenge": {
+        "type": "object",
+        "required": ["challenge_id", "factor_type"],
+        "properties": {
+          "challenge_id": {
+            "type": "string"
+          },
+          "factor_type": {
+            "type": "string"
+          }
+        }
+      },
+      "MfaVerifyRequest": {
+        "type": "object",
+        "required": ["challenge_id", "response"],
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "response": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      },
+      "MfaVerified": {
+        "type": "object",
+        "required": ["mfa_elevated"],
+        "properties": {
+          "mfa_elevated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "IdVerification": {
+        "type": "object",
+        "required": ["method", "status", "verified_at"],
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": ["ID_SCAN_SELFIE"]
+          },
+          "status": {
+            "type": "string"
+          },
+          "verified_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "OpenCaseSummary": {
+        "type": "object",
+        "required": ["case_id", "status", "priority_signal_level"],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          },
+          "priority_signal_level": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SignalLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ActiveQrf": {
+        "type": "object",
+        "required": ["service_request_id", "state", "headline", "cancellable"],
+        "properties": {
+          "service_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "cancellable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CategoryCard": {
+        "type": "object",
+        "required": ["label", "disposition", "category", "note"],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "disposition": {
+            "type": "string",
+            "enum": ["OPERATIONAL", "INFORMATION_ONLY", "COMING_SOON"]
+          },
+          "category": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ServiceCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "VeteranMe": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "status",
+          "enrolled_channels",
+          "county",
+          "display_name",
+          "is_admin",
+          "id_verification",
+          "open_case",
+          "active_qrf",
+          "categories"
+        ],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["INVITED", "ACTIVE", "SUSPENDED", "REVOKED"]
+          },
+          "enrolled_channels": {
+            "type": "object",
+            "required": ["email", "phone"],
+            "properties": {
+              "email": {
+                "type": "boolean"
+              },
+              "phone": {
+                "type": "boolean"
+              }
+            }
+          },
+          "county": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ServiceCounty"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "display_name": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "is_admin": {
+            "type": "boolean",
+            "description": "True when the person holds the SUAS System Administrator grant."
+          },
+          "id_verification": {
+            "$ref": "#/components/schemas/IdVerification"
+          },
+          "open_case": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OpenCaseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_qrf": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ActiveQrf"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryCard"
+            }
+          }
+        }
+      },
+      "SetCountyRequest": {
+        "type": "object",
+        "required": ["county"],
+        "properties": {
+          "county": {
+            "$ref": "#/components/schemas/ServiceCounty"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SetCountyResponse": {
+        "type": "object",
+        "required": ["county"],
+        "properties": {
+          "county": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ServiceCounty"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "SetProfileRequest": {
+        "type": "object",
+        "required": ["display_name"],
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "Trimmed, 1 to 40 characters. Guidance for the form: \"First name and last initial, like Marcus T.\""
+          }
+        }
+      },
+      "SetProfileResponse": {
+        "type": "object",
+        "required": ["display_name"],
+        "properties": {
+          "display_name": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 40
+          }
+        }
+      },
+      "CheckIn": {
+        "type": "object",
+        "required": ["check_in_id", "questionnaire_version", "status", "completed_at"],
+        "properties": {
+          "check_in_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "questionnaire_version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["STARTED", "IN_PROGRESS", "COMPLETED", "ABANDONED", "INCOMPLETE"]
+          },
+          "completed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "CheckInQuestion": {
+        "type": "object",
+        "required": ["question_id", "question_key", "prompt", "dimension", "required", "options"],
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "question_key": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "dimension": {
+            "type": ["string", "null"]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["answer_option_id", "option_key", "label"],
+              "properties": {
+                "answer_option_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "option_key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "CheckInWithQuestions": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CheckIn"
+          },
+          {
+            "type": "object",
+            "required": ["questions"],
+            "properties": {
+              "questions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CheckInQuestion"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CheckInResponseRequest": {
+        "type": "object",
+        "required": ["question_id", "answer_option_id"],
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "answer_option_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "CheckInCompleted": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CheckIn"
+          },
+          {
+            "type": "object",
+            "required": ["incomplete", "already_completed", "support_signal", "support_case"],
+            "properties": {
+              "incomplete": {
+                "type": "boolean"
+              },
+              "already_completed": {
+                "type": "boolean"
+              },
+              "support_signal": {
+                "type": ["object", "null"],
+                "required": ["support_signal_id", "level"],
+                "properties": {
+                  "support_signal_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "level": {
+                    "$ref": "#/components/schemas/SignalLevel"
+                  }
+                }
+              },
+              "support_case": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/OpenCaseSummary"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SupportCase": {
+        "type": "object",
+        "required": ["case_id", "status", "priority_signal_level"],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          },
+          "priority_signal_level": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SignalLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "OpenCaseResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SupportCase"
+          },
+          {
+            "type": "object",
+            "required": ["created", "replayed"],
+            "properties": {
+              "created": {
+                "type": "boolean"
+              },
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "CaseCommandResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SupportCase"
+          },
+          {
+            "type": "object",
+            "required": ["replayed"],
+            "properties": {
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "CaseCommandRequest": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "expected_status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          }
+        }
+      },
+      "CaseCommandReasonRequest": {
+        "type": "object",
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "expected_status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          }
+        }
+      },
+      "Settlement": {
+        "type": "object",
+        "required": [
+          "settlement_id",
+          "case_id",
+          "resolution_cycle",
+          "requested",
+          "occurred",
+          "fulfilled",
+          "unresolved",
+          "remaining_follow_ups",
+          "authored_by",
+          "accepted_by_user_id",
+          "veteran_confirmed_by",
+          "settled_at"
+        ],
+        "properties": {
+          "settlement_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resolution_cycle": {
+            "type": "integer"
+          },
+          "requested": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "occurred": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "fulfilled": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "unresolved": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "remaining_follow_ups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "authored_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accepted_by_user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "veteran_confirmed_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "settled_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "VeteranSettlement": {
+        "type": "object",
+        "required": [
+          "settlement_id",
+          "resolution_cycle",
+          "requested",
+          "fulfilled",
+          "unresolved",
+          "remaining_follow_ups",
+          "settled_at"
+        ],
+        "properties": {
+          "settlement_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resolution_cycle": {
+            "type": "integer"
+          },
+          "requested": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "fulfilled": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "unresolved": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "remaining_follow_ups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "settled_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ResolveCaseRequest": {
+        "type": "object",
+        "required": ["requested", "occurred", "fulfilled", "unresolved"],
+        "properties": {
+          "requested": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "occurred": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "fulfilled": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "unresolved": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "expected_status": {
+            "type": "string",
+            "enum": ["ACTIVE", "FOLLOWUP"]
+          }
+        },
+        "description": "The author, the accepter and the requester confirmation are derived on the server from the session and the case assignment; they are not accepted from the body."
+      },
+      "ResolveCaseResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SupportCase"
+          },
+          {
+            "type": "object",
+            "required": ["settlement_id", "resolution_cycle", "settlement", "replayed"],
+            "properties": {
+              "settlement_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "resolution_cycle": {
+                "type": "integer"
+              },
+              "settlement": {
+                "$ref": "#/components/schemas/Settlement"
+              },
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "ServiceRequestRef": {
+        "type": "object",
+        "required": ["service_request_id", "case_id", "category", "status"],
+        "properties": {
+          "service_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ServiceRequestStatus"
+          }
+        }
+      },
+      "ServiceRequestCommandResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ServiceRequestRef"
+          },
+          {
+            "type": "object",
+            "required": ["replayed"],
+            "properties": {
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "ServiceRequestCommandRequest": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "expected_status": {
+            "$ref": "#/components/schemas/ServiceRequestStatus"
+          },
+          "grantee_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "description": "SUBMIT, CANCEL and CONFIRM belong to the requester; every other command belongs to the person who accepted (403 otherwise)."
+      },
+      "CreateCaseServiceRequestRequest": {
+        "type": "object",
+        "required": ["category"],
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "ServiceRequestFormRequest": {
+        "type": "object",
+        "required": ["category", "summary"],
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 280
+          },
+          "timing": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "meeting_place": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Where to meet. Required to submit FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE); optional for PEER_SUPPORT. Never shown in lists."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ServiceRequestFormResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ServiceRequestRef"
+          },
+          {
+            "type": "object",
+            "required": ["replayed"],
+            "properties": {
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "ServiceRequestListItem": {
+        "type": "object",
+        "required": [
+          "service_request_id",
+          "case_id",
+          "category",
+          "status",
+          "summary",
+          "created_at"
+        ],
+        "properties": {
+          "service_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ServiceRequestStatus"
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "The requester one-line summary. Timing and meeting place are never listed."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "county": {
+            "$ref": "#/components/schemas/ServiceCounty",
+            "description": "ownership=open and mine only: the requester county."
+          },
+          "widened": {
+            "type": "boolean",
+            "description": "ownership=open and mine only."
+          },
+          "counterpart_display_name": {
+            "type": ["string", "null"],
+            "description": "ownership=mine only: the requester display name."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ownership=requested only."
+          },
+          "closed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "ownership=requested only: set once the request reached a terminal status."
+          }
+        }
+      },
+      "ServiceRequestList": {
+        "type": "object",
+        "required": ["service_requests", "next_cursor"],
+        "properties": {
+          "service_requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceRequestListItem"
+            }
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "AcceptServiceRequestResult": {
+        "type": "object",
+        "required": ["service_request_id", "case_id", "case_status", "assignment_id"],
+        "properties": {
+          "service_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "case_status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          },
+          "assignment_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ServiceRequestDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ServiceRequestRef"
+          },
+          {
+            "type": "object",
+            "required": [
+              "summary",
+              "timing",
+              "meeting_place",
+              "created_at",
+              "widened",
+              "county",
+              "counterpart_display_name"
+            ],
+            "properties": {
+              "summary": {
+                "type": ["string", "null"]
+              },
+              "timing": {
+                "type": ["string", "null"]
+              },
+              "meeting_place": {
+                "type": ["string", "null"]
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "widened": {
+                "type": "boolean"
+              },
+              "county": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/ServiceCounty"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "counterpart_display_name": {
+                "type": ["string", "null"],
+                "description": "For the requester: the display name of the person who accepted (null until accepted or if unnamed). For the accepter: the requester display name."
+              }
+            }
+          }
+        ]
+      },
+      "CaseServiceRequestList": {
+        "type": "object",
+        "required": ["service_requests"],
+        "properties": {
+          "service_requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceRequestRef"
+            }
+          }
+        }
+      },
+      "ContactAttempt": {
+        "type": "object",
+        "required": [
+          "contact_attempt_id",
+          "case_id",
+          "logged_by_user_id",
+          "attempted_at",
+          "channel",
+          "outcome"
+        ],
+        "properties": {
+          "contact_attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "logged_by_user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "channel": {
+            "type": "string",
+            "enum": ["EMAIL", "SMS", "IN_APP", "PHONE"]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["PENDING", "REACHED", "NO_ANSWER", "LEFT_MESSAGE", "DECLINED", "UNABLE"]
+          }
+        }
+      },
+      "ContactAttemptResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContactAttempt"
+          },
+          {
+            "type": "object",
+            "required": ["deduplicated", "replayed"],
+            "properties": {
+              "deduplicated": {
+                "type": "boolean"
+              },
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "LogContactAttemptRequest": {
+        "type": "object",
+        "required": ["channel"],
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": ["EMAIL", "SMS", "IN_APP", "PHONE"]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["PENDING"]
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CompleteContactRequest": {
+        "type": "object",
+        "required": ["channel", "outcome"],
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": ["EMAIL", "SMS", "IN_APP", "PHONE"]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["REACHED", "NO_ANSWER", "LEFT_MESSAGE", "DECLINED", "UNABLE"]
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FollowUp": {
+        "type": "object",
+        "required": [
+          "follow_up_id",
+          "case_id",
+          "service_request_id",
+          "due_at",
+          "schedule_version",
+          "responsible_type",
+          "responsible_id",
+          "status",
+          "coordination_attempt_count",
+          "resolution_disposition"
+        ],
+        "properties": {
+          "follow_up_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "service_request_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schedule_version": {
+            "type": "integer"
+          },
+          "responsible_type": {
+            "type": "string",
+            "enum": ["USER", "VETERAN", "SYSTEM"]
+          },
+          "responsible_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "DUE",
+              "COMPLETED",
+              "RESCHEDULED",
+              "OVERDUE",
+              "ESCALATED",
+              "CANCELLED"
+            ]
+          },
+          "coordination_attempt_count": {
+            "type": "integer"
+          },
+          "resolution_disposition": {
+            "type": ["string", "null"],
+            "enum": ["BLOCKING", "CARRIED_FORWARD", null]
+          }
+        }
+      },
+      "CreateFollowUpRequest": {
+        "type": "object",
+        "required": ["case_id", "due_at", "responsible_type", "responsible_id"],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "responsible_type": {
+            "type": "string",
+            "enum": ["USER", "VETERAN", "SYSTEM"]
+          },
+          "responsible_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "service_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resolution_disposition": {
+            "type": "string",
+            "enum": ["BLOCKING", "CARRIED_FORWARD"]
+          }
+        }
+      },
+      "FollowUpResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FollowUp"
+          },
+          {
+            "type": "object",
+            "required": ["replayed"],
+            "properties": {
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "FollowUpCompleted": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FollowUp"
+          },
+          {
+            "type": "object",
+            "required": ["already_completed", "replayed"],
+            "properties": {
+              "already_completed": {
+                "type": "boolean"
+              },
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "Notification": {
+        "type": "object",
+        "required": [
+          "notification_id",
+          "reason",
+          "channel",
+          "delivery_status",
+          "attempt_count",
+          "subject_type",
+          "subject_id",
+          "sent_at",
+          "cancelled_at"
+        ],
+        "properties": {
+          "notification_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string",
+            "enum": ["EMAIL", "SMS", "IN_APP"]
+          },
+          "delivery_status": {
+            "type": "string",
+            "enum": ["QUEUED", "SENT", "FAILED", "DELIVERED", "BOUNCED", "UNDELIVERABLE"]
+          },
+          "attempt_count": {
+            "type": "integer"
+          },
+          "subject_type": {
+            "type": ["string", "null"]
+          },
+          "subject_id": {
+            "type": ["string", "null"]
+          },
+          "sent_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "cancelled_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "NotificationPreferenceRequest": {
+        "type": "object",
+        "required": ["channel", "enabled"],
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": ["EMAIL", "SMS", "IN_APP"]
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ConsentGrant": {
+        "type": "object",
+        "required": [
+          "consent_grant_id",
+          "permission",
+          "scope",
+          "purpose",
+          "grantee_type",
+          "grantee_id",
+          "consent_template_version",
+          "status",
+          "granted_at",
+          "expires_at",
+          "revoked_at"
+        ],
+        "properties": {
+          "consent_grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "permission": {
+            "type": "string",
+            "enum": ["can_receive", "can_view", "can_share"]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "grantee_type": {
+            "type": "string",
+            "enum": ["TRUSTED_CONTACT", "USER", "SERVICE_PROVIDER", "SYSTEM"]
+          },
+          "grantee_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "consent_template_version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "REVOKED", "EXPIRED"]
+          },
+          "granted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "revoked_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "ConsentGrantResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ConsentGrant"
+          },
+          {
+            "type": "object",
+            "required": ["replayed"],
+            "properties": {
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "GrantConsentRequest": {
+        "type": "object",
+        "required": [
+          "permission",
+          "scope",
+          "purpose",
+          "grantee_type",
+          "grantee_id",
+          "consent_template_version"
+        ],
+        "properties": {
+          "permission": {
+            "type": "string",
+            "enum": ["can_receive", "can_view", "can_share"]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "YELLOW",
+              "ORANGE",
+              "RED",
+              "support_signal",
+              "checkin_answers",
+              "current_requests",
+              "location",
+              "service_request_fulfillment"
+            ]
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "grantee_type": {
+            "type": "string",
+            "enum": ["TRUSTED_CONTACT", "USER", "SERVICE_PROVIDER", "SYSTEM"]
+          },
+          "grantee_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "consent_template_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TrustedContact": {
+        "type": "object",
+        "required": ["trusted_contact_id", "relationship_label", "status", "contact_user_id"],
+        "properties": {
+          "trusted_contact_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "relationship_label": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["INVITED", "ACCEPTED", "SUSPENDED", "REMOVED", "REVOKED"]
+          },
+          "contact_user_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        }
+      },
+      "TrustedContactResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TrustedContact"
+          },
+          {
+            "type": "object",
+            "required": ["replayed"],
+            "properties": {
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "InviteTrustedContactRequest": {
+        "type": "object",
+        "required": ["relationship_label"],
+        "properties": {
+          "relationship_label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "invite_email": {
+            "type": "string",
+            "format": "email"
+          },
+          "invite_phone": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 32
+          }
+        },
+        "description": "At least one of invite_email and invite_phone is required."
+      },
+      "IntakeDraft": {
+        "type": "object",
+        "required": [
+          "draft_id",
+          "status",
+          "category",
+          "summary",
+          "timing",
+          "meeting_place",
+          "service_request_id",
+          "created_at",
+          "updated_at",
+          "submitted_at"
+        ],
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "SUBMITTED", "DISCARDED"]
+          },
+          "category": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ServiceCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "maxLength": 280
+          },
+          "timing": {
+            "type": ["string", "null"],
+            "maxLength": 120
+          },
+          "meeting_place": {
+            "type": ["string", "null"],
+            "maxLength": 200
+          },
+          "service_request_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "submitted_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "IntakeDraftWithText": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/IntakeDraft"
+          },
+          {
+            "type": "object",
+            "required": ["intake_text"],
+            "properties": {
+              "intake_text": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "IntakeResource": {
+        "type": "object",
+        "required": [
+          "resource_id",
+          "service_name",
+          "category",
+          "counties",
+          "hours",
+          "cost",
+          "contact_method",
+          "contact_method_kind",
+          "freshness",
+          "stale_warning"
+        ],
+        "properties": {
+          "resource_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "service_name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "counties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hours": {
+            "type": ["string", "null"]
+          },
+          "cost": {
+            "type": ["string", "null"]
+          },
+          "contact_method": {
+            "type": ["string", "null"]
+          },
+          "contact_method_kind": {
+            "type": ["string", "null"]
+          },
+          "freshness": {
+            "type": "string"
+          },
+          "stale_warning": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RequestFormPointer": {
+        "type": "object",
+        "required": ["method", "path"],
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": ["POST"]
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "IntakeTurn": {
+        "type": "object",
+        "required": [
+          "outcome",
+          "assistant_message",
+          "not_available_yet",
+          "notice",
+          "draft",
+          "resources",
+          "request_form"
+        ],
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": ["DRAFT_READY", "NO_DRAFT", "FALLBACK_FORM"],
+            "description": "FALLBACK_FORM: the assistant did not answer; nothing new was stored, show the plain request form (request_form)."
+          },
+          "assistant_message": {
+            "type": ["string", "null"]
+          },
+          "not_available_yet": {
+            "type": "boolean"
+          },
+          "notice": {
+            "type": ["string", "null"]
+          },
+          "draft": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IntakeDraft"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntakeResource"
+            }
+          },
+          "request_form": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RequestFormPointer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "IntakeStatus": {
+        "type": "object",
+        "required": ["assistant_available", "request_form"],
+        "properties": {
+          "assistant_available": {
+            "type": "boolean"
+          },
+          "request_form": {
+            "$ref": "#/components/schemas/RequestFormPointer"
+          }
+        }
+      },
+      "IntakeMessageRequest": {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "additionalProperties": false
+      },
+      "IntakeDraftEditRequest": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 280
+          },
+          "timing": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "meeting_place": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "additionalProperties": false,
+        "minProperties": 1
+      },
+      "IntakeSubmitResult": {
+        "type": "object",
+        "required": ["service_request", "draft", "replayed"],
+        "properties": {
+          "service_request": {
+            "$ref": "#/components/schemas/ServiceRequestRef"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/IntakeDraft"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CatalogResourceList": {
+        "type": "object",
+        "required": ["resources", "limit", "next_cursor"],
+        "properties": {
+          "resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogResource"
+            }
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "ImmediateResources": {
+        "type": "object",
+        "required": ["state", "basis", "placeholder", "resources"],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": ["APPROVED", "PLACEHOLDER"]
+          },
+          "basis": {
+            "type": "string"
+          },
+          "placeholder": {
+            "type": ["string", "null"]
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["label", "destination", "approved_under"],
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "destination": {
+                  "type": "string"
+                },
+                "approved_under": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ChatMessageSent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChatMessage"
+          },
+          {
+            "type": "object",
+            "required": ["replayed"],
+            "properties": {
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "ChatMessagePage": {
+        "type": "object",
+        "required": ["messages", "next_cursor"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            }
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "ChatThread": {
+        "type": "object",
+        "required": [
+          "service_request_id",
+          "category",
+          "summary",
+          "counterpart_display_name",
+          "last_message_body",
+          "last_message_at",
+          "closed"
+        ],
+        "properties": {
+          "service_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          },
+          "summary": {
+            "type": ["string", "null"]
+          },
+          "counterpart_display_name": {
+            "type": ["string", "null"]
+          },
+          "last_message_body": {
+            "type": ["string", "null"],
+            "maxLength": 140,
+            "description": "Truncated to 140 characters; null when no message was sent yet."
+          },
+          "last_message_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "closed": {
+            "type": "boolean",
+            "description": "The request is in a terminal status."
+          }
+        }
+      },
+      "ChatThreadList": {
+        "type": "object",
+        "required": ["threads"],
+        "properties": {
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatThread"
+            }
+          }
+        }
+      },
+      "ChatConnectTicket": {
+        "type": "object",
+        "required": ["ticket", "expires_at", "websocket_url"],
+        "properties": {
+          "ticket": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "websocket_url": {
+            "type": "string"
+          }
+        }
+      },
+      "AdapterCatalogEntry": {
+        "type": "object",
+        "required": [
+          "adapter_id",
+          "capability",
+          "integration_mode",
+          "decision",
+          "label",
+          "secret_presence"
+        ],
+        "properties": {
+          "adapter_id": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "integration_mode": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "secret_presence": {
+            "type": "string"
+          }
+        }
+      },
+      "AdapterConfiguration": {
+        "type": "object",
+        "required": [
+          "adapter_configuration_id",
+          "tenant_id",
+          "adapter_id",
+          "capability",
+          "integration_mode",
+          "enabled",
+          "routing_priority",
+          "health",
+          "coverage_counties",
+          "secret_presence",
+          "label"
+        ],
+        "properties": {
+          "adapter_configuration_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "adapter_id": {
+            "type": "string"
+          },
+          "capability": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          },
+          "integration_mode": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "routing_priority": {
+            "type": "integer"
+          },
+          "health": {
+            "type": "string"
+          },
+          "coverage_counties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "secret_presence": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "AdapterEnableRequest": {
+        "type": "object",
+        "required": ["tenant_id", "adapter_id", "capability"],
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "adapter_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "capability": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          },
+          "coverage_counties": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "routing_priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          }
+        }
+      },
+      "AdapterDisableRequest": {
+        "type": "object",
+        "required": ["tenant_id", "adapter_id", "capability"],
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "adapter_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "capability": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          }
+        }
+      },
+      "AdapterRoutingRequest": {
+        "type": "object",
+        "required": [
+          "tenant_id",
+          "adapter_id",
+          "capability",
+          "coverage_counties",
+          "routing_priority"
+        ],
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "adapter_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "capability": {
+            "$ref": "#/components/schemas/ServiceCategory"
+          },
+          "coverage_counties": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "routing_priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          }
+        }
+      },
+      "BuildInfo": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Build provenance (app commit/version, spec version, manifest, environment, schema version). No secrets."
       }
     },
     "responses": {
       "Error": {
-        "description": "Canonical API.md §6 error body",
+        "description": "Canonical API.md \u00a76 error body",
         "content": {
           "application/json": {
             "schema": {

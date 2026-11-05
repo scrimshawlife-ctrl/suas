@@ -97,6 +97,11 @@ Hyperdrive pointed at the local database.
 | Sign-in method   | `EMAIL_OTP`                                                                                 |
 | Other codes      | `curl "http://127.0.0.1:3000/api/v0/dev/last-challenge?destination=newvet@example.invalid"` |
 
+To try the Intake Assistant locally, start with `SUAS_MODEL_INFERENCE_MODE=fake` and queue
+scripted turns (`{"turns": [...]}`) with `POST /api/v0/dev/model-inference/turns` (LOCAL only,
+answers `409` unless the model is the scripted fake). To let a new email address sign up, set
+`SUAS_BROWSER_TENANT_ID` to the tenant new people join.
+
 The fixed code `123456` works only for `demo@example.invalid`. On the LOCAL
 demo Worker three gates must all pass (`src/auth/demo-fixed-code.ts`):
 `SUAS_ENV=LOCAL`, the opt-in `SUAS_DEMO_FIXED_CODE=enabled` that
