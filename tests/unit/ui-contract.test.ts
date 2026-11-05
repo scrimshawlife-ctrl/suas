@@ -397,10 +397,8 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
       limit: 4,
       next_cursor: null,
     };
-    const modelUrl = new URL(
-      '../../web/src/features/support/resources-model.ts',
-      import.meta.url,
-    ).href;
+    const modelUrl = new URL('../../web/src/features/support/resources-model.ts', import.meta.url)
+      .href;
     const model = (await import(modelUrl)) as {
       phoneHref: (text: string) => string | null;
       contactAction: (resource: DirectoryResource) => { kind: string; href?: string };
