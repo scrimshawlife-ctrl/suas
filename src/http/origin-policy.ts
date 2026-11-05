@@ -28,7 +28,7 @@ import { usesBrowserCookie } from './authenticate.js';
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-const ALLOW_METHODS = 'GET, HEAD, POST, PUT, OPTIONS';
+const ALLOW_METHODS = 'GET, HEAD, POST, PUT, PATCH, OPTIONS';
 const ALLOWED_REQUEST_HEADERS = new Set([
   'authorization',
   'content-type',
