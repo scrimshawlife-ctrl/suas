@@ -137,33 +137,33 @@ user (`suas_admin`, an `rds_superuser`), the same user the Proxy and the migrate
 All values are plain except the two marked secret. Other functions get the subset they need (see `lib/backend-stack.ts`);
 each function's environment is checked against the application's own config validator in the tests.
 
-| Variable                                                                                        | Value                                                                                                     |
-| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `SUAS_ENV`                                                                                      | `STAGING`                                                                                                 |
-| `SUAS_SPEC_VERSION`, `SUAS_RELEASE_MANIFEST`                                                    | from `src/release/pins.ts` (so a re-pin follows automatically)                                            |
-| `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS`                                                              | `false`                                                                                                   |
-| `SUAS_SESSION_SECRET`                                                                           | secret (Secrets Manager)                                                                                  |
-| `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<proxy endpoint>:5432/suas`                                           |
-| `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3`                                                                                             |
-| `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; WebSocket and job worker `off`)                            |
-| `SUAS_BROWSER_AUTH_MODE`, `SUAS_BROWSER_TENANT_ID`                                              | `email_otp`, the `browserTenantId` context                                                                |
-| `SUAS_EMAIL_MODE`, `SUAS_EMAIL_FROM`                                                            | `ses`, the `emailFrom` context                                                                            |
-| `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                               |
-| `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                               |
-| `SUAS_MODEL_INFERENCE_MODE`, `SUAS_BEDROCK_MODEL_ID`                                            | `bedrock`, the `bedrockModelId` context                                                                   |
-| `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket                                                                                   |
-| `SUAS_ID_VERIFICATION_MODE`                                                                     | `fake` (no provider chosen; allowed outside PRODUCTION, `src/config/schema.ts` `validateAwsCapabilities`) |
-| `SUAS_CHAT_PUSH_MODE`                                                                           | `apigw`                                                                                                   |
-| `SUAS_CHAT_WS_ENDPOINT`                                                                         | `https://<ws api id>.execute-api.us-west-2.amazonaws.com/staging` (management endpoint)                   |
-| `SUAS_CHAT_WS_PUBLIC_URL`                                                                       | `wss://ws.staging.suasqrf.com` (what browsers open; no stage path)                                        |
-| `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | `https://staging.suasqrf.com`                                                                             |
-| `SUAS_TRANSPORTATION_ADAPTER_MODE`, `SUAS_SHELTER_ADAPTER_MODE`, `SUAS_FOOD_ADAPTER_MODE`       | `fake`                                                                                                    |
-| `SUAS_PEER_SUPPORT_ADAPTER_MODE`                                                                | `manual`                                                                                                  |
-| `SUAS_SUPPORT_SIGNAL_MODE`, `SUAS_SAFETY_COPY_MODE`, `SUAS_SENSITIVE_AGGREGATE_REPORTING`       | `fixture`, the `safetyCopyMode` context, `disabled`                                                       |
-| `SUAS_HTTP_HOST`, `SUAS_HTTP_PORT`                                                              | `0.0.0.0`, `8080`                                                                                         |
-| `SUAS_LOG_LEVEL`                                                                                | `info`                                                                                                    |
-| `SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`                                                     | stamped at synth                                                                                          |
-| `AWS_LAMBDA_EXEC_WRAPPER`, `AWS_LWA_PORT`, `AWS_LWA_READINESS_CHECK_PATH`, `AWS_LWA_ASYNC_INIT` | `/opt/bootstrap`, `8080`, `/api/v0/health`, `true` (Lambda Web Adapter)                                   |
+| Variable                                                                                        | Value                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SUAS_ENV`                                                                                      | `STAGING`                                                                                                                                                                |
+| `SUAS_SPEC_VERSION`, `SUAS_RELEASE_MANIFEST`                                                    | from `src/release/pins.ts` (so a re-pin follows automatically)                                                                                                           |
+| `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS`                                                              | `false`                                                                                                                                                                  |
+| `SUAS_SESSION_SECRET`                                                                           | secret (Secrets Manager)                                                                                                                                                 |
+| `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<proxy endpoint>:5432/suas`                                                                                                          |
+| `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3`                                                                                                                                                            |
+| `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; WebSocket and job worker `off`)                                                                                           |
+| `SUAS_BROWSER_AUTH_MODE`, `SUAS_BROWSER_TENANT_ID`                                              | `email_otp`, the `browserTenantId` context                                                                                                                               |
+| `SUAS_EMAIL_MODE`, `SUAS_EMAIL_FROM`                                                            | `ses`, the `emailFrom` context                                                                                                                                           |
+| `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                                                              |
+| `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                                                                                              |
+| `SUAS_MODEL_INFERENCE_MODE`, `SUAS_BEDROCK_MODEL_ID`                                            | `bedrock`, the `bedrockModelId` context                                                                                                                                  |
+| `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket                                                                                                                                                  |
+| `SUAS_ID_VERIFICATION_MODE`                                                                     | `fake` (no provider chosen; allowed outside PRODUCTION, `src/config/schema.ts` `validateAwsCapabilities`)                                                                |
+| `SUAS_CHAT_PUSH_MODE`                                                                           | `apigw`                                                                                                                                                                  |
+| `SUAS_CHAT_WS_ENDPOINT`                                                                         | `https://<ws api id>.execute-api.us-west-2.amazonaws.com/staging` (management endpoint)                                                                                  |
+| `SUAS_CHAT_WS_PUBLIC_URL`                                                                       | `wss://ws.staging.suasqrf.com` (what browsers open; no stage path)                                                                                                       |
+| `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | unset (empty allowlist). Stays empty until a separate frontend domain exists and the cross-site cookie question is settled. The Worker origin serves `/app` same-origin. |
+| `SUAS_TRANSPORTATION_ADAPTER_MODE`, `SUAS_SHELTER_ADAPTER_MODE`, `SUAS_FOOD_ADAPTER_MODE`       | `fake`                                                                                                                                                                   |
+| `SUAS_PEER_SUPPORT_ADAPTER_MODE`                                                                | `manual`                                                                                                                                                                 |
+| `SUAS_SUPPORT_SIGNAL_MODE`, `SUAS_SAFETY_COPY_MODE`, `SUAS_SENSITIVE_AGGREGATE_REPORTING`       | `fixture`, the `safetyCopyMode` context, `disabled`                                                                                                                      |
+| `SUAS_HTTP_HOST`, `SUAS_HTTP_PORT`                                                              | `0.0.0.0`, `8080`                                                                                                                                                        |
+| `SUAS_LOG_LEVEL`                                                                                | `info`                                                                                                                                                                   |
+| `SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`                                                     | stamped at synth                                                                                                                                                         |
+| `AWS_LAMBDA_EXEC_WRAPPER`, `AWS_LWA_PORT`, `AWS_LWA_READINESS_CHECK_PATH`, `AWS_LWA_ASYNC_INIT` | `/opt/bootstrap`, `8080`, `/api/v0/health`, `true` (Lambda Web Adapter)                                                                                                  |
 
 `SUAS_DEMO_FIXED_CODE` is not set. `RESEND_API_KEY` is not used.
 
@@ -217,30 +217,34 @@ Do not deploy until the AWS account layout is decided. When it is, from `infra/`
 account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it) and `-c bedrockModelId=...`:
 
 1. `cdk bootstrap` the account for `us-west-2` **and** `us-east-1` (cross-region references and the certificate need both).
-2. Export the Cloudflare zone (manual step 1), then `cdk deploy Suas-Dns`. Note the `NameServers` output.
-3. **Move the registrar NS records as soon as `Suas-Dns` is deployed (manual step 1).** Certificates and DKIM
-   cannot validate before this.
-4. `cdk deploy Suas-Staging-WebCert Suas-Staging-Backend` (these wait for DNS validation).
+2. Export the Cloudflare zone (manual step 1), then `cdk deploy Suas-Dns`. Note the `NameServers` output. That note is prep only.
+3. **Do not change the registrar name servers.** The nameserver cutover waits for the suas-specs #61 R6.8 gate and an
+   owner decision (manual step 1). Until both are recorded, leave the registrar pointing at Cloudflare. Certificates
+   and DKIM stay pending while the domain still resolves from Cloudflare. Keep the zone export and the `NameServers`
+   output for that later decision. Do not apply them.
+4. `cdk deploy Suas-Staging-WebCert Suas-Staging-Backend` only after that gate and an owner decision allow a cutover.
+   These stacks wait for DNS validation and will not finish before then. Do not change name servers to unblock them.
 5. **Run the migrate function (manual step 4).**
 6. Build the web app (above), then `cdk deploy Suas-Staging-Web`.
 7. Seed or create synthetic users as the staging runbooks describe, then smoke-test.
 
 ## Manual steps
 
-1. **Move the name servers at the registrar, as soon as `Suas-Dns` is deployed.**
-   1. First export the zone from the Cloudflare dashboard (the records found by `dig` are listed below, but
+1. **Prepare DNS. Do not change name servers.**
+   1. Export the zone from the Cloudflare dashboard (the records found by `dig` are listed below, but
       `dig` cannot list a whole zone).
    2. `Suas-Dns` already recreates the mail records found (`resend._domainkey` TXT, `send` TXT and `send` MX) in
-      the Route 53 zone. Add by hand anything else in the export that must keep working.
-   3. Set the registrar's NS records to the four values in the `NameServers` output.
-   4. **After the move, the Cloudflare Worker staging site at `staging.suasqrf.com` and the apex `suasqrf.com`
-      stop resolving until they are recreated.** `staging.suasqrf.com` is recreated by `Suas-Staging-Web` as an
-      alias to CloudFront. The apex gets no record from this app.
-      Until the move, the domain resolves from Cloudflare, and the CloudFront certificate, API certificate and
-      DKIM records stay pending.
+      the Route 53 zone. Add by hand anything else in the export that must keep working, inside this zone only.
+   3. Record the four values in the `NameServers` output. Do not set them at the registrar.
+   4. The nameserver cutover waits for the suas-specs #61 R6.8 gate and an owner decision. Until both are
+      recorded, the domain keeps resolving from Cloudflare, and `staging.suasqrf.com` and the apex `suasqrf.com`
+      stay on the Worker. A cutover would stop those names until they are recreated: `Suas-Staging-Web` would make
+      `staging.suasqrf.com` an alias to CloudFront, and the apex gets no record from this app. The CloudFront
+      certificate, API certificate and DKIM records stay pending until that decision. That wait is expected.
 2. **Leave the sandbox in SES** (a new account is in the SES sandbox: it can send only to verified addresses).
    Verify test recipient addresses for staging, or open an AWS support request for production access (plan §7).
-   Check that the domain identity shows "Verified" and DKIM "Successful" once DNS is delegated.
+   Check that the domain identity shows "Verified" and DKIM "Successful" only after a cutover that has passed the
+   suas-specs #61 R6.8 gate and an owner decision. Do not change name servers in order to check this.
 3. **Enable Bedrock model access** for the chosen model in the Bedrock console (us-west-2). Without it, the API
    reports the model capability unavailable and the plain request form is shown.
 4. **Run the migrate function** after every deploy that adds migrations. From a shell with credentials:
@@ -253,20 +257,21 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it) and `-c bed
 
 Found with `dig` on 2026-11-05 (zone on `romina.ns.cloudflare.com` and `rustam.ns.cloudflare.com`).
 
-| Name                            | Type | Value                                                                                                                                                                                                                        | Needs recreating in Route 53?                                                       |
-| ------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `suasqrf.com`                   | A    | `104.21.28.254`, `172.67.171.51` (Cloudflare proxy)                                                                                                                                                                          | Yes, or the current site goes down at the NS move. This app does not create it.     |
-| `suasqrf.com`                   | AAAA | `2606:4700:3035::ac43:ab33`, `2606:4700:3035::6815:1cfe`                                                                                                                                                                     | Same                                                                                |
-| `staging.suasqrf.com`           | A    | same two Cloudflare IPs                                                                                                                                                                                                      | **No: replaced.** The web stack makes `staging.suasqrf.com` an alias to CloudFront. |
-| `resend._domainkey.suasqrf.com` | TXT  | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDrMvHRhU05sXko0q5D1sB8fH9gt051BBQgB46SggGREJahiVsC3/tmMV4QNQjBl5vi5ih8TFNArxy0O/i1pkMnXBBIGgOWDqF3Jrvl8rHAcM98JQuSX+cQggOwo4WrPBMI6aX1RtjTZIcSX2rKiy/g6dXHTqISnj4HAmTpcC13zQIDAQAB` | **Created by `Suas-Dns`.** Public DNS value, not a secret                           |
-| `send.suasqrf.com`              | TXT  | `"v=spf1 include:amazonses.com ~all"`                                                                                                                                                                                        | **Created by `Suas-Dns`**                                                           |
-| `send.suasqrf.com`              | MX   | `10 feedback-smtp.us-east-1.amazonses.com.`                                                                                                                                                                                  | **Created by `Suas-Dns`**                                                           |
+| Name                            | Type | Value                                                                                                                                                                                                                        | Needs recreating in Route 53?                                                                                                                      |
+| ------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `suasqrf.com`                   | A    | `104.21.28.254`, `172.67.171.51` (Cloudflare proxy)                                                                                                                                                                          | Not now. A later cutover would take the current site down. This app does not create it. The cutover waits for the R6.8 gate and an owner decision. |
+| `suasqrf.com`                   | AAAA | `2606:4700:3035::ac43:ab33`, `2606:4700:3035::6815:1cfe`                                                                                                                                                                     | Same                                                                                                                                               |
+| `staging.suasqrf.com`           | A    | same two Cloudflare IPs                                                                                                                                                                                                      | Not now. If a later cutover is approved, the web stack makes `staging.suasqrf.com` an alias to CloudFront. Do not change name servers for this.    |
+| `resend._domainkey.suasqrf.com` | TXT  | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDrMvHRhU05sXko0q5D1sB8fH9gt051BBQgB46SggGREJahiVsC3/tmMV4QNQjBl5vi5ih8TFNArxy0O/i1pkMnXBBIGgOWDqF3Jrvl8rHAcM98JQuSX+cQggOwo4WrPBMI6aX1RtjTZIcSX2rKiy/g6dXHTqISnj4HAmTpcC13zQIDAQAB` | **Created by `Suas-Dns`.** Public DNS value, not a secret                                                                                          |
+| `send.suasqrf.com`              | TXT  | `"v=spf1 include:amazonses.com ~all"`                                                                                                                                                                                        | **Created by `Suas-Dns`**                                                                                                                          |
+| `send.suasqrf.com`              | MX   | `10 feedback-smtp.us-east-1.amazonses.com.`                                                                                                                                                                                  | **Created by `Suas-Dns`**                                                                                                                          |
 
 The Cloudflare A and AAAA addresses are Cloudflare edge addresses, so the apex is a proxied record pointing at the
 Cloudflare Worker. They cannot be copied into Route 53 as the origin; the apex needs a decision (point it at AWS,
 or keep the zone on Cloudflare until then). No apex or `www` TXT, MX or CAA record, no `_dmarc`, and no `www`
 record were found; `dig` cannot list a whole zone (AXFR is refused), so export the zone from the Cloudflare
-dashboard before the move to be sure nothing was missed.
+dashboard as prep. Do not change name servers. Any later cutover waits for the suas-specs #61 R6.8 gate and an
+owner decision.
 
 ## Known risks (unverified offline)
 

@@ -27,10 +27,10 @@ describe('D-012 crisis copy', () => {
       'Emergency: Call 911 Crisis support: Call or text 988 Practical support: Continue with SUAS',
     );
     expect(screen.getByRole('link', { name: 'Call 911' })).toHaveAttribute('href', 'tel:911');
-    expect(screen.getByRole('link', { name: 'Call' })).toHaveAttribute('href', 'tel:988');
-    expect(screen.getByRole('link', { name: 'text 988' })).toHaveAttribute('href', 'sms:988');
+    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+    expect(screen.getByRole('link', { name: 'Text 988' })).toHaveAttribute('href', 'sms:988');
     for (const link of screen.getAllByRole('link')) {
-      expect(link).toHaveClass('text-white');
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11', 'text-white');
       expect(link).not.toHaveClass('bg-sos');
       expect(link.querySelector('svg')).toBeNull();
     }

@@ -204,7 +204,6 @@ export class BackendStack extends Stack {
 
     // -------------------------------------------------------------------- api
     const code = suasLambdaCode();
-    const webOrigin = `https://${config.webHostname}`;
 
     const wsApi = new apigw.WebSocketApi(this, 'WebSocketApi', {
       apiName: `suas-${config.name}-chat`,
@@ -319,7 +318,11 @@ export class BackendStack extends Stack {
         SUAS_HTTP_PORT: API_PORT,
         SUAS_BROWSER_AUTH_MODE: 'email_otp',
         SUAS_BROWSER_TENANT_ID: config.browserTenantId,
-        SUAS_CORS_ALLOWED_ORIGINS: webOrigin,
+        // SUAS_CORS_ALLOWED_ORIGINS stays unset, which is an empty allowlist.
+        // Lambda rejects an empty string, and unset parses as no origins. The
+        // Worker origin serves /app same-origin (suasqrf.com). A separate
+        // frontend domain and the cross-site cookie question are unsettled, so
+        // do not list the staging web hostname.
         SUAS_EMAIL_MODE: 'ses',
         SUAS_EMAIL_FROM: config.emailFrom,
         SUAS_MODEL_INFERENCE_MODE: 'bedrock',

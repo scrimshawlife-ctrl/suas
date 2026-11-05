@@ -4,7 +4,9 @@
  * stack in us-west-2.
  *
  * Validation is by DNS records in the hosted zone. Deploying waits until ACM sees those
- * records, which means the registrar must already delegate the domain to Route 53.
+ * records, which needs the registrar to delegate the domain to Route 53. That cutover
+ * waits for the suas-specs #61 R6.8 gate and an owner decision (see README). Do not
+ * change name servers to unblock this stack.
  */
 
 import { Stack, type StackProps } from 'aws-cdk-lib';

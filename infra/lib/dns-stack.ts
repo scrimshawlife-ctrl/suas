@@ -3,7 +3,8 @@
  *
  * - The public hosted zone for the root domain. It holds no apex or `www` record, so
  *   deploying it does not change what the domain serves today. Nothing resolves from it
- *   until the NS records at the registrar are moved by hand (see README).
+ *   while the registrar still points at Cloudflare. Changing those name servers waits
+ *   for the suas-specs #61 R6.8 gate and an owner decision (see README).
  * - The mail records that exist on Cloudflare today (Resend DKIM, `send` SPF and MX).
  * - The SES domain identity with Easy DKIM, in the zone. An SES identity belongs to a
  *   domain, not to an environment, so it lives here and not in a per-environment stack.
@@ -39,8 +40,9 @@ export class DnsStack extends Stack {
     });
 
     // Mail records that exist in the Cloudflare zone today (Resend, D-004). They are public DNS
-    // values, not secrets. They are recreated here so outgoing mail keeps working after the
-    // registrar moves the domain to Route 53. Nothing for the apex or `www` is created here.
+    // values, not secrets. They are recreated here so outgoing mail can keep working if the
+    // registrar later delegates the domain to Route 53. That cutover waits for the suas-specs
+    // #61 R6.8 gate and an owner decision (see README). Nothing for the apex or `www` is created.
     if (props.rootDomain === 'suasqrf.com') {
       new route53.TxtRecord(this, 'ResendDkim', {
         zone: this.zone,
@@ -61,7 +63,7 @@ export class DnsStack extends Stack {
 
     new CfnOutput(this, 'NameServers', {
       description:
-        'Set these as the NS records at the registrar to delegate the domain to Route 53.',
+        'Route 53 name servers for this zone. Do not change the registrar name servers. That cutover waits for the suas-specs #61 R6.8 gate and an owner decision.',
       value: Fn.join(', ', this.zone.hostedZoneNameServers ?? []),
     });
   }

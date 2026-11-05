@@ -48,15 +48,21 @@ function recordedTime(iso: string | undefined): string | undefined {
     : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+/** 44px minimum tap target (WCAG 2.2). Visible words stay the D-012 sentence. */
+const crisisLink = 'inline-flex min-h-11 min-w-11 items-center px-1 font-bold';
+
 const emergencyLinks = (
   <>
-    call{' '}
-    <a href="tel:911" className="font-bold">
-      911
+    <a href="tel:911" className={crisisLink} aria-label="Call 911">
+      call 911
     </a>
-    . For a suicide or emotional crisis, call or text{' '}
-    <a href="tel:988" className="font-bold">
-      988
+    . For a suicide or emotional crisis,{' '}
+    <a href="tel:988" className={crisisLink} aria-label="Call 988">
+      call
+    </a>{' '}
+    or{' '}
+    <a href="sms:988" className={crisisLink} aria-label="Text 988">
+      text 988
     </a>
     .
   </>
