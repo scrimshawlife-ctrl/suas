@@ -2760,7 +2760,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Claims the Support Case (ASSIGNED) and moves the Service Request to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). The accepter then runs START, FULFILL; the requester runs CONFIRM."
       }
     },
     "/api/v0/veterans/me/county": {
