@@ -53,6 +53,7 @@
     "check:staging:path-params": "tsx scripts/staging-path-param-check.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.1162.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1162.0",
     "@aws-sdk/client-s3": "^3.1162.0",
     "@aws-sdk/client-sesv2": "^3.1162.0",
