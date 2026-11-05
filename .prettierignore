@@ -14,3 +14,6 @@ contract/demo-fixtures.json
 
 # Generated from docs/openapi/v0.json by `npm run gen:api` in web/
 web/src/api/schema.d.ts
+
+# CDK synth output (infra/)
+infra/cdk.out/

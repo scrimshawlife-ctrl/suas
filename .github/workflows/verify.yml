@@ -71,6 +71,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             web/package-lock.json
+            infra/package-lock.json
 
       - name: Create the migration-test database
         env:
@@ -125,6 +126,16 @@ jobs:
         # web/ is a separate package (not an npm workspace): lint, typecheck, unit tests,
         # and the production build of the React app.
         working-directory: web
+        run: |
+          npm ci
+          npm run check
+
+      - name: Infrastructure checks
+        # infra/ is a separate package (not an npm workspace): typecheck, CDK assertion tests
+        # and an offline `cdk synth`. It bundles the Lambda code from this repository's src/
+        # with esbuild, so it runs after the root `npm ci` and needs no Docker and no AWS
+        # credentials. It never deploys (the AWS account layout is undecided, plan §8 item 17).
+        working-directory: infra
         run: |
           npm ci
           npm run check
