@@ -21,7 +21,7 @@ import { API_PREFIX } from '../release/pins.js';
 import type { BuildInfo } from '../provenance/build-info.js';
 import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
-import type { ModelInferencePort } from '../inference/index.js';
+import { UnavailableModelInference, type ModelInferencePort } from '../inference/index.js';
 import type { IdVerificationPort } from '../identity/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { authenticate } from './authenticate.js';
@@ -35,6 +35,7 @@ import { registerFollowUpRoutes } from './routes/follow-ups.js';
 import { registerIntakeRoutes } from './routes/intake.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerResourceRoutes } from './routes/resources.js';
+import { registerAdminResourceDraftRoutes } from './routes/admin-resource-drafts.js';
 import { registerServiceRequestRoutes } from './routes/service-requests.js';
 import { registerTrustedContactRoutes } from './routes/trusted-contacts.js';
 import { registerUiRoutes } from './routes/ui.js';
@@ -308,6 +309,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       pool,
       config: deps.config,
       sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerAdminResourceDraftRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      modelInference: deps.modelInference ?? new UnavailableModelInference(),
     });
 
     registerCheckInRoutes(app, {
