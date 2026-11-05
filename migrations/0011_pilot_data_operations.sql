@@ -1,4 +1,4 @@
--- 0013_pilot_data_operations.sql — D-007 approved pilot operations (2026-08-29).
+-- 0011_pilot_data_operations.sql — D-007 approved pilot operations (2026-08-29).
 -- Pilot-only operational evidence. It never authorizes a provider, recipient, or
 -- external delivery. Immutable Audit Events remain the authoritative audit trail.
 CREATE TYPE suas_data_operation_kind AS ENUM ('EXPORT', 'DELETION', 'RETENTION_PURGE');
