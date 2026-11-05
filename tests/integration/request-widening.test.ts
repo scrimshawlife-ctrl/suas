@@ -15,6 +15,7 @@ import { widenDueRequests } from '../../src/coordination/widening.js';
 import { createUser, type ServiceCounty } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -46,6 +47,8 @@ async function person(tenantId: string, county: ServiceCounty): Promise<Person> 
     status: 'ACTIVE',
     county,
   });
+  // Requesting needs a passed scan; the chosen county is kept.
+  await markVerifiedVeteran(pool(), tenantId, user.userId, county);
   const session = await createSession(pool(), TEST_SESSION_SECRET, {
     tenantId,
     userId: user.userId,
