@@ -147,15 +147,15 @@ describe('the delay boundary', () => {
 });
 
 describe('who can see a widened request', () => {
-  it('reaches bordering counties only, marks the request widened, and audits it', async () => {
+  it('reaches bordering counties only (Merced does not), marks the request widened, and audits it', async () => {
     const now = new Date();
     const tenantId = randomUUID();
     const requester = await person(tenantId, 'SAN_MATEO');
     const ownCounty = await person(tenantId, 'SAN_MATEO');
     const bordering = await person(tenantId, 'SANTA_CRUZ');
     const notBordering = await person(tenantId, 'MERCED');
-    // San Mateo and Alameda meet only across the bay, so Alameda is not a neighbour.
-    const waterOnly = await person(tenantId, 'ALAMEDA');
+    // A water-only border counts as bordering (owner decision), so Alameda reaches too.
+    const acrossBay = await person(tenantId, 'ALAMEDA');
     const serviceRequestId = await submittedRequest(requester, now, 31);
 
     expect(await openItems(bordering)).toEqual([]);
@@ -168,7 +168,9 @@ describe('who can see a widened request', () => {
       expect.objectContaining({ service_request_id: serviceRequestId, widened: true }),
     ]);
     expect(await openItems(notBordering)).toEqual([]);
-    expect(await openItems(waterOnly)).toEqual([]);
+    expect(await openItems(acrossBay)).toEqual([
+      expect.objectContaining({ service_request_id: serviceRequestId, widened: true }),
+    ]);
 
     const audit = await pool().query<{ payload: { reached_counties: string[] } }>(
       `SELECT payload FROM audit_events
@@ -176,7 +178,11 @@ describe('who can see a widened request', () => {
       [serviceRequestId],
     );
     expect(audit.rows).toHaveLength(1);
-    expect(audit.rows[0]?.payload.reached_counties).toEqual(['SANTA_CLARA', 'SANTA_CRUZ']);
+    expect([...(audit.rows[0]?.payload.reached_counties ?? [])].sort()).toEqual([
+      'ALAMEDA',
+      'SANTA_CLARA',
+      'SANTA_CRUZ',
+    ]);
   });
 
   it('lets a person in a bordering county accept it, and the first accept wins', async () => {
