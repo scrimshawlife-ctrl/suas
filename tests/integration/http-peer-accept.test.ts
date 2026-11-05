@@ -16,6 +16,7 @@ import { createSession } from '../../src/auth/index.js';
 import { createUser, type ServiceCounty } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -31,6 +32,7 @@ afterAll(async () => {
 });
 
 interface Person {
+  readonly tenantId: string;
   readonly userId: string;
   readonly headers: Record<string, string>;
 }
@@ -55,7 +57,11 @@ async function person(
     tenantId,
     userId: user.userId,
   });
-  return { userId: user.userId, headers: { authorization: `Bearer ${session.credential}` } };
+  return {
+    tenantId,
+    userId: user.userId,
+    headers: { authorization: `Bearer ${session.credential}` },
+  };
 }
 
 function keyed(who: Person): Record<string, string> {
@@ -64,6 +70,8 @@ function keyed(who: Person): Record<string, string> {
 
 /** The requester opens a case and creates a request; `submit` puts it on the open list. */
 async function request(requester: Person, options: { submit?: boolean } = {}) {
+  // Requesting help needs a passed ID scan; helpers need none.
+  await markVerifiedVeteran(pool(), requester.tenantId, requester.userId);
   const opened = await app.server.inject({
     method: 'POST',
     url: '/api/v0/cases',

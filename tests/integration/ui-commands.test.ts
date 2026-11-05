@@ -16,6 +16,7 @@ import { presentQrfState, VETERAN_QRF_CANCEL_REASON } from '../../src/ui/index.j
 import { readActiveQrf } from '../../src/ui/read.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
+import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -43,7 +44,7 @@ async function veteranSession(): Promise<{
   userId: string;
 }> {
   const tenantId = randomUUID();
-  const user = await createUser(pool(), {
+  const user = await createVerifiedUser(pool(), {
     tenantId,
     email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',

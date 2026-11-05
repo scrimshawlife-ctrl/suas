@@ -41,6 +41,7 @@ import { RELEASE_MANIFEST, SPEC_VERSION } from './release/pins.js';
 import { createFulfillmentAdapterRegistry, type AdapterRegistry } from './fulfillment/index.js';
 import { createChannelRegistry } from './notifications/index.js';
 import { createModelInferencePort, type ModelInferencePort } from './inference/index.js';
+import { createIdVerificationPort, type IdVerificationPort } from './identity/index.js';
 
 export interface StartedApp {
   readonly config: SuasConfig;
@@ -51,6 +52,8 @@ export interface StartedApp {
   readonly mfa: MfaPort;
   readonly fulfillmentAdapters: AdapterRegistry;
   readonly modelInference: ModelInferencePort;
+  /** Undefined when ID verification is disabled. */
+  readonly idVerification: IdVerificationPort | undefined;
   readonly buildInfo: BuildInfo;
   close(): Promise<void>;
 }
@@ -164,6 +167,8 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   // 5b. Model inference (Intake Assistant, catalog builder). The unavailable port
   // when no model is configured, so callers fall back to the plain form.
   const modelInference = createModelInferencePort(config);
+  // 5b. ID scan + selfie capability port (fake adapter only until a provider is chosen).
+  const idVerification = createIdVerificationPort(config);
 
   // 6. Build provenance.
   const resolveBuildInfo = (): BuildInfo =>
@@ -183,6 +188,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     mfa,
     jobQueue,
     modelInference,
+    ...(idVerification !== undefined ? { idVerification } : {}),
     // Pino's default transport uses worker_threads, which Workers do not run.
     ...(runtime === 'worker' ? { logger: false, workerRuntime: true } : {}),
   });
@@ -208,6 +214,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     mfa,
     fulfillmentAdapters,
     modelInference,
+    idVerification,
     buildInfo: resolveBuildInfo(),
     close: async () => {
       await server.close();

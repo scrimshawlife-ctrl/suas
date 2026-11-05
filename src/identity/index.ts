@@ -14,6 +14,31 @@ export {
   type UserStatus,
 } from './users.js';
 export { listBorderingCounties, SERVICE_COUNTIES, type ServiceCounty } from './counties.js';
+export {
+  findLatestIdScan,
+  hasPassedIdScan,
+  IdVerificationUnavailableError,
+  readIdScanStatus,
+  startIdScan,
+  type IdScanRecord,
+  type IdScanStatus,
+  type IdScanView,
+} from './id-scan.js';
+export {
+  requireCounty,
+  requireVerifiedVeteran,
+  VeteranVerificationRequiredError,
+} from './veteran-gate.js';
+export {
+  createIdVerificationPort,
+  ID_CHECK_METHOD,
+  type IdCheckOutcome,
+  type IdCheckStart,
+  type IdCheckStatus,
+  type IdVerificationPort,
+  type StartIdCheckInput,
+} from './id-verification.js';
+export { FakeIdVerification } from './fake-id-verification.js';
 export { selectUserForSignIn } from './signin-tenant.js';
 export { grantSuasAdmin, isSuasAdmin, revokeSuasAdmin, type SuasAdminGrant } from './admins.js';
 export {

@@ -7,14 +7,26 @@
  * - SUAS-specs PRIVACY.md (minimum necessary; self-profile only)
  * - SUAS-specs MVP_REFERENCE.md §5–§7 (category cards + QRF truthfulness)
  * - SUAS-specs AUTH.md §2 (enrolled contact channels)
+ * - V1_PROJECT_PLAN.md §2.1 / §4.3 F1 (county), F2 (ID scan + selfie status)
+ *
+ * The county and ID scan routes are open to any signed-in person: a person who has
+ * not passed the scan can still set a county and help others.
  */
 
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
+import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { findNonClosedCase } from '../../coordination/index.js';
-import { findUserById } from '../../identity/index.js';
+import {
+  readIdScanStatus,
+  startIdScan,
+  type IdScanView,
+  type IdVerificationPort,
+} from '../../identity/index.js';
+import { SERVICE_COUNTIES } from '../../identity/counties.js';
+import { findUserById, setUserCounty } from '../../identity/users.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { CATEGORY_CARDS } from '../../ui/categories.js';
 import { presentQrfState } from '../../ui/qrf.js';
@@ -23,6 +35,18 @@ import { readActiveQrf } from '../../ui/read.js';
 export interface VeteranRouteDeps {
   readonly pool: Pool;
   readonly sessionSecret: string | undefined;
+  /** Undefined when ID verification is disabled; the scan then reports unavailable. */
+  readonly idVerification?: IdVerificationPort;
+}
+
+const countyBody = z.object({ county: z.enum(SERVICE_COUNTIES) });
+
+function publicIdVerification(view: IdScanView) {
+  return {
+    method: 'ID_SCAN_SELFIE',
+    status: view.status,
+    verified_at: view.verifiedAt?.toISOString() ?? null,
+  };
 }
 
 export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDeps): void {
@@ -31,6 +55,12 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
     const user = await findUserById(deps.pool, context.tenantId, context.userId);
     if (user === undefined) throw new ResourceNotVisibleError();
 
+    const idScan = await readIdScanStatus(
+      deps.pool,
+      deps.idVerification,
+      context.tenantId,
+      context.userId,
+    );
     const openCase = await findNonClosedCase(deps.pool, context.tenantId, context.userId);
     const activeQrf = await readActiveQrf(deps.pool, context.tenantId, context.userId);
 
@@ -41,6 +71,8 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
         email: user.email !== undefined,
         phone: user.phone !== undefined,
       },
+      county: user.county ?? null,
+      id_verification: publicIdVerification(idScan),
       open_case:
         openCase === undefined
           ? null
@@ -68,5 +100,31 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
         note: card.note ?? null,
       })),
     };
+  });
+
+  app.put(`${API_PREFIX}/veterans/me/county`, async (request) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const body = countyBody.parse(request.body);
+    const user = await setUserCounty(deps.pool, context.tenantId, context.userId, body.county);
+    if (user === undefined) throw new ResourceNotVisibleError();
+    return { county: user.county ?? null };
+  });
+
+  app.get(`${API_PREFIX}/veterans/me/id-verification`, async (request) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    return publicIdVerification(
+      await readIdScanStatus(deps.pool, deps.idVerification, context.tenantId, context.userId),
+    );
+  });
+
+  app.post(`${API_PREFIX}/veterans/me/id-verification/commands/start`, async (request, reply) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const { view, created } = await startIdScan(
+      deps.pool,
+      deps.idVerification,
+      context.tenantId,
+      context.userId,
+    );
+    return reply.status(created ? 201 : 200).send(publicIdVerification(view));
   });
 }

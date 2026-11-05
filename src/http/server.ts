@@ -22,6 +22,7 @@ import type { BuildInfo } from '../provenance/build-info.js';
 import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
 import type { ModelInferencePort } from '../inference/index.js';
+import type { IdVerificationPort } from '../identity/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { authenticate } from './authenticate.js';
 import { registerAuthRoutes } from './routes/auth.js';
@@ -54,6 +55,8 @@ export interface ServerDependencies {
   readonly mfa?: MfaPort;
   readonly jobQueue?: DurableJobQueuePort;
   readonly modelInference?: ModelInferencePort;
+  /** ID scan + selfie port; absent when `SUAS_ID_VERIFICATION_MODE=disabled`. */
+  readonly idVerification?: IdVerificationPort;
   /**
    * Fastify logger. `false` disables pino (Worker isolates cannot use
    * worker_threads). Default keeps the Node structured logger.
@@ -327,6 +330,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerVeteranRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
+      ...(deps.idVerification !== undefined ? { idVerification: deps.idVerification } : {}),
     });
 
     registerConsentRoutes(app, {

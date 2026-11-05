@@ -8,6 +8,7 @@ import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { BROWSER_AUTH_BODY_LIMIT_BYTES } from '../../src/http/routes/ui.js';
 import { validEnv } from '../helpers/env.js';
+import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 const TENANT_ID = '11111111-1111-4111-8111-111111111111';
 /** Allowlisted cross-origin frontend (SUAS-specs D-038, released in 0.7.0). */
@@ -38,7 +39,7 @@ function delivery(): RecordingChallengeDelivery {
 async function enrolledEmail(): Promise<string> {
   const email = syntheticEmail(`browser-${randomUUID().slice(0, 8)}`);
   if (app.pool === undefined) throw new Error('test database absent');
-  await createUser(app.pool, { tenantId: TENANT_ID, email, status: 'ACTIVE' });
+  await createVerifiedUser(app.pool, { tenantId: TENANT_ID, email, status: 'ACTIVE' });
   return email;
 }
 
