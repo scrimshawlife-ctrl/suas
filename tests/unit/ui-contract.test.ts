@@ -284,7 +284,7 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
     ]);
   });
 
-  it('authorizes no released destination other than 911 and 988', () => {
+  it('authorizes no released destination other than 911 and 988', async () => {
     const source = readFileSync(new URL('../../src/ui/safety.ts', import.meta.url), 'utf8');
     const prose = source.replace(/\n\s*\*\s?/g, ' ').replace(/\s+/g, ' ');
     expect(prose).toContain(
@@ -326,6 +326,30 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
       }
     }
     expect(hrefs).toEqual(expect.arrayContaining(['tel:911', 'tel:988', 'sms:988', 'sms:838255']));
+
+    const modelUrl = new URL(
+      '../../web/src/features/support/resources-model.ts',
+      import.meta.url,
+    ).href;
+    const model = (await import(modelUrl)) as Record<string, unknown>;
+    const produced: string[] = [];
+    const seen = new Set<unknown>();
+    const collect = (value: unknown): void => {
+      if (typeof value === 'string') {
+        if (/^(?:tel|sms):/.test(value)) produced.push(value);
+        return;
+      }
+      if (typeof value !== 'object' || value === null || seen.has(value)) return;
+      seen.add(value);
+      for (const child of Object.values(value)) collect(child);
+    };
+    for (const [name, value] of Object.entries(model)) {
+      if (name === 'default' || typeof value === 'function') continue;
+      collect(value);
+    }
+    for (const href of produced) {
+      expect(allowed.has(href), `resources-model ${href}`).toBe(true);
+    }
   });
 
   it('states placeholder unavailability without giving crisis guidance', () => {
