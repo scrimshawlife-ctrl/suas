@@ -69,8 +69,13 @@ export function notificationSendHandler(
       throw new Error(`notification send failed: ${result.reason ?? 'provider refused'}`);
     }
     // SAFETY.md §3.4: TRUSTED_CONTACT_ALERTED only when a send actually occurred.
-    // The idempotency key makes a replay after SENT record nothing twice.
-    if (result.outcome === 'SENT' && result.notification.reason === 'trusted_contact_alert') {
+    // `sentAt` is set once the provider accepted it, so this also covers a retry
+    // that finds the row already SENT (or past it) because the previous run died
+    // before appending. The idempotency key keeps it to one event.
+    if (
+      result.notification.sentAt !== undefined &&
+      result.notification.reason === 'trusted_contact_alert'
+    ) {
       await appendDomainEvent(pool, {
         eventType: 'TRUSTED_CONTACT_ALERTED',
         aggregateType: 'TrustedContact',

@@ -20,7 +20,11 @@ import {
   type ConsentScope,
 } from '../../src/consent/index.js';
 import { createUser } from '../../src/identity/index.js';
-import { DispatchingJobQueue, InMemoryJobQueue } from '../../src/jobs/index.js';
+import {
+  DispatchingJobQueue,
+  InMemoryJobQueue,
+  type DurableJobQueuePort,
+} from '../../src/jobs/index.js';
 import { notificationSendHandler } from '../../src/jobs/handlers.js';
 import { createChannelRegistry, type RecordingChannel } from '../../src/notifications/index.js';
 import {
@@ -160,8 +164,9 @@ async function setup() {
     await answerAndComplete(tenantId, veteran.userId, started.checkInId, answers);
     return started.checkInId;
   }
-  const compute = (checkInId: string) =>
-    runSupportSignalComputeJob(pool, config, { tenantId, checkInId }, { jobQueue: dispatching });
+  const compute = (checkInId: string, jobQueue: DurableJobQueuePort = dispatching) =>
+    runSupportSignalComputeJob(pool, config, { tenantId, checkInId }, { jobQueue });
+  const sendHandler = notificationSendHandler(pool, channels);
   const notifications = () =>
     pool.query<{ destination: string; recipient_user_id: string | null; reason: string }>(
       `SELECT destination, recipient_user_id, reason FROM notifications WHERE tenant_id = $1`,
@@ -179,6 +184,8 @@ async function setup() {
     );
 
   return {
+    sendHandler,
+    dispatching,
     tenantId,
     veteran,
     helper,
@@ -255,5 +262,53 @@ describe('F9 RED alert to Trusted Contacts', () => {
     expect(s.email.sent()).toHaveLength(0);
     expect((await s.notifications()).rows).toHaveLength(0);
     expect(await s.alertedEvents()).toBe(0);
+  });
+
+  it('recovers when the process dies after the Notification row but before its send job', async () => {
+    const s = await setup();
+    const consented = await s.contact('consented', { accept: true, scope: 'RED' });
+    const checkInId = await s.checkIn(RED);
+
+    // First attempt: the row is inserted, then enqueueing the send job fails.
+    const crashing: DurableJobQueuePort = {
+      durability: s.dispatching.durability,
+      implementation: s.dispatching.implementation,
+      enqueue: () => Promise.reject(new Error('process died before enqueue')),
+    };
+    await expect(s.compute(checkInId, crashing)).rejects.toThrow('process died');
+    expect((await s.notifications()).rows).toHaveLength(1);
+    expect(s.email.sent()).toHaveLength(0);
+
+    // Retry: the dedupe hit must re-enqueue the missing send, not skip it.
+    await s.compute(checkInId);
+    await s.compute(checkInId);
+
+    expect(s.failures).toEqual([]);
+    expect(s.email.sent().map((m) => m.destination)).toEqual([consented.email]);
+    expect((await s.notifications()).rows).toHaveLength(1);
+  });
+
+  it('writes the missing TRUSTED_CONTACT_ALERTED event when the row was already SENT', async () => {
+    const s = await setup();
+    await s.contact('consented', { accept: true, scope: 'RED' });
+    const held = new InMemoryJobQueue();
+    await s.compute(await s.checkIn(RED), held);
+    const job = held.enqueued()[0];
+    if (job === undefined) throw new Error('no send job was enqueued');
+
+    // Simulate a crash after the provider accepted and the row was marked SENT,
+    // but before the audit event was appended.
+    await pool.query(
+      `UPDATE notifications SET delivery_status = 'SENT', sent_at = now() WHERE tenant_id = $1`,
+      [s.tenantId],
+    );
+    expect(await s.alertedEvents()).toBe(0);
+
+    await s.sendHandler(job);
+    await s.sendHandler(job);
+
+    expect(await s.alertedEvents()).toBe(1);
+    // The already-sent row is not sent again.
+    expect(s.email.sent()).toHaveLength(0);
   });
 });

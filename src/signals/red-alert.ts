@@ -18,9 +18,10 @@
  */
 
 import type { Pool } from 'pg';
-import { listAcceptedContactsWithEmail } from '../consent/index.js';
+import { listAcceptedContactsWithEmail, type DisclosureRequest } from '../consent/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
 import {
+  buildNotificationSendPayload,
   ChannelPreferenceDisabledError,
   enqueueNotification,
   NotificationConsentDeniedError,
@@ -45,7 +46,8 @@ const NONE: RedAlertSummary = { enqueued: 0, alreadyEnqueued: 0, skipped: 0 };
 /**
  * Enqueue the RED alert for each consented, accepted contact of the signal's
  * veteran. Replay-safe: the dedupe key is the signal plus the contact, so a
- * redelivered compute job, or a retry after a partial failure, adds nothing.
+ * redelivered compute job, or a retry after a partial failure, adds no second
+ * Notification, and repairs a Notification whose send job was never enqueued.
  * Contacts are attempted independently; the first unexpected error is rethrown
  * after the rest were tried so the job retries.
  */
@@ -69,6 +71,15 @@ export async function alertTrustedContactsOfRed(
 
   for (const contact of contacts) {
     try {
+      const disclosure: DisclosureRequest = {
+        tenantId: signal.tenantId,
+        veteranUserId: signal.veteranUserId,
+        permission: 'can_receive',
+        scope: 'RED',
+        granteeType: 'TRUSTED_CONTACT',
+        granteeId: contact.trustedContactId,
+        purpose: RED_ALERT_PURPOSE,
+      };
       const result = await enqueueNotification(
         pool,
         {
@@ -83,20 +94,31 @@ export async function alertTrustedContactsOfRed(
           dedupeKey: `red-alert:${signal.supportSignalId}:${contact.trustedContactId}`,
           subjectType: 'SupportSignal',
           subjectId: signal.supportSignalId,
-          disclosure: {
-            tenantId: signal.tenantId,
-            veteranUserId: signal.veteranUserId,
-            permission: 'can_receive',
-            scope: 'RED',
-            granteeType: 'TRUSTED_CONTACT',
-            granteeId: contact.trustedContactId,
-            purpose: RED_ALERT_PURPOSE,
-          },
+          disclosure,
         },
         { jobQueue: deps.jobQueue },
       );
-      if (result.deduplicated) alreadyEnqueued += 1;
-      else enqueued += 1;
+      if (result.deduplicated) {
+        alreadyEnqueued += 1;
+        // The row is inserted before its send job is enqueued, so a crash between
+        // the two leaves a QUEUED row with no job. Re-enqueue under the same
+        // idempotency key the first enqueue used: the queue dedupes it when the
+        // job does exist, and a settled or cancelled row needs nothing.
+        const { notification } = result;
+        if (
+          notification.cancelledAt === undefined &&
+          (notification.deliveryStatus === 'QUEUED' || notification.deliveryStatus === 'FAILED')
+        ) {
+          await deps.jobQueue.enqueue({
+            jobType: 'notification.send',
+            payload: buildNotificationSendPayload(notification.notificationId, disclosure),
+            idempotencyKey: notification.notificationId,
+            tenantId: signal.tenantId,
+          });
+        }
+      } else {
+        enqueued += 1;
+      }
     } catch (error) {
       if (
         error instanceof NotificationConsentDeniedError ||
