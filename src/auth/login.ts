@@ -1,10 +1,16 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../db/index.js';
 import { appendAuditEvent } from '../events/index.js';
-import { revokeLiveChallenges, verifyChallenge } from './challenge.js';
+import { findUserByDestination } from '../identity/users.js';
+import {
+  ChallengeVerificationFailedError,
+  revokeLiveChallenges,
+  verifyChallenge,
+} from './challenge.js';
 import type { ChallengeDeliveryPort } from './delivery.js';
 import type { FixedOtpCodeFor } from './demo-fixed-code.js';
 import { createSession, type IssuedSession } from './session.js';
+import { stagingFixturePrincipalRefused, type StagingAccess } from './staging-access.js';
 
 export interface VerifyAndCreateSessionInput {
   readonly tenantId: string;
@@ -20,9 +26,24 @@ export async function verifyAndCreateSession(
     readonly sessionSecret: string | undefined;
     readonly delivery: ChallengeDeliveryPort;
     readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
+    readonly stagingAccess?: StagingAccess | undefined;
   },
   input: VerifyAndCreateSessionInput,
 ): Promise<IssuedSession> {
+  if (deps.stagingAccess !== undefined) {
+    const enrolled = await findUserByDestination(deps.pool, input.tenantId, input.destination);
+    if (
+      stagingFixturePrincipalRefused(
+        deps.stagingAccess,
+        enrolled === undefined
+          ? undefined
+          : { tenantId: enrolled.tenantId, userId: enrolled.userId },
+      )
+    ) {
+      throw new ChallengeVerificationFailedError();
+    }
+  }
+
   const user = await verifyChallenge(deps, {
     tenantId: input.tenantId,
     destination: input.destination,
