@@ -15,6 +15,7 @@ import { widenDueRequests } from '../../src/coordination/widening.js';
 import { createUser, type ServiceCounty } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -46,6 +47,8 @@ async function person(tenantId: string, county: ServiceCounty): Promise<Person> 
     status: 'ACTIVE',
     county,
   });
+  // Requesting needs a passed scan; the chosen county is kept.
+  await markVerifiedVeteran(pool(), tenantId, user.userId, county);
   const session = await createSession(pool(), TEST_SESSION_SECRET, {
     tenantId,
     userId: user.userId,
@@ -64,6 +67,8 @@ async function submittedRequest(requester: Person, now: Date, waitedMinutes: num
     url: '/api/v0/cases',
     headers: keyed(requester),
   });
+  // 201 opens a new case; 200 returns the requester's already-open case.
+  expect([200, 201]).toContain(opened.statusCode);
   const caseId: string = opened.json().case_id;
   const created = await app.server.inject({
     method: 'POST',
@@ -71,6 +76,7 @@ async function submittedRequest(requester: Person, now: Date, waitedMinutes: num
     headers: keyed(requester),
     payload: { category: 'FOOD' },
   });
+  expect(created.statusCode).toBe(201);
   const serviceRequestId: string = created.json().service_request_id;
   const submitted = await app.server.inject({
     method: 'POST',
