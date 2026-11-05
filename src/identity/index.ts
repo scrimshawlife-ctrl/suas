@@ -12,6 +12,32 @@ export {
   type User,
   type UserStatus,
 } from './users.js';
+export {
+  findLatestIdScan,
+  hasPassedIdScan,
+  IdVerificationUnavailableError,
+  readIdScanStatus,
+  startIdScan,
+  type IdScanRecord,
+  type IdScanStatus,
+  type IdScanView,
+} from './id-scan.js';
+export {
+  CountyRequiredError,
+  requireCounty,
+  requireVerifiedVeteran,
+  VeteranVerificationRequiredError,
+} from './veteran-gate.js';
+export {
+  createIdVerificationPort,
+  ID_CHECK_METHOD,
+  type IdCheckOutcome,
+  type IdCheckStart,
+  type IdCheckStatus,
+  type IdVerificationPort,
+  type StartIdCheckInput,
+} from './id-verification.js';
+export { FakeIdVerification } from './fake-id-verification.js';
 export { selectUserForSignIn } from './signin-tenant.js';
 export {
   createMembership,
