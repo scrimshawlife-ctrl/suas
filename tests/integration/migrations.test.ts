@@ -6,6 +6,7 @@
  * SUAS-specs TESTING.md §2 "Migration/restore" layer.
  */
 
+import { isIP } from 'node:net';
 import { Pool, type PoolClient } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -137,6 +138,19 @@ function expectNoDestructiveStatement(queries: readonly string[]): void {
     expect(query).not.toMatch(/\btruncate\b/i);
     expect(query).not.toMatch(/\bdrop\s+database\b/i);
   }
+}
+
+async function explicitResetUrl(baseUrl: string, database: string): Promise<string> {
+  const observed = await pool.query<{ server_addr: string | null; server_port: number | null }>(
+    'SELECT host(inet_server_addr()) AS server_addr, inet_server_port() AS server_port',
+  );
+  const address = observed.rows[0]?.server_addr ?? '';
+  const port = observed.rows[0]?.server_port;
+  expect(isIP(address)).not.toBe(0);
+  expect(port).toEqual(expect.any(Number));
+  const parsed = new URL(baseUrl);
+  const host = isIP(address) === 6 ? `[${address}]` : address;
+  return `postgresql://${encodeURIComponent(decodeURIComponent(parsed.username))}:${encodeURIComponent(decodeURIComponent(parsed.password))}@${host}:${String(port)}/${database}`;
 }
 
 async function preparedSchema(): Promise<number> {
@@ -273,9 +287,10 @@ describe('D-053 — reset only a named synthetic disposable database', () => {
     expect(name).toBeDefined();
     await runMigrations(pool, { mode: 'apply', provenance });
     await pool.query('CREATE TABLE public.reset_probe (id int)');
+    const explicit = await explicitResetUrl(url, name ?? '');
     await withAmbient(
       {
-        DATABASE_URL: url,
+        DATABASE_URL: explicit,
         PGHOST: undefined,
         PGPORT: undefined,
         PGUSER: undefined,
@@ -287,7 +302,7 @@ describe('D-053 — reset only a named synthetic disposable database', () => {
           pool,
           {
             environment: 'TEST',
-            databaseUrl: url,
+            databaseUrl: explicit,
             allowlist: [name ?? ''],
             syntheticMarker: name,
           },
@@ -362,7 +377,7 @@ describe('D-053 — destructive reset is refused before any schema change', () =
   });
 
   it('refuses when the pool is not the authorized database and leaves the schema', async () => {
-    const other = 'postgresql://suas:suas@localhost:5432/suas_migrations_test_other';
+    const other = 'postgresql://suas:suas@192.0.2.1:5432/suas_migrations_test_other';
     let queries: readonly string[] = [];
     await withAmbient(
       {
@@ -459,6 +474,195 @@ describe('D-053 — destructive reset is refused before any schema change', () =
     expectNoDestructiveStatement(captured.queries);
     await expectSchemaUnchanged(version);
   });
+
+  it('pins reset work to the checked-out client', async () => {
+    const version = await preparedSchema();
+    const explicit = await explicitResetUrl(url, name);
+    const otherHost = explicit.includes('@127.0.0.1:') ? '192.0.2.1' : '127.0.0.1';
+    const other = explicit.replace(/@[^/]+/, `@${otherHost}:5432`);
+    const queries: string[] = [];
+    let checkouts = 0;
+    let queriesBeforeRelease = -1;
+    const originalConnect = pool.connect.bind(pool);
+    const originalQuery = pool.query.bind(pool);
+    pool.query = (() => {
+      throw new Error('pool.query');
+    });
+    pool.connect = (async () => {
+      checkouts += 1;
+      if (checkouts > 1) throw new Error('second checkout');
+      const client = await originalConnect();
+      const originalClientQuery = client.query.bind(client);
+      const originalRelease = client.release.bind(client);
+      client.query = ((...args: unknown[]) => {
+        const text = args[0];
+        if (typeof text === 'string') queries.push(text);
+        return (originalClientQuery as (...queryArgs: unknown[]) => unknown).apply(client, args);
+      }) as PoolClient['query'];
+      client.release = ((...args: unknown[]) => {
+        if (queriesBeforeRelease < 0) queriesBeforeRelease = queries.length;
+        return (originalRelease as (...releaseArgs: unknown[]) => void).apply(client, args);
+      });
+      return client;
+    }) as Pool['connect'];
+    try {
+      await withAmbient(
+        {
+          DATABASE_URL: other,
+          PGHOST: undefined,
+          PGPORT: undefined,
+          PGUSER: undefined,
+          PGPASSWORD: undefined,
+          PGDATABASE: undefined,
+        },
+        async () => {
+          await expect(
+            resetSyntheticDatabase(
+              pool,
+              {
+                environment: 'TEST',
+                databaseUrl: other,
+                allowlist: [name],
+                syntheticMarker: name,
+              },
+              provenance,
+            ),
+          ).rejects.toThrow(/checked-out connection/);
+        },
+      );
+    } finally {
+      pool.connect = originalConnect;
+      pool.query = originalQuery;
+    }
+    expect(checkouts).toBe(1);
+    expect(queriesBeforeRelease).toBeGreaterThan(0);
+    expectNoDestructiveStatement(queries);
+    await expectSchemaUnchanged(version);
+  });
+
+  it('refuses the same database name on a different endpoint and leaves the schema', async () => {
+    const explicit = await explicitResetUrl(url, name);
+    const otherHost = explicit.includes('@127.0.0.1:') ? '192.0.2.1' : '127.0.0.1';
+    const other = explicit.replace(/@[^/]+/, `@${otherHost}:5432`);
+    let queries: readonly string[] = [];
+    await withAmbient(
+      {
+        DATABASE_URL: other,
+        PGHOST: undefined,
+        PGPORT: undefined,
+        PGUSER: undefined,
+        PGPASSWORD: undefined,
+        PGDATABASE: undefined,
+      },
+      async () => {
+        queries = await refuseWithoutChange(
+          {
+            environment: 'TEST',
+            databaseUrl: other,
+            allowlist: [name],
+            syntheticMarker: name,
+          },
+          /checked-out connection/,
+        );
+      },
+    );
+    expect(queries.some((query) => /inet_server_addr/i.test(query))).toBe(true);
+    expect(queries.some((query) => /current_database/i.test(query))).toBe(true);
+  });
+
+  it('refuses ambiguous reset URLs and leaves the schema', async () => {
+    const formatCases = [
+      `postgresql://suas:suas@127.0.0.1:5432/${name}#fragment`,
+      `postgresql://suas:suas@127.0.0.1:5432/${name}?host=192.0.2.1`,
+      `postgresql://suas:suas@127.0.0.1:5432/${name}?port=1`,
+      `postgresql://suas:suas@127.0.0.1:5432/${name}?sslmode=disable&sslmode=require`,
+      `postgresql://suas:suas@127.0.0.1:5432/${name}?application_name=reset`,
+      `postgresql://suas:suas@127.0.0.1/${name}`,
+      `postgresql://suas@127.0.0.1:5432/${name}`,
+      `postgresql://:suas@127.0.0.1:5432/${name}`,
+      `postgresql://suas:suas@:5432/${name}`,
+    ];
+    for (const databaseUrl of formatCases) {
+      await refuseWithoutChange(
+        {
+          environment: 'TEST',
+          databaseUrl,
+          allowlist: [name, databaseUrl],
+          syntheticMarker: name,
+        },
+        /malformed/,
+      );
+    }
+    const hostname = `postgresql://suas:suas@localhost:5432/${name}`;
+    await withAmbient(
+      {
+        DATABASE_URL: hostname,
+        PGHOST: undefined,
+        PGPORT: undefined,
+        PGUSER: undefined,
+        PGPASSWORD: undefined,
+        PGDATABASE: undefined,
+      },
+      async () => {
+        await refuseWithoutChange(
+          {
+            environment: 'TEST',
+            databaseUrl: hostname,
+            allowlist: [name],
+            syntheticMarker: name,
+          },
+          /unsupported or ambiguous/,
+        );
+      },
+    );
+  });
+
+  it.each([
+    ['DATABASE_URL', { DATABASE_URL: 'postgresql://suas:suas@127.0.0.1:5432/suas_test' }],
+    ['PGHOST', { PGHOST: '192.0.2.1' }],
+    ['PGPORT', { PGPORT: '1' }],
+    ['PGUSER', { PGUSER: 'not-the-reset-user' }],
+    ['PGPASSWORD', { PGPASSWORD: 'not-the-reset-password' }],
+    ['PGDATABASE', { PGDATABASE: 'not_the_reset_database' }],
+  ] as const)(
+    'refuses an ambient %s override and leaves the schema',
+    async (variable, override) => {
+      const explicit = await explicitResetUrl(url, name);
+      const version = await preparedSchema();
+      const captured = captureQueries(pool);
+      try {
+        await withAmbient(
+          {
+            DATABASE_URL: explicit,
+            PGHOST: undefined,
+            PGPORT: undefined,
+            PGUSER: undefined,
+            PGPASSWORD: undefined,
+            PGDATABASE: undefined,
+            ...override,
+          },
+          async () => {
+            await expect(
+              resetSyntheticDatabase(
+                pool,
+                {
+                  environment: 'TEST',
+                  databaseUrl: explicit,
+                  allowlist: [name],
+                  syntheticMarker: name,
+                },
+                provenance,
+              ),
+            ).rejects.toThrow(new RegExp(`${variable} does not match`));
+          },
+        );
+      } finally {
+        captured.restore();
+      }
+      expectNoDestructiveStatement(captured.queries);
+      await expectSchemaUnchanged(version);
+    },
+  );
 
   it('refuses a malformed URL or allowlist entry and leaves the schema', async () => {
     await refuseWithoutChange(
