@@ -33,7 +33,7 @@ export function Footer({ showVeteransCrisisLine = false }: FooterProps) {
         {showVeteransCrisisLine ? (
           <p>
             Veterans Crisis Line:{' '}
-            <a href="tel:988" className={crisisLink} aria-label="Call 988">
+            <a href="tel:988" className={crisisLink}>
               Dial 988
             </a>
             , then press 1 ·{' '}

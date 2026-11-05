@@ -89,9 +89,8 @@ describe('D-012 crisis copy', () => {
     expect(text(screen.getByRole('contentinfo'))).toContain(
       'Veterans Crisis Line: Dial 988, then press 1 · Text 838255',
     );
-    const call988 = screen.getAllByRole('link', { name: 'Call 988' });
-    expect(call988).toHaveLength(2);
-    for (const link of call988) expect(link).toHaveAttribute('href', 'tel:988');
+    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+    expect(screen.getByRole('link', { name: 'Dial 988' })).toHaveAttribute('href', 'tel:988');
     expect(screen.getByRole('link', { name: 'Text 838255' })).toHaveAttribute('href', 'sms:838255');
     for (const link of screen.getAllByRole('link')) {
       expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11', 'items-center');
