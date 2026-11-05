@@ -57,7 +57,7 @@ Hostnames must be inside `rootDomain`, because certificates are validated in the
 
 | Stack                  | Region    | Contents                                                                                                                                                                                                          |
 | ---------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), SES domain identity with Easy DKIM CNAMEs, `NameServers` output. No apex or `www` record.                                                              |
+| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), SES domain identity with Easy DKIM CNAMEs, the Resend mail records carried over from Cloudflare, `NameServers` output. No apex or `www` record.        |
 | `Suas-Staging-WebCert` | us-east-1 | DNS-validated ACM certificate for the web hostname (CloudFront needs us-east-1). Passed to the web stack with `crossRegionReferences`.                                                                            |
 | `Suas-Staging-Backend` | us-west-2 | VPC (isolated subnets), VPC endpoints, RDS PostgreSQL 17 + RDS Proxy, secrets, assets bucket, API / WebSocket / job worker / migrate Lambdas, HTTP and WebSocket APIs with custom domains, EventBridge Scheduler. |
 | `Suas-Staging-Web`     | us-west-2 | Private S3 bucket, CloudFront distribution with OAC, `staging.suasqrf.com` A and AAAA alias, `web/dist` upload (only if `web/dist` exists at synth time).                                                         |
@@ -128,9 +128,9 @@ The application reads configuration from environment variables only (`src/config
 (64 generated characters) and the database credentials are in Secrets Manager and are injected as CloudFormation
 dynamic references (`{{resolve:secretsmanager:...}}`), resolved at deploy time. **The template never contains the
 values, but the resolved values are visible to anyone who can read the Lambda configuration** (for example
-`lambda:GetFunctionConfiguration`). That is acceptable for synthetic staging data. Reading secrets at run time
-(or IAM authentication to RDS Proxy) would need application code and should be decided before production.
-Rotating a secret needs a redeploy.
+`lambda:GetFunctionConfiguration`). The owner accepted this for synthetic staging data. See "Before production".
+Rotating a secret needs a redeploy. The API, WebSocket and job worker functions connect as the generated master
+user (`suas_admin`, an `rds_superuser`), the same user the Proxy and the migrate function use.
 
 ### Environment variables (API function)
 
@@ -172,7 +172,9 @@ each function's environment is checked against the application's own config vali
 Each function has its own role with no managed policies: write to its own log group, plus the ENI actions Lambda
 needs in a VPC (not scopable). Added grants: SES `ses:SendEmail` on the one domain identity (API and job worker);
 Bedrock `bedrock:InvokeModel` on the configured model only (API); S3 get/put/delete on the assets bucket objects
-(API); `execute-api:ManageConnections` on the WebSocket API (API). A model id with a geography prefix (`us.`,
+plus `s3:ListBucket` on the bucket itself (API; without it a missing key returns AccessDenied instead of
+NoSuchKey); `execute-api:ManageConnections` on the WebSocket API (API). The ENI actions are the six in
+`AWSLambdaVPCAccessExecutionRole`, including `ec2:DescribeSubnets`. A model id with a geography prefix (`us.`,
 `eu.`, `global.`...) is treated as an inference profile: the profile in this account plus the underlying
 foundation model with a wildcard **region** only, because the profile routes across regions.
 
@@ -183,6 +185,23 @@ fixed metadata record (request id, route key, status, latency): no bodies, paths
 No WebSocket access log is kept, since it could capture the connect ticket. The API (Fastify/pino) logs
 method, path and status per request, never bodies: no code in `src/intake`, `src/catalog`, `src/inference` or
 `src/http` logs request bodies or intake text, and `src/inference/bedrock-inference.ts` logs only the outcome.
+
+### Alarms
+
+Each of the API and job-worker log groups has a metric filter for the messages the code logs on failure:
+`job_failed` and `sweep_failed` (`src/jobs/worker.ts`) and `chat push failed` (`src/chat/send.ts`). An alarm per
+group fires on one or more in 5 minutes. **There is no notification target yet**, so the alarms only show in the
+CloudWatch console until someone picks a topic (an SNS topic and subscriber are not created here). The inline
+job dispatcher in the API logs a different message (`[suas] job <type> failed`, `src/app.ts`) that these filters
+do not match.
+
+### Log retention of CDK-owned helper functions
+
+All application log groups and the `BucketDeployment` function have 30-day retention. The Lambda functions that
+CDK itself adds have no retention (their log groups never expire): the cross-region export reader/writer (Dns,
+WebCert and Web stacks), the VPC default-security-group restrictor, and the S3 auto-delete helper. These constructs
+expose no log group property, so a fix would need an aspect that overrides CloudFormation properties, which is
+neither simple nor a supported use. They log only a few lines per deploy. Left as is.
 
 ### Web
 
@@ -198,8 +217,9 @@ Do not deploy until the AWS account layout is decided. When it is, from `infra/`
 account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it) and `-c bedrockModelId=...`:
 
 1. `cdk bootstrap` the account for `us-west-2` **and** `us-east-1` (cross-region references and the certificate need both).
-2. `cdk deploy Suas-Dns`. Note the `NameServers` output.
-3. **Move the registrar NS records (manual step 1).** Certificates and DKIM cannot validate before this.
+2. Export the Cloudflare zone (manual step 1), then `cdk deploy Suas-Dns`. Note the `NameServers` output.
+3. **Move the registrar NS records as soon as `Suas-Dns` is deployed (manual step 1).** Certificates and DKIM
+   cannot validate before this.
 4. `cdk deploy Suas-Staging-WebCert Suas-Staging-Backend` (these wait for DNS validation).
 5. **Run the migrate function (manual step 4).**
 6. Build the web app (above), then `cdk deploy Suas-Staging-Web`.
@@ -207,10 +227,17 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it) and `-c bed
 
 ## Manual steps
 
-1. **Move the name servers at the registrar.** After `Suas-Dns` is deployed, set the registrar's NS records to the
-   four values in the `NameServers` output. First recreate in Route 53 any record that must keep working (see
-   "Records on Cloudflare today"). Until then the domain resolves from Cloudflare, and the CloudFront certificate,
-   API certificate and DKIM records stay pending.
+1. **Move the name servers at the registrar, as soon as `Suas-Dns` is deployed.**
+   1. First export the zone from the Cloudflare dashboard (the records found by `dig` are listed below, but
+      `dig` cannot list a whole zone).
+   2. `Suas-Dns` already recreates the mail records found (`resend._domainkey` TXT, `send` TXT and `send` MX) in
+      the Route 53 zone. Add by hand anything else in the export that must keep working.
+   3. Set the registrar's NS records to the four values in the `NameServers` output.
+   4. **After the move, the Cloudflare Worker staging site at `staging.suasqrf.com` and the apex `suasqrf.com`
+      stop resolving until they are recreated.** `staging.suasqrf.com` is recreated by `Suas-Staging-Web` as an
+      alias to CloudFront. The apex gets no record from this app.
+      Until the move, the domain resolves from Cloudflare, and the CloudFront certificate, API certificate and
+      DKIM records stay pending.
 2. **Leave the sandbox in SES** (a new account is in the SES sandbox: it can send only to verified addresses).
    Verify test recipient addresses for staging, or open an AWS support request for production access (plan §7).
    Check that the domain identity shows "Verified" and DKIM "Successful" once DNS is delegated.
@@ -231,9 +258,9 @@ Found with `dig` on 2026-11-05 (zone on `romina.ns.cloudflare.com` and `rustam.n
 | `suasqrf.com`                   | A    | `104.21.28.254`, `172.67.171.51` (Cloudflare proxy)                                                                                                                                                                          | Yes, or the current site goes down at the NS move. This app does not create it.     |
 | `suasqrf.com`                   | AAAA | `2606:4700:3035::ac43:ab33`, `2606:4700:3035::6815:1cfe`                                                                                                                                                                     | Same                                                                                |
 | `staging.suasqrf.com`           | A    | same two Cloudflare IPs                                                                                                                                                                                                      | **No: replaced.** The web stack makes `staging.suasqrf.com` an alias to CloudFront. |
-| `resend._domainkey.suasqrf.com` | TXT  | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDrMvHRhU05sXko0q5D1sB8fH9gt051BBQgB46SggGREJahiVsC3/tmMV4QNQjBl5vi5ih8TFNArxy0O/i1pkMnXBBIGgOWDqF3Jrvl8rHAcM98JQuSX+cQggOwo4WrPBMI6aX1RtjTZIcSX2rKiy/g6dXHTqISnj4HAmTpcC13zQIDAQAB` | Only while Resend (D-004) is still used for mail                                    |
-| `send.suasqrf.com`              | TXT  | `"v=spf1 include:amazonses.com ~all"`                                                                                                                                                                                        | Same (Resend sending subdomain)                                                     |
-| `send.suasqrf.com`              | MX   | `10 feedback-smtp.us-east-1.amazonses.com.`                                                                                                                                                                                  | Same                                                                                |
+| `resend._domainkey.suasqrf.com` | TXT  | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDrMvHRhU05sXko0q5D1sB8fH9gt051BBQgB46SggGREJahiVsC3/tmMV4QNQjBl5vi5ih8TFNArxy0O/i1pkMnXBBIGgOWDqF3Jrvl8rHAcM98JQuSX+cQggOwo4WrPBMI6aX1RtjTZIcSX2rKiy/g6dXHTqISnj4HAmTpcC13zQIDAQAB` | **Created by `Suas-Dns`.** Public DNS value, not a secret                           |
+| `send.suasqrf.com`              | TXT  | `"v=spf1 include:amazonses.com ~all"`                                                                                                                                                                                        | **Created by `Suas-Dns`**                                                           |
+| `send.suasqrf.com`              | MX   | `10 feedback-smtp.us-east-1.amazonses.com.`                                                                                                                                                                                  | **Created by `Suas-Dns`**                                                           |
 
 The Cloudflare A and AAAA addresses are Cloudflare edge addresses, so the apex is a proxied record pointing at the
 Cloudflare Worker. They cannot be copied into Route 53 as the origin; the apex needs a decision (point it at AWS,
@@ -247,11 +274,25 @@ dashboard before the move to be sure nothing was missed.
   can't access the default endpoint of a public API Gateway API from your VPC endpoint. You can access an API with
   a custom domain name." The push adapter posts to the default execute-api URL
   (`src/config/schema.ts` accepts nothing else for `SUAS_CHAT_WS_ENDPOINT`). If `PostToConnection` fails in staging,
-  chat still works over REST and only live updates are lost (look for `chat push failed` in the API log group).
-  Fallbacks: allow the custom domain as the management endpoint, or add a non-VPC pusher function. Undecided.
+  chat still works over REST and only live updates are lost (look for `chat push failed` in the API log group; the
+  API alarm fires on it). The user accepted this risk on 2026-11-05: ship as built and test on the first deploy.
+  Fallbacks if it fails: (B) loosen the `SUAS_CHAT_WS_ENDPOINT` pattern so the custom domain can be the
+  management URL; (C) add a non-VPC pusher function the API invokes through a `lambda` endpoint; (D) a NAT
+  gateway for the API function (reverses the VPC decision).
 - **Endpoint availability by zone.** An interface endpoint cannot be created in a zone that does not offer the
   service. If a deploy fails for that reason, pass `-c availabilityZones=us-west-2a,us-west-2b` (or other zones).
 - **Cold starts and the API Gateway limit.** The HTTP API integration times out after 29 seconds; the Bedrock call
   in the adapter allows 30 seconds.
 - `npm audit` reports a moderate `minimatch` issue bundled inside `aws-cdk-lib` itself; it affects build-time code
   only, and the fix is a CDK upgrade.
+
+## Before production
+
+Not needed for synthetic staging, required before any real Veteran data (plan §7 gates also apply):
+
+- Fetch secrets at run time (needs application code), or use RDS Proxy IAM authentication. Today the session
+  secret and the database credentials are CloudFormation dynamic references, visible in the Lambda configuration.
+- A least-privilege `suas_app` database role for the API, WebSocket and job worker functions. Today they use the
+  generated master user, which is an `rds_superuser`. Only the migrate function needs schema-change rights.
+- Secret rotation: a rotation needs a redeploy while secrets are injected as environment variables.
+- A notification target for the alarms, and a CSP on the web distribution.

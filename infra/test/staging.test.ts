@@ -266,6 +266,23 @@ describe('functions', () => {
   });
 });
 
+describe('alarms', () => {
+  it('counts the logged failure messages on the API and job worker logs and alarms on them', () => {
+    const filters = ofType(s.backend, 'AWS::Logs::MetricFilter').map(([, r]) => r.Properties);
+    expect(filters).toHaveLength(2);
+    for (const filter of filters) {
+      expect(filter?.FilterPattern).toBe('?"job_failed" ?"sweep_failed" ?"chat push failed"');
+    }
+    const alarms = ofType(s.backend, 'AWS::CloudWatch::Alarm').map(([, r]) => r.Properties);
+    expect(alarms).toHaveLength(2);
+    for (const alarm of alarms) {
+      expect(alarm?.Threshold).toBe(1);
+      // No notification target yet.
+      expect(alarm?.AlarmActions).toBeUndefined();
+    }
+  });
+});
+
 describe('IAM', () => {
   const statements = (template: Synthesized['backend']) =>
     ofType(template, 'AWS::IAM::Policy').flatMap(
@@ -276,6 +293,29 @@ describe('IAM', () => {
           Effect: string;
         }>,
     );
+
+  it('lets the Lambda roles manage ENIs, including DescribeSubnets', () => {
+    const eni = statements(s.backend).filter((st) =>
+      [st.Action].flat().includes('ec2:CreateNetworkInterface'),
+    );
+    expect(eni).toHaveLength(4);
+    for (const st of eni) {
+      expect([st.Action].flat().sort()).toEqual([
+        'ec2:AssignPrivateIpAddresses',
+        'ec2:CreateNetworkInterface',
+        'ec2:DeleteNetworkInterface',
+        'ec2:DescribeNetworkInterfaces',
+        'ec2:DescribeSubnets',
+        'ec2:UnassignPrivateIpAddresses',
+      ]);
+    }
+  });
+
+  it('lets the API list the assets bucket, so a missing key is NoSuchKey and not AccessDenied', () => {
+    const list = statements(s.backend).find((st) => [st.Action].flat().includes('s3:ListBucket'));
+    expect(JSON.stringify(list?.Resource)).toContain('AssetsBucket');
+    expect(JSON.stringify(list?.Resource)).not.toContain('/*');
+  });
 
   it('never uses a wildcard resource for Bedrock or SES actions', () => {
     const sensitive = statements(s.backend).filter((st) =>
@@ -312,17 +352,22 @@ describe('IAM', () => {
 });
 
 describe('DNS and email', () => {
-  it('owns a retained public zone for the root domain and creates no apex or www record', () => {
+  it('owns a retained public zone and creates no apex or www record', () => {
     s.dns.hasResource('AWS::Route53::HostedZone', {
       Properties: { Name: 'suasqrf.com.' },
       DeletionPolicy: 'Retain',
     });
     const records = ofType(s.dns, 'AWS::Route53::RecordSet').map(([, r]) => r.Properties);
-    expect(records).toHaveLength(3);
-    for (const record of records) {
-      expect(record?.Type).toBe('CNAME');
-      expect(JSON.stringify(record?.Name)).toContain('DkimDNSTokenName');
-    }
+    const dkim = records.filter((r) => JSON.stringify(r?.Name).includes('DkimDNSTokenName'));
+    expect(dkim).toHaveLength(3);
+    for (const record of dkim) expect(record?.Type).toBe('CNAME');
+    // The rest are the mail records carried over from Cloudflare, all on subdomains.
+    const others = records.filter((r) => !dkim.includes(r)).map((r) => `${r?.Type} ${r?.Name}`);
+    expect(others.sort()).toEqual([
+      'MX send.suasqrf.com.',
+      'TXT resend._domainkey.suasqrf.com.',
+      'TXT send.suasqrf.com.',
+    ]);
     s.dns.hasOutput('NameServers', Match.anyValue());
   });
 

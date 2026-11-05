@@ -18,6 +18,7 @@ import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { AccessLogFormat } from 'aws-cdk-lib/aws-apigateway';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -244,6 +245,7 @@ export class BackendStack extends Stack {
     };
     const viaProxy: Env = { DATABASE_URL: databaseUrl(proxy.endpoint) };
 
+    const functionLogGroups = new Map<string, logs.LogGroup>();
     const newFunction = (
       fnId: string,
       options: {
@@ -265,11 +267,13 @@ export class BackendStack extends Stack {
         assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       });
       logGroup.grantWrite(role);
+      functionLogGroups.set(fnId, logGroup);
       role.addToPolicy(
         new iam.PolicyStatement({
           actions: [
             'ec2:CreateNetworkInterface',
             'ec2:DescribeNetworkInterfaces',
+            'ec2:DescribeSubnets',
             'ec2:DeleteNetworkInterface',
             'ec2:AssignPrivateIpAddresses',
             'ec2:UnassignPrivateIpAddresses',
@@ -394,6 +398,14 @@ export class BackendStack extends Stack {
         resources: [assetsBucket.arnForObjects('*')],
       }),
     );
+    // Without list permission, S3 answers AccessDenied instead of NoSuchKey for a missing key,
+    // and the storage adapter maps only NoSuchKey to "not found".
+    apiFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:ListBucket'],
+        resources: [assetsBucket.bucketArn],
+      }),
+    );
     wsApi.grantManageConnections(apiFunction);
 
     // ---------------------------------------------------- certificate and domains
@@ -489,6 +501,41 @@ export class BackendStack extends Stack {
         retryAttempts: 0,
       }),
     });
+
+    // ------------------------------------------------------------------ alarms
+    // Count the failure messages the code logs and alarm on any in five minutes. There is no
+    // notification target yet: the alarm only shows in the console until one is chosen.
+    //   job_failed, sweep_failed: src/jobs/worker.ts (job worker)
+    //   chat push failed:         src/chat/send.ts (API, through pino)
+    const failureTerms = ['job_failed', 'sweep_failed', 'chat push failed'];
+    for (const [fnId, label] of [
+      ['ApiFunction', 'Api'],
+      ['JobWorkerFunction', 'JobWorker'],
+    ] as const) {
+      const logGroup = functionLogGroups.get(fnId);
+      if (logGroup === undefined) throw new Error(`No log group recorded for ${fnId}.`);
+      const metricName = `${label}FailureMessages`;
+      logGroup.addMetricFilter(`${label}FailureFilter`, {
+        filterPattern: logs.FilterPattern.anyTerm(...failureTerms),
+        metricNamespace: `Suas/${config.name}`,
+        metricName,
+        metricValue: '1',
+        defaultValue: 0,
+      });
+      new cloudwatch.Alarm(this, `${label}FailureAlarm`, {
+        alarmDescription: `${label}: the code logged ${failureTerms.join(', ')}. No notification target yet.`,
+        metric: new cloudwatch.Metric({
+          namespace: `Suas/${config.name}`,
+          metricName,
+          statistic: 'Sum',
+          period: Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+    }
 
     new CfnOutput(this, 'ApiUrl', { value: `https://${config.apiHostname}` });
     new CfnOutput(this, 'WebSocketUrl', { value: `wss://${config.wsHostname}` });

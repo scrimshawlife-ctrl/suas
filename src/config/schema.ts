@@ -536,10 +536,6 @@ function validateProviderEndpoint(
   }
 }
 
-/**
- * Full configuration schema including the ENVIRONMENT.md §5 cross-field
- * startup-validation invariants. Every failure here is fail-closed by design.
- */
 /** Why `SUAS_CHAT_WS_PUBLIC_URL` is not a usable client URL, or undefined when it is. */
 function chatWsPublicUrlIssue(value: string): string | undefined {
   const message =
@@ -645,6 +641,10 @@ function validateAwsCapabilities(
   }
 }
 
+/**
+ * Full configuration schema including the ENVIRONMENT.md §5 cross-field
+ * startup-validation invariants. Every failure here is fail-closed by design.
+ */
 export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   const environment = raw.SUAS_ENV;
 
