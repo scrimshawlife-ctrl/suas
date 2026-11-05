@@ -142,12 +142,18 @@ export function visibleToViewerConditions(
   ];
 }
 
+/**
+ * The case may still take a new accepter. A case another helper already holds a request
+ * of (`ASSIGNED`, `ACTIVE`, `FOLLOWUP`) stays open to others for its other requests:
+ * accepting is per request. A `RESOLVED` or `CLOSED` case does not.
+ */
+export const OPEN_CASE_STATE_CONDITION = `c.status IN ('OPEN', 'TRIAGED', 'ASSIGNED', 'ACTIVE', 'FOLLOWUP')`;
+
 /** The state conditions: the request is still waiting for someone to accept it. */
 export const OPEN_REQUEST_STATE_CONDITIONS: readonly string[] = [
   `r.status = ANY(ARRAY['SUBMITTED','TRIAGED','MATCHING']::suas_service_request_status[])`,
-  `c.status IN ('OPEN', 'TRIAGED')`,
-  `NOT EXISTS (SELECT 1 FROM case_assignments a
-               WHERE a.case_id = c.case_id AND a.status = 'ACTIVE')`,
+  OPEN_CASE_STATE_CONDITION,
+  `r.accepted_by_user_id IS NULL`,
 ];
 
 export const REQUEST_REQUESTER_FROM = `
@@ -204,11 +210,7 @@ export async function readRequestList(
     conditions.push(`c.veteran_user_id = $2::uuid`);
   } else {
     values.push(viewerUserId);
-    conditions.push(
-      `EXISTS (SELECT 1 FROM case_assignments a
-                WHERE a.case_id = c.case_id AND a.status = 'ACTIVE'
-                  AND a.accepted_by_user_id = $2::uuid)`,
-    );
+    conditions.push(`r.accepted_by_user_id = $2::uuid`);
   }
 
   if (page.cursor !== undefined) {

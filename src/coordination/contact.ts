@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendDomainEvent } from '../events/index.js';
-import { findActiveAssignment, NoActiveAssignmentError } from './cases.js';
+import { caseHasAcceptedRequest, NoActiveAssignmentError } from './cases.js';
 
 /** EVENT_MODEL.md §3.3 `channel`. */
 export const CONTACT_CHANNELS = ['EMAIL', 'SMS', 'IN_APP', 'PHONE'] as const;
@@ -111,7 +111,7 @@ export interface RecordContactResult {
 /**
  * Record a contact attempt and emit `RESPONDER_CONTACT_LOGGED`.
  *
- * Requires an active assignment (RESPONDER_WORKFLOWS.md §2). The Domain Event
+ * Requires an accepted request on the case (RESPONDER_WORKFLOWS.md §2). The Domain Event
  * carries the payload EVENT_MODEL.md §3.3 requires, including which of the two
  * commands produced it.
  */
@@ -124,8 +124,7 @@ export async function recordContact(
   }
 
   return withTransaction(pool, async (tx) => {
-    const assignment = await findActiveAssignment(tx, input.caseId);
-    if (assignment === undefined) {
+    if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
       throw new NoActiveAssignmentError(input.command);
     }
 
@@ -234,8 +233,7 @@ export async function addCaseNote(
   },
 ): Promise<CaseNote> {
   return withTransaction(pool, async (tx) => {
-    const assignment = await findActiveAssignment(tx, input.caseId);
-    if (assignment === undefined) {
+    if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
       throw new NoActiveAssignmentError('ADD_NOTE');
     }
 

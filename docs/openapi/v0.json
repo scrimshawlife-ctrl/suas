@@ -1242,7 +1242,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The request, for its requester or its accepter only",
+            "description": "The request, for its requester or the one person who accepted it only (another helper on the same Veteran's case gets 404)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1538,7 +1538,7 @@
             }
           }
         },
-        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED."
+        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED."
       }
     },
     "/api/v0/cases/{caseId}/follow-ups": {
@@ -2511,6 +2511,7 @@
       "post": {
         "tags": ["cases"],
         "summary": "Reopen a CLOSED case (org admin; reason required)",
+        "description": "Answers 409 ILLEGAL_TRANSITION when the Veteran already has a newer current case (a case that is not RESOLVED or CLOSED): a Veteran has at most one at a time, and nothing is merged.",
         "operationId": "reopenCase",
         "security": [
           {
@@ -2761,7 +2762,7 @@
             }
           }
         },
-        "description": "Claims the Support Case (ASSIGNED) and moves the Service Request to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). The accepter then runs START, FULFILL; the requester runs CONFIRM."
+        "description": "Accepts this one Service Request: records the caller as its holder and moves it to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). Other requests of the same Veteran stay open to other people. A first accept on an OPEN case also moves the case to ASSIGNED. First accept wins: a second person gets 409 ALREADY_CLAIMED. The accepter then runs START, FULFILL; the requester runs CONFIRM."
       }
     },
     "/api/v0/veterans/me/county": {
@@ -4278,6 +4279,7 @@
         }
       },
       "OpenCaseSummary": {
+        "description": "The current case of a Veteran: not RESOLVED or CLOSED. A Veteran whose case is resolved has none until they ask for help again, which opens a new case.",
         "type": "object",
         "required": ["case_id", "status", "priority_signal_level"],
         "properties": {
@@ -4302,11 +4304,15 @@
       },
       "ActiveQrf": {
         "type": "object",
-        "required": ["service_request_id", "state", "headline", "cancellable"],
+        "description": "The caller's newest open Service Request, of any category (FOOD, TRANSPORTATION, SHELTER or PEER_SUPPORT).",
+        "required": ["service_request_id", "category", "state", "headline", "cancellable"],
         "properties": {
           "service_request_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ServiceCategory"
           },
           "state": {
             "type": "string"
@@ -4840,7 +4846,7 @@
             "enum": ["ACTIVE", "FOLLOWUP"]
           }
         },
-        "description": "The author, the accepter and the requester confirmation are derived on the server from the session and the case assignment; they are not accepted from the body."
+        "description": "The author, the accepter and the requester confirmation are derived on the server from the session (the person resolving must hold a request of the case); they are not accepted from the body."
       },
       "ResolveCaseResult": {
         "allOf": [
@@ -5075,7 +5081,7 @@
       },
       "AcceptServiceRequestResult": {
         "type": "object",
-        "required": ["service_request_id", "case_id", "case_status", "assignment_id"],
+        "required": ["service_request_id", "case_id", "case_status"],
         "properties": {
           "service_request_id": {
             "type": "string",
@@ -5087,10 +5093,6 @@
           },
           "case_status": {
             "$ref": "#/components/schemas/CaseStatus"
-          },
-          "assignment_id": {
-            "type": "string",
-            "format": "uuid"
           }
         }
       },

@@ -67,7 +67,9 @@ export async function deployQrfInTx(
     [input.tenantId, opened.supportCase.caseId],
   );
 
-  const existing = await readActiveQrf(tx, input.tenantId, input.veteranUserId);
+  const existing = await readActiveQrf(tx, input.tenantId, input.veteranUserId, {
+    category: 'PEER_SUPPORT',
+  });
   if (existing !== undefined) {
     return { serviceRequestId: existing.serviceRequestId, created: false };
   }
@@ -103,7 +105,9 @@ export interface CancelQrfResult {
  * client-supplied Service Request id. A replay after cancel is a no-op.
  */
 export async function cancelQrf(pool: Pool, input: CancelQrfInput): Promise<CancelQrfResult> {
-  const active = await readActiveQrf(pool, input.tenantId, input.veteranUserId);
+  const active = await readActiveQrf(pool, input.tenantId, input.veteranUserId, {
+    category: 'PEER_SUPPORT',
+  });
   if (active === undefined) {
     return { serviceRequestId: undefined, cancelled: false };
   }

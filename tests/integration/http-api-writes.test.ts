@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { findNonClosedCase } from '../../src/coordination/index.js';
+import { findCurrentCase } from '../../src/coordination/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -85,7 +85,7 @@ async function openRedCase() {
     headers,
   });
   expect(completed.statusCode).toBe(200);
-  const supportCase = await findNonClosedCase(pool, tenantId, user.userId);
+  const supportCase = await findCurrentCase(pool, tenantId, user.userId);
   if (supportCase === undefined) throw new Error('expected RED case');
   return { pool, tenantId, user, headers, supportCase };
 }
@@ -253,8 +253,9 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
     expect(created.statusCode).toBe(201);
     const srId = created.json().service_request_id as string;
     expect((await command(srId, 'SUBMIT', other.headers)).statusCode).toBe(404);
-    // The accepter created it, but submitting is the requester's act.
-    expect((await command(srId, 'SUBMIT', creator.headers)).statusCode).toBe(403);
+    // The helper created it, but submitting is the requester's act. They hold a different
+    // request of the case, not this one, so they have no standing on it at all.
+    expect((await command(srId, 'SUBMIT', creator.headers)).statusCode).toBe(404);
     const submitted = await command(srId, 'SUBMIT', headers);
     expect(submitted.statusCode).toBe(200);
     expect(submitted.json()).toMatchObject({ status: 'SUBMITTED' });

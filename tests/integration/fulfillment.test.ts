@@ -11,7 +11,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withTransaction } from '../../src/db/index.js';
 import { listAggregateEvents } from '../../src/events/index.js';
 import {
-  claimCase,
   createServiceRequest,
   executeCaseCommand,
   openCase,
@@ -60,6 +59,7 @@ import {
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { createTestPool, resetKernelTables, syntheticTenantId } from '../helpers/db.js';
+import { holdCase } from '../helpers/hold-case.js';
 
 const pool: Pool = createTestPool();
 
@@ -94,7 +94,7 @@ async function requestScenario() {
     }),
   );
   const caseId = opened.supportCase.caseId;
-  await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
+  await holdCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
   await executeCaseCommand(pool, {
     tenantId,
     caseId,
@@ -204,7 +204,7 @@ describe('PROVIDER_INTEGRATIONS.md §2 rule 8 — manual coordination is first-c
           actorId: responder.userId,
         }),
       );
-      await claimCase(pool, {
+      await holdCase(pool, {
         tenantId,
         caseId: opened.supportCase.caseId,
         acceptedByUserId: responder.userId,

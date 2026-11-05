@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { findNonClosedCase, openCase } from '../../src/coordination/index.js';
+import { findCurrentCase, openCase } from '../../src/coordination/index.js';
 import { withTransaction } from '../../src/db/transaction.js';
 import { listAggregateEvents } from '../../src/events/index.js';
 import { createUser } from '../../src/identity/index.js';
@@ -96,7 +96,7 @@ describe('SAFETY.md §3.2 — APPLY_EFFECTIVE_SIGNAL', () => {
     const context = await fixture();
     await settlePrimarySignal(pool, settleInput(context, 'RED'));
 
-    const opened = await findNonClosedCase(pool, context.tenantId, context.veteran.userId);
+    const opened = await findCurrentCase(pool, context.tenantId, context.veteran.userId);
     expect(opened?.prioritySignalLevel).toBe('RED');
     expect(opened?.status).toBe('OPEN');
 
@@ -111,7 +111,7 @@ describe('SAFETY.md §3.2 — APPLY_EFFECTIVE_SIGNAL', () => {
   it('does not open a case from YELLOW', async () => {
     const context = await fixture();
     await settlePrimarySignal(pool, settleInput(context, 'YELLOW'));
-    expect(await findNonClosedCase(pool, context.tenantId, context.veteran.userId)).toBeUndefined();
+    expect(await findCurrentCase(pool, context.tenantId, context.veteran.userId)).toBeUndefined();
   });
 
   it('replays of the same RED settlement do not create a second case', async () => {
@@ -121,7 +121,7 @@ describe('SAFETY.md §3.2 — APPLY_EFFECTIVE_SIGNAL', () => {
     expect(replay.deduplicated).toBe(true);
     expect(replay.signal.supportSignalId).toBe(first.signal.supportSignalId);
 
-    const opened = await findNonClosedCase(pool, context.tenantId, context.veteran.userId);
+    const opened = await findCurrentCase(pool, context.tenantId, context.veteran.userId);
     const events = await listAggregateEvents(pool, {
       tenantId: context.tenantId,
       aggregateType: 'SupportCase',
@@ -143,7 +143,7 @@ describe('SAFETY.md §3.2 — APPLY_EFFECTIVE_SIGNAL', () => {
     );
     await settlePrimarySignal(pool, settleInput(context, 'RED'));
 
-    const current = await findNonClosedCase(pool, context.tenantId, context.veteran.userId);
+    const current = await findCurrentCase(pool, context.tenantId, context.veteran.userId);
     expect(current?.prioritySignalLevel).toBe('RED');
     const listed = await pool.query(
       `SELECT count(*)::int AS n FROM support_cases WHERE tenant_id = $1 AND veteran_user_id = $2`,
@@ -164,7 +164,7 @@ describe('SAFETY.md §3.2 — APPLY_EFFECTIVE_SIGNAL', () => {
       checkInId: later.checkInId,
       signalVersion: 'sv-unreleased-fixture-2',
     });
-    const current = await findNonClosedCase(pool, context.tenantId, context.veteran.userId);
+    const current = await findCurrentCase(pool, context.tenantId, context.veteran.userId);
     expect(current?.prioritySignalLevel).toBe('RED');
   });
 
@@ -178,7 +178,7 @@ describe('SAFETY.md §3.2 — APPLY_EFFECTIVE_SIGNAL', () => {
     );
     await settlePrimarySignal(pool, settleInput(context, 'RED'));
 
-    const current = await findNonClosedCase(pool, context.tenantId, context.veteran.userId);
+    const current = await findCurrentCase(pool, context.tenantId, context.veteran.userId);
     expect(current?.caseId).not.toBe(closedId);
     expect(current?.status).toBe('OPEN');
     expect(current?.prioritySignalLevel).toBe('RED');
@@ -191,7 +191,7 @@ describe('SAFETY.md §3.2 — APPLY_EFFECTIVE_SIGNAL', () => {
   it('opens a case when a responder override settles RED', async () => {
     const context = await fixture();
     const primary = await settlePrimarySignal(pool, settleInput(context, 'YELLOW'));
-    expect(await findNonClosedCase(pool, context.tenantId, context.veteran.userId)).toBeUndefined();
+    expect(await findCurrentCase(pool, context.tenantId, context.veteran.userId)).toBeUndefined();
 
     await overrideSignal(pool, {
       tenantId: context.tenantId,
@@ -200,7 +200,7 @@ describe('SAFETY.md §3.2 — APPLY_EFFECTIVE_SIGNAL', () => {
       actorId: context.responder.userId,
       reason: 'responder review of the settled signal',
     });
-    const opened = await findNonClosedCase(pool, context.tenantId, context.veteran.userId);
+    const opened = await findCurrentCase(pool, context.tenantId, context.veteran.userId);
     expect(opened?.prioritySignalLevel).toBe('RED');
   });
 });

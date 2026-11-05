@@ -23,7 +23,7 @@ import type { JsonObject } from '../jobs/index.js';
 import {
   BlockingWorkError,
   CaseNotFoundError,
-  findActiveAssignment,
+  caseHasAcceptedRequest,
   findCase,
   findRequesterConfirmation,
   NoActiveAssignmentError,
@@ -140,8 +140,9 @@ async function resolveInTransaction(
 
   const transition = resolveCaseTransition('RESOLVE', row.status);
 
-  const assignment = await findActiveAssignment(tx, input.caseId);
-  if (assignment === undefined) throw new NoActiveAssignmentError('RESOLVE');
+  if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
+    throw new NoActiveAssignmentError('RESOLVE');
+  }
 
   // CASES.md §7: blocking Service Requests must be terminal.
   const blockingRequests = await tx.query<{ count: string }>(

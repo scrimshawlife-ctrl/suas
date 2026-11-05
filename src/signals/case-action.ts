@@ -20,7 +20,7 @@
 
 import type { PoolClient } from 'pg';
 import {
-  findNonClosedCase,
+  findCurrentCase,
   openCase,
   setCasePrioritySignalLevel,
   type SupportCase,
@@ -71,7 +71,7 @@ export async function applyEffectiveSignal(
   tx: PoolClient,
   signal: SupportSignal,
 ): Promise<ApplyEffectiveSignalResult> {
-  const existing = await findNonClosedCase(tx, signal.tenantId, signal.veteranUserId);
+  const existing = await findCurrentCase(tx, signal.tenantId, signal.veteranUserId);
   const decision = decideEffectiveSignalCaseAction({
     level: signal.level,
     ...(existing !== undefined
