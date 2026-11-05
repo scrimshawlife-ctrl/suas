@@ -5,9 +5,14 @@
  *
  * Runs against DATABASE_URL (unpooled Neon for Node). Does not replace the
  * Worker request path; it drains durable jobs enqueued by STAGING/PRODUCTION.
+ *
+ * Each pass also runs the time-driven sweeps that no request enqueues work for.
+ * Today that is request widening (V1_PROJECT_PLAN.md F6), so the scheduler's
+ * `job-worker --once` is the only schedule that has to exist.
  */
 
 import { loadConfig } from '../config/index.js';
+import { widenDueRequests } from '../coordination/widening.js';
 import { createPool } from '../db/index.js';
 import { claimDueJobs, markJobFailed, markJobSucceeded, type JobOutboxRow } from '../jobs/index.js';
 import {
@@ -58,6 +63,30 @@ async function handleJob(
   await handler(job);
 }
 
+/**
+ * A failed sweep is logged and does not stop the outbox drain: the next pass
+ * repeats it, and widening is idempotent.
+ */
+async function runSweeps(pool: ReturnType<typeof createPool>): Promise<void> {
+  try {
+    const { widened, delayMinutes } = await widenDueRequests(pool);
+    for (const request of widened) {
+      console.log(
+        JSON.stringify({
+          msg: 'request_widened',
+          service_request_id: request.serviceRequestId,
+          from_county: request.fromCounty,
+          reached_counties: request.reachedCounties,
+          delay_minutes: delayMinutes,
+        }),
+      );
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(JSON.stringify({ msg: 'sweep_failed', sweep: 'widening', error: message }));
+  }
+}
+
 async function main(): Promise<void> {
   const { once, limit } = parseArgs(process.argv.slice(2));
   const config = loadConfig(process.env);
@@ -66,6 +95,7 @@ async function main(): Promise<void> {
 
   try {
     for (;;) {
+      await runSweeps(pool);
       const claimed = await claimDueJobs(pool, { owner, limit });
       if (claimed.length === 0) {
         if (once) break;
