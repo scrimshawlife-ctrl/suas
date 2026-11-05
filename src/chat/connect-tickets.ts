@@ -12,6 +12,7 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import type { Queryable } from '../db/index.js';
+import { LIVE_SESSION_CONDITIONS } from './live-session.js';
 
 export const CONNECT_TICKET_TTL_SECONDS = 60;
 
@@ -23,6 +24,8 @@ export interface IssuedConnectTicket {
 export interface RedeemedConnectTicket {
   readonly tenantId: string;
   readonly userId: string;
+  /** The session that issued the ticket; the connection inherits it. */
+  readonly sessionId: string;
 }
 
 function hashTicket(ticket: string): string {
@@ -31,17 +34,17 @@ function hashTicket(ticket: string): string {
 
 export async function issueConnectTicket(
   db: Queryable,
-  input: { readonly tenantId: string; readonly userId: string },
+  input: { readonly tenantId: string; readonly userId: string; readonly sessionId: string },
 ): Promise<IssuedConnectTicket> {
   // Redeemed or long-expired tickets have no further use; sweep them as we go.
   await db.query(`DELETE FROM chat_connect_tickets WHERE expires_at < now() - interval '1 hour'`);
 
   const ticket = randomBytes(32).toString('base64url');
   const result = await db.query<{ expires_at: Date }>(
-    `INSERT INTO chat_connect_tickets (ticket_hash, tenant_id, user_id, expires_at)
-     VALUES ($1, $2, $3, now() + make_interval(secs => $4))
+    `INSERT INTO chat_connect_tickets (ticket_hash, tenant_id, user_id, session_id, expires_at)
+     VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))
      RETURNING expires_at`,
-    [hashTicket(ticket), input.tenantId, input.userId, CONNECT_TICKET_TTL_SECONDS],
+    [hashTicket(ticket), input.tenantId, input.userId, input.sessionId, CONNECT_TICKET_TTL_SECONDS],
   );
   const row = result.rows[0];
   if (row === undefined) throw new Error('Connect ticket insert returned no row.');
@@ -50,20 +53,25 @@ export async function issueConnectTicket(
 
 /**
  * Marks the ticket used and returns who it was issued to, or undefined when it is
- * unknown, expired or already used. The single UPDATE is the atomic single-use
- * guarantee: two concurrent connects cannot both win.
+ * unknown, expired or already used, or when its session is no longer live. The single
+ * UPDATE is the atomic single-use guarantee: two concurrent connects cannot both win.
  */
 export async function redeemConnectTicket(
   db: Queryable,
   ticket: string,
 ): Promise<RedeemedConnectTicket | undefined> {
-  const result = await db.query<{ tenant_id: string; user_id: string }>(
-    `UPDATE chat_connect_tickets
+  const result = await db.query<{ tenant_id: string; user_id: string; session_id: string }>(
+    `UPDATE chat_connect_tickets t
         SET redeemed_at = now()
-      WHERE ticket_hash = $1 AND redeemed_at IS NULL AND expires_at > now()
-      RETURNING tenant_id, user_id`,
+       FROM sessions s
+       JOIN users u ON u.user_id = s.user_id AND u.tenant_id = s.tenant_id
+      WHERE t.ticket_hash = $1 AND t.redeemed_at IS NULL AND t.expires_at > now()
+        AND s.session_id = t.session_id AND ${LIVE_SESSION_CONDITIONS}
+      RETURNING t.tenant_id, t.user_id, t.session_id`,
     [hashTicket(ticket)],
   );
   const row = result.rows[0];
-  return row === undefined ? undefined : { tenantId: row.tenant_id, userId: row.user_id };
+  return row === undefined
+    ? undefined
+    : { tenantId: row.tenant_id, userId: row.user_id, sessionId: row.session_id };
 }

@@ -121,6 +121,7 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
     const issued = await issueConnectTicket(deps.pool, {
       tenantId: context.tenantId,
       userId: context.userId,
+      sessionId: context.session.sessionId,
     });
     return reply.status(201).send({
       ticket: issued.ticket,

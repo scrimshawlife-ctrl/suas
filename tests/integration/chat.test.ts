@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
+import { createSession, revokeSession } from '../../src/auth/index.js';
 import {
   createChatConnectionLifecycle,
   issueConnectTicket,
@@ -65,6 +65,7 @@ function pool(): Pool {
 
 interface Person {
   readonly userId: string;
+  readonly sessionId: string;
   readonly headers: Record<string, string>;
 }
 
@@ -78,7 +79,11 @@ async function person(tenantId: string, label: string): Promise<Person> {
     tenantId,
     userId: user.userId,
   });
-  return { userId: user.userId, headers: { authorization: `Bearer ${session.credential}` } };
+  return {
+    userId: user.userId,
+    sessionId: session.session.sessionId,
+    headers: { authorization: `Bearer ${session.credential}` },
+  };
 }
 
 function keyed(who: Person, key: string = randomUUID()): Record<string, string> {
@@ -282,6 +287,7 @@ describe('push on the local adapter', () => {
     const issued = await issueConnectTicket(pool(), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
+      sessionId: s.requester.sessionId,
     });
     const client = openSocket(`ws://127.0.0.1:${String(localPort)}/?ticket=${issued.ticket}`);
     expect(await client.opened).toBe('open');
@@ -301,6 +307,7 @@ describe('connect tickets', () => {
     const { ticket, expiresAt } = await issueConnectTicket(pool(), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
+      sessionId: s.requester.sessionId,
     });
     expect(expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(60_000);
     expect(expiresAt.getTime() - Date.now()).toBeGreaterThan(50_000);
@@ -317,6 +324,7 @@ describe('connect tickets', () => {
     const { ticket } = await issueConnectTicket(pool(), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
+      sessionId: s.requester.sessionId,
     });
     await pool().query(
       `UPDATE chat_connect_tickets SET expires_at = now() - interval '1 second'
@@ -337,6 +345,7 @@ describe('connect tickets', () => {
     const { ticket } = await issueConnectTicket(pool(), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
+      sessionId: s.requester.sessionId,
     });
     const stored = await pool().query(
       `SELECT ticket_hash FROM chat_connect_tickets WHERE user_id = $1`,
@@ -372,11 +381,13 @@ describe('push failure and gone connections', () => {
       connectionId: 'aws-gone',
       tenantId: s.tenantId,
       userId: s.requester.userId,
+      sessionId: s.requester.sessionId,
     });
     await registerConnection(pool(), {
       connectionId: 'aws-live',
       tenantId: s.tenantId,
       userId: s.requester.userId,
+      sessionId: s.requester.sessionId,
     });
     const sentTo: string[] = [];
     const push = new ApiGatewayConnectionPush({
@@ -414,12 +425,64 @@ describe('push failure and gone connections', () => {
     expect(await listConnectionIds(pool(), s.tenantId, s.requester.userId)).toEqual(['aws-live']);
   });
 
+  it('sends nothing to a connection whose session was revoked', async () => {
+    const s = await scenario({ accepted: true });
+    const liveSession = await createSession(pool(), TEST_SESSION_SECRET, {
+      tenantId: s.tenantId,
+      userId: s.requester.userId,
+    });
+    for (const [connectionId, sessionId] of [
+      ['revoked-conn', s.requester.sessionId],
+      ['live-conn', liveSession.session.sessionId],
+    ] as const) {
+      await registerConnection(pool(), {
+        connectionId,
+        tenantId: s.tenantId,
+        userId: s.requester.userId,
+        sessionId,
+      });
+    }
+    await revokeSession(pool(), s.requester.sessionId, 'LOGOUT');
+
+    const sentTo: string[] = [];
+    const recording: ConnectionPushPort = {
+      implementation: 'recording',
+      connectUrl: () => 'wss://invalid.example',
+      send: (connectionId) => {
+        sentTo.push(connectionId);
+        return Promise.resolve('delivered');
+      },
+    };
+    const access: ChatAccess = {
+      chatThreadId: randomUUID(),
+      serviceRequestId: s.serviceRequestId,
+      counterpartUserId: s.requester.userId,
+    };
+    await pushToCounterpart(
+      { pool: pool(), push: recording, log: { warn: () => undefined } },
+      s.tenantId,
+      access,
+      message(access, s.accepter.userId),
+    );
+    expect(sentTo).toEqual(['live-conn']);
+
+    // A ticket issued before the revocation cannot be redeemed either.
+    const late = await issueConnectTicket(pool(), {
+      tenantId: s.tenantId,
+      userId: s.requester.userId,
+      sessionId: liveSession.session.sessionId,
+    });
+    await revokeSession(pool(), liveSession.session.sessionId, 'LOGOUT');
+    expect(await redeemConnectTicket(pool(), late.ticket)).toBeUndefined();
+  });
+
   it('still stores and returns the message when the push provider fails', async () => {
     const s = await scenario({ accepted: true });
     await registerConnection(pool(), {
       connectionId: 'failing-conn',
       tenantId: s.tenantId,
       userId: s.requester.userId,
+      sessionId: s.requester.sessionId,
     });
     const failing: ConnectionPushPort = {
       implementation: 'always-fails',
