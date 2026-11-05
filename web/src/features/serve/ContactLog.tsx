@@ -45,7 +45,7 @@ export function ContactLog({ caseId }: { caseId: string }) {
         >
           {save.isPending ? 'Saving…' : 'Save contact attempt'}
         </Button>
-        <p role="status" className="flex items-center gap-2 font-bold empty:hidden">
+        <p role="status" className="flex items-center gap-2 font-bold empty:sr-only">
           {save.isSuccess ? (
             <>
               <CheckIcon />

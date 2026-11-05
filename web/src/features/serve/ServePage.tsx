@@ -46,6 +46,8 @@ export default function ServePage() {
   if (hasApiCode(open.error, 'COUNTY_REQUIRED')) return <Navigate to={paths.welcome} replace />;
 
   const take = (id: string) => {
+    // A double click can land before the pending state re-renders the button.
+    if (accept.isPending) return;
     setNotice(null);
     accept.mutate(id, {
       onSuccess: () => void navigate(paths.case(id)),
@@ -81,7 +83,7 @@ export default function ServePage() {
             <p className="text-16 text-slate">{boardSubtitle(me.data?.county, anyWidened)}</p>
           </div>
 
-          <p role="status" className="flex items-center gap-2.5 font-bold empty:hidden">
+          <p role="status" className="flex items-center gap-2.5 font-bold empty:sr-only">
             {notice ? (
               <>
                 <AlertCircleIcon />

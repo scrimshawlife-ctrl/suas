@@ -4,7 +4,7 @@ type Notification = Schemas['Notification'];
 
 /** Plain words for notification reason codes. Unknown codes get a neutral line. */
 const REASON_TEXT: Record<string, string> = {
-  service_request_update: "A request you're helping with was updated",
+  service_request_update: 'A request you can see was updated',
   followup_due: 'A follow-up is due',
   'qrf.responder_notified': 'Someone was told about a request',
   trusted_contact_alert: 'A trusted contact alert',

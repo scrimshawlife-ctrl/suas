@@ -181,7 +181,8 @@ function Progress({ request }: { request: ServiceRequestDetail }) {
       ) : null}
       {request.status === 'FULFILLED' ? (
         <p className="text-slate">
-          {request.counterpart_display_name ?? 'The person you helped'} will confirm it's done.
+          Waiting for {request.counterpart_display_name ?? 'the person you helped'} to confirm it's
+          done.
         </p>
       ) : null}
       {run.isError ? <p className="font-bold">{commandErrorMessage(run.error)}</p> : null}

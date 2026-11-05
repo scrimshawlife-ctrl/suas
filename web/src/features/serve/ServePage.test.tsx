@@ -19,6 +19,10 @@ const open = (id: string, summary: string | null) => ({
   widened: false,
   summary,
   created_at: new Date(Date.now() - 12 * 60_000).toISOString(),
+  // The API never sends these on the open list; the board must not show them even if it did.
+  meeting_place: '1200 Example Ave, San Jose',
+  timing: 'Thursday, pick up at 9:30 AM',
+  counterpart_display_name: 'Marcus T.',
 });
 
 function renderServe() {
@@ -88,6 +92,42 @@ describe('Serve board', () => {
     expect(client.POST).toHaveBeenCalledWith(
       '/api/v0/service-requests/{id}/accept',
       expect.objectContaining({ params: { path: { id: 'r1' } } }),
+    );
+  });
+
+  it('shows no meeting place, timing or requester name on the open list', async () => {
+    renderServe();
+    await screen.findByText('Groceries for two days');
+    const board = screen.getByRole('region', { name: 'Open requests' });
+    for (const hidden of ['1200 Example Ave', 'Thursday, pick up', 'Marcus']) {
+      expect(board).not.toHaveTextContent(hidden);
+    }
+  });
+
+  it('sends an Idempotency-Key with the accept', async () => {
+    client.POST.mockResolvedValue({ data: { service_request_id: 'r1', case_id: 'case-r1' } });
+    renderServe();
+    await screen.findByText('Groceries for two days');
+    await userEvent.click(screen.getByRole('button', { name: /Take this request: Groceries/ }));
+    await screen.findByText('case opened');
+    const options = client.POST.mock.calls[0]?.[1] as { headers: Record<string, string> };
+    expect(options.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('sends exactly one accept on a double click and locks every take button meanwhile', async () => {
+    client.POST.mockReturnValue(new Promise(() => undefined));
+    renderServe();
+    await screen.findByText('Groceries for two days');
+    await userEvent.dblClick(screen.getByRole('button', { name: /Take this request: Groceries/ }));
+    expect(client.POST).toHaveBeenCalledTimes(1);
+    const taking = screen.getByRole('button', { name: /Taking this request: Groceries/ });
+    expect(taking).toHaveAttribute('aria-busy', 'true');
+    expect(taking).toHaveAttribute('aria-disabled', 'true');
+    expect(taking).toHaveTextContent('Taking it…');
+    // The other card waits too, so a second request cannot start.
+    expect(screen.getByRole('button', { name: /Take this request: Food/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
     );
   });
 });

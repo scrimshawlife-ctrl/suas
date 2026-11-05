@@ -1,0 +1,163 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/errors';
+import { tokenStore } from '../../api/token-store';
+import CasePage from './CasePage';
+
+const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));
+vi.mock('../../api/client', () => ({ api: client }));
+
+const SECRETS = ['1200 Example Ave, San Jose', 'Thursday, pick up at 9:30 AM', 'Marcus T.'];
+
+const detail = (status = 'ACCEPTED') => ({
+  service_request_id: 'r1',
+  case_id: 'c1',
+  category: 'FOOD',
+  status,
+  summary: 'Groceries for two days',
+  timing: 'Thursday, pick up at 9:30 AM',
+  meeting_place: '1200 Example Ave, San Jose',
+  created_at: '2026-11-04T12:00:00Z',
+  widened: false,
+  county: 'SANTA_CLARA',
+  counterpart_display_name: 'Marcus T.',
+});
+
+type Reply = { data: unknown } | Error;
+let replies: { detail: Reply; attempts: Reply };
+
+function reply(value: Reply) {
+  return value instanceof Error ? Promise.reject(value) : Promise.resolve(value);
+}
+
+function renderCase() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/serve/requests/r1']}>
+        <Routes>
+          <Route path="/serve/requests/:id" element={<CasePage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+const keyOf = (call: number) =>
+  (client.POST.mock.calls[call]?.[1] as { headers: Record<string, string> }).headers[
+    'Idempotency-Key'
+  ];
+
+beforeEach(() => {
+  tokenStore.setToken('tok');
+  client.GET.mockReset();
+  client.POST.mockReset();
+  replies = {
+    detail: { data: detail() },
+    attempts: { data: { contact_attempts: [] } },
+  };
+  client.GET.mockImplementation((path: string) => {
+    if (path === '/api/v0/service-requests/{id}') return reply(replies.detail);
+    if (path === '/api/v0/cases/{caseId}/contact-attempts') return reply(replies.attempts);
+    return reply({ data: { service_requests: [] } });
+  });
+});
+
+describe('Case page access', () => {
+  async function notFoundText(): Promise<string> {
+    const view = renderCase();
+    await screen.findByRole('heading', { name: "We couldn't find that request." });
+    for (const secret of SECRETS) expect(view.container).not.toHaveTextContent(secret);
+    return view.container.textContent ?? '';
+  }
+
+  it('shows the same not-found page, with no request details, to a non-accepter (404)', async () => {
+    replies.detail = new ApiError(404, 'NOT_FOUND', 'Resource not found.');
+    expect(await notFoundText()).toContain("We couldn't find that request.");
+  });
+
+  it('shows the same copy to the requester, whose contact log answers 403', async () => {
+    replies.attempts = new ApiError(403, 'FORBIDDEN', 'Reserved for the accepter.');
+    const forbidden = await notFoundText();
+    document.body.innerHTML = '';
+    replies.detail = new ApiError(404, 'NOT_FOUND', 'Resource not found.');
+    replies.attempts = { data: { contact_attempts: [] } };
+    expect(await notFoundText()).toBe(forbidden);
+  });
+});
+
+describe('Contact attempt saving', () => {
+  it('posts "Waiting to hear" to log-contact-attempt and a settled outcome to complete-contact', async () => {
+    client.POST.mockResolvedValue({ data: {} });
+    renderCase();
+    await screen.findByRole('button', { name: 'Save contact attempt' });
+    await userEvent.click(screen.getByText('Waiting to hear'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save contact attempt' }));
+    await screen.findByText('Saved.');
+    expect(client.POST).toHaveBeenLastCalledWith(
+      '/api/v0/cases/{caseId}/commands/log-contact-attempt',
+      expect.objectContaining({ body: { channel: 'PHONE', outcome: 'PENDING' } }),
+    );
+
+    await userEvent.click(screen.getByText('Reached them'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save contact attempt' }));
+    await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
+    expect(client.POST).toHaveBeenLastCalledWith(
+      '/api/v0/cases/{caseId}/commands/complete-contact',
+      expect.objectContaining({ body: { channel: 'PHONE', outcome: 'REACHED' } }),
+    );
+  });
+
+  it('reuses the Idempotency-Key on retry and uses a new one after success', async () => {
+    client.POST.mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'x')).mockResolvedValue({
+      data: {},
+    });
+    renderCase();
+    const save = await screen.findByRole('button', { name: 'Save contact attempt' });
+    await userEvent.click(save);
+    await screen.findByText("That didn't save. Try again.");
+    await userEvent.click(screen.getByRole('button', { name: 'Save contact attempt' }));
+    await screen.findByText('Saved.');
+    await userEvent.click(screen.getByRole('button', { name: 'Save contact attempt' }));
+    await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(3));
+    expect(keyOf(1)).toBe(keyOf(0));
+    expect(keyOf(2)).not.toBe(keyOf(0));
+  });
+});
+
+describe('Progress step', () => {
+  it.each([
+    ['ACCEPTED', "I've started helping", 'START'],
+    ['IN_PROGRESS', 'Mark as done', 'FULFILL'],
+  ])('%s: "%s" is disabled while it is saving and runs once', async (status, label, command) => {
+    replies.detail = { data: detail(status) };
+    client.POST.mockReturnValue(new Promise(() => undefined));
+    renderCase();
+    await userEvent.dblClick(await screen.findByRole('button', { name: label }));
+    expect(client.POST).toHaveBeenCalledTimes(1);
+    expect(client.POST).toHaveBeenCalledWith(
+      '/api/v0/service-requests/{id}/commands/{command}',
+      expect.objectContaining({ params: { path: { id: 'r1', command } } }),
+    );
+    const saving = screen.getByRole('button', { name: 'Saving…' });
+    expect(saving).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('shows no step before the request is accepted', async () => {
+    replies.detail = { data: detail('SUBMITTED') };
+    renderCase();
+    await screen.findByText('Taken, not started', { selector: 'span' });
+    expect(screen.queryByRole('button', { name: /started helping|Mark as done/ })).toBeNull();
+  });
+
+  it('says it is waiting for the requester once it is marked as done', async () => {
+    replies.detail = { data: detail('FULFILLED') };
+    renderCase();
+    expect(
+      await screen.findByText("Waiting for Marcus T. to confirm it's done."),
+    ).toBeInTheDocument();
+  });
+});

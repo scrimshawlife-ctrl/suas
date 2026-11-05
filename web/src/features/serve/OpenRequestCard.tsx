@@ -7,7 +7,7 @@ export interface OpenRequestCardProps {
   card: OpenRequestCardModel;
   /** True while this card's accept is in flight. */
   taking: boolean;
-  /** True while another card's accept is in flight; the rest wait. */
+  /** True while any accept is in flight, this card's included; every take button waits. */
   disabled: boolean;
   onTake: (id: string) => void;
 }
@@ -34,10 +34,10 @@ export function OpenRequestCard({ card, taking, disabled, onTake }: OpenRequestC
           ) : null}
         </span>
         <Button
-          disabled={disabled && !taking}
+          disabled={disabled}
           aria-busy={taking || undefined}
           onClick={() => onTake(card.id)}
-          aria-label={`Take this request: ${card.title}`}
+          aria-label={`${taking ? 'Taking this request' : 'Take this request'}: ${card.title}`}
         >
           {taking ? 'Taking it…' : 'Take this request'}
         </Button>
