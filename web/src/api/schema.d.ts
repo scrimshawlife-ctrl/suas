@@ -420,7 +420,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Read one service request visible to the actor */
+    /** Read a request (its requester or the person who accepted it only) */
     get: operations['getServiceRequest'];
     put?: never;
     post?: never;
@@ -491,7 +491,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Execute a released service-request command */
+    /**
+     * Execute a released service-request command
+     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not.
+     */
     post: operations['executeServiceRequestCommand'];
     delete?: never;
     options?: never;
@@ -829,7 +832,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List service requests: open ones the caller can accept (their county, plus bordering counties once widened) or ones the caller accepted */
+    /** List service requests: open ones the caller can accept (ownership=open), ones the caller accepted (ownership=mine), or the caller own requests (ownership=requested) */
     get: operations['listServiceRequests'];
     put?: never;
     /**
@@ -1173,6 +1176,43 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v0/chat/threads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the caller's chat threads */
+    get: operations['listChatThreads'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/profile': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set the display name other people see
+     * @description Signed-in only; no ID scan needed. Guidance for the form: "First name and last initial, like Marcus T." Only length and emptiness are validated.
+     */
+    put: operations['putVeteransMeProfile'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1290,6 +1330,693 @@ export interface components {
       /** Format: date-time */
       created_at: string;
     };
+    /** @enum {string} */
+    ServiceCategory: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
+    /** @enum {string} */
+    ServiceCounty:
+      | 'SANTA_CLARA'
+      | 'SAN_MATEO'
+      | 'ALAMEDA'
+      | 'SANTA_CRUZ'
+      | 'SAN_BENITO'
+      | 'MERCED'
+      | 'STANISLAUS';
+    /** @enum {string} */
+    ServiceRequestStatus:
+      | 'CREATED'
+      | 'SUBMITTED'
+      | 'TRIAGED'
+      | 'MATCHING'
+      | 'ASSIGNED'
+      | 'ACCEPTED'
+      | 'IN_PROGRESS'
+      | 'FULFILLED'
+      | 'CONFIRMED'
+      | 'CLOSED'
+      | 'CANCELLED'
+      | 'DECLINED'
+      | 'EXPIRED'
+      | 'UNFULFILLABLE'
+      | 'ESCALATED';
+    /** @enum {string} */
+    CaseStatus: 'OPEN' | 'TRIAGED' | 'ASSIGNED' | 'ACTIVE' | 'FOLLOWUP' | 'RESOLVED' | 'CLOSED';
+    /** @enum {string} */
+    SignalLevel: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED';
+    AuthChallengeRequest: {
+      /**
+       * Format: uuid
+       * @description Legacy filter; people do not choose an organization.
+       */
+      tenant_id?: string;
+      destination: string;
+      /** @enum {string} */
+      method: 'MAGIC_LINK' | 'EMAIL_OTP' | 'PHONE_OTP';
+    };
+    AuthChallengeAccepted: {
+      /** @enum {string} */
+      status: 'accepted';
+    };
+    AuthVerifyRequest: {
+      /** Format: uuid */
+      tenant_id?: string;
+      destination: string;
+      code: string;
+    };
+    AuthSession: {
+      session_credential: string;
+      /** Format: date-time */
+      expires_at: string;
+      mfa_elevated: boolean;
+    };
+    LogoutRequest: {
+      everywhere?: boolean;
+    };
+    MfaChallenge: {
+      challenge_id: string;
+      factor_type: string;
+    };
+    MfaVerifyRequest: {
+      challenge_id: string;
+      response: string;
+    };
+    MfaVerified: {
+      mfa_elevated: boolean;
+    };
+    IdVerification: {
+      /** @enum {string} */
+      method: 'ID_SCAN_SELFIE';
+      status: string;
+      /** Format: date-time */
+      verified_at: string | null;
+    };
+    OpenCaseSummary: {
+      /** Format: uuid */
+      case_id: string;
+      status: components['schemas']['CaseStatus'];
+      priority_signal_level: components['schemas']['SignalLevel'] | null;
+    };
+    ActiveQrf: {
+      /** Format: uuid */
+      service_request_id: string;
+      state: string;
+      headline: string;
+      cancellable: boolean;
+    };
+    CategoryCard: {
+      label: string;
+      /** @enum {string} */
+      disposition: 'OPERATIONAL' | 'INFORMATION_ONLY' | 'COMING_SOON';
+      category: components['schemas']['ServiceCategory'] | null;
+      note: string | null;
+    };
+    VeteranMe: {
+      /** Format: uuid */
+      user_id: string;
+      /** @enum {string} */
+      status: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED';
+      enrolled_channels: {
+        email: boolean;
+        phone: boolean;
+      };
+      county: components['schemas']['ServiceCounty'] | null;
+      display_name: string | null;
+      /** @description True when the person holds the SUAS System Administrator grant. */
+      is_admin: boolean;
+      id_verification: components['schemas']['IdVerification'];
+      open_case: components['schemas']['OpenCaseSummary'] | null;
+      active_qrf: components['schemas']['ActiveQrf'] | null;
+      categories: components['schemas']['CategoryCard'][];
+    };
+    SetCountyRequest: {
+      county: components['schemas']['ServiceCounty'];
+    };
+    SetCountyResponse: {
+      county: components['schemas']['ServiceCounty'] | null;
+    };
+    SetProfileRequest: {
+      /** @description Trimmed, 1 to 40 characters. Guidance for the form: "First name and last initial, like Marcus T." */
+      display_name: string;
+    };
+    SetProfileResponse: {
+      display_name: string | null;
+    };
+    CheckIn: {
+      /** Format: uuid */
+      check_in_id: string;
+      questionnaire_version: string;
+      /** @enum {string} */
+      status: 'STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED' | 'INCOMPLETE';
+      /** Format: date-time */
+      completed_at: string | null;
+    };
+    CheckInQuestion: {
+      /** Format: uuid */
+      question_id: string;
+      question_key: string;
+      prompt: string;
+      dimension: string | null;
+      required: boolean;
+      options: {
+        /** Format: uuid */
+        answer_option_id: string;
+        option_key: string;
+        label: string;
+      }[];
+    };
+    CheckInWithQuestions: components['schemas']['CheckIn'] & {
+      questions: components['schemas']['CheckInQuestion'][];
+    };
+    CheckInResponseRequest: {
+      /** Format: uuid */
+      question_id: string;
+      /** Format: uuid */
+      answer_option_id: string;
+    };
+    CheckInCompleted: components['schemas']['CheckIn'] & {
+      incomplete: boolean;
+      already_completed: boolean;
+      support_signal: {
+        /** Format: uuid */
+        support_signal_id: string;
+        level: components['schemas']['SignalLevel'];
+      } | null;
+      support_case: components['schemas']['OpenCaseSummary'] | null;
+    };
+    SupportCase: {
+      /** Format: uuid */
+      case_id: string;
+      status: components['schemas']['CaseStatus'];
+      priority_signal_level: components['schemas']['SignalLevel'] | null;
+    };
+    OpenCaseResult: components['schemas']['SupportCase'] & {
+      created: boolean;
+      replayed: boolean;
+    };
+    CaseCommandResult: components['schemas']['SupportCase'] & {
+      replayed: boolean;
+    };
+    CaseCommandRequest: {
+      reason?: string;
+      expected_status?: components['schemas']['CaseStatus'];
+    };
+    CaseCommandReasonRequest: {
+      reason: string;
+      expected_status?: components['schemas']['CaseStatus'];
+    };
+    Settlement: {
+      /** Format: uuid */
+      settlement_id: string;
+      /** Format: uuid */
+      case_id: string;
+      resolution_cycle: number;
+      requested: {
+        [key: string]: unknown;
+      };
+      occurred: {
+        [key: string]: unknown;
+      };
+      fulfilled: {
+        [key: string]: unknown;
+      };
+      unresolved: {
+        [key: string]: unknown;
+      };
+      remaining_follow_ups: {
+        [key: string]: unknown;
+      }[];
+      /** Format: uuid */
+      authored_by: string;
+      /** Format: uuid */
+      accepted_by_user_id: string;
+      /** Format: uuid */
+      veteran_confirmed_by: string | null;
+      /** Format: date-time */
+      settled_at: string;
+    };
+    VeteranSettlement: {
+      /** Format: uuid */
+      settlement_id: string;
+      resolution_cycle: number;
+      requested: {
+        [key: string]: unknown;
+      };
+      fulfilled: {
+        [key: string]: unknown;
+      };
+      unresolved: {
+        [key: string]: unknown;
+      };
+      remaining_follow_ups: {
+        [key: string]: unknown;
+      }[];
+      /** Format: date-time */
+      settled_at: string;
+    };
+    /** @description The author, the accepter and the requester confirmation are derived on the server from the session and the case assignment; they are not accepted from the body. */
+    ResolveCaseRequest: {
+      requested: {
+        [key: string]: unknown;
+      };
+      occurred: {
+        [key: string]: unknown;
+      };
+      fulfilled: {
+        [key: string]: unknown;
+      };
+      unresolved: {
+        [key: string]: unknown;
+      };
+      /** @enum {string} */
+      expected_status?: 'ACTIVE' | 'FOLLOWUP';
+    };
+    ResolveCaseResult: components['schemas']['SupportCase'] & {
+      /** Format: uuid */
+      settlement_id: string;
+      resolution_cycle: number;
+      settlement: components['schemas']['Settlement'];
+      replayed: boolean;
+    };
+    ServiceRequestRef: {
+      /** Format: uuid */
+      service_request_id: string;
+      /** Format: uuid */
+      case_id: string;
+      category: components['schemas']['ServiceCategory'];
+      status: components['schemas']['ServiceRequestStatus'];
+    };
+    ServiceRequestCommandResult: components['schemas']['ServiceRequestRef'] & {
+      replayed: boolean;
+    };
+    /** @description SUBMIT, CANCEL and CONFIRM belong to the requester; every other command belongs to the person who accepted (403 otherwise). */
+    ServiceRequestCommandRequest: {
+      reason?: string;
+      to?: string;
+      expected_status?: components['schemas']['ServiceRequestStatus'];
+      /** Format: uuid */
+      grantee_id?: string;
+    };
+    CreateCaseServiceRequestRequest: {
+      category: components['schemas']['ServiceCategory'];
+      /** @description Same bounded fields as the plain form. Unknown keys are refused (400). */
+      details?: {
+        summary?: string;
+        timing?: string;
+        meeting_place?: string;
+      };
+    };
+    ServiceRequestFormRequest: {
+      category: components['schemas']['ServiceCategory'];
+      summary: string;
+      timing?: string;
+      /** @description Where to meet. Required to submit FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE); optional for PEER_SUPPORT. Never shown in lists. */
+      meeting_place?: string;
+    };
+    ServiceRequestFormResult: components['schemas']['ServiceRequestRef'] & {
+      replayed: boolean;
+    };
+    ServiceRequestListItem: {
+      /** Format: uuid */
+      service_request_id: string;
+      /** Format: uuid */
+      case_id: string;
+      category: components['schemas']['ServiceCategory'];
+      status: components['schemas']['ServiceRequestStatus'];
+      /** @description The requester one-line summary. Timing and meeting place are never listed. */
+      summary: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** @description ownership=open and mine only: the requester county. */
+      county?: components['schemas']['ServiceCounty'];
+      /** @description ownership=open and mine only. */
+      widened?: boolean;
+      /** @description ownership=mine only: the requester display name. */
+      counterpart_display_name?: string | null;
+      /**
+       * Format: date-time
+       * @description ownership=requested only.
+       */
+      updated_at?: string;
+      /**
+       * Format: date-time
+       * @description ownership=requested only: set once the request reached a terminal status.
+       */
+      closed_at?: string | null;
+    };
+    ServiceRequestList: {
+      service_requests: components['schemas']['ServiceRequestListItem'][];
+      next_cursor: string | null;
+    };
+    AcceptServiceRequestResult: {
+      /** Format: uuid */
+      service_request_id: string;
+      /** Format: uuid */
+      case_id: string;
+      case_status: components['schemas']['CaseStatus'];
+      /** Format: uuid */
+      assignment_id: string;
+    };
+    ServiceRequestDetail: components['schemas']['ServiceRequestRef'] & {
+      summary: string | null;
+      timing: string | null;
+      meeting_place: string | null;
+      /** Format: date-time */
+      created_at: string;
+      widened: boolean;
+      county: components['schemas']['ServiceCounty'] | null;
+      /** @description For the requester: the display name of the person who accepted (null until accepted or if unnamed). For the accepter: the requester display name. */
+      counterpart_display_name: string | null;
+    };
+    CaseServiceRequestList: {
+      service_requests: components['schemas']['ServiceRequestRef'][];
+    };
+    ContactAttempt: {
+      /** Format: uuid */
+      contact_attempt_id: string;
+      /** Format: uuid */
+      case_id: string;
+      /** Format: uuid */
+      logged_by_user_id: string;
+      /** Format: date-time */
+      attempted_at: string;
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP' | 'PHONE';
+      /** @enum {string} */
+      outcome: 'PENDING' | 'REACHED' | 'NO_ANSWER' | 'LEFT_MESSAGE' | 'DECLINED' | 'UNABLE';
+    };
+    ContactAttemptResult: components['schemas']['ContactAttempt'] & {
+      deduplicated: boolean;
+      replayed: boolean;
+    };
+    LogContactAttemptRequest: {
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP' | 'PHONE';
+      /** @enum {string} */
+      outcome?: 'PENDING';
+      note?: string;
+      /** Format: date-time */
+      attempted_at?: string;
+    };
+    CompleteContactRequest: {
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP' | 'PHONE';
+      /** @enum {string} */
+      outcome: 'REACHED' | 'NO_ANSWER' | 'LEFT_MESSAGE' | 'DECLINED' | 'UNABLE';
+      note?: string;
+      /** Format: date-time */
+      attempted_at?: string;
+    };
+    FollowUp: {
+      /** Format: uuid */
+      follow_up_id: string;
+      /** Format: uuid */
+      case_id: string;
+      /** Format: uuid */
+      service_request_id: string | null;
+      /** Format: date-time */
+      due_at: string;
+      schedule_version: number;
+      /** @enum {string} */
+      responsible_type: 'USER' | 'VETERAN' | 'SYSTEM';
+      /** Format: uuid */
+      responsible_id: string;
+      /** @enum {string} */
+      status:
+        'SCHEDULED' | 'DUE' | 'COMPLETED' | 'RESCHEDULED' | 'OVERDUE' | 'ESCALATED' | 'CANCELLED';
+      coordination_attempt_count: number;
+      /** @enum {string|null} */
+      resolution_disposition: 'BLOCKING' | 'CARRIED_FORWARD' | null;
+    };
+    CreateFollowUpRequest: {
+      /** Format: uuid */
+      case_id: string;
+      /** Format: date-time */
+      due_at: string;
+      /** @enum {string} */
+      responsible_type: 'USER' | 'VETERAN' | 'SYSTEM';
+      /** Format: uuid */
+      responsible_id: string;
+      /** Format: uuid */
+      service_request_id?: string;
+      /** @enum {string} */
+      resolution_disposition?: 'BLOCKING' | 'CARRIED_FORWARD';
+    };
+    FollowUpResult: components['schemas']['FollowUp'] & {
+      replayed: boolean;
+    };
+    FollowUpCompleted: components['schemas']['FollowUp'] & {
+      already_completed: boolean;
+      replayed: boolean;
+    };
+    Notification: {
+      /** Format: uuid */
+      notification_id: string;
+      reason: string;
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP';
+      /** @enum {string} */
+      delivery_status: 'QUEUED' | 'SENT' | 'FAILED' | 'DELIVERED' | 'BOUNCED' | 'UNDELIVERABLE';
+      attempt_count: number;
+      subject_type: string | null;
+      subject_id: string | null;
+      /** Format: date-time */
+      sent_at: string | null;
+      /** Format: date-time */
+      cancelled_at: string | null;
+    };
+    NotificationPreferenceRequest: {
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP';
+      enabled: boolean;
+    };
+    ConsentGrant: {
+      /** Format: uuid */
+      consent_grant_id: string;
+      /** @enum {string} */
+      permission: 'can_receive' | 'can_view' | 'can_share';
+      scope: string;
+      purpose: string;
+      /** @enum {string} */
+      grantee_type: 'TRUSTED_CONTACT' | 'USER' | 'SERVICE_PROVIDER' | 'SYSTEM';
+      /** Format: uuid */
+      grantee_id: string;
+      consent_template_version: string;
+      /** @enum {string} */
+      status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+      /** Format: date-time */
+      granted_at: string;
+      /** Format: date-time */
+      expires_at: string | null;
+      /** Format: date-time */
+      revoked_at: string | null;
+    };
+    ConsentGrantResult: components['schemas']['ConsentGrant'] & {
+      replayed: boolean;
+    };
+    GrantConsentRequest: {
+      /** @enum {string} */
+      permission: 'can_receive' | 'can_view' | 'can_share';
+      /** @enum {string} */
+      scope:
+        | 'YELLOW'
+        | 'ORANGE'
+        | 'RED'
+        | 'support_signal'
+        | 'checkin_answers'
+        | 'current_requests'
+        | 'location'
+        | 'service_request_fulfillment';
+      purpose: string;
+      /** @enum {string} */
+      grantee_type: 'TRUSTED_CONTACT' | 'USER' | 'SERVICE_PROVIDER' | 'SYSTEM';
+      /** Format: uuid */
+      grantee_id: string;
+      consent_template_version: string;
+      /** Format: date-time */
+      expires_at?: string;
+    };
+    TrustedContact: {
+      /** Format: uuid */
+      trusted_contact_id: string;
+      relationship_label: string;
+      /** @enum {string} */
+      status: 'INVITED' | 'ACCEPTED' | 'SUSPENDED' | 'REMOVED' | 'REVOKED';
+      /** Format: uuid */
+      contact_user_id: string | null;
+    };
+    TrustedContactResult: components['schemas']['TrustedContact'] & {
+      replayed: boolean;
+    };
+    /** @description At least one of invite_email and invite_phone is required. */
+    InviteTrustedContactRequest: {
+      relationship_label: string;
+      /** Format: email */
+      invite_email?: string;
+      invite_phone?: string;
+    };
+    IntakeDraft: {
+      /** Format: uuid */
+      draft_id: string;
+      /** @enum {string} */
+      status: 'DRAFT' | 'SUBMITTED' | 'DISCARDED';
+      category: components['schemas']['ServiceCategory'] | null;
+      summary: string | null;
+      timing: string | null;
+      meeting_place: string | null;
+      /** Format: uuid */
+      service_request_id: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+      /** Format: date-time */
+      submitted_at: string | null;
+    };
+    IntakeDraftWithText: components['schemas']['IntakeDraft'] & {
+      intake_text: string;
+    };
+    IntakeResource: {
+      /** Format: uuid */
+      resource_id: string;
+      service_name: string;
+      category: string;
+      counties: string[];
+      hours: string | null;
+      cost: string | null;
+      contact_method: string | null;
+      contact_method_kind: string | null;
+      freshness: string;
+      stale_warning: boolean;
+    };
+    RequestFormPointer: {
+      /** @enum {string} */
+      method: 'POST';
+      path: string;
+    };
+    IntakeTurn: {
+      /**
+       * @description FALLBACK_FORM: the assistant did not answer; nothing new was stored, show the plain request form (request_form).
+       * @enum {string}
+       */
+      outcome: 'DRAFT_READY' | 'NO_DRAFT' | 'FALLBACK_FORM';
+      assistant_message: string | null;
+      not_available_yet: boolean;
+      notice: string | null;
+      draft: components['schemas']['IntakeDraft'] | null;
+      resources: components['schemas']['IntakeResource'][];
+      request_form: components['schemas']['RequestFormPointer'] | null;
+    };
+    IntakeStatus: {
+      assistant_available: boolean;
+      request_form: components['schemas']['RequestFormPointer'];
+    };
+    IntakeMessageRequest: {
+      text: string;
+    };
+    IntakeDraftEditRequest: {
+      category?: components['schemas']['ServiceCategory'];
+      summary?: string;
+      timing?: string | null;
+      meeting_place?: string | null;
+    };
+    IntakeSubmitResult: {
+      service_request: components['schemas']['ServiceRequestRef'];
+      draft: components['schemas']['IntakeDraft'];
+      replayed: boolean;
+    };
+    CatalogResourceList: {
+      resources: components['schemas']['CatalogResource'][];
+      limit: number;
+      next_cursor: string | null;
+    };
+    ImmediateResources: {
+      /** @enum {string} */
+      state: 'APPROVED' | 'PLACEHOLDER';
+      basis: string;
+      placeholder: string | null;
+      resources: {
+        label: string;
+        destination: string;
+        approved_under: string;
+      }[];
+    };
+    ChatMessageSent: components['schemas']['ChatMessage'] & {
+      replayed: boolean;
+    };
+    ChatMessagePage: {
+      messages: components['schemas']['ChatMessage'][];
+      next_cursor: string | null;
+    };
+    ChatThread: {
+      /** Format: uuid */
+      service_request_id: string;
+      category: components['schemas']['ServiceCategory'];
+      summary: string | null;
+      counterpart_display_name: string | null;
+      /** @description Truncated to 140 characters; null when no message was sent yet. */
+      last_message_body: string | null;
+      /** Format: date-time */
+      last_message_at: string | null;
+      /** @description The request is in a terminal status. */
+      closed: boolean;
+    };
+    ChatThreadList: {
+      threads: components['schemas']['ChatThread'][];
+    };
+    ChatConnectTicket: {
+      ticket: string;
+      /** Format: date-time */
+      expires_at: string;
+      websocket_url: string;
+    };
+    AdapterCatalogEntry: {
+      adapter_id: string;
+      capability: string;
+      integration_mode: string;
+      decision: string;
+      label: string;
+      secret_presence: string;
+    };
+    AdapterConfiguration: {
+      /** Format: uuid */
+      adapter_configuration_id: string;
+      /** Format: uuid */
+      tenant_id: string;
+      adapter_id: string;
+      capability: components['schemas']['ServiceCategory'];
+      integration_mode: string;
+      enabled: boolean;
+      routing_priority: number;
+      health: string;
+      coverage_counties: string[];
+      secret_presence: string;
+      label: string;
+    };
+    AdapterEnableRequest: {
+      /** Format: uuid */
+      tenant_id: string;
+      adapter_id: string;
+      capability: components['schemas']['ServiceCategory'];
+      coverage_counties?: string[];
+      routing_priority?: number;
+    };
+    AdapterDisableRequest: {
+      /** Format: uuid */
+      tenant_id: string;
+      adapter_id: string;
+      capability: components['schemas']['ServiceCategory'];
+    };
+    AdapterRoutingRequest: {
+      /** Format: uuid */
+      tenant_id: string;
+      adapter_id: string;
+      capability: components['schemas']['ServiceCategory'];
+      coverage_counties: string[];
+      routing_priority: number;
+    };
+    /** @description Build provenance (app commit/version, spec version, manifest, environment, schema version). No secrets. */
+    BuildInfo: {
+      [key: string]: unknown;
+    };
   };
   responses: {
     /** @description Canonical API.md §6 error body */
@@ -1304,7 +2031,9 @@ export interface components {
   };
   parameters: {
     IdPath: string;
+    /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
     IdempotencyKey: string;
+    CaseIdPath: string;
   };
   requestBodies: never;
   headers: never;
@@ -1355,16 +2084,24 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AuthChallengeRequest'];
+      };
+    };
     responses: {
-      /** @description Challenge created */
-      200: {
+      /** @description Accepted. The same answer for any address, so it cannot be used to find out who is enrolled. A code goes to the address for an enrolled person and, for EMAIL_OTP, to a new address (self sign-up). */
+      202: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['AuthChallengeAccepted'];
+        };
       };
       400: components['responses']['Error'];
+      429: components['responses']['Error'];
+      503: components['responses']['Error'];
     };
   };
   verifyAuthChallenge: {
@@ -1374,16 +2111,24 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AuthVerifyRequest'];
+      };
+    };
     responses: {
-      /** @description Session issued */
-      200: {
+      /** @description Session created. A code for a new address creates the user (ACTIVE, no county, no display name) first. */
+      201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['AuthSession'];
+        };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
+      429: components['responses']['Error'];
     };
   };
   createMfaChallenge: {
@@ -1395,12 +2140,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description MFA challenge created */
+      /** @description MFA challenge started */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['MfaChallenge'];
+        };
       };
       401: components['responses']['Error'];
     };
@@ -1412,15 +2159,22 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MfaVerifyRequest'];
+      };
+    };
     responses: {
-      /** @description Session MFA-elevated */
+      /** @description Session elevated */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['MfaVerified'];
+        };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
     };
   };
@@ -1431,10 +2185,14 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['LogoutRequest'];
+      };
+    };
     responses: {
-      /** @description Session revoked */
-      200: {
+      /** @description Session revoked (or every session, with everywhere: true) */
+      204: {
         headers: {
           [name: string]: unknown;
         };
@@ -1452,12 +2210,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Check-In started with questions */
+      /** @description Check-in started with its questions */
       201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CheckInWithQuestions'];
+        };
       };
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
@@ -1482,12 +2242,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Check-In projection */
+      /** @description Check-in with its questions */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CheckInWithQuestions'];
+        };
       };
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
@@ -1511,15 +2273,22 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CheckInResponseRequest'];
+      };
+    };
     responses: {
-      /** @description Response saved */
+      /** @description Answer saved */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CheckIn'];
+        };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
       403: {
@@ -1544,12 +2313,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Check-In completed; RED may open a case */
+      /** @description Check-in completed (or incomplete) */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CheckInCompleted'];
+        };
       };
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
@@ -1568,6 +2339,7 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
         'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path?: never;
@@ -1580,14 +2352,18 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['OpenCaseResult'];
+        };
       };
       /** @description Support Case created */
       201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['OpenCaseResult'];
+        };
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
@@ -1628,7 +2404,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['SupportCase'];
+        };
       };
       401: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -1649,17 +2427,13 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Bounded active catalog page with next_cursor */
+      /** @description Active Resources */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            resources: components['schemas']['CatalogResource'][];
-            limit: number;
-            next_cursor: string | null;
-          };
+          'application/json': components['schemas']['CatalogResourceList'];
         };
       };
       400: components['responses']['Error'];
@@ -1686,7 +2460,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Resource projection */
+      /** @description One active Resource */
       200: {
         headers: {
           [name: string]: unknown;
@@ -1723,17 +2497,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** @enum {string} */
-            state: 'APPROVED' | 'PLACEHOLDER';
-            basis: string;
-            placeholder: string | null;
-            resources: {
-              label: string;
-              destination: string;
-              approved_under: string;
-            }[];
-          };
+          'application/json': components['schemas']['ImmediateResources'];
         };
       };
     };
@@ -1752,7 +2516,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['BuildInfo'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -1772,7 +2538,11 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': {
+            adapters: components['schemas']['AdapterCatalogEntry'][];
+          };
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -1780,19 +2550,25 @@ export interface operations {
   };
   getAdminAdapterConfigurations: {
     parameters: {
-      query?: never;
+      query: {
+        tenant_id: string;
+      };
       header?: never;
       path?: never;
       cookie?: never;
     };
     requestBody?: never;
     responses: {
-      /** @description Configurations */
+      /** @description Configurations for the tenant */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': {
+            configurations: components['schemas']['AdapterConfiguration'][];
+          };
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -1805,14 +2581,20 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdapterEnableRequest'];
+      };
+    };
     responses: {
-      /** @description Enabled */
+      /** @description Configuration after the change */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['AdapterConfiguration'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -1825,14 +2607,20 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdapterDisableRequest'];
+      };
+    };
     responses: {
-      /** @description Disabled */
+      /** @description Configuration after the change */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['AdapterConfiguration'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -1845,14 +2633,20 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdapterRoutingRequest'];
+      };
+    };
     responses: {
-      /** @description Routing updated */
+      /** @description Configuration after the change */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['AdapterConfiguration'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -1867,71 +2661,13 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Self profile without contact literals; open case and QRF when present */
+      /** @description The signed-in person */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** Format: uuid */
-            user_id: string;
-            /** @enum {string} */
-            status: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED';
-            enrolled_channels: {
-              email: boolean;
-              phone: boolean;
-            };
-            open_case: null | {
-              /** Format: uuid */
-              case_id: string;
-              status: string;
-              /** @enum {string|null} */
-              priority_signal_level: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | null;
-            };
-            active_qrf: null | {
-              /** Format: uuid */
-              service_request_id: string;
-              state: string;
-              headline: string;
-              cancellable: boolean;
-            };
-            categories: {
-              label: string;
-              /** @enum {string} */
-              disposition: 'OPERATIONAL' | 'INFORMATION_ONLY' | 'COMING_SOON';
-              /** @enum {string|null} */
-              category: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT' | null;
-              note: string | null;
-            }[];
-            /**
-             * @description The county the person chose; null until they pick one
-             * @enum {string|null}
-             */
-            county:
-              | 'SANTA_CLARA'
-              | 'SAN_MATEO'
-              | 'ALAMEDA'
-              | 'SANTA_CRUZ'
-              | 'SAN_BENITO'
-              | 'MERCED'
-              | 'STANISLAUS'
-              | null;
-            id_verification: {
-              /** @enum {string} */
-              method: 'ID_SCAN_SELFIE';
-              /** @enum {string} */
-              status:
-                | 'NOT_STARTED'
-                | 'PENDING'
-                | 'VERIFIED'
-                | 'NOT_CONFIRMED'
-                | 'UNAVAILABLE'
-                | 'REVOKED';
-              /** Format: date-time */
-              verified_at: string | null;
-            };
-          };
+          'application/json': components['schemas']['VeteranMe'];
         };
       };
       401: components['responses']['Error'];
@@ -1954,24 +2690,7 @@ export interface operations {
         };
         content: {
           'application/json': {
-            consents: {
-              /** Format: uuid */
-              consent_grant_id: string;
-              permission: string;
-              scope: string;
-              purpose: string;
-              grantee_type: string;
-              grantee_id: string;
-              consent_template_version: string;
-              /** @enum {string} */
-              status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
-              /** Format: date-time */
-              granted_at: string;
-              /** Format: date-time */
-              expires_at: string | null;
-              /** Format: date-time */
-              revoked_at: string | null;
-            }[];
+            consents: components['schemas']['ConsentGrant'][];
           };
         };
       };
@@ -1991,26 +2710,35 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GrantConsentRequest'];
+      };
+    };
     responses: {
       /** @description Identical idempotent replay */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ConsentGrantResult'];
+        };
       };
       /** @description Grant created */
       201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ConsentGrantResult'];
+        };
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
@@ -2037,12 +2765,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Bounded service-request list */
+      /** @description Service Requests of the case */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CaseServiceRequestList'];
+        };
       };
       401: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -2052,28 +2782,37 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         caseId: string;
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateCaseServiceRequestRequest'];
+      };
+    };
     responses: {
       /** @description Idempotent replay */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ServiceRequestFormResult'];
+        };
       };
-      /** @description Created */
+      /** @description Service Request created (status CREATED) */
       201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ServiceRequestFormResult'];
+        };
       };
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
@@ -2109,12 +2848,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Service request projection */
+      /** @description The request, for its requester or its accepter only */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ServiceRequestDetail'];
+        };
       };
       401: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -2129,12 +2870,16 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Trusted contacts without invite channel literals */
+      /** @description Trusted circle */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': {
+            trusted_contacts: components['schemas']['TrustedContact'][];
+          };
+        };
       };
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
@@ -2155,14 +2900,20 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['InviteTrustedContactRequest'];
+      };
+    };
     responses: {
-      /** @description Invite recorded */
+      /** @description Invitation created */
       201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['TrustedContact'];
+        };
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
@@ -2193,7 +2944,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['TrustedContact'];
+        };
       };
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
@@ -2212,7 +2965,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2221,12 +2975,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Grant revoked or idempotent replay */
+      /** @description Grant after revoke */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ConsentGrantResult'];
+        };
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
@@ -2238,7 +2994,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2262,15 +3019,22 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['ServiceRequestCommandRequest'];
+      };
+    };
     responses: {
-      /** @description Transition applied or replayed */
+      /** @description Request after the command */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ServiceRequestCommandResult'];
+        };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       /** @description FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits before passing the ID scan + selfie check */
       403: {
@@ -2283,6 +3047,7 @@ export interface operations {
       };
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      422: components['responses']['Error'];
     };
   };
   listCaseFollowUps: {
@@ -2296,12 +3061,16 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Open follow-ups */
+      /** @description Open Follow-Ups */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': {
+            follow_ups: components['schemas']['FollowUp'][];
+          };
+        };
       };
       401: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -2311,26 +3080,35 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateFollowUpRequest'];
+      };
+    };
     responses: {
       /** @description Idempotent replay */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['FollowUpResult'];
+        };
       };
-      /** @description Created */
+      /** @description Follow-Up created */
       201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['FollowUpResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2341,7 +3119,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2350,12 +3129,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Completed or replayed */
+      /** @description Follow-Up completed */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['FollowUpCompleted'];
+        };
       };
       401: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -2376,7 +3157,12 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': {
+            notifications: components['schemas']['Notification'][];
+            limit: number;
+          };
+        };
       };
       401: components['responses']['Error'];
     };
@@ -2388,14 +3174,20 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NotificationPreferenceRequest'];
+      };
+    };
     responses: {
       /** @description Preference stored */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['NotificationPreferenceRequest'];
+        };
       };
       401: components['responses']['Error'];
     };
@@ -2404,7 +3196,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2413,12 +3206,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Invite accepted */
+      /** @description Invitation accepted */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['TrustedContactResult'];
+        };
       };
       401: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -2441,7 +3236,11 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': {
+            contact_attempts: components['schemas']['ContactAttempt'][];
+          };
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2452,28 +3251,37 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         caseId: string;
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['LogContactAttemptRequest'];
+      };
+    };
     responses: {
-      /** @description Idempotent replay */
+      /** @description Replay or duplicate of an earlier attempt */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ContactAttemptResult'];
+        };
       };
-      /** @description Attempt recorded */
+      /** @description Contact attempt logged */
       201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ContactAttemptResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2485,28 +3293,37 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         caseId: string;
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CompleteContactRequest'];
+      };
+    };
     responses: {
-      /** @description Idempotent replay */
+      /** @description Replay or duplicate of an earlier contact */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ContactAttemptResult'];
+        };
       };
-      /** @description Contact completed */
+      /** @description Contact recorded */
       201: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ContactAttemptResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2518,7 +3335,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2527,28 +3345,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          requested: {
-            [key: string]: unknown;
-          };
-          occurred: {
-            [key: string]: unknown;
-          };
-          fulfilled: {
-            [key: string]: unknown;
-          };
-          unresolved: {
-            [key: string]: unknown;
-          };
-          /** Format: uuid */
-          authored_by: string;
-          /** Format: uuid */
-          accepted_by_user_id: string;
-          /** Format: uuid */
-          veteran_confirmed_by?: string;
-          /** @enum {string} */
-          expected_status?: 'ACTIVE' | 'FOLLOWUP';
-        };
+        'application/json': components['schemas']['ResolveCaseRequest'];
       };
     };
     responses: {
@@ -2557,7 +3354,9 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ResolveCaseResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2577,12 +3376,18 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Settlement history oldest cycle first */
+      /** @description Settlements. The requester gets VeteranSettlement items (no internal actors); the accepter gets full Settlements. */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': {
+            settlements: (
+              components['schemas']['Settlement'] | components['schemas']['VeteranSettlement']
+            )[];
+          };
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2601,12 +3406,15 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Settlement */
+      /** @description One Settlement (full for the accepter, reduced for the requester) */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json':
+            components['schemas']['Settlement'] | components['schemas']['VeteranSettlement'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2617,7 +3425,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2626,21 +3435,18 @@ export interface operations {
     };
     requestBody?: {
       content: {
-        'application/json': {
-          reason?: string;
-          /** @enum {string} */
-          expected_status?:
-            'OPEN' | 'TRIAGED' | 'ASSIGNED' | 'ACTIVE' | 'FOLLOWUP' | 'RESOLVED' | 'CLOSED';
-        };
+        'application/json': components['schemas']['CaseCommandRequest'];
       };
     };
     responses: {
-      /** @description Case transition applied */
+      /** @description Case after the command */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2653,7 +3459,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2662,21 +3469,18 @@ export interface operations {
     };
     requestBody?: {
       content: {
-        'application/json': {
-          reason?: string;
-          /** @enum {string} */
-          expected_status?:
-            'OPEN' | 'TRIAGED' | 'ASSIGNED' | 'ACTIVE' | 'FOLLOWUP' | 'RESOLVED' | 'CLOSED';
-        };
+        'application/json': components['schemas']['CaseCommandRequest'];
       };
     };
     responses: {
-      /** @description Case transition applied */
+      /** @description Case after the command */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2689,7 +3493,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2698,21 +3503,18 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          reason: string;
-          /** @enum {string} */
-          expected_status?:
-            'OPEN' | 'TRIAGED' | 'ASSIGNED' | 'ACTIVE' | 'FOLLOWUP' | 'RESOLVED' | 'CLOSED';
-        };
+        'application/json': components['schemas']['CaseCommandReasonRequest'];
       };
     };
     responses: {
-      /** @description Case transition applied */
+      /** @description Case after the command */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2725,7 +3527,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2734,21 +3537,18 @@ export interface operations {
     };
     requestBody?: {
       content: {
-        'application/json': {
-          reason?: string;
-          /** @enum {string} */
-          expected_status?:
-            'OPEN' | 'TRIAGED' | 'ASSIGNED' | 'ACTIVE' | 'FOLLOWUP' | 'RESOLVED' | 'CLOSED';
-        };
+        'application/json': components['schemas']['CaseCommandRequest'];
       };
     };
     responses: {
-      /** @description Case transition applied */
+      /** @description Case after the command */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2761,7 +3561,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2770,21 +3571,18 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          reason: string;
-          /** @enum {string} */
-          expected_status?:
-            'OPEN' | 'TRIAGED' | 'ASSIGNED' | 'ACTIVE' | 'FOLLOWUP' | 'RESOLVED' | 'CLOSED';
-        };
+        'application/json': components['schemas']['CaseCommandReasonRequest'];
       };
     };
     responses: {
-      /** @description Case transition applied */
+      /** @description Case after the command */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2797,7 +3595,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2806,21 +3605,18 @@ export interface operations {
     };
     requestBody?: {
       content: {
-        'application/json': {
-          reason?: string;
-          /** @enum {string} */
-          expected_status?:
-            'OPEN' | 'TRIAGED' | 'ASSIGNED' | 'ACTIVE' | 'FOLLOWUP' | 'RESOLVED' | 'CLOSED';
-        };
+        'application/json': components['schemas']['CaseCommandRequest'];
       };
     };
     responses: {
-      /** @description Case transition applied */
+      /** @description Case after the command */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2833,7 +3629,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -2842,21 +3639,18 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          reason: string;
-          /** @enum {string} */
-          expected_status?:
-            'OPEN' | 'TRIAGED' | 'ASSIGNED' | 'ACTIVE' | 'FOLLOWUP' | 'RESOLVED' | 'CLOSED';
-        };
+        'application/json': components['schemas']['CaseCommandReasonRequest'];
       };
     };
     responses: {
-      /** @description Case transition applied */
+      /** @description Case after the command */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
       };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
@@ -2868,7 +3662,7 @@ export interface operations {
   listServiceRequests: {
     parameters: {
       query?: {
-        ownership?: 'open' | 'mine';
+        ownership?: 'open' | 'mine' | 'requested';
         /** @description Opaque keyset cursor taken from a prior response's next_cursor. */
         cursor?: string;
         limit?: number;
@@ -2879,12 +3673,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Bounded list of service_request_id, case_id, category, status, county, widened, created_at with next_cursor. Details are not shown before accepting. */
+      /** @description Bounded page. ownership=open: requests the caller could accept (category, county, status, summary). ownership=mine: requests the caller accepted, with the requester name. ownership=requested: the caller own requests in any status, newest first (no county needed). */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ServiceRequestList'];
+        };
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
@@ -2903,19 +3699,15 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path?: never;
       cookie?: never;
     };
     requestBody: {
       content: {
-        'application/json': {
-          /** @enum {string} */
-          category: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
-          summary: string;
-          timing?: string;
-        };
+        'application/json': components['schemas']['ServiceRequestFormRequest'];
       };
     };
     responses: {
@@ -2924,23 +3716,17 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ServiceRequestFormResult'];
+        };
       };
-      /** @description Service Request created */
+      /** @description Service Request created and submitted */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** Format: uuid */
-            service_request_id?: string;
-            /** Format: uuid */
-            case_id?: string;
-            category?: string;
-            status?: string;
-            replayed?: boolean;
-          };
+          'application/json': components['schemas']['ServiceRequestFormResult'];
         };
       };
       400: components['responses']['Error'];
@@ -2961,12 +3747,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Accepted, or a repeat by the person who already holds it. Returns service_request_id, case_id, case_status, assignment_id. */
+      /** @description Accepted (or the same answer again for the person who already holds it) */
       200: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['AcceptServiceRequestResult'];
+        };
       };
       401: components['responses']['Error'];
       /** @description The caller is the requester */
@@ -3008,17 +3796,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          /** @enum {string} */
-          county:
-            | 'SANTA_CLARA'
-            | 'SAN_MATEO'
-            | 'ALAMEDA'
-            | 'SANTA_CRUZ'
-            | 'SAN_BENITO'
-            | 'MERCED'
-            | 'STANISLAUS';
-        };
+        'application/json': components['schemas']['SetCountyRequest'];
       };
     };
     responses: {
@@ -3028,18 +3806,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** @enum {string|null} */
-            county:
-              | 'SANTA_CLARA'
-              | 'SAN_MATEO'
-              | 'ALAMEDA'
-              | 'SANTA_CRUZ'
-              | 'SAN_BENITO'
-              | 'MERCED'
-              | 'STANISLAUS'
-              | null;
-          };
+          'application/json': components['schemas']['SetCountyResponse'];
         };
       };
       400: components['responses']['Error'];
@@ -3056,21 +3823,13 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Current standing; NOT_STARTED when no check was ever started */
+      /** @description ID scan and selfie status */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** @enum {string} */
-            method: 'ID_SCAN_SELFIE';
-            /** @enum {string} */
-            status:
-              'NOT_STARTED' | 'PENDING' | 'VERIFIED' | 'NOT_CONFIRMED' | 'UNAVAILABLE' | 'REVOKED';
-            /** Format: date-time */
-            verified_at: string | null;
-          };
+          'application/json': components['schemas']['IdVerification'];
         };
       };
       401: components['responses']['Error'];
@@ -3085,38 +3844,22 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description An existing check or standing was returned */
+      /** @description A check is already pending */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** @enum {string} */
-            method: 'ID_SCAN_SELFIE';
-            /** @enum {string} */
-            status:
-              'NOT_STARTED' | 'PENDING' | 'VERIFIED' | 'NOT_CONFIRMED' | 'UNAVAILABLE' | 'REVOKED';
-            /** Format: date-time */
-            verified_at: string | null;
-          };
+          'application/json': components['schemas']['IdVerification'];
         };
       };
-      /** @description A new check was opened */
+      /** @description Check started */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** @enum {string} */
-            method: 'ID_SCAN_SELFIE';
-            /** @enum {string} */
-            status:
-              'NOT_STARTED' | 'PENDING' | 'VERIFIED' | 'NOT_CONFIRMED' | 'UNAVAILABLE' | 'REVOKED';
-            /** Format: date-time */
-            verified_at: string | null;
-          };
+          'application/json': components['schemas']['IdVerification'];
         };
       };
       401: components['responses']['Error'];
@@ -3146,14 +3889,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            assistant_available?: boolean;
-            request_form?: {
-              /** @enum {string} */
-              method?: 'POST';
-              path?: string;
-            } | null;
-          };
+          'application/json': components['schemas']['IntakeStatus'];
         };
       };
       401: components['responses']['Error'];
@@ -3169,9 +3905,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          text: string;
-        };
+        'application/json': components['schemas']['IntakeMessageRequest'];
       };
     };
     responses: {
@@ -3181,52 +3915,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /**
-             * @description FALLBACK_FORM: the assistant did not answer and nothing was stored; show the plain request form (`request_form`).
-             * @enum {string}
-             */
-            outcome?: 'DRAFT_READY' | 'NO_DRAFT' | 'FALLBACK_FORM';
-            assistant_message?: string | null;
-            not_available_yet?: boolean;
-            notice?: string | null;
-            draft?: {
-              /** Format: uuid */
-              draft_id?: string;
-              /** @enum {string} */
-              status?: 'DRAFT' | 'SUBMITTED' | 'DISCARDED';
-              /** @enum {string|null} */
-              category?: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT' | null;
-              summary?: string | null;
-              timing?: string | null;
-              /** Format: uuid */
-              service_request_id?: string | null;
-              /** Format: date-time */
-              created_at?: string;
-              /** Format: date-time */
-              updated_at?: string;
-              /** Format: date-time */
-              submitted_at?: string | null;
-            } | null;
-            resources?: {
-              /** Format: uuid */
-              resource_id?: string;
-              service_name?: string;
-              category?: string;
-              counties?: string[];
-              hours?: string | null;
-              cost?: string | null;
-              contact_method?: string | null;
-              contact_method_kind?: string | null;
-              freshness?: string;
-              stale_warning?: boolean;
-            }[];
-            request_form?: {
-              /** @enum {string} */
-              method?: 'POST';
-              path?: string;
-            } | null;
-          };
+          'application/json': components['schemas']['IntakeTurn'];
         };
       };
       /** @description Draft created */
@@ -3235,52 +3924,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /**
-             * @description FALLBACK_FORM: the assistant did not answer and nothing was stored; show the plain request form (`request_form`).
-             * @enum {string}
-             */
-            outcome?: 'DRAFT_READY' | 'NO_DRAFT' | 'FALLBACK_FORM';
-            assistant_message?: string | null;
-            not_available_yet?: boolean;
-            notice?: string | null;
-            draft?: {
-              /** Format: uuid */
-              draft_id?: string;
-              /** @enum {string} */
-              status?: 'DRAFT' | 'SUBMITTED' | 'DISCARDED';
-              /** @enum {string|null} */
-              category?: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT' | null;
-              summary?: string | null;
-              timing?: string | null;
-              /** Format: uuid */
-              service_request_id?: string | null;
-              /** Format: date-time */
-              created_at?: string;
-              /** Format: date-time */
-              updated_at?: string;
-              /** Format: date-time */
-              submitted_at?: string | null;
-            } | null;
-            resources?: {
-              /** Format: uuid */
-              resource_id?: string;
-              service_name?: string;
-              category?: string;
-              counties?: string[];
-              hours?: string | null;
-              cost?: string | null;
-              contact_method?: string | null;
-              contact_method_kind?: string | null;
-              freshness?: string;
-              stale_warning?: boolean;
-            }[];
-            request_form?: {
-              /** @enum {string} */
-              method?: 'POST';
-              path?: string;
-            } | null;
-          };
+          'application/json': components['schemas']['IntakeTurn'];
         };
       };
       400: components['responses']['Error'];
@@ -3305,26 +3949,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            intake_text?: string;
-          } & {
-            /** Format: uuid */
-            draft_id?: string;
-            /** @enum {string} */
-            status?: 'DRAFT' | 'SUBMITTED' | 'DISCARDED';
-            /** @enum {string|null} */
-            category?: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT' | null;
-            summary?: string | null;
-            timing?: string | null;
-            /** Format: uuid */
-            service_request_id?: string | null;
-            /** Format: date-time */
-            created_at?: string;
-            /** Format: date-time */
-            updated_at?: string;
-            /** Format: date-time */
-            submitted_at?: string | null;
-          };
+          'application/json': components['schemas']['IntakeDraftWithText'];
         };
       };
       401: components['responses']['Error'];
@@ -3343,39 +3968,17 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          /** @enum {string} */
-          category?: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
-          summary?: string;
-          timing?: string | null;
-        };
+        'application/json': components['schemas']['IntakeDraftEditRequest'];
       };
     };
     responses: {
-      /** @description Updated draft */
+      /** @description Draft after the edit */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** Format: uuid */
-            draft_id?: string;
-            /** @enum {string} */
-            status?: 'DRAFT' | 'SUBMITTED' | 'DISCARDED';
-            /** @enum {string|null} */
-            category?: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT' | null;
-            summary?: string | null;
-            timing?: string | null;
-            /** Format: uuid */
-            service_request_id?: string | null;
-            /** Format: date-time */
-            created_at?: string;
-            /** Format: date-time */
-            updated_at?: string;
-            /** Format: date-time */
-            submitted_at?: string | null;
-          };
+          'application/json': components['schemas']['IntakeDraft'];
         };
       };
       400: components['responses']['Error'];
@@ -3396,64 +3999,17 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
-          text: string;
-        };
+        'application/json': components['schemas']['IntakeMessageRequest'];
       };
     };
     responses: {
-      /** @description Assistant result */
+      /** @description Follow-up turn */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /**
-             * @description FALLBACK_FORM: the assistant did not answer and nothing was stored; show the plain request form (`request_form`).
-             * @enum {string}
-             */
-            outcome?: 'DRAFT_READY' | 'NO_DRAFT' | 'FALLBACK_FORM';
-            assistant_message?: string | null;
-            not_available_yet?: boolean;
-            notice?: string | null;
-            draft?: {
-              /** Format: uuid */
-              draft_id?: string;
-              /** @enum {string} */
-              status?: 'DRAFT' | 'SUBMITTED' | 'DISCARDED';
-              /** @enum {string|null} */
-              category?: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT' | null;
-              summary?: string | null;
-              timing?: string | null;
-              /** Format: uuid */
-              service_request_id?: string | null;
-              /** Format: date-time */
-              created_at?: string;
-              /** Format: date-time */
-              updated_at?: string;
-              /** Format: date-time */
-              submitted_at?: string | null;
-            } | null;
-            resources?: {
-              /** Format: uuid */
-              resource_id?: string;
-              service_name?: string;
-              category?: string;
-              counties?: string[];
-              hours?: string | null;
-              cost?: string | null;
-              contact_method?: string | null;
-              contact_method_kind?: string | null;
-              freshness?: string;
-              stale_warning?: boolean;
-            }[];
-            request_form?: {
-              /** @enum {string} */
-              method?: 'POST';
-              path?: string;
-            } | null;
-          };
+          'application/json': components['schemas']['IntakeTurn'];
         };
       };
       400: components['responses']['Error'];
@@ -3468,7 +4024,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -3482,43 +4039,17 @@ export interface operations {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['IntakeSubmitResult'];
+        };
       };
-      /** @description Service Request created */
+      /** @description Service Request created from the draft. 422 UNPROCESSABLE when the draft is incomplete or a required meeting_place is missing. */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            service_request?: {
-              /** Format: uuid */
-              service_request_id?: string;
-              /** Format: uuid */
-              case_id?: string;
-              category?: string;
-              status?: string;
-            };
-            draft?: {
-              /** Format: uuid */
-              draft_id?: string;
-              /** @enum {string} */
-              status?: 'DRAFT' | 'SUBMITTED' | 'DISCARDED';
-              /** @enum {string|null} */
-              category?: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT' | null;
-              summary?: string | null;
-              timing?: string | null;
-              /** Format: uuid */
-              service_request_id?: string | null;
-              /** Format: date-time */
-              created_at?: string;
-              /** Format: date-time */
-              updated_at?: string;
-              /** Format: date-time */
-              submitted_at?: string | null;
-            };
-            replayed?: boolean;
-          };
+          'application/json': components['schemas']['IntakeSubmitResult'];
         };
       };
       401: components['responses']['Error'];
@@ -3716,10 +4247,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            messages: components['schemas']['ChatMessage'][];
-            next_cursor: string | null;
-          };
+          'application/json': components['schemas']['ChatMessagePage'];
         };
       };
       400: components['responses']['Error'];
@@ -3740,7 +4268,8 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        'Idempotency-Key': string;
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
       };
       path: {
         id: components['parameters']['IdPath'];
@@ -3761,9 +4290,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['ChatMessage'] & {
-            replayed: boolean;
-          };
+          'application/json': components['schemas']['ChatMessageSent'];
         };
       };
       /** @description Message stored; the other participant's live connections are notified on a best-effort basis */
@@ -3772,9 +4299,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['ChatMessage'] & {
-            replayed: boolean;
-          };
+          'application/json': components['schemas']['ChatMessageSent'];
         };
       };
       400: components['responses']['Error'];
@@ -3800,18 +4325,13 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Ticket issued */
+      /** @description One-time WebSocket connect ticket */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            ticket: string;
-            /** Format: date-time */
-            expires_at: string;
-            websocket_url: string;
-          };
+          'application/json': components['schemas']['ChatConnectTicket'];
         };
       };
       401: components['responses']['Error'];
@@ -3824,6 +4344,54 @@ export interface operations {
           'application/json': components['schemas']['ErrorBody'];
         };
       };
+    };
+  };
+  listChatThreads: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The caller threads (as requester or accepter), newest activity first, at most 100 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatThreadList'];
+        };
+      };
+      401: components['responses']['Error'];
+    };
+  };
+  putVeteransMeProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetProfileRequest'];
+      };
+    };
+    responses: {
+      /** @description Display name stored (trimmed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SetProfileResponse'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
     };
   };
 }

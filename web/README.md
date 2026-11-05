@@ -58,7 +58,8 @@ Each route points at a lazy `features/<area>/<Screen>Page.tsx` with a default ex
   - turns every non-2xx response into a thrown `ApiError { status, code, message }` from the `{error:{code,message}}` envelope;
   - on 401 for a signed-in request: clears the token and goes to `/sign-in` (a wrong sign-in code is a 401 too and is left alone).
 - Because errors throw, `const { data } = await api.GET(...)` is enough; use `isApiError` and `GATE_CODES` (`VERIFICATION_REQUIRED`, `COUNTY_REQUIRED`, `MFA_REQUIRED`, `FORBIDDEN`) to branch.
-- `src/api/supplement.ts` is a temporary typed supplement for fields the OpenAPI document does not describe yet (auth bodies, `display_name`, `is_admin`, `PUT /veterans/me/profile`). Delete it, and the `Omit` in `client-types.ts`, once the document has them and `npm run gen:api` has been re-run.
+- `src/api/types.ts` has short names for the generated schemas (`Me`, `County`, `ServiceRequestListItem`, …). After the document changes, run `npm run gen:api`; the generated `schema.d.ts` is committed.
+- Shared hooks: `useMe`, `useServiceRequests(ownership)`, `useServiceRequest(id)`, `useChatThreads()`, `useUpdateProfile()`, `useUpdateCounty()`, and the sign-in hooks in `auth.ts`. Queries stay idle while there is no session token.
 
 ### Writes and idempotency
 

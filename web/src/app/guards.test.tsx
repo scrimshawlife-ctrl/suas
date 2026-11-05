@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { queryKeys } from '../api/keys';
-import type { MeResponse } from '../api/supplement';
+import type { Me as MeResponse } from '../api/types';
 import { tokenStore } from '../api/token-store';
 import {
   RequireAdmin,
