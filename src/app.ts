@@ -40,6 +40,12 @@ import { buildInfo, type BuildInfo } from './provenance/build-info.js';
 import { RELEASE_MANIFEST, SPEC_VERSION } from './release/pins.js';
 import { createFulfillmentAdapterRegistry, type AdapterRegistry } from './fulfillment/index.js';
 import { createChannelRegistry } from './notifications/index.js';
+import { createChatConnectionLifecycle } from './chat/index.js';
+import {
+  createConnectionPushPort,
+  LocalWebSocketPush,
+  type ConnectionPushPort,
+} from './realtime/index.js';
 
 export interface StartedApp {
   readonly config: SuasConfig;
@@ -49,6 +55,8 @@ export interface StartedApp {
   readonly challengeDelivery: ChallengeDeliveryPort;
   readonly mfa: MfaPort;
   readonly fulfillmentAdapters: AdapterRegistry;
+  /** Chat live-update push; undefined when SUAS_CHAT_PUSH_MODE=disabled. */
+  readonly chatPush: ConnectionPushPort | undefined;
   readonly buildInfo: BuildInfo;
   close(): Promise<void>;
 }
@@ -159,6 +167,12 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   // never displaces the mandatory manual transportation path.
   const fulfillmentAdapters = createFulfillmentAdapterRegistry(config);
 
+  // 5b. Chat live updates. Messages travel over REST; this only pushes new ones.
+  const chatPush =
+    pool !== undefined
+      ? createConnectionPushPort(config, createChatConnectionLifecycle(pool))
+      : undefined;
+
   // 6. Build provenance.
   const resolveBuildInfo = (): BuildInfo =>
     buildInfo({
@@ -176,6 +190,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     challengeDelivery,
     mfa,
     jobQueue,
+    ...(chatPush !== undefined ? { chatPush } : {}),
     // Pino's default transport uses worker_threads, which Workers do not run.
     ...(runtime === 'worker' ? { logger: false, workerRuntime: true } : {}),
   });
@@ -184,6 +199,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     const port = options.listenPort ?? (runtime === 'worker' ? 8787 : config.http.port);
     const host = runtime === 'worker' ? '127.0.0.1' : config.http.host;
     await server.listen({ host, port });
+    if (chatPush instanceof LocalWebSocketPush) await chatPush.listen(config.chatPush.localPort);
     if (runtime !== 'worker') {
       server.log.info(
         { build_info: resolveBuildInfo(), configuration: describeConfig(config) },
@@ -200,9 +216,11 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     challengeDelivery,
     mfa,
     fulfillmentAdapters,
+    chatPush,
     buildInfo: resolveBuildInfo(),
     close: async () => {
       await server.close();
+      if (chatPush instanceof LocalWebSocketPush) await chatPush.close();
       if (pool !== undefined) await pool.end();
     },
   };

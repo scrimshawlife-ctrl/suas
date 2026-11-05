@@ -21,11 +21,13 @@ import { API_PREFIX } from '../release/pins.js';
 import type { BuildInfo } from '../provenance/build-info.js';
 import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
+import type { ConnectionPushPort } from '../realtime/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { authenticate } from './authenticate.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
 import { registerCaseRoutes } from './routes/cases.js';
+import { registerChatRoutes } from './routes/chat.js';
 import { registerCheckInRoutes } from './routes/check-ins.js';
 import { registerConsentRoutes } from './routes/consents.js';
 import { registerContactLogRoutes } from './routes/contact-log.js';
@@ -51,6 +53,8 @@ export interface ServerDependencies {
   readonly challengeDelivery?: ChallengeDeliveryPort;
   readonly mfa?: MfaPort;
   readonly jobQueue?: DurableJobQueuePort;
+  /** Pushes new chat messages to live connections; absent when disabled. */
+  readonly chatPush?: ConnectionPushPort;
   /**
    * Fastify logger. `false` disables pino (Worker isolates cannot use
    * worker_threads). Default keeps the Node structured logger.
@@ -334,6 +338,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerServiceRequestRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerChatRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      push: deps.chatPush,
     });
 
     registerTrustedContactRoutes(app, {

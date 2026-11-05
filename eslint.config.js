@@ -55,6 +55,7 @@ export default tseslint.config(
       'src/cli/**/*.ts',
       'scripts/**/*.ts',
       'src/main.ts',
+      'src/aws/websocket-lambda.ts',
       'tests/**/*.ts',
       '*.config.ts',
     ],
