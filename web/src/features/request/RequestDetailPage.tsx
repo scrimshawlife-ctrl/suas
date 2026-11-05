@@ -1,4 +1,4 @@
-import { useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 import { useMe } from '../../api/me';
 import { isApiError } from '../../api/errors';
 import { paths } from '../../app/paths';
@@ -54,6 +54,10 @@ export default function RequestDetailPage() {
   }
 
   const detail = request.data;
+  // The person who accepted works the case from Serve; this page is the requester's.
+  if (detail.viewer_role === 'ACCEPTER') {
+    return <Navigate to={paths.case(detail.service_request_id)} replace />;
+  }
   const activeQrf = me.data?.active_qrf ?? null;
   const input = { requestId: detail.service_request_id, status: detail.status, activeQrf };
   const need = NEEDS[detail.category];
