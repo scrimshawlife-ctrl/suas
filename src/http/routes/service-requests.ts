@@ -268,6 +268,7 @@ export function registerServiceRequestRoutes(
         : await findDisplayName(deps.pool, context.tenantId, counterpartUserId);
     return {
       ...publicServiceRequest(serviceRequest),
+      viewer_role: access.owner ? 'REQUESTER' : 'ACCEPTER',
       summary: detail.summary,
       timing: detail.timing,
       meeting_place: detail.meetingPlace,

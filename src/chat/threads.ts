@@ -24,6 +24,10 @@ export interface ChatThreadSummary {
   readonly lastMessageAt: Date | null;
   /** The request is in a terminal status. */
   readonly closed: boolean;
+  /** The caller's side of the thread. */
+  readonly role: 'REQUESTER' | 'ACCEPTER';
+  /** Whether the latest message is the caller's own; null when there are no messages. */
+  readonly lastMessageFromMe: boolean | null;
 }
 
 interface ThreadRow {
@@ -34,6 +38,8 @@ interface ThreadRow {
   counterpart_display_name: string | null;
   last_message_body: string | null;
   last_message_at: Date | null;
+  role: 'REQUESTER' | 'ACCEPTER';
+  last_message_from_me: boolean | null;
 }
 
 export async function listChatThreads(
@@ -45,7 +51,9 @@ export async function listChatThreads(
     `SELECT t.service_request_id, r.category, r.status, CASE WHEN jsonb_typeof(r.details->'summary') = 'string'
                  THEN left(r.details->>'summary', 280) END AS summary,
             cp.display_name AS counterpart_display_name,
-            m.preview AS last_message_body, m.created_at AS last_message_at
+            m.preview AS last_message_body, m.created_at AS last_message_at,
+            CASE WHEN t.requester_user_id = $2::uuid THEN 'REQUESTER' ELSE 'ACCEPTER' END AS role,
+            m.sender_user_id = $2::uuid AS last_message_from_me
        FROM chat_threads t
        JOIN service_requests r
          ON r.service_request_id = t.service_request_id AND r.tenant_id = t.tenant_id
@@ -54,7 +62,7 @@ export async function listChatThreads(
         AND cp.user_id = CASE WHEN t.requester_user_id = $2::uuid
                               THEN t.accepted_by_user_id ELSE t.requester_user_id END
        LEFT JOIN LATERAL (
-         SELECT left(body, $3::int) AS preview, created_at
+         SELECT left(body, $3::int) AS preview, created_at, sender_user_id
            FROM chat_messages
           WHERE chat_thread_id = t.chat_thread_id AND tenant_id = t.tenant_id
           ORDER BY created_at DESC, chat_message_id DESC
@@ -73,6 +81,8 @@ export async function listChatThreads(
     counterpartDisplayName: row.counterpart_display_name,
     lastMessageBody: row.last_message_body,
     lastMessageAt: row.last_message_at,
+    role: row.role,
+    lastMessageFromMe: row.last_message_from_me,
     closed: (TERMINAL_REQUEST_STATUSES as readonly string[]).includes(row.status),
   }));
 }

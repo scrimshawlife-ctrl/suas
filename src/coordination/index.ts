@@ -16,6 +16,7 @@ export {
   assertServiceCategory,
   findRequestTransition,
   IllegalRequestTransitionError,
+  RequestReasonRequiredError,
   RESERVED_FUTURE_CATEGORIES,
   resolveRequestTransition,
   SERVICE_CATEGORIES,
