@@ -264,6 +264,90 @@ describe('D-052 STAGING fixture registry', () => {
     }
   });
 
+  it('refuses an API challenge for a non-admitted account and creates nothing', async () => {
+    const app = await stagingApp([]);
+    try {
+      const pool = app.pool;
+      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const tenantId = randomUUID();
+      const email = syntheticEmail(`api-challenge-${tenantId.slice(0, 8)}`);
+      await createUser(pool, { tenantId, email, status: 'ACTIVE' });
+      const before = await effectCounts(pool, app);
+      const response = await app.server.inject({
+        method: 'POST',
+        url: `${API_PREFIX}/auth/challenges`,
+        payload: { destination: email, method: 'EMAIL_OTP', tenant_id: tenantId },
+      });
+      expect(response.statusCode).toBe(202);
+      expect(await effectCounts(pool, app)).toEqual(before);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('refuses a UI challenge for a non-admitted account and creates nothing', async () => {
+    const tenantId = '00000000-0000-4000-8000-000000000001';
+    const app = await startApp({
+      env: validEnv({
+        SUAS_ENV: 'STAGING',
+        SUAS_MIGRATIONS_MODE: 'apply',
+        SUAS_PUBLIC_SIGN_UP: 'disabled',
+        SUAS_ID_VERIFICATION_MODE: 'disabled',
+        SUAS_BROWSER_AUTH_MODE: 'email_otp',
+        SUAS_BROWSER_TENANT_ID: tenantId,
+      }),
+      listen: false,
+    });
+    try {
+      const pool = app.pool;
+      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const email = syntheticEmail(`ui-challenge-${randomUUID().slice(0, 8)}`);
+      await createUser(pool, { tenantId, email, status: 'ACTIVE' });
+      const before = await effectCounts(pool, app);
+      const response = await app.server.inject({
+        method: 'POST',
+        url: '/app/auth/challenges',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams({ destination: email, role: 'veteran' }).toString(),
+      });
+      expect(response.statusCode).toBe(200);
+      expect(await effectCounts(pool, app)).toEqual(before);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each(['STAGING', 'PRODUCTION'] as const)(
+    'refuses public sign-up through issueChallenge on %s and creates nothing',
+    async (environment) => {
+      const app = await stagingApp([]);
+      try {
+        const pool = app.pool;
+        if (pool === undefined) throw new Error('The test app has no database pool.');
+        const before = await effectCounts(pool, app);
+        await expect(
+          issueChallenge(
+            {
+              pool,
+              sessionSecret: TEST_SESSION_SECRET,
+              delivery: app.challengeDelivery,
+              stagingAccess: { environment, publicSignUp: true, fixturePrincipals: [] },
+            },
+            {
+              tenantId: randomUUID(),
+              destination: syntheticEmail(`signup-${environment.toLowerCase()}`),
+              method: 'EMAIL_OTP',
+              allowSignUp: true,
+            },
+          ),
+        ).rejects.toThrow(PublicSignUpRefusedError);
+        expect(await effectCounts(pool, app)).toEqual(before);
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
   it('refuses a previously issued challenge after the principal is not admitted', async () => {
     const tenantId = randomUUID();
     const userId = randomUUID();
