@@ -206,8 +206,19 @@
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/check-ins/{id}": {
@@ -232,10 +243,21 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/check-ins/{id}/responses": {
@@ -260,10 +282,21 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/check-ins/{id}/commands/complete": {
@@ -288,10 +321,21 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/cases": {
@@ -322,10 +366,31 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "409": {
             "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "description": "COUNTY_REQUIRED: the person has not chosen a county",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
-        }
+        },
+        "x-requires": ["verified_veteran", "county"]
       },
       "get": {
         "tags": ["cases"],
@@ -525,8 +590,19 @@
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/resources/{id}": {
@@ -558,22 +634,29 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/immediate-resources": {
       "get": {
         "tags": ["resources"],
-        "summary": "Immediate-resource / approved safety-copy slot",
+        "summary": "Immediate-resource / approved safety-copy slot (public: signed out and unverified people can read it)",
         "operationId": "getImmediateResources",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [],
         "responses": {
           "200": {
             "description": "Approved crisis destinations or labelled placeholder",
@@ -615,9 +698,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -781,6 +861,8 @@
                     "user_id",
                     "status",
                     "enrolled_channels",
+                    "county",
+                    "id_verification",
                     "open_case",
                     "active_qrf",
                     "categories"
@@ -876,6 +958,45 @@
                           "note": {
                             "type": ["string", "null"]
                           }
+                        }
+                      }
+                    },
+                    "county": {
+                      "type": ["string", "null"],
+                      "enum": [
+                        "SANTA_CLARA",
+                        "SAN_MATEO",
+                        "ALAMEDA",
+                        "SANTA_CRUZ",
+                        "SAN_BENITO",
+                        "MERCED",
+                        "STANISLAUS",
+                        null
+                      ],
+                      "description": "The county the person chose; null until they pick one"
+                    },
+                    "id_verification": {
+                      "type": "object",
+                      "required": ["method", "status", "verified_at"],
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "enum": ["ID_SCAN_SELFIE"]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_STARTED",
+                            "PENDING",
+                            "VERIFIED",
+                            "NOT_CONFIRMED",
+                            "UNAVAILABLE",
+                            "REVOKED"
+                          ]
+                        },
+                        "verified_at": {
+                          "type": ["string", "null"],
+                          "format": "date-time"
                         }
                       }
                     }
@@ -978,8 +1099,19 @@
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       },
       "post": {
         "tags": ["consent"],
@@ -1014,10 +1146,21 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "409": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/cases/{caseId}/service-requests": {
@@ -1092,13 +1235,34 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "$ref": "#/components/responses/Error"
           },
           "409": {
             "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "description": "COUNTY_REQUIRED: the person has not chosen a county",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
-        }
+        },
+        "x-requires": ["verified_veteran", "county"]
       }
     },
     "/api/v0/service-requests/{id}": {
@@ -1145,8 +1309,19 @@
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       },
       "post": {
         "tags": ["consent"],
@@ -1166,8 +1341,19 @@
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/trusted-contacts/{id}/commands/remove": {
@@ -1192,10 +1378,21 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/consents/{id}/commands/revoke": {
@@ -1299,7 +1496,14 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "$ref": "#/components/responses/Error"
+            "description": "FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits before passing the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/Error"
@@ -1307,7 +1511,8 @@
           "409": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/cases/{caseId}/follow-ups": {
@@ -2381,6 +2586,221 @@
           },
           "422": {
             "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/veterans/me/county": {
+      "put": {
+        "tags": ["veterans"],
+        "summary": "Set or change the signed-in person's county",
+        "operationId": "putVeteransMeCounty",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["county"],
+                "additionalProperties": false,
+                "properties": {
+                  "county": {
+                    "type": "string",
+                    "enum": [
+                      "SANTA_CLARA",
+                      "SAN_MATEO",
+                      "ALAMEDA",
+                      "SANTA_CRUZ",
+                      "SAN_BENITO",
+                      "MERCED",
+                      "STANISLAUS"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "County stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["county"],
+                  "properties": {
+                    "county": {
+                      "type": ["string", "null"],
+                      "enum": [
+                        "SANTA_CLARA",
+                        "SAN_MATEO",
+                        "ALAMEDA",
+                        "SANTA_CRUZ",
+                        "SAN_BENITO",
+                        "MERCED",
+                        "STANISLAUS",
+                        null
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/veterans/me/id-verification": {
+      "get": {
+        "tags": ["veterans"],
+        "summary": "ID scan + selfie status; a pending check is resolved with the verification port",
+        "operationId": "getVeteransMeIdVerification",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current standing; NOT_STARTED when no check was ever started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["method", "status", "verified_at"],
+                  "properties": {
+                    "method": {
+                      "type": "string",
+                      "enum": ["ID_SCAN_SELFIE"]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "NOT_STARTED",
+                        "PENDING",
+                        "VERIFIED",
+                        "NOT_CONFIRMED",
+                        "UNAVAILABLE",
+                        "REVOKED"
+                      ]
+                    },
+                    "verified_at": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/veterans/me/id-verification/commands/start": {
+      "post": {
+        "tags": ["veterans"],
+        "summary": "Start an ID scan + selfie check (idempotent: reuses a pending check, leaves a verified standing alone)",
+        "operationId": "postVeteransMeIdVerificationStart",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An existing check or standing was returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["method", "status", "verified_at"],
+                  "properties": {
+                    "method": {
+                      "type": "string",
+                      "enum": ["ID_SCAN_SELFIE"]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "NOT_STARTED",
+                        "PENDING",
+                        "VERIFIED",
+                        "NOT_CONFIRMED",
+                        "UNAVAILABLE",
+                        "REVOKED"
+                      ]
+                    },
+                    "verified_at": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A new check was opened",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["method", "status", "verified_at"],
+                  "properties": {
+                    "method": {
+                      "type": "string",
+                      "enum": ["ID_SCAN_SELFIE"]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "NOT_STARTED",
+                        "PENDING",
+                        "VERIFIED",
+                        "NOT_CONFIRMED",
+                        "UNAVAILABLE",
+                        "REVOKED"
+                      ]
+                    },
+                    "verified_at": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "description": "ID_VERIFICATION_UNAVAILABLE: no verification provider is configured or it is down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         }
       }
