@@ -46,7 +46,7 @@ export function FindHelp({ categories }: { categories: readonly CategoryCard[] }
       <h2 id="find-help" className="heading text-28 leading-[1.1]">
         Find help
       </h2>
-      <ul className="grid grid-cols-3 gap-3.5 max-md:grid-cols-[repeat(2,minmax(0,1fr))] max-sm:gap-2.5 max-[359px]:grid-cols-1">
+      <ul className="grid grid-cols-3 gap-3.5 max-md:grid-cols-[repeat(2,minmax(0,1fr))] max-sm:gap-2.5 max-[359px]:grid-cols-1!">
         {categories.map((card) => {
           if (card.disposition === 'OPERATIONAL') {
             if (card.category === null) return null;
