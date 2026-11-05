@@ -1,7 +1,8 @@
 /**
- * Deterministic fake for the ID verification port (LOCAL/TEST/STAGING only).
+ * Deterministic fake for the ID verification port (LOCAL and TEST only).
  *
- * Config refuses it in PRODUCTION (V1_PROJECT_PLAN.md §7). Tests drive outcomes
+ * Config and the port factory refuse it in STAGING and PRODUCTION (D-052).
+ * Tests drive outcomes
  * with `resolve`; the constructor sets the status a new check starts with.
  */
 

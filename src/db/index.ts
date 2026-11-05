@@ -22,3 +22,9 @@ export {
 } from './migration-files.js';
 export { EXPECTED_SCHEMA_VERSION, MIGRATION_LOCK_KEY, MIGRATIONS_TABLE } from './schema-version.js';
 export { assertExpectedSchemaVersion } from './operating-schema.js';
+export {
+  databaseNameFromUrl,
+  migrationResetRefusal,
+  resetSyntheticDatabase,
+  type MigrationResetPolicy,
+} from './migration-reset.js';
