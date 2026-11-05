@@ -19,7 +19,7 @@ import type { Pool } from 'pg';
 import { withTransaction } from '../db/transaction.js';
 import type { Queryable } from '../db/transaction.js';
 import { appendAuditEvent } from '../events/index.js';
-import { findUserByDestination, type User } from '../identity/users.js';
+import { createUser, findUserByDestination, type User } from '../identity/users.js';
 import {
   CHALLENGE_ISSUE_LIMIT,
   CHALLENGE_ISSUE_WINDOW_SECONDS,
@@ -51,8 +51,17 @@ export interface IssueChallengeInput {
   readonly tenantId: string;
   readonly destination: string;
   readonly method: ChallengeMethod;
+  /**
+   * Self sign-up (v1 web): an unknown email address still gets an EMAIL_OTP code, and
+   * verifying it creates the user. The caller answers the same 202 either way, so the
+   * response reveals nothing about who is enrolled. Ignored for other methods.
+   */
+  readonly allowSignUp?: boolean;
   readonly correlationId?: string;
 }
+
+/** Deliberately loose: enough to keep junk out of `users.email`; the mail provider is the real check. */
+const SIGN_UP_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface IssueChallengeResult {
   /**
@@ -125,19 +134,18 @@ export async function issueChallenge(
   );
 
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
+  const signUp =
+    user === undefined &&
+    input.allowSignUp === true &&
+    input.method === 'EMAIL_OTP' &&
+    SIGN_UP_EMAIL_PATTERN.test(destination);
 
-  if (user === undefined || user.status === 'REVOKED' || user.status === 'SUSPENDED') {
-    await recordChallengeAudit(deps.pool, {
-      tenantId: input.tenantId,
-      action: 'AUTH_CHALLENGE_ISSUE_SKIPPED',
-      outcome: user === undefined ? 'NO_ENROLLED_USER' : `USER_${user.status}`,
-      method: input.method,
-      actorId: user?.userId ?? 'anonymous',
-      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
-    });
-    return { issued: false, challengeId: undefined, expiresAt: undefined };
-  }
-
+  // Every branch does the same database work: one challenge row and one audit event in a
+  // transaction, and the same hashing. They differ only in whether a code is delivered, so
+  // neither the answer nor the database time says whether an address is enrolled. A person who
+  // may not receive a code gets a row that is already REVOKED, which verify never selects.
+  const deliverable =
+    signUp || (user !== undefined && user.status !== 'REVOKED' && user.status !== 'SUSPENDED');
   const secret =
     input.method === 'MAGIC_LINK' ? generateOpaqueToken() : (fixedCode ?? generateOtpCode());
   const challengeId = randomUUID();
@@ -147,42 +155,51 @@ export async function issueChallenge(
     await tx.query(
       `INSERT INTO auth_challenges
          (auth_challenge_id, tenant_id, user_id, method, destination, secret_hash,
-          max_attempts, expires_at, correlation_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          max_attempts, expires_at, correlation_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         challengeId,
         input.tenantId,
-        user.userId,
+        user?.userId ?? null,
         input.method,
         destination,
         hashCredential(deps.sessionSecret, secret),
         CHALLENGE_MAX_ATTEMPTS.value,
         expiresAt,
         input.correlationId ?? null,
+        deliverable ? 'ISSUED' : 'REVOKED',
       ],
     );
 
     await appendAuditEvent(tx, {
-      eventType: 'AUTH_CHALLENGE_ISSUED',
-      action: 'ISSUE_AUTH_CHALLENGE',
+      eventType: deliverable ? 'AUTH_CHALLENGE_ISSUED' : 'AUTH_CHALLENGE_ISSUE_SKIPPED',
+      action: deliverable ? 'ISSUE_AUTH_CHALLENGE' : 'AUTH_CHALLENGE_ISSUE_SKIPPED',
       targetType: 'AuthChallenge',
       targetId: challengeId,
       aggregateType: 'User',
-      aggregateId: user.userId,
+      // A sign-up has no user yet; the challenge id stands in as the aggregate.
+      aggregateId: user?.userId ?? challengeId,
       tenantId: input.tenantId,
       actorType: 'SYSTEM',
-      actorId: 'auth',
+      actorId: deliverable ? 'auth' : (user?.userId ?? 'anonymous'),
       // The destination is a contact identifier; only the method is recorded.
-      payload: { method: input.method, channel },
+      payload: deliverable
+        ? { method: input.method, channel, ...(signUp ? { sign_up: true } : {}) }
+        : {
+            method: input.method,
+            outcome: user === undefined ? 'NO_ENROLLED_USER' : `USER_${user.status}`,
+          },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
   });
 
+  if (!deliverable) return { issued: false, challengeId: undefined, expiresAt: undefined };
+
   // Delivery happens after commit: a delivery failure must not leave a phantom
   // challenge, and the challenge must exist before a code can arrive.
-  // The synthetic demo code is shown on the sign-in page. A vendor rejection
-  // (example.invalid is not a mailbox) does not remove that challenge and is
-  // not reported as a successful email send.
+  // A failed send (provider outage, or example.invalid is not a mailbox) must not change the
+  // answer either: unknown and suspended addresses send nothing and cannot fail, so a failure
+  // that surfaced would reveal an enrolled address. It is audited and the answer is unchanged.
   try {
     await deps.delivery.deliver({
       channel,
@@ -192,13 +209,27 @@ export async function issueChallenge(
       expiresAt,
     });
   } catch (error: unknown) {
-    if (fixedCode === undefined) throw error;
     const errorName = error instanceof Error ? error.name : 'unknown';
     console.error(
       JSON.stringify({
         level: 'warn',
-        msg: 'demo_fixed_code_delivery_not_accepted',
+        msg: 'challenge_delivery_not_accepted',
         error_name: errorName,
+      }),
+    );
+    await withTransaction(deps.pool, (tx) =>
+      appendAuditEvent(tx, {
+        eventType: 'AUTH_CHALLENGE_DELIVERY_FAILED',
+        action: 'DELIVER_AUTH_CHALLENGE',
+        targetType: 'AuthChallenge',
+        targetId: challengeId,
+        aggregateType: 'User',
+        aggregateId: user?.userId ?? challengeId,
+        tenantId: input.tenantId,
+        actorType: 'SYSTEM',
+        actorId: 'auth',
+        payload: { method: input.method, channel, error_name: errorName },
+        ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
       }),
     );
   }
@@ -312,7 +343,45 @@ export async function verifyChallenge(
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
 
-    return challenge.user_id ?? undefined;
+    if (challenge.user_id !== null) return challenge.user_id;
+
+    // A sign-up challenge has no user yet. Proving control of the address creates one,
+    // unless the address was enrolled in the meantime, in which case that person signs in.
+    const existing = await findUserByDestination(tx, input.tenantId, destination);
+    if (existing !== undefined) return existing.userId;
+    // A concurrent sign-up of the same address loses on the unique index. A savepoint keeps
+    // the transaction usable so the winner can be re-read; the pg error is dropped here
+    // because its detail quotes the email address.
+    await tx.query('SAVEPOINT self_sign_up');
+    let created: User;
+    try {
+      created = await createUser(tx, {
+        tenantId: input.tenantId,
+        email: destination,
+        status: 'ACTIVE',
+      });
+      await tx.query('RELEASE SAVEPOINT self_sign_up');
+    } catch (error: unknown) {
+      if ((error as { code?: unknown } | null)?.code !== '23505') throw error;
+      await tx.query('ROLLBACK TO SAVEPOINT self_sign_up');
+      const winner = await findUserByDestination(tx, input.tenantId, destination);
+      if (winner === undefined) throw new ChallengeVerificationFailedError();
+      return winner.userId;
+    }
+    await appendAuditEvent(tx, {
+      eventType: 'USER_SELF_SIGNED_UP',
+      action: 'CREATE_USER',
+      targetType: 'User',
+      targetId: created.userId,
+      aggregateType: 'User',
+      aggregateId: created.userId,
+      tenantId: input.tenantId,
+      actorType: 'SYSTEM',
+      actorId: 'auth',
+      payload: { method: 'EMAIL_OTP' },
+      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    });
+    return created.userId;
   });
 
   if (userId === undefined) {
@@ -329,7 +398,12 @@ export async function verifyChallenge(
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
   // AUTH.md §6: User.status = ACTIVE is required to act. A challenge verified by
   // a user who is no longer active does not produce a session.
-  if (user === undefined || user.userId !== userId) {
+  if (
+    user === undefined ||
+    user.userId !== userId ||
+    user.status === 'SUSPENDED' ||
+    user.status === 'REVOKED'
+  ) {
     throw new ChallengeVerificationFailedError();
   }
   return user;

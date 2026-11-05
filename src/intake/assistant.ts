@@ -66,12 +66,14 @@ export interface IntakeDraftFields {
   readonly category: IntakeCategory | null;
   readonly summary: string | null;
   readonly timing: string | null;
+  readonly meetingPlace: string | null;
 }
 
 export const EMPTY_DRAFT_FIELDS: IntakeDraftFields = {
   category: null,
   summary: null,
   timing: null,
+  meetingPlace: null,
 };
 
 /**
@@ -111,6 +113,7 @@ function renderUserMessage(input: IntakeRunInput): string {
           category: input.draft.category,
           summary: input.draft.summary,
           timing: input.draft.timing,
+          meeting_place: input.draft.meetingPlace,
         });
   return `<intake_text>\n${safeText}\n</intake_text>\n\nCurrent draft: ${current}`;
 }
@@ -198,12 +201,15 @@ function runDraft(call: ModelToolCall, state: RunState): ToolOutcome {
 
   const parsed = draftServiceRequestInput.safeParse(input);
   if (!parsed.success) {
-    return error('Invalid input. Provide category and summary; timing is optional.');
+    return error(
+      'Invalid input. Provide category and summary; timing and meeting_place are optional.',
+    );
   }
   state.draft = {
     category: parsed.data.category,
     summary: parsed.data.summary,
     timing: parsed.data.timing ?? null,
+    meetingPlace: parsed.data.meeting_place ?? null,
   };
   return { content: 'Draft saved. The Veteran will review it before submitting.' };
 }

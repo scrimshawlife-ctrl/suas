@@ -847,16 +847,23 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
     });
   }
 
+  // Also the tenant that new addresses sign up into over /api/v0, so a bad value fails at startup
+  // in every mode.
+  if (
+    raw.SUAS_BROWSER_TENANT_ID !== undefined &&
+    !z.string().uuid().safeParse(raw.SUAS_BROWSER_TENANT_ID).success
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SUAS_BROWSER_TENANT_ID must be a UUID.',
+    });
+  }
+
   if (raw.SUAS_BROWSER_AUTH_MODE === 'email_otp') {
     if (raw.SUAS_BROWSER_TENANT_ID === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'SUAS_BROWSER_TENANT_ID is required when SUAS_BROWSER_AUTH_MODE=email_otp.',
-      });
-    } else if (!z.string().uuid().safeParse(raw.SUAS_BROWSER_TENANT_ID).success) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'SUAS_BROWSER_TENANT_ID must be a UUID.',
       });
     }
     if (raw.SUAS_EMAIL_MODE === 'disabled') {

@@ -10,6 +10,7 @@ function user(tenantId: string): User {
     email: 'v@example.invalid',
     phone: undefined,
     county: undefined,
+    displayName: undefined,
     deletedAt: undefined,
   };
 }

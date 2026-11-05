@@ -5,6 +5,7 @@ export {
   findUserById,
   NoEnrolledChannelError,
   setUserCounty,
+  setUserDisplayName,
   setUserStatus,
   softDeleteUser,
   UserTerminalError,

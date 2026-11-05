@@ -18,6 +18,8 @@ export interface User {
   readonly phone: string | undefined;
   /** Null until the person picks a county at sign-up. */
   readonly county: ServiceCounty | undefined;
+  /** What the other person on a request sees. Null until the person chooses one. */
+  readonly displayName: string | undefined;
   readonly deletedAt: Date | undefined;
 }
 
@@ -28,10 +30,11 @@ interface UserRow {
   email: string | null;
   phone: string | null;
   county: ServiceCounty | null;
+  display_name: string | null;
   deleted_at: Date | null;
 }
 
-const USER_COLUMNS = 'user_id, tenant_id, status, email, phone, county, deleted_at';
+const USER_COLUMNS = 'user_id, tenant_id, status, email, phone, county, display_name, deleted_at';
 
 function toUser(row: UserRow): User {
   return {
@@ -41,6 +44,7 @@ function toUser(row: UserRow): User {
     email: row.email ?? undefined,
     phone: row.phone ?? undefined,
     county: row.county ?? undefined,
+    displayName: row.display_name ?? undefined,
     deletedAt: row.deleted_at ?? undefined,
   };
 }
@@ -151,6 +155,23 @@ export async function setUserCounty(
      WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL
      RETURNING ${USER_COLUMNS}`,
     [tenantId, userId, county],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : toUser(row);
+}
+
+/** A person sets the name the other participant of a request sees. */
+export async function setUserDisplayName(
+  db: Queryable,
+  tenantId: string,
+  userId: string,
+  displayName: string,
+): Promise<User | undefined> {
+  const result = await db.query<UserRow>(
+    `UPDATE users SET display_name = $3, updated_at = now()
+     WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL
+     RETURNING ${USER_COLUMNS}`,
+    [tenantId, userId, displayName],
   );
   const row = result.rows[0];
   return row === undefined ? undefined : toUser(row);

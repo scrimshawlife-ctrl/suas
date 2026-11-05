@@ -291,7 +291,7 @@ describe('helping others needs no scan', () => {
       method: 'POST',
       url: `/api/v0/cases/${caseId}/service-requests`,
       headers: { ...requester.headers, 'idempotency-key': randomUUID() },
-      payload: { category: 'FOOD' },
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
     });
     const requestId = created.json<{ service_request_id: string }>().service_request_id;
     await app.server.inject({

@@ -83,7 +83,7 @@ async function request(requester: Person, options: { submit?: boolean } = {}) {
     method: 'POST',
     url: `/api/v0/cases/${caseId}/service-requests`,
     headers: keyed(requester),
-    payload: { category: 'FOOD' },
+    payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
   });
   expect(created.statusCode).toBe(201);
   const serviceRequestId: string = created.json().service_request_id;
@@ -241,6 +241,31 @@ describe('accept: first wins', () => {
     expect(threads.rows).toEqual([
       { requester_user_id: requester.userId, accepted_by_user_id: winner.userId },
     ]);
+  });
+});
+
+describe('accept: a request you cannot see does not reveal itself', () => {
+  it('answers 404 to an ineligible caller and 409 only to an eligible loser', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'SANTA_CLARA', 'requester');
+    const winner = await person(tenantId, 'SANTA_CLARA');
+    const eligibleLoser = await person(tenantId, 'SANTA_CLARA');
+    const farAway = await person(tenantId, 'MERCED');
+    const { serviceRequestId } = await request(requester);
+
+    expect((await accept(winner, serviceRequestId)).statusCode).toBe(200);
+
+    // Someone outside the county gets the answer for a request that does not exist.
+    const hidden = await accept(farAway, serviceRequestId);
+    expect(hidden.statusCode).toBe(404);
+    expect(hidden.json().error.code).toBe('NOT_FOUND');
+    const missing = await accept(farAway, randomUUID());
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json()).toEqual(hidden.json());
+
+    const lost = await accept(eligibleLoser, serviceRequestId);
+    expect(lost.statusCode).toBe(409);
+    expect(lost.json().error.code).toBe('ALREADY_CLAIMED');
   });
 });
 
