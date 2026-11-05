@@ -69,10 +69,18 @@ describe('D-012 crisis copy', () => {
   it('shows the Veterans Crisis Line only when asked, with the default link colour', () => {
     const { rerender } = wrap(<Footer />);
     expect(screen.queryByText(/Veterans Crisis Line/)).toBeNull();
-    expect(text(screen.getByRole('contentinfo'))).toBe(
+    const footer = screen.getByRole('contentinfo');
+    expect(text(footer)).toBe(
       'SUAS coordinates community support. It does not provide emergency medical care or emergency dispatch. ' +
         'For immediate danger, call 911. For suicide or emotional crisis support, call or text 988.',
     );
+    expect(screen.getByRole('link', { name: 'Call 911' })).toHaveAttribute('href', 'tel:911');
+    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+    expect(screen.getByRole('link', { name: 'Text 988' })).toHaveAttribute('href', 'sms:988');
+    for (const link of screen.getAllByRole('link')) {
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11', 'items-center');
+      expect(link).not.toHaveClass('text-sos', 'text-white');
+    }
     rerender(
       <MemoryRouter>
         <Footer showVeteransCrisisLine />
@@ -81,9 +89,13 @@ describe('D-012 crisis copy', () => {
     expect(text(screen.getByRole('contentinfo'))).toContain(
       'Veterans Crisis Line: Dial 988, then press 1 · Text 838255',
     );
-    for (const link of screen.getAllByRole('link', { name: '988' })) {
-      expect(link).not.toHaveClass('text-sos');
+    const call988 = screen.getAllByRole('link', { name: 'Call 988' });
+    expect(call988).toHaveLength(2);
+    for (const link of call988) expect(link).toHaveAttribute('href', 'tel:988');
+    expect(screen.getByRole('link', { name: 'Text 838255' })).toHaveAttribute('href', 'sms:838255');
+    for (const link of screen.getAllByRole('link')) {
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11', 'items-center');
+      expect(link).not.toHaveClass('text-sos', 'text-white');
     }
-    expect(screen.getByRole('link', { name: '838255' })).toHaveAttribute('href', 'sms:838255');
   });
 });
