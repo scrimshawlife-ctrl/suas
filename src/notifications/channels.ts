@@ -17,6 +17,7 @@
 
 import type { CommunicationMode, SuasConfig } from '../config/index.js';
 import { createResendEmailChannel } from './resend-email.js';
+import { createSesEmailChannel } from './ses-email.js';
 
 export const NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'IN_APP'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
@@ -94,10 +95,11 @@ export interface SendAcknowledgement {
 }
 
 /**
- * Runtime mode on a port. `resend` is adapter identity only — it is not a
- * released `SUAS_EMAIL_MODE` value (ENVIRONMENT.md §3).
+ * Runtime mode on a port. `resend` and `ses` are adapter identities. `resend`
+ * is not a released `SUAS_EMAIL_MODE` value (ENVIRONMENT.md §3); `ses` is the
+ * v1 plan's replacement (V1_PROJECT_PLAN.md §4.1).
  */
-export type ChannelRuntimeMode = CommunicationMode | 'internal' | 'resend';
+export type ChannelRuntimeMode = CommunicationMode | 'internal' | 'resend' | 'ses';
 
 export interface NotificationChannelPort {
   readonly channel: NotificationChannel;
@@ -175,7 +177,9 @@ export class FailingChannel implements NotificationChannelPort {
  * send. IN_APP is internal and always present.
  *
  * D-004 selects Resend as the sole external EMAIL provider. Fake and sink stay
- * recording-only; `resend` constructs the adapter with validated configuration.
+ * recording-only; `resend` and `ses` construct their adapters with validated
+ * configuration. SES takes its region from `config.aws` and its credentials from
+ * the AWS default provider chain.
  */
 export function createChannelRegistry(
   config: SuasConfig,
@@ -187,6 +191,14 @@ export function createChannelRegistry(
       'EMAIL',
       createResendEmailChannel({
         apiKey: config.notifications.resendApiKey,
+        fromAddress: config.notifications.emailFrom,
+      }),
+    );
+  } else if (config.notifications.email === 'ses') {
+    registry.set(
+      'EMAIL',
+      createSesEmailChannel({
+        region: config.aws.region,
         fromAddress: config.notifications.emailFrom,
       }),
     );

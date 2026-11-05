@@ -37,8 +37,25 @@ export type MigrationsMode = (typeof MIGRATIONS_MODES)[number];
  */
 export const COMMUNICATION_MODES = ['disabled', 'fake', 'sink'] as const;
 export type CommunicationMode = (typeof COMMUNICATION_MODES)[number];
-export const EMAIL_MODES = [...COMMUNICATION_MODES, 'resend'] as const;
+export const EMAIL_MODES = [...COMMUNICATION_MODES, 'resend', 'ses'] as const;
 export type EmailMode = (typeof EMAIL_MODES)[number];
+
+/**
+ * V1_PROJECT_PLAN.md §2.2 and §4.1: AWS-backed capability ports. Each has a fake
+ * for LOCAL/TEST. Real AWS modes are refused in LOCAL/TEST; fakes are refused in
+ * PRODUCTION (plan §7). The default is `disabled` so existing environments need
+ * no new variables.
+ */
+export const MODEL_INFERENCE_MODES = ['disabled', 'fake', 'bedrock'] as const;
+export type ModelInferenceMode = (typeof MODEL_INFERENCE_MODES)[number];
+export const OBJECT_STORAGE_MODES = ['disabled', 'fake', 's3'] as const;
+export type ObjectStorageMode = (typeof OBJECT_STORAGE_MODES)[number];
+/** No real provider is chosen yet (plan §8 item 2), so only a fake exists. */
+export const ID_VERIFICATION_MODES = ['disabled', 'fake'] as const;
+export type IdVerificationMode = (typeof ID_VERIFICATION_MODES)[number];
+
+const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d$/;
+const S3_BUCKET_PATTERN = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 
 export const BROWSER_AUTH_MODES = ['disabled', 'email_otp'] as const;
 export type BrowserAuthMode = (typeof BROWSER_AUTH_MODES)[number];
@@ -113,6 +130,24 @@ function requiredEnum<const T extends readonly string[]>(
       });
     }
   }) as unknown as z.ZodType<T[number], z.ZodTypeDef, unknown>;
+}
+
+/** Like {@link requiredEnum}, but an unset variable takes `fallback`. */
+function optionalEnum<const T extends readonly string[]>(
+  varName: string,
+  allowed: T,
+  fallback: T[number],
+): z.ZodType<T[number], z.ZodTypeDef, unknown> {
+  return optionalRaw
+    .superRefine((value, ctx) => {
+      if (value !== undefined && !allowed.includes(value)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${varName}="${value}" is not a valid value. Allowed: ${allowed.join(' | ')}.`,
+        });
+      }
+    })
+    .transform((value) => (value ?? fallback) as T[number]);
 }
 
 /** ENVIRONMENT.md §5: fail closed on invalid/unknown values, including booleans. */
@@ -190,7 +225,30 @@ const rawConfigSchema = z.object({
   // Resend slots are required only when the released mode is selected.
   // Secrets stay empty in committed examples (ENVIRONMENT.md §6–§7).
   RESEND_API_KEY: optionalRaw,
+  // Shared by `resend` and `ses`. SES credentials are never configured here:
+  // the AWS SDK default provider chain supplies them (the Lambda role).
   SUAS_EMAIL_FROM: optionalRaw,
+
+  // --- AWS capability ports. V1_PROJECT_PLAN.md §2.2, §4.1. ---
+  SUAS_AWS_REGION: optionalRaw,
+  SUAS_MODEL_INFERENCE_MODE: optionalEnum(
+    'SUAS_MODEL_INFERENCE_MODE',
+    MODEL_INFERENCE_MODES,
+    'disabled',
+  ),
+  // Unset means the capability is reported unavailable: the model is not chosen.
+  SUAS_BEDROCK_MODEL_ID: optionalRaw,
+  SUAS_OBJECT_STORAGE_MODE: optionalEnum(
+    'SUAS_OBJECT_STORAGE_MODE',
+    OBJECT_STORAGE_MODES,
+    'disabled',
+  ),
+  SUAS_S3_BUCKET: optionalRaw,
+  SUAS_ID_VERIFICATION_MODE: optionalEnum(
+    'SUAS_ID_VERIFICATION_MODE',
+    ID_VERIFICATION_MODES,
+    'disabled',
+  ),
 
   // --- Fulfillment adapters. ENVIRONMENT.md §3. ---
   SUAS_TRANSPORTATION_ADAPTER_MODE: requiredEnum(
@@ -296,6 +354,21 @@ export interface SuasConfig {
     readonly sms: CommunicationMode;
     readonly resendApiKey: string | undefined;
     readonly emailFrom: string | undefined;
+  };
+  readonly aws: {
+    readonly region: string | undefined;
+  };
+  readonly modelInference: {
+    readonly mode: ModelInferenceMode;
+    /** Unset means the capability is unavailable (model not chosen). */
+    readonly bedrockModelId: string | undefined;
+  };
+  readonly objectStorage: {
+    readonly mode: ObjectStorageMode;
+    readonly bucket: string | undefined;
+  };
+  readonly idVerification: {
+    readonly mode: IdVerificationMode;
   };
   readonly adapters: {
     readonly transportation: AdapterMode;
@@ -426,6 +499,66 @@ function validateProviderEndpoint(
  * Full configuration schema including the ENVIRONMENT.md §5 cross-field
  * startup-validation invariants. Every failure here is fail-closed by design.
  */
+/**
+ * Guards for the AWS-backed capability ports (V1_PROJECT_PLAN.md §4.1, §7).
+ *
+ * - A real AWS mode (`ses`, `bedrock`, `s3`) is refused in LOCAL/TEST, like
+ *   Resend (ENVIRONMENT.md §3 rule 3, AGENTS.md rule 4), and needs its region.
+ * - A fake mode is refused in PRODUCTION. The ID-verification fake would pass
+ *   anyone through the identity gate, so plan §7 requires this refusal.
+ */
+function validateAwsCapabilities(
+  raw: z.output<typeof rawConfigSchema>,
+  environment: EnvironmentClass,
+  ctx: z.RefinementCtx,
+): void {
+  const issue = (message: string): void => {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  };
+
+  const realModes: ReadonlyArray<readonly [string, string, string]> = [
+    ['SUAS_EMAIL_MODE', raw.SUAS_EMAIL_MODE, 'ses'],
+    ['SUAS_MODEL_INFERENCE_MODE', raw.SUAS_MODEL_INFERENCE_MODE, 'bedrock'],
+    ['SUAS_OBJECT_STORAGE_MODE', raw.SUAS_OBJECT_STORAGE_MODE, 's3'],
+  ];
+  const awsEnabled = realModes.filter(([, value, real]) => value === real);
+  for (const [varName, value] of awsEnabled) {
+    if (environment === 'LOCAL' || environment === 'TEST') {
+      issue(`${varName}=${value} is forbidden in ${environment}; use fake or sink.`);
+    }
+  }
+  if (awsEnabled.length > 0 && raw.SUAS_AWS_REGION === undefined) {
+    issue('SUAS_AWS_REGION is required when an AWS-backed capability mode is selected.');
+  }
+  if (raw.SUAS_AWS_REGION !== undefined && !AWS_REGION_PATTERN.test(raw.SUAS_AWS_REGION)) {
+    issue('SUAS_AWS_REGION must be an AWS region name such as us-west-2.');
+  }
+
+  if (raw.SUAS_EMAIL_MODE === 'ses' && raw.SUAS_EMAIL_FROM === undefined) {
+    issue('SUAS_EMAIL_FROM is required when SUAS_EMAIL_MODE=ses.');
+  }
+  if (raw.SUAS_OBJECT_STORAGE_MODE === 's3') {
+    if (raw.SUAS_S3_BUCKET === undefined) {
+      issue('SUAS_S3_BUCKET is required when SUAS_OBJECT_STORAGE_MODE=s3.');
+    }
+  }
+  if (raw.SUAS_S3_BUCKET !== undefined && !S3_BUCKET_PATTERN.test(raw.SUAS_S3_BUCKET)) {
+    issue('SUAS_S3_BUCKET must be a valid S3 bucket name.');
+  }
+
+  if (environment === 'PRODUCTION') {
+    for (const [varName, value] of [
+      ['SUAS_MODEL_INFERENCE_MODE', raw.SUAS_MODEL_INFERENCE_MODE],
+      ['SUAS_OBJECT_STORAGE_MODE', raw.SUAS_OBJECT_STORAGE_MODE],
+      ['SUAS_ID_VERIFICATION_MODE', raw.SUAS_ID_VERIFICATION_MODE],
+    ] as const) {
+      if (value === 'fake') {
+        issue(`${varName}=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).`);
+      }
+    }
+  }
+}
+
 export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   const environment = raw.SUAS_ENV;
 
@@ -701,7 +834,9 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
     }
   }
 
-  // The sender is required in Resend mode. Resend accepts either a bare
+  validateAwsCapabilities(raw, environment, ctx);
+
+  // The sender is required in Resend and SES modes. Both accept either a bare
   // address or the standard display-name form: "Name <address>".
   if (
     raw.SUAS_EMAIL_FROM !== undefined &&
@@ -763,6 +898,13 @@ export function shapeConfig(
       resendApiKey: raw.RESEND_API_KEY,
       emailFrom: raw.SUAS_EMAIL_FROM,
     },
+    aws: { region: raw.SUAS_AWS_REGION },
+    modelInference: {
+      mode: raw.SUAS_MODEL_INFERENCE_MODE,
+      bedrockModelId: raw.SUAS_BEDROCK_MODEL_ID,
+    },
+    objectStorage: { mode: raw.SUAS_OBJECT_STORAGE_MODE, bucket: raw.SUAS_S3_BUCKET },
+    idVerification: { mode: raw.SUAS_ID_VERIFICATION_MODE },
     adapters: {
       transportation: raw.SUAS_TRANSPORTATION_ADAPTER_MODE,
       shelter: raw.SUAS_SHELTER_ADAPTER_MODE,

@@ -13,6 +13,10 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
+### Added
+
+- **AWS capability ports and adapters** (local v1 plan, `V1_PROJECT_PLAN.md` sections 2.2 and 4.1; not a released spec). `SUAS_EMAIL_MODE=ses` sends through Amazon SES next to Resend. New SUAS-owned ports: model inference (Bedrock Converse adapter, unavailable until `SUAS_BEDROCK_MODEL_ID` is set), object storage (S3 adapter), and ID scan + selfie verification (fake adapter only; no provider chosen). Each has a fake for LOCAL/TEST. Real AWS modes are refused in LOCAL/TEST and need `SUAS_AWS_REGION`; fake inference, storage and ID verification are refused in PRODUCTION. New variables are optional and default to `disabled`.
+
 ### Fixed
 
 - **QRF label after fulfillment.** A `FULFILLED` peer-support request showed `SEARCHING` ("Looking for a responder."). `FULFILLED`, `CONFIRMED` and `CLOSED` now show `RESPONDER_ACCEPTED`, because each is only reachable through `ACCEPTED`. Cancel is offered exactly where SUAS-specs `DISPATCH.md` section 4 has a `CANCEL` edge, so it no longer appears on `FULFILLED`, `DECLINED`, `EXPIRED`, `UNFULFILLABLE` or `ESCALATED` requests. SUAS-specs `MVP_REFERENCE.md` section 7.2 (stack 0.7.0).
