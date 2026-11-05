@@ -26,7 +26,7 @@ import {
   type IdVerificationPort,
 } from '../../identity/index.js';
 import { SERVICE_COUNTIES } from '../../identity/counties.js';
-import { findUserById, setUserCounty } from '../../identity/users.js';
+import { findUserById, setUserCounty, setUserDisplayName } from '../../identity/users.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { CATEGORY_CARDS } from '../../ui/categories.js';
 import { presentQrfState } from '../../ui/qrf.js';
@@ -40,6 +40,9 @@ export interface VeteranRouteDeps {
 }
 
 const countyBody = z.object({ county: z.enum(SERVICE_COUNTIES) });
+// Only length and emptiness are validated. The format hint ("First name and last
+// initial, like Marcus T.") is guidance shown by the client.
+const profileBody = z.object({ display_name: z.string().trim().min(1).max(40) });
 
 function publicIdVerification(view: IdScanView) {
   return {
@@ -72,6 +75,8 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
         phone: user.phone !== undefined,
       },
       county: user.county ?? null,
+      display_name: user.displayName ?? null,
+      is_admin: context.isSuasAdmin,
       id_verification: publicIdVerification(idScan),
       open_case:
         openCase === undefined
@@ -108,6 +113,20 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
     const user = await setUserCounty(deps.pool, context.tenantId, context.userId, body.county);
     if (user === undefined) throw new ResourceNotVisibleError();
     return { county: user.county ?? null };
+  });
+
+  /** Signed-in only: a person can set a name before passing the ID scan. */
+  app.put(`${API_PREFIX}/veterans/me/profile`, async (request) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const body = profileBody.parse(request.body);
+    const user = await setUserDisplayName(
+      deps.pool,
+      context.tenantId,
+      context.userId,
+      body.display_name,
+    );
+    if (user === undefined) throw new ResourceNotVisibleError();
+    return { display_name: user.displayName ?? null };
   });
 
   app.get(`${API_PREFIX}/veterans/me/id-verification`, async (request) => {

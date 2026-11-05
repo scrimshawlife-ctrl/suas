@@ -19,7 +19,7 @@ import type { Pool } from 'pg';
 import { withTransaction } from '../db/transaction.js';
 import type { Queryable } from '../db/transaction.js';
 import { appendAuditEvent } from '../events/index.js';
-import { findUserByDestination, type User } from '../identity/users.js';
+import { createUser, findUserByDestination, type User } from '../identity/users.js';
 import {
   CHALLENGE_ISSUE_LIMIT,
   CHALLENGE_ISSUE_WINDOW_SECONDS,
@@ -51,8 +51,17 @@ export interface IssueChallengeInput {
   readonly tenantId: string;
   readonly destination: string;
   readonly method: ChallengeMethod;
+  /**
+   * Self sign-up (v1 web): an unknown email address still gets an EMAIL_OTP code, and
+   * verifying it creates the user. The caller answers the same 202 either way, so the
+   * response reveals nothing about who is enrolled. Ignored for other methods.
+   */
+  readonly allowSignUp?: boolean;
   readonly correlationId?: string;
 }
+
+/** Deliberately loose: enough to keep junk out of `users.email`; the mail provider is the real check. */
+const SIGN_UP_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface IssueChallengeResult {
   /**
@@ -125,8 +134,13 @@ export async function issueChallenge(
   );
 
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
+  const signUp =
+    user === undefined &&
+    input.allowSignUp === true &&
+    input.method === 'EMAIL_OTP' &&
+    SIGN_UP_EMAIL_PATTERN.test(destination);
 
-  if (user === undefined || user.status === 'REVOKED' || user.status === 'SUSPENDED') {
+  if (!signUp && (user === undefined || user.status === 'REVOKED' || user.status === 'SUSPENDED')) {
     await recordChallengeAudit(deps.pool, {
       tenantId: input.tenantId,
       action: 'AUTH_CHALLENGE_ISSUE_SKIPPED',
@@ -152,7 +166,7 @@ export async function issueChallenge(
       [
         challengeId,
         input.tenantId,
-        user.userId,
+        user?.userId ?? null,
         input.method,
         destination,
         hashCredential(deps.sessionSecret, secret),
@@ -168,12 +182,13 @@ export async function issueChallenge(
       targetType: 'AuthChallenge',
       targetId: challengeId,
       aggregateType: 'User',
-      aggregateId: user.userId,
+      // A sign-up has no user yet; the challenge id stands in as the aggregate.
+      aggregateId: user?.userId ?? challengeId,
       tenantId: input.tenantId,
       actorType: 'SYSTEM',
       actorId: 'auth',
       // The destination is a contact identifier; only the method is recorded.
-      payload: { method: input.method, channel },
+      payload: { method: input.method, channel, ...(signUp ? { sign_up: true } : {}) },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
   });
@@ -312,7 +327,31 @@ export async function verifyChallenge(
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
 
-    return challenge.user_id ?? undefined;
+    if (challenge.user_id !== null) return challenge.user_id;
+
+    // A sign-up challenge has no user yet. Proving control of the address creates one,
+    // unless the address was enrolled in the meantime, in which case that person signs in.
+    const existing = await findUserByDestination(tx, input.tenantId, destination);
+    if (existing !== undefined) return existing.userId;
+    const created = await createUser(tx, {
+      tenantId: input.tenantId,
+      email: destination,
+      status: 'ACTIVE',
+    });
+    await appendAuditEvent(tx, {
+      eventType: 'USER_SELF_SIGNED_UP',
+      action: 'CREATE_USER',
+      targetType: 'User',
+      targetId: created.userId,
+      aggregateType: 'User',
+      aggregateId: created.userId,
+      tenantId: input.tenantId,
+      actorType: 'SYSTEM',
+      actorId: 'auth',
+      payload: { method: 'EMAIL_OTP' },
+      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    });
+    return created.userId;
   });
 
   if (userId === undefined) {
@@ -329,7 +368,12 @@ export async function verifyChallenge(
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
   // AUTH.md §6: User.status = ACTIVE is required to act. A challenge verified by
   // a user who is no longer active does not produce a session.
-  if (user === undefined || user.userId !== userId) {
+  if (
+    user === undefined ||
+    user.userId !== userId ||
+    user.status === 'SUSPENDED' ||
+    user.status === 'REVOKED'
+  ) {
     throw new ChallengeVerificationFailedError();
   }
   return user;
