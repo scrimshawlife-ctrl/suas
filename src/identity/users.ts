@@ -51,6 +51,8 @@ function toUser(row: UserRow): User {
 
 export interface CreateUserInput {
   readonly tenantId: string;
+  /** Set only when the caller already named this fixture principal. */
+  readonly userId?: string;
   readonly email?: string;
   readonly phone?: string;
   readonly county?: ServiceCounty;
@@ -94,7 +96,14 @@ export async function createUser(db: Queryable, input: CreateUserInput): Promise
     `INSERT INTO users (user_id, tenant_id, status, email, phone, county)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING ${USER_COLUMNS}`,
-    [randomUUID(), input.tenantId, input.status ?? 'INVITED', email, phone, input.county ?? null],
+    [
+      input.userId ?? randomUUID(),
+      input.tenantId,
+      input.status ?? 'INVITED',
+      email,
+      phone,
+      input.county ?? null,
+    ],
   );
   const row = result.rows[0];
   if (row === undefined) throw new Error('User insert returned no row.');
