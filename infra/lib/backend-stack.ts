@@ -329,8 +329,9 @@ export class BackendStack extends Stack {
         SUAS_BEDROCK_MODEL_ID: config.bedrockModelId,
         SUAS_OBJECT_STORAGE_MODE: 's3',
         SUAS_S3_BUCKET: assetsBucket.bucketName,
-        // No identity-check provider is chosen (plan §8 item 2); the fake is allowed outside PRODUCTION.
-        SUAS_ID_VERIFICATION_MODE: 'fake',
+        // No identity-check provider is chosen (plan §8 item 2). Fake ID verification
+        // is refused on STAGING (D-052), so the gate stays disabled.
+        SUAS_ID_VERIFICATION_MODE: 'disabled',
         SUAS_CHAT_PUSH_MODE: 'apigw',
         SUAS_CHAT_WS_ENDPOINT: wsManagementEndpoint,
         SUAS_CHAT_WS_PUBLIC_URL: `wss://${config.wsHostname}`,

@@ -243,7 +243,9 @@ describe('functions', () => {
         expect(result.config.environment).toBe('STAGING');
         expect(result.config.notifications.email).toBe('ses');
         expect(result.config.modelInference.mode).toBe('bedrock');
-        expect(result.config.idVerification.mode).toBe('fake');
+        expect(result.config.idVerification.mode).toBe('disabled');
+        expect(result.config.publicSignUp).toBe(false);
+        expect(result.config.stagingFixturePrincipals).toEqual([]);
         expect(env.SUAS_CORS_ALLOWED_ORIGINS).toBeUndefined();
         expect(result.config.corsAllowedOrigins).toEqual([]);
         expect(result.config.chatPush.publicUrl).toBe('wss://ws.staging.suasqrf.com');
