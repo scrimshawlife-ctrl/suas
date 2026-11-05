@@ -34,6 +34,8 @@ export interface WorkerBindings {
   readonly DATABASE_URL?: string | undefined;
   readonly DATABASE_POOL_MAX?: string | undefined;
   readonly SUAS_MIGRATIONS_MODE?: string | undefined;
+  readonly SUAS_MIGRATION_RESET_ALLOWLIST?: string | undefined;
+  readonly SUAS_MIGRATION_RESET_SYNTHETIC_MARKER?: string | undefined;
   readonly SUAS_SESSION_SECRET?: string | undefined;
   readonly SUAS_BROWSER_AUTH_MODE?: string | undefined;
   readonly SUAS_BROWSER_TENANT_ID?: string | undefined;

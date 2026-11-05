@@ -9,11 +9,13 @@
 import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+  databaseNameFromUrl,
   EXPECTED_SCHEMA_VERSION,
   loadMigrationFiles,
   MIGRATIONS_TABLE,
   readAppliedMigrations,
   readSchemaVersion,
+  resetSyntheticDatabase,
   runMigrations,
   SchemaStateError,
 } from '../../src/db/index.js';
@@ -105,6 +107,77 @@ describe('validate mode', () => {
     await runMigrations(pool, { mode: 'validate', provenance }).catch(() => undefined);
     const applied = await readAppliedMigrations(pool);
     expect(applied).toHaveLength(0);
+  });
+});
+
+describe('D-053 — reset only a named synthetic disposable database', () => {
+  const url = migrationsTestDatabaseUrl();
+  const name = databaseNameFromUrl(url);
+
+  it('refuses an unnamed or non-synthetic target and leaves the schema', async () => {
+    await runMigrations(pool, { mode: 'apply', provenance });
+    await expect(
+      resetSyntheticDatabase(
+        pool,
+        {
+          environment: 'TEST',
+          databaseUrl: url,
+          allowlist: [],
+          syntheticMarker: name,
+        },
+        provenance,
+      ),
+    ).rejects.toThrow(/unnamed target/);
+    await expect(
+      resetSyntheticDatabase(
+        pool,
+        {
+          environment: 'TEST',
+          databaseUrl: url,
+          allowlist: name === undefined ? [] : [name],
+          syntheticMarker: 'synthetic',
+        },
+        provenance,
+      ),
+    ).rejects.toThrow(/does not contain the synthetic marker/);
+    await expect(
+      resetSyntheticDatabase(
+        pool,
+        {
+          environment: 'PRODUCTION',
+          databaseUrl: url,
+          allowlist: name === undefined ? [] : [name],
+          syntheticMarker: name,
+        },
+        provenance,
+      ),
+    ).rejects.toThrow(/PRODUCTION/);
+    expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
+  });
+
+  it('resets an allowlisted synthetic database and bootstraps it cleanly', async () => {
+    expect(name).toBeDefined();
+    await runMigrations(pool, { mode: 'apply', provenance });
+    await pool.query('CREATE TABLE public.reset_probe (id int)');
+    await resetSyntheticDatabase(
+      pool,
+      {
+        environment: 'TEST',
+        databaseUrl: url,
+        allowlist: [name ?? ''],
+        syntheticMarker: name,
+      },
+      provenance,
+    );
+    const probe = await pool.query<{ present: string | null }>(
+      `SELECT to_regclass('public.reset_probe') AS present`,
+    );
+    expect(probe.rows[0]?.present).toBeNull();
+    expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
+    await pool.query(`UPDATE ${MIGRATIONS_TABLE} SET checksum = 'tampered' WHERE version = 1`);
+    await expect(runMigrations(pool, { mode: 'validate', provenance })).rejects.toThrow(
+      /was modified after it was applied/,
+    );
   });
 });
 
