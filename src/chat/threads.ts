@@ -42,7 +42,8 @@ export async function listChatThreads(
   userId: string,
 ): Promise<ChatThreadSummary[]> {
   const result = await db.query<ThreadRow>(
-    `SELECT t.service_request_id, r.category, r.status, r.details->>'summary' AS summary,
+    `SELECT t.service_request_id, r.category, r.status, CASE WHEN jsonb_typeof(r.details->'summary') = 'string'
+                 THEN left(r.details->>'summary', 280) END AS summary,
             cp.display_name AS counterpart_display_name,
             m.preview AS last_message_body, m.created_at AS last_message_at
        FROM chat_threads t

@@ -225,7 +225,8 @@ export async function readRequestList(
 
   const result = await db.query<ListRow>(
     `SELECT r.service_request_id, r.case_id, r.category, r.status, u.county,
-            r.widened_at, r.details->>'summary' AS summary,
+            r.widened_at, CASE WHEN jsonb_typeof(r.details->'summary') = 'string'
+                 THEN left(r.details->>'summary', 280) END AS summary,
             u.display_name AS requester_display_name,
             r.created_at, r.updated_at, r.terminal_at
        FROM ${REQUEST_REQUESTER_FROM}

@@ -18,7 +18,6 @@ import { assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
 import {
   executeCaseCommand,
   findCase,
-  hasRequesterConfirmedRequest,
   openCase,
   type CaseCommand,
   type SupportCase,
@@ -258,7 +257,6 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     // SETTLEMENT.md §2: the accountable author is the person resolving, and the accepter
     // is the case's active assignment. Both come from the session and the assignment.
     const acceptedByUserId = access.assignment?.acceptedByUserId ?? context.userId;
-    const requesterConfirmed = await hasRequesterConfirmedRequest(deps.pool, context.tenantId, id);
     const content = {
       requested: body.requested as JsonObject,
       occurred: body.occurred as JsonObject,
@@ -266,7 +264,6 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
       unresolved: body.unresolved as JsonObject,
       authoredBy: context.userId,
       acceptedByUserId,
-      ...(requesterConfirmed ? { veteranConfirmedBy: access.supportCase.veteranUserId } : {}),
     };
 
     const result = await resolveCaseWithSettlement(deps.pool, {
@@ -275,6 +272,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
       actorId: context.userId,
       content,
       idempotencyKey,
+      deriveRequesterConfirmation: true,
       correlationId: String(request.id),
       ...(body.expected_status !== undefined ? { expectedStatus: body.expected_status } : {}),
     });

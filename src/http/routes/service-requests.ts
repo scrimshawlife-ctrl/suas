@@ -15,6 +15,7 @@ import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { ForbiddenError, ResourceNotVisibleError } from '../../authz/index.js';
 import type { AuthContext } from '../../authz/index.js';
+import { draftDetailsInput } from '../../intake/tools.js';
 import { requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
 import { resolveCaseAccess, type CaseAccess } from '../case-access.js';
 import { requireDisclosure } from '../../consent/index.js';
@@ -55,7 +56,8 @@ const commandParams = z.object({
 
 const createBody = z.object({
   category: z.enum(SERVICE_CATEGORIES),
-  details: z.record(z.unknown()).optional(),
+  // The same bounded fields the plain form and drafts use; unknown keys are refused.
+  details: draftDetailsInput.partial().optional(),
 });
 
 const listQuery = z.object({
