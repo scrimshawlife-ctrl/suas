@@ -19,21 +19,11 @@ async function main(): Promise<void> {
     throw new Error('STAGING browser auth must be enabled for the canonical synthetic tenant.');
   }
 
-  const raw = process.env['SUAS_STAGING_AUTH_EMAILS'];
-  const emails = [
-    ...new Set(
-      (raw ?? '')
-        .split(',')
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  ];
-  if (
-    emails.length === 0 ||
-    emails.length > 10 ||
-    emails.some((email) => !EMAIL_SHAPE.test(email))
-  ) {
-    throw new Error('SUAS_STAGING_AUTH_EMAILS must contain 1-10 comma-separated email addresses.');
+  const emails = config.stagingFixturePrincipals;
+  if (emails.length === 0 || emails.some((email) => !EMAIL_SHAPE.test(email))) {
+    throw new Error(
+      'SUAS_STAGING_AUTH_EMAILS must contain 1-10 comma-separated synthetic fixture addresses.',
+    );
   }
 
   const pool = createPool(config);

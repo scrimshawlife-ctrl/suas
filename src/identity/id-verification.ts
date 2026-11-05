@@ -50,12 +50,17 @@ export interface IdVerificationPort {
 
 /**
  * ID verification for this configuration, or undefined when disabled so callers
- * report the gate unavailable. Config validation has already refused the fake in
- * PRODUCTION. The config-selected fake passes a check immediately, so synthetic
- * environments can exercise the post-scan journey.
+ * report the gate unavailable. Fake auto-verify is LOCAL and TEST only. STAGING
+ * and PRODUCTION fail closed even if a caller builds a config the startup
+ * schema would already have refused (D-052).
  */
 export function createIdVerificationPort(config: SuasConfig): IdVerificationPort | undefined {
   if (config.idVerification.mode === 'fake') {
+    if (config.environment !== 'LOCAL' && config.environment !== 'TEST') {
+      throw new Error(
+        'Fake ID verification is refused outside LOCAL and TEST. STAGING and PRODUCTION fail closed.',
+      );
+    }
     return new FakeIdVerification({ initialStatus: 'VERIFIED' });
   }
   return undefined;

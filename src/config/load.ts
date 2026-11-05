@@ -81,6 +81,8 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     bedrock_model_configured: config.modelInference.bedrockModelId !== undefined,
     object_storage_mode: config.objectStorage.mode,
     id_verification_mode: config.idVerification.mode,
+    public_sign_up: config.publicSignUp,
+    staging_fixture_principal_count: config.stagingFixturePrincipals.length,
     transportation_adapter_mode: config.adapters.transportation,
     shelter_adapter_mode: config.adapters.shelter,
     food_adapter_mode: config.adapters.food,
