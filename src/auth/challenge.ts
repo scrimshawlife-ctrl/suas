@@ -44,6 +44,11 @@ import {
   normalizeDestination,
 } from './secrets.js';
 import type { FixedOtpCodeFor } from './demo-fixed-code.js';
+import {
+  assertPublicSignUpPermitted,
+  stagingFixturePrincipalRefused,
+  type StagingAccess,
+} from './staging-access.js';
 
 export type ChallengeStatus = 'ISSUED' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
 
@@ -55,6 +60,7 @@ export interface IssueChallengeInput {
    * Self sign-up (v1 web): an unknown email address still gets an EMAIL_OTP code, and
    * verifying it creates the user. The caller answers the same 202 either way, so the
    * response reveals nothing about who is enrolled. Ignored for other methods.
+   * Refused outside LOCAL and TEST, including when the caller sets it on STAGING (D-052).
    */
   readonly allowSignUp?: boolean;
   readonly correlationId?: string;
@@ -98,6 +104,8 @@ export interface ChallengeServiceDeps {
    * the synthetic demo destination. Absent in every other environment class.
    */
   readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
+  /** Present on the server. STAGING uses it to refuse a non-fixture account. */
+  readonly stagingAccess?: StagingAccess | undefined;
 }
 
 /**
@@ -111,6 +119,9 @@ export async function issueChallenge(
   deps: ChallengeServiceDeps,
   input: IssueChallengeInput,
 ): Promise<IssueChallengeResult> {
+  if (input.allowSignUp === true) {
+    assertPublicSignUpPermitted(deps.stagingAccess);
+  }
   const destination = normalizeDestination(input.destination);
   const channel = channelForMethod(input.method);
   const fixedCode = input.method === 'EMAIL_OTP' ? deps.fixedOtpCodeFor?.(destination) : undefined;
@@ -139,13 +150,21 @@ export async function issueChallenge(
     input.allowSignUp === true &&
     input.method === 'EMAIL_OTP' &&
     SIGN_UP_EMAIL_PATTERN.test(destination);
+  const fixtureRefused =
+    deps.stagingAccess !== undefined &&
+    stagingFixturePrincipalRefused(
+      deps.stagingAccess,
+      user === undefined ? undefined : { tenantId: user.tenantId, userId: user.userId },
+    );
 
   // Every branch does the same database work: one challenge row and one audit event in a
   // transaction, and the same hashing. They differ only in whether a code is delivered, so
   // neither the answer nor the database time says whether an address is enrolled. A person who
   // may not receive a code gets a row that is already REVOKED, which verify never selects.
+  // A STAGING account that is not an admitted fixture pair is not deliverable.
   const deliverable =
-    signUp || (user !== undefined && user.status !== 'REVOKED' && user.status !== 'SUSPENDED');
+    !fixtureRefused &&
+    (signUp || (user !== undefined && user.status !== 'REVOKED' && user.status !== 'SUSPENDED'));
   const secret =
     input.method === 'MAGIC_LINK' ? generateOpaqueToken() : (fixedCode ?? generateOtpCode());
   const challengeId = randomUUID();
@@ -187,7 +206,11 @@ export async function issueChallenge(
         ? { method: input.method, channel, ...(signUp ? { sign_up: true } : {}) }
         : {
             method: input.method,
-            outcome: user === undefined ? 'NO_ENROLLED_USER' : `USER_${user.status}`,
+            outcome: fixtureRefused
+              ? 'NOT_STAGING_FIXTURE'
+              : user === undefined
+                ? 'NO_ENROLLED_USER'
+                : `USER_${user.status}`,
           },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });

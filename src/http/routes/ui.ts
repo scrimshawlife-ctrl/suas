@@ -107,6 +107,7 @@ import {
   demoFixedCodeFor,
   type FixedOtpCodeFor,
 } from '../../auth/demo-fixed-code.js';
+import { stagingAccessFromConfig } from '../../auth/staging-access.js';
 import { normalizeDestination } from '../../auth/secrets.js';
 
 export interface UiRouteDependencies {
@@ -344,6 +345,7 @@ async function loadOwnedCheckIn(
 
 export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies): void {
   const { config, pool, sessionSecret, safetyCopyMode, supportSignalMode } = deps;
+  const stagingAccess = stagingAccessFromConfig(config);
   const fixedOtpCodeFor = demoFixedCodeFor({
     environment: config.environment,
     demoFixedCode: config.demoFixedCode,
@@ -420,6 +422,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         sessionSecret,
         delivery: deps.challengeDelivery,
         fixedOtpCodeFor,
+        stagingAccess,
       },
       {
         tenantId,
@@ -465,7 +468,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
     try {
       const issued = await verifyAndCreateSession(
-        { pool, sessionSecret, delivery: deps.challengeDelivery, fixedOtpCodeFor },
+        { pool, sessionSecret, delivery: deps.challengeDelivery, fixedOtpCodeFor, stagingAccess },
         {
           tenantId,
           destination: body.destination,

@@ -67,6 +67,8 @@ async function submittedRequest(requester: Person, now: Date, waitedMinutes: num
     url: '/api/v0/cases',
     headers: keyed(requester),
   });
+  // 201 opens a new case; 200 returns the requester's already-open case.
+  expect([200, 201]).toContain(opened.statusCode);
   const caseId: string = opened.json().case_id;
   const created = await app.server.inject({
     method: 'POST',
@@ -74,6 +76,7 @@ async function submittedRequest(requester: Person, now: Date, waitedMinutes: num
     headers: keyed(requester),
     payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
   });
+  expect(created.statusCode).toBe(201);
   const serviceRequestId: string = created.json().service_request_id;
   const submitted = await app.server.inject({
     method: 'POST',

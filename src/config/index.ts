@@ -37,6 +37,7 @@ export {
   type ObjectStorageMode,
   type SafetyCopyMode,
   type SensitiveAggregateReporting,
+  type StagingFixturePrincipal,
   type SuasConfig,
   type SupportSignalMode,
 } from './schema.js';
