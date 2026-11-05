@@ -485,9 +485,9 @@ describe('D-053 — destructive reset is refused before any schema change', () =
     let queriesBeforeRelease = -1;
     const originalConnect = pool.connect.bind(pool);
     const originalQuery = pool.query.bind(pool);
-    pool.query = (() => {
+    pool.query = () => {
       throw new Error('pool.query');
-    });
+    };
     pool.connect = (async () => {
       checkouts += 1;
       if (checkouts > 1) throw new Error('second checkout');
@@ -499,10 +499,10 @@ describe('D-053 — destructive reset is refused before any schema change', () =
         if (typeof text === 'string') queries.push(text);
         return (originalClientQuery as (...queryArgs: unknown[]) => unknown).apply(client, args);
       }) as PoolClient['query'];
-      client.release = ((...args: unknown[]) => {
+      client.release = (...args: unknown[]) => {
         if (queriesBeforeRelease < 0) queriesBeforeRelease = queries.length;
         return (originalRelease as (...releaseArgs: unknown[]) => void).apply(client, args);
-      });
+      };
       return client;
     }) as Pool['connect'];
     try {
