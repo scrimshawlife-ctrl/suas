@@ -11,6 +11,7 @@ import { ModeSwitch, type Mode } from '../components/ModeSwitch';
 import { PublicHeader } from '../components/PublicHeader';
 import { ServeHeader } from '../components/ServeHeader';
 import { VeteranHeader } from '../components/VeteranHeader';
+import { useChatUnreadCount } from '../features/chat/unread';
 import { setMode, useMode } from './mode-store';
 import { navCurrent, type NavCurrent } from './nav-current';
 import { paths } from './paths';
@@ -30,11 +31,13 @@ function PageFrame({
   header,
   mode,
   current,
+  chatUnread = 0,
   children,
 }: {
   header: ReactNode;
   mode?: Mode;
   current?: NavCurrent;
+  chatUnread?: number;
   children: ReactNode;
 }) {
   const signedInChrome = mode !== undefined;
@@ -60,7 +63,9 @@ function PageFrame({
         {children}
       </main>
       <Footer />
-      {signedInChrome ? <BottomTabBar mode={mode} current={current ?? 'none'} /> : null}
+      {signedInChrome ? (
+        <BottomTabBar mode={mode} current={current ?? 'none'} chatUnread={chatUnread} />
+      ) : null}
     </div>
   );
 }
@@ -90,6 +95,7 @@ function SignedInChrome({ mode }: { mode: Mode }) {
   const me = useMe();
   const signOut = useSignOut();
   const current = navCurrent(useLocation().pathname);
+  const chatUnread = useChatUnreadCount();
   const header =
     mode === 'serve' ? (
       <ServeHeader
@@ -97,6 +103,7 @@ function SignedInChrome({ mode }: { mode: Mode }) {
         displayName={me.data?.display_name ?? null}
         onSignOut={signOut}
         onModeSelect={setMode}
+        chatUnread={chatUnread}
       />
     ) : (
       <VeteranHeader
@@ -104,10 +111,11 @@ function SignedInChrome({ mode }: { mode: Mode }) {
         displayName={me.data?.display_name ?? null}
         onSignOut={signOut}
         onModeSelect={setMode}
+        chatUnread={chatUnread}
       />
     );
   return (
-    <PageFrame header={header} mode={mode} current={current}>
+    <PageFrame header={header} mode={mode} current={current} chatUnread={chatUnread}>
       <Outlet />
     </PageFrame>
   );
