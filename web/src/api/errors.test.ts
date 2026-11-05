@@ -33,4 +33,23 @@ describe('apiErrorFromResponse', () => {
     expect(error.code).toBe('HTTP_400');
     expect(typeof error.message).toBe('string');
   });
+
+  it('reads retry-after seconds on a 429 and ignores a missing or non-numeric value', async () => {
+    const limited = await apiErrorFromResponse(
+      new Response(JSON.stringify({ error: { code: 'RATE_LIMITED', message: 'Slow down.' } }), {
+        status: 429,
+        headers: { 'retry-after': '120' },
+      }),
+    );
+    expect(limited.retryAfterSeconds).toBe(120);
+    const dated = await apiErrorFromResponse(
+      new Response('', {
+        status: 429,
+        headers: { 'retry-after': 'Wed, 21 Oct 2026 07:28:00 GMT' },
+      }),
+    );
+    expect(dated.retryAfterSeconds).toBeNull();
+    const plain = await apiErrorFromResponse(new Response('', { status: 500 }));
+    expect(plain.retryAfterSeconds).toBeNull();
+  });
 });

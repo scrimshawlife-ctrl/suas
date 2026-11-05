@@ -2,12 +2,20 @@
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
+  /** Seconds from a `retry-after` header (sent with 429), or null when absent. */
+  readonly retryAfterSeconds: number | null;
 
-  constructor(status: number, code: string, message: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    retryAfterSeconds: number | null = null,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -44,5 +52,12 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
   } catch {
     // Not JSON: keep the status based defaults.
   }
-  return new ApiError(response.status, code, message);
+  return new ApiError(response.status, code, message, retryAfterSeconds(response));
+}
+
+/** `retry-after` as whole seconds; an HTTP date or junk value counts as absent. */
+function retryAfterSeconds(response: Response): number | null {
+  const raw = response.headers.get('retry-after');
+  if (raw === null || !/^\d+$/.test(raw.trim())) return null;
+  return Number.parseInt(raw.trim(), 10);
 }
