@@ -84,11 +84,11 @@ export function Conversation({ serviceRequestId, thread, meUserId }: Conversatio
         </div>
       </div>
 
-      {messagesQuery.isPending && !messagesQuery.isError ? (
+      {messagesQuery.data === undefined && !messagesQuery.isError ? (
         <p role="status" className="p-6 text-slate">
           Loading messages
         </p>
-      ) : messagesQuery.isError ? (
+      ) : messagesQuery.data === undefined ? (
         <div className="flex flex-col items-start gap-3 p-6">
           <p role="alert">{conversationErrorText(messagesQuery.error)}</p>
           {isPermanentConversationError(messagesQuery.error) ? null : (
@@ -106,6 +106,7 @@ export function Conversation({ serviceRequestId, thread, meUserId }: Conversatio
             counterpart={name}
             hasEarlier={messagesQuery.hasNextPage}
             loadingEarlier={messagesQuery.isFetchingNextPage}
+            earlierFailed={messagesQuery.isFetchNextPageError}
             onLoadEarlier={async () => !(await messagesQuery.fetchNextPage()).isError}
             onRetry={outbox.retry}
           />

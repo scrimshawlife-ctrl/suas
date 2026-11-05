@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
+import { createQueryClient } from '../../app/query-client';
 import { tokenStore } from '../../api/token-store';
 import ChatPage from './ChatPage';
+import { outbox } from './outbox';
+import { seenStore } from './unread';
 
 const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));
 vi.mock('../../api/client', () => ({ api: client }));
@@ -23,7 +26,7 @@ const threads = {
       summary: 'Ride to a clinic appointment',
       counterpart_display_name: 'Marcus T.',
       last_message_body: 'Perfect, see you then.',
-      last_message_at: '2026-11-04T20:14:00.000Z',
+      last_message_at: '2026-11-04T20:02:00.000Z',
       closed: false,
     },
     {
@@ -49,9 +52,11 @@ const message = (n: number, sender: string, body: string) => ({
 interface Routes_ {
   messages?: (query: { cursor?: string }) => unknown;
   requested?: string[];
+  /** Issue connect tickets (the test supplies a WebSocket) instead of answering 503. */
+  realtime?: boolean;
 }
 
-function mockApi({ messages, requested = [REQ] }: Routes_ = {}) {
+function mockApi({ messages, requested = [REQ], realtime = false }: Routes_ = {}) {
   client.GET.mockImplementation(
     (path: string, init?: { params?: { query?: { cursor?: string } } }) => {
       switch (path) {
@@ -77,15 +82,17 @@ function mockApi({ messages, requested = [REQ] }: Routes_ = {}) {
     },
   );
   // Live updates unavailable: the page falls back to polling and opens no socket.
-  client.POST.mockImplementation((path: string) =>
-    path === '/api/v0/chat/connect-tickets'
-      ? Promise.reject(new ApiError(503, 'CHAT_REALTIME_UNAVAILABLE', 'No push.'))
-      : Promise.reject(new Error(`unexpected POST ${path}`)),
-  );
+  client.POST.mockImplementation((path: string) => {
+    if (path !== '/api/v0/chat/connect-tickets') {
+      return Promise.reject(new Error(`unexpected POST ${path}`));
+    }
+    return realtime
+      ? Promise.resolve({ data: { ticket: 't', websocket_url: 'ws://127.0.0.1:3171' } })
+      : Promise.reject(new ApiError(503, 'CHAT_REALTIME_UNAVAILABLE', 'No push.'));
+  });
 }
 
-function renderChat(at: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderChat(at: string, queryClient = new QueryClient()) {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[at]}>
@@ -108,6 +115,7 @@ const page2 = {
 };
 
 beforeEach(() => {
+  outbox.clear();
   tokenStore.setToken('tok');
   client.GET.mockReset();
   client.POST.mockReset();
@@ -245,6 +253,166 @@ describe('sending', () => {
     expect(sendKeys).toHaveLength(2);
     expect(sendKeys[0]).not.toBe('');
     expect(sendKeys[1]).toBe(sendKeys[0]);
-    expect(screen.getAllByText('See you at 9:30')).toHaveLength(1);
+    expect(
+      within(screen.getByRole('list', { name: 'Messages' })).getAllByText('See you at 9:30'),
+    ).toHaveLength(1);
+  });
+});
+
+describe('failures', () => {
+  it('asks once for a conversation that is not found or not open yet, with the real client defaults', async () => {
+    for (const error of [
+      new ApiError(404, 'NOT_FOUND', 'Not found.'),
+      new ApiError(409, 'CHAT_UNAVAILABLE', 'Not accepted.'),
+    ]) {
+      client.GET.mockReset();
+      mockApi({ messages: () => error });
+      const view = renderChat(`/chat/${REQ}`, createQueryClient());
+      await screen.findByRole('alert');
+      const asked = client.GET.mock.calls.filter(
+        ([path]) => path === '/api/v0/service-requests/{id}/chat/messages',
+      );
+      expect(asked).toHaveLength(1);
+      view.unmount();
+    }
+  });
+
+  it('keeps what is on screen when loading earlier messages fails, and loads them on the next try', async () => {
+    let failOnce = true;
+    mockApi({
+      messages: (q) => {
+        if (q.cursor === undefined) return page1;
+        if (failOnce) {
+          failOnce = false;
+          return new ApiError(400, 'VALIDATION_FAILED', 'Bad cursor.');
+        }
+        return page2;
+      },
+    });
+    const user = userEvent.setup();
+    renderChat(`/chat/${REQ}`);
+    await user.click(await screen.findByRole('button', { name: 'Load earlier messages' }));
+    expect(await screen.findByText("We couldn't load earlier messages.")).toBeInTheDocument();
+    expect(screen.getByText('Got it.')).toBeInTheDocument();
+    expect(screen.queryByText('Chat is open for this request.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Load earlier messages' }));
+    expect(await screen.findByText('Hi Marcus.')).toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load earlier messages.")).not.toBeInTheDocument();
+  });
+
+  it('shows a send that the server refused (4xx) as not sent, without retrying by itself', async () => {
+    mockApi({ messages: () => page2 });
+    const user = userEvent.setup();
+    renderChat(`/chat/${REQ}`);
+    const box = await screen.findByLabelText('Message Marcus T.');
+    client.POST.mockImplementation((path: string) =>
+      path === '/api/v0/chat/connect-tickets'
+        ? Promise.reject(new ApiError(503, 'CHAT_REALTIME_UNAVAILABLE', 'No push.'))
+        : Promise.reject(new ApiError(422, 'VALIDATION_FAILED', 'Body must not be empty.')),
+    );
+    await user.type(box, 'hello');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Not sent.')).toBeInTheDocument();
+    const sends = client.POST.mock.calls.filter(
+      ([path]) => path !== '/api/v0/chat/connect-tickets',
+    );
+    expect(sends).toHaveLength(1);
+  });
+
+  it('still shows "Not sent." for a send that failed after leaving the conversation and coming back', async () => {
+    mockApi({ messages: () => page2 });
+    const user = userEvent.setup();
+    const first = renderChat(`/chat/${REQ}`);
+    const box = await screen.findByLabelText('Message Marcus T.');
+    let fail: (error: Error) => void = () => undefined;
+    client.POST.mockImplementation((path: string) =>
+      path === '/api/v0/chat/connect-tickets'
+        ? Promise.reject(new ApiError(503, 'CHAT_REALTIME_UNAVAILABLE', 'No push.'))
+        : new Promise((_resolve, reject) => {
+            fail = reject;
+          }),
+    );
+    await user.type(box, 'on my way');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Sending')).toBeInTheDocument();
+    first.unmount();
+
+    fail(new ApiError(500, 'INTERNAL', 'Server error.'));
+    await waitFor(() => {
+      expect(outbox.get(REQ)[0]?.status).toBe('failed');
+    });
+    renderChat(`/chat/${REQ}`);
+    expect(await screen.findByText('on my way')).toBeInTheDocument();
+    expect(screen.getByText('Not sent.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('forgets unsent messages when the person signs out', async () => {
+    mockApi({ messages: () => page2 });
+    const user = userEvent.setup();
+    renderChat(`/chat/${REQ}`);
+    const box = await screen.findByLabelText('Message Marcus T.');
+    client.POST.mockImplementation((path: string) =>
+      path === '/api/v0/chat/connect-tickets'
+        ? Promise.reject(new ApiError(503, 'CHAT_REALTIME_UNAVAILABLE', 'No push.'))
+        : Promise.reject(new ApiError(500, 'INTERNAL', 'Server error.')),
+    );
+    await user.type(box, 'draft');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Not sent.');
+    act(() => {
+      tokenStore.signOut();
+    });
+    expect(outbox.get(REQ)).toHaveLength(0);
+  });
+});
+
+describe('live frame', () => {
+  it('reaches the open conversation, the thread preview and the live region, and marks it read', async () => {
+    const sockets: { onmessage: ((e: { data: string }) => void) | null }[] = [];
+    vi.stubGlobal(
+      'WebSocket',
+      class {
+        onmessage: ((e: { data: string }) => void) | null = null;
+        close = vi.fn();
+        constructor() {
+          sockets.push(this);
+        }
+      },
+    );
+    mockApi({ messages: () => page2, realtime: true });
+    const markSeen = vi.spyOn(seenStore, 'markSeen');
+    renderChat(`/chat/${REQ}`);
+    await screen.findByText('Hi Marcus.');
+    await waitFor(() => {
+      expect(sockets).toHaveLength(1);
+    });
+
+    const created = '2026-11-04T20:09:00.000000Z';
+    act(() => {
+      sockets[0]?.onmessage?.({
+        data: JSON.stringify({
+          type: 'chat.message',
+          message: {
+            chat_message_id: '00000000-0000-4000-8000-0000000000f9',
+            service_request_id: REQ,
+            sender_user_id: THEM,
+            body: 'Running five minutes late',
+            created_at: created,
+          },
+        }),
+      });
+    });
+
+    const list = screen.getByRole('list', { name: 'Messages' });
+    expect(await within(list).findByText('Running five minutes late')).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: 'Conversations' });
+    expect(await within(nav).findByText('Running five minutes late')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('New message from Marcus T.');
+    });
+    expect(markSeen).toHaveBeenCalledWith(REQ, Date.parse(created));
+    vi.unstubAllGlobals();
   });
 });

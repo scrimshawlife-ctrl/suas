@@ -63,13 +63,18 @@ export async function issueConnectTicket() {
 
 /**
  * Whether the signed-in person made this request (so its page is /requests/:id) or accepted
- * it (/serve/requests/:id). The thread data carries no role, so this checks the person's own
- * requests; `undefined` while that list loads.
+ * it (/serve/requests/:id). The thread data carries no role yet, so this checks the person's
+ * own requests; `undefined` while that list loads or when the id is not on its first page.
  */
 export function useIsRequester(serviceRequestId: string | undefined): boolean | undefined {
   const requested = useServiceRequests('requested', { limit: 100 });
   if (serviceRequestId === undefined || requested.data === undefined) return undefined;
-  return requested.data.service_requests.some((r) => r.service_request_id === serviceRequestId);
+  const found = requested.data.service_requests.some(
+    (r) => r.service_request_id === serviceRequestId,
+  );
+  // More requests than one page holds: "not here" does not mean "not mine".
+  if (!found && requested.data.next_cursor !== null) return undefined;
+  return found;
 }
 
 /**
@@ -79,9 +84,15 @@ export function useIsRequester(serviceRequestId: string | undefined): boolean | 
  */
 export function applyMessageToCaches(queryClient: QueryClient, message: ChatMessage): void {
   const id = message.service_request_id;
-  queryClient.setQueryData<MessagesData>(queryKeys.chatMessages(id), (data) =>
+  const messagesKey = queryKeys.chatMessages(id);
+  queryClient.setQueryData<MessagesData>(messagesKey, (data) =>
     data === undefined ? data : insertMessage(data, message),
   );
+  // A fetch that started before this message was committed may land without it and wipe the
+  // insert. Restart it, so data read after the commit wins.
+  if (queryClient.isFetching({ queryKey: messagesKey }) > 0) {
+    void queryClient.invalidateQueries({ queryKey: messagesKey });
+  }
 
   const threads = queryClient.getQueryData<{ threads: ChatThread[] }>(queryKeys.chatThreads);
   const thread = threads?.threads.find((t) => t.service_request_id === id);
@@ -105,4 +116,7 @@ export function applyMessageToCaches(queryClient: QueryClient, message: ChatMess
     ...threads,
     threads: [updated, ...threads.threads.filter((t) => t.service_request_id !== id)],
   });
+  if (queryClient.isFetching({ queryKey: queryKeys.chatThreads }) > 0) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.chatThreads });
+  }
 }

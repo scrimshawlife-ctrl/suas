@@ -1,5 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
-import { useChatThreads } from '../../api/chat';
+import { chatThreadsQueryOptions } from '../../api/chat';
+import { tokenStore, useSessionToken } from '../../api/token-store';
 import type { ChatThread } from '../../api/types';
 
 /**
@@ -18,6 +20,8 @@ const STORAGE_KEY = 'suas.chat.seen';
 export interface SeenStore {
   getState: () => SeenState;
   markSeen: (serviceRequestId: string, atMs: number) => void;
+  /** Starts over with a new baseline (sign-out: the next person has read nothing). */
+  reset: () => void;
   subscribe: (listener: () => void) => () => void;
 }
 
@@ -57,6 +61,13 @@ export function createSeenStore(): SeenStore {
         listener();
       });
     },
+    reset() {
+      state = { baseline: Date.now(), seen: {} };
+      persist();
+      listeners.forEach((listener) => {
+        listener();
+      });
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -66,22 +77,43 @@ export function createSeenStore(): SeenStore {
 
 export const seenStore: SeenStore = createSeenStore();
 
+// Sign-out (or an expired session) drops the token: the next person has read nothing.
+tokenStore.subscribe(() => {
+  if (tokenStore.getToken() === null) seenStore.reset();
+});
+
+/** The server tells us when the newest message is the person's own (`last_message_from_me`). */
+function lastMessageIsMine(thread: ChatThread): boolean {
+  return (thread as ChatThread & { last_message_from_me?: boolean }).last_message_from_me === true;
+}
+
 export function countUnread(threads: readonly ChatThread[], state: SeenState): number {
   return threads.filter((thread) => {
-    if (thread.last_message_at === null) return false;
+    if (thread.last_message_at === null || lastMessageIsMine(thread)) return false;
     const last = Date.parse(thread.last_message_at);
     return last > (state.seen[thread.service_request_id] ?? state.baseline);
   }).length;
 }
 
+/** Unread numbers stay fresh on any screen: refetch about every minute while the tab is visible. */
+export const UNREAD_REFETCH_MS = 60_000;
+
 /**
- * Number of conversations with a message newer than the last one the person opened or sent.
- * Counts from the thread list, which refreshes while the chat screen is open and on the
- * query's own refetch; it does not hold a socket of its own. A message sent from another
- * device shows as unread here, because the thread list does not say who sent the last one.
+ * Number of conversations with a message newer than the last one the person opened or sent,
+ * for the header badge: `import { useChatUnreadCount } from '../features/chat/unread'`.
+ * It reads the thread list through its own observer that refetches every minute (TanStack
+ * skips interval refetches while the tab is hidden); the chat screen's live socket keeps the
+ * same list current while it is open. A thread whose newest message is the person's own does
+ * not count once the server sends `last_message_from_me`; until then a message sent from
+ * another device shows as unread.
  */
 export function useChatUnreadCount(): number {
-  const threads = useChatThreads();
+  const token = useSessionToken();
+  const threads = useQuery({
+    ...chatThreadsQueryOptions(),
+    enabled: token !== null,
+    refetchInterval: UNREAD_REFETCH_MS,
+  });
   const state = useSyncExternalStore(seenStore.subscribe, seenStore.getState);
   return countUnread(threads.data?.threads ?? [], state);
 }

@@ -9,11 +9,13 @@ import type { PendingMessage } from './outbox';
 export interface MessageListProps {
   /** Oldest to newest. */
   messages: ChatMessage[];
-  pending: PendingMessage[];
+  pending: readonly PendingMessage[];
   meUserId: string | undefined;
   counterpart: string;
   hasEarlier: boolean;
   loadingEarlier: boolean;
+  /** The last attempt to load older messages failed; what is shown stays. */
+  earlierFailed: boolean;
   /** Resolves true when older messages were added. */
   onLoadEarlier: () => Promise<boolean>;
   onRetry: (clientId: string) => void;
@@ -33,6 +35,7 @@ export function MessageList({
   counterpart,
   hasEarlier,
   loadingEarlier,
+  earlierFailed,
   onLoadEarlier,
   onRetry,
 }: MessageListProps) {
@@ -68,6 +71,9 @@ export function MessageList({
   return (
     <div
       ref={scroller}
+      role="region"
+      aria-label="Message history"
+      tabIndex={0}
       onScroll={(event) => {
         const el = event.currentTarget;
         pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
@@ -75,7 +81,12 @@ export function MessageList({
       className="min-h-0 flex-1 overflow-y-auto bg-mist p-6 max-sm:p-4"
     >
       {hasEarlier ? (
-        <div className="mb-3.5 flex justify-center">
+        <div className="mb-3.5 flex flex-col items-center gap-2">
+          {earlierFailed && !loadingEarlier ? (
+            <p role="alert" className="text-16">
+              {"We couldn't load earlier messages."}
+            </p>
+          ) : null}
           <Button
             variant="secondary"
             size="small"
