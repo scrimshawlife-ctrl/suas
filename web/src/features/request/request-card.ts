@@ -72,8 +72,8 @@ export function cardFromStatus(status: ServiceRequestStatus): RequestCard {
 /**
  * The card to show. `me.active_qrf.state` is the authority for the request it names, since
  * only the server sees notification delivery. The one exception is a fresher request read
- * that already shows cancellation or acceptance: the server ranks those above every other
- * fact, so a lagging `me` must not hold the card at an earlier state.
+ * that already shows cancellation, acceptance or a dead end (expired, declined, unfulfillable):
+ * the server ranks those above every other fact except a coordination fault.
  */
 export function resolveRequestCard(input: {
   requestId: string;
@@ -85,7 +85,10 @@ export function resolveRequestCard(input: {
   if (active?.service_request_id !== input.requestId) return fromStatus;
   const fromQrf = cardFromQrfState(active.state);
   if (fromQrf === undefined) return fromStatus;
+  // The server ranks cancelled, accepted and the dead-end statuses above every fact except
+  // a coordination fault, so a lagging `me` must not hold the card at an earlier state.
   if (fromStatus === 'CANCELLED' || fromStatus === 'ACCEPTED') return fromStatus;
+  if (fromStatus === 'UNAVAILABLE' && fromQrf !== 'DEGRADED') return fromStatus;
   return fromQrf;
 }
 

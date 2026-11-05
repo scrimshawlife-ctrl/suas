@@ -65,12 +65,11 @@ const TRACK_LABELS = [
   'A veteran accepted',
 ] as const;
 
-/** Index of the current step on the track. Cards missing here (unavailable, degraded, cancelled) have none. */
+/** Index of the current step on the track. Cards missing here (accepted, unavailable, degraded, cancelled) have none. */
 const TRACK_PROGRESS: Partial<Record<RequestCard, number>> = {
   RECEIVED: 0,
   MATCHING: 1,
   NOTIFIED: 2,
-  ACCEPTED: 3,
 };
 
 export function hasProgressTrack(card: RequestCard): boolean {
@@ -78,27 +77,20 @@ export function hasProgressTrack(card: RequestCard): boolean {
 }
 
 /**
- * The QrfActive 4-step track. A step is "done" only up to the card's recorded state; the
- * step after it is "now" and everything later says "Not yet". `received` is the recorded
- * request time ("7:42 PM"), the only timestamp the request read gives.
+ * The QrfActive 4-step track, for the cards where the request is still being looked after.
+ * A step is "done" only up to the card's recorded state; the step after it is "now" and
+ * everything later says "Not yet". The accepted card has no track: acceptance does not
+ * record a notification, so "A veteran was notified" is never ticked from it. `received` is
+ * the recorded request time ("7:42 PM"), the only timestamp the request read gives.
  */
 export function progressSteps(card: RequestCard, received?: string): ProgressStep[] {
   const current = TRACK_PROGRESS[card];
   if (current === undefined) return [];
   return TRACK_LABELS.map((label, index) => {
-    const detail = (): string | undefined => {
-      if (index === 0) return received;
-      if (index > current) return 'Not yet';
-      if (index === current && card !== 'ACCEPTED') return 'Now';
-      return undefined;
-    };
     const state: ProgressStep['state'] =
-      index < current || (card === 'ACCEPTED' && index === current)
-        ? 'done'
-        : index === current
-          ? 'now'
-          : 'todo';
-    const text = detail();
-    return text === undefined ? { label, state } : { label, state, detail: text };
+      index < current ? 'done' : index === current ? 'now' : 'todo';
+    const detail =
+      index === 0 ? received : index === current ? 'Now' : index > current ? 'Not yet' : undefined;
+    return detail === undefined ? { label, state } : { label, state, detail };
   });
 }

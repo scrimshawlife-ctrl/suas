@@ -1,7 +1,7 @@
 import type { Me } from '../../../api/types';
 import { RequestStatusCard } from '../RequestStatusCard';
 import { useRequestDetail } from '../api';
-import { cardFromQrfState, resolveRequestCard, type RequestCard } from '../request-card';
+import { canCancel, cardFromQrfState, resolveRequestCard, type RequestCard } from '../request-card';
 
 type ActiveQrf = NonNullable<Me['active_qrf']>;
 
@@ -19,6 +19,9 @@ export function ActiveRequest({ active }: { active: ActiveQrf }) {
         activeQrf: active,
       })
     : (cardFromQrfState(active.state) ?? 'MATCHING');
+  const cancellable = detail
+    ? canCancel({ requestId: active.service_request_id, status: detail.status, activeQrf: active })
+    : active.cancellable;
   return (
     <RequestStatusCard
       variant="home"
@@ -27,7 +30,7 @@ export function ActiveRequest({ active }: { active: ActiveQrf }) {
       status={detail?.status}
       counterpartName={detail?.counterpart_display_name}
       createdAt={detail?.created_at}
-      cancellable={active.cancellable && detail?.status !== 'CANCELLED'}
+      cancellable={cancellable}
     />
   );
 }

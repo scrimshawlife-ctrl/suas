@@ -18,8 +18,8 @@ interface Exchange {
 }
 
 export interface AssistantPanelProps {
-  /** The assistant did not answer: the page should show the plain form. */
-  onFallback: () => void;
+  /** The assistant did not answer: the page shows the plain form with what was typed. */
+  onFallback: (typed: string) => void;
 }
 
 /**
@@ -43,13 +43,14 @@ export function AssistantPanel({ onFallback }: AssistantPanelProps) {
     setFailure(null);
     try {
       // Keep the person's edits: a reply rebuilds the draft from what the server holds.
-      if (draft) await editor.save().catch(() => undefined);
+      // If the edits cannot be saved, stop: a reply would rebuild the draft without them.
+      if (draft) await editor.save();
       const turn = await send.mutateAsync({ draftId: draft?.draft_id ?? null, text: typed });
       setExchanges((list) => [...list, { id: list.length, said: typed, turn }]);
       setText('');
       if (turn.draft) setDraft(turn.draft);
       setReady(turn.outcome === 'DRAFT_READY');
-      if (turnNeedsForm(turn)) onFallback();
+      if (turnNeedsForm(turn)) onFallback(typed);
     } catch (error) {
       const gate = gateRedirect(error);
       if (gate) void navigate(gate, { replace: true });

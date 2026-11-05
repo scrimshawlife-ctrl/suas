@@ -122,6 +122,7 @@ export function useCreateRequest() {
 /**
  * The owner's request read. While the request is open it refetches every 15 s and refreshes
  * `me` alongside, so `active_qrf` (the authority for the NOTIFIED card) never lags the read.
+ * The read that first shows a settled status refreshes `me` too, then polling stops.
  */
 export function useRequestDetail(id: string | undefined) {
   const token = useSessionToken();
@@ -135,13 +136,12 @@ export function useRequestDetail(id: string | undefined) {
 
   const seen = useRef(0);
   const updatedAt = query.dataUpdatedAt;
-  const status = query.data?.status;
   useEffect(() => {
     const first = seen.current === 0;
     seen.current = updatedAt;
-    if (first || updatedAt === 0 || isSettled(status)) return;
+    if (first || updatedAt === 0) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.me });
-  }, [updatedAt, status, queryClient]);
+  }, [updatedAt, queryClient]);
 
   return query;
 }

@@ -9,6 +9,7 @@ import { gateRedirect, requestErrorMessage } from './errors';
 import { InlineError } from './InlineError';
 import { RequestFieldsForm } from './RequestFieldsForm';
 import {
+  SUMMARY_MAX,
   isCategory,
   toFormBody,
   validateRequestFields,
@@ -18,14 +19,17 @@ import {
 
 const MEETING_PLACE_REJECTED = /meeting[_ ]place/i;
 
-/** The plain request form: the same fields as the draft card, no assistant. */
-export function PlainForm() {
+/**
+ * The plain request form: the same fields as the draft card, no assistant. After the
+ * assistant fails, `initialSummary` carries what the person typed (cut to 280 characters).
+ */
+export function PlainForm({ initialSummary = '' }: { initialSummary?: string }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const initialCategory = params.get('category');
   const [fields, setFields] = useState<RequestFields>({
     category: isCategory(initialCategory) ? initialCategory : '',
-    summary: '',
+    summary: initialSummary.trim().slice(0, SUMMARY_MAX),
     timing: '',
     meetingPlace: '',
   });

@@ -20,6 +20,7 @@ export default function RequestPage() {
   const status = useIntakeStatus();
   const [useForm, setUseForm] = useState(false);
   const [assistantFailed, setAssistantFailed] = useState(false);
+  const [typedText, setTypedText] = useState('');
 
   if (status.isPending) return <LoadingScreen />;
   const gate = status.isError ? gateRedirect(status.error) : undefined;
@@ -45,7 +46,8 @@ export default function RequestPage() {
       {assistantAvailable ? (
         <div hidden={showForm}>
           <AssistantPanel
-            onFallback={() => {
+            onFallback={(typed) => {
+              setTypedText(typed);
               setAssistantFailed(true);
               setUseForm(true);
             }}
@@ -56,7 +58,7 @@ export default function RequestPage() {
       {showForm ? (
         <section aria-label="Simple form" className="flex flex-col gap-4">
           {assistantFailed ? <p className="font-bold">{FALLBACK_NOTICE}</p> : null}
-          <PlainForm />
+          <PlainForm key={typedText} initialSummary={typedText} />
         </section>
       ) : null}
 
