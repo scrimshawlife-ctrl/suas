@@ -10,6 +10,8 @@ const thread = (id: string, at: string | null): ChatThread => ({
   last_message_body: at === null ? null : 'hi',
   last_message_at: at,
   closed: false,
+  role: 'REQUESTER',
+  last_message_from_me: at === null ? null : false,
 });
 
 describe('unread count', () => {
@@ -51,8 +53,11 @@ describe('unread count', () => {
     expect(countUnread([later], { baseline: base, seen: store.getState().seen })).toBe(1);
   });
 
-  it("does not count a thread whose newest message is the person's own, once the server says so", () => {
-    const own = { ...thread('a', '2026-11-04T20:00:05.000Z'), last_message_from_me: true };
+  it("does not count a thread whose newest message is the person's own, (`last_message_from_me`)", () => {
+    const own: ChatThread = {
+      ...thread('a', '2026-11-04T20:00:05.000Z'),
+      last_message_from_me: true,
+    };
     expect(countUnread([own], { baseline: 0, seen: {} })).toBe(0);
   });
 
