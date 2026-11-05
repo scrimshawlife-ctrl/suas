@@ -208,7 +208,7 @@ export async function buildPilotExport(
   const datasets: Record<string, Record<string, unknown>[]> = {};
   for (const [name, sql] of Object.entries({
     users:
-      'SELECT user_id,tenant_id,email,phone,status,created_at,updated_at FROM users WHERE tenant_id=$1 AND user_id=$2',
+      'SELECT user_id,tenant_id,email,phone,display_name,status,created_at,updated_at FROM users WHERE tenant_id=$1 AND user_id=$2',
     domain_events: 'SELECT * FROM domain_events WHERE tenant_id=$1 AND aggregate_id=$2',
     audit_events: 'SELECT * FROM audit_events WHERE tenant_id=$1 AND aggregate_id=$2',
     consent_events: 'SELECT * FROM consent_events WHERE tenant_id=$1 AND veteran_user_id=$2',

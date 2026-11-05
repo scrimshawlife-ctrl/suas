@@ -283,6 +283,11 @@ describe('ENVIRONMENT.md §3 — provider surfaces fail closed', () => {
     expect(config.browserAuth.mode).toBe('email_otp');
   });
 
+  it('rejects a malformed SUAS_BROWSER_TENANT_ID even when browser sign-in is off', () => {
+    const issues = issuesFor(validEnv({ SUAS_BROWSER_TENANT_ID: 'not-a-uuid' }));
+    expect(issues.join('\n')).toContain('SUAS_BROWSER_TENANT_ID must be a UUID');
+  });
+
   it('rejects a malformed SUAS_EMAIL_FROM without requiring the slot', () => {
     const issues = issuesFor(validEnv({ SUAS_EMAIL_FROM: 'not-an-address' }));
     expect(issues.join('\n')).toContain(

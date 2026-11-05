@@ -390,6 +390,7 @@ describe('SCALING.md §10 — growing lists are bounded', () => {
           category: 'FOOD',
           createdBy: veteran.userId,
           actorType: 'VETERAN',
+          details: { meeting_place: 'Main Street library' },
         });
       });
       await executeServiceRequestCommand(poolA(), {

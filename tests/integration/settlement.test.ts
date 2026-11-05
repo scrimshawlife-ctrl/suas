@@ -18,6 +18,7 @@ import {
   executeCaseCommand,
   executeServiceRequestCommand,
   findCase,
+  findRequesterConfirmation,
   openCase,
 } from '../../src/coordination/index.js';
 import {
@@ -885,5 +886,110 @@ describe('CASES.md §7 — blocking Service Requests still apply', () => {
       content: content(responder.userId),
     });
     expect(result.supportCase.status).toBe('RESOLVED');
+  });
+});
+
+describe('requester confirmation derived at resolve', () => {
+  async function requestIn(context: Awaited<ReturnType<typeof activeCase>>) {
+    const request = await withTransaction(pool, (tx) =>
+      createServiceRequest(tx, {
+        tenantId: context.tenantId,
+        caseId: context.caseId,
+        category: 'PEER_SUPPORT',
+        createdBy: context.veteran.userId,
+        actorType: 'VETERAN',
+      }),
+    );
+    return request.serviceRequestId;
+  }
+
+  const resolveDerived = (context: Awaited<ReturnType<typeof activeCase>>) =>
+    resolveCaseWithSettlement(pool, {
+      tenantId: context.tenantId,
+      caseId: context.caseId,
+      actorId: context.responder.userId,
+      content: content(context.responder.userId),
+      deriveRequesterConfirmation: true,
+    });
+
+  it('omits it when nothing was confirmed', async () => {
+    const context = await activeCase();
+    await requestIn(context);
+    await pool.query(
+      `UPDATE service_requests SET status = 'CANCELLED', terminal_at = now()` +
+        ` WHERE case_id = $1`,
+      [context.caseId],
+    );
+    const { settlement } = await resolveDerived(context);
+    expect(settlement.veteranConfirmedBy).toBeUndefined();
+  });
+
+  it('counts a request that is CONFIRMED but not yet closed, at its confirmation time', async () => {
+    const context = await activeCase();
+    const id = await requestIn(context);
+    expect(await findRequesterConfirmation(pool, context.tenantId, context.caseId)).toBeUndefined();
+    const updated = await pool.query<{ updated_at: Date }>(
+      `UPDATE service_requests SET status = 'CONFIRMED', updated_at = now()
+        WHERE service_request_id = $1 RETURNING updated_at`,
+      [id],
+    );
+    const found = await findRequesterConfirmation(pool, context.tenantId, context.caseId);
+    expect(found?.confirmedAt).toEqual(updated.rows[0]?.updated_at);
+  });
+
+  it('records the requester and the time when a request was confirmed and closed this cycle', async () => {
+    const context = await activeCase();
+    const id = await requestIn(context);
+    const closed = await pool.query<{ terminal_at: Date }>(
+      `UPDATE service_requests SET status = 'CLOSED', terminal_at = now()
+        WHERE service_request_id = $1 RETURNING terminal_at`,
+      [id],
+    );
+    const { settlement } = await resolveDerived(context);
+    expect(settlement.veteranConfirmedBy).toBe(context.veteran.userId);
+    const stored = await pool.query<{ veteran_confirmed_at: Date }>(
+      `SELECT veteran_confirmed_at FROM settlements WHERE settlement_id = $1`,
+      [settlement.settlementId],
+    );
+    expect(stored.rows[0]?.veteran_confirmed_at).toEqual(closed.rows[0]?.terminal_at);
+  });
+
+  it('does not count a confirmation from before the last Settlement after a reopen', async () => {
+    const context = await activeCase();
+    const id = await requestIn(context);
+    await pool.query(
+      `UPDATE service_requests SET status = 'CLOSED', terminal_at = now() WHERE service_request_id = $1`,
+      [id],
+    );
+    const first = await resolveDerived(context);
+    expect(first.settlement.veteranConfirmedBy).toBe(context.veteran.userId);
+
+    const { tenantId, caseId, responder } = context;
+    await executeCaseCommand(pool, {
+      tenantId,
+      caseId,
+      command: 'CLOSE',
+      actorId: responder.userId,
+      actorType: 'USER',
+    });
+    await executeCaseCommand(pool, {
+      tenantId,
+      caseId,
+      command: 'REOPEN',
+      actorId: responder.userId,
+      actorType: 'SUAS_ADMIN',
+      reason: 'the need recurred',
+    });
+    await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
+    await executeCaseCommand(pool, {
+      tenantId,
+      caseId,
+      command: 'ACTIVATE',
+      actorId: responder.userId,
+      actorType: 'USER',
+    });
+    const second = await resolveDerived(context);
+    expect(second.settlement.resolutionCycle).toBe(2);
+    expect(second.settlement.veteranConfirmedBy).toBeUndefined();
   });
 });

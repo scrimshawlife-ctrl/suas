@@ -41,13 +41,39 @@ import {
   type ServiceRequestCommand,
   type ServiceRequestStatus,
 } from '../../coordination/index.js';
+import {
+  MODEL_FAILURE_KINDS,
+  ScriptedModelInference,
+  type ModelInferencePort,
+} from '../../inference/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 
 export interface DevRouteDeps {
   readonly pool: Pool;
   readonly sessionSecret: string | undefined;
   readonly delivery: ChallengeDeliveryPort;
+  /** The app's model port; only the scripted fake can be fed turns. */
+  readonly modelInference?: ModelInferencePort | undefined;
 }
+
+// A scripted turn is either `{ok:true,text,toolCalls}` or `{ok:false,failure}`.
+const scriptedTurnsBody = z.object({
+  turns: z
+    .array(
+      z.union([
+        z.object({
+          ok: z.literal(true),
+          text: z.string(),
+          toolCalls: z.array(z.object({ id: z.string(), name: z.string(), input: z.unknown() })),
+        }),
+        z.object({
+          ok: z.literal(false),
+          failure: z.enum(MODEL_FAILURE_KINDS),
+        }),
+      ]),
+    )
+    .max(50),
+});
 
 const lastChallengeQuery = z.object({
   destination: z.string().min(3).max(320),
@@ -112,6 +138,32 @@ export function registerDevRoutes(app: FastifyInstance, deps: DevRouteDeps): voi
       code: last.secret,
       expires_at: last.expiresAt.toISOString(),
     };
+  });
+
+  // Lets a local web app exercise the Intake Assistant: with SUAS_MODEL_INFERENCE_MODE=fake
+  // the port answers "unavailable" until turns are queued here.
+  app.post(`${API_PREFIX}/dev/model-inference/turns`, async (request, reply) => {
+    const body = scriptedTurnsBody.parse(request.body);
+    if (!(deps.modelInference instanceof ScriptedModelInference)) {
+      return reply.status(409).send({
+        error: {
+          code: 'DEV_MODEL_NOT_SCRIPTED',
+          message: 'The model port is not the scripted fake. Set SUAS_MODEL_INFERENCE_MODE=fake.',
+        },
+      });
+    }
+    deps.modelInference.enqueue(
+      ...body.turns.map((turn) =>
+        turn.ok
+          ? {
+              ok: true as const,
+              text: turn.text,
+              toolCalls: turn.toolCalls.map(({ id, name, input }) => ({ id, name, input })),
+            }
+          : turn,
+      ),
+    );
+    return reply.status(202).send({ queued: body.turns.length });
   });
 
   app.post(`${API_PREFIX}/dev/service-requests/:id/simulate`, async (request) => {

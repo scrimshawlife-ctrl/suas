@@ -27,3 +27,4 @@ export {
   type SendChatMessageInput,
   type SendChatMessageResult,
 } from './send.js';
+export { listChatThreads, type ChatThreadSummary } from './threads.js';

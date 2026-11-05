@@ -468,6 +468,7 @@ describe('DISPATCH.md §3, §6, §8 — Service Request commands', () => {
         category: 'TRANSPORTATION',
         createdBy: context.responder.userId,
         actorType: 'USER',
+        details: { meeting_place: 'Main Street library' },
       }),
     );
 

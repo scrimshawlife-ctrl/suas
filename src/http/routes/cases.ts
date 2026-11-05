@@ -75,9 +75,9 @@ const resolveBody = z.object({
   occurred: z.record(z.unknown()),
   fulfilled: z.record(z.unknown()),
   unresolved: z.record(z.unknown()),
-  authored_by: z.string().uuid(),
-  accepted_by_user_id: z.string().uuid(),
-  veteran_confirmed_by: z.string().uuid().optional(),
+  // The author, the accepter and the requester's confirmation are derived on the server.
+  // A client that still sends authored_by, accepted_by_user_id or veteran_confirmed_by
+  // has them dropped by this schema (zod strips unknown keys, as everywhere in this API).
   expected_status: z.enum(['ACTIVE', 'FOLLOWUP']).optional(),
 });
 
@@ -250,19 +250,20 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
     const body = resolveBody.parse(request.body ?? {});
-    assertAccepter(await resolveCaseAccess(deps.pool, context, id), 'RESOLVE');
+    const access = await resolveCaseAccess(deps.pool, context, id);
+    assertAccepter(access, 'RESOLVE');
 
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
+    // SETTLEMENT.md §2: the accountable author is the person resolving, and the accepter
+    // is the case's active assignment. Both come from the session and the assignment.
+    const acceptedByUserId = access.assignment?.acceptedByUserId ?? context.userId;
     const content = {
       requested: body.requested as JsonObject,
       occurred: body.occurred as JsonObject,
       fulfilled: body.fulfilled as JsonObject,
       unresolved: body.unresolved as JsonObject,
-      authoredBy: body.authored_by,
-      acceptedByUserId: body.accepted_by_user_id,
-      ...(body.veteran_confirmed_by !== undefined
-        ? { veteranConfirmedBy: body.veteran_confirmed_by }
-        : {}),
+      authoredBy: context.userId,
+      acceptedByUserId,
     };
 
     const result = await resolveCaseWithSettlement(deps.pool, {
@@ -271,6 +272,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
       actorId: context.userId,
       content,
       idempotencyKey,
+      deriveRequesterConfirmation: true,
       correlationId: String(request.id),
       ...(body.expected_status !== undefined ? { expectedStatus: body.expected_status } : {}),
     });

@@ -257,6 +257,34 @@ describe('POST /api/v0/cases/:id/commands/resolve', () => {
     expect(veteran.userId).toBeDefined();
   });
 
+  it('takes the author and accepter from the session, not from the request body', async () => {
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { responder, headers } = await claimAndActivate(
+      tenantId,
+      supportCase.caseId,
+      veteranHeaders,
+    );
+    const forged = randomUUID();
+
+    const resolved = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${supportCase.caseId}/commands/resolve`,
+      headers: { ...headers, 'idempotency-key': `forged-${randomUUID()}` },
+      payload: {
+        ...settlementPayload(forged),
+        authored_by: forged,
+        accepted_by_user_id: forged,
+        veteran_confirmed_by: forged,
+      },
+    });
+    expect(resolved.statusCode).toBe(200);
+    expect(resolved.json().settlement).toMatchObject({
+      authored_by: responder.userId,
+      accepted_by_user_id: responder.userId,
+      veteran_confirmed_by: null,
+    });
+  });
+
   it('requires Idempotency-Key and hides the case from anyone who did not accept it', async () => {
     const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
     const assigned = await claimAndActivate(tenantId, supportCase.caseId, veteranHeaders);

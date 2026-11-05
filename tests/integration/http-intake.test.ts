@@ -81,7 +81,12 @@ describe('draft, edit and submit', () => {
     const { headers, tenantId, user } = await veteran();
     model.enqueue(
       toolTurn(
-        draftTool({ category: 'FOOD', summary: 'Groceries for the week', timing: 'Friday' }),
+        draftTool({
+          category: 'FOOD',
+          summary: 'Groceries for the week',
+          timing: 'Friday',
+          meeting_place: 'Front steps of the library',
+        }),
       ),
       textTurn('I drafted a food request. Check it before you submit.'),
     );
@@ -91,7 +96,12 @@ describe('draft, edit and submit', () => {
     expect(created.statusCode).toBe(201);
     const turn = created.json();
     expect(turn.outcome).toBe('DRAFT_READY');
-    expect(turn.draft).toMatchObject({ status: 'DRAFT', category: 'FOOD', timing: 'Friday' });
+    expect(turn.draft).toMatchObject({
+      status: 'DRAFT',
+      category: 'FOOD',
+      timing: 'Friday',
+      meeting_place: 'Front steps of the library',
+    });
     const draftId: string = turn.draft.draft_id;
 
     // Nothing exists as a Service Request until the Veteran submits.
@@ -105,10 +115,19 @@ describe('draft, edit and submit', () => {
       method: 'PATCH',
       url: `/api/v0/intake/drafts/${draftId}`,
       headers,
-      payload: { category: 'TRANSPORTATION', summary: 'Ride to the food bank', timing: null },
+      payload: {
+        category: 'TRANSPORTATION',
+        summary: 'Ride to the food bank',
+        timing: null,
+        meeting_place: 'Corner of Elm and 3rd',
+      },
     });
     expect(edited.statusCode).toBe(200);
-    expect(edited.json()).toMatchObject({ category: 'TRANSPORTATION', timing: null });
+    expect(edited.json()).toMatchObject({
+      category: 'TRANSPORTATION',
+      timing: null,
+      meeting_place: 'Corner of Elm and 3rd',
+    });
 
     const submitted = await post(
       `/api/v0/intake/drafts/${draftId}/submit`,
@@ -131,7 +150,10 @@ describe('draft, edit and submit', () => {
       `SELECT details, created_by FROM service_requests WHERE service_request_id = $1`,
       [body.service_request.service_request_id],
     );
-    expect(stored.rows[0].details).toEqual({ summary: 'Ride to the food bank' });
+    expect(stored.rows[0].details).toEqual({
+      summary: 'Ride to the food bank',
+      meeting_place: 'Corner of Elm and 3rd',
+    });
     expect(stored.rows[0].created_by).toBe(user.userId);
 
     const replay = await post(
@@ -279,7 +301,11 @@ describe('fallback to the plain form', () => {
     const form = await post(
       '/api/v0/service-requests',
       headers,
-      { category: 'TRANSPORTATION', summary: 'A ride to the clinic' },
+      {
+        category: 'TRANSPORTATION',
+        summary: 'A ride to the clinic',
+        meeting_place: 'Clinic main entrance',
+      },
       { 'idempotency-key': 'form-1' },
     );
     expect(form.statusCode).toBe(201);
@@ -389,6 +415,14 @@ describe('intake text is never logged', () => {
       );
       const ok = await post('/api/v0/intake/drafts', headers, { text: `Food please ${MARKER}` });
       expect(ok.statusCode).toBe(201);
+      // The meeting place is on the same footing: it is stored, never logged.
+      const form = await post(
+        '/api/v0/service-requests',
+        headers,
+        { category: 'FOOD', summary: 'Food', meeting_place: `Library ${MARKER}` },
+        { 'idempotency-key': 'log-form' },
+      );
+      expect(form.statusCode).toBe(201);
       model.enqueue({ ok: false, failure: 'invalid' });
       await post('/api/v0/intake/drafts', headers, { text: `Again ${MARKER}` });
       // A port that throws with the text in its message must not reach the logs either.
