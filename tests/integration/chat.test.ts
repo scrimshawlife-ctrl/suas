@@ -31,6 +31,7 @@ import {
 import { createServer } from '../../src/http/server.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 interface ChatPage {
   messages: { body: string }[];
@@ -75,6 +76,8 @@ async function person(tenantId: string, label: string): Promise<Person> {
     email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
   });
+  // Passed scan and a county (Santa Clara), so requesting and accepting both work.
+  await markVerifiedVeteran(pool(), tenantId, user.userId);
   const session = await createSession(pool(), TEST_SESSION_SECRET, {
     tenantId,
     userId: user.userId,
