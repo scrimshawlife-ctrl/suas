@@ -15,7 +15,6 @@ import type { Pool } from 'pg';
 import { stagingFixturePrincipalRefused, type StagingAccess } from '../auth/staging-access.js';
 import { resolveAuthContext, type AuthContext } from '../authz/index.js';
 import { UnauthenticatedError } from '../authz/index.js';
-import { findUserById } from '../identity/users.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -93,12 +92,15 @@ export async function authenticate(
   }
 
   const stagingAccess = request.stagingAccess;
-  if (stagingAccess !== undefined) {
-    const user = await findUserById(pool, resolution.context.tenantId, resolution.context.userId);
-    if (stagingFixturePrincipalRefused(stagingAccess, user?.email)) {
-      request.log.info({ auth_rejection: 'not_staging_fixture' }, 'session rejected');
-      throw new UnauthenticatedError('The session credential is not valid.');
-    }
+  if (
+    stagingAccess !== undefined &&
+    stagingFixturePrincipalRefused(stagingAccess, {
+      tenantId: resolution.context.tenantId,
+      userId: resolution.context.userId,
+    })
+  ) {
+    request.log.info({ auth_rejection: 'not_staging_fixture' }, 'session rejected');
+    throw new UnauthenticatedError('The session credential is not valid.');
   }
   return resolution.context;
 }

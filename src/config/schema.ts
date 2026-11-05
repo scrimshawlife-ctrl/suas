@@ -63,6 +63,46 @@ export type ObjectStorageMode = (typeof OBJECT_STORAGE_MODES)[number];
 export const ID_VERIFICATION_MODES = ['disabled', 'fake'] as const;
 export type IdVerificationMode = (typeof ID_VERIFICATION_MODES)[number];
 
+/** One provisioned synthetic fixture. Identity is the pair, not the email address. */
+export interface StagingFixturePrincipal {
+  readonly tenantId: string;
+  readonly userId: string;
+}
+
+const FIXTURE_PRINCIPAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function parseStagingFixtureRegistry(value: string | undefined): {
+  readonly principals: readonly StagingFixturePrincipal[];
+  readonly issue: string | undefined;
+} {
+  if (value === undefined) return { principals: [], issue: undefined };
+  const entries = splitCsv(value);
+  if (entries.length > 10) {
+    return {
+      principals: [],
+      issue: 'SUAS_STAGING_FIXTURE_REGISTRY must contain at most 10 principals.',
+    };
+  }
+  const principals: StagingFixturePrincipal[] = [];
+  for (const entry of entries) {
+    const separator = entry.indexOf(':');
+    const tenantId = separator === -1 ? '' : entry.slice(0, separator);
+    const userId = separator === -1 ? '' : entry.slice(separator + 1);
+    if (
+      separator === -1 ||
+      !FIXTURE_PRINCIPAL_ID.test(tenantId) ||
+      !FIXTURE_PRINCIPAL_ID.test(userId)
+    ) {
+      return {
+        principals: [],
+        issue: 'SUAS_STAGING_FIXTURE_REGISTRY entries must be tenant-id:user-id pairs.',
+      };
+    }
+    principals.push({ tenantId: tenantId.toLowerCase(), userId: userId.toLowerCase() });
+  }
+  return { principals, issue: undefined };
+}
+
 const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d$/;
 const S3_BUCKET_PATTERN = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 
@@ -279,8 +319,10 @@ const rawConfigSchema = z.object({
   ),
   // D-052. Public self sign-up stays off unless LOCAL or TEST sets "enabled".
   SUAS_PUBLIC_SIGN_UP: optionalRaw,
-  // Explicit synthetic fixture principals for STAGING server auth. Empty admits nobody.
+  // Addresses the STAGING provision command may create. Not an admission list.
   SUAS_STAGING_AUTH_EMAILS: optionalRaw,
+  // Explicit tenant-id:user-id pairs STAGING auth admits. Empty admits nobody.
+  SUAS_STAGING_FIXTURE_REGISTRY: optionalRaw,
 
   // --- Fulfillment adapters. ENVIRONMENT.md §3. ---
   SUAS_TRANSPORTATION_ADAPTER_MODE: requiredEnum(
@@ -412,8 +454,13 @@ export interface SuasConfig {
   };
   /** Public self sign-up. Startup refuses `enabled` outside LOCAL and TEST. */
   readonly publicSignUp: boolean;
-  /** Normalized emails from SUAS_STAGING_AUTH_EMAILS. STAGING auth admits only these. */
-  readonly stagingFixturePrincipals: readonly string[];
+  /** Normalized emails the STAGING provision command may create. Not admission. */
+  readonly stagingAuthEmails: readonly string[];
+  /**
+   * Explicit, immutable (tenant id, user id) pairs STAGING auth admits.
+   * Empty or absent admits nobody. The demo account is not added implicitly.
+   */
+  readonly stagingFixturePrincipals: readonly StagingFixturePrincipal[];
   readonly adapters: {
     readonly transportation: AdapterMode;
     readonly shelter: AdapterMode;
@@ -658,6 +705,13 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'SUAS_STAGING_AUTH_EMAILS must contain only synthetic fixture addresses.',
+    });
+  }
+  const registry = parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY);
+  if (registry.issue !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: registry.issue,
     });
   }
 
@@ -1044,9 +1098,9 @@ export function shapeConfig(
     objectStorage: { mode: raw.SUAS_OBJECT_STORAGE_MODE, bucket: raw.SUAS_S3_BUCKET },
     idVerification: { mode: raw.SUAS_ID_VERIFICATION_MODE },
     publicSignUp: raw.SUAS_PUBLIC_SIGN_UP === 'enabled',
-    stagingFixturePrincipals: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) =>
-      email.toLowerCase(),
-    ),
+    stagingAuthEmails: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) => email.toLowerCase()),
+    stagingFixturePrincipals: parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY)
+      .principals,
     adapters: {
       transportation: raw.SUAS_TRANSPORTATION_ADAPTER_MODE,
       shelter: raw.SUAS_SHELTER_ADAPTER_MODE,
