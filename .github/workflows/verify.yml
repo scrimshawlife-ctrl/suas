@@ -68,6 +68,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
 
       - name: Create the migration-test database
         env:
@@ -117,6 +120,14 @@ jobs:
       - name: OpenAPI route drift
         # Fails when registered /api/v0 routes and docs/openapi/v0.json disagree.
         run: npm run openapi:check
+
+      - name: Web app checks
+        # web/ is a separate package (not an npm workspace): lint, typecheck, unit tests,
+        # and the production build of the React app.
+        working-directory: web
+        run: |
+          npm ci
+          npm run check
 
       - name: Eval (reporting only)
         # F11: scores the synthetic intake set with the scripted fake adapter, so the
