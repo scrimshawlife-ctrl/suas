@@ -21,14 +21,38 @@ export const DATABASE_URL = `${DB_HOST_URL}/${DB_NAME}`;
 /** The tenant `npm run seed` writes to, and the one browser sign-up creates users in. */
 export const TENANT_ID = '00000000-0000-4000-8000-000000000001';
 
-/** The dropped-and-recreated database must be a throwaway LOCAL one. */
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/**
+ * The e2e database must be a throwaway LOCAL one: a `suas_local_<name>` database on this
+ * machine. Runs when this module loads, so every consumer (stack, helpers, config) is covered.
+ */
 export function assertDisposableDatabase(): void {
   if (!/^suas_local_[a-z0-9_]+$/.test(DB_NAME)) {
     throw new Error(
-      `Refusing to reset database "${DB_NAME}": the e2e stack only wipes databases named suas_local_<name>.`,
+      `Refusing database "${DB_NAME}": the e2e stack only uses databases named suas_local_<name>.`,
     );
   }
+  let host: URL;
+  try {
+    host = new URL(DB_HOST_URL);
+  } catch {
+    throw new Error('SUAS_E2E_DB_HOST_URL is not a valid URL.');
+  }
+  if (host.protocol !== 'postgres:' && host.protocol !== 'postgresql:') {
+    throw new Error(`Refusing database URL with protocol "${host.protocol}".`);
+  }
+  if (!LOCAL_HOSTNAMES.has(host.hostname)) {
+    throw new Error(
+      `Refusing database host "${host.hostname}": the e2e stack is LOCAL only (localhost, 127.0.0.1, ::1).`,
+    );
+  }
+  if ((host.pathname !== '' && host.pathname !== '/') || host.search !== '' || host.hash !== '') {
+    throw new Error('SUAS_E2E_DB_HOST_URL must be a server address only: no path, query or hash.');
+  }
 }
+
+assertDisposableDatabase();
 
 /**
  * The LOCAL fake environment for the API, the migrator, the seed and the job worker.

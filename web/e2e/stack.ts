@@ -20,8 +20,8 @@ async function resetDatabase(): Promise<void> {
   const admin = new Client({ connectionString: `${DB_HOST_URL}/postgres` });
   await admin.connect();
   try {
-    await admin.query(`DROP DATABASE IF EXISTS ${DB_NAME} WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE ${DB_NAME}`);
+    await admin.query(`DROP DATABASE IF EXISTS "${DB_NAME}" WITH (FORCE)`);
+    await admin.query(`CREATE DATABASE "${DB_NAME}"`);
   } finally {
     await admin.end();
   }
