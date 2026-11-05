@@ -22,7 +22,6 @@ import { syntheticEmail, syntheticPhone } from '../testing/fixture-boundary.js';
 import { CATEGORY_CARDS } from './categories.js';
 import { requireSurface, type ConformanceClass, type SurfaceId } from './contract.js';
 import {
-  renderActiveNeeds,
   renderAdminOverview,
   renderChat,
   renderEnrollment,
@@ -32,13 +31,10 @@ import {
   renderQrfRequest,
   renderResourceCategories,
   renderResourceList,
-  renderResponderAvailability,
-  renderResponderCase,
-  renderResponderDashboard,
   renderVeteranHome,
 } from './surfaces.js';
 import type { MarkupKind } from './a11y.js';
-import { DUTY_UNAVAILABLE_REASON, type ShellViewModel, type ViewportClass } from './view-models.js';
+import type { ShellViewModel, ViewportClass } from './view-models.js';
 
 /** MVP_REFERENCE.md §4 header block. Recorded on every fixture. */
 export const REFERENCE_SOURCE = 'https://suasqrf.org/app/' as const;
@@ -51,7 +47,7 @@ export interface VisualFixture {
   /** §11 "viewport/device class". */
   readonly viewport: ViewportClass;
   /** §11 "role". */
-  readonly role: 'PUBLIC' | 'VETERAN' | 'RESPONDER' | 'ADMIN';
+  readonly role: 'PUBLIC' | 'VETERAN' | 'ADMIN';
   /** §11 "conformance class", carried from the §5 inventory. */
   readonly conformance: ConformanceClass;
   /** §11 "approved divergence references". */
@@ -71,27 +67,6 @@ function shell(overrides: Partial<ShellViewModel> = {}): ShellViewModel {
     ...(overrides.currentNav === undefined ? {} : { currentNav: overrides.currentNav }),
   };
 }
-
-/** Operational categories only, as §9.3 scopes Quick Resource Share. */
-const OPERATIONAL_CARDS = CATEGORY_CARDS.filter((card) => card.disposition === 'OPERATIONAL');
-
-/**
- * §9: `Responses`, `Rating`, `This Month`, and `Avg Response` have no released
- * definitions, so the fixture pins the not-computable rendering. If a future
- * spec defines them, this fixture changes and the change is reviewable.
- */
-const UNDEFINED_METRICS = [
-  {
-    label: 'Responses',
-    state: 'NOT_COMPUTABLE' as const,
-    reason: 'No released definition',
-  },
-  {
-    label: 'Avg Response',
-    state: 'NOT_COMPUTABLE' as const,
-    reason: 'No released definition',
-  },
-];
 
 function fixture(
   id: string,
@@ -148,8 +123,8 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
       activeQrf: {
         facts: {
           requestStatus: 'MATCHING',
-          responderAssigned: false,
-          responderNotificationDelivered: false,
+          assigned: false,
+          assignedNotificationDelivered: false,
           coordinationDegraded: false,
           matchingExhausted: false,
         },
@@ -165,8 +140,8 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
       qrf: {
         facts: {
           requestStatus: 'MATCHING',
-          responderAssigned: false,
-          responderNotificationDelivered: false,
+          assigned: false,
+          assignedNotificationDelivered: false,
           coordinationDegraded: false,
           matchingExhausted: false,
         },
@@ -182,8 +157,8 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
       qrf: {
         facts: {
           requestStatus: 'MATCHING',
-          responderAssigned: false,
-          responderNotificationDelivered: false,
+          assigned: false,
+          assignedNotificationDelivered: false,
           coordinationDegraded: false,
           matchingExhausted: true,
         },
@@ -199,8 +174,8 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
       qrf: {
         facts: {
           requestStatus: 'SUBMITTED',
-          responderAssigned: false,
-          responderNotificationDelivered: false,
+          assigned: false,
+          assignedNotificationDelivered: false,
           coordinationDegraded: true,
           matchingExhausted: false,
         },
@@ -281,83 +256,6 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
     }),
   ),
 
-  fixture(
-    'responder-case',
-    'RESPONDER_CASE',
-    'unassigned case claim from the queue',
-    () =>
-      renderResponderCase({
-        shell: shell({ title: 'Case', viewport: 'DESKTOP' }),
-        need: {
-          caseId: 'case-0001',
-          caseStatus: 'OPEN',
-          category: 'Support Case',
-          openedLabel: 'Opened',
-          prioritySignalLevel: 'RED',
-          claimable: true,
-        },
-        contactAttempts: [
-          { channel: 'PHONE', outcome: 'REACHED', attemptedAtLabel: '2026-08-26T12:00:00.000Z' },
-        ],
-        serviceRequests: [{ category: 'TRANSPORTATION', status: 'REQUESTED' }],
-      }),
-    { viewport: 'DESKTOP' },
-  ),
-
-  fixture(
-    'responder-dashboard',
-    'RESPONDER_DASHBOARD',
-    '§11.8 responder dashboard, on-duty unavailable',
-    () =>
-      renderResponderDashboard({
-        shell: shell({ title: 'Responder', viewport: 'DESKTOP' }),
-        duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-        activeNeeds: [
-          {
-            caseId: 'case-0001',
-            caseStatus: 'ASSIGNED',
-            category: 'PEER_SUPPORT',
-            openedLabel: 'Opened 20 minutes ago',
-          },
-        ],
-        alerts: { status: 'AVAILABLE', items: ['One request is waiting for acknowledgement.'] },
-        quickShareCategories: OPERATIONAL_CARDS,
-        metrics: UNDEFINED_METRICS,
-      }),
-    { viewport: 'DESKTOP' },
-  ),
-
-  fixture(
-    'responder-availability',
-    'RESPONDER_AVAILABILITY',
-    '§11.8 on-duty unavailable (G-I-30)',
-    () =>
-      renderResponderAvailability({
-        shell: shell({ title: 'On Duty' }),
-        duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-        // D-009 coverage hours are DECISION_PENDING, so no window is shown.
-      }),
-  ),
-
-  fixture(
-    'active-needs',
-    'ACTIVE_NEEDS',
-    '§11.9 active needs/alerts',
-    () =>
-      renderActiveNeeds({
-        shell: shell({ title: 'Active Needs', viewport: 'DESKTOP' }),
-        needs: [
-          {
-            caseId: 'case-0001',
-            caseStatus: 'ACTIVE',
-            category: 'FOOD',
-            openedLabel: 'Opened 2 hours ago',
-          },
-        ],
-      }),
-    { viewport: 'DESKTOP' },
-  ),
-
   fixture('chat-unavailable', 'CHAT', '§11.10 chat entry while messaging is unavailable', () =>
     renderChat({
       shell: shell({ title: 'Chat', currentNav: 'CHAT' }),
@@ -366,7 +264,7 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
       availability: {
         status: 'UNAVAILABLE',
         reason:
-          'Messaging is not available yet. Your responder will contact you through ' +
+          'Messaging is not available yet. The person who accepts your request will contact you through ' +
           'the channels you have consented to.',
       },
     }),
@@ -379,7 +277,7 @@ export const VISUAL_FIXTURES: readonly VisualFixture[] = [
     () =>
       renderAdminOverview({
         shell: shell({ title: 'SUAS Admin', viewport: 'DESKTOP', showMobileNav: false }),
-        tenantLabel: 'Example Partner Organization',
+        tenantLabel: 'Synthetic tenant',
         capabilities: [
           { name: 'Peer support (manual)', presence: 'CONFIGURED' },
           {
@@ -440,9 +338,6 @@ export const REQUIRED_FIXTURE_COVERAGE: readonly SurfaceId[] = [
   'QRF_REQUEST',
   'RESOURCE_CATEGORIES',
   'RESOURCE_LIST',
-  'RESPONDER_DASHBOARD',
-  'RESPONDER_AVAILABILITY',
-  'ACTIVE_NEEDS',
   'CHAT',
   'ADMIN_OVERVIEW',
   'MOBILE_NAV',

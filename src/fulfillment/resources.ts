@@ -274,7 +274,7 @@ export async function verifyResource(
     aggregateType: 'Resource',
     aggregateId: input.resourceId,
     tenantId: input.tenantId,
-    actorType: 'ORG_ADMIN',
+    actorType: 'SUAS_ADMIN',
     actorId: input.actorId,
     payload: {
       verification_source: input.verificationSource,
@@ -327,7 +327,7 @@ export async function setResourceActive(
     aggregateType: 'Resource',
     aggregateId: input.resourceId,
     tenantId: input.tenantId,
-    actorType: 'ORG_ADMIN',
+    actorType: 'SUAS_ADMIN',
     actorId: input.actorId,
     payload: { active: input.active },
   });

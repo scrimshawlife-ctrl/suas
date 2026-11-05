@@ -14,7 +14,7 @@ import { withTransaction } from '../../src/db/index.js';
 import { listAggregateEvents } from '../../src/events/index.js';
 import {
   addCaseNote,
-  assignCase,
+  CaseAlreadyClaimedError,
   claimCase,
   ContactOutcomeRequiredError,
   createServiceRequest,
@@ -24,12 +24,10 @@ import {
   executeServiceRequestCommand,
   findActiveAssignment,
   IllegalCaseTransitionError,
-  InvalidCursorError,
   listContactAttempts,
   NoActiveAssignmentError,
-  NotAssignedResponderError,
+  NotAssignedError,
   openCase,
-  readCaseQueue,
   recordContact,
   StaleCaseStateError,
 } from '../../src/coordination/index.js';
@@ -63,7 +61,7 @@ async function scenario() {
     openCase(tx, {
       tenantId,
       veteranUserId: veteran.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
       actorId: responder.userId,
     }),
   );
@@ -142,14 +140,14 @@ describe('CASES.md §3.1 — atomic creation invariant', () => {
     await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
     });
     await executeCaseCommand(pool, {
       tenantId,
       caseId: supportCase.caseId,
       command: 'ACTIVATE',
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     // A second non-closed case for the same veteran is refused while one is open.
@@ -157,7 +155,7 @@ describe('CASES.md §3.1 — atomic creation invariant', () => {
       openCase(tx, {
         tenantId,
         veteranUserId: veteran.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
         actorId: responder.userId,
       }),
     );
@@ -171,20 +169,20 @@ describe('CASES.md §5 — atomic claim', () => {
     const result = await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
     });
 
     expect(result.supportCase.status).toBe('ASSIGNED');
-    expect(result.assignment.responderUserId).toBe(responder.userId);
+    expect(result.assignment.acceptedByUserId).toBe(responder.userId);
   });
 
   it('produces exactly one winner under concurrent claims', async () => {
     const { tenantId, responder, other, supportCase } = await scenario();
 
     const outcomes = await Promise.allSettled([
-      claimCase(pool, { tenantId, caseId: supportCase.caseId, responderUserId: responder.userId }),
-      claimCase(pool, { tenantId, caseId: supportCase.caseId, responderUserId: other.userId }),
-      claimCase(pool, { tenantId, caseId: supportCase.caseId, responderUserId: responder.userId }),
+      claimCase(pool, { tenantId, caseId: supportCase.caseId, acceptedByUserId: responder.userId }),
+      claimCase(pool, { tenantId, caseId: supportCase.caseId, acceptedByUserId: other.userId }),
+      claimCase(pool, { tenantId, caseId: supportCase.caseId, acceptedByUserId: responder.userId }),
     ]);
 
     // CASES.md §5 item 5: the responder's repeated claim is a replay of the same
@@ -210,8 +208,8 @@ describe('CASES.md §5 — atomic claim', () => {
   it('emits CASE_ASSIGNED once per logical assignment', async () => {
     const { tenantId, responder, other, supportCase } = await scenario();
     await Promise.allSettled([
-      claimCase(pool, { tenantId, caseId: supportCase.caseId, responderUserId: responder.userId }),
-      claimCase(pool, { tenantId, caseId: supportCase.caseId, responderUserId: other.userId }),
+      claimCase(pool, { tenantId, caseId: supportCase.caseId, acceptedByUserId: responder.userId }),
+      claimCase(pool, { tenantId, caseId: supportCase.caseId, acceptedByUserId: other.userId }),
     ]);
 
     const events = await listAggregateEvents(pool, {
@@ -227,14 +225,14 @@ describe('CASES.md §5 — atomic claim', () => {
     const first = await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
       expectedStatus: 'OPEN',
     });
     // Same logical command, same expectedStatus, after the case moved on.
     const again = await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
       expectedStatus: 'OPEN',
     });
     expect(again.assignment.caseAssignmentId).toBe(first.assignment.caseAssignmentId);
@@ -257,93 +255,36 @@ describe('CASES.md §5 — atomic claim', () => {
     await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
     });
 
     await expect(
-      claimCase(pool, { tenantId, caseId: supportCase.caseId, responderUserId: other.userId }),
-    ).rejects.toThrow(IllegalCaseTransitionError);
+      claimCase(pool, { tenantId, caseId: supportCase.caseId, acceptedByUserId: other.userId }),
+    ).rejects.toThrow(CaseAlreadyClaimedError);
 
     const assignment = await findActiveAssignment(pool, supportCase.caseId);
-    expect(assignment?.responderUserId).toBe(responder.userId);
+    expect(assignment?.acceptedByUserId).toBe(responder.userId);
   });
 
-  it('conflicts safely on a stale queue item', async () => {
-    const { tenantId, responder, other, supportCase } = await scenario();
-    await claimCase(pool, {
+  it('conflicts safely on a stale list item', async () => {
+    const { tenantId, other, supportCase } = await scenario();
+    await executeCaseCommand(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      command: 'TRIAGE',
+      actorId: 'staff',
+      actorType: 'SUAS_ADMIN',
     });
 
-    // The second responder still believes the case is OPEN, as their queue showed.
+    // The claimer still believes the case is OPEN, as their list showed.
     await expect(
       claimCase(pool, {
         tenantId,
         caseId: supportCase.caseId,
-        responderUserId: other.userId,
+        acceptedByUserId: other.userId,
         expectedStatus: 'OPEN',
       }),
     ).rejects.toThrow(StaleCaseStateError);
-  });
-});
-
-describe('CASES.md §5.7 — reassignment is atomic', () => {
-  it('releases the prior assignment and creates the successor', async () => {
-    const { tenantId, responder, other, supportCase } = await scenario();
-    const first = await claimCase(pool, {
-      tenantId,
-      caseId: supportCase.caseId,
-      responderUserId: responder.userId,
-    });
-
-    const second = await assignCase(pool, {
-      tenantId,
-      caseId: supportCase.caseId,
-      responderUserId: other.userId,
-      assignedBy: other.userId,
-    });
-
-    expect(second.assignment.responderUserId).toBe(other.userId);
-
-    const active = await findActiveAssignment(pool, supportCase.caseId);
-    expect(active?.caseAssignmentId).toBe(second.assignment.caseAssignmentId);
-
-    const prior = await pool.query<{ status: string }>(
-      'SELECT status FROM case_assignments WHERE case_assignment_id = $1',
-      [first.assignment.caseAssignmentId],
-    );
-    expect(prior.rows[0]?.status).toBe('REASSIGNED');
-  });
-
-  it('never leaves two active owners under concurrent reassignment', async () => {
-    const { tenantId, responder, other, supportCase } = await scenario();
-    await claimCase(pool, {
-      tenantId,
-      caseId: supportCase.caseId,
-      responderUserId: responder.userId,
-    });
-
-    await Promise.allSettled([
-      assignCase(pool, {
-        tenantId,
-        caseId: supportCase.caseId,
-        responderUserId: other.userId,
-        assignedBy: other.userId,
-      }),
-      assignCase(pool, {
-        tenantId,
-        caseId: supportCase.caseId,
-        responderUserId: responder.userId,
-        assignedBy: responder.userId,
-      }),
-    ]);
-
-    const active = await pool.query(
-      `SELECT 1 FROM case_assignments WHERE case_id = $1 AND status = 'ACTIVE'`,
-      [supportCase.caseId],
-    );
-    expect(active.rowCount).toBe(1);
   });
 });
 
@@ -356,7 +297,7 @@ describe('CASES.md §4.1 — unassigned cases cannot use assigned-responder edge
         caseId: supportCase.caseId,
         command: 'ESCALATE',
         actorId: responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
         reason: 'urgent',
       }),
     ).rejects.toThrow(IllegalCaseTransitionError);
@@ -367,7 +308,7 @@ describe('CASES.md §4.1 — unassigned cases cannot use assigned-responder edge
     await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
     });
 
     const escalated = await executeCaseCommand(pool, {
@@ -375,7 +316,7 @@ describe('CASES.md §4.1 — unassigned cases cannot use assigned-responder edge
       caseId: supportCase.caseId,
       command: 'ESCALATE',
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
       reason: 'no responder available in region',
     });
     expect(escalated.status).toBe('ACTIVE');
@@ -393,7 +334,7 @@ describe('CASES.md §4.1 — unassigned cases cannot use assigned-responder edge
     await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
     });
 
     await expect(
@@ -402,9 +343,9 @@ describe('CASES.md §4.1 — unassigned cases cannot use assigned-responder edge
         caseId: supportCase.caseId,
         command: 'ACTIVATE',
         actorId: other.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
-    ).rejects.toThrow(NotAssignedResponderError);
+    ).rejects.toThrow(NotAssignedError);
   });
 });
 
@@ -414,7 +355,7 @@ describe('RESPONDER_WORKFLOWS.md §7 — contact log', () => {
     await claimCase(pool, {
       tenantId: context.tenantId,
       caseId: context.supportCase.caseId,
-      responderUserId: context.responder.userId,
+      acceptedByUserId: context.responder.userId,
     });
     return context;
   }
@@ -424,7 +365,7 @@ describe('RESPONDER_WORKFLOWS.md §7 — contact log', () => {
     const result = await recordContact(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      loggedByUserId: responder.userId,
       command: 'log-contact-attempt',
       channel: 'PHONE',
       outcome: 'NO_ANSWER',
@@ -452,7 +393,7 @@ describe('RESPONDER_WORKFLOWS.md §7 — contact log', () => {
       recordContact(pool, {
         tenantId,
         caseId: supportCase.caseId,
-        responderUserId: responder.userId,
+        loggedByUserId: responder.userId,
         command: 'log-contact-attempt',
         channel: 'PHONE',
         outcome: 'PENDING',
@@ -466,7 +407,7 @@ describe('RESPONDER_WORKFLOWS.md §7 — contact log', () => {
       recordContact(pool, {
         tenantId,
         caseId: supportCase.caseId,
-        responderUserId: responder.userId,
+        loggedByUserId: responder.userId,
         command: 'complete-contact',
         channel: 'PHONE',
         outcome: 'PENDING',
@@ -479,7 +420,7 @@ describe('RESPONDER_WORKFLOWS.md §7 — contact log', () => {
     const input = {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      loggedByUserId: responder.userId,
       command: 'complete-contact' as const,
       channel: 'PHONE' as const,
       outcome: 'REACHED' as const,
@@ -518,7 +459,7 @@ describe('DISPATCH.md §3, §6, §8 — Service Request commands', () => {
     await claimCase(pool, {
       tenantId: context.tenantId,
       caseId: context.supportCase.caseId,
-      responderUserId: context.responder.userId,
+      acceptedByUserId: context.responder.userId,
     });
     const request = await withTransaction(pool, (tx) =>
       createServiceRequest(tx, {
@@ -526,7 +467,7 @@ describe('DISPATCH.md §3, §6, §8 — Service Request commands', () => {
         caseId: context.supportCase.caseId,
         category: 'TRANSPORTATION',
         createdBy: context.responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
     );
 
@@ -534,7 +475,7 @@ describe('DISPATCH.md §3, §6, §8 — Service Request commands', () => {
       tenantId: context.tenantId,
       serviceRequestId: request.serviceRequestId,
       actorId: context.responder.userId,
-      actorType: 'RESPONDER' as const,
+      actorType: 'USER' as const,
     };
     await executeServiceRequestCommand(pool, { ...base, command: 'SUBMIT' });
     await executeServiceRequestCommand(pool, { ...base, command: 'TRIAGE' });
@@ -550,7 +491,7 @@ describe('DISPATCH.md §3, §6, §8 — Service Request commands', () => {
         caseId: supportCase.caseId,
         category: 'FOOD',
         createdBy: responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
     );
 
@@ -655,7 +596,7 @@ describe('DISPATCH.md §3, §6, §8 — Service Request commands', () => {
           caseId: supportCase.caseId,
           category: 'HOUSING',
           createdBy: responder.userId,
-          actorType: 'RESPONDER',
+          actorType: 'USER',
         }),
       ),
     ).rejects.toThrow();
@@ -668,15 +609,15 @@ describe('CONSENT.md §3.6 — the assignment verifier', () => {
     await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
     });
 
     const verify = createAssignmentVerifier(pool);
     expect(
-      await verify({ tenantId, responderUserId: responder.userId, veteranUserId: veteran.userId }),
+      await verify({ tenantId, acceptedByUserId: responder.userId, veteranUserId: veteran.userId }),
     ).toBe(true);
     expect(
-      await verify({ tenantId, responderUserId: other.userId, veteranUserId: veteran.userId }),
+      await verify({ tenantId, acceptedByUserId: other.userId, veteranUserId: veteran.userId }),
     ).toBe(false);
   });
 
@@ -685,7 +626,7 @@ describe('CONSENT.md §3.6 — the assignment verifier', () => {
     await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
     });
 
     // Slice 4 denied this basis for want of a verifier; Slice 5 supplies one.
@@ -696,30 +637,28 @@ describe('CONSENT.md §3.6 — the assignment verifier', () => {
         veteranUserId: veteran.userId,
         permission: 'can_view',
         scope: 'current_requests',
-        granteeType: 'RESPONDER',
+        granteeType: 'USER',
         granteeId: responder.userId,
         purpose: 'Coordinate an assigned case',
-        systemBasis: 'RESPONDER_CASE_ASSIGNMENT',
+        systemBasis: 'CASE_ASSIGNMENT',
       },
       { verifyActiveAssignment: createAssignmentVerifier(pool) },
     );
 
-    expect(decision).toMatchObject({ allowed: true, basis: 'RESPONDER_CASE_ASSIGNMENT' });
+    expect(decision).toMatchObject({ allowed: true, basis: 'CASE_ASSIGNMENT' });
   });
 
   it('denies once the assignment is released', async () => {
-    const { tenantId, veteran, responder, other, supportCase } = await scenario();
+    const { tenantId, veteran, responder, supportCase } = await scenario();
     await claimCase(pool, {
       tenantId,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: responder.userId,
     });
-    await assignCase(pool, {
-      tenantId,
-      caseId: supportCase.caseId,
-      responderUserId: other.userId,
-      assignedBy: other.userId,
-    });
+    await pool.query(
+      `UPDATE case_assignments SET status = 'RELEASED', released_at = now() WHERE case_id = $1`,
+      [supportCase.caseId],
+    );
 
     const decision = await evaluateDisclosure(
       pool,
@@ -728,107 +667,14 @@ describe('CONSENT.md §3.6 — the assignment verifier', () => {
         veteranUserId: veteran.userId,
         permission: 'can_view',
         scope: 'current_requests',
-        granteeType: 'RESPONDER',
+        granteeType: 'USER',
         granteeId: responder.userId,
         purpose: 'Coordinate a case I no longer hold',
-        systemBasis: 'RESPONDER_CASE_ASSIGNMENT',
+        systemBasis: 'CASE_ASSIGNMENT',
       },
       { verifyActiveAssignment: createAssignmentVerifier(pool) },
     );
 
     expect(decision.allowed).toBe(false);
-  });
-});
-
-describe('RESPONDER_WORKFLOWS.md §4 — queue contract', () => {
-  it('never returns another tenant’s cases', async () => {
-    const a = await scenario();
-    const b = await scenario();
-
-    const page = await readCaseQueue(pool, a.tenantId);
-    expect(page.cases.map((item) => item.caseId)).toEqual([a.supportCase.caseId]);
-    expect(page.cases.map((item) => item.caseId)).not.toContain(b.supportCase.caseId);
-  });
-
-  it('bounds the page and paginates with a stable cursor', async () => {
-    const tenantId = syntheticTenantId();
-    const created: string[] = [];
-    for (let i = 0; i < 5; i += 1) {
-      const veteran = await user(tenantId, `veteran-${i}`);
-      const opened = await withTransaction(pool, (tx) =>
-        openCase(tx, {
-          tenantId,
-          veteranUserId: veteran.userId,
-          actorType: 'SYSTEM',
-          actorId: 'seed',
-        }),
-      );
-      created.push(opened.supportCase.caseId);
-    }
-
-    const first = await readCaseQueue(pool, tenantId, {}, { limit: 2 });
-    expect(first.cases).toHaveLength(2);
-    expect(first.nextCursor).toBeDefined();
-
-    const cursor = first.nextCursor;
-    if (cursor === undefined) throw new Error('Expected a next-page cursor.');
-    const second = await readCaseQueue(pool, tenantId, {}, { limit: 2, cursor });
-    expect(second.cases).toHaveLength(2);
-
-    const seen = [...first.cases, ...second.cases].map((item) => item.caseId);
-    expect(new Set(seen).size).toBe(4);
-  });
-
-  it('rejects a malformed cursor with a 400 rather than a 500', async () => {
-    const tenantId = syntheticTenantId();
-    // Decodable base64url, but not a "<iso>|<uuid>" keyset — would otherwise
-    // reach the ::timestamptz/::uuid cast and surface as an internal error.
-    const crafted = Buffer.from('not-a-timestamp|not-a-uuid', 'utf8').toString('base64url');
-    await expect(readCaseQueue(pool, tenantId, {}, { cursor: crafted })).rejects.toThrow(
-      InvalidCursorError,
-    );
-    await expect(readCaseQueue(pool, tenantId, {}, { cursor: '!!!not base64!!!' })).rejects.toThrow(
-      InvalidCursorError,
-    );
-  });
-
-  it('caps the page size regardless of what is asked for', async () => {
-    const { tenantId } = await scenario();
-    const page = await readCaseQueue(pool, tenantId, {}, { limit: 5000 });
-    expect(page.cases.length).toBeLessThanOrEqual(100);
-  });
-
-  it('filters by ownership', async () => {
-    const { tenantId, responder, supportCase } = await scenario();
-
-    const unassignedBefore = await readCaseQueue(pool, tenantId, { ownership: 'unassigned' });
-    expect(unassignedBefore.cases).toHaveLength(1);
-
-    await claimCase(pool, {
-      tenantId,
-      caseId: supportCase.caseId,
-      responderUserId: responder.userId,
-    });
-
-    const unassignedAfter = await readCaseQueue(pool, tenantId, { ownership: 'unassigned' });
-    expect(unassignedAfter.cases).toHaveLength(0);
-
-    const mine = await readCaseQueue(pool, tenantId, {
-      ownership: 'mine',
-      responderUserId: responder.userId,
-    });
-    expect(mine.cases.map((item) => item.caseId)).toEqual([supportCase.caseId]);
-  });
-
-  it('filters by status', async () => {
-    const { tenantId, responder, supportCase } = await scenario();
-    await claimCase(pool, {
-      tenantId,
-      caseId: supportCase.caseId,
-      responderUserId: responder.userId,
-    });
-
-    expect((await readCaseQueue(pool, tenantId, { statuses: ['ASSIGNED'] })).cases).toHaveLength(1);
-    expect((await readCaseQueue(pool, tenantId, { statuses: ['OPEN'] })).cases).toHaveLength(0);
   });
 });

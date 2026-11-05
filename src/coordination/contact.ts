@@ -38,7 +38,7 @@ export interface ContactAttempt {
   readonly contactAttemptId: string;
   readonly tenantId: string;
   readonly caseId: string;
-  readonly responderUserId: string;
+  readonly loggedByUserId: string;
   readonly attemptedAt: Date;
   readonly channel: ContactChannel;
   readonly outcome: ContactOutcome;
@@ -48,14 +48,14 @@ interface ContactRow {
   contact_attempt_id: string;
   tenant_id: string;
   case_id: string;
-  responder_user_id: string;
+  logged_by_user_id: string;
   attempted_at: Date;
   channel: ContactChannel;
   outcome: ContactOutcome;
 }
 
 const CONTACT_COLUMNS = `
-  contact_attempt_id, tenant_id, case_id, responder_user_id, attempted_at, channel, outcome
+  contact_attempt_id, tenant_id, case_id, logged_by_user_id, attempted_at, channel, outcome
 `;
 
 function toContactAttempt(row: ContactRow): ContactAttempt {
@@ -63,7 +63,7 @@ function toContactAttempt(row: ContactRow): ContactAttempt {
     contactAttemptId: row.contact_attempt_id,
     tenantId: row.tenant_id,
     caseId: row.case_id,
-    responderUserId: row.responder_user_id,
+    loggedByUserId: row.logged_by_user_id,
     attemptedAt: row.attempted_at,
     channel: row.channel,
     outcome: row.outcome,
@@ -87,7 +87,7 @@ export class ContactOutcomeRequiredError extends Error {
 export interface RecordContactInput {
   readonly tenantId: string;
   readonly caseId: string;
-  readonly responderUserId: string;
+  readonly loggedByUserId: string;
   readonly command: ContactCommand;
   readonly channel: ContactChannel;
   readonly outcome: ContactOutcome;
@@ -140,14 +140,14 @@ export async function recordContact(
       aggregateType: 'SupportCase',
       aggregateId: input.caseId,
       tenantId: input.tenantId,
-      actorType: 'RESPONDER',
-      actorId: input.responderUserId,
+      actorType: 'USER',
+      actorId: input.loggedByUserId,
       payload: {
         contact_attempt_id: contactAttemptId,
         at: attemptedAt.toISOString(),
         channel: input.channel,
         outcome: input.outcome,
-        actor_id: input.responderUserId,
+        actor_id: input.loggedByUserId,
         command: input.command,
       },
       ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
@@ -171,7 +171,7 @@ export async function recordContact(
 
     const inserted = await tx.query<ContactRow>(
       `INSERT INTO contact_attempts
-         (contact_attempt_id, tenant_id, case_id, responder_user_id, attempted_at,
+         (contact_attempt_id, tenant_id, case_id, logged_by_user_id, attempted_at,
           channel, outcome, note)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING ${CONTACT_COLUMNS}`,
@@ -179,7 +179,7 @@ export async function recordContact(
         contactAttemptId,
         input.tenantId,
         input.caseId,
-        input.responderUserId,
+        input.loggedByUserId,
         attemptedAt,
         input.channel,
         input.outcome,

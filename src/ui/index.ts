@@ -76,7 +76,6 @@ export {
   type TruthfulnessPresentation,
 } from './truthfulness.js';
 export {
-  renderActiveNeeds,
   renderAdminOverview,
   renderAdminPlannedSurface,
   renderChat,
@@ -94,18 +93,11 @@ export {
   renderQrfRequest,
   renderResourceCategories,
   renderResourceList,
-  renderResponderAvailability,
-  renderResponderCase,
-  renderResponderDashboard,
   renderVeteranHome,
 } from './surfaces.js';
 export { MIN_TARGET_PX, PRIMARY_TARGET_PX, STYLESHEET } from './theme.js';
 export {
-  ALERTS_UNAVAILABLE_REASON,
-  DUTY_UNAVAILABLE_REASON,
   VIEWPORT_CLASSES,
-  type ActiveNeedsViewModel,
-  type ActiveNeedViewModel,
   type AdminCapabilityViewModel,
   type AdminProviderCatalogViewModel,
   type AdminProviderConfigurationViewModel,
@@ -120,7 +112,6 @@ export {
   type CheckInResultViewModel,
   type CheckInSessionViewModel,
   type CheckInStartViewModel,
-  type DutyAvailability,
   type EnrollmentViewModel,
   type EmailOtpViewModel,
   type LandingViewModel,
@@ -137,12 +128,6 @@ export {
   type ResourceCategoriesViewModel,
   type ResourceListViewModel,
   type ResourceRowViewModel,
-  type ContactAttemptRowViewModel,
-  type ServiceRequestRowViewModel,
-  type ResponderAvailabilityViewModel,
-  type ResponderCaseViewModel,
-  type ResponderDashboardViewModel,
-  type ResponderMetricViewModel,
   type ShellViewModel,
   type VeteranHomeViewModel,
   type ViewportClass,

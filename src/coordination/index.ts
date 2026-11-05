@@ -31,7 +31,6 @@ export {
   type ServiceRequestTransition,
 } from './request-transitions.js';
 export {
-  assignCase,
   BlockingWorkError,
   CaseAlreadyClaimedError,
   CaseNotFoundError,
@@ -42,10 +41,9 @@ export {
   findCase,
   findNonClosedCase,
   NoActiveAssignmentError,
-  NotAssignedResponderError,
+  NotAssignedError,
   openCase,
   setCasePrioritySignalLevel,
-  type AssignCaseInput,
   type AssignmentResult,
   type CaseAssignment,
   type CaseCommandInput,
@@ -84,11 +82,15 @@ export {
   type ServiceRequestCommandInput,
 } from './requests.js';
 export {
+  CountyRequiredError,
   DEFAULT_PAGE_SIZE,
+  findUserCounty,
   InvalidCursorError,
   MAX_PAGE_SIZE,
-  QueueOwnershipError,
-  readCaseQueue,
-  type QueueFilters,
-  type QueuePage,
-} from './queue.js';
+  readRequestList,
+  type ListRequestsFilters,
+  type OpenRequestSummary,
+  type RequestListPage,
+} from './open-requests.js';
+export { acceptServiceRequest, OwnRequestError, type AcceptServiceRequestInput } from './accept.js';
+export { createChatThreadInTx, type ChatThread } from './chat-threads.js';

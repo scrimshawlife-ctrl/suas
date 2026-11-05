@@ -2,8 +2,8 @@
  * LOCAL synthetic-data seed.
  *
  * Populates a coherent, recognizably-fictitious dataset in the LOCAL database so
- * a developer has something to see across the reference surfaces: an org, a SUAS
- * admin, a responder, veterans, an active QRF (Support Case + PEER_SUPPORT
+ * a developer has something to see across the reference surfaces: a SUAS
+ * admin, a person who accepts requests, veterans, an active QRF (Support Case + PEER_SUPPORT
  * Service Request), and an active/verified Resource catalog. It also mints
  * sessions and prints their bearer credentials for the authenticated surfaces.
  *
@@ -33,17 +33,12 @@ import { loadConfig } from '../config/index.js';
 import { resolveSyntheticStagingOrigin } from '../config/staging-host.js';
 import { createPool, withTransaction } from '../db/index.js';
 import {
-  createMembership,
-  createOrganization,
   createUser,
   findUserByDestination,
   grantSuasAdmin,
   isSuasAdmin,
-  listActiveMemberships,
-  setMembershipStatus,
-  setOrganizationStatus,
+  setUserCounty,
   setUserStatus,
-  type Organization,
   type User,
 } from '../identity/index.js';
 import { createSession, elevateSession } from '../auth/index.js';
@@ -86,11 +81,9 @@ import {
 
 /** Fixed synthetic tenant so re-runs converge rather than multiply. */
 export const TENANT_ID = '00000000-0000-4000-8000-000000000001';
-const ORG_NAME = 'Example Veteran Support Org (synthetic)';
+/** Synthetic users all live in one launch county so the open-request list has matches. */
+const SEED_COUNTY = 'SANTA_CLARA' as const;
 
-interface OrgRow {
-  organization_id: string;
-}
 interface ResourceRow {
   resource_id: string;
 }
@@ -99,40 +92,16 @@ export async function getOrCreateUser(pool: Pool, localPart: string): Promise<Us
   const email = syntheticEmail(localPart);
   const existing = await findUserByDestination(pool, TENANT_ID, email);
   if (existing !== undefined) {
-    if (existing.status !== 'ACTIVE') {
-      const updated = await setUserStatus(pool, TENANT_ID, existing.userId, 'ACTIVE');
-      return updated ?? existing;
+    let current = existing;
+    if (current.status !== 'ACTIVE') {
+      current = (await setUserStatus(pool, TENANT_ID, current.userId, 'ACTIVE')) ?? current;
     }
-    return existing;
+    if (current.county === undefined) {
+      current = (await setUserCounty(pool, TENANT_ID, current.userId, SEED_COUNTY)) ?? current;
+    }
+    return current;
   }
-  return createUser(pool, { tenantId: TENANT_ID, email, status: 'ACTIVE' });
-}
-
-async function getOrCreateOrg(pool: Pool): Promise<Organization> {
-  const found = await pool.query<OrgRow>(
-    `SELECT organization_id FROM organizations WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
-    [TENANT_ID, ORG_NAME],
-  );
-  const existingId = found.rows[0]?.organization_id;
-  if (existingId !== undefined) {
-    const active = await setOrganizationStatus(pool, TENANT_ID, existingId, 'ACTIVE');
-    if (active !== undefined) return active;
-  }
-  const org = await createOrganization(pool, { tenantId: TENANT_ID, name: ORG_NAME });
-  const active = await setOrganizationStatus(pool, TENANT_ID, org.organizationId, 'ACTIVE');
-  return active ?? org;
-}
-
-async function ensureMembership(pool: Pool, userId: string, organizationId: string): Promise<void> {
-  const memberships = await listActiveMemberships(pool, userId, TENANT_ID);
-  if (memberships.some((m) => m.organizationId === organizationId)) return;
-  const membership = await createMembership(pool, {
-    tenantId: TENANT_ID,
-    userId,
-    organizationId,
-    role: 'RESPONDER',
-  });
-  await setMembershipStatus(pool, TENANT_ID, membership.membershipId, 'ACTIVE');
+  return createUser(pool, { tenantId: TENANT_ID, email, status: 'ACTIVE', county: SEED_COUNTY });
 }
 
 export interface ResourceSpec {
@@ -164,7 +133,7 @@ const RESOURCE_SPECS: readonly ResourceSpec[] = [
     category: 'TRANSPORTATION',
     counties: ['Example County'],
     // Unstructured: shown as text, no action guessed.
-    contactMethod: 'Request through a responder',
+    contactMethod: 'Request through the person who accepts your request',
     hours: 'By appointment',
     cost: 'No cost',
     eligibility: 'All veterans',
@@ -242,7 +211,7 @@ export async function ensureResource(
 async function ensureActiveQrf(
   pool: Pool,
   veteran: User,
-  responder: User,
+  accepter: User,
 ): Promise<{ supportCase: SupportCase; serviceRequestId: string }> {
   const opened = await withTransaction(pool, (tx: PoolClient) =>
     openCase(tx, {
@@ -259,7 +228,7 @@ async function ensureActiveQrf(
     await claimCase(pool, {
       tenantId: TENANT_ID,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: accepter.userId,
     });
     supportCase = await refetchCase(pool, supportCase.caseId);
   }
@@ -298,7 +267,7 @@ async function refetchCase(pool: Pool, caseId: string): Promise<SupportCase> {
  * boolean. Idempotent: the template is get-or-create and the grant is skipped
  * when an identical live one already exists.
  */
-async function ensureConsent(pool: Pool, veteran: User, responder: User): Promise<string> {
+async function ensureConsent(pool: Pool, veteran: User, accepter: User): Promise<string> {
   const versionKey = consentTemplateVersionKey('local-seed-consent', 1);
   const template = await findConsentTemplateVersion(pool, versionKey);
   if (template === undefined) {
@@ -309,7 +278,7 @@ async function ensureConsent(pool: Pool, veteran: User, responder: User): Promis
     });
   }
   if (template === undefined || template.status !== 'PUBLISHED') {
-    await publishConsentTemplateVersion(pool, versionKey, responder.userId);
+    await publishConsentTemplateVersion(pool, versionKey, accepter.userId);
   }
 
   const existing = await findActiveGrant(pool, {
@@ -317,8 +286,8 @@ async function ensureConsent(pool: Pool, veteran: User, responder: User): Promis
     veteranUserId: veteran.userId,
     permission: 'can_view',
     scope: 'current_requests',
-    granteeType: 'RESPONDER',
-    granteeId: responder.userId,
+    granteeType: 'USER',
+    granteeId: accepter.userId,
   });
   if (existing !== undefined) return existing.consentGrantId;
 
@@ -328,8 +297,8 @@ async function ensureConsent(pool: Pool, veteran: User, responder: User): Promis
     permission: 'can_view',
     scope: 'current_requests',
     purpose: "Coordinate the veteran's active support requests (synthetic seed).",
-    granteeType: 'RESPONDER',
-    granteeId: responder.userId,
+    granteeType: 'USER',
+    granteeId: accepter.userId,
     consentTemplateVersion: versionKey,
   });
   return grant.consentGrantId;
@@ -412,7 +381,7 @@ async function ensureVeteranNotifications(
 async function ensureSettledCase(
   pool: Pool,
   veteran: User,
-  responder: User,
+  accepter: User,
 ): Promise<{ caseId: string; status: CaseStatus; settlementId: string | undefined }> {
   const latest = await pool.query<{ case_id: string; status: CaseStatus }>(
     `SELECT case_id, status FROM support_cases
@@ -443,7 +412,7 @@ async function ensureSettledCase(
     await claimCase(pool, {
       tenantId: TENANT_ID,
       caseId: supportCase.caseId,
-      responderUserId: responder.userId,
+      acceptedByUserId: accepter.userId,
     });
     supportCase = await refetchCase(pool, supportCase.caseId);
   }
@@ -453,8 +422,8 @@ async function ensureSettledCase(
       tenantId: TENANT_ID,
       caseId: supportCase.caseId,
       command: 'ACTIVATE',
-      actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorId: accepter.userId,
+      actorType: 'USER',
     });
     supportCase = await refetchCase(pool, supportCase.caseId);
   }
@@ -471,32 +440,34 @@ async function ensureSettledCase(
       tenantId: TENANT_ID,
       caseId: supportCase.caseId,
       dueAt: new Date(),
-      responsibleType: 'RESPONDER',
-      responsibleId: responder.userId,
-      actorId: responder.userId,
-      actorType: 'RESPONDER',
+      responsibleType: 'USER',
+      responsibleId: accepter.userId,
+      actorId: accepter.userId,
+      actorType: 'USER',
     });
     followUpId = created.followUpId;
   }
   await completeFollowUp(pool, {
     tenantId: TENANT_ID,
     followUpId,
-    actorId: responder.userId,
-    actorType: 'RESPONDER',
+    actorId: accepter.userId,
+    actorType: 'USER',
   });
 
   if (supportCase.status === 'ACTIVE') {
     await resolveCaseWithSettlement(pool, {
       tenantId: TENANT_ID,
       caseId: supportCase.caseId,
-      actorId: responder.userId,
+      actorId: accepter.userId,
       content: {
         requested: { summary: 'Peer support and food navigation (synthetic).' },
-        occurred: { summary: 'Responder coordinated support manually; one Follow-Up completed.' },
+        occurred: {
+          summary: 'The accepter coordinated support manually; one Follow-Up completed.',
+        },
         fulfilled: { summary: 'Immediate need met through manual peer coordination.' },
         unresolved: { summary: 'No open needs at settlement.' },
-        authoredBy: responder.userId,
-        responderConfirmedBy: responder.userId,
+        authoredBy: accepter.userId,
+        acceptedByUserId: accepter.userId,
       },
       idempotencyKey: `seed-resolve:${supportCase.caseId}`,
     });
@@ -508,8 +479,8 @@ async function ensureSettledCase(
       tenantId: TENANT_ID,
       caseId: supportCase.caseId,
       command: 'CLOSE',
-      actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorId: accepter.userId,
+      actorType: 'USER',
     });
     supportCase = await refetchCase(pool, supportCase.caseId);
   }
@@ -524,9 +495,8 @@ async function ensureSettledCase(
 
 /** Everything the base LOCAL seed converges on. Reused by the demo seed. */
 export interface LocalSeedResult {
-  readonly org: Organization;
   readonly admin: User;
-  readonly responder: User;
+  readonly accepter: User;
   readonly veteran: User;
   readonly veteranTwo: User;
   readonly resourceIds: readonly string[];
@@ -553,10 +523,8 @@ export async function runLocalSeed(
   pool: Pool,
   options: LocalSeedOptions = {},
 ): Promise<LocalSeedResult> {
-  const org = await getOrCreateOrg(pool);
-
   const admin = await getOrCreateUser(pool, 'admin');
-  const responder = await getOrCreateUser(pool, 'responder');
+  const accepter = await getOrCreateUser(pool, 'accepter');
   const veteran = await getOrCreateUser(pool, options.veteranLocalPart ?? 'veteran');
   const veteranTwo = await getOrCreateUser(pool, 'veteran2');
 
@@ -564,7 +532,6 @@ export async function runLocalSeed(
     await grantSuasAdmin(pool, admin.userId, admin.userId);
   }
   await ensurePublishedQv001(pool, admin.userId);
-  await ensureMembership(pool, responder.userId, org.organizationId);
   await seedManualAdapterConfigurations(pool, TENANT_ID);
 
   const resourceIds: string[] = [];
@@ -572,16 +539,15 @@ export async function runLocalSeed(
     resourceIds.push(await ensureResource(pool, spec, admin.userId));
   }
 
-  const qrf = await ensureActiveQrf(pool, veteran, responder);
-  const consentGrantId = await ensureConsent(pool, veteran, responder);
+  const qrf = await ensureActiveQrf(pool, veteran, accepter);
+  const consentGrantId = await ensureConsent(pool, veteran, accepter);
   const trustedContactId = await ensureTrustedContact(pool, veteran);
   const notificationCount = await ensureVeteranNotifications(pool, veteran, qrf.serviceRequestId);
-  const settled = await ensureSettledCase(pool, veteranTwo, responder);
+  const settled = await ensureSettledCase(pool, veteranTwo, accepter);
 
   return {
-    org,
     admin,
-    responder,
+    accepter,
     veteran,
     veteranTwo,
     resourceIds,
@@ -609,9 +575,8 @@ async function main(): Promise<void> {
   const pool = createPool(config);
   try {
     const {
-      org,
       admin,
-      responder,
+      accepter,
       veteran,
       veteranTwo,
       resourceIds,
@@ -628,10 +593,9 @@ async function main(): Promise<void> {
       tenantId: TENANT_ID,
       userId: veteran.userId,
     });
-    const responderSession = await createSession(pool, secret, {
+    const accepterSession = await createSession(pool, secret, {
       tenantId: TENANT_ID,
-      userId: responder.userId,
-      organizationId: org.organizationId,
+      userId: accepter.userId,
     });
     const adminSession = await withTransaction(pool, async (tx) => {
       const issued = await createSession(tx, secret, {
@@ -650,10 +614,9 @@ async function main(): Promise<void> {
     const summary = {
       environment: config.environment,
       tenantId: TENANT_ID,
-      organizationId: org.organizationId,
       users: {
         admin: { userId: admin.userId, email: syntheticEmail('admin') },
-        responder: { userId: responder.userId, email: syntheticEmail('responder') },
+        accepter: { userId: accepter.userId, email: syntheticEmail('accepter') },
         veteran: { userId: veteran.userId, email: syntheticEmail('veteran') },
         veteran2: { userId: veteranTwo.userId, email: syntheticEmail('veteran2') },
       },
@@ -673,7 +636,7 @@ async function main(): Promise<void> {
       resources: { count: resourceIds.length, categories: RESOURCE_SPECS.map((s) => s.category) },
       sessions: {
         veteranBearer: veteranSession.credential,
-        responderBearer: responderSession.credential,
+        accepterBearer: accepterSession.credential,
         adminBearer: adminSession.credential,
         expiresAt: veteranSession.session.expiresAt.toISOString(),
       },

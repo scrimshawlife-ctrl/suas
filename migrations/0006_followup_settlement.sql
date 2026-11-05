@@ -13,8 +13,8 @@
 -- is a table of cycles rather than one mutable row. Retention remains D-007
 -- DECISION_PENDING and nothing purges.
 --
--- Destructive-change note (ENVIRONMENT.md §9): additive only. The one change to
--- an existing table adds a nullable column.
+-- v1: the confirming person is whoever accepted the case (accepted_by_user_id);
+-- there is no Responder role.
 
 -- ---------------------------------------------------------------------------
 -- Follow-Up lifecycle (FOLLOWUP.md §2; DATA_MODEL.md §6)
@@ -31,8 +31,9 @@ CREATE TYPE suas_follow_up_status AS ENUM (
 );
 
 -- FOLLOWUP.md §3 requires responsible_type/responsible_id but does not enumerate
--- the types. These are the actors §0 names; the enumeration is returned to specs.
-CREATE TYPE suas_responsible_type AS ENUM ('RESPONDER', 'VETERAN', 'ORG_ADMIN', 'SYSTEM');
+-- the types. v1 actors: the requester (VETERAN), the person who accepted (USER), and
+-- the system. The enumeration is returned to specs.
+CREATE TYPE suas_responsible_type AS ENUM ('USER', 'VETERAN', 'SYSTEM');
 
 -- SETTLEMENT.md §4 / DATA_MODEL.md §6: a first-class, queryable classification.
 -- FOLLOWUP.md §10 forbids deriving it from note text, and SETTLEMENT.md §4
@@ -101,9 +102,10 @@ CREATE TABLE settlements (
     unresolved_summary      jsonb       NOT NULL,
     -- Explicit carried-forward responsibilities with owner and due date.
     remaining_follow_ups    jsonb       NOT NULL DEFAULT '[]'::jsonb,
-    -- SETTLEMENT.md §2: responder confirmation required, veteran optional.
-    responder_confirmed_by  uuid        NOT NULL,
-    responder_confirmed_at  timestamptz NOT NULL DEFAULT now(),
+    -- SETTLEMENT.md §2: confirmation by the person who accepted is required,
+    -- the requester's is optional.
+    accepted_by_user_id     uuid        NOT NULL,
+    accepted_by_confirmed_at timestamptz NOT NULL DEFAULT now(),
     veteran_confirmed_by    uuid,
     veteran_confirmed_at    timestamptz,
     -- Accountable human author (SETTLEMENT.md §2; §5.6 forbids autonomous
@@ -112,7 +114,7 @@ CREATE TABLE settlements (
     settled_at              timestamptz NOT NULL DEFAULT now(),
 
     FOREIGN KEY (case_id, tenant_id) REFERENCES support_cases (case_id, tenant_id),
-    FOREIGN KEY (responder_confirmed_by, tenant_id) REFERENCES users (user_id, tenant_id),
+    FOREIGN KEY (accepted_by_user_id, tenant_id) REFERENCES users (user_id, tenant_id),
     FOREIGN KEY (authored_by, tenant_id) REFERENCES users (user_id, tenant_id),
 
     -- DATA_MODEL.md §8: unique Case + resolution cycle.
@@ -165,7 +167,7 @@ BEGIN
        OR NEW.fulfilled_summary  IS DISTINCT FROM OLD.fulfilled_summary
        OR NEW.unresolved_summary IS DISTINCT FROM OLD.unresolved_summary
        OR NEW.remaining_follow_ups IS DISTINCT FROM OLD.remaining_follow_ups
-       OR NEW.responder_confirmed_by IS DISTINCT FROM OLD.responder_confirmed_by
+       OR NEW.accepted_by_user_id IS DISTINCT FROM OLD.accepted_by_user_id
        OR NEW.authored_by        IS DISTINCT FROM OLD.authored_by
        OR NEW.settled_at         IS DISTINCT FROM OLD.settled_at
     THEN

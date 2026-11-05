@@ -197,7 +197,7 @@ async function resolveInTransaction(
     aggregateType: 'SupportCase',
     aggregateId: input.caseId,
     tenantId: input.tenantId,
-    actorType: 'RESPONDER',
+    actorType: 'USER',
     actorId: input.actorId,
     payload: {
       settlement_id: settlement.settlementId,
@@ -252,7 +252,7 @@ export async function resolveCaseWithSettlement(
       requestFingerprint: fingerprintRequest({
         case_id: input.caseId,
         authored_by: input.content.authoredBy,
-        responder_confirmed_by: input.content.responderConfirmedBy,
+        accepted_by_user_id: input.content.acceptedByUserId,
         summaries: JSON.stringify([
           input.content.requested,
           input.content.occurred,

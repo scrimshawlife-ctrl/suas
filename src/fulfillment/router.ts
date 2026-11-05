@@ -390,7 +390,7 @@ async function auditDisclosure(
       aggregateType: 'ServiceRequest',
       aggregateId: input.serviceRequestId,
       tenantId: input.tenantId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
       actorId: input.actorId,
       payload: {
         capability: input.capability,

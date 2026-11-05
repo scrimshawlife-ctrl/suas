@@ -58,7 +58,7 @@ export interface EnrollmentViewModel {
    */
   readonly contactChannelRequirement: string;
   readonly authEnabled?: boolean;
-  readonly selectedRole?: 'veteran' | 'responder';
+  readonly selectedRole?: 'veteran';
   /** Present only when this environment offers the synthetic demo sign-in. */
   readonly demoSignIn?: { readonly email: string; readonly code: string };
 }
@@ -66,7 +66,7 @@ export interface EnrollmentViewModel {
 export interface EmailOtpViewModel {
   readonly shell: ShellViewModel;
   readonly destination: string;
-  readonly selectedRole: 'veteran' | 'responder';
+  readonly selectedRole: 'veteran';
   readonly error?: string;
   /** Shown instead of a "check your email" line for the synthetic demo account. */
   readonly demoCode?: string;
@@ -263,165 +263,6 @@ export interface ResourceListViewModel {
   /** Keyset cursor for §8 progressive loading. Absent when the list is complete. */
   readonly nextCursor?: string;
   readonly backHref: string;
-}
-
-/**
- * A responder metric. §9 permits `Responses`, `Rating`, `This Month`, and
- * `Avg Response` "only if exact definitions/data are specified". No released
- * spec defines them, so the value variant carries that fact instead of a zero.
- */
-export interface ResponderMetricViewModel {
-  readonly label: string;
-  readonly state: 'AVAILABLE' | 'NOT_COMPUTABLE';
-  /** Present only when `state` is `AVAILABLE`. */
-  readonly value?: string;
-  /** Why it is not computable, when it is not. */
-  readonly reason?: string;
-}
-
-export interface ActiveNeedViewModel {
-  readonly caseId: string;
-  /** Canonical Case status. §5 "canonical Case/Request state applies". */
-  readonly caseStatus: string;
-  readonly category: string;
-  /** Human-readable age, derived from a real timestamp. */
-  readonly openedLabel: string;
-  /** Queue-filter fact only (CASES.md §3). Absent when unset. */
-  readonly prioritySignalLevel?: string;
-  /** Unassigned OPEN/TRIAGED cases may be claimed (RESPONDER_WORKFLOWS.md §2). */
-  readonly claimable?: boolean;
-}
-
-/**
- * Contact attempt row for the HTML case page. Matches the public JSON shape
- * (no note / destination — PRIVACY.md / contact-log route).
- */
-export interface ContactAttemptRowViewModel {
-  readonly channel: string;
-  readonly outcome: string;
-  /** ISO timestamp or short label already formatted for display. */
-  readonly attemptedAtLabel: string;
-}
-
-/**
- * Service request row for the HTML case page. Matches the public JSON shape
- * (category + status only; details stay off the HTML surface).
- */
-export interface ServiceRequestRowViewModel {
-  readonly category: string;
-  readonly status: string;
-}
-
-/**
- * Released contact channels for the HTML log form (EVENT_MODEL.md §3.3).
- * Keep in sync with `CONTACT_CHANNELS` in coordination/contact.ts.
- */
-export const CONTACT_CHANNEL_OPTIONS = ['EMAIL', 'SMS', 'IN_APP', 'PHONE'] as const;
-
-/**
- * Released contact outcomes for the HTML log form (EVENT_MODEL.md §3.3).
- * Keep in sync with `CONTACT_OUTCOMES` in coordination/contact.ts.
- */
-export const CONTACT_OUTCOME_OPTIONS = [
-  'PENDING',
-  'REACHED',
-  'NO_ANSWER',
-  'LEFT_MESSAGE',
-  'DECLINED',
-  'UNABLE',
-] as const;
-
-/**
- * MVP service categories for the HTML create form (DISPATCH.md §7).
- * Keep in sync with `SERVICE_CATEGORIES` in coordination/request-transitions.ts.
- */
-export const SERVICE_CATEGORY_OPTIONS = [
-  'FOOD',
-  'TRANSPORTATION',
-  'SHELTER',
-  'PEER_SUPPORT',
-] as const;
-
-export interface ResponderCaseViewModel {
-  readonly shell: ShellViewModel;
-  readonly need: ActiveNeedViewModel;
-  /** Bounded contact-attempt page (newest first). Empty when none recorded. */
-  readonly contactAttempts: readonly ContactAttemptRowViewModel[];
-  /** Bounded service-request page (newest first). Empty when none recorded. */
-  readonly serviceRequests: readonly ServiceRequestRowViewModel[];
-  /**
-   * When true, render the log-contact form. Requires an active assignment for
-   * this responder (RESPONDER_WORKFLOWS.md §2). Absent/false for unclaimed cases.
-   */
-  readonly canLogContact?: boolean;
-  /**
-   * When true, render the create-service-request form. Parent case must not be
-   * CLOSED (DISPATCH.md §4). Absent/false when the case cannot accept creates.
-   */
-  readonly canCreateServiceRequest?: boolean;
-}
-
-/**
- * On-duty availability. G-I-30 / MVP_REFERENCE.md §9: on-duty is not a
- * recorded domain fact. A boolean on/off would claim a stored roster that
- * no released table has. The only honest state is UNAVAILABLE.
- */
-export type DutyAvailability = {
-  readonly status: 'UNAVAILABLE';
-  readonly reason: string;
-};
-
-/** Live and fixture copy. Does not claim that requests are or are not received. */
-export const DUTY_UNAVAILABLE_REASON =
-  'On-duty is not a recorded fact. This build does not store responder availability.';
-
-/**
- * Responder Alerts. MVP_REFERENCE.md §4.8 requires operational states to be
- * visible and truthful: no released alert source exists (D-043 is not
- * released), so the live dashboard says alerts are unavailable rather than
- * "No alerts.", which would claim there is nothing to see.
- */
-export type ResponderAlerts =
-  | { readonly status: 'UNAVAILABLE'; readonly reason: string }
-  | { readonly status: 'AVAILABLE'; readonly items: readonly string[] };
-
-/** Live and fixture copy for the unavailable alerts state. */
-export const ALERTS_UNAVAILABLE_REASON = 'Alerts are not available yet.';
-
-export interface ResponderDashboardViewModel {
-  readonly shell: ShellViewModel;
-  readonly duty: DutyAvailability;
-  /** Same-tenant unassigned Cases. RESPONDER_WORKFLOWS.md §4. */
-  readonly unassignedNeeds?: readonly ActiveNeedViewModel[];
-  /**
-   * Keyset cursor for the unassigned list (API.md §5). Absent when the page is
-   * complete. Surfaces link it as `unassigned_cursor`.
-   */
-  readonly unassignedNextCursor?: string;
-  readonly activeNeeds: readonly ActiveNeedViewModel[];
-  /**
-   * Keyset cursor for the active-needs list (API.md §5). Absent when the page
-   * is complete. Surfaces link it as `active_cursor`.
-   */
-  readonly activeNextCursor?: string;
-  readonly alerts: ResponderAlerts;
-  /** §9.3 Quick Resource Share covers the released MVP capabilities only. */
-  readonly quickShareCategories: readonly CategoryCard[];
-  readonly metrics: readonly ResponderMetricViewModel[];
-}
-
-export interface ResponderAvailabilityViewModel {
-  readonly shell: ShellViewModel;
-  readonly duty: DutyAvailability;
-  /** Coverage hours are D-009 `DECISION_PENDING`; absent rather than invented. */
-  readonly coverageWindow?: string;
-}
-
-export interface ActiveNeedsViewModel {
-  readonly shell: ShellViewModel;
-  readonly needs: readonly ActiveNeedViewModel[];
-  /** Keyset cursor for §5 progressive loading. Absent when the list is complete. */
-  readonly nextCursor?: string;
 }
 
 export interface ChatThreadViewModel {

@@ -24,7 +24,6 @@
     "dev": "node --env-file=.env --import tsx/esm --watch src/main.ts",
     "local:start": "bash scripts/start-local.sh",
     "demo:local:veteran": "node --env-file=.env --import tsx/esm scripts/local-demo-browser.ts veteran",
-    "demo:local:responder": "node --env-file=.env --import tsx/esm scripts/local-demo-browser.ts responder",
     "demo:local:admin": "node --env-file=.env --import tsx/esm scripts/local-demo-browser.ts admin",
     "worker:dev": "npx wrangler dev",
     "start": "node dist/main.js",

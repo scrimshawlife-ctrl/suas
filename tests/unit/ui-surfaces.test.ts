@@ -8,17 +8,14 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  ALERTS_UNAVAILABLE_REASON,
   assertRequiredElementsPresent,
   auditAccessibility,
   CATEGORY_CARDS,
   containsForbiddenCrisisPhrase,
   CRISIS_ENTRY_HEADING,
   CRISIS_ENTRY_NOT_EMERGENCY,
-  DUTY_UNAVAILABLE_REASON,
   MissingRequiredElementError,
   presentCheckInResult,
-  renderActiveNeeds,
   renderChat,
   renderConsentsList,
   renderTrustedContactsList,
@@ -29,9 +26,6 @@ import {
   renderNotificationPreferences,
   renderNotificationsInbox,
   renderResourceList,
-  renderResponderAvailability,
-  renderResponderCase,
-  renderResponderDashboard,
   renderVeteranHome,
   UnknownSurfaceStateError,
   VISUAL_FIXTURES,
@@ -98,10 +92,7 @@ describe('MVP_REFERENCE.md §2 — required elements cannot silently disappear',
       assertRequiredElementsPresent('LANDING', '<h1>TAKE ACTION</h1>');
       expect.unreachable('expected a missing-element failure');
     } catch (error) {
-      expect((error as MissingRequiredElementError).missing).toEqual([
-        'I NEED SUPPORT',
-        'I WANT TO SERVE',
-      ]);
+      expect((error as MissingRequiredElementError).missing).toEqual(['I NEED SUPPORT']);
     }
   });
 });
@@ -216,8 +207,8 @@ describe('MVP_REFERENCE.md §7.2 — the veteran home with a request in flight',
     activeQrf: {
       facts: {
         requestStatus: 'MATCHING',
-        responderAssigned: false,
-        responderNotificationDelivered: false,
+        assigned: false,
+        assignedNotificationDelivered: false,
         coordinationDegraded: false,
         matchingExhausted: false,
       },
@@ -409,263 +400,6 @@ describe('MVP_REFERENCE.md §8 — resource screens', () => {
   });
 });
 
-describe('MVP_REFERENCE.md §9 — no fabricated responder metrics', () => {
-  const markup = renderResponderDashboard({
-    shell,
-    duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-    activeNeeds: [],
-    alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
-    quickShareCategories: [],
-    metrics: [
-      { label: 'Responses', state: 'NOT_COMPUTABLE', reason: 'No released definition' },
-      { label: 'Avg Response', state: 'NOT_COMPUTABLE', reason: 'No released definition' },
-    ],
-  });
-
-  it('states why a metric is unavailable instead of showing a zero', () => {
-    expect(markup).toContain('No released definition');
-    expect(markup).not.toMatch(/<dd[^>]*>\s*0\s*<\/dd>/);
-  });
-
-  it('keeps the §9 emphasis blocks present', () => {
-    for (const block of ['On Duty', 'Active Needs', 'Alerts', 'Quick Resource Share']) {
-      expect(markup, block).toContain(block);
-    }
-  });
-});
-
-describe('API.md §5 — responder HTML queue cursors', () => {
-  it('links Show more when unassigned or active pages continue', () => {
-    const markup = renderResponderDashboard({
-      shell,
-      duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-      unassignedNeeds: [
-        {
-          caseId: 'case-u1',
-          caseStatus: 'OPEN',
-          category: 'Support Case',
-          openedLabel: 'Opened',
-          claimable: true,
-        },
-      ],
-      unassignedNextCursor: 'cursor-unassigned-2',
-      activeNeeds: [
-        {
-          caseId: 'case-a1',
-          caseStatus: 'ASSIGNED',
-          category: 'Support Case',
-          openedLabel: 'Opened',
-        },
-      ],
-      activeNextCursor: 'cursor-active-2',
-      alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
-      quickShareCategories: [],
-      metrics: [],
-    });
-    expect(markup).toContain('href="?unassigned_cursor=cursor-unassigned-2"');
-    expect(markup).toContain('Show more unassigned');
-    expect(markup).toContain('href="?active_cursor=cursor-active-2"');
-    expect(markup).toContain('Show more active needs');
-  });
-
-  it('omits Show more when the page is complete', () => {
-    const markup = renderResponderDashboard({
-      shell,
-      duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-      unassignedNeeds: [],
-      activeNeeds: [],
-      alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
-      quickShareCategories: [],
-      metrics: [],
-    });
-    expect(markup).not.toContain('Show more unassigned');
-    expect(markup).not.toContain('Show more active needs');
-    expect(markup).not.toContain('unassigned_cursor=');
-    expect(markup).not.toContain('active_cursor=');
-  });
-
-  it('links Show more on the dedicated Active Needs surface', () => {
-    const markup = renderActiveNeeds({
-      shell,
-      needs: [
-        {
-          caseId: 'case-a1',
-          caseStatus: 'ACTIVE',
-          category: 'Support Case',
-          openedLabel: 'Opened',
-        },
-      ],
-      nextCursor: 'cursor-needs-2',
-    });
-    expect(markup).toContain('href="?cursor=cursor-needs-2"');
-    expect(markup).toContain('Show more active needs');
-  });
-});
-
-describe('MVP_REFERENCE.md §9 / G-I-30 — on-duty is not a recorded fact', () => {
-  const dashboard = renderResponderDashboard({
-    shell,
-    duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-    activeNeeds: [],
-    alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
-    quickShareCategories: [],
-    metrics: [],
-  });
-  const availability = renderResponderAvailability({
-    shell: { title: 'On Duty', viewport: 'MOBILE', showMobileNav: true },
-    duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-  });
-
-  it('says alerts are unavailable instead of claiming there are none', () => {
-    expect(dashboard).toContain(ALERTS_UNAVAILABLE_REASON);
-    expect(dashboard).not.toContain('No alerts.');
-  });
-
-  it('renders "No alerts." only for an available, empty alert list', () => {
-    const empty = renderResponderDashboard({
-      shell,
-      duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-      activeNeeds: [],
-      alerts: { status: 'AVAILABLE', items: [] },
-      quickShareCategories: [],
-      metrics: [],
-    });
-    expect(empty).toContain('No alerts.');
-    expect(empty).not.toContain(ALERTS_UNAVAILABLE_REASON);
-  });
-
-  it('keeps the On Duty landmark on both responder surfaces', () => {
-    expect(dashboard).toContain('On Duty');
-    expect(availability).toContain('On Duty');
-  });
-
-  it('states unavailability rather than posting a duty change', () => {
-    for (const markup of [dashboard, availability]) {
-      expect(markup).toContain(DUTY_UNAVAILABLE_REASON);
-      expect(markup).toContain('Unavailable');
-      expect(markup).not.toContain('action="/app/responder/availability"');
-      expect(markup).not.toContain('Go on duty');
-      expect(markup).not.toContain('Go off duty');
-    }
-  });
-
-  it('does not claim that the responder is or is not receiving requests', () => {
-    for (const markup of [dashboard, availability]) {
-      expect(markup).not.toContain('You are receiving requests.');
-      expect(markup).not.toContain('You are not receiving requests.');
-    }
-  });
-});
-
-describe('Responder case HTML lists contact and service requests', () => {
-  it('posts Create service request only when canCreateServiceRequest', () => {
-    const withForm = renderResponderCase({
-      shell,
-      need: {
-        caseId: 'case-open',
-        caseStatus: 'ASSIGNED',
-        category: 'Support Case',
-        openedLabel: 'Opened',
-      },
-      contactAttempts: [],
-      serviceRequests: [],
-      canCreateServiceRequest: true,
-    });
-    expect(withForm).toContain('action="/app/responder/cases/case-open/service-requests"');
-    expect(withForm).toContain('Create service request');
-    expect(withForm).toContain('name="category"');
-    expect(auditAccessibility(withForm)).toEqual([]);
-
-    const without = renderResponderCase({
-      shell,
-      need: {
-        caseId: 'case-closed',
-        caseStatus: 'CLOSED',
-        category: 'Support Case',
-        openedLabel: 'Opened',
-      },
-      contactAttempts: [],
-      serviceRequests: [],
-    });
-    expect(without).not.toContain('action="/app/responder/cases/case-closed/service-requests"');
-    expect(without).not.toContain('Create service request');
-  });
-
-  it('posts Log contact attempt only when canLogContact', () => {
-    const withForm = renderResponderCase({
-      shell,
-      need: {
-        caseId: 'case-claimed',
-        caseStatus: 'ASSIGNED',
-        category: 'Support Case',
-        openedLabel: 'Opened',
-      },
-      contactAttempts: [],
-      serviceRequests: [],
-      canLogContact: true,
-    });
-    expect(withForm).toContain(
-      'action="/app/responder/cases/case-claimed/commands/log-contact-attempt"',
-    );
-    expect(withForm).toContain('Log contact attempt');
-    expect(withForm).toContain('name="channel"');
-    expect(withForm).toContain('name="outcome"');
-    expect(auditAccessibility(withForm)).toEqual([]);
-
-    const without = renderResponderCase({
-      shell,
-      need: {
-        caseId: 'case-open',
-        caseStatus: 'OPEN',
-        category: 'Support Case',
-        openedLabel: 'Opened',
-        claimable: true,
-      },
-      contactAttempts: [],
-      serviceRequests: [],
-    });
-    expect(without).not.toContain('log-contact-attempt');
-  });
-
-  it('renders contact attempts and service requests on the case page', () => {
-    const markup = renderResponderCase({
-      shell,
-      need: {
-        caseId: 'case-0001',
-        caseStatus: 'ASSIGNED',
-        category: 'Support Case',
-        openedLabel: 'Opened',
-      },
-      contactAttempts: [
-        { channel: 'PHONE', outcome: 'REACHED', attemptedAtLabel: '2026-08-26T12:00:00.000Z' },
-      ],
-      serviceRequests: [{ category: 'FOOD', status: 'REQUESTED' }],
-    });
-    expect(markup).toContain('Contact attempts');
-    expect(markup).toContain('PHONE · REACHED');
-    expect(markup).toContain('Service requests');
-    expect(markup).toContain('FOOD · REQUESTED');
-    expect(auditAccessibility(markup)).toEqual([]);
-  });
-
-  it('states empty lists without inventing rows', () => {
-    const markup = renderResponderCase({
-      shell,
-      need: {
-        caseId: 'case-0002',
-        caseStatus: 'OPEN',
-        category: 'Support Case',
-        openedLabel: 'Opened',
-        claimable: true,
-      },
-      contactAttempts: [],
-      serviceRequests: [],
-    });
-    expect(markup).toContain('No contact attempts recorded for this case.');
-    expect(markup).toContain('No service requests on this case.');
-  });
-});
-
 describe('Chat is honest about being unimplemented', () => {
   it('states unavailability rather than rendering an empty inbox', () => {
     const markup = renderChat({
@@ -693,7 +427,7 @@ describe('Veteran-authored text is data, not markup', () => {
         threads: [
           {
             threadId: 't1',
-            counterpartLabel: 'Responder',
+            counterpartLabel: 'Peer',
             lastMessagePreview: '<script>alert(1)</script>',
           },
         ],
@@ -715,8 +449,8 @@ describe('HTML command targets stay on registered /app routes', () => {
       activeQrf: {
         facts: {
           requestStatus: 'CREATED',
-          responderAssigned: false,
-          responderNotificationDelivered: false,
+          assigned: false,
+          assignedNotificationDelivered: false,
           coordinationDegraded: false,
           matchingExhausted: false,
         },
@@ -739,7 +473,6 @@ describe('HTML command targets stay on registered /app routes', () => {
     expect(markup).toContain('Veteran');
     expect(markup).not.toContain('demo@example.invalid');
     expect(markup).not.toContain('href="/app/join?role=veteran"');
-    expect(markup).not.toContain('href="/app/join?role=responder"');
   });
 
   it('shows the synthetic demo sign-in when the environment offers it', () => {
@@ -754,19 +487,6 @@ describe('HTML command targets stay on registered /app routes', () => {
     expect(markup).toContain('123456');
     expect(markup).toContain('value="demo@example.invalid"');
     expect(markup).toContain('No email is sent for this account.');
-  });
-
-  it('does not post On Duty to /app/responder/availability', () => {
-    const dashboard = renderResponderDashboard({
-      shell,
-      duty: { status: 'UNAVAILABLE', reason: DUTY_UNAVAILABLE_REASON },
-      activeNeeds: [],
-      alerts: { status: 'UNAVAILABLE', reason: ALERTS_UNAVAILABLE_REASON },
-      quickShareCategories: [],
-      metrics: [],
-    });
-    expect(dashboard).not.toContain('action="/app/responder/availability"');
-    expect(dashboard).not.toContain('Go on duty');
   });
 });
 

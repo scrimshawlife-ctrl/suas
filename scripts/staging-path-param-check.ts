@@ -8,7 +8,7 @@
  *
  * STAGING only. It reuses the `suas-synthetic-staging` host and credentials that
  * the existing acceptance workflows already use (`SUAS_E2E_BASE_URL`,
- * `SUAS_E2E_VETERAN_BEARER`, optional `SUAS_E2E_RESPONDER_BEARER`). It never
+ * `SUAS_E2E_VETERAN_BEARER`). It never
  * targets production, never records response bodies or credentials, and never
  * calls `/api/v0/dev/*` (LOCAL only; it 404s on staging).
  *
@@ -33,7 +33,6 @@ const PATH_PARAM_BUG =
 export interface PathParamCheckConfig {
   readonly baseUrl: string;
   readonly veteranBearer: string;
-  readonly responderBearer: string | undefined;
   readonly timeoutMs: number;
   readonly outputPath: string;
 }
@@ -56,7 +55,7 @@ export interface PathParamCheckSummary {
   readonly started_at: string;
   readonly finished_at: string;
   readonly case_id: string;
-  readonly case_id_source: 'veteran_open_case' | 'responder_case_list' | 'random_uuid';
+  readonly case_id_source: 'veteran_open_case' | 'random_uuid';
   readonly checks: readonly PathParamCheckResult[];
   readonly skipped: readonly { readonly id: string; readonly reason: string }[];
   readonly credentials_recorded: false;
@@ -99,7 +98,6 @@ export function configFromEnv(env: NodeJS.ProcessEnv): PathParamCheckConfig {
   return {
     baseUrl: resolveSyntheticStagingOrigin(env.SUAS_E2E_BASE_URL, 'SUAS_E2E_BASE_URL'),
     veteranBearer: requiredBearer(env, 'SUAS_E2E_VETERAN_BEARER'),
-    responderBearer: env.SUAS_E2E_RESPONDER_BEARER?.trim() || undefined,
     timeoutMs: timeoutFromEnv(env),
     outputPath: env.SUAS_PATH_PARAM_OUTPUT_PATH?.trim() || DEFAULT_OUTPUT_PATH,
   };
@@ -131,20 +129,6 @@ export function openCaseId(body: string): string | undefined {
 }
 
 /** First case id in an existing case-list payload, used only when no open case exists. */
-export function firstCaseId(body: string): string | undefined {
-  try {
-    const parsed = JSON.parse(body) as { cases?: unknown };
-    if (!Array.isArray(parsed.cases)) return undefined;
-    for (const entry of parsed.cases as unknown[]) {
-      if (typeof entry !== 'object' || entry === null) continue;
-      const found = firstUuid((entry as { case_id?: unknown }).case_id);
-      if (found !== undefined) return found;
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 /** First service request id in a case service-request list payload. */
 export function firstServiceRequestId(body: string): string | undefined {
@@ -235,25 +219,11 @@ export async function runPathParamChecks(
     );
   }
 
-  // Case id: the veteran's own open case, else a responder-visible case (read with
-  // the responder bearer, since a veteran cannot see another veteran's case), else a
-  // random UUID for which 404 NOT_FOUND is the healthy answer.
+  // Case id: the veteran's own open case, else a random UUID for which 404 NOT_FOUND
+  // is the healthy answer (nobody else can read another person's case).
   let caseId = openCaseId(veteran.body);
   let caseIdSource: PathParamCheckSummary['case_id_source'] = 'veteran_open_case';
   let caseBearer = config.veteranBearer;
-  if (caseId === undefined && config.responderBearer !== undefined) {
-    const cases = await get(
-      config,
-      '/api/v0/cases?ownership=unassigned&limit=20',
-      config.responderBearer,
-      fetchImpl,
-    );
-    caseId = cases.status === 200 ? firstCaseId(cases.body) : undefined;
-    if (caseId !== undefined) {
-      caseIdSource = 'responder_case_list';
-      caseBearer = config.responderBearer;
-    }
-  }
   if (caseId === undefined) {
     caseId = randomUUID();
     caseIdSource = 'random_uuid';

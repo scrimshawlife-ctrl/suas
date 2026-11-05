@@ -27,7 +27,7 @@ export interface Settlement {
   readonly fulfilledSummary: JsonObject;
   readonly unresolvedSummary: JsonObject;
   readonly remainingFollowUps: JsonObject[];
-  readonly responderConfirmedBy: string;
+  readonly acceptedByUserId: string;
   readonly veteranConfirmedBy: string | undefined;
   readonly authoredBy: string;
   readonly settledAt: Date;
@@ -43,7 +43,7 @@ interface SettlementRow {
   fulfilled_summary: JsonObject;
   unresolved_summary: JsonObject;
   remaining_follow_ups: JsonObject[];
-  responder_confirmed_by: string;
+  accepted_by_user_id: string;
   veteran_confirmed_by: string | null;
   authored_by: string;
   settled_at: Date;
@@ -52,7 +52,7 @@ interface SettlementRow {
 const SETTLEMENT_COLUMNS = `
   settlement_id, tenant_id, case_id, resolution_cycle, requested_summary,
   occurred_summary, fulfilled_summary, unresolved_summary, remaining_follow_ups,
-  responder_confirmed_by, veteran_confirmed_by, authored_by, settled_at
+  accepted_by_user_id, veteran_confirmed_by, authored_by, settled_at
 `;
 
 function toSettlement(row: SettlementRow): Settlement {
@@ -66,7 +66,7 @@ function toSettlement(row: SettlementRow): Settlement {
     fulfilledSummary: row.fulfilled_summary,
     unresolvedSummary: row.unresolved_summary,
     remainingFollowUps: row.remaining_follow_ups,
-    responderConfirmedBy: row.responder_confirmed_by,
+    acceptedByUserId: row.accepted_by_user_id,
     veteranConfirmedBy: row.veteran_confirmed_by ?? undefined,
     authoredBy: row.authored_by,
     settledAt: row.settled_at,
@@ -98,7 +98,7 @@ export interface SettlementContent {
   readonly unresolved: JsonObject;
   /** Accountable human author. §5.6 forbids autonomous generative authorship. */
   readonly authoredBy: string;
-  readonly responderConfirmedBy: string;
+  readonly acceptedByUserId: string;
   readonly veteranConfirmedBy?: string;
 }
 
@@ -115,8 +115,8 @@ export function assertSettlementContent(content: SettlementContent): void {
   if (content.authoredBy === undefined || content.authoredBy.trim() === '') {
     missing.push('an accountable author');
   }
-  if (content.responderConfirmedBy === undefined || content.responderConfirmedBy.trim() === '') {
-    missing.push('responder confirmation');
+  if (content.acceptedByUserId === undefined || content.acceptedByUserId.trim() === '') {
+    missing.push('confirmation by the person who accepted');
   }
   if (missing.length > 0) throw new SettlementContentError(missing);
 }
@@ -155,7 +155,7 @@ export async function createSettlement(
     `INSERT INTO settlements
        (settlement_id, tenant_id, case_id, resolution_cycle, requested_summary,
         occurred_summary, fulfilled_summary, unresolved_summary, remaining_follow_ups,
-        responder_confirmed_by, veteran_confirmed_by, veteran_confirmed_at, authored_by)
+        accepted_by_user_id, veteran_confirmed_by, veteran_confirmed_at, authored_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING ${SETTLEMENT_COLUMNS}`,
     [
@@ -168,7 +168,7 @@ export async function createSettlement(
       JSON.stringify(input.content.fulfilled),
       JSON.stringify(input.content.unresolved),
       JSON.stringify(input.remainingFollowUps),
-      input.content.responderConfirmedBy,
+      input.content.acceptedByUserId,
       input.content.veteranConfirmedBy ?? null,
       input.content.veteranConfirmedBy === undefined ? null : new Date(),
       input.content.authoredBy,
@@ -236,7 +236,7 @@ export async function findSettlement(
  * SETTLEMENT.md §6: a Settlement is not a clinical chart, and internal records
  * are not exposed merely because the Settlement references them. This projection
  * therefore drops the occurred summary — which references Contact Attempts and
- * internal responder actions — and every internal actor identity.
+ * internal accepter actions — and every internal actor identity.
  */
 export function veteranVisibleSettlement(settlement: Settlement): JsonObject {
   return {
