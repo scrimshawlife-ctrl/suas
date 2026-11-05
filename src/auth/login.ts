@@ -1,10 +1,15 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../db/index.js';
 import { appendAuditEvent } from '../events/index.js';
-import { revokeLiveChallenges, verifyChallenge } from './challenge.js';
+import {
+  ChallengeVerificationFailedError,
+  revokeLiveChallenges,
+  verifyChallenge,
+} from './challenge.js';
 import type { ChallengeDeliveryPort } from './delivery.js';
 import type { FixedOtpCodeFor } from './demo-fixed-code.js';
 import { createSession, type IssuedSession } from './session.js';
+import { stagingFixturePrincipalRefused, type StagingAccess } from './staging-access.js';
 
 export interface VerifyAndCreateSessionInput {
   readonly tenantId: string;
@@ -20,6 +25,7 @@ export async function verifyAndCreateSession(
     readonly sessionSecret: string | undefined;
     readonly delivery: ChallengeDeliveryPort;
     readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
+    readonly stagingAccess?: StagingAccess | undefined;
   },
   input: VerifyAndCreateSessionInput,
 ): Promise<IssuedSession> {
@@ -29,6 +35,13 @@ export async function verifyAndCreateSession(
     secret: input.code,
     ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
   });
+
+  if (
+    deps.stagingAccess !== undefined &&
+    stagingFixturePrincipalRefused(deps.stagingAccess, user.email)
+  ) {
+    throw new ChallengeVerificationFailedError();
+  }
 
   return withTransaction(deps.pool, async (tx) => {
     await revokeLiveChallenges(tx, user.tenantId, input.destination);
