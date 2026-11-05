@@ -23,11 +23,13 @@ import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
 import { UnavailableModelInference, type ModelInferencePort } from '../inference/index.js';
 import type { IdVerificationPort } from '../identity/index.js';
+import type { ConnectionPushPort } from '../realtime/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { authenticate } from './authenticate.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
 import { registerCaseRoutes } from './routes/cases.js';
+import { registerChatRoutes } from './routes/chat.js';
 import { registerCheckInRoutes } from './routes/check-ins.js';
 import { registerConsentRoutes } from './routes/consents.js';
 import { registerContactLogRoutes } from './routes/contact-log.js';
@@ -58,6 +60,8 @@ export interface ServerDependencies {
   readonly modelInference?: ModelInferencePort;
   /** ID scan + selfie port; absent when `SUAS_ID_VERIFICATION_MODE=disabled`. */
   readonly idVerification?: IdVerificationPort;
+  /** Pushes new chat messages to live connections; absent when disabled. */
+  readonly chatPush?: ConnectionPushPort;
   /**
    * Fastify logger. `false` disables pino (Worker isolates cannot use
    * worker_threads). Default keeps the Node structured logger.
@@ -348,6 +352,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerServiceRequestRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerChatRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      push: deps.chatPush,
     });
 
     registerTrustedContactRoutes(app, {
