@@ -19,7 +19,12 @@ const formatDateTime = new Intl.DateTimeFormat('en-US', {
 export function SourceLink({ link }: { link: string }) {
   if (!isHttpUrl(link)) return <span className="break-all">{link}</span>;
   return (
-    <a href={link} target="_blank" rel="noopener noreferrer" className="break-all">
+    <a
+      href={link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="-my-2.5 inline-block py-2.5 break-all"
+    >
       {link}
       <span className="sr-only"> (opens in a new tab)</span>
     </a>

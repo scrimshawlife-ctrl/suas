@@ -18,7 +18,7 @@ import {
 } from './layouts';
 import { paths } from './paths';
 import RouteErrorPage from './RouteErrorPage';
-import { RouteFocus } from './RouteFocus';
+import { FocusRescue, RouteFocus } from './RouteFocus';
 import { LoadingScreen } from './status-screens';
 
 /**
@@ -56,6 +56,7 @@ function RootRoute() {
   return (
     <>
       <RouteFocus />
+      <FocusRescue />
       <Outlet />
     </>
   );

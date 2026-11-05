@@ -1,7 +1,9 @@
 import { act, render, screen } from '@testing-library/react';
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router';
 import { describe, expect, it } from 'vitest';
-import { RouteFocus } from './RouteFocus';
+import { useState } from 'react';
+import userEvent from '@testing-library/user-event';
+import { FocusRescue, RouteFocus } from './RouteFocus';
 
 function Shell() {
   return (
@@ -64,5 +66,28 @@ describe('RouteFocus', () => {
       await Promise.resolve();
     });
     expect(screen.getByRole('heading', { level: 1, name: 'Loaded' })).toHaveFocus();
+  });
+});
+
+function Replaceable() {
+  const [done, setDone] = useState(false);
+  return (
+    <>
+      <FocusRescue />
+      <button>Before</button>
+      <section aria-label="Card">
+        {done ? <p>Done</p> : <button onClick={() => setDone(true)}>Start</button>}
+      </section>
+    </>
+  );
+}
+
+describe('FocusRescue', () => {
+  it('keeps focus in the card when the focused button is replaced', async () => {
+    const user = userEvent.setup();
+    render(<Replaceable />);
+    await user.click(screen.getByRole('button', { name: 'Start' }));
+    expect(await screen.findByText('Done')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Card' })).toHaveFocus();
   });
 });

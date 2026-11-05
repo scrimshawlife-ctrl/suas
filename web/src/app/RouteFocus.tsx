@@ -66,3 +66,64 @@ export function RouteFocus() {
 
   return null;
 }
+
+/**
+ * When the focused control leaves the page (a button that is replaced by the next state, a
+ * card that is removed), the browser drops focus to the top of the document. Put it on the
+ * nearest surviving container (or the main region) instead, so keyboard and screen-reader users stay where they were.
+ * Not for a deliberate blur: only a control that was removed triggers this.
+ */
+export function FocusRescue() {
+  useEffect(() => {
+    let chain: HTMLElement[] = [];
+
+    const onFocusIn = (event: FocusEvent) => {
+      chain = [];
+      for (
+        let node = event.target instanceof HTMLElement ? event.target : null;
+        node !== null && node !== document.body;
+        node = node.parentElement
+      ) {
+        chain.push(node);
+      }
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      const left = event.target;
+      // Focus went nowhere. If the control is still on the page a moment later the person
+      // blurred it on purpose, so forget it; a control that was removed is the case to rescue.
+      if (event.relatedTarget !== null || left !== chain[0]) return;
+      queueMicrotask(() => {
+        if (left instanceof HTMLElement && left.isConnected && left === chain[0]) chain = [];
+      });
+    };
+    const rescue = () => {
+      const [removed] = chain;
+      if (
+        removed === undefined ||
+        removed.isConnected ||
+        document.activeElement !== document.body
+      ) {
+        return;
+      }
+      // Nothing around it survived (a dialog and its opener both went): use the main region.
+      const survivor = chain.find((node) => node.isConnected) ?? document.getElementById('main');
+      chain = [];
+      if (survivor === null) return;
+      if (!survivor.hasAttribute('tabindex')) survivor.setAttribute('tabindex', '-1');
+      survivor.setAttribute('data-focus-rescue', '');
+      survivor.focus({ preventScroll: true });
+    };
+
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    const observer = new MutationObserver(rescue);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+      observer.disconnect();
+    };
+  }, []);
+
+  return null;
+}
