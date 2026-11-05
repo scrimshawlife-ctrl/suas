@@ -22,7 +22,7 @@ export default function ChatPage() {
     <Page>
       <title>Chat · SUAS</title>
       <h1 className="heading text-40 max-sm:text-32">Chat</h1>
-      <div className="grid h-[680px] max-h-[calc(100dvh-13rem)] min-h-[480px] grid-cols-[340px_minmax(0,1fr)] overflow-hidden rounded-12 border border-line bg-white max-[860px]:h-[calc(100dvh-16rem)] max-[860px]:grid-cols-1">
+      <div className="grid h-[clamp(480px,calc(100dvh-20rem),720px)] grid-cols-[340px_minmax(0,1fr)] overflow-hidden rounded-12 border border-line bg-white max-[860px]:h-[clamp(360px,calc(100dvh-26rem),720px)] max-[860px]:grid-cols-1">
         <ThreadList
           threads={threads.data?.threads}
           selectedId={serviceRequestId}
