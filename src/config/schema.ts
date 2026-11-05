@@ -118,6 +118,18 @@ const optionalRaw = z.preprocess((value) => {
   return trimmed === '' ? undefined : trimmed;
 }, z.string().optional());
 
+function splitCsv(value: string | undefined): readonly string[] {
+  if (value === undefined) return [];
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== ''),
+    ),
+  ];
+}
+
 function requiredEnum<const T extends readonly string[]>(
   varName: string,
   allowed: T,
@@ -200,6 +212,10 @@ const rawConfigSchema = z.object({
     MIGRATIONS_MODES,
     'ENVIRONMENT.md §3 "Data / persistence"; production automatic-migration policy must be explicit in deployment runbooks.',
   ),
+  // D-053. Both stay unset except for an explicit reset of a named synthetic
+  // disposable database. They are not a startup migrations mode.
+  SUAS_MIGRATION_RESET_ALLOWLIST: optionalRaw,
+  SUAS_MIGRATION_RESET_SYNTHETIC_MARKER: optionalRaw,
 
   // --- Auth / sessions. ENVIRONMENT.md §3, §6. ---
   SUAS_SESSION_SECRET: optionalRaw,
@@ -342,6 +358,10 @@ export interface SuasConfig {
     readonly url: string | undefined;
     readonly poolMax: number;
     readonly migrationsMode: MigrationsMode;
+    /** Names or URLs that may be wiped by `migrate reset`. Empty refuses every reset. */
+    readonly resetAllowlist: readonly string[];
+    /** Substring required in the database name before a reset. Unset refuses every reset. */
+    readonly resetSyntheticMarker: string | undefined;
     readonly ssl: {
       readonly mode: DatabaseSslMode;
       readonly caFile: string | undefined;
@@ -932,6 +952,8 @@ export function shapeConfig(
         ctx,
       ),
       migrationsMode: raw.SUAS_MIGRATIONS_MODE,
+      resetAllowlist: splitCsv(raw.SUAS_MIGRATION_RESET_ALLOWLIST),
+      resetSyntheticMarker: raw.SUAS_MIGRATION_RESET_SYNTHETIC_MARKER,
       ssl: {
         mode: (raw.DATABASE_SSL_MODE ?? 'disable') as DatabaseSslMode,
         caFile: raw.DATABASE_SSL_CA_FILE,
