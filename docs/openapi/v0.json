@@ -2384,6 +2384,308 @@
           }
         }
       }
+    },
+    "/api/v0/admin/resource-drafts": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "List Resource Drafts",
+        "operationId": "getAdminResourceDrafts",
+        "description": "SUAS administrator (MFA-elevated session) only. Newest first, bounded by limit and cursor. `builder.available` is false, with a plain message, when the catalog builder cannot run; Resources can still be created without it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["DRAFT", "PUBLISHED", "REJECTED"]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Drafts and catalog builder state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDraftList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/admin/resource-drafts/{id}": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "Read one Resource Draft",
+        "operationId": "getAdminResourceDraft",
+        "description": "SUAS administrator (MFA-elevated session) only.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDraft"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/admin/resource-drafts/commands/extract": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Extract Resource Drafts from pasted source text",
+        "operationId": "extractAdminResourceDrafts",
+        "description": "SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceDraftExtractRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created drafts (possibly none)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDraftExtraction"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/admin/resource-drafts/{id}/commands/edit": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Edit a pending Resource Draft",
+        "operationId": "editAdminResourceDraft",
+        "description": "SUAS administrator (MFA-elevated session) only. Changes any subset of the draft fields; null clears an optional field. A draft that is already published or discarded returns 409 ILLEGAL_TRANSITION.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceDraftEditRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Edited draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDraft"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/admin/resource-drafts/{id}/commands/discard": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Discard a pending Resource Draft",
+        "operationId": "discardAdminResourceDraft",
+        "description": "SUAS administrator (MFA-elevated session) only. Marks the draft REJECTED and keeps it on record; no Resource is created. Audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Discarded draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDraft"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/admin/resource-drafts/{id}/commands/publish": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Publish a pending Resource Draft",
+        "operationId": "publishAdminResourceDraft",
+        "description": "SUAS administrator (MFA-elevated session) only. Creates the Resource, records the verification against the draft's source link, and activates it, in one transaction. The publish is the verification act; the model never sets last_verified_at. Audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published draft and the new Resource id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDraftPublished"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2475,6 +2777,252 @@
           },
           "stale_warning": {
             "type": "boolean"
+          }
+        }
+      },
+      "ResourceDraft": {
+        "type": "object",
+        "description": "A Resource Draft. It has no verification fields and is never shown to Veterans.",
+        "required": [
+          "resource_draft_id",
+          "status",
+          "source_link",
+          "service_name",
+          "category",
+          "counties",
+          "eligibility",
+          "hours",
+          "contact_method",
+          "contact_method_kind",
+          "referral_method",
+          "cost",
+          "published_resource_id",
+          "reviewed_by",
+          "reviewed_at",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "resource_draft_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "PUBLISHED", "REJECTED"]
+          },
+          "source_link": {
+            "type": "string"
+          },
+          "service_name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "category": {
+            "type": "string",
+            "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT"]
+          },
+          "counties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "SANTA_CLARA",
+                "SAN_MATEO",
+                "ALAMEDA",
+                "SANTA_CRUZ",
+                "SAN_BENITO",
+                "MERCED",
+                "STANISLAUS"
+              ]
+            }
+          },
+          "eligibility": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "hours": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300
+          },
+          "contact_method": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300
+          },
+          "contact_method_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["PHONE", "EMAIL", "URL", "FREEFORM", null]
+          },
+          "referral_method": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "cost": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300
+          },
+          "published_resource_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "reviewed_by": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "reviewed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ResourceDraftList": {
+        "type": "object",
+        "required": ["builder", "drafts", "limit", "next_cursor"],
+        "properties": {
+          "builder": {
+            "type": "object",
+            "required": ["available", "message"],
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "drafts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDraft"
+            }
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ResourceDraftExtraction": {
+        "type": "object",
+        "required": ["drafts"],
+        "properties": {
+          "drafts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDraft"
+            }
+          }
+        }
+      },
+      "ResourceDraftExtractRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_text", "source_link"],
+        "properties": {
+          "source_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30000
+          },
+          "source_link": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "http or https URL of the pasted source; kept on every draft and used as the verification source on publish."
+          }
+        }
+      },
+      "ResourceDraftEditRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "category": {
+            "type": "string",
+            "enum": ["FOOD", "TRANSPORTATION", "SHELTER", "PEER_SUPPORT"]
+          },
+          "counties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "SANTA_CLARA",
+                "SAN_MATEO",
+                "ALAMEDA",
+                "SANTA_CRUZ",
+                "SAN_BENITO",
+                "MERCED",
+                "STANISLAUS"
+              ]
+            }
+          },
+          "eligibility": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "hours": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300
+          },
+          "contact_method": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300
+          },
+          "contact_method_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["PHONE", "EMAIL", "URL", "FREEFORM", null]
+          },
+          "referral_method": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "cost": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300
+          }
+        }
+      },
+      "ResourceDraftPublished": {
+        "type": "object",
+        "required": ["draft", "resource_id"],
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/ResourceDraft"
+          },
+          "resource_id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       }

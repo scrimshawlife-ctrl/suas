@@ -15,6 +15,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Added
 
+- **Catalog builder** (local v1 plan, `V1_PROJECT_PLAN.md` sections 2.1 and 4.3 F8; not a released spec). A SUAS administrator pastes source text plus its source link; the model inference port extracts zero or more Resource Drafts through one validated tool call. Invalid model output creates no draft. Drafts keep the source link and are reviewed, edited, discarded or published through `/api/v0/admin/resource-drafts`. Only publish creates a Resource, through `createResource`, `verifyResource` and `setResourceActive`; the model never sets `last_verified_at`, and drafts never reach Veteran Resource lists. When the model is not configured the routes say so plainly. Pasted text only: no URL fetching and no PDF input (undecided, plan section 8 item 6).
 - **AWS capability ports and adapters** (local v1 plan, `V1_PROJECT_PLAN.md` sections 2.2 and 4.1; not a released spec). `SUAS_EMAIL_MODE=ses` sends through Amazon SES next to Resend. New SUAS-owned ports: model inference (Bedrock Converse adapter, unavailable until `SUAS_BEDROCK_MODEL_ID` is set), object storage (S3 adapter), and ID scan + selfie verification (fake adapter only; no provider chosen). Each has a fake for LOCAL/TEST. Real AWS modes are refused in LOCAL/TEST and need `SUAS_AWS_REGION`; fake inference, storage and ID verification are refused in PRODUCTION. New variables are optional and default to `disabled`.
 
 ### Fixed

@@ -32,6 +32,8 @@ import { registerContactLogRoutes } from './routes/contact-log.js';
 import { registerFollowUpRoutes } from './routes/follow-ups.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerResourceRoutes } from './routes/resources.js';
+import { registerAdminResourceDraftRoutes } from './routes/admin-resource-drafts.js';
+import { UnavailableModelInference, type ModelInferencePort } from '../inference/index.js';
 import { registerServiceRequestRoutes } from './routes/service-requests.js';
 import { registerTrustedContactRoutes } from './routes/trusted-contacts.js';
 import { registerUiRoutes } from './routes/ui.js';
@@ -51,6 +53,8 @@ export interface ServerDependencies {
   readonly challengeDelivery?: ChallengeDeliveryPort;
   readonly mfa?: MfaPort;
   readonly jobQueue?: DurableJobQueuePort;
+  /** Model inference port; absent means the capability is unavailable. */
+  readonly modelInference?: ModelInferencePort;
   /**
    * Fastify logger. `false` disables pino (Worker isolates cannot use
    * worker_threads). Default keeps the Node structured logger.
@@ -302,6 +306,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       pool,
       config: deps.config,
       sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerAdminResourceDraftRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      modelInference: deps.modelInference ?? new UnavailableModelInference(),
     });
 
     registerCheckInRoutes(app, {
