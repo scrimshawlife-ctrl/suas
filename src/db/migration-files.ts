@@ -7,8 +7,9 @@
  */
 
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export interface MigrationFile {
@@ -20,7 +21,11 @@ export interface MigrationFile {
 }
 
 /**
- * Repository-root `migrations/` directory, resolved relative to this module.
+ * The `migrations/` directory, found from where this code runs: the repository
+ * root for `src/db` and `dist/db`, beside a bundle in `dist/` or at the deploy
+ * root, or under the working directory (Lambda runs from the deploy directory).
+ * The first candidate that exists wins; if none does, the first is returned and
+ * loading fails with a clear missing-directory error.
  *
  * Lazily evaluated: Cloudflare Workers may import this module through the db
  * barrel during isolate startup, and a top-level `new URL(..., import.meta.url)`
@@ -30,8 +35,17 @@ export interface MigrationFile {
 let migrationsDirCache: string | undefined;
 
 export function resolveMigrationsDir(): string {
-  migrationsDirCache ??= fileURLToPath(new URL('../../migrations', import.meta.url));
+  migrationsDirCache ??= firstExistingDir([
+    fileURLToPath(new URL('../../migrations', import.meta.url)),
+    fileURLToPath(new URL('../migrations', import.meta.url)),
+    fileURLToPath(new URL('./migrations', import.meta.url)),
+    resolve('migrations'),
+  ]);
   return migrationsDirCache;
+}
+
+function firstExistingDir(candidates: readonly [string, ...string[]]): string {
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 /** @deprecated Prefer `resolveMigrationsDir()`. */
