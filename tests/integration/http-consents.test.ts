@@ -17,6 +17,7 @@ import {
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -55,7 +56,7 @@ describe('GET /api/v0/consents', () => {
     const template = await publishedTemplate(pool);
 
     const tenantId = randomUUID();
-    const veteran = await createUser(pool, {
+    const veteran = await createVerifiedUser(pool, {
       tenantId,
       email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
       status: 'ACTIVE',
@@ -115,7 +116,7 @@ describe('POST /api/v0/consents', () => {
     if (pool === undefined) throw new Error('no pool');
     const template = await publishedTemplate(pool);
     const tenantId = randomUUID();
-    const veteran = await createUser(pool, {
+    const veteran = await createVerifiedUser(pool, {
       tenantId,
       email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
       status: 'ACTIVE',
@@ -163,7 +164,7 @@ describe('POST /api/v0/consents', () => {
     if (pool === undefined) throw new Error('no pool');
     const template = await publishedTemplate(pool);
     const tenantId = randomUUID();
-    const veteran = await createUser(pool, {
+    const veteran = await createVerifiedUser(pool, {
       tenantId,
       email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
       status: 'ACTIVE',
@@ -219,7 +220,7 @@ describe('POST /api/v0/consents', () => {
     if (pool === undefined) throw new Error('no pool');
     const template = await publishedTemplate(pool);
     const tenantId = randomUUID();
-    const veteran = await createUser(pool, {
+    const veteran = await createVerifiedUser(pool, {
       tenantId,
       email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
       status: 'ACTIVE',
@@ -271,7 +272,7 @@ describe('POST /api/v0/consents/:id/commands/revoke', () => {
     if (pool === undefined) throw new Error('no pool');
     const template = await publishedTemplate(pool);
     const tenantId = randomUUID();
-    const veteran = await createUser(pool, {
+    const veteran = await createVerifiedUser(pool, {
       tenantId,
       email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
       status: 'ACTIVE',

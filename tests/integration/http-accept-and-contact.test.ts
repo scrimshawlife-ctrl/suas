@@ -14,6 +14,7 @@ import { createUser } from '../../src/identity/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -54,7 +55,7 @@ async function openRedCase() {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
   const tenantId = randomUUID();
-  const veteran = await createUser(pool, {
+  const veteran = await createVerifiedUser(pool, {
     tenantId,
     email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
@@ -135,7 +136,7 @@ describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
     const pool = app.pool;
     if (pool === undefined) throw new Error('no pool');
     const tenantId = randomUUID();
-    const veteran = await createUser(pool, {
+    const veteran = await createVerifiedUser(pool, {
       tenantId,
       email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
       status: 'ACTIVE',
@@ -193,7 +194,7 @@ describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
     if (pool === undefined) throw new Error('no pool');
     const tenantA = randomUUID();
     const tenantB = randomUUID();
-    const veteran = await createUser(pool, {
+    const veteran = await createVerifiedUser(pool, {
       tenantId: tenantA,
       email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
       status: 'ACTIVE',

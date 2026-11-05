@@ -15,6 +15,7 @@ import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { ForbiddenError, ResourceNotVisibleError } from '../../authz/index.js';
 import type { AuthContext } from '../../authz/index.js';
+import { requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
 import { resolveCaseAccess, type CaseAccess } from '../case-access.js';
 import { requireDisclosure } from '../../consent/index.js';
 import {
@@ -125,6 +126,10 @@ export function registerServiceRequestRoutes(
     const { caseId } = caseIdParams.parse(request.params);
     const body = createBody.parse(request.body);
     const access = await resolveCaseAccess(deps.pool, context, caseId);
+    if (access.owner) {
+      await requireVerifiedVeteran(deps.pool, context);
+      await requireCounty(deps.pool, context);
+    }
     const actorType = actorTypeFor(access);
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({
@@ -242,6 +247,8 @@ export function registerServiceRequestRoutes(
         'Only the person who accepted this case may run this command (SUAS-specs DISPATCH.md §4).',
       );
     }
+    // Submitting is the act of requesting help; cancelling or confirming is not.
+    if (access.owner && command === 'SUBMIT') await requireVerifiedVeteran(deps.pool, context);
     const actorType = actorTypeFor(access);
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({

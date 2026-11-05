@@ -12,6 +12,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
+import { requireVerifiedVeteran } from '../../identity/index.js';
 import {
   acceptTrustedContact,
   findTrustedContact,
@@ -56,12 +57,14 @@ export function registerTrustedContactRoutes(
 ): void {
   app.get(`${API_PREFIX}/trusted-contacts`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const contacts = await listTrustedCircle(deps.pool, context.tenantId, context.userId);
     return { trusted_contacts: contacts.map(publicTrustedContact) };
   });
 
   app.post(`${API_PREFIX}/trusted-contacts`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const body = inviteBody.parse(request.body);
     const contact = await inviteTrustedContact(deps.pool, {
       tenantId: context.tenantId,
@@ -75,6 +78,7 @@ export function registerTrustedContactRoutes(
 
   app.post(`${API_PREFIX}/trusted-contacts/:id/commands/remove`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const { id } = idParams.parse(request.params);
     const existing = await findTrustedContact(deps.pool, context.tenantId, id);
     if (existing === undefined || existing.veteranUserId !== context.userId) {
