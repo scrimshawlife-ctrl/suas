@@ -127,7 +127,7 @@ describe('Service Request create + SUBMIT', () => {
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
       headers: { ...headers, 'idempotency-key': key },
-      payload: { category: 'FOOD' },
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
     });
     expect(created.statusCode).toBe(201);
     const srId = created.json().service_request_id as string;
@@ -142,7 +142,7 @@ describe('Service Request create + SUBMIT', () => {
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
       headers: { ...headers, 'idempotency-key': key },
-      payload: { category: 'FOOD' },
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
     });
     expect(replay.statusCode).toBe(200);
     expect(replay.json()).toMatchObject({
@@ -170,7 +170,7 @@ describe('Service Request create + SUBMIT', () => {
       method: 'POST',
       url: `/api/v0/cases/${a.supportCase.caseId}/service-requests`,
       headers: { ...b.headers, 'idempotency-key': `sr-leak-${randomUUID()}` },
-      payload: { category: 'SHELTER' },
+      payload: { category: 'SHELTER', details: { meeting_place: 'Main Street library' } },
     });
     expect(response.statusCode).toBe(404);
   });
@@ -196,7 +196,7 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
       method: 'POST',
       url: `/api/v0/cases/${opened.supportCase.caseId}/service-requests`,
       headers: { ...opened.headers, 'idempotency-key': `sr-create-${randomUUID()}` },
-      payload: { category: 'FOOD' },
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
     });
     expect(created.statusCode).toBe(201);
     const srId = created.json().service_request_id as string;
@@ -228,14 +228,14 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
     expect(triaged.json()).toMatchObject({ status: 'TRIAGED' });
   });
 
-  it('lets the accepter submit a request they created, but not the requester-only commands of others', async () => {
+  it('keeps SUBMIT with the requester, even for a request the accepter created', async () => {
     const { tenantId, supportCase, headers } = await openRedCase();
     // The accepter needs a submitted request to accept, then creates another of their own.
     const first = await app.server.inject({
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
       headers: { ...headers, 'idempotency-key': `sr-create-${randomUUID()}` },
-      payload: { category: 'FOOD' },
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
     });
     const firstId = first.json().service_request_id as string;
     expect((await command(firstId, 'SUBMIT', headers)).statusCode).toBe(200);
@@ -247,12 +247,14 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
       headers: { ...creator.headers, 'idempotency-key': `sr-create-${randomUUID()}` },
-      payload: { category: 'FOOD' },
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
     });
     expect(created.statusCode).toBe(201);
     const srId = created.json().service_request_id as string;
     expect((await command(srId, 'SUBMIT', other.headers)).statusCode).toBe(404);
-    const submitted = await command(srId, 'SUBMIT', creator.headers);
+    // The accepter created it, but submitting is the requester's act.
+    expect((await command(srId, 'SUBMIT', creator.headers)).statusCode).toBe(403);
+    const submitted = await command(srId, 'SUBMIT', headers);
     expect(submitted.statusCode).toBe(200);
     expect(submitted.json()).toMatchObject({ status: 'SUBMITTED' });
   });
@@ -266,7 +268,7 @@ describe('Follow-Ups', () => {
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
       headers: { ...veteranHeaders, 'idempotency-key': `sr-${randomUUID()}` },
-      payload: { category: 'FOOD' },
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
     });
     const srId = sr.json().service_request_id as string;
     await app.server.inject({

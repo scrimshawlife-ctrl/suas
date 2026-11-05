@@ -39,6 +39,7 @@ import {
 } from '../../intake/drafts.js';
 import { createDatabaseIntakeHost } from '../../intake/resource-search.js';
 import { createSubmittedRequestInTx, submitDraftInTx } from '../../intake/submit.js';
+import { MEETING_PLACE_MAX } from '../../coordination/index.js';
 import {
   draftDetailsInput,
   INTAKE_CATEGORIES,
@@ -65,6 +66,7 @@ const editBody = z
     category: z.enum(INTAKE_CATEGORIES).optional(),
     summary: z.string().trim().min(1).max(SUMMARY_MAX).optional(),
     timing: z.string().trim().min(1).max(TIMING_MAX).nullable().optional(),
+    meeting_place: z.string().trim().min(1).max(MEETING_PLACE_MAX).nullable().optional(),
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0, { message: 'Provide at least one field.' });
@@ -80,6 +82,7 @@ function draftView(draft: ServiceRequestDraft) {
     category: draft.fields.category,
     summary: draft.fields.summary,
     timing: draft.fields.timing,
+    meeting_place: draft.fields.meetingPlace,
     service_request_id: draft.serviceRequestId ?? null,
     created_at: draft.createdAt.toISOString(),
     updated_at: draft.updatedAt.toISOString(),
@@ -177,7 +180,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     return { ...draftView(draft), intake_text: draft.intakeText };
   });
 
-  /** The Veteran edits the draft by hand. Only the three reviewed fields can change. */
+  /** The Veteran edits the draft by hand. Only the four reviewed fields can change. */
   app.patch(`${API_PREFIX}/intake/drafts/:id`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     await requireVerifiedVeteran(deps.pool, context);
@@ -189,6 +192,8 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
         category: body.category ?? draft.fields.category,
         summary: body.summary ?? draft.fields.summary,
         timing: body.timing === undefined ? draft.fields.timing : body.timing,
+        meetingPlace:
+          body.meeting_place === undefined ? draft.fields.meetingPlace : body.meeting_place,
       },
     });
     return draftView(saved);
@@ -257,6 +262,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
       category: body.category,
       summary: body.summary,
       timing: body.timing ?? null,
+      meetingPlace: body.meeting_place ?? null,
     });
     const scope = commandScope({
       command: 'POST /service-requests',

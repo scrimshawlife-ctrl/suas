@@ -2,7 +2,7 @@
  * Service Request Draft storage (table `service_request_drafts`, migration 0013).
  *
  * V1_PROJECT_PLAN.md §2.1: the Intake Assistant produces a draft; the Veteran
- * reviews, edits and submits it. `intake_text` is what the Veteran typed. It is a
+ * reviews, edits and submits it. `intake_text` is what the Veteran typed; `meeting_place` is sensitive free text on the same footing. It is a
  * plain column protected by database encryption at rest only, so it is read and
  * written here and nowhere else, and must never be logged or copied into a Service
  * Request, an event payload or an error message.
@@ -34,7 +34,7 @@ interface DraftRow {
   user_id: string;
   status: DraftStatus;
   category: IntakeCategory | null;
-  details: { summary?: unknown; timing?: unknown };
+  details: { summary?: unknown; timing?: unknown; meeting_place?: unknown };
   intake_text: string;
   service_request_id: string | null;
   created_at: Date;
@@ -59,6 +59,7 @@ function toDraft(row: DraftRow): ServiceRequestDraft {
       category: row.category,
       summary: text(row.details.summary),
       timing: text(row.details.timing),
+      meetingPlace: text(row.details.meeting_place),
     },
     intakeText: row.intake_text,
     serviceRequestId: row.service_request_id ?? undefined,
@@ -73,6 +74,7 @@ export function draftDetails(fields: IntakeDraftFields): Record<string, string> 
   return {
     ...(fields.summary !== null ? { summary: fields.summary } : {}),
     ...(fields.timing !== null ? { timing: fields.timing } : {}),
+    ...(fields.meetingPlace !== null ? { meeting_place: fields.meetingPlace } : {}),
   };
 }
 

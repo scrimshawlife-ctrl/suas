@@ -74,7 +74,11 @@ export {
   executeServiceRequestCommand,
   executeServiceRequestCommandInTx,
   findServiceRequest,
+  hasRequesterConfirmedRequest,
   listCaseServiceRequests,
+  MEETING_PLACE_MAX,
+  MeetingPlaceRequiredError,
+  readDetailText,
   ServiceRequestNotFoundError,
   type CreateServiceRequestInput,
   type DisclosureGuard,
@@ -94,3 +98,8 @@ export {
 } from './open-requests.js';
 export { acceptServiceRequest, OwnRequestError, type AcceptServiceRequestInput } from './accept.js';
 export { createChatThreadInTx, type ChatThread } from './chat-threads.js';
+export {
+  findDisplayName,
+  readServiceRequestDetail,
+  type ServiceRequestDetail,
+} from './request-detail.js';

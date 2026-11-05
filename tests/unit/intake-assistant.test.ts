@@ -91,7 +91,12 @@ describe('the two-tool contract', () => {
     );
     const result = await run(port);
     expect(result.outcome).toBe('DRAFT_READY');
-    expect(result.draft).toEqual({ category: 'FOOD', summary: 'Groceries', timing: 'Friday' });
+    expect(result.draft).toEqual({
+      category: 'FOOD',
+      summary: 'Groceries',
+      timing: 'Friday',
+      meetingPlace: null,
+    });
   });
 
   it('accepts a loosely written category and rejects extra fields', async () => {
