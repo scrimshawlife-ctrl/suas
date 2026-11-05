@@ -2,10 +2,15 @@
  * Service Request Draft storage (table `service_request_drafts`, migration 0013).
  *
  * V1_PROJECT_PLAN.md §2.1: the Intake Assistant produces a draft; the Veteran
- * reviews, edits and submits it. `intake_text` is what the Veteran typed; `meeting_place` is sensitive free text on the same footing. It is a
+ * reviews, edits and submits it. `intake_text` is what the Veteran typed. It is a
  * plain column protected by database encryption at rest only, so it is read and
  * written here and nowhere else, and must never be logged or copied into a Service
  * Request, an event payload or an error message.
+ *
+ * `meeting_place` (in `details`) is sensitive free text too, but it is meant to move:
+ * submit copies it, with the summary and timing, into the Service Request's `details`
+ * in the same database, where the requester and the accepter read it. It must still
+ * never be logged, listed, or put in an event or audit payload.
  */
 
 import { ResourceNotVisibleError } from '../authz/index.js';

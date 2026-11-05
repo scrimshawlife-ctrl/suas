@@ -1527,7 +1527,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "x-requires": ["verified_veteran"],
+        "x-requires": [],
         "requestBody": {
           "required": false,
           "content": {
@@ -1538,7 +1538,7 @@
             }
           }
         },
-        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE)."
+        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not."
       }
     },
     "/api/v0/cases/{caseId}/follow-ups": {
@@ -4936,7 +4936,25 @@
           },
           "details": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": false,
+            "description": "Same bounded fields as the plain form. Unknown keys are refused (400).",
+            "properties": {
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 280
+              },
+              "timing": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "meeting_place": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
           }
         }
       },

@@ -10,6 +10,8 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
+import { openCase, createServiceRequest } from '../../src/coordination/index.js';
+import { withTransaction } from '../../src/db/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
@@ -107,5 +109,43 @@ describe('POST /api/v0/dev/model-inference/turns', () => {
     const test = await start({ SUAS_MODEL_INFERENCE_MODE: 'fake' });
     const response = await test.server.inject({ method: 'POST', url: URL, payload: TURNS });
     expect(response.statusCode).toBe(404);
+  });
+
+  it('answers the simulate step with a clear 422 when the meeting place is missing', async () => {
+    const local = await start({ SUAS_ENV: 'LOCAL' });
+    const pool = local.pool;
+    if (pool === undefined) throw new Error('no pool');
+    const tenantId = randomUUID();
+    const user = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail(`sim-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    const session = await createSession(pool, TEST_SESSION_SECRET, {
+      tenantId,
+      userId: user.userId,
+    });
+    const request = await withTransaction(pool, async (tx) => {
+      const opened = await openCase(tx, {
+        tenantId,
+        veteranUserId: user.userId,
+        actorType: 'VETERAN',
+        actorId: user.userId,
+      });
+      return createServiceRequest(tx, {
+        tenantId,
+        caseId: opened.supportCase.caseId,
+        category: 'FOOD',
+        createdBy: user.userId,
+        actorType: 'VETERAN',
+      });
+    });
+    const response = await local.server.inject({
+      method: 'POST',
+      url: `/api/v0/dev/service-requests/${request.serviceRequestId}/simulate`,
+      headers: { authorization: `Bearer ${session.credential}` },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.message).toContain('meeting_place');
   });
 });

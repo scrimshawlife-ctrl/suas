@@ -272,6 +272,7 @@ async function ensureDemoRequests(
   if (!present.has('TRANSPORTATION')) {
     const created = await createDemoServiceRequest(pool, caseId, 'TRANSPORTATION', veteran.userId, {
       purpose: 'Ride to a scheduled appointment (synthetic)',
+      meeting_place: 'Demo pickup spot (synthetic)',
     });
     await advance(
       pool,
@@ -288,6 +289,7 @@ async function ensureDemoRequests(
   if (!present.has('FOOD')) {
     const created = await createDemoServiceRequest(pool, caseId, 'FOOD', veteran.userId, {
       note: 'Groceries for one week (synthetic)',
+      meeting_place: 'Demo pickup spot (synthetic)',
     });
     await advance(
       pool,
@@ -306,7 +308,9 @@ async function ensureDemoRequests(
   }
 
   if (!present.has('SHELTER')) {
-    const created = await createDemoServiceRequest(pool, caseId, 'SHELTER', veteran.userId);
+    const created = await createDemoServiceRequest(pool, caseId, 'SHELTER', veteran.userId, {
+      meeting_place: 'Demo meeting spot (synthetic)',
+    });
     await advance(
       pool,
       created,

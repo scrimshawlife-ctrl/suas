@@ -11,6 +11,11 @@
  * after `authenticate`. Intake text is read from request bodies and handed to the
  * inference port and the draft table only: it is never logged, never put in an
  * idempotency fingerprint or stored result, and never returned except to its owner.
+ *
+ * The meeting place is different in one way: it is saved on the draft and then in the
+ * Service Request's `details` (same database), and the plain form's idempotency
+ * fingerprint includes it as a SHA-256 hash. It is not in any stored command result,
+ * and it is never logged, listed, or put in an event or audit payload.
  */
 
 import { randomUUID } from 'node:crypto';

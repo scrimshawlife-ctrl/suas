@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession, type RecordingChallengeDelivery } from '../../src/auth/index.js';
 import { createUser, grantSuasAdmin, setUserStatus } from '../../src/identity/index.js';
@@ -571,5 +571,143 @@ describe('requester-only commands', () => {
       payload: { reason: 'changed my mind' },
     });
     expect(cancelled.statusCode).toBe(200);
+  });
+});
+
+describe('sign-in answers do not depend on who is enrolled', () => {
+  async function emailOf(userId: string): Promise<string> {
+    const row = await pool().query<{ email: string }>(
+      `SELECT email FROM users WHERE user_id = $1`,
+      [userId],
+    );
+    return row.rows[0]?.email ?? '';
+  }
+
+  const issue = (destination: string) =>
+    app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/challenges',
+      payload: { destination, method: 'EMAIL_OTP' },
+    });
+
+  it('writes a challenge row and an audit event even when no code is sent', async () => {
+    const suspended = await person(SIGN_UP_TENANT);
+    await setUserStatus(pool(), SIGN_UP_TENANT, suspended.userId, 'SUSPENDED');
+    const email = await emailOf(suspended.userId);
+    expect((await issue(email)).statusCode).toBe(202);
+
+    const rows = await pool().query<{ status: string }>(
+      `SELECT status FROM auth_challenges WHERE user_id = $1`,
+      [suspended.userId],
+    );
+    expect(rows.rows).toEqual([{ status: 'REVOKED' }]);
+    const audit = await pool().query(
+      `SELECT 1 FROM audit_events WHERE aggregate_id = $1 AND event_type = 'AUTH_CHALLENGE_ISSUE_SKIPPED'`,
+      [suspended.userId],
+    );
+    expect(audit.rowCount).toBe(1);
+    expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
+  });
+
+  it('still answers 202, and audits the failure, when the send fails', async () => {
+    const enrolled = await person(SIGN_UP_TENANT);
+    const enrolledEmail = await emailOf(enrolled.userId);
+    const newEmail = syntheticEmail(`fail-${randomUUID().slice(0, 8)}`);
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const send = vi.spyOn(delivery(), 'deliver').mockRejectedValue(new Error('provider down'));
+    try {
+      const known = await issue(enrolledEmail);
+      const unknown = await issue(newEmail);
+      expect(known.statusCode).toBe(202);
+      expect(unknown.statusCode).toBe(202);
+      expect(unknown.body).toBe(known.body);
+    } finally {
+      send.mockRestore();
+      quiet.mockRestore();
+    }
+    const failures = await pool().query(
+      `SELECT 1 FROM audit_events WHERE aggregate_id = $1 AND event_type = 'AUTH_CHALLENGE_DELIVERY_FAILED'`,
+      [enrolled.userId],
+    );
+    expect(failures.rowCount).toBe(1);
+  });
+
+  it('survives a sign-up that loses the unique-index race, without echoing the address', async () => {
+    // A trigger stands in for a concurrent insert of the same address: it raises the
+    // unique violation, with the address in the error detail as Postgres does.
+    const email = syntheticEmail(`race-${randomUUID().slice(0, 8)}`).toLowerCase();
+    const suffix = randomUUID().slice(0, 8).replaceAll('-', '');
+    const fn = `race_fn_${suffix}`;
+    await pool().query(
+      `CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$
+         BEGIN RAISE EXCEPTION 'duplicate' USING ERRCODE = '23505', DETAIL = NEW.email; END $$`,
+    );
+    await pool().query(
+      `CREATE TRIGGER race_trg_${suffix} BEFORE INSERT ON users FOR EACH ROW
+         WHEN (NEW.email = '${email}') EXECUTE FUNCTION ${fn}()`,
+    );
+    try {
+      expect((await issue(email)).statusCode).toBe(202);
+      const code = delivery().lastFor(email)?.secret ?? '';
+      const refused = await app.server.inject({
+        method: 'POST',
+        url: '/api/v0/auth/challenges/commands/verify',
+        payload: { destination: email, code },
+      });
+      expect(refused.statusCode).toBe(401);
+      expect(refused.json().error.code).toBe('CHALLENGE_INVALID');
+      expect(refused.body).not.toContain(email);
+    } finally {
+      await pool().query(`DROP TRIGGER race_trg_${suffix} ON users`);
+      await pool().query(`DROP FUNCTION ${fn}()`);
+    }
+  });
+});
+
+describe('request summaries and case-route details are bounded', () => {
+  it('lists a summary only when it is a string, cut to 280 characters', async () => {
+    const tenantId = randomUUID();
+    const helper = await person(tenantId, { county: 'SANTA_CLARA' });
+    const requester = await person(tenantId, { verified: true, county: 'SANTA_CLARA' });
+    const other = await person(tenantId, { verified: true, county: 'SANTA_CLARA' });
+    const long = await submitForm(requester, {
+      category: 'PEER_SUPPORT',
+      meeting_place: undefined,
+    });
+    const odd = await submitForm(other, { category: 'PEER_SUPPORT', meeting_place: undefined });
+    await pool().query(
+      `UPDATE service_requests SET details = jsonb_build_object('summary', repeat('x', 500))
+        WHERE service_request_id = $1`,
+      [long.id],
+    );
+    await pool().query(
+      `UPDATE service_requests SET details = jsonb_build_object('summary', 12345)
+        WHERE service_request_id = $1`,
+      [odd.id],
+    );
+    const items: { service_request_id: string; summary: string | null }[] = (
+      await getJson('/api/v0/service-requests?ownership=open', helper)
+    ).json().service_requests;
+    const byId = new Map(items.map((item) => [item.service_request_id, item.summary]));
+    expect(byId.get(long.id)).toBe('x'.repeat(280));
+    expect(byId.get(odd.id)).toBeNull();
+  });
+
+  it('refuses unknown or over-long details on POST /cases/{caseId}/service-requests', async () => {
+    const requester = await person(randomUUID(), { verified: true, county: 'SANTA_CLARA' });
+    const opened = await postJson('/api/v0/cases', requester, {});
+    const caseId: string = opened.json().case_id;
+    for (const details of [{ purpose: 'x' }, { summary: 'x'.repeat(281) }, { meeting_place: '' }]) {
+      const refused = await postJson(`/api/v0/cases/${caseId}/service-requests`, requester, {
+        category: 'PEER_SUPPORT',
+        details,
+      });
+      expect(refused.statusCode).toBe(400);
+    }
+    const ok = await postJson(`/api/v0/cases/${caseId}/service-requests`, requester, {
+      category: 'FOOD',
+      details: { summary: 'Groceries', timing: 'Friday', meeting_place: 'Library' },
+    });
+    expect(ok.statusCode).toBe(201);
   });
 });
