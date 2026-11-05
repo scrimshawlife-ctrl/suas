@@ -32,7 +32,6 @@ export function Footer({ showVeteransCrisisLine = false }: FooterProps) {
         </p>
         {showVeteransCrisisLine ? (
           <p>
-            Veterans Crisis Line:{' '}
             <a href="tel:988" className={crisisLink}>
               Dial 988
             </a>

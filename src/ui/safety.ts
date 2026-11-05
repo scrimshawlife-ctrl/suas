@@ -48,7 +48,7 @@ export const APPROVED_CRISIS_DESTINATIONS = ['tel:911', 'tel:988', 'sms:988'] as
  * 838255 (sms:838255, Text 838255): owner-decided as D-050 on 2026-11-05,
  * pending a spec release; the pinned spec 0.7.0 SAFETY_COPY authorizes only
  * 911 and 988.
- * Owner decision (Danny, 2026-11-05 1:20 PM PT): "You can keep those numbers" /
+ * Owner decision (owner (scrimshawlife-ctrl), 2026-11-05 1:20 PM PT): "You can keep those numbers" /
  * "Just label them appropriately". That does not settle a spec release.
  * The footer must label 838255 as the Veterans Crisis Line text number.
  * Do not describe this destination as released in the pinned spec.

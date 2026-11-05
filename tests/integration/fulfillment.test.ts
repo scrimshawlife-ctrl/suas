@@ -855,6 +855,19 @@ describe('RESOURCES.md — catalog', () => {
     expect(resource.contactMethodKind).toBeUndefined();
   });
 
+  it('rejects a directory name that looks like a crisis line (SAFETY.md §2)', async () => {
+    const tenantId = syntheticTenantId();
+    await expect(
+      createResource(pool, {
+        tenantId,
+        serviceName: 'Veterans Crisis Line',
+        category: 'PEER_SUPPORT',
+        contactMethod: '+1-555-555-0102',
+        contactMethodKind: 'PHONE',
+      }),
+    ).rejects.toThrow(/crisis line/);
+  });
+
   it('rejects an unknown contact-method scheme (P-13)', async () => {
     const tenantId = syntheticTenantId();
     await expect(

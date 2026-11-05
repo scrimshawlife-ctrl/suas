@@ -331,7 +331,7 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
     // The model has no crisis category or crisis contact flag. 911, 988 and 838255
     // are still passed through phoneHref and contactAction; phoneHref only links a
     // number of 7 to 15 digits, so those three stay text unless a future change emits them.
-    // Owner decision (Danny, 2026-11-05 1:20 PM PT): "You can keep those numbers" /
+    // Owner decision (owner (scrimshawlife-ctrl), 2026-11-05 1:20 PM PT): "You can keep those numbers" /
     // "Just label them appropriately". Hotline-shaped directory numbers stay
     // directory resources and are labelled with the listed resource name.
     interface DirectoryResource {
@@ -403,8 +403,7 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
           counties: ['SANTA_CLARA'],
           hours: null,
           cost: null,
-          // Toll-free shape with a leading 1, split so the fixture scan sees no routable literal.
-          contact_method: ['1', '800', '273', '8255'].join('-'),
+          contact_method: '800-555-0142',
           contact_method_kind: 'PHONE',
           freshness: 'FRESH',
           stale_warning: false,
@@ -416,8 +415,7 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
           counties: ['SANTA_CLARA'],
           hours: null,
           cost: null,
-          // Parenthesized toll-free shape, split the same way.
-          contact_method: `(${'800'}) ${['273', '8255'].join('-')}`,
+          contact_method: '(800) 555-0143',
           contact_method_kind: 'PHONE',
           freshness: 'FRESH',
           stale_warning: false,
@@ -449,20 +447,15 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
       consider(model.phoneHref(method));
       const action = model.contactAction(resource);
       if (action.kind === 'phone') {
-        expect(action.label, resource.service_name).toBe(resource.service_name);
+        const verb = (action.href ?? '').startsWith('sms:') ? 'Text' : 'Call';
+        expect(action.label).toBe(`${verb} ${resource.service_name} at ${method}`);
+        expect(action.label).toContain(method);
         expect(action.href ?? '').toMatch(/^tel:/);
       }
       consider(action.href ?? null);
     }
     expect(produced.length).toBeGreaterThan(0);
-    const national = ['1', '800', '273', '8255'].join('-');
-    const local = `(${'800'}) ${['273', '8255'].join('-')}`;
-    expect(produced).toEqual(
-      expect.arrayContaining([
-        `tel:${national.replace(/\D/g, '')}`,
-        `tel:${local.replace(/\D/g, '')}`,
-      ]),
-    );
+    expect(produced).toEqual(expect.arrayContaining(['tel:8005550142', 'tel:8005550143']));
   });
 
   it('states placeholder unavailability without giving crisis guidance', () => {

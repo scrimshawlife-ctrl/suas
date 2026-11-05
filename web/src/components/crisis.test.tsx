@@ -87,7 +87,7 @@ describe('D-012 crisis copy', () => {
       </MemoryRouter>,
     );
     expect(text(screen.getByRole('contentinfo'))).toContain(
-      'Veterans Crisis Line: Dial 988, then press 1 · Veterans Crisis Line: Text 838255',
+      'Dial 988, then press 1 · Veterans Crisis Line: Text 838255',
     );
     expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
     expect(screen.getByRole('link', { name: 'Dial 988' })).toHaveAttribute('href', 'tel:988');
