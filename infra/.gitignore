@@ -1,0 +1,4 @@
+cdk.out/
+node_modules/
+# cdk.context.json is only ever written by context lookups, which this app never uses.
+cdk.context.json

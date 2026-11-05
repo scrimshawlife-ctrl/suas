@@ -44,6 +44,19 @@ describe('ApiGatewayConnectionPush', () => {
     await expect(push.send('c', '{}')).rejects.toBeInstanceOf(ConnectionPushError);
   });
 
+  it('hands clients the public URL while management calls keep using the endpoint', async () => {
+    const client = new ScriptedAwsClient<PostToConnectionCommandOutput>([{ $metadata: {} }]);
+    const push = new ApiGatewayConnectionPush({
+      endpoint: ENDPOINT,
+      region: 'us-west-2',
+      publicUrl: 'wss://ws.example.invalid',
+      client,
+    });
+    expect(push.connectUrl()).toBe('wss://ws.example.invalid');
+    await push.send('conn-1', '{}');
+    expect(client.commands).toHaveLength(1);
+  });
+
   it('derives the client WebSocket URL from the management endpoint', () => {
     expect(pushWith([]).push.connectUrl()).toBe(
       'wss://abc123.execute-api.us-west-2.amazonaws.com/staging',
@@ -83,5 +96,46 @@ describe('chat push configuration', () => {
     expect(issues({ ...base, SUAS_CHAT_WS_ENDPOINT: 'http://example.com' })).toContain(
       'SUAS_CHAT_WS_ENDPOINT must be',
     );
+  });
+
+  describe('SUAS_CHAT_WS_PUBLIC_URL', () => {
+    const staging = {
+      SUAS_ENV: 'STAGING',
+      SUAS_CHAT_PUSH_MODE: 'apigw',
+      SUAS_AWS_REGION: 'us-west-2',
+      SUAS_CHAT_WS_ENDPOINT: ENDPOINT,
+    };
+
+    it('is optional and parsed when valid', () => {
+      const unset = tryLoadConfig(validEnv(staging));
+      expect(unset.ok && unset.config.chatPush.publicUrl).toBeUndefined();
+      const set = tryLoadConfig(
+        validEnv({ ...staging, SUAS_CHAT_WS_PUBLIC_URL: 'wss://ws.example.invalid' }),
+      );
+      expect(set.ok && set.config.chatPush.publicUrl).toBe('wss://ws.example.invalid');
+    });
+
+    it.each([
+      'https://ws.example.invalid',
+      'ws://ws.example.invalid',
+      'wss://user:pw@ws.example.invalid',
+      'wss://ws.example.invalid/?a=b',
+      'wss://ws.example.invalid/#frag',
+      'wss://ws.example.invalid?',
+      'not a url',
+    ])('rejects %s', (value) => {
+      expect(issues({ ...staging, SUAS_CHAT_WS_PUBLIC_URL: value })).toContain(
+        'SUAS_CHAT_WS_PUBLIC_URL must be a wss:// URL',
+      );
+    });
+
+    it('requires the apigw mode, which keeps it out of LOCAL and TEST', () => {
+      expect(
+        issues({
+          SUAS_CHAT_PUSH_MODE: 'local',
+          SUAS_CHAT_WS_PUBLIC_URL: 'wss://ws.example.invalid',
+        }),
+      ).toContain('SUAS_CHAT_WS_PUBLIC_URL requires SUAS_CHAT_PUSH_MODE=apigw');
+    });
   });
 });

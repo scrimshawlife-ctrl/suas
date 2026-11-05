@@ -9,6 +9,8 @@ export default tseslint.config(
     // `web/` is the React app. It has its own package.json, tsconfig and ESLint
     // config (`cd web && npm run lint`), and root type-checked lint must not
     // discover its files.
+    // `infra/` is the CDK app. It has its own package.json and tsconfig
+    // (`cd infra && npm run check`), and root type-checked lint must not discover it.
     // `docs/` is the GitHub Pages poster (HTML/CSS plus a browser click-through
     // script). It is not in the TypeScript project. Type-checked lint must not
     // discover those files.
@@ -20,6 +22,7 @@ export default tseslint.config(
       'docs/**',
       '.wrangler/**',
       'web/**',
+      'infra/**',
     ],
   },
   js.configs.recommended,
@@ -61,6 +64,8 @@ export default tseslint.config(
       'eval/**/*.ts',
       'src/main.ts',
       'src/aws/websocket-lambda.ts',
+      'src/aws/job-worker-lambda.ts',
+      'src/aws/migrate-lambda.ts',
       'tests/**/*.ts',
       '*.config.ts',
     ],
