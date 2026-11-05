@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { describe, expect, it } from 'vitest';
 import { Dialog } from './Dialog';
 
@@ -39,5 +39,30 @@ describe('Dialog', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(opener).toHaveFocus();
+  });
+
+  it('focuses the initialFocusRef control on open', async () => {
+    function SafeChoice() {
+      const [open, setOpen] = useState(false);
+      const keepRef = useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Open</button>
+          <Dialog
+            open={open}
+            onClose={() => setOpen(false)}
+            title="Cancel this request?"
+            initialFocusRef={keepRef}
+          >
+            <button ref={keepRef}>Keep request active</button>
+            <button>Cancel request</button>
+          </Dialog>
+        </>
+      );
+    }
+    const user = userEvent.setup();
+    render(<SafeChoice />);
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    expect(screen.getByRole('button', { name: 'Keep request active' })).toHaveFocus();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './Button';
 import { XIcon } from './icons';
@@ -8,6 +8,8 @@ export interface DialogProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** Control to focus on open (for example the safe choice). Defaults to the first focusable. */
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 const FOCUSABLE =
@@ -18,7 +20,7 @@ const FOCUSABLE =
  * and the backdrop close it, the page behind does not scroll, and focus returns to the
  * element that opened it.
  */
-export function Dialog({ open, onClose, title, children }: DialogProps) {
+export function Dialog({ open, onClose, title, children, initialFocusRef }: DialogProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -32,7 +34,7 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
     const panel = panelRef.current;
     const focusables = () =>
       panel ? Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)) : [];
-    (focusables()[0] ?? panel)?.focus();
+    (initialFocusRef?.current ?? focusables()[0] ?? panel)?.focus();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
@@ -68,6 +70,8 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
       document.body.style.overflow = previousOverflow;
       opener?.focus();
     };
+    // initialFocusRef is a stable ref object; only `open` should re-run this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;
