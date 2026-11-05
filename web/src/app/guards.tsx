@@ -57,6 +57,15 @@ export function RequireAdmin() {
 /** 4b. Admin session has passed MFA step-up. Otherwise the step-up screen. */
 export function RequireMfa() {
   const elevated = useMfaElevated();
-  if (!elevated) return <Navigate to={paths.adminMfa} replace />;
+  const location = useLocation();
+  if (!elevated) {
+    return (
+      <Navigate
+        to={paths.adminMfa}
+        replace
+        state={{ from: `${location.pathname}${location.search}` }}
+      />
+    );
+  }
   return <Outlet />;
 }

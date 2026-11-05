@@ -12,6 +12,8 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 function isAuthPath(schemaPath: string): boolean {
   return (
     schemaPath.startsWith('/api/v0/auth/challenges') ||
+    // A wrong MFA response is a 401 too; it must not end the session.
+    schemaPath.startsWith('/api/v0/auth/mfa/') ||
     schemaPath === '/api/v0/auth/sessions/commands/logout'
   );
 }
