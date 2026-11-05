@@ -17,6 +17,7 @@ import { z } from 'zod';
 import type { SafetyCopyMode } from '../../config/index.js';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
+import { requireVerifiedVeteran } from '../../identity/index.js';
 import { SERVICE_CATEGORIES } from '../../coordination/index.js';
 import {
   findResource,
@@ -81,6 +82,7 @@ function publicCatalogFromResource(resource: Resource, now = new Date()) {
 export function registerResourceRoutes(app: FastifyInstance, deps: ResourceRouteDeps): void {
   app.get(`${API_PREFIX}/resources`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const query = listQuery.parse(request.query);
     const page = await searchResources(
       deps.pool,
@@ -104,6 +106,7 @@ export function registerResourceRoutes(app: FastifyInstance, deps: ResourceRoute
 
   app.get(`${API_PREFIX}/resources/:id`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const { id } = idParams.parse(request.params);
     const resource = await findResource(deps.pool, context.tenantId, id);
     // Inactive and missing share 404 — no existence leakage across tenants/state.
@@ -113,8 +116,8 @@ export function registerResourceRoutes(app: FastifyInstance, deps: ResourceRoute
     return publicCatalogFromResource(resource);
   });
 
-  app.get(`${API_PREFIX}/immediate-resources`, async (request) => {
-    await authenticate(deps.pool, deps.sessionSecret, request);
+  // The crisis screen is for everyone, signed out or unverified (plan §2.1).
+  app.get(`${API_PREFIX}/immediate-resources`, () => {
     const slot = resolveImmediateResourceSlot(deps.safetyCopyMode);
     return {
       state: slot.state,

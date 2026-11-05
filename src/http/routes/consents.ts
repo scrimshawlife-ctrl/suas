@@ -14,6 +14,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
+import { requireVerifiedVeteran } from '../../identity/index.js';
 import {
   CONSENT_PERMISSIONS,
   CONSENT_SCOPES,
@@ -81,12 +82,14 @@ function publicGrant(grant: ConsentGrant) {
 export function registerConsentRoutes(app: FastifyInstance, deps: ConsentRouteDeps): void {
   app.get(`${API_PREFIX}/consents`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const grants = await listGrantsForVeteran(deps.pool, context.tenantId, context.userId);
     return { consents: grants.map(publicGrant) };
   });
 
   app.post(`${API_PREFIX}/consents`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const body = grantBody.parse(request.body);
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({

@@ -13,6 +13,7 @@ import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { assertResponder, ForbiddenError, ResourceNotVisibleError } from '../../authz/index.js';
 import type { AuthContext } from '../../authz/index.js';
+import { requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
 import { requireDisclosure } from '../../consent/index.js';
 import {
   createServiceRequest,
@@ -125,6 +126,10 @@ export function registerServiceRequestRoutes(
     const { caseId } = caseIdParams.parse(request.params);
     const body = createBody.parse(request.body);
     const { owner } = await assertCaseAccess(deps.pool, context, caseId);
+    if (owner) {
+      await requireVerifiedVeteran(deps.pool, context);
+      await requireCounty(deps.pool, context);
+    }
     const actorType = actorTypeFor(context, owner);
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({
@@ -191,6 +196,8 @@ export function registerServiceRequestRoutes(
     if (supportCase === undefined) throw new ResourceNotVisibleError();
     const owner = supportCase.veteranUserId === context.userId;
     if (!owner) assertResponder(context);
+    // Submitting is the act of requesting help; cancelling or confirming is not.
+    if (owner && command === 'SUBMIT') await requireVerifiedVeteran(deps.pool, context);
     if (owner && !VETERAN_COMMANDS.includes(command)) {
       assertResponder(context);
     }

@@ -35,7 +35,7 @@ import {
   type CaseCommand,
   type SupportCase,
 } from '../../coordination/index.js';
-import { findUserById } from '../../identity/index.js';
+import { findUserById, requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import type { JsonObject } from '../../jobs/index.js';
 import { API_PREFIX } from '../../release/pins.js';
@@ -197,6 +197,8 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const veteran = await findUserById(deps.pool, context.tenantId, context.userId);
     if (veteran === undefined) throw new ResourceNotVisibleError();
+    await requireVerifiedVeteran(deps.pool, context);
+    await requireCounty(deps.pool, context);
 
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({ actor_id: context.userId });
