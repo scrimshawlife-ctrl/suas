@@ -30,7 +30,7 @@ function CapabilitiesCard() {
         <p className="px-4 pb-4 text-slate">This build did not report any capabilities.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-16">
+          <table className="w-full border-collapse text-16 max-sm:block max-sm:[&_tbody]:block max-sm:[&_thead]:sr-only">
             <thead>
               <tr>
                 {['Capability', 'Status', 'Note'].map((heading) => (
@@ -46,12 +46,15 @@ function CapabilitiesCard() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.name} className="border-b border-line last:border-b-0">
-                  <td className="px-4 py-3">{row.name}</td>
-                  <td className="px-4 py-3">
+                <tr
+                  key={row.name}
+                  className="border-b border-line last:border-b-0 max-sm:flex max-sm:flex-col max-sm:items-start max-sm:gap-1.5 max-sm:px-4 max-sm:py-3"
+                >
+                  <td className="px-4 py-3 max-sm:p-0 max-sm:font-bold">{row.name}</td>
+                  <td className="px-4 py-3 max-sm:p-0">
                     <StatusChip kind={row.kind}>{row.status}</StatusChip>
                   </td>
-                  <td className="px-4 py-3 text-slate">{row.note}</td>
+                  <td className="px-4 py-3 text-slate max-sm:p-0">{row.note}</td>
                 </tr>
               ))}
             </tbody>

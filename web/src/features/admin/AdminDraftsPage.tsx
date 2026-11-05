@@ -50,7 +50,7 @@ function DraftTable({ drafts }: { drafts: ResourceDraft[] }) {
         <tbody>
           {drafts.map((draft) => (
             <tr key={draft.resource_draft_id} className="border-b border-line last:border-b-0">
-              <td className="px-4 py-3 font-bold">
+              <td className="min-w-48 px-4 py-3 font-bold">
                 <Link
                   to={paths.adminDraft(draft.resource_draft_id)}
                   className="inline-flex min-h-11 items-center"
@@ -59,7 +59,7 @@ function DraftTable({ drafts }: { drafts: ResourceDraft[] }) {
                 </Link>
               </td>
               <td className="px-4 py-3 whitespace-nowrap">{CATEGORY_LABELS[draft.category]}</td>
-              <td className="px-4 py-3">{countiesLabel(draft.counties)}</td>
+              <td className="min-w-40 px-4 py-3">{countiesLabel(draft.counties)}</td>
               <td className="px-4 py-3">
                 <DraftStatusChip status={draft.status} />
               </td>
