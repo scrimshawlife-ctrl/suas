@@ -4,7 +4,9 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'src/api/schema.d.ts'] },
+  {
+    ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'e2e-results/**', 'src/api/schema.d.ts'],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   reactHooks.configs.flat['recommended-latest'],

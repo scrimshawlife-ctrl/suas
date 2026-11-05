@@ -54,3 +54,6 @@ graphify-out/
 playwright-report/
 test-results/
 blob-report/
+
+# Web end-to-end suite output (web/playwright.e2e.config.ts)
+web/e2e-results/
