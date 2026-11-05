@@ -79,7 +79,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
   {
     serviceName: 'Demo Harbor Food Bank (synthetic)',
     category: 'FOOD',
-    counties: ['Example County'],
+    counties: ['SANTA_CLARA'],
     contactMethod: syntheticPhone(10),
     contactMethodKind: 'PHONE',
     hours: 'Weekdays 9:00 to 16:00',
@@ -89,7 +89,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
   {
     serviceName: 'Sample Pantry Network (synthetic)',
     category: 'FOOD',
-    counties: ['Sample County'],
+    counties: ['SANTA_CLARA'],
     contactMethod: syntheticEmail('demo-pantry'),
     contactMethodKind: 'EMAIL',
     hours: 'Monday, Wednesday, Friday 10:00 to 14:00',
@@ -99,7 +99,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
   {
     serviceName: 'Demo Ride Coordination (synthetic)',
     category: 'TRANSPORTATION',
-    counties: ['Example County'],
+    counties: ['SANTA_CLARA'],
     contactMethod: syntheticPhone(11),
     contactMethodKind: 'PHONE',
     hours: 'Weekdays 7:00 to 18:00',
@@ -109,7 +109,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
   {
     serviceName: 'Sample Mobility Desk (synthetic)',
     category: 'TRANSPORTATION',
-    counties: ['Sample County'],
+    counties: ['SANTA_CLARA'],
     contactMethod: 'Ask the person who accepts your request to arrange',
     hours: 'Weekdays 8:00 to 17:00',
     cost: 'Varies by trip; the accepter confirms before booking',
@@ -118,7 +118,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
   {
     serviceName: 'Demo Overnight Shelter (synthetic)',
     category: 'SHELTER',
-    counties: ['Example County'],
+    counties: ['SANTA_CLARA'],
     contactMethod: syntheticPhone(12),
     contactMethodKind: 'PHONE',
     hours: 'Check-in 17:00 to 20:00 daily',
@@ -128,7 +128,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
   {
     serviceName: 'Sample Temporary Shelter (synthetic)',
     category: 'SHELTER',
-    counties: ['Sample County'],
+    counties: ['SANTA_CLARA'],
     contactMethod: 'Ask the person who accepts your request to arrange',
     hours: 'Intake 16:00 to 19:00 daily',
     cost: 'No cost',
@@ -137,7 +137,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
   {
     serviceName: 'Demo Peer Circle (synthetic)',
     category: 'PEER_SUPPORT',
-    counties: ['Example County'],
+    counties: ['SANTA_CLARA'],
     contactMethod: syntheticPhone(13),
     contactMethodKind: 'PHONE',
     hours: 'Tuesdays and Thursdays 18:00 to 19:30',
@@ -147,7 +147,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
   {
     serviceName: 'Sample Peer Line (synthetic)',
     category: 'PEER_SUPPORT',
-    counties: ['Sample County'],
+    counties: ['SANTA_CLARA'],
     contactMethod: 'Ask the person who accepts your request to arrange',
     hours: 'Weekdays 12:00 to 15:00',
     cost: 'No cost',
