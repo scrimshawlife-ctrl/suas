@@ -1,0 +1,156 @@
+@import 'tailwindcss';
+
+/*
+ * SUAS day theme. Tokens come from SUAS-brand-kit/tokens/colors.css and the
+ * Components board. Day only; there is no night theme in v1.
+ * Red (sos) is for the 911 / 988 crisis entries and nothing else.
+ */
+@theme {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-service-blue: #1c529e;
+  --color-harbor: #12325f;
+  --color-harbor-tint: #c9d6ea;
+  --color-ink: #101828;
+  --color-slate: #556274;
+  --color-mist: #f2f4f7;
+  --color-card: #ffffff;
+  --color-line: #d8dee8;
+  --color-need-transportation: #2173b8;
+  --color-need-food: #a65a12;
+  --color-need-shelter: #3b7748;
+  --color-need-peer: #2e7a73;
+  --color-sos: #b42318;
+
+  --font-display: 'Public Sans', system-ui, sans-serif;
+  --font-body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Type scale in px, named by size, as drawn on the boards. Body 18, labels 17, floor 16. */
+  --text-16: 16px;
+  --text-17: 17px;
+  --text-18: 18px;
+  --text-19: 19px;
+  --text-20: 20px;
+  --text-21: 21px;
+  --text-22: 22px;
+  --text-24: 24px;
+  --text-26: 26px;
+  --text-28: 28px;
+  --text-30: 30px;
+  --text-32: 32px;
+  --text-34: 34px;
+  --text-40: 40px;
+  --text-44: 44px;
+  --text-48: 48px;
+  --text-52: 52px;
+  --text-54: 54px;
+  --text-56: 56px;
+  --text-60: 60px;
+  --text-64: 64px;
+  --text-72: 72px;
+  --text-96: 96px;
+
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-14: 14px;
+  --radius-pill: 999px;
+
+  /* The phone layout is 640 px and below, so `max-sm:` means <= 640 px. */
+  --breakpoint-sm: 40.0625rem;
+  --breakpoint-md: 60.0625rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-mist);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 18px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  p,
+  ul,
+  ol,
+  dl,
+  dd,
+  fieldset {
+    margin: 0;
+  }
+
+  ul,
+  ol {
+    padding: 0;
+    list-style: none;
+  }
+
+  fieldset {
+    border: 0;
+    padding: 0;
+    min-width: 0;
+  }
+
+  a {
+    color: var(--color-service-blue);
+    text-decoration: underline;
+  }
+
+  a:hover {
+    color: var(--color-harbor);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-service-blue);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px #fff;
+  }
+}
+
+/* Request-progress beacon. Static unless the person allows motion. */
+@keyframes suas-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(46 122 115 / 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgb(46 122 115 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(46 122 115 / 0);
+  }
+}
+
+/* Public Sans 700 heading look used by every display line on the boards. */
+@utility heading {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+
+@utility beacon-pulse {
+  animation: suas-pulse 2.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

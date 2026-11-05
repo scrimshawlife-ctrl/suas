@@ -11,3 +11,6 @@ docs/readiness/evidence/
 # Captured synthetic demo fixtures (npm run demo:fixtures). Byte-identical copies live in
 # suas-ios and suas-android, so keep the generator output as is.
 contract/demo-fixtures.json
+
+# Generated from docs/openapi/v0.json by `npm run gen:api` in web/
+web/src/api/schema.d.ts

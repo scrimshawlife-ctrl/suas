@@ -49,3 +49,8 @@ wrangler.synthetic.jsonc
 
 # graphify knowledge graph output (local, regenerated)
 graphify-out/
+
+# Playwright output (web app browser checks)
+playwright-report/
+test-results/
+blob-report/
