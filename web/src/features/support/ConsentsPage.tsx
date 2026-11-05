@@ -1,59 +1,14 @@
-import { useState } from 'react';
-import { useIdempotencyKey } from '../../api/idempotency';
+import { useRef, useState } from 'react';
 import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { Dialog } from '../../components/Dialog';
 import { Page } from '../../components/Page';
 import { StatusChip } from '../../components/StatusChip';
-import { useConsents, useRevokeConsent, useTrustedContacts, type ConsentGrant } from './api';
+import { useConsents, useTrustedContacts, type ConsentGrant } from './api';
+import { StopSharingDialog } from './StopSharingDialog';
 import { describeStatus, describeWhat, describeWho, formatDate, sortGrants } from './consent-model';
 import { ErrorNotice } from './errors';
-
-function StopSharingDialog({
-  grant,
-  who,
-  onClose,
-}: {
-  grant: ConsentGrant;
-  who: string;
-  onClose: () => void;
-}) {
-  const key = useIdempotencyKey();
-  const revoke = useRevokeConsent();
-  return (
-    <Dialog open onClose={onClose} title="Stop sharing?">
-      <div className="flex flex-col gap-1">
-        <p className="font-bold">{who}</p>
-        <p>{describeWhat(grant)}</p>
-      </div>
-      <p>This stops right away. You can share again later.</p>
-      {revoke.isError ? <ErrorNotice error={revoke.error} doing="stop sharing" /> : null}
-      <div className="flex flex-wrap gap-3">
-        <Button
-          disabled={revoke.isPending}
-          onClick={() =>
-            revoke.mutate(
-              { consentGrantId: grant.consent_grant_id, headers: key.headers() },
-              {
-                onSuccess: () => {
-                  key.renew();
-                  onClose();
-                },
-              },
-            )
-          }
-        >
-          {revoke.isPending ? 'Stopping…' : 'Stop sharing'}
-        </Button>
-        <Button variant="secondary" onClick={onClose}>
-          Keep sharing
-        </Button>
-      </div>
-    </Dialog>
-  );
-}
 
 /** Consents: who may see or be told what, with a way to stop. No board. */
 export default function ConsentsPage() {
@@ -61,6 +16,7 @@ export default function ConsentsPage() {
   const contacts = useTrustedContacts();
   const [stopping, setStopping] = useState<ConsentGrant | null>(null);
   const grants = sortGrants(consents.data ?? []);
+  const listHeading = useRef<HTMLHeadingElement>(null);
 
   return (
     <Page width="narrow">
@@ -72,6 +28,10 @@ export default function ConsentsPage() {
           time.
         </p>
       </div>
+
+      <h2 ref={listHeading} tabIndex={-1} className="heading text-26">
+        Your choices
+      </h2>
 
       {consents.isPending ? (
         <p role="status" className="text-slate">
@@ -92,7 +52,7 @@ export default function ConsentsPage() {
         <Card as="div" padding="none">
           <ul className="divide-y divide-line">
             {grants.map((grant) => {
-              const status = describeStatus(grant);
+              const status = describeStatus(grant, contacts.data ?? []);
               const who = describeWho(grant, contacts.data ?? []);
               return (
                 <li
@@ -100,7 +60,7 @@ export default function ConsentsPage() {
                   className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 p-5"
                 >
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <p className="font-bold">{who}</p>
+                    <p className="font-bold break-words">{who}</p>
                     <p>{describeWhat(grant)}</p>
                     <p className="text-16 text-slate">
                       {grant.status === 'REVOKED' && grant.revoked_at
@@ -129,6 +89,10 @@ export default function ConsentsPage() {
           grant={stopping}
           who={describeWho(stopping, contacts.data ?? [])}
           onClose={() => setStopping(null)}
+          onStopped={() => {
+            setStopping(null);
+            window.setTimeout(() => listHeading.current?.focus(), 0);
+          }}
         />
       ) : null}
     </Page>

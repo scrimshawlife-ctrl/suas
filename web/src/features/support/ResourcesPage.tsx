@@ -21,6 +21,9 @@ import {
   REQUEST_BAND,
 } from './resources-model';
 
+/** Long addresses wrap inside the button instead of widening the page. */
+const WRAP = 'h-auto max-w-full py-2 text-left [overflow-wrap:anywhere]';
+
 function ClockIcon() {
   return (
     <Icon size={16}>
@@ -40,7 +43,9 @@ function ResourceCard({ resource }: { resource: CatalogResource }) {
   return (
     <Card as="li" padding="lg" className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <h3 className="text-22 leading-tight font-bold">{resource.service_name}</h3>
+        <h3 className="min-w-0 text-22 leading-tight font-bold break-words">
+          {resource.service_name}
+        </h3>
         <StatusChip kind={freshness.chip === 'ok' ? 'ok' : 'stale'}>
           {freshness.chip === 'ok' ? null : <ClockIcon />}
           {freshness.label}
@@ -57,21 +62,28 @@ function ResourceCard({ resource }: { resource: CatalogResource }) {
       {contact.kind === 'none' ? (
         <p className="pt-1.5 text-slate">No contact method recorded.</p>
       ) : contact.kind === 'text' ? (
-        <p className="pt-1.5">{contact.text}</p>
+        <p className="pt-1.5 break-words">{contact.text}</p>
       ) : (
         <div className="flex flex-wrap gap-2.5 pt-1.5">
           {contact.kind === 'phone' ? (
-            <Button size="small" icon={<PhoneIcon />} href={contact.href}>
+            <Button size="small" className={WRAP} icon={<PhoneIcon />} href={contact.href}>
               {contact.label}
             </Button>
           ) : contact.kind === 'email' ? (
-            <Button size="small" variant="secondary" icon={<MailIcon />} href={contact.href}>
+            <Button
+              size="small"
+              variant="secondary"
+              className={WRAP}
+              icon={<MailIcon />}
+              href={contact.href}
+            >
               {contact.label}
             </Button>
           ) : (
             <Button
               size="small"
               variant="secondary"
+              className={WRAP}
               href={contact.href}
               target="_blank"
               rel="noopener noreferrer"

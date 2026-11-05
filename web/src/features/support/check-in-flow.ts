@@ -45,12 +45,3 @@ export function skipQuestion(
 export function previousQuestion(position: Position): Position {
   return { ...position, index: Math.max(0, position.index - 1) };
 }
-
-/** Index of the first required question without an answer, or null when none is missing. */
-export function firstMissingRequired(
-  questions: readonly Question[],
-  answers: Answers,
-): number | null {
-  const index = questions.findIndex((q) => q.required && answers[q.question_id] === undefined);
-  return index === -1 ? null : index;
-}

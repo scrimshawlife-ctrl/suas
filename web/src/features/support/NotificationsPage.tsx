@@ -5,7 +5,7 @@ import { Page } from '../../components/Page';
 import { useNotifications } from './api';
 import { formatDate } from './consent-model';
 import { ErrorNotice } from './errors';
-import { describeReason, newestFirst } from './notification-reasons';
+import { describeReason, describeWhen, newestFirst } from './notification-reasons';
 
 /** Notifications: what SUAS told you, newest first. No board. */
 export default function NotificationsPage() {
@@ -37,9 +37,7 @@ export default function NotificationsPage() {
             {items.map((item) => (
               <li key={item.notification_id} className="flex flex-col gap-1 p-5">
                 <p className="font-bold">{describeReason(item.reason)}</p>
-                <p className="text-16 text-slate">
-                  {item.sent_at ? formatDate(item.sent_at) : 'Not sent yet'}
-                </p>
+                <p className="text-16 text-slate">{describeWhen(item, formatDate)}</p>
               </li>
             ))}
           </ul>

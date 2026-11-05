@@ -6,7 +6,7 @@ import type { NotificationItem } from './api';
  */
 export const REASON_TEXT: Readonly<Record<string, string>> = {
   trusted_contact_alert:
-    'Someone who named you as a trusted contact asked SUAS to send you this notice.',
+    'Someone who named you as a trusted contact asked SUAS to send you this notice. This notice does not describe their situation.',
   followup_due: 'A follow-up is due.',
   'qrf.responder_notified': 'You were told about a request that needs help.',
   service_request_update: 'A request you can see was updated.',
@@ -31,4 +31,20 @@ export function newestFirst(items: readonly NotificationItem[]): NotificationIte
     if (b.sent_at === null) return 1;
     return b.sent_at.localeCompare(a.sent_at);
   });
+}
+
+/** When a notification was sent, by what the server recorded for its delivery. */
+export function describeWhen(
+  item: Pick<NotificationItem, 'delivery_status' | 'sent_at'>,
+  formatDate: (iso: string) => string,
+): string {
+  if (
+    item.delivery_status === 'FAILED' ||
+    item.delivery_status === 'BOUNCED' ||
+    item.delivery_status === 'UNDELIVERABLE'
+  ) {
+    return 'Could not be delivered';
+  }
+  if (item.delivery_status === 'QUEUED' || item.sent_at === null) return 'Waiting to send';
+  return formatDate(item.sent_at);
 }

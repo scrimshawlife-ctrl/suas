@@ -1,30 +1,23 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useIdempotencyKey } from '../../api/idempotency';
-import { hasApiCode } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { Dialog } from '../../components/Dialog';
 import { Page } from '../../components/Page';
 import { StatusChip, type StatusKind } from '../../components/StatusChip';
 import { TextField } from '../../components/TextField';
 import {
   useConsents,
-  useGrantConsent,
   useInviteTrustedContact,
-  useRemoveTrustedContact,
-  useRevokeConsent,
   useTrustedContacts,
-  type ConsentGrant,
   type TrustedContact,
 } from './api';
 import { ErrorNotice } from './errors';
 import { visibleContacts } from './consent-model';
-import { findRedAlertGrant, redAlertGrantBody } from './red-alert-consent';
-
-const ALERT_LABEL = 'Alert this person if a Check-In shows I need support right away';
+import { AlertToggle } from './AlertToggle';
+import { RemoveContactDialog } from './RemoveContactDialog';
 
 const STATUS: Record<string, { label: string; kind: StatusKind }> = {
   INVITED: { label: 'Invited', kind: 'wait' },
@@ -99,95 +92,12 @@ function InviteForm() {
   );
 }
 
-/** The switch-like control that creates or ends the RED-alert grant for one accepted contact. */
-function AlertToggle({
-  contact,
-  grants,
-}: {
-  contact: TrustedContact;
-  grants: readonly ConsentGrant[] | undefined;
-}) {
-  const grant = useGrantConsent();
-  const revoke = useRevokeConsent();
-  const key = useIdempotencyKey();
-  const active = grants ? findRedAlertGrant(grants, contact.trusted_contact_id) : undefined;
-  const pending = grant.isPending || revoke.isPending;
-  const error = grant.error ?? revoke.error;
-  const unavailable = hasApiCode(grant.error, 'CONSENT_TEMPLATE_UNAVAILABLE');
-
-  function onChange(next: boolean) {
-    grant.reset();
-    revoke.reset();
-    const done = { onSuccess: () => key.renew() };
-    if (next) {
-      grant.mutate(
-        { body: redAlertGrantBody(contact.trusted_contact_id), headers: key.headers() },
-        done,
-      );
-    } else if (active) {
-      revoke.mutate({ consentGrantId: active.consent_grant_id, headers: key.headers() }, done);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="flex min-h-11 cursor-pointer items-start gap-3">
-        <input
-          type="checkbox"
-          role="switch"
-          className="mt-0.5 size-6 shrink-0 accent-service-blue"
-          checked={active !== undefined}
-          disabled={pending || grants === undefined}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-        <span>{ALERT_LABEL}</span>
-      </label>
-      <p role="status" className="pl-9 text-16 text-slate">
-        {pending
-          ? 'Saving…'
-          : active
-            ? 'On. This person may be told if a Check-In shows you need support right away.'
-            : 'Off. This person will not be told.'}
-      </p>
-      {unavailable ? (
-        <p role="alert" className="pl-9 font-bold">
-          Alerts cannot be turned on in this environment yet.
-        </p>
-      ) : error ? (
-        <div className="pl-9">
-          <ErrorNotice error={error} doing="change this setting" />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function RemoveDialog({ contact, onClose }: { contact: TrustedContact; onClose: () => void }) {
-  const remove = useRemoveTrustedContact();
-  return (
-    <Dialog open onClose={onClose} title={`Remove ${contact.relationship_label}?`}>
-      <p>They will no longer be told anything. You can add them again later.</p>
-      {remove.isError ? <ErrorNotice error={remove.error} doing="remove this person" /> : null}
-      <div className="flex flex-wrap gap-3">
-        <Button
-          disabled={remove.isPending}
-          onClick={() => remove.mutate(contact.trusted_contact_id, { onSuccess: onClose })}
-        >
-          {remove.isPending ? 'Removing…' : 'Remove'}
-        </Button>
-        <Button variant="secondary" onClick={onClose}>
-          Keep
-        </Button>
-      </div>
-    </Dialog>
-  );
-}
-
 /** Trusted contacts: add, list, remove, and choose who may be alerted. No board. */
 export default function TrustedContactsPage() {
   const contacts = useTrustedContacts();
   const consents = useConsents();
   const [removing, setRemoving] = useState<TrustedContact | null>(null);
+  const listHeading = useRef<HTMLHeadingElement>(null);
   const list = visibleContacts(contacts.data ?? []);
 
   return (
@@ -204,7 +114,7 @@ export default function TrustedContactsPage() {
       <InviteForm />
 
       <section aria-labelledby="your-contacts" className="flex flex-col gap-4">
-        <h2 id="your-contacts" className="heading text-26">
+        <h2 id="your-contacts" ref={listHeading} tabIndex={-1} className="heading text-26">
           Your trusted contacts
         </h2>
         {contacts.isPending ? (
@@ -229,8 +139,10 @@ export default function TrustedContactsPage() {
                 return (
                   <li key={contact.trusted_contact_id} className="flex flex-col gap-4 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <p className="text-20 font-bold">{contact.relationship_label}</p>
+                      <div className="flex min-w-0 flex-wrap items-center gap-3">
+                        <p className="min-w-0 text-20 font-bold break-words">
+                          {contact.relationship_label}
+                        </p>
                         <StatusChip kind={status.kind}>{status.label}</StatusChip>
                       </div>
                       <Button size="small" variant="secondary" onClick={() => setRemoving(contact)}>
@@ -241,7 +153,9 @@ export default function TrustedContactsPage() {
                       <AlertToggle contact={contact} grants={consents.data} />
                     ) : (
                       <p className="text-16 text-slate">
-                        You can choose whether to alert this person once they have accepted.
+                        {contact.status === 'SUSPENDED'
+                          ? 'Alerts are paused for this contact.'
+                          : 'You can choose whether to alert this person once they have accepted.'}
                       </p>
                     )}
                   </li>
@@ -260,10 +174,15 @@ export default function TrustedContactsPage() {
       </section>
 
       {removing ? (
-        <RemoveDialog
+        <RemoveContactDialog
           key={removing.trusted_contact_id}
           contact={removing}
+          grants={consents.data}
           onClose={() => setRemoving(null)}
+          onRemoved={() => {
+            setRemoving(null);
+            window.setTimeout(() => listHeading.current?.focus(), 0);
+          }}
         />
       ) : null}
     </Page>

@@ -5,11 +5,11 @@ export function describeWhat(grant: Pick<ConsentGrant, 'permission' | 'scope'>):
   const key = `${grant.permission}:${grant.scope}`;
   switch (key) {
     case 'can_receive:RED':
-      return 'Be told if a Check-In shows you need support right away';
+      return 'Get a notice from SUAS after a Check-In shows you need support right away';
     case 'can_receive:ORANGE':
-      return 'Be told if a Check-In shows you could use support soon';
+      return 'Get a notice from SUAS after a Check-In shows you could use support soon';
     case 'can_receive:YELLOW':
-      return 'Be told if a Check-In shows things have been harder lately';
+      return 'Get a notice from SUAS after a Check-In';
     case 'can_view:support_signal':
       return 'See the result of your Check-Ins';
     case 'can_view:checkin_answers':
@@ -46,13 +46,25 @@ export function describeWho(
 
 export type GrantStatusKind = 'ok' | 'off';
 
-export function describeStatus(grant: Pick<ConsentGrant, 'status'>): {
-  label: string;
-  kind: GrantStatusKind;
-} {
+/**
+ * A grant to a trusted contact who was removed or revoked stays ACTIVE on the server, but
+ * the membership check comes first, so it has no effect. Say so instead of "Sharing".
+ */
+export function describeStatus(
+  grant: Pick<ConsentGrant, 'status' | 'grantee_type' | 'grantee_id'>,
+  contacts: readonly TrustedContact[] = [],
+): { label: string; kind: GrantStatusKind } {
   switch (grant.status) {
-    case 'ACTIVE':
+    case 'ACTIVE': {
+      const contact =
+        grant.grantee_type === 'TRUSTED_CONTACT'
+          ? contacts.find((c) => c.trusted_contact_id === grant.grantee_id)
+          : undefined;
+      if (contact && (contact.status === 'REMOVED' || contact.status === 'REVOKED')) {
+        return { label: 'Not in effect', kind: 'off' };
+      }
       return { label: 'Sharing', kind: 'ok' };
+    }
     case 'REVOKED':
       return { label: 'Stopped', kind: 'off' };
     default:

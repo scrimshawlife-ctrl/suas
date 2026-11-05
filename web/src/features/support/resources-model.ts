@@ -84,21 +84,47 @@ export type ContactAction =
   | { kind: 'text'; text: string }
   | { kind: 'none' };
 
+/**
+ * A `tel:` target only when the whole string is one phone number: digits, spaces and the
+ * usual punctuation, an optional leading "+", 7 to 15 digits. Extensions, two numbers,
+ * letters or a "+" in the middle fail, and the text is shown as written instead.
+ */
+export function phoneHref(text: string): string | null {
+  const value = text.trim();
+  if (!/^\+?[\d\s().-]{7,20}$/.test(value)) return null;
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return null;
+  return `tel:${value.startsWith('+') ? '+' : ''}${digits}`;
+}
+
+/**
+ * A `mailto:` target only for one plain address: no spaces, "?", "&", "," or other
+ * characters that could add a subject, a second recipient or a header. Each part is encoded.
+ */
+export function mailHref(text: string): string | null {
+  const value = text.trim();
+  const match = /^([A-Za-z0-9._+'-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)$/.exec(value);
+  if (!match) return null;
+  return `mailto:${encodeURIComponent(match[1]!)}@${encodeURIComponent(match[2]!)}`;
+}
+
 /** What to offer for a listing's contact method, by `contact_method_kind`. */
 export function contactAction(resource: CatalogResource): ContactAction {
   const method = resource.contact_method?.trim() ?? '';
   if (method === '') return { kind: 'none' };
   switch (resource.contact_method_kind) {
     case 'PHONE': {
-      const dial = method.replace(/[^\d+]/g, '');
-      return dial === ''
+      const href = phoneHref(method);
+      return href === null
         ? { kind: 'text', text: method }
-        : { kind: 'phone', label: `Call ${method}`, href: `tel:${dial}` };
+        : { kind: 'phone', label: `Call ${method}`, href };
     }
-    case 'EMAIL':
-      return /^[^\s@<>]+@[^\s@<>]+$/.test(method)
-        ? { kind: 'email', label: `Email ${method}`, href: `mailto:${method}` }
-        : { kind: 'text', text: method };
+    case 'EMAIL': {
+      const href = mailHref(method);
+      return href === null
+        ? { kind: 'text', text: method }
+        : { kind: 'email', label: `Email ${method}`, href };
+    }
     case 'URL': {
       try {
         const url = new URL(method);

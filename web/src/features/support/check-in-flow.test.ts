@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  firstMissingRequired,
   previousQuestion,
   recordAnswer,
   skipQuestion,
@@ -47,11 +46,5 @@ describe('Check-In step flow', () => {
     const skipped = skipQuestion(questions, { index: 1, answers: { q1: 'q1-a' } });
     expect(skipped.position).toEqual({ index: 2, answers: { q1: 'q1-a' } });
     expect(skipped.done).toBe(false);
-  });
-
-  it('finds the first required question still unanswered', () => {
-    expect(firstMissingRequired(questions, { q1: 'q1-a' })).toBe(2);
-    expect(firstMissingRequired(questions, {})).toBe(0);
-    expect(firstMissingRequired(questions, { q1: 'x', q3: 'y' })).toBeNull();
   });
 });

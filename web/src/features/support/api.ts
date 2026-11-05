@@ -158,17 +158,37 @@ export function useInviteTrustedContact() {
   });
 }
 
-/** POST /trusted-contacts/{id}/commands/remove. */
+/**
+ * Remove a trusted contact. An ACTIVE RED-alert grant to them is revoked first (its own key),
+ * then the contact is removed. Both lists are refreshed even after a partial failure, so a
+ * retry sees the grant already revoked.
+ */
 export function useRemoveTrustedContact() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (trustedContactId: string) => {
+    mutationFn: async (input: {
+      trustedContactId: string;
+      redGrantId: string | undefined;
+      revokeHeaders: KeyHeaders;
+      removeHeaders: KeyHeaders;
+    }) => {
+      if (input.redGrantId !== undefined) {
+        await api.POST('/api/v0/consents/{id}/commands/revoke', {
+          params: { path: { id: input.redGrantId } },
+          headers: input.revokeHeaders,
+        });
+      }
       const { data } = await api.POST('/api/v0/trusted-contacts/{id}/commands/remove', {
-        params: { path: { id: trustedContactId } },
+        params: { path: { id: input.trustedContactId } },
+        headers: input.removeHeaders,
       });
       return requireData(data, 'trusted contact');
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: supportKeys.trustedContacts.all }),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: supportKeys.consents.all }),
+        queryClient.invalidateQueries({ queryKey: supportKeys.trustedContacts.all }),
+      ]),
   });
 }
 

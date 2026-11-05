@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { NotificationItem } from './api';
-import { describeReason, FALLBACK_TEXT, newestFirst, REASON_TEXT } from './notification-reasons';
+import {
+  describeReason,
+  describeWhen,
+  FALLBACK_TEXT,
+  newestFirst,
+  REASON_TEXT,
+} from './notification-reasons';
 
 function item(
   id: string,
@@ -46,5 +52,30 @@ describe('notification reasons', () => {
       item('queued', 'trusted_contact_alert', null),
     ]);
     expect(list.map((n) => n.notification_id)).toEqual(['queued', 'new', 'old']);
+  });
+});
+
+describe('notification sentences and dates', () => {
+  it('the trusted contact notice carries the template disclaimer', () => {
+    expect(describeReason('trusted_contact_alert')).toContain(
+      'This notice does not describe their situation.',
+    );
+  });
+
+  it('dates follow the delivery status', () => {
+    const fmt = (iso: string) => `on ${iso}`;
+    const sent = '2026-11-03T00:00:00Z';
+    expect(describeWhen({ delivery_status: 'QUEUED', sent_at: null }, fmt)).toBe('Waiting to send');
+    expect(describeWhen({ delivery_status: 'SENT', sent_at: null }, fmt)).toBe('Waiting to send');
+    for (const status of ['FAILED', 'BOUNCED', 'UNDELIVERABLE'] as const) {
+      expect(describeWhen({ delivery_status: status, sent_at: null }, fmt)).toBe(
+        'Could not be delivered',
+      );
+      expect(describeWhen({ delivery_status: status, sent_at: sent }, fmt)).toBe(
+        'Could not be delivered',
+      );
+    }
+    expect(describeWhen({ delivery_status: 'SENT', sent_at: sent }, fmt)).toBe(`on ${sent}`);
+    expect(describeWhen({ delivery_status: 'DELIVERED', sent_at: sent }, fmt)).toBe(`on ${sent}`);
   });
 });

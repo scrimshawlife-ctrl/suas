@@ -4,6 +4,8 @@ import {
   categoryFromParam,
   contactAction,
   describeFreshness,
+  mailHref,
+  phoneHref,
   REQUEST_BAND,
 } from './resources-model';
 
@@ -139,5 +141,51 @@ describe('describeFreshness', () => {
     expect(
       describeFreshness(resource({ freshness: 'UNVERIFIED', stale_warning: true })),
     ).toMatchObject({ label: 'Not checked yet', outOfDate: true });
+  });
+});
+
+describe('phoneHref', () => {
+  it('builds a tel: link only for one whole phone number', () => {
+    expect(phoneHref('(408) 555-0142')).toBe('tel:4085550142');
+    expect(phoneHref('+1-555-555-0101')).toBe('tel:+15555550101');
+    expect(phoneHref('  408.555.0142 ')).toBe('tel:4085550142');
+  });
+
+  it('shows text for extensions, two numbers, letters, a mid-string plus and bad lengths', () => {
+    for (const text of [
+      '408-555-0142 ext. 5',
+      '408-555-0142 x5',
+      '408-555-0142 / 408-555-0178',
+      '(408) 555-0142 (408) 555-0178',
+      '408-555-0142 or ask for Dee',
+      '408+555-0142',
+      '1-800-FLOWERS',
+      '555-01',
+      '+1234567890123456',
+      'tel:4085550142',
+    ]) {
+      expect(phoneHref(text), text).toBeNull();
+    }
+  });
+});
+
+describe('mailHref', () => {
+  it('builds a mailto: link only for one plain address, encoded', () => {
+    expect(mailHref('locker@example.org')).toBe('mailto:locker@example.org');
+    expect(mailHref("o'brien+help@example.org")).toBe("mailto:o'brien%2Bhelp@example.org");
+  });
+
+  it('shows text when the string could add a subject, a recipient or spaces', () => {
+    for (const text of [
+      'a@example.org?subject=x',
+      'a@example.org&cc=b@example.org',
+      'a@example.org,b@example.org',
+      'a@example.org b@example.org',
+      'Dee <a@example.org>',
+      'a@example',
+      'no address',
+    ]) {
+      expect(mailHref(text), text).toBeNull();
+    }
   });
 });

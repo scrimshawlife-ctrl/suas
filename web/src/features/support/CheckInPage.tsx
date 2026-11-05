@@ -13,7 +13,6 @@ import {
   type CheckInCompleted,
 } from './api';
 import {
-  firstMissingRequired,
   previousQuestion,
   recordAnswer,
   skipQuestion,
@@ -21,7 +20,7 @@ import {
   type Position,
   type Question,
 } from './check-in-flow';
-import { NOT_A_DIAGNOSIS, resultCopy } from './check-in-result';
+import { INCOMPLETE_TEXT, NOT_A_DIAGNOSIS, resultCopy } from './check-in-result';
 import { ErrorNotice } from './errors';
 
 function Segments({ total, index }: { total: number; index: number }) {
@@ -49,19 +48,30 @@ function Disclaimer() {
   return <p className="rounded-8 bg-mist px-4.5 py-4 text-16 text-slate">{NOT_A_DIAGNOSIS}</p>;
 }
 
+/** Neutral result. A RED signal adds the crisis panel straight after the two lines. */
 function Result({ result }: { result: CheckInCompleted }) {
   const copy = resultCopy(result);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  useEffect(() => headingRef.current?.focus(), []);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    headingRef.current?.focus({ preventScroll: true });
+  }, []);
   return (
-    <Page width="narrow" className="max-w-[760px] gap-6 pt-12">
-      {copy.crisis ? <CrisisPanel /> : null}
-      <div className="flex flex-col gap-3">
-        <h1 ref={headingRef} tabIndex={-1} className="heading text-40 max-sm:text-30">
+    <Page width="narrow" className="max-w-[760px] gap-5 pt-8 max-sm:pt-4">
+      <div className="flex flex-col gap-1.5">
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className={cn(
+            'heading',
+            copy.crisis ? 'text-30 max-sm:text-24' : 'text-40 max-sm:text-30',
+          )}
+        >
           {copy.heading}
         </h1>
         <p>{copy.body}</p>
       </div>
+      {copy.crisis ? <CrisisPanel /> : null}
       <div className="flex flex-wrap gap-3">
         <Button size="form" href={paths.request}>
           Ask for help
@@ -75,7 +85,7 @@ function Result({ result }: { result: CheckInCompleted }) {
   );
 }
 
-/** Check-In board: one question per step, then a plain result. */
+/** Check-In board: one question per step, then a neutral result. */
 export default function CheckInPage() {
   const start = useStartCheckIn();
   const checkIn = start.data;
@@ -84,9 +94,9 @@ export default function CheckInPage() {
   const [position, setPosition] = useState<Position>(START);
   const [choice, setChoice] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<CheckInCompleted | null>(null);
-  const [missing, setMissing] = useState(false);
+  const [incomplete, setIncomplete] = useState(false);
   const started = useRef(false);
-  const headingRef = useRef<HTMLDivElement>(null);
+  const questionRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (started.current) return;
@@ -102,21 +112,27 @@ export default function CheckInPage() {
   function goTo(next: Position) {
     setPosition(next);
     setChoice(undefined);
-    setMissing(false);
     save.reset();
     complete.reset();
-    queueMicrotask(() => headingRef.current?.focus());
+    queueMicrotask(() => questionRef.current?.focus());
   }
 
-  async function finish(answers: Position['answers']) {
+  /** A fresh Check-In: the server does not resume or edit one that has ended. */
+  function startAgain() {
+    setPosition(START);
+    setChoice(undefined);
+    setResult(null);
+    setIncomplete(false);
+    save.reset();
+    complete.reset();
+    start.reset();
+    start.mutate();
+  }
+
+  async function finish() {
     const done = await complete.mutateAsync();
-    if (done.incomplete) {
-      const index = firstMissingRequired(questions, answers);
-      goTo({ index: index ?? 0, answers });
-      setMissing(true);
-      return;
-    }
-    setResult(done);
+    if (done.incomplete) setIncomplete(true);
+    else setResult(done);
   }
 
   async function onSave() {
@@ -125,7 +141,7 @@ export default function CheckInPage() {
     const next = recordAnswer(questions, position, selected);
     if (next.done) {
       setPosition(next.position);
-      await finish(next.position.answers);
+      await finish();
     } else {
       goTo(next.position);
     }
@@ -133,11 +149,30 @@ export default function CheckInPage() {
 
   async function onSkip() {
     const next = skipQuestion(questions, position);
-    if (next.done) await finish(next.position.answers);
+    if (next.done) await finish();
     else goTo(next.position);
   }
 
   if (result) return <Result result={result} />;
+
+  if (incomplete) {
+    return (
+      <Page width="narrow" className="max-w-[760px] gap-5 pt-12">
+        <p role="alert" className="text-20 font-bold">
+          {INCOMPLETE_TEXT}
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <Button size="form" onClick={startAgain}>
+            Start again
+          </Button>
+          <Button size="form" variant="secondary" href={paths.home}>
+            Back to home
+          </Button>
+        </div>
+        <Disclaimer />
+      </Page>
+    );
+  }
 
   if (start.isError) {
     return (
@@ -169,9 +204,10 @@ export default function CheckInPage() {
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <h1 className="text-20 font-bold">Check-In</h1>
           <Link to={paths.home} className="inline-flex min-h-11 items-center font-bold">
-            Save and finish later
+            Leave Check-In
           </Link>
         </div>
+        <p className="text-16 text-slate">If you leave, you will start a new Check-In next time.</p>
         <p role="status" className="font-bold text-slate">
           Question {position.index + 1} of {questions.length}
         </p>
@@ -185,24 +221,24 @@ export default function CheckInPage() {
           void onSave().catch(() => undefined);
         }}
       >
-        {missing ? (
-          <p role="alert" className="font-bold">
-            This question needs an answer before we can finish.
-          </p>
-        ) : null}
-        <div ref={headingRef} tabIndex={-1} className="outline-offset-8">
-          <RadioCardGroup
-            key={question.question_id}
-            name="answer"
-            legend={<span className="heading block text-40 max-sm:text-28">{question.prompt}</span>}
-            options={question.options.map((option) => ({
-              value: option.answer_option_id,
-              title: option.label,
-            }))}
-            value={selected ?? ''}
-            onValueChange={setChoice}
-          />
-        </div>
+        <h2
+          ref={questionRef}
+          tabIndex={-1}
+          className="heading text-40 outline-offset-8 max-sm:text-28"
+        >
+          {question.prompt}
+        </h2>
+        <RadioCardGroup
+          key={question.question_id}
+          name="answer"
+          legend={<span className="sr-only">{question.prompt}</span>}
+          options={question.options.map((option) => ({
+            value: option.answer_option_id,
+            title: option.label,
+          }))}
+          value={selected ?? ''}
+          onValueChange={setChoice}
+        />
         {failure ? <ErrorNotice error={failure} doing="save your answer" /> : null}
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" size="form" disabled={busy || selected === undefined}>
