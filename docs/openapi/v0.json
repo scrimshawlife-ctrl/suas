@@ -2511,6 +2511,7 @@
       "post": {
         "tags": ["cases"],
         "summary": "Reopen a CLOSED case (org admin; reason required)",
+        "description": "Answers 409 ILLEGAL_TRANSITION when the Veteran already has a newer current case (a case that is not RESOLVED or CLOSED): a Veteran has at most one at a time, and nothing is merged.",
         "operationId": "reopenCase",
         "security": [
           {
@@ -4278,6 +4279,7 @@
         }
       },
       "OpenCaseSummary": {
+        "description": "The current case of a Veteran: not RESOLVED or CLOSED. A Veteran whose case is resolved has none until they ask for help again, which opens a new case.",
         "type": "object",
         "required": ["case_id", "status", "priority_signal_level"],
         "properties": {

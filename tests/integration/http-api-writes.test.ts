@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { findNonClosedCase } from '../../src/coordination/index.js';
+import { findCurrentCase } from '../../src/coordination/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -85,7 +85,7 @@ async function openRedCase() {
     headers,
   });
   expect(completed.statusCode).toBe(200);
-  const supportCase = await findNonClosedCase(pool, tenantId, user.userId);
+  const supportCase = await findCurrentCase(pool, tenantId, user.userId);
   if (supportCase === undefined) throw new Error('expected RED case');
   return { pool, tenantId, user, headers, supportCase };
 }

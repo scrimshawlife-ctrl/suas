@@ -36,7 +36,7 @@ import { createUser, setUserCounty } from '../../src/identity/index.js';
 import { evaluateDisclosure } from '../../src/consent/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { createTestPool, resetKernelTables, syntheticTenantId } from '../helpers/db.js';
-import { holdCase } from '../helpers/hold-case.js';
+import { holdCase, holdRequest } from '../helpers/hold-case.js';
 
 const pool: Pool = createTestPool();
 
@@ -647,13 +647,44 @@ describe('DISPATCH.md §3, §6, §8 — Service Request commands', () => {
 });
 
 describe('CONSENT.md §3.6 — the assignment verifier', () => {
-  it('reports a held request for the helper who accepted it', async () => {
-    const { tenantId, veteran, responder, other, supportCase } = await scenario();
-    await holdCase(pool, {
-      tenantId,
-      caseId: supportCase.caseId,
-      acceptedByUserId: responder.userId,
+  /** The helper holds a live (accepted, not finished) request of the veteran's case. */
+  async function liveHold() {
+    const context = await scenario();
+    const created = await withTransaction(pool, (tx) =>
+      createServiceRequest(tx, {
+        tenantId: context.tenantId,
+        caseId: context.supportCase.caseId,
+        category: 'PEER_SUPPORT',
+        createdBy: context.veteran.userId,
+        actorType: 'VETERAN',
+      }),
+    );
+    await holdRequest(pool, {
+      tenantId: context.tenantId,
+      serviceRequestId: created.serviceRequestId,
+      acceptedByUserId: context.responder.userId,
     });
+    return { ...context, serviceRequestId: created.serviceRequestId };
+  }
+
+  const decisionFor = (tenantId: string, veteranUserId: string, granteeId: string) =>
+    evaluateDisclosure(
+      pool,
+      {
+        tenantId,
+        veteranUserId,
+        permission: 'can_view',
+        scope: 'current_requests',
+        granteeType: 'USER',
+        granteeId,
+        purpose: 'Coordinate an assigned case',
+        systemBasis: 'CASE_ASSIGNMENT',
+      },
+      { verifyActiveAssignment: createAssignmentVerifier(pool) },
+    );
+
+  it('reports a held request for the helper who accepted it', async () => {
+    const { tenantId, veteran, responder, other } = await liveHold();
 
     const verify = createAssignmentVerifier(pool);
     expect(
@@ -665,59 +696,49 @@ describe('CONSENT.md §3.6 — the assignment verifier', () => {
   });
 
   it('lets the consent kernel grant responder access on that basis', async () => {
-    const { tenantId, veteran, responder, supportCase } = await scenario();
-    await holdCase(pool, {
-      tenantId,
-      caseId: supportCase.caseId,
-      acceptedByUserId: responder.userId,
-    });
+    const { tenantId, veteran, responder } = await liveHold();
 
     // Slice 4 denied this basis for want of a verifier; Slice 5 supplies one.
-    const decision = await evaluateDisclosure(
-      pool,
-      {
-        tenantId,
-        veteranUserId: veteran.userId,
-        permission: 'can_view',
-        scope: 'current_requests',
-        granteeType: 'USER',
-        granteeId: responder.userId,
-        purpose: 'Coordinate an assigned case',
-        systemBasis: 'CASE_ASSIGNMENT',
-      },
-      { verifyActiveAssignment: createAssignmentVerifier(pool) },
-    );
+    const decision = await decisionFor(tenantId, veteran.userId, responder.userId);
 
     expect(decision).toMatchObject({ allowed: true, basis: 'CASE_ASSIGNMENT' });
   });
 
-  it('denies once the case is closed', async () => {
-    const { tenantId, veteran, responder, supportCase } = await scenario();
-    await holdCase(pool, {
+  it('denies once the held request goes terminal', async () => {
+    const { tenantId, veteran, responder, serviceRequestId } = await liveHold();
+    await executeServiceRequestCommand(pool, {
       tenantId,
-      caseId: supportCase.caseId,
-      acceptedByUserId: responder.userId,
+      serviceRequestId,
+      command: 'CANCEL',
+      actorId: veteran.userId,
+      actorType: 'VETERAN',
+      reason: 'no longer needed',
     });
+
+    expect((await decisionFor(tenantId, veteran.userId, responder.userId)).allowed).toBe(false);
+  });
+
+  it('denies once the case is closed', async () => {
+    const { tenantId, veteran, responder, supportCase } = await liveHold();
     // Ownership ends with the case: a closed case grants nothing.
-    await pool.query(`UPDATE support_cases SET status = 'CLOSED' WHERE case_id = $1`, [
+    await pool.query(
+      `UPDATE support_cases SET status = 'CLOSED', closed_at = now() WHERE case_id = $1`,
+      [supportCase.caseId],
+    );
+
+    expect((await decisionFor(tenantId, veteran.userId, responder.userId)).allowed).toBe(false);
+  });
+
+  it('does not carry a previous cycle holder into a reopened case', async () => {
+    const { tenantId, veteran, responder, supportCase } = await liveHold();
+    await pool.query(
+      `UPDATE support_cases SET status = 'CLOSED', closed_at = now() WHERE case_id = $1`,
+      [supportCase.caseId],
+    );
+    await pool.query(`UPDATE support_cases SET status = 'OPEN' WHERE case_id = $1`, [
       supportCase.caseId,
     ]);
 
-    const decision = await evaluateDisclosure(
-      pool,
-      {
-        tenantId,
-        veteranUserId: veteran.userId,
-        permission: 'can_view',
-        scope: 'current_requests',
-        granteeType: 'USER',
-        granteeId: responder.userId,
-        purpose: 'Coordinate a case I no longer hold',
-        systemBasis: 'CASE_ASSIGNMENT',
-      },
-      { verifyActiveAssignment: createAssignmentVerifier(pool) },
-    );
-
-    expect(decision.allowed).toBe(false);
+    expect((await decisionFor(tenantId, veteran.userId, responder.userId)).allowed).toBe(false);
   });
 });

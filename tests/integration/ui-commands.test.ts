@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { findNonClosedCase, listCaseServiceRequests } from '../../src/coordination/index.js';
+import { findCurrentCase, listCaseServiceRequests } from '../../src/coordination/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { presentQrfState, VETERAN_QRF_CANCEL_REASON } from '../../src/ui/index.js';
 import { readActiveQrf } from '../../src/ui/read.js';
@@ -113,7 +113,7 @@ describe('POST /app/qrf/deploy — veteran peer-support request', () => {
     expect(home.body).not.toContain('Deploy QRF');
     expect(home.body).toContain('action="/app/qrf/cancel"');
 
-    const supportCase = await findNonClosedCase(pool(), tenantId, userId);
+    const supportCase = await findCurrentCase(pool(), tenantId, userId);
     expect(supportCase).toBeDefined();
     const qrf = await readActiveQrf(pool(), tenantId, userId);
     expect(qrf?.serviceRequestId).toBeDefined();
@@ -232,7 +232,7 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
       url: '/app/qrf/deploy',
       headers: authorized(veteran.credential),
     });
-    const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
+    const supportCase = await findCurrentCase(pool(), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
     const responder = await accepterSession(veteran.tenantId);
     const request = (
@@ -265,7 +265,7 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
       url: '/app/qrf/deploy',
       headers: authorized(veteran.credential),
     });
-    const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
+    const supportCase = await findCurrentCase(pool(), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
     const responder = await accepterSession(veteran.tenantId);
     const request = (
@@ -311,7 +311,7 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
       url: '/app/qrf/deploy',
       headers: authorized(veteran.credential),
     });
-    const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
+    const supportCase = await findCurrentCase(pool(), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
     const responder = await accepterSession(veteran.tenantId);
     const request = (

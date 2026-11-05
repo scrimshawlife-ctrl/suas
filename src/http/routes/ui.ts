@@ -37,7 +37,7 @@ import {
 } from '../../auth/index.js';
 import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
 import type { SafetyCopyMode, SupportSignalMode, SuasConfig } from '../../config/index.js';
-import { findNonClosedCase, SERVICE_CATEGORIES } from '../../coordination/index.js';
+import { findCurrentCase, SERVICE_CATEGORIES } from '../../coordination/index.js';
 import { withTransaction } from '../../db/index.js';
 import { appendAuditEvent } from '../../events/index.js';
 import {
@@ -733,7 +733,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       : undefined;
     const supportCase =
       signal?.level === 'RED'
-        ? await findNonClosedCase(pool, context.tenantId, context.userId)
+        ? await findCurrentCase(pool, context.tenantId, context.userId)
         : undefined;
 
     await reply.type(HTML).send(

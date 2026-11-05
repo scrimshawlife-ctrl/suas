@@ -12,7 +12,7 @@
 import type { Pool } from 'pg';
 import type { SuasConfig } from '../config/index.js';
 import type { DurableJobQueuePort, JsonObject } from '../jobs/index.js';
-import { findNonClosedCase } from '../coordination/cases.js';
+import { findCurrentCase } from '../coordination/cases.js';
 import { canonicalInputFor, findCheckIn } from './check-ins.js';
 import { computeSignal } from './engine.js';
 import { alertTrustedContactsOfRed } from './red-alert.js';
@@ -99,5 +99,5 @@ export async function runSupportSignalComputeJob(
 
 /** Convenience for tests: settled RED should have opened a non-closed case. */
 export async function caseOpenedForVeteran(pool: Pool, tenantId: string, veteranUserId: string) {
-  return findNonClosedCase(pool, tenantId, veteranUserId);
+  return findCurrentCase(pool, tenantId, veteranUserId);
 }

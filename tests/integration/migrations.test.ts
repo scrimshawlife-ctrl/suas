@@ -250,8 +250,8 @@ describe('0017 request holder backfill', () => {
       const closedNoChat = await insertRequest(tenantId, caseB, veteranB, 'CLOSED');
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([17]);
-      expect(await readSchemaVersion(pool)).toBe(17);
+      expect(result.appliedNow).toEqual([17, 18]);
+      expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const holders = await pool.query<{ id: string; holder: string | null }>(
         `SELECT service_request_id AS id, accepted_by_user_id AS holder FROM service_requests`,
@@ -280,5 +280,42 @@ describe('0017 request holder backfill', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('0018 current case index', () => {
+  async function insertUser(tenantId: string): Promise<string> {
+    const id = randomUUID();
+    await pool.query(`INSERT INTO users (user_id, tenant_id, status) VALUES ($1, $2, 'ACTIVE')`, [
+      id,
+      tenantId,
+    ]);
+    return id;
+  }
+
+  const insertCase = (tenantId: string, veteran: string, status: string) =>
+    pool.query(
+      `INSERT INTO support_cases (case_id, tenant_id, veteran_user_id, status)
+       VALUES ($1, $2, $3, $4::suas_case_status)`,
+      [randomUUID(), tenantId, veteran, status],
+    );
+
+  it('lets a RESOLVED or CLOSED case sit beside a new current case, and refuses two current ones', async () => {
+    await runMigrations(pool, { mode: 'apply', provenance });
+    const tenantId = randomUUID();
+    const veteran = await insertUser(tenantId);
+
+    await insertCase(tenantId, veteran, 'CLOSED');
+    await insertCase(tenantId, veteran, 'RESOLVED');
+    await insertCase(tenantId, veteran, 'OPEN');
+
+    // Any second current case is refused, in whatever status.
+    for (const status of ['OPEN', 'TRIAGED', 'ASSIGNED', 'ACTIVE', 'FOLLOWUP']) {
+      await expect(insertCase(tenantId, veteran, status), status).rejects.toThrow(
+        /support_cases_one_active_per_veteran/,
+      );
+    }
+    // Another Veteran is unaffected.
+    await insertCase(tenantId, await insertUser(tenantId), 'OPEN');
   });
 });

@@ -57,9 +57,11 @@ import {
   executeCaseCommand,
   executeServiceRequestCommand,
   findCase,
+  findCurrentCase,
   listCaseServiceRequests,
   lockCase,
   openCase,
+  TERMINAL_REQUEST_STATUSES,
   type CaseStatus,
   type SupportCase,
 } from '../coordination/index.js';
@@ -429,16 +431,29 @@ async function ensureSettledCase(
   veteran: User,
   accepter: User,
 ): Promise<{ caseId: string; status: CaseStatus; settlementId: string | undefined }> {
-  const latest = await pool.query<{ case_id: string; status: CaseStatus }>(
-    `SELECT case_id, status FROM support_cases
-     WHERE tenant_id = $1 AND veteran_user_id = $2
-     ORDER BY created_at DESC LIMIT 1`,
+  // The seeded settled case is the Veteran's CLOSED case with a Settlement. Once it exists
+  // the seed leaves it alone, whatever the Veteran did afterwards: a later case of their own
+  // (a request made while trying the app) is theirs, and resolving it here would fail on its
+  // open requests.
+  const closed = await pool.query<{ case_id: string }>(
+    `SELECT case_id FROM support_cases
+     WHERE tenant_id = $1 AND veteran_user_id = $2 AND status = 'CLOSED'
+     ORDER BY created_at LIMIT 1`,
     [TENANT_ID, veteran.userId],
   );
-  const existing = latest.rows[0];
-  if (existing !== undefined && existing.status === 'CLOSED') {
+  const existing = closed.rows[0];
+  if (existing !== undefined) {
     const settlement = await findCurrentSettlement(pool, TENANT_ID, existing.case_id);
     return { caseId: existing.case_id, status: 'CLOSED', settlementId: settlement?.settlementId };
+  }
+
+  // A current case with live requests is the Veteran's own work, not seed data: leave it.
+  const current = await findCurrentCase(pool, TENANT_ID, veteran.userId);
+  if (current !== undefined) {
+    const live = await listCaseServiceRequests(pool, TENANT_ID, current.caseId);
+    if (live.some((request) => !TERMINAL_REQUEST_STATUSES.includes(request.status))) {
+      return { caseId: current.caseId, status: current.status, settlementId: undefined };
+    }
   }
 
   const opened = await withTransaction(pool, (tx: PoolClient) =>

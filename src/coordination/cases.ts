@@ -23,6 +23,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendDomainEvent } from '../events/index.js';
+import { TERMINAL_REQUEST_STATUSES } from './request-transitions.js';
 import {
   resolveCaseTransition,
   StaleCaseStateError,
@@ -94,15 +95,20 @@ export async function findCase(
   return row === undefined ? undefined : toCase(row);
 }
 
-/** The MVP one-active-case projection (CASES.md §3). CLOSED rows are excluded. */
-export async function findNonClosedCase(
+/**
+ * The Veteran's current case: the one new requests join and signals update. RESOLVED and
+ * CLOSED cases are excluded, so a Veteran whose case is resolved has no current case until
+ * they ask again (decided 2026-11-05; departs from the CASES.md §3 one-non-closed default).
+ * Every reader that means "the case in play" uses this; none means "any non-closed case".
+ */
+export async function findCurrentCase(
   db: Queryable,
   tenantId: string,
   veteranUserId: string,
 ): Promise<SupportCase | undefined> {
   const result = await db.query<CaseRow>(
     `SELECT ${CASE_COLUMNS} FROM support_cases
-     WHERE tenant_id = $1 AND veteran_user_id = $2 AND status <> 'CLOSED'`,
+     WHERE tenant_id = $1 AND veteran_user_id = $2 AND status NOT IN ('RESOLVED', 'CLOSED')`,
     [tenantId, veteranUserId],
   );
   const row = result.rows[0];
@@ -129,10 +135,24 @@ export async function setCasePrioritySignalLevel(
 }
 
 /**
- * Whether a person holds at least one Service Request of the case: they accepted it.
- * This is the test for every case-level action (contact log, follow-ups, case commands,
- * resolve). It counts a request in any status, because a case cannot be resolved until
- * its requests are finished and the helper who ran them still has to be able to do it.
+ * The requests that give standing on a case: those of its current cycle, while the case is
+ * not CLOSED. Closing ends the cycle, so a former holder loses every case-level action and
+ * read. `closed_at` is written only when a case becomes CLOSED and never cleared, so after an
+ * admin reopen the requests created before it belong to the previous cycle and do not count.
+ * Expects `$1` = tenant and `$2` = case; aliases `r` (service_requests), `c` (support_cases).
+ */
+const CURRENT_CYCLE_REQUESTS = `
+  FROM service_requests r
+  JOIN support_cases c ON c.case_id = r.case_id AND c.tenant_id = r.tenant_id
+ WHERE r.tenant_id = $1 AND r.case_id = $2
+   AND c.status <> 'CLOSED'
+   AND (c.closed_at IS NULL OR r.created_at > c.closed_at)`;
+
+/**
+ * Whether a person holds at least one Service Request of the case's current cycle: they
+ * accepted it. This is the test for every case-level action (contact log, follow-ups, case
+ * commands, resolve). It counts a request in any status, because a case cannot be resolved
+ * until its requests are finished and the helper who ran them still has to be able to do it.
  */
 export async function holdsRequestInCase(
   db: Queryable,
@@ -141,24 +161,20 @@ export async function holdsRequestInCase(
   userId: string,
 ): Promise<boolean> {
   const result = await db.query(
-    `SELECT 1 FROM service_requests
-      WHERE tenant_id = $1 AND case_id = $2 AND accepted_by_user_id = $3
-      LIMIT 1`,
+    `SELECT 1 ${CURRENT_CYCLE_REQUESTS} AND r.accepted_by_user_id = $3 LIMIT 1`,
     [tenantId, caseId, userId],
   );
   return (result.rowCount ?? 0) > 0;
 }
 
-/** Whether anyone has accepted a Service Request of the case. */
+/** Whether anyone has accepted a Service Request of the case's current cycle. */
 export async function caseHasAcceptedRequest(
   db: Queryable,
   tenantId: string,
   caseId: string,
 ): Promise<boolean> {
   const result = await db.query(
-    `SELECT 1 FROM service_requests
-      WHERE tenant_id = $1 AND case_id = $2 AND accepted_by_user_id IS NOT NULL
-      LIMIT 1`,
+    `SELECT 1 ${CURRENT_CYCLE_REQUESTS} AND r.accepted_by_user_id IS NOT NULL LIMIT 1`,
     [tenantId, caseId],
   );
   return (result.rowCount ?? 0) > 0;
@@ -180,7 +196,8 @@ export interface OpenCaseResult {
 }
 
 /**
- * Open a Support Case under the MVP one-active-case default.
+ * Open the Veteran's current Support Case, or return the one they already have.
+ * A RESOLVED or CLOSED case is never reused: the Veteran's next request opens a new case.
  *
  * CASES.md §3.1: signal, event, and job delivery may be duplicated or
  * concurrent, so creation must not rely on "read no case → insert". The insert
@@ -202,7 +219,7 @@ export async function openCase(tx: PoolClient, input: OpenCaseInput): Promise<Op
   if (row === undefined) {
     const existing = await tx.query<CaseRow>(
       `SELECT ${CASE_COLUMNS} FROM support_cases
-       WHERE tenant_id = $1 AND veteran_user_id = $2 AND status <> 'CLOSED'`,
+       WHERE tenant_id = $1 AND veteran_user_id = $2 AND status NOT IN ('RESOLVED', 'CLOSED')`,
       [input.tenantId, input.veteranUserId],
     );
     const existingRow = existing.rows[0];
@@ -358,7 +375,14 @@ export async function executeCaseCommand(
       }
     }
 
-    const updated = await setCaseStatus(tx, input.tenantId, input.caseId, transition.to);
+    let updated: SupportCase;
+    try {
+      updated = await setCaseStatus(tx, input.tenantId, input.caseId, transition.to);
+    } catch (error) {
+      // The Veteran already has a newer current case: the one-current-case index refuses a second.
+      if (input.command === 'REOPEN' && isUniqueViolation(error)) throw new ReopenBlockedError();
+      throw error;
+    }
 
     if (input.command === 'ESCALATE') {
       await appendDomainEvent(tx, {
@@ -375,6 +399,23 @@ export async function executeCaseCommand(
 
     return updated;
   });
+}
+
+/** REOPEN would give the Veteran two current cases. Nothing is merged; the admin decides. */
+export class ReopenBlockedError extends Error {
+  readonly code = 'ILLEGAL_TRANSITION';
+  readonly httpStatus = 409;
+
+  constructor() {
+    super('This case cannot be reopened while the Veteran has another current case.');
+    this.name = 'ReopenBlockedError';
+  }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as { code?: unknown }).code === '23505'
+  );
 }
 
 export class NoActiveAssignmentError extends Error {
@@ -401,11 +442,12 @@ export class NotAssignedError extends Error {
 }
 
 /**
- * Whether a person currently holds a request of a veteran's open case.
+ * Whether a person currently holds a live request of a veteran's current case cycle.
  *
- * This is the verifier CONSENT.md §3.6 needs: the accepter's
- * least-privilege access is a documented basis, and Slice 4 denies it until
- * something can confirm the acceptance. This is that something.
+ * This is the verifier CONSENT.md §3.6 needs: the accepter's least-privilege access is a
+ * documented basis, and Slice 4 denies it until something can confirm the acceptance. This
+ * is that something. The request must not be terminal, so a helper whose request was
+ * cancelled, expired or closed loses the basis, and a closed case grants nothing.
  */
 export function createAssignmentVerifier(pool: Pool) {
   return async (params: {
@@ -421,8 +463,10 @@ export function createAssignmentVerifier(pool: Pool) {
          AND r.accepted_by_user_id = $2
          AND c.veteran_user_id = $3
          AND c.status <> 'CLOSED'
+         AND (c.closed_at IS NULL OR r.created_at > c.closed_at)
+         AND r.status <> ALL($4::suas_service_request_status[])
        LIMIT 1`,
-      [params.tenantId, params.acceptedByUserId, params.veteranUserId],
+      [params.tenantId, params.acceptedByUserId, params.veteranUserId, TERMINAL_REQUEST_STATUSES],
     );
     return (result.rowCount ?? 0) > 0;
   };

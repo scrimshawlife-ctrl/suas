@@ -817,7 +817,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Reopen a CLOSED case (org admin; reason required) */
+    /**
+     * Reopen a CLOSED case (org admin; reason required)
+     * @description Answers 409 ILLEGAL_TRANSITION when the Veteran already has a newer current case (a case that is not RESOLVED or CLOSED): a Veteran has at most one at a time, and nothing is merged.
+     */
     post: operations['reopenCase'];
     delete?: never;
     options?: never;
@@ -1412,6 +1415,7 @@ export interface components {
       /** Format: date-time */
       verified_at: string | null;
     };
+    /** @description The current case of a Veteran: not RESOLVED or CLOSED. A Veteran whose case is resolved has none until they ask for help again, which opens a new case. */
     OpenCaseSummary: {
       /** Format: uuid */
       case_id: string;
