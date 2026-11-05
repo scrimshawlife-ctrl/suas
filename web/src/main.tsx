@@ -26,10 +26,14 @@ setUnauthorizedHandler(() => {
   void router.navigate(paths.signIn, { replace: true, state: { from: `${pathname}${search}` } });
 });
 
-// MFA_REQUIRED has already cleared the client MFA flag; go to the step-up screen.
+// MFA_REQUIRED has already cleared the client MFA flag; go to the step-up screen and come back.
 setMfaRequiredHandler(() => {
-  if (router.state.location.pathname !== paths.adminMfa) {
-    void router.navigate(paths.adminMfa, { replace: true });
+  const { pathname, search } = router.state.location;
+  if (pathname !== paths.adminMfa) {
+    void router.navigate(paths.adminMfa, {
+      replace: true,
+      state: { from: `${pathname}${search}` },
+    });
   }
 });
 
