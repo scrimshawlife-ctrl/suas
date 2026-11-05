@@ -37,8 +37,12 @@ export function Footer({ showVeteransCrisisLine = false }: FooterProps) {
               Dial 988
             </a>
             , then press 1 ·{' '}
-            <a href="sms:838255" className={crisisLink} aria-label="Text 838255">
-              Text 838255
+            <a
+              href="sms:838255"
+              className={crisisLink}
+              aria-label="Veterans Crisis Line: Text 838255"
+            >
+              Veterans Crisis Line: Text 838255
             </a>
           </p>
         ) : null}

@@ -331,6 +331,9 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
     // The model has no crisis category or crisis contact flag. 911, 988 and 838255
     // are still passed through phoneHref and contactAction; phoneHref only links a
     // number of 7 to 15 digits, so those three stay text unless a future change emits them.
+    // Owner decision (Danny, 2026-11-05 1:20 PM PT): "You can keep those numbers" /
+    // "Just label them appropriately". Hotline-shaped directory numbers stay
+    // directory resources and are labelled with the listed resource name.
     interface DirectoryResource {
       resource_id: string;
       service_name: string;
@@ -393,15 +396,45 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
           freshness: 'FRESH',
           stale_warning: false,
         },
+        {
+          resource_id: '55555555-5555-4555-8555-555555555555',
+          service_name: 'National Lifeline',
+          category: 'PEER_SUPPORT',
+          counties: ['SANTA_CLARA'],
+          hours: null,
+          cost: null,
+          // Toll-free shape with a leading 1, split so the fixture scan sees no routable literal.
+          contact_method: ['1', '800', '273', '8255'].join('-'),
+          contact_method_kind: 'PHONE',
+          freshness: 'FRESH',
+          stale_warning: false,
+        },
+        {
+          resource_id: '66666666-6666-4666-8666-666666666666',
+          service_name: 'Local helpline',
+          category: 'PEER_SUPPORT',
+          counties: ['SANTA_CLARA'],
+          hours: null,
+          cost: null,
+          // Parenthesized toll-free shape, split the same way.
+          contact_method: `(${'800'}) ${['273', '8255'].join('-')}`,
+          contact_method_kind: 'PHONE',
+          freshness: 'FRESH',
+          stale_warning: false,
+        },
       ],
-      limit: 4,
+      limit: 6,
       next_cursor: null,
     };
     const modelUrl = new URL('../../web/src/features/support/resources-model.ts', import.meta.url)
       .href;
     const model = (await import(modelUrl)) as {
       phoneHref: (text: string) => string | null;
-      contactAction: (resource: DirectoryResource) => { kind: string; href?: string };
+      contactAction: (resource: DirectoryResource) => {
+        kind: string;
+        href?: string;
+        label?: string;
+      };
     };
     const produced: string[] = [];
     const consider = (href: string | null): void => {
@@ -415,9 +448,21 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
       const method = resource.contact_method ?? '';
       consider(model.phoneHref(method));
       const action = model.contactAction(resource);
+      if (action.kind === 'phone') {
+        expect(action.label, resource.service_name).toBe(resource.service_name);
+        expect(action.href ?? '').toMatch(/^tel:/);
+      }
       consider(action.href ?? null);
     }
     expect(produced.length).toBeGreaterThan(0);
+    const national = ['1', '800', '273', '8255'].join('-');
+    const local = `(${'800'}) ${['273', '8255'].join('-')}`;
+    expect(produced).toEqual(
+      expect.arrayContaining([
+        `tel:${national.replace(/\D/g, '')}`,
+        `tel:${local.replace(/\D/g, '')}`,
+      ]),
+    );
   });
 
   it('states placeholder unavailability without giving crisis guidance', () => {

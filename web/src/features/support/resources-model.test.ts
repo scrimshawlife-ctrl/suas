@@ -52,7 +52,7 @@ describe('contactAction', () => {
       contactAction(resource({ contact_method: '(408) 555-0142', contact_method_kind: 'PHONE' })),
     ).toEqual({
       kind: 'phone',
-      label: 'Call (408) 555-0142',
+      label: 'Pantry',
       href: 'tel:4085550142',
     });
     expect(

@@ -87,11 +87,13 @@ describe('D-012 crisis copy', () => {
       </MemoryRouter>,
     );
     expect(text(screen.getByRole('contentinfo'))).toContain(
-      'Veterans Crisis Line: Dial 988, then press 1 · Text 838255',
+      'Veterans Crisis Line: Dial 988, then press 1 · Veterans Crisis Line: Text 838255',
     );
     expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
     expect(screen.getByRole('link', { name: 'Dial 988' })).toHaveAttribute('href', 'tel:988');
-    expect(screen.getByRole('link', { name: 'Text 838255' })).toHaveAttribute('href', 'sms:838255');
+    const text838255 = screen.getByRole('link', { name: 'Veterans Crisis Line: Text 838255' });
+    expect(text838255).toHaveAttribute('href', 'sms:838255');
+    expect(text838255).toHaveAttribute('aria-label', 'Veterans Crisis Line: Text 838255');
     for (const link of screen.getAllByRole('link')) {
       expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11', 'items-center');
       expect(link).not.toHaveClass('text-sos', 'text-white');
