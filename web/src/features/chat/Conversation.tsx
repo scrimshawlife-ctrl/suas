@@ -49,7 +49,7 @@ export function Conversation({ serviceRequestId, thread, meUserId }: Conversatio
     if (live.current !== null) {
       live.current.textContent =
         previous !== undefined && previous !== newestId && !newestIsMine
-          ? `New message from ${name}.`
+          ? `New message from ${name.replace(/\.$/, '')}.`
           : '';
     }
   }, [newestId, newestIsMine, name]);

@@ -130,6 +130,7 @@
   /* Where focus lands after a route change. Not controls, so no ring (see RouteFocus). */
   main:focus,
   h1[tabindex='-1']:focus,
+  [data-route-focus][tabindex='-1']:focus,
   [data-focus-rescue]:focus {
     outline: none;
     box-shadow: none;

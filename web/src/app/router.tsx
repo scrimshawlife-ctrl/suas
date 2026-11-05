@@ -22,26 +22,48 @@ import { FocusRescue, RouteFocus } from './RouteFocus';
 import { LoadingScreen } from './status-screens';
 
 /**
+ * One wrapper component per loaded screen and title. Routes that load the same screen with the
+ * same title (`/chat` and `/chat/:id`) must share a component type, otherwise React remounts the
+ * screen when the route changes and loses its state, scroll position and focus.
+ */
+const wrappers = new WeakMap<ComponentType, Map<string, ComponentType>>();
+
+function wrapScreen(Screen: ComponentType, fullTitle: string): ComponentType {
+  let byTitle = wrappers.get(Screen);
+  if (byTitle === undefined) {
+    byTitle = new Map();
+    wrappers.set(Screen, byTitle);
+  }
+  let Wrapped = byTitle.get(fullTitle);
+  if (Wrapped === undefined) {
+    Wrapped = function RouteScreen() {
+      return (
+        <>
+          <title>{fullTitle}</title>
+          <Screen />
+        </>
+      );
+    };
+    byTitle.set(fullTitle, Wrapped);
+  }
+  return Wrapped;
+}
+
+/**
  * Lazy route: the screen module's default export becomes the route component. `title` is the
  * document title for every state of the route (loading, error, loaded); a screen that renders
- * its own more specific `<title>` takes precedence once it is mounted.
+ * its own more specific `<title>` takes precedence once it is mounted. `suffix` is the site
+ * part of the title and must match the one the screens use (the admin pages say "SUAS Admin").
  */
 function page(
   title: string,
   load: () => Promise<{ default: ComponentType }>,
+  suffix = 'SUAS',
 ): Pick<RouteObject, 'lazy'> {
   return {
-    lazy: async () => {
-      const Screen = (await load()).default;
-      return {
-        Component: () => (
-          <>
-            <title>{`${title} · SUAS`}</title>
-            <Screen />
-          </>
-        ),
-      };
-    },
+    lazy: async () => ({
+      Component: wrapScreen((await load()).default, `${title} · ${suffix}`),
+    }),
   };
 }
 
@@ -219,6 +241,7 @@ export const routes: RouteObject[] = [
                             ...page(
                               'Overview',
                               () => import('../features/admin/AdminOverviewPage'),
+                              'SUAS Admin',
                             ),
                           },
                           {
@@ -226,6 +249,7 @@ export const routes: RouteObject[] = [
                             ...page(
                               'Resource drafts',
                               () => import('../features/admin/AdminDraftsPage'),
+                              'SUAS Admin',
                             ),
                           },
                           {
@@ -233,6 +257,7 @@ export const routes: RouteObject[] = [
                             ...page(
                               'Resource draft',
                               () => import('../features/admin/AdminDraftPage'),
+                              'SUAS Admin',
                             ),
                           },
                         ],
