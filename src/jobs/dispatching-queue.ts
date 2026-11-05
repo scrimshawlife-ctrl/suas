@@ -1,9 +1,10 @@
 /**
- * LOCAL/TEST job dispatch: run a handler after a successful enqueue.
+ * Inline job dispatch: run a handler right after a successful enqueue.
  *
  * Completing a Check-In still only *requests* work (CHECKINS.md §6.3). This
- * wrapper is how that request is honoured in the non-durable seam in LOCAL/TEST when using the in-memory seam. Handler failures are logged and do not fail the enqueue, so
- * CHECKIN_COMPLETED stays committed even when scoring refuses.
+ * wrapper is how that request is honoured promptly. Handler failures are logged
+ * and do not fail the enqueue, so CHECKIN_COMPLETED stays committed even when
+ * scoring refuses; a durable row then stays pending for the job worker.
  */
 
 import type { DurableJobQueuePort, EnqueuedJob, JobEnqueueRequest } from './port.js';
@@ -20,6 +21,12 @@ export class DispatchingJobQueue implements DurableJobQueuePort {
     private readonly onHandlerError: (error: unknown, request: JobEnqueueRequest) => void = () => {
       /* tests replace this */
     },
+    /**
+     * Called after the handler succeeds, so a durable queue can mark the row
+     * done and the job worker does not run it a second time. When this fails
+     * the row stays pending and the worker replays it, which handlers tolerate.
+     */
+    private readonly onHandled?: (job: EnqueuedJob) => Promise<void>,
   ) {
     this.durability = inner.durability;
     this.implementation = inner.implementation;
@@ -32,6 +39,7 @@ export class DispatchingJobQueue implements DurableJobQueuePort {
     if (handler === undefined) return result;
     try {
       await handler(request);
+      await this.onHandled?.(result);
     } catch (error) {
       this.onHandlerError(error, request);
     }

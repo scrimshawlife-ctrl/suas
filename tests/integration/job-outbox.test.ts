@@ -7,6 +7,7 @@ import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   assertJobPortConformance,
+  DispatchingJobQueue,
   claimDueJobs,
   markJobFailed,
   markJobSucceeded,
@@ -71,5 +72,26 @@ describe('PostgresOutboxJobQueue', () => {
       error: 'synthetic failure',
     });
     expect(status).toBe('DEAD_LETTER');
+  });
+
+  it('marks a job done after inline dispatch so the worker does not run it again', async () => {
+    const outbox = new PostgresOutboxJobQueue(pool);
+    const queue = new DispatchingJobQueue(
+      outbox,
+      {
+        'test.inline-ok': () => Promise.resolve(),
+        'test.inline-bad': () => Promise.reject(new Error('refused')),
+      },
+      () => undefined,
+      (job) => markJobSucceeded(pool, job.jobId),
+    );
+    const tenantId = randomUUID();
+    const done = await queue.enqueue({ jobType: 'test.inline-ok', payload: {}, tenantId });
+    const failed = await queue.enqueue({ jobType: 'test.inline-bad', payload: {}, tenantId });
+
+    const claimed = await claimDueJobs(pool, { owner: 'worker-inline', limit: 200 });
+    expect(claimed.some((job) => job.jobId === done.jobId)).toBe(false);
+    // A failed inline run leaves the row for the worker to retry.
+    expect(claimed.some((job) => job.jobId === failed.jobId)).toBe(true);
   });
 });

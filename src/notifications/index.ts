@@ -60,3 +60,8 @@ export {
   type Notification,
   type SendAttemptResult,
 } from './service.js';
+export {
+  buildNotificationSendPayload,
+  parseNotificationSendPayload,
+  type NotificationSendJob,
+} from './send-job-payload.js';

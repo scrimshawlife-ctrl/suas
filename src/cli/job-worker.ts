@@ -10,7 +10,12 @@
 import { loadConfig } from '../config/index.js';
 import { createPool } from '../db/index.js';
 import { claimDueJobs, markJobFailed, markJobSucceeded, type JobOutboxRow } from '../jobs/index.js';
-import { parseComputeJobPayload, runSupportSignalComputeJob } from '../signals/index.js';
+import {
+  notificationSendHandler,
+  supportSignalComputeHandler,
+  type JobWork,
+} from '../jobs/handlers.js';
+import { createChannelRegistry } from '../notifications/index.js';
 
 const owner = `job-worker:${process.pid}`;
 
@@ -31,27 +36,33 @@ function parseArgs(argv: readonly string[]): { once: boolean; limit: number } {
   return { once, limit: Number.isFinite(limit) && limit > 0 ? limit : 10 };
 }
 
-async function handleJob(
+function createHandlers(
   pool: ReturnType<typeof createPool>,
   config: ReturnType<typeof loadConfig>,
+): Readonly<Record<string, JobWork>> {
+  return {
+    'support-signal.compute': supportSignalComputeHandler(pool, config),
+    'notification.send': notificationSendHandler(pool, createChannelRegistry(config)),
+  };
+}
+
+async function handleJob(
+  handlers: Readonly<Record<string, JobWork>>,
   job: JobOutboxRow,
 ): Promise<void> {
-  if (job.jobType === 'support-signal.compute') {
-    const parsed = parseComputeJobPayload(job.payload, job.tenantId);
-    if (parsed === undefined) {
-      throw new Error('invalid support-signal.compute payload');
-    }
-    await runSupportSignalComputeJob(pool, config, parsed);
-    return;
-  }
+  const handler = handlers[job.jobType];
   // Unknown types stay leased until retry/DLQ so operators notice.
-  throw new Error(`no handler registered for job type ${job.jobType}`);
+  if (handler === undefined) {
+    throw new Error(`no handler registered for job type ${job.jobType}`);
+  }
+  await handler(job);
 }
 
 async function main(): Promise<void> {
   const { once, limit } = parseArgs(process.argv.slice(2));
   const config = loadConfig(process.env);
   const pool = createPool(config);
+  const handlers = createHandlers(pool, config);
 
   try {
     for (;;) {
@@ -64,7 +75,7 @@ async function main(): Promise<void> {
 
       for (const job of claimed) {
         try {
-          await handleJob(pool, config, job);
+          await handleJob(handlers, job);
           await markJobSucceeded(pool, job.jobId);
           console.log(
             JSON.stringify({
