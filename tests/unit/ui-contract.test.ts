@@ -7,10 +7,14 @@
  * (fixture contract).
  */
 
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
 import {
+  APPROVED_CRISIS_DESTINATIONS,
   APPROVED_CRISIS_RESOURCES,
+  PENDING_RELEASE_CRISIS_DESTINATIONS,
   assertApprovedSafetyCopyAvailable,
   CATEGORY_CARDS,
   categoryForCard,
@@ -280,14 +284,48 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
     ]);
   });
 
-  it('authorizes no destination other than 911 and 988', () => {
+  it('authorizes no released destination other than 911 and 988', () => {
     const source = readFileSync(new URL('../../src/ui/safety.ts', import.meta.url), 'utf8');
+    const prose = source.replace(/\n\s*\*\s?/g, ' ').replace(/\s+/g, ' ');
+    expect(prose).toContain(
+      '838255 (sms:838255, Text 838255): owner-decided as D-050 on 2026-11-05, pending a spec release; the pinned spec 0.7.0 SAFETY_COPY authorizes only 911 and 988.',
+    );
     expect(source).not.toMatch(/\b1-?800-?\d{3}-?\d{4}\b/);
     expect(source).not.toMatch(/https?:\/\//);
+    expect([...APPROVED_CRISIS_DESTINATIONS]).toEqual(['tel:911', 'tel:988', 'sms:988']);
+    expect([...PENDING_RELEASE_CRISIS_DESTINATIONS]).toEqual(['sms:838255']);
     expect(APPROVED_CRISIS_RESOURCES.map((resource) => resource.destination)).toEqual([
       'tel:911',
       'tel:988',
     ]);
+    const allowed = new Set<string>([
+      ...APPROVED_CRISIS_DESTINATIONS,
+      ...PENDING_RELEASE_CRISIS_DESTINATIONS,
+    ]);
+    const root = fileURLToPath(new URL('../../web/src/', import.meta.url));
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) {
+          walk(path);
+          continue;
+        }
+        if (!/\.(tsx|ts)$/.test(name) || /\.test\.(tsx|ts)$/.test(name)) continue;
+        files.push(path);
+      }
+    };
+    walk(root);
+    const hrefs: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8');
+      for (const match of text.matchAll(/href="((?:tel|sms):[^"]+)"/g)) {
+        const href = match[1] ?? '';
+        hrefs.push(href);
+        expect(allowed.has(href), `${file} ${href}`).toBe(true);
+      }
+    }
+    expect(hrefs).toEqual(expect.arrayContaining(['tel:911', 'tel:988', 'sms:988', 'sms:838255']));
   });
 
   it('states placeholder unavailability without giving crisis guidance', () => {
