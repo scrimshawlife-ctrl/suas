@@ -44,6 +44,11 @@ import {
   normalizeDestination,
 } from './secrets.js';
 import type { FixedOtpCodeFor } from './demo-fixed-code.js';
+import {
+  assertPublicSignUpPermitted,
+  stagingFixturePrincipalRefused,
+  type StagingAccess,
+} from './staging-access.js';
 
 export type ChallengeStatus = 'ISSUED' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
 
@@ -52,6 +57,11 @@ export interface IssueChallengeInput {
   readonly destination: string;
   readonly method: ChallengeMethod;
   readonly correlationId?: string;
+  /**
+   * Create an account for an unknown destination. Refused outside LOCAL and
+   * TEST, including when the caller sets it on STAGING (D-052).
+   */
+  readonly allowSignUp?: boolean;
 }
 
 export interface IssueChallengeResult {
@@ -89,6 +99,8 @@ export interface ChallengeServiceDeps {
    * the synthetic demo destination. Absent in every other environment class.
    */
   readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
+  /** Present on the server. STAGING uses it to refuse a non-fixture account. */
+  readonly stagingAccess?: StagingAccess | undefined;
 }
 
 /**
@@ -102,6 +114,9 @@ export async function issueChallenge(
   deps: ChallengeServiceDeps,
   input: IssueChallengeInput,
 ): Promise<IssueChallengeResult> {
+  if (input.allowSignUp === true) {
+    assertPublicSignUpPermitted(deps.stagingAccess);
+  }
   const destination = normalizeDestination(input.destination);
   const channel = channelForMethod(input.method);
   const fixedCode = input.method === 'EMAIL_OTP' ? deps.fixedOtpCodeFor?.(destination) : undefined;
@@ -125,12 +140,28 @@ export async function issueChallenge(
   );
 
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
+  const fixtureRefused =
+    deps.stagingAccess !== undefined &&
+    stagingFixturePrincipalRefused(
+      deps.stagingAccess,
+      user === undefined ? undefined : { tenantId: user.tenantId, userId: user.userId },
+    );
 
-  if (user === undefined || user.status === 'REVOKED' || user.status === 'SUSPENDED') {
+  if (
+    fixtureRefused ||
+    user === undefined ||
+    user.status === 'REVOKED' ||
+    user.status === 'SUSPENDED'
+  ) {
+    const outcome = fixtureRefused
+      ? 'NOT_STAGING_FIXTURE'
+      : user === undefined
+        ? 'NO_ENROLLED_USER'
+        : `USER_${user.status}`;
     await recordChallengeAudit(deps.pool, {
       tenantId: input.tenantId,
       action: 'AUTH_CHALLENGE_ISSUE_SKIPPED',
-      outcome: user === undefined ? 'NO_ENROLLED_USER' : `USER_${user.status}`,
+      outcome,
       method: input.method,
       actorId: user?.userId ?? 'anonymous',
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),

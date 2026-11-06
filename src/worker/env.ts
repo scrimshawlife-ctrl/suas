@@ -73,6 +73,9 @@ export interface WorkerBindings {
   readonly SUAS_HTTP_HOST?: string | undefined;
   readonly SUAS_LOG_LEVEL?: string | undefined;
   readonly SUAS_DEMO_FIXED_CODE?: string | undefined;
+  readonly SUAS_PUBLIC_SIGN_UP?: string | undefined;
+  readonly SUAS_STAGING_AUTH_EMAILS?: string | undefined;
+  readonly SUAS_STAGING_FIXTURE_REGISTRY?: string | undefined;
   readonly SUAS_CORS_ALLOWED_ORIGINS?: string | undefined;
   readonly SUAS_BUILD_COMMIT?: string | undefined;
   readonly SUAS_BUILD_TIMESTAMP?: string | undefined;

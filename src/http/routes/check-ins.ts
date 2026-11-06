@@ -17,6 +17,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
+import { requireVerifiedVeteran } from '../../identity/index.js';
 import { findNonClosedCase } from '../../coordination/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
 import { API_PREFIX } from '../../release/pins.js';
@@ -84,6 +85,7 @@ async function loadOwnedCheckIn(
 export function registerCheckInRoutes(app: FastifyInstance, deps: CheckInRouteDeps): void {
   app.post(`${API_PREFIX}/check-ins`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const checkIn = await startCheckIn(deps.pool, {
       tenantId: context.tenantId,
       veteranUserId: context.userId,
@@ -97,6 +99,7 @@ export function registerCheckInRoutes(app: FastifyInstance, deps: CheckInRouteDe
 
   app.get(`${API_PREFIX}/check-ins/:id`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const { id } = idParams.parse(request.params);
     const checkIn = await loadOwnedCheckIn(deps.pool, context.tenantId, context.userId, id);
     const questions = await listQuestionsWithOptions(deps.pool, checkIn.questionnaireVersion);
@@ -105,6 +108,7 @@ export function registerCheckInRoutes(app: FastifyInstance, deps: CheckInRouteDe
 
   app.post(`${API_PREFIX}/check-ins/:id/responses`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const { id } = idParams.parse(request.params);
     await loadOwnedCheckIn(deps.pool, context.tenantId, context.userId, id);
     const body = responseBody.parse(request.body);
@@ -121,6 +125,7 @@ export function registerCheckInRoutes(app: FastifyInstance, deps: CheckInRouteDe
 
   app.post(`${API_PREFIX}/check-ins/:id/commands/complete`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
     const { id } = idParams.parse(request.params);
     await loadOwnedCheckIn(deps.pool, context.tenantId, context.userId, id);
     const outcome = await completeCheckIn(

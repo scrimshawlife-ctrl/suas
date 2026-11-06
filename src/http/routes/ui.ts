@@ -55,6 +55,7 @@ import {
   setAdapterRouting,
 } from '../../fulfillment/index.js';
 import { ManualAdapterRequiredError } from '../../fulfillment/index.js';
+import { requireVerifiedVeteran } from '../../identity/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
 import { listGrantsForVeteran, listTrustedCircle } from '../../consent/index.js';
 import {
@@ -106,6 +107,7 @@ import {
   demoFixedCodeFor,
   type FixedOtpCodeFor,
 } from '../../auth/demo-fixed-code.js';
+import { stagingAccessFromConfig } from '../../auth/staging-access.js';
 import { normalizeDestination } from '../../auth/secrets.js';
 
 export interface UiRouteDependencies {
@@ -343,6 +345,7 @@ async function loadOwnedCheckIn(
 
 export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies): void {
   const { config, pool, sessionSecret, safetyCopyMode, supportSignalMode } = deps;
+  const stagingAccess = stagingAccessFromConfig(config);
   const fixedOtpCodeFor = demoFixedCodeFor({
     environment: config.environment,
     demoFixedCode: config.demoFixedCode,
@@ -419,6 +422,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         sessionSecret,
         delivery: deps.challengeDelivery,
         fixedOtpCodeFor,
+        stagingAccess,
       },
       {
         tenantId,
@@ -464,7 +468,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
     try {
       const issued = await verifyAndCreateSession(
-        { pool, sessionSecret, delivery: deps.challengeDelivery, fixedOtpCodeFor },
+        { pool, sessionSecret, delivery: deps.challengeDelivery, fixedOtpCodeFor, stagingAccess },
         {
           tenantId,
           destination: body.destination,
@@ -630,6 +634,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get('/app/consents', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    await requireVerifiedVeteran(pool, context);
     const grants = await listGrantsForVeteran(pool, context.tenantId, context.userId);
     await reply.type(HTML).send(
       renderConsentsList({
@@ -651,6 +656,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get('/app/trusted-contacts', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    await requireVerifiedVeteran(pool, context);
     const contacts = await listTrustedCircle(pool, context.tenantId, context.userId);
     await reply.type(HTML).send(
       renderTrustedContactsList({
@@ -665,6 +671,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.post('/app/qrf/deploy', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    await requireVerifiedVeteran(pool, context);
     await deployQrf(pool, {
       tenantId: context.tenantId,
       veteranUserId: context.userId,
@@ -685,6 +692,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get('/app/check-ins', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    await requireVerifiedVeteran(pool, context);
     const inProgress = await findInProgressCheckIn(pool, context.tenantId, context.userId);
     await reply.type(HTML).send(
       renderCheckInStart({
@@ -699,6 +707,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.post('/app/check-ins', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    await requireVerifiedVeteran(pool, context);
     const started = await startOrResumeCheckIn(pool, {
       tenantId: context.tenantId,
       veteranUserId: context.userId,
@@ -708,6 +717,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get<{ Params: { id: string } }>('/app/check-ins/:id', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    await requireVerifiedVeteran(pool, context);
     const { id } = checkInIdParams.parse(pathParams(request, 'check-in-id'));
     const checkIn = await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
     const questions = await listQuestionsWithOptions(pool, checkIn.questionnaireVersion);
@@ -764,6 +774,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.post<{ Params: { id: string } }>('/app/check-ins/:id/responses', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    await requireVerifiedVeteran(pool, context);
     const { id } = checkInIdParams.parse(pathParams(request, 'check-in-id'));
     await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
     const body = checkInResponseBody.parse(request.body);
@@ -780,6 +791,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     '/app/check-ins/:id/commands/complete',
     async (request, reply) => {
       const context = await authenticate(pool, sessionSecret, request);
+      await requireVerifiedVeteran(pool, context);
       const { id } = checkInIdParams.parse(pathParams(request, 'check-in-id'));
       await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
       await completeCheckIn(
@@ -796,8 +808,8 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     },
   );
 
-  app.get('/app/immediate-resources', async (request, reply) => {
-    await authenticate(pool, sessionSecret, request);
+  // The crisis screen is for everyone, signed out or unverified (plan §2.1).
+  app.get('/app/immediate-resources', async (_request, reply) => {
     await reply
       .type(HTML)
       .send(renderImmediateResources(shell('Immediate Resources'), safetyCopyMode));
@@ -814,7 +826,8 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
       .default(RESOURCE_DEFAULT_PAGE_SIZE),
   });
   app.get('/app/resources', async (request, reply) => {
-    await authenticate(pool, sessionSecret, request);
+    const context = await authenticate(pool, sessionSecret, request);
+    await requireVerifiedVeteran(pool, context);
     await reply
       .type(HTML)
       .send(renderResourceCategories({ shell: shell('Find help'), categories: CATEGORY_CARDS }));
@@ -822,6 +835,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
 
   app.get<{ Params: { label: string } }>('/app/resources/:label', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
+    await requireVerifiedVeteran(pool, context);
     const { label } = pathParams(request, 'resource-label');
     if (label === undefined || label === '') {
       throw new NonOperationalCategoryError('(missing)', 'COMING_SOON');

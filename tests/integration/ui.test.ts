@@ -29,6 +29,7 @@ import { withTransaction } from '../../src/db/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { auditAccessibility } from '../../src/ui/index.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
+import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -55,7 +56,7 @@ async function signIn(
 
   const tenantId = randomUUID();
   const email = syntheticEmail(`veteran-${randomUUID().slice(0, 8)}`);
-  const user = await createUser(targetPool, { tenantId, email, status: 'ACTIVE' });
+  const user = await createVerifiedUser(targetPool, { tenantId, email, status: 'ACTIVE' });
 
   const issued = await target.server.inject({
     method: 'POST',

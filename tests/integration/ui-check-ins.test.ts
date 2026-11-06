@@ -10,7 +10,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { findNonClosedCase } from '../../src/coordination/index.js';
-import { createUser } from '../../src/identity/index.js';
 import {
   ensurePublishedQv001,
   findCheckIn,
@@ -19,6 +18,7 @@ import {
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { auditAccessibility } from '../../src/ui/index.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
+import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -55,7 +55,7 @@ async function veteranSession(): Promise<{
   userId: string;
 }> {
   const tenantId = randomUUID();
-  const user = await createUser(pool(), {
+  const user = await createVerifiedUser(pool(), {
     tenantId,
     email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',

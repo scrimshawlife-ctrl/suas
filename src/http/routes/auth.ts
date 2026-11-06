@@ -22,6 +22,7 @@ import { API_PREFIX } from '../../release/pins.js';
 import { authenticate } from '../authenticate.js';
 import { UnauthenticatedError } from '../../authz/index.js';
 import type { FixedOtpCodeFor } from '../../auth/demo-fixed-code.js';
+import type { StagingAccess } from '../../auth/staging-access.js';
 
 export interface AuthRouteDeps {
   readonly pool: Pool;
@@ -30,6 +31,7 @@ export interface AuthRouteDeps {
   readonly mfa: MfaPort;
   /** LOCAL demo only; see src/auth/demo-fixed-code.ts. */
   readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
+  readonly stagingAccess?: StagingAccess | undefined;
 }
 
 const UNKNOWN_TENANT = '00000000-0000-4000-8000-000000000000';
@@ -72,6 +74,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         sessionSecret: deps.sessionSecret,
         delivery: deps.delivery,
         fixedOtpCodeFor: deps.fixedOtpCodeFor,
+        stagingAccess: deps.stagingAccess,
       },
       {
         tenantId,
@@ -94,6 +97,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         sessionSecret: deps.sessionSecret,
         delivery: deps.delivery,
         fixedOtpCodeFor: deps.fixedOtpCodeFor,
+        stagingAccess: deps.stagingAccess,
       },
       {
         tenantId,

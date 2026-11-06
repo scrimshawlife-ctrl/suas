@@ -46,3 +46,6 @@ artifacts/
 logs/
 .local-secrets/
 wrangler.synthetic.jsonc
+
+# graphify knowledge graph output (local, regenerated)
+graphify-out/
