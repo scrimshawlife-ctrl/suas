@@ -27,6 +27,7 @@ export function ActiveRequest({ active }: { active: ActiveQrf }) {
       variant="home"
       card={card}
       requestId={active.service_request_id}
+      category={active.category}
       status={detail?.status}
       counterpartName={detail?.counterpart_display_name}
       createdAt={detail?.created_at}

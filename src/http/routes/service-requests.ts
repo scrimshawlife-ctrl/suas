@@ -17,14 +17,13 @@ import { ForbiddenError, ResourceNotVisibleError } from '../../authz/index.js';
 import type { AuthContext } from '../../authz/index.js';
 import { draftDetailsInput } from '../../intake/tools.js';
 import { requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
-import { resolveCaseAccess, type CaseAccess } from '../case-access.js';
+import { resolveCaseAccess, resolveRequestAccess } from '../case-access.js';
 import { requireDisclosure } from '../../consent/index.js';
 import {
   acceptServiceRequest,
   createServiceRequest,
   DEFAULT_PAGE_SIZE,
   executeServiceRequestCommandInTx,
-  findActiveAssignment,
   findCase,
   findDisplayName,
   findServiceRequest,
@@ -92,21 +91,21 @@ function publicServiceRequest(request: ServiceRequest) {
 
 /**
  * DISPATCH.md §4 names the *assigned* actor for every non-requester transition. In v1
- * that is the person who accepted the case.
+ * that is the person who accepted this request.
  *
  * Runs inside the command transaction: CASES.md §5 requires authorization to be
  * re-checked at mutation time, not trusted from an earlier read.
  */
-async function assertAssignedAccepter(db: Queryable, context: AuthContext, caseId: string) {
-  const assignment = await findActiveAssignment(db, caseId);
-  if (assignment?.acceptedByUserId === context.userId) return;
+async function assertRequestHolder(db: Queryable, context: AuthContext, requestId: string) {
+  const current = await findServiceRequest(db, context.tenantId, requestId);
+  if (current?.acceptedByUserId === context.userId) return;
   throw new ForbiddenError(
-    'Only the person who accepted this case may run this command (SUAS-specs DISPATCH.md §4).',
+    'Only the person who accepted this request may run this command (SUAS-specs DISPATCH.md §4).',
   );
 }
 
-function actorTypeFor(access: CaseAccess): 'VETERAN' | 'USER' {
-  return access.owner ? 'VETERAN' : 'USER';
+function actorTypeFor(owner: boolean): 'VETERAN' | 'USER' {
+  return owner ? 'VETERAN' : 'USER';
 }
 
 export function registerServiceRequestRoutes(
@@ -116,8 +115,15 @@ export function registerServiceRequestRoutes(
   app.get(`${API_PREFIX}/cases/:caseId/service-requests`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { caseId } = caseIdParams.parse(request.params);
-    await resolveCaseAccess(deps.pool, context, caseId);
-    const page = await listCaseServiceRequests(deps.pool, context.tenantId, caseId, 50);
+    const access = await resolveCaseAccess(deps.pool, context, caseId);
+    // A helper sees only the requests they accepted, never the Veteran's other requests.
+    const page = await listCaseServiceRequests(
+      deps.pool,
+      context.tenantId,
+      caseId,
+      50,
+      access.owner ? undefined : context.userId,
+    );
     return { service_requests: page.map(publicServiceRequest) };
   });
 
@@ -130,7 +136,7 @@ export function registerServiceRequestRoutes(
       await requireVerifiedVeteran(deps.pool, context);
       await requireCounty(deps.pool, context);
     }
-    const actorType = actorTypeFor(access);
+    const actorType = actorTypeFor(access.owner);
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({
       case_id: caseId,
@@ -241,26 +247,25 @@ export function registerServiceRequestRoutes(
       service_request_id: id,
       case_id: result.supportCase.caseId,
       case_status: result.supportCase.status,
-      assignment_id: result.assignment.caseAssignmentId,
     };
   });
 
   /**
-   * The whole request, for its requester and its accepter only (anyone else gets the
-   * same 404 as a request that does not exist). The counterpart name is the other
-   * person's: the accepter's for the requester (null until someone accepts), the
-   * requester's for the accepter.
+   * The whole request, for its requester and the one helper who accepted it (anyone else,
+   * including another helper on the same Veteran's case, gets the same 404 as a request
+   * that does not exist). The counterpart name is the other person's: the accepter's for
+   * the requester (null until someone accepts), the requester's for the accepter.
    */
   app.get(`${API_PREFIX}/service-requests/:id`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
     const serviceRequest = await findServiceRequest(deps.pool, context.tenantId, id);
     if (serviceRequest === undefined) throw new ResourceNotVisibleError();
-    const access = await resolveCaseAccess(deps.pool, context, serviceRequest.caseId);
+    const access = await resolveRequestAccess(deps.pool, context, serviceRequest);
     const detail = await readServiceRequestDetail(deps.pool, context.tenantId, id);
     if (detail === undefined) throw new ResourceNotVisibleError();
     const counterpartUserId = access.owner
-      ? access.assignment?.acceptedByUserId
+      ? serviceRequest.acceptedByUserId
       : access.supportCase.veteranUserId;
     const counterpartDisplayName =
       counterpartUserId === undefined
@@ -285,19 +290,20 @@ export function registerServiceRequestRoutes(
     const body = commandBody.parse(request.body ?? {});
     const serviceRequest = await findServiceRequest(deps.pool, context.tenantId, id);
     if (serviceRequest === undefined) throw new ResourceNotVisibleError();
-    const access = await resolveCaseAccess(deps.pool, context, serviceRequest.caseId);
+    const access = await resolveRequestAccess(deps.pool, context, serviceRequest);
     // CONFIRM, CANCEL and SUBMIT belong to the requester alone; every other command
-    // belongs to the accepter alone (resolveCaseAccess never makes one person both).
+    // belongs to this request's accepter alone (resolveRequestAccess never makes one
+    // person both).
     if (access.owner !== VETERAN_COMMANDS.includes(command)) {
       throw new ForbiddenError(
         access.owner
-          ? 'Only the person who accepted this case may run this command (SUAS-specs DISPATCH.md §4).'
+          ? 'Only the person who accepted this request may run this command (SUAS-specs DISPATCH.md §4).'
           : 'Only the person who asked for help may run this command (SUAS-specs DISPATCH.md §4).',
       );
     }
     // Submitting is the act of requesting help; cancelling or confirming is not.
     if (access.owner && command === 'SUBMIT') await requireVerifiedVeteran(deps.pool, context);
-    const actorType = actorTypeFor(access);
+    const actorType = actorTypeFor(access.owner);
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({
       service_request_id: id,
@@ -325,7 +331,7 @@ export function registerServiceRequestRoutes(
       },
       async (tx) => {
         if (actorType === 'USER') {
-          await assertAssignedAccepter(tx, context, serviceRequest.caseId);
+          await assertRequestHolder(tx, context, id);
         }
         const updated = await executeServiceRequestCommandInTx(
           tx,

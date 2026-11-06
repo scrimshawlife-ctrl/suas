@@ -493,7 +493,7 @@ export interface paths {
     put?: never;
     /**
      * Execute a released service-request command
-     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED.
+     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED.
      */
     post: operations['executeServiceRequestCommand'];
     delete?: never;
@@ -817,7 +817,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Reopen a CLOSED case (org admin; reason required) */
+    /**
+     * Reopen a CLOSED case (org admin; reason required)
+     * @description Answers 409 ILLEGAL_TRANSITION when the Veteran already has a newer current case (a case that is not RESOLVED or CLOSED): a Veteran has at most one at a time, and nothing is merged.
+     */
     post: operations['reopenCase'];
     delete?: never;
     options?: never;
@@ -857,7 +860,7 @@ export interface paths {
     put?: never;
     /**
      * Accept an open service request (first accept wins)
-     * @description Claims the Support Case (ASSIGNED) and moves the Service Request to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). The accepter then runs START, FULFILL; the requester runs CONFIRM.
+     * @description Accepts this one Service Request: records the caller as its holder and moves it to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). Other requests of the same Veteran stay open to other people. A first accept on an OPEN case also moves the case to ASSIGNED. First accept wins: a second person gets 409 ALREADY_CLAIMED. The accepter then runs START, FULFILL; the requester runs CONFIRM.
      */
     post: operations['acceptServiceRequest'];
     delete?: never;
@@ -1412,15 +1415,18 @@ export interface components {
       /** Format: date-time */
       verified_at: string | null;
     };
+    /** @description The current case of a Veteran: not RESOLVED or CLOSED. A Veteran whose case is resolved has none until they ask for help again, which opens a new case. */
     OpenCaseSummary: {
       /** Format: uuid */
       case_id: string;
       status: components['schemas']['CaseStatus'];
       priority_signal_level: components['schemas']['SignalLevel'] | null;
     };
+    /** @description The caller's newest open Service Request, of any category (FOOD, TRANSPORTATION, SHELTER or PEER_SUPPORT). */
     ActiveQrf: {
       /** Format: uuid */
       service_request_id: string;
+      category: components['schemas']['ServiceCategory'];
       state: string;
       headline: string;
       cancellable: boolean;
@@ -1575,7 +1581,7 @@ export interface components {
       /** Format: date-time */
       settled_at: string;
     };
-    /** @description The author, the accepter and the requester confirmation are derived on the server from the session and the case assignment; they are not accepted from the body. */
+    /** @description The author, the accepter and the requester confirmation are derived on the server from the session (the person resolving must hold a request of the case); they are not accepted from the body. */
     ResolveCaseRequest: {
       requested: {
         [key: string]: unknown;
@@ -1675,8 +1681,6 @@ export interface components {
       /** Format: uuid */
       case_id: string;
       case_status: components['schemas']['CaseStatus'];
-      /** Format: uuid */
-      assignment_id: string;
     };
     ServiceRequestDetail: components['schemas']['ServiceRequestRef'] & {
       summary: string | null;
@@ -2863,7 +2867,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description The request, for its requester or its accepter only */
+      /** @description The request, for its requester or the one person who accepted it only (another helper on the same Veteran's case gets 404) */
       200: {
         headers: {
           [name: string]: unknown;

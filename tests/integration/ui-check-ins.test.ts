@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { findNonClosedCase } from '../../src/coordination/index.js';
+import { findCurrentCase } from '../../src/coordination/index.js';
 import {
   ensurePublishedQv001,
   findCheckIn,
@@ -196,7 +196,7 @@ describe('Check-In HTML — start, answer, complete', () => {
     expect(result.body).not.toContain('Save answer');
     const main = /<main[\s\S]*<\/main>/.exec(result.body)?.[0] ?? '';
     expect(main.toLowerCase()).not.toContain('transition');
-    expect(await findNonClosedCase(pool(), tenantId, userId)).toBeUndefined();
+    expect(await findCurrentCase(pool(), tenantId, userId)).toBeUndefined();
     expect(auditAccessibility(result.body)).toEqual([]);
   });
 
@@ -303,7 +303,7 @@ describe('Check-In HTML — start, answer, complete', () => {
     expect(result.body).toContain('A Support Case was opened');
     expect(result.body).toContain('did not contact emergency services');
     expect(result.body).toContain('not a clinical score');
-    const supportCase = await findNonClosedCase(pool(), tenantId, userId);
+    const supportCase = await findCurrentCase(pool(), tenantId, userId);
     expect(supportCase?.prioritySignalLevel).toBe('RED');
   });
 });

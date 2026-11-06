@@ -213,6 +213,37 @@ describe('who can see a widened request', () => {
   });
 });
 
+describe('a Veteran whose case already has a helper', () => {
+  it('still widens a later request, and a bordering helper can take it', async () => {
+    const now = new Date();
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'SAN_MATEO');
+    const firstHelper = await person(tenantId, 'SAN_MATEO');
+    const bordering = await person(tenantId, 'SANTA_CLARA');
+    const held = await submittedRequest(requester, now, 31);
+    const accepted = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${held}/accept`,
+      headers: firstHelper.headers,
+    });
+    expect(accepted.statusCode).toBe(200);
+    // The case now has a helper; the next request joins that case.
+    const later = await submittedRequest(requester, now, 31);
+
+    const result = await widenDueRequests(pool(), { now });
+
+    expect(result.widened.map((item) => item.serviceRequestId)).toEqual([later]);
+    expect(await widenedAt(held)).toBeNull();
+    expect((await openItems(bordering)).map((item) => item.service_request_id)).toEqual([later]);
+    const taken = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${later}/accept`,
+      headers: bordering.headers,
+    });
+    expect(taken.statusCode).toBe(200);
+  });
+});
+
 describe('requests that never widen', () => {
   it('skips an accepted request and a cancelled request', async () => {
     const now = new Date();

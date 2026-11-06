@@ -284,7 +284,7 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
     ]);
   });
 
-  it('authorizes no released destination other than 911 and 988', () => {
+  it('authorizes no released destination other than 911 and 988', async () => {
     const source = readFileSync(new URL('../../src/ui/safety.ts', import.meta.url), 'utf8');
     const prose = source.replace(/\n\s*\*\s?/g, ' ').replace(/\s+/g, ' ');
     expect(prose).toContain(
@@ -326,6 +326,136 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
       }
     }
     expect(hrefs).toEqual(expect.arrayContaining(['tel:911', 'tel:988', 'sms:988', 'sms:838255']));
+
+    // Directory listings, same shape as GET /api/v0/resources (CatalogResourceList).
+    // The model has no crisis category or crisis contact flag. 911, 988 and 838255
+    // are still passed through phoneHref and contactAction; phoneHref only links a
+    // number of 7 to 15 digits, so those three stay text unless a future change emits them.
+    // Owner decision (owner (scrimshawlife-ctrl), 2026-11-05 1:20 PM PT): "You can keep those numbers" /
+    // "Just label them appropriately". Hotline-shaped directory numbers stay
+    // directory resources and are labelled with the listed resource name.
+    interface DirectoryResource {
+      resource_id: string;
+      service_name: string;
+      category: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
+      counties: string[];
+      hours: string | null;
+      cost: string | null;
+      contact_method: string | null;
+      contact_method_kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
+      freshness: 'FRESH' | 'AGING' | 'STALE' | 'UNVERIFIED';
+      stale_warning: boolean;
+    }
+    const directory: { resources: DirectoryResource[]; limit: number; next_cursor: null } = {
+      resources: [
+        {
+          resource_id: '11111111-1111-4111-8111-111111111111',
+          service_name: 'County food pantry',
+          category: 'FOOD',
+          counties: ['SANTA_CLARA'],
+          hours: null,
+          cost: null,
+          contact_method: '(408) 555-0142',
+          contact_method_kind: 'PHONE',
+          freshness: 'FRESH',
+          stale_warning: false,
+        },
+        {
+          resource_id: '22222222-2222-4222-8222-222222222222',
+          service_name: '911',
+          category: 'PEER_SUPPORT',
+          counties: ['SANTA_CLARA'],
+          hours: null,
+          cost: null,
+          contact_method: '911',
+          contact_method_kind: 'PHONE',
+          freshness: 'FRESH',
+          stale_warning: false,
+        },
+        {
+          resource_id: '33333333-3333-4333-8333-333333333333',
+          service_name: '988',
+          category: 'PEER_SUPPORT',
+          counties: ['SANTA_CLARA'],
+          hours: null,
+          cost: null,
+          contact_method: '988',
+          contact_method_kind: 'PHONE',
+          freshness: 'FRESH',
+          stale_warning: false,
+        },
+        {
+          resource_id: '44444444-4444-4444-8444-444444444444',
+          service_name: '838255',
+          category: 'PEER_SUPPORT',
+          counties: ['SANTA_CLARA'],
+          hours: null,
+          cost: null,
+          contact_method: '838255',
+          contact_method_kind: 'PHONE',
+          freshness: 'FRESH',
+          stale_warning: false,
+        },
+        {
+          resource_id: '55555555-5555-4555-8555-555555555555',
+          service_name: 'County transit desk',
+          category: 'PEER_SUPPORT',
+          counties: ['SANTA_CLARA'],
+          hours: null,
+          cost: null,
+          contact_method: '800-555-0142',
+          contact_method_kind: 'PHONE',
+          freshness: 'FRESH',
+          stale_warning: false,
+        },
+        {
+          resource_id: '66666666-6666-4666-8666-666666666666',
+          service_name: 'Local helpline',
+          category: 'PEER_SUPPORT',
+          counties: ['SANTA_CLARA'],
+          hours: null,
+          cost: null,
+          contact_method: '(800) 555-0143',
+          contact_method_kind: 'PHONE',
+          freshness: 'FRESH',
+          stale_warning: false,
+        },
+      ],
+      limit: 6,
+      next_cursor: null,
+    };
+    const modelUrl = new URL('../../web/src/features/support/resources-model.ts', import.meta.url)
+      .href;
+    const model = (await import(modelUrl)) as {
+      phoneHref: (text: string) => string | null;
+      contactAction: (resource: DirectoryResource) => {
+        kind: string;
+        href?: string;
+        label?: string;
+      };
+    };
+    const produced: string[] = [];
+    const consider = (href: string | null): void => {
+      if (href === null || href === '') return;
+      produced.push(href);
+      const digits = href.replace(/^(?:tel|sms):/, '').replace(/\D/g, '');
+      const crisis = digits === '911' || digits === '988' || digits === '838255';
+      if (crisis) expect(allowed.has(href), href).toBe(true);
+    };
+    for (const resource of directory.resources) {
+      const method = resource.contact_method ?? '';
+      consider(model.phoneHref(method));
+      const action = model.contactAction(resource);
+      if (action.kind === 'phone') {
+        const verb = (action.href ?? '').startsWith('sms:') ? 'Text' : 'Call';
+        expect(action.label).toBe(`${verb} ${resource.service_name} at ${method}`);
+        expect(action.label).toContain(method);
+        expect(action.href ?? '').toMatch(/^tel:/);
+      }
+      consider(action.href ?? null);
+    }
+    expect(produced.length).toBeGreaterThan(0);
+    expect(produced).toEqual(expect.arrayContaining(['tel:8005550142', 'tel:8005550143']));
   });
 
   it('states placeholder unavailability without giving crisis guidance', () => {

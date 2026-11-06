@@ -250,13 +250,12 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
     const body = resolveBody.parse(request.body ?? {});
-    const access = await resolveCaseAccess(deps.pool, context, id);
-    assertAccepter(access, 'RESOLVE');
+    assertAccepter(await resolveCaseAccess(deps.pool, context, id), 'RESOLVE');
 
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     // SETTLEMENT.md §2: the accountable author is the person resolving, and the accepter
-    // is the case's active assignment. Both come from the session and the assignment.
-    const acceptedByUserId = access.assignment?.acceptedByUserId ?? context.userId;
+    // is that same person: only a helper who holds a request of the case may resolve it.
+    const acceptedByUserId = context.userId;
     const content = {
       requested: body.requested as JsonObject,
       occurred: body.occurred as JsonObject,

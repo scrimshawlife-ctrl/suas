@@ -12,7 +12,7 @@
  */
 
 import type { Queryable } from '../db/index.js';
-import type { ServiceRequestStatus } from '../coordination/index.js';
+import type { ServiceCategory, ServiceRequestStatus } from '../coordination/index.js';
 import type { QrfFacts } from './qrf.js';
 
 /** Statuses that mean the request is no longer in flight. */
@@ -25,6 +25,7 @@ const TERMINAL_STATUSES: readonly ServiceRequestStatus[] = [
 
 interface QrfRow {
   service_request_id: string;
+  category: ServiceCategory;
   status: ServiceRequestStatus;
   assigned: boolean;
   assigned_notification_delivered: boolean;
@@ -32,59 +33,58 @@ interface QrfRow {
 
 export interface ActiveQrf {
   readonly serviceRequestId: string;
+  readonly category: ServiceCategory;
   readonly facts: QrfFacts;
 }
 
 /**
- * The veteran's in-flight peer-support request, if one exists.
+ * The veteran's newest in-flight Service Request, if one exists.
  *
- * `assignedNotificationDelivered` reflects a real delivery the system can see:
- * a notification whose subject is this Service Request, addressed to the case's
- * person who accepted, that reached a `SENT`/`DELIVERED` state. MVP_REFERENCE.md
- * §7.2 permits `RESPONDER_NOTIFIED` only when the system "actually knows" a
- * notification occurred, so an assignment alone still reads as `SEARCHING`. The
- * subject linkage this depends on was added by accepted gap proposal P-12
- * (migration 0008); before it, no join from a delivery back to the request
- * existed and this was necessarily `false` (Slice 10 §10 item 1).
+ * Any category counts (FOOD, TRANSPORTATION, SHELTER, PEER_SUPPORT). `options.category`
+ * narrows it to one category for the callers that are about a single kind of request:
+ * the legacy `/app` Deploy and Cancel buttons are peer-support commands.
+ *
+ * `assigned` is the request's own holder (`accepted_by_user_id`): accepting is per
+ * request, so another helper holding a different request of the same Veteran never
+ * makes this one read as accepted. `assignedNotificationDelivered` reflects a real
+ * delivery the system can see: a notification whose subject is this Service Request,
+ * addressed to the person who accepted it, that reached a `SENT`/`DELIVERED` state.
+ * MVP_REFERENCE.md §7.2 permits `RESPONDER_NOTIFIED` only when the system "actually
+ * knows" a notification occurred, so an acceptance alone still reads as `SEARCHING`.
+ * The subject linkage this depends on was added by accepted gap proposal P-12
+ * (migration 0008).
  */
 export async function readActiveQrf(
   db: Queryable,
   tenantId: string,
   veteranUserId: string,
+  options: { readonly category?: ServiceCategory } = {},
 ): Promise<ActiveQrf | undefined> {
   const result = await db.query<QrfRow>(
     `SELECT r.service_request_id,
+            r.category,
             r.status,
+            r.accepted_by_user_id IS NOT NULL AS assigned,
             EXISTS (
-              SELECT 1 FROM case_assignments a
-               WHERE a.case_id = r.case_id
-                 AND a.tenant_id = r.tenant_id
-                 AND a.status = 'ACTIVE'
-            ) AS assigned,
-            EXISTS (
-              -- §7.2: a delivery the system can actually see — a notification
-              -- about this request, to the person who accepted, that went out.
-              SELECT 1 FROM case_assignments a
-               JOIN notifications n
-                 ON n.tenant_id = a.tenant_id
-                AND n.recipient_user_id = a.accepted_by_user_id
-                AND n.subject_type = 'ServiceRequest'
-                AND n.subject_id = r.service_request_id
-                AND n.delivery_status IN ('SENT', 'DELIVERED')
-               WHERE a.case_id = r.case_id
-                 AND a.tenant_id = r.tenant_id
-                 AND a.status = 'ACTIVE'
+              -- §7.2: a delivery the system can actually see: a notification
+              -- about this request, to the person who accepted it, that went out.
+              SELECT 1 FROM notifications n
+               WHERE n.tenant_id = r.tenant_id
+                 AND n.recipient_user_id = r.accepted_by_user_id
+                 AND n.subject_type = 'ServiceRequest'
+                 AND n.subject_id = r.service_request_id
+                 AND n.delivery_status IN ('SENT', 'DELIVERED')
             ) AS assigned_notification_delivered
        FROM service_requests r
        JOIN support_cases c
          ON c.case_id = r.case_id AND c.tenant_id = r.tenant_id
       WHERE r.tenant_id = $1
         AND c.veteran_user_id = $2
-        AND r.category = 'PEER_SUPPORT'
+        AND ($4::suas_service_category IS NULL OR r.category = $4::suas_service_category)
         AND r.status <> ALL($3::suas_service_request_status[])
       ORDER BY r.created_at DESC
       LIMIT 1`,
-    [tenantId, veteranUserId, TERMINAL_STATUSES],
+    [tenantId, veteranUserId, TERMINAL_STATUSES, options.category ?? null],
   );
 
   const row = result.rows[0];
@@ -92,6 +92,7 @@ export async function readActiveQrf(
 
   return {
     serviceRequestId: row.service_request_id,
+    category: row.category,
     facts: {
       requestStatus: row.status,
       assigned: row.assigned,

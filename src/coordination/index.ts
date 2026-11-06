@@ -33,22 +33,21 @@ export {
 } from './request-transitions.js';
 export {
   BlockingWorkError,
-  CaseAlreadyClaimedError,
   CaseNotFoundError,
-  claimCase,
+  caseHasAcceptedRequest,
   createAssignmentVerifier,
   executeCaseCommand,
-  findActiveAssignment,
+  holdsRequestInCase,
+  lockCase,
   findCase,
-  findNonClosedCase,
+  findCurrentCase,
   NoActiveAssignmentError,
   NotAssignedError,
   openCase,
+  recordRequestAcceptedOnCase,
+  ReopenBlockedError,
   setCasePrioritySignalLevel,
-  type AssignmentResult,
-  type CaseAssignment,
   type CaseCommandInput,
-  type ClaimCaseInput,
   type OpenCaseInput,
   type OpenCaseResult,
   type SupportCase,
@@ -98,7 +97,14 @@ export {
   type OpenRequestSummary,
   type RequestListPage,
 } from './open-requests.js';
-export { acceptServiceRequest, OwnRequestError, type AcceptServiceRequestInput } from './accept.js';
+export {
+  acceptRequestInTx,
+  acceptServiceRequest,
+  OwnRequestError,
+  RequestAlreadyAcceptedError,
+  type AcceptServiceRequestInput,
+  type AcceptServiceRequestResult,
+} from './accept.js';
 export { createChatThreadInTx, type ChatThread } from './chat-threads.js';
 export {
   findDisplayName,

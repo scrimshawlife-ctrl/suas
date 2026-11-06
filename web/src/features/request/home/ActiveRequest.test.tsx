@@ -35,6 +35,7 @@ describe('ActiveRequest', () => {
       <ActiveRequest
         active={{
           service_request_id: ID,
+          category: 'PEER_SUPPORT',
           state: 'RESPONDER_ACCEPTED',
           headline: 'Someone accepted your request.',
           cancellable: true,
@@ -49,10 +50,41 @@ describe('ActiveRequest', () => {
     get.mockResolvedValue({ data: detail('MATCHING') });
     renderScreen(
       <ActiveRequest
-        active={{ service_request_id: ID, state: 'SEARCHING', headline: 'x', cancellable: true }}
+        active={{
+          service_request_id: ID,
+          category: 'PEER_SUPPORT',
+          state: 'SEARCHING',
+          headline: 'x',
+          cancellable: true,
+        }}
       />,
     );
     expect(await screen.findByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Request progress' })).toBeInTheDocument();
+  });
+
+  it('keeps the QRF title for peer support and names any other category', async () => {
+    const active = (category: 'PEER_SUPPORT' | 'FOOD' | 'TRANSPORTATION' | 'SHELTER') => ({
+      service_request_id: ID,
+      category,
+      state: 'REQUESTED',
+      headline: 'x',
+      cancellable: true,
+    });
+    get.mockResolvedValue({ data: detail('SUBMITTED') });
+    const peer = renderScreen(<ActiveRequest active={active('PEER_SUPPORT')} />);
+    expect(await screen.findByRole('heading', { name: 'Your QRF request' })).toBeInTheDocument();
+    peer.unmount();
+
+    const titles = {
+      FOOD: 'Your food request',
+      TRANSPORTATION: 'Your transportation request',
+      SHELTER: 'Your housing request',
+    } as const;
+    for (const [category, title] of Object.entries(titles)) {
+      const view = renderScreen(<ActiveRequest active={active(category as keyof typeof titles)} />);
+      expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
+      view.unmount();
+    }
   });
 });

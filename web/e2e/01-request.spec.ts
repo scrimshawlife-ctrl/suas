@@ -54,21 +54,11 @@ test('a new Veteran signs up, passes the ID check and sends a request through th
     .getByRole('link', { name: new RegExp(summary) });
   await expect(row).toContainText('Received');
 
-  // The QRF status card on Home is for peer support (the only category me.active_qrf reads),
-  // whose meeting place is optional.
-  const peerSummary = `Someone to talk to ${uniqueEmail('y').slice(6, 14)}`;
-  await scriptModel(request, draftTurns({ category: 'PEER_SUPPORT', summary: peerSummary }));
-  await page.getByRole('link', { name: 'Request peer support' }).click();
-  await page.getByLabel('Tell us what you need').fill('I would like to talk to another veteran.');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await page
-    .getByRole('region', { name: 'Check your request' })
-    .getByRole('button', { name: 'Send request' })
-    .click();
-  await expect(page).toHaveURL(/\/requests\/[0-9a-f-]{36}$/);
-  await page.getByRole('link', { name: /back to home/i }).click();
-  const status = page.getByRole('region', { name: 'Your QRF request' });
+  // Home's status card covers every category (me.active_qrf), so the FOOD request now
+  // replaces the peer-support panel there.
+  const status = page.getByRole('region', { name: 'Your food request' });
   await expect(status).toBeVisible();
   await expect(status.getByText('Your request has been received.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Request peer support' })).toHaveCount(0);
   await shoot(page, '01-request-home-status');
 });

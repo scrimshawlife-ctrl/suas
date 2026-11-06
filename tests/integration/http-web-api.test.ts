@@ -851,3 +851,45 @@ describe('commands that need a reason', () => {
     );
   });
 });
+
+describe('me.active_qrf covers every category', () => {
+  it.each(['FOOD', 'TRANSPORTATION', 'SHELTER', 'PEER_SUPPORT'] as const)(
+    'names an open %s request, then the helper who accepted it',
+    async (category) => {
+      const tenantId = randomUUID();
+      const requester = await person(tenantId, { verified: true, county: 'SANTA_CLARA' });
+      const helper = await person(tenantId, { county: 'SANTA_CLARA' });
+      const { id } = await submitForm(requester, { category });
+
+      const open = await getJson('/api/v0/veterans/me', requester);
+      expect(open.json().active_qrf).toMatchObject({
+        service_request_id: id,
+        state: 'REQUESTED',
+      });
+
+      expect((await accept(helper, id)).statusCode).toBe(200);
+      const accepted = await getJson('/api/v0/veterans/me', requester);
+      expect(accepted.json().active_qrf).toMatchObject({
+        service_request_id: id,
+        state: 'RESPONDER_ACCEPTED',
+      });
+    },
+  );
+
+  it('keeps a second request of a held case readable as still waiting', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, { verified: true, county: 'SANTA_CLARA' });
+    const helper = await person(tenantId, { county: 'SANTA_CLARA' });
+    const first = await submitForm(requester, { category: 'FOOD' });
+    expect((await accept(helper, first.id)).statusCode).toBe(200);
+
+    // The newest request is a different one, so the helper on the first must not make it
+    // read as accepted.
+    const second = await submitForm(requester, { category: 'TRANSPORTATION' });
+    const me = await getJson('/api/v0/veterans/me', requester);
+    expect(me.json().active_qrf).toMatchObject({
+      service_request_id: second.id,
+      state: 'REQUESTED',
+    });
+  });
+});

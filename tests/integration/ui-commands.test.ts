@@ -10,13 +10,14 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { claimCase, findNonClosedCase } from '../../src/coordination/index.js';
+import { findCurrentCase, listCaseServiceRequests } from '../../src/coordination/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { presentQrfState, VETERAN_QRF_CANCEL_REASON } from '../../src/ui/index.js';
 import { readActiveQrf } from '../../src/ui/read.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
+import { holdRequest } from '../helpers/hold-case.js';
 
 let app: StartedApp;
 
@@ -112,7 +113,7 @@ describe('POST /app/qrf/deploy — veteran peer-support request', () => {
     expect(home.body).not.toContain('Deploy QRF');
     expect(home.body).toContain('action="/app/qrf/cancel"');
 
-    const supportCase = await findNonClosedCase(pool(), tenantId, userId);
+    const supportCase = await findCurrentCase(pool(), tenantId, userId);
     expect(supportCase).toBeDefined();
     const qrf = await readActiveQrf(pool(), tenantId, userId);
     expect(qrf?.serviceRequestId).toBeDefined();
@@ -231,12 +232,16 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
       url: '/app/qrf/deploy',
       headers: authorized(veteran.credential),
     });
-    const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
+    const supportCase = await findCurrentCase(pool(), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
     const responder = await accepterSession(veteran.tenantId);
-    await claimCase(pool(), {
+    const request = (
+      await listCaseServiceRequests(pool(), veteran.tenantId, supportCase.caseId)
+    )[0];
+    if (request === undefined) throw new Error('expected the deployed request');
+    await holdRequest(pool(), {
       tenantId: veteran.tenantId,
-      caseId: supportCase.caseId,
+      serviceRequestId: request.serviceRequestId,
       acceptedByUserId: responder.userId,
     });
 
@@ -260,14 +265,23 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
       url: '/app/qrf/deploy',
       headers: authorized(veteran.credential),
     });
-    const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
+    const supportCase = await findCurrentCase(pool(), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
     const responder = await accepterSession(veteran.tenantId);
-    await claimCase(pool(), {
+    const request = (
+      await listCaseServiceRequests(pool(), veteran.tenantId, supportCase.caseId)
+    )[0];
+    if (request === undefined) throw new Error('expected the deployed request');
+    await holdRequest(pool(), {
       tenantId: veteran.tenantId,
-      caseId: supportCase.caseId,
+      serviceRequestId: request.serviceRequestId,
       acceptedByUserId: responder.userId,
     });
+    // An accepted request always reads RESPONDER_ACCEPTED. Put it back to a status that
+    // is held but not yet accepted, so this isolates the notification join under test.
+    await pool().query(`UPDATE service_requests SET status = 'ASSIGNED' WHERE case_id = $1`, [
+      supportCase.caseId,
+    ]);
     const qrf = await readActiveQrf(pool(), veteran.tenantId, veteran.userId);
     if (qrf === undefined) throw new Error('expected an in-flight request');
 
@@ -297,12 +311,16 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
       url: '/app/qrf/deploy',
       headers: authorized(veteran.credential),
     });
-    const supportCase = await findNonClosedCase(pool(), veteran.tenantId, veteran.userId);
+    const supportCase = await findCurrentCase(pool(), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
     const responder = await accepterSession(veteran.tenantId);
-    await claimCase(pool(), {
+    const request = (
+      await listCaseServiceRequests(pool(), veteran.tenantId, supportCase.caseId)
+    )[0];
+    if (request === undefined) throw new Error('expected the deployed request');
+    await holdRequest(pool(), {
       tenantId: veteran.tenantId,
-      caseId: supportCase.caseId,
+      serviceRequestId: request.serviceRequestId,
       acceptedByUserId: responder.userId,
     });
 

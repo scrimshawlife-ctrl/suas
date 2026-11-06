@@ -18,7 +18,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
-import { findNonClosedCase } from '../../coordination/index.js';
+import { findCurrentCase } from '../../coordination/index.js';
 import {
   readIdScanStatus,
   startIdScan,
@@ -64,7 +64,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
       context.tenantId,
       context.userId,
     );
-    const openCase = await findNonClosedCase(deps.pool, context.tenantId, context.userId);
+    const openCase = await findCurrentCase(deps.pool, context.tenantId, context.userId);
     const activeQrf = await readActiveQrf(deps.pool, context.tenantId, context.userId);
 
     return {
@@ -93,6 +93,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
               const presentation = presentQrfState(activeQrf.facts);
               return {
                 service_request_id: activeQrf.serviceRequestId,
+                category: activeQrf.category,
                 state: presentation.state,
                 headline: presentation.headline,
                 cancellable: presentation.cancellable,

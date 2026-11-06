@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
-import { findNonClosedCase } from '../../src/coordination/index.js';
+import { findCurrentCase } from '../../src/coordination/index.js';
 import { DispatchingJobQueue, InMemoryJobQueue } from '../../src/jobs/index.js';
 import {
   completeCheckIn,
@@ -107,7 +107,7 @@ describe('runSupportSignalComputeJob', () => {
       checkInId: checkIn.checkInId,
     });
     expect(result).toEqual({ status: 'SKIPPED', reason: 'MODE_DISABLED' });
-    expect(await findNonClosedCase(pool, tenantId, veteran.userId)).toBeUndefined();
+    expect(await findCurrentCase(pool, tenantId, veteran.userId)).toBeUndefined();
   });
 
   it('skips a Check-In that is not qv-001', async () => {
@@ -172,7 +172,7 @@ describe('runSupportSignalComputeJob', () => {
       checkInId: checkIn.checkInId,
     });
     expect(result).toEqual({ status: 'SKIPPED', reason: 'NOT_QV_001' });
-    expect(await findNonClosedCase(pool, tenantId, veteran.userId)).toBeUndefined();
+    expect(await findCurrentCase(pool, tenantId, veteran.userId)).toBeUndefined();
   });
 
   it('settles GREEN from A0 and does not open a case', async () => {
@@ -189,7 +189,7 @@ describe('runSupportSignalComputeJob', () => {
     });
     expect(result.status).toBe('SETTLED');
     expect(result.signal?.level).toBe('GREEN');
-    expect(await findNonClosedCase(pool, tenantId, veteran.userId)).toBeUndefined();
+    expect(await findCurrentCase(pool, tenantId, veteran.userId)).toBeUndefined();
   });
 
   it('opens a RED case when GV-007 answers settle through the job dispatcher', async () => {
@@ -212,7 +212,7 @@ describe('runSupportSignalComputeJob', () => {
       { jobQueue: queue },
     );
     expect(inner.enqueued()[0]?.jobType).toBe('support-signal.compute');
-    const opened = await findNonClosedCase(pool, tenantId, veteran.userId);
+    const opened = await findCurrentCase(pool, tenantId, veteran.userId);
     expect(opened?.prioritySignalLevel).toBe('RED');
     expect(opened?.status).toBe('OPEN');
   });

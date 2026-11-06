@@ -336,6 +336,9 @@ const rawConfigSchema = z.object({
   SUAS_CHAT_PUSH_MODE: optionalEnum('SUAS_CHAT_PUSH_MODE', CHAT_PUSH_MODES, 'disabled'),
   // `https://{api-id}.execute-api.{region}.amazonaws.com/{stage}` of the WebSocket API.
   SUAS_CHAT_WS_ENDPOINT: optionalRaw,
+  // Optional `wss://` URL clients open instead of the execute-api host, such as a custom
+  // domain mapped to the same WebSocket API stage. `apigw` only; unset keeps the default.
+  SUAS_CHAT_WS_PUBLIC_URL: optionalRaw,
   // Port for the local WebSocket server (SUAS_CHAT_PUSH_MODE=local). Defaults to 3001.
   SUAS_CHAT_LOCAL_WS_PORT: optionalRaw,
 
@@ -480,6 +483,8 @@ export interface SuasConfig {
     readonly mode: ChatPushMode;
     /** WebSocket API management endpoint; set only for `apigw`. */
     readonly apiGatewayEndpoint: string | undefined;
+    /** URL handed to clients when it differs from the management endpoint; `apigw` only. */
+    readonly publicUrl: string | undefined;
     readonly localPort: number;
   };
   readonly adapters: {
@@ -607,10 +612,28 @@ function validateProviderEndpoint(
   }
 }
 
-/**
- * Full configuration schema including the ENVIRONMENT.md §5 cross-field
- * startup-validation invariants. Every failure here is fail-closed by design.
- */
+/** Why `SUAS_CHAT_WS_PUBLIC_URL` is not a usable client URL, or undefined when it is. */
+function chatWsPublicUrlIssue(value: string): string | undefined {
+  const message =
+    'SUAS_CHAT_WS_PUBLIC_URL must be a wss:// URL with a host name and no credentials, query or fragment.';
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return message;
+  }
+  const bad =
+    parsed.protocol !== 'wss:' ||
+    parsed.hostname === '' ||
+    parsed.username !== '' ||
+    parsed.password !== '' ||
+    parsed.search !== '' ||
+    parsed.hash !== '' ||
+    value.includes('?') ||
+    value.includes('#');
+  return bad ? message : undefined;
+}
+
 /**
  * Guards for the AWS-backed capability ports (V1_PROJECT_PLAN.md §4.1, §7).
  *
@@ -668,6 +691,13 @@ function validateAwsCapabilities(
       );
     }
   }
+  if (raw.SUAS_CHAT_WS_PUBLIC_URL !== undefined) {
+    if (raw.SUAS_CHAT_PUSH_MODE !== 'apigw') {
+      issue('SUAS_CHAT_WS_PUBLIC_URL requires SUAS_CHAT_PUSH_MODE=apigw.');
+    }
+    const publicUrlIssue = chatWsPublicUrlIssue(raw.SUAS_CHAT_WS_PUBLIC_URL);
+    if (publicUrlIssue !== undefined) issue(publicUrlIssue);
+  }
   // The local server keeps its sockets in one process, so it cannot serve a deployed,
   // multi-instance environment (AGENTS.md rule 8).
   if (raw.SUAS_CHAT_PUSH_MODE === 'local' && environment !== 'LOCAL' && environment !== 'TEST') {
@@ -697,6 +727,10 @@ function validateAwsCapabilities(
   }
 }
 
+/**
+ * Full configuration schema including the ENVIRONMENT.md §5 cross-field
+ * startup-validation invariants. Every failure here is fail-closed by design.
+ */
 export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   const environment = raw.SUAS_ENV;
 
@@ -1148,6 +1182,7 @@ export function shapeConfig(
     chatPush: {
       mode: raw.SUAS_CHAT_PUSH_MODE,
       apiGatewayEndpoint: raw.SUAS_CHAT_WS_ENDPOINT,
+      publicUrl: raw.SUAS_CHAT_WS_PUBLIC_URL,
       localPort: parsePositiveInt(
         'SUAS_CHAT_LOCAL_WS_PORT',
         raw.SUAS_CHAT_LOCAL_WS_PORT,

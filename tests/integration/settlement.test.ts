@@ -13,7 +13,6 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { withTransaction } from '../../src/db/index.js';
 import { listAggregateEvents } from '../../src/events/index.js';
 import {
-  claimCase,
   createServiceRequest,
   executeCaseCommand,
   executeServiceRequestCommand,
@@ -45,6 +44,7 @@ import {
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { createTestPool, resetKernelTables, syntheticTenantId } from '../helpers/db.js';
+import { holdCase } from '../helpers/hold-case.js';
 
 const pool: Pool = createTestPool();
 
@@ -76,7 +76,7 @@ async function activeCase() {
     }),
   );
   const caseId = opened.supportCase.caseId;
-  await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
+  await holdCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
   await executeCaseCommand(pool, {
     tenantId,
     caseId,
@@ -720,7 +720,7 @@ describe('SETTLEMENT.md §3 — multi-cycle resolution history', () => {
       reason: 'the need recurred',
     });
 
-    await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
+    await holdCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
     await executeCaseCommand(pool, {
       tenantId,
       caseId,
@@ -762,7 +762,7 @@ describe('SETTLEMENT.md §3 — multi-cycle resolution history', () => {
       actorType: 'SUAS_ADMIN',
       reason: 'recurrence',
     });
-    await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
+    await holdCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
     await executeCaseCommand(pool, {
       tenantId,
       caseId,
@@ -980,7 +980,7 @@ describe('requester confirmation derived at resolve', () => {
       actorType: 'SUAS_ADMIN',
       reason: 'the need recurred',
     });
-    await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
+    await holdCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
     await executeCaseCommand(pool, {
       tenantId,
       caseId,

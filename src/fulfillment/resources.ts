@@ -39,11 +39,18 @@ export type ContactMethodKind = (typeof CONTACT_METHOD_KINDS)[number];
  * would be presented as a crisis line (SUAS-specs SAFETY.md §2).
  */
 const CRISIS_LINE_SERVICE_NAMES: readonly RegExp[] = [
+  /^911$/i,
+  /^9-1-1$/i,
   /^988$/i,
+  /^838255$/i,
   /suicide\s*&\s*crisis\s+lifeline/i,
   /veterans\s+crisis\s+line/i,
   /crisis\s+line/i,
+  /national\s+lifeline/i,
 ];
+
+/** Shown in place of a stored crisis-identity name. Itself not a crisis-line name. */
+export const QUALIFIED_DIRECTORY_SERVICE_NAME = 'Directory listing';
 
 export function directoryServiceNameCrisisIssue(serviceName: string): string | undefined {
   const normalized = serviceName.trim().replace(/\s+/g, ' ');
@@ -53,6 +60,37 @@ export function directoryServiceNameCrisisIssue(serviceName: string): string | u
     `Resource name "${serviceName}" looks like a crisis line. A directory listing must not ` +
     'label a number as a crisis line (SUAS-specs SAFETY.md §2).'
   );
+}
+
+/**
+ * Legacy rows were stored before the name policy. On read, a crisis-identity
+ * name is replaced so the directory does not display it.
+ */
+export function directoryServiceNameForDisplay(serviceName: string): string {
+  return directoryServiceNameCrisisIssue(serviceName) === undefined
+    ? serviceName
+    : QUALIFIED_DIRECTORY_SERVICE_NAME;
+}
+
+const CRISIS_DIRECTORY_NUMBERS = new Set(['911', '988', '838255']);
+
+function isCrisisDirectoryNumber(contactMethod: string | undefined): boolean {
+  if (contactMethod === undefined) return false;
+  return CRISIS_DIRECTORY_NUMBERS.has(contactMethod.replace(/\D/g, ''));
+}
+
+/**
+ * 911, 988, and 838255 stay recorded text. A legacy PHONE kind must not become
+ * a directory link.
+ */
+export function directoryContactForRead(
+  contactMethod: string | undefined,
+  contactMethodKind: ContactMethodKind | undefined,
+): { contactMethod: string | undefined; contactMethodKind: ContactMethodKind | undefined } {
+  if (contactMethodKind === 'PHONE' && isCrisisDirectoryNumber(contactMethod)) {
+    return { contactMethod, contactMethodKind: 'FREEFORM' };
+  }
+  return { contactMethod, contactMethodKind };
 }
 
 export function assertContactMethodKind(value: string): asserts value is ContactMethodKind {
@@ -108,18 +146,22 @@ const RESOURCE_COLUMNS = `
 `;
 
 function toResource(row: ResourceRow): Resource {
+  const contact = directoryContactForRead(
+    row.contact_method ?? undefined,
+    row.contact_method_kind ?? undefined,
+  );
   return {
     resourceId: row.resource_id,
     tenantId: row.tenant_id,
-    serviceName: row.service_name,
+    serviceName: directoryServiceNameForDisplay(row.service_name),
     category: row.category,
     counties: row.counties,
     integrationModes: row.integration_modes,
     active: row.active,
     lastVerifiedAt: row.last_verified_at ?? undefined,
     verificationSource: row.verification_source ?? undefined,
-    contactMethod: row.contact_method ?? undefined,
-    contactMethodKind: row.contact_method_kind ?? undefined,
+    contactMethod: contact.contactMethod,
+    contactMethodKind: contact.contactMethodKind,
     referralMethod: row.referral_method ?? undefined,
     hours: row.hours ?? undefined,
     cost: row.cost ?? undefined,

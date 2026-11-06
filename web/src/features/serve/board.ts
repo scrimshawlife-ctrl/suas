@@ -44,20 +44,28 @@ export interface OpenRequestCardModel {
   category: ServiceCategory;
   title: string;
   meta: string;
+  /** True when this viewer is in a bordering county of a widened request ("Nearby county"). */
   widened: boolean;
 }
 
-/** One open-request row: "{summary}" over "{Category}, opened {time}". */
+/**
+ * One open-request row: "{summary}" over "{Category}, opened {time}".
+ *
+ * `item.widened` is a fact about the request, so it is true for everyone who can see it.
+ * The "Nearby county" mark is about the viewer: only a helper outside the requester's
+ * county gets it. With no known viewer county nothing is marked.
+ */
 export function toOpenCard(
   item: ServiceRequestListItem,
   now: number = Date.now(),
+  viewerCounty?: County | null,
 ): OpenRequestCardModel {
   return {
     id: item.service_request_id,
     category: item.category,
     title: summaryOrCategory(item.summary, item.category),
     meta: `${NEEDS[item.category].label}, opened ${relativeTime(item.created_at, now)}`,
-    widened: item.widened === true,
+    widened: item.widened === true && !!viewerCounty && item.county !== viewerCounty,
   };
 }
 

@@ -11,11 +11,12 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { withTransaction } from '../../src/db/index.js';
-import { claimCase, createServiceRequest, openCase } from '../../src/coordination/index.js';
+import { createServiceRequest, openCase } from '../../src/coordination/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { readActiveQrf } from '../../src/ui/read.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { createTestPool, resetKernelTables, syntheticTenantId } from '../helpers/db.js';
+import { holdRequest } from '../helpers/hold-case.js';
 
 const pool: Pool = createTestPool();
 
@@ -55,9 +56,9 @@ async function assignedQrf() {
       actorType: 'VETERAN',
     }),
   );
-  await claimCase(pool, {
+  await holdRequest(pool, {
     tenantId,
-    caseId: opened.supportCase.caseId,
+    serviceRequestId: request.serviceRequestId,
     acceptedByUserId: responder.userId,
   });
   return { tenantId, veteran, responder, request };
@@ -107,5 +108,76 @@ describe('MVP_REFERENCE.md §7.2 — RESPONDER_NOTIFIED requires a recorded deli
 
     const qrf = await readActiveQrf(pool, tenantId, veteran.userId);
     expect(qrf?.facts.assignedNotificationDelivered).toBe(false);
+  });
+});
+
+describe('the in-flight request covers every category', () => {
+  async function requestOf(
+    tenantId: string,
+    veteranId: string,
+    category: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT',
+  ) {
+    const opened = await withTransaction(pool, (tx) =>
+      openCase(tx, {
+        tenantId,
+        veteranUserId: veteranId,
+        actorType: 'VETERAN',
+        actorId: veteranId,
+      }),
+    );
+    return withTransaction(pool, (tx) =>
+      createServiceRequest(tx, {
+        tenantId,
+        caseId: opened.supportCase.caseId,
+        category,
+        createdBy: veteranId,
+        actorType: 'VETERAN',
+        details: { meeting_place: 'Main Street library' },
+      }),
+    );
+  }
+
+  it.each(['FOOD', 'TRANSPORTATION', 'SHELTER', 'PEER_SUPPORT'] as const)(
+    'reads an open %s request',
+    async (category) => {
+      const tenantId = syntheticTenantId();
+      const veteran = await activeUser(tenantId, 'veteran');
+      const request = await requestOf(tenantId, veteran.userId, category);
+
+      const qrf = await readActiveQrf(pool, tenantId, veteran.userId);
+      expect(qrf?.serviceRequestId).toBe(request.serviceRequestId);
+    },
+  );
+
+  it('returns the newest open request, and can be narrowed to one category', async () => {
+    const tenantId = syntheticTenantId();
+    const veteran = await activeUser(tenantId, 'veteran');
+    const peer = await requestOf(tenantId, veteran.userId, 'PEER_SUPPORT');
+    const food = await requestOf(tenantId, veteran.userId, 'FOOD');
+
+    expect((await readActiveQrf(pool, tenantId, veteran.userId))?.serviceRequestId).toBe(
+      food.serviceRequestId,
+    );
+    expect(
+      (await readActiveQrf(pool, tenantId, veteran.userId, { category: 'PEER_SUPPORT' }))
+        ?.serviceRequestId,
+    ).toBe(peer.serviceRequestId);
+  });
+
+  it('reads accepted from the request itself, not from another request on the case', async () => {
+    const tenantId = syntheticTenantId();
+    const veteran = await activeUser(tenantId, 'veteran');
+    const responder = await activeUser(tenantId, 'responder');
+    const first = await requestOf(tenantId, veteran.userId, 'FOOD');
+    await holdRequest(pool, {
+      tenantId,
+      serviceRequestId: first.serviceRequestId,
+      acceptedByUserId: responder.userId,
+    });
+    const second = await requestOf(tenantId, veteran.userId, 'SHELTER');
+
+    const qrf = await readActiveQrf(pool, tenantId, veteran.userId);
+    expect(qrf?.serviceRequestId).toBe(second.serviceRequestId);
+    expect(qrf?.facts.assigned).toBe(false);
   });
 });

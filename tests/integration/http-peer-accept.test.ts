@@ -5,7 +5,9 @@
  * - any signed-in person lists open requests in their county and accepts one;
  * - first accept wins and the request leaves other people's lists;
  * - a requester cannot accept their own request;
- * - only the person who accepted runs the request's accepter commands.
+ * - only the person who accepted runs the request's accepter commands;
+ * - accepting is per request (decided 2026-11-05): two requests of one Veteran can be
+ *   held by two different helpers, each seeing only their own.
  * SUAS-specs API.md §5 (cursor pagination), §4 (no existence leakage).
  */
 
@@ -219,7 +221,7 @@ describe('accept: first wins', () => {
     expect(loserMine.json().service_requests).toEqual([]);
   });
 
-  it('answers the winner again with the same assignment, and the late accepter with 409', async () => {
+  it('answers the winner again with the same answer, and the late accepter with 409', async () => {
     const tenantId = randomUUID();
     const requester = await person(tenantId, 'SANTA_CLARA', 'requester');
     const winner = await person(tenantId, 'SANTA_CLARA');
@@ -230,7 +232,8 @@ describe('accept: first wins', () => {
     const replay = await accept(winner, serviceRequestId);
     expect(first.statusCode).toBe(200);
     expect(replay.statusCode).toBe(200);
-    expect(replay.json().assignment_id).toBe(first.json().assignment_id);
+    expect(replay.json()).toEqual(first.json());
+    expect(first.json()).toMatchObject({ service_request_id: serviceRequestId });
     expect((await accept(late, serviceRequestId)).statusCode).toBe(409);
 
     // The chat thread is created with the accept, one per request, between the two people.
@@ -385,5 +388,220 @@ describe('GET /api/v0/service-requests pagination', () => {
       headers: viewer.headers,
     });
     expect(malformed.statusCode).toBe(400);
+  });
+});
+
+describe('accepting is per request, not per case', () => {
+  /** One Veteran with two submitted requests on the one case, and two helpers in the county. */
+  async function twoRequests() {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'SANTA_CLARA', 'requester');
+    const helperA = await person(tenantId, 'SANTA_CLARA', 'helper-a');
+    const helperB = await person(tenantId, 'SANTA_CLARA', 'helper-b');
+    const bystander = await person(tenantId, 'SANTA_CLARA', 'bystander');
+    const first = await request(requester);
+    const created = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${first.caseId}/service-requests`,
+      headers: keyed(requester),
+      payload: {
+        category: 'TRANSPORTATION',
+        details: { summary: 'A ride to the clinic', meeting_place: 'Clinic front desk' },
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const secondId: string = created.json().service_request_id;
+    const submitted = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${secondId}/commands/SUBMIT`,
+      headers: keyed(requester),
+      payload: {},
+    });
+    expect(submitted.statusCode).toBe(200);
+    return {
+      tenantId,
+      requester,
+      helperA,
+      helperB,
+      bystander,
+      caseId: first.caseId,
+      firstId: first.serviceRequestId,
+      secondId,
+    };
+  }
+
+  const get = (who: Person, url: string) =>
+    app.server.inject({ method: 'GET', url: `/api/v0${url}`, headers: who.headers });
+
+  it('puts a later request of a held case on the open list for another helper', async () => {
+    const { helperA, helperB, firstId, secondId } = await twoRequests();
+    expect((await accept(helperA, firstId)).statusCode).toBe(200);
+
+    // The first request left everyone's list; the second is still open to both.
+    expect(await openIds(helperB)).toEqual([secondId]);
+    expect(await openIds(helperA)).toEqual([secondId]);
+  });
+
+  it('lets two helpers hold two requests of the same Veteran', async () => {
+    const { helperA, helperB, caseId, firstId, secondId } = await twoRequests();
+    const a = await accept(helperA, firstId);
+    const b = await accept(helperB, secondId);
+    expect(a.statusCode).toBe(200);
+    expect(b.statusCode).toBe(200);
+    expect(a.json()).toMatchObject({ case_id: caseId, case_status: 'ASSIGNED' });
+    expect(b.json()).toMatchObject({ case_id: caseId, case_status: 'ASSIGNED' });
+    expect(await openIds(helperA)).toEqual([]);
+  });
+
+  it('shows each helper only their own request, in the list and in detail', async () => {
+    const { requester, helperA, helperB, firstId, secondId } = await twoRequests();
+    await accept(helperA, firstId);
+    await accept(helperB, secondId);
+
+    const mine = async (who: Person) =>
+      (
+        (await get(who, '/service-requests?ownership=mine')).json().service_requests as {
+          service_request_id: string;
+          counterpart_display_name: string | null;
+        }[]
+      ).map((item) => item.service_request_id);
+    expect(await mine(helperA)).toEqual([firstId]);
+    expect(await mine(helperB)).toEqual([secondId]);
+
+    const ownDetail = await get(helperA, `/service-requests/${firstId}`);
+    expect(ownDetail.statusCode).toBe(200);
+    expect(ownDetail.json()).toMatchObject({
+      viewer_role: 'ACCEPTER',
+      meeting_place: 'Main Street library',
+    });
+    // The other helper's request, on the same Veteran's case, does not exist to them.
+    expect((await get(helperA, `/service-requests/${secondId}`)).statusCode).toBe(404);
+    expect((await get(helperB, `/service-requests/${firstId}`)).statusCode).toBe(404);
+
+    // The requester sees both, each with its own helper.
+    await pool().query(`UPDATE users SET display_name = 'Dee R.' WHERE user_id = $1`, [
+      helperA.userId,
+    ]);
+    await pool().query(`UPDATE users SET display_name = 'Sam K.' WHERE user_id = $1`, [
+      helperB.userId,
+    ]);
+    const asRequester = async (id: string): Promise<string | null> => {
+      const body: { counterpart_display_name: string | null } = (
+        await get(requester, `/service-requests/${id}`)
+      ).json();
+      return body.counterpart_display_name;
+    };
+    expect(await asRequester(firstId)).toBe('Dee R.');
+    expect(await asRequester(secondId)).toBe('Sam K.');
+
+    // The case's request list is narrowed the same way for a helper.
+    const caseList = async (who: Person, caseId: string) =>
+      (
+        (await get(who, `/cases/${caseId}/service-requests`)).json().service_requests as {
+          service_request_id: string;
+        }[]
+      ).map((item) => item.service_request_id);
+    const caseId = ownDetail.json().case_id as string;
+    expect(await caseList(helperA, caseId)).toEqual([firstId]);
+    expect((await caseList(requester, caseId)).sort()).toEqual([firstId, secondId].sort());
+  });
+
+  it("runs a request command only for that request's holder", async () => {
+    const { helperA, helperB, firstId, secondId } = await twoRequests();
+    await accept(helperA, firstId);
+    await accept(helperB, secondId);
+
+    const start = (who: Person, id: string) =>
+      app.server.inject({
+        method: 'POST',
+        url: `/api/v0/service-requests/${id}/commands/START`,
+        headers: keyed(who),
+        payload: {},
+      });
+    expect((await start(helperA, secondId)).statusCode).toBe(404);
+    expect((await start(helperB, firstId)).statusCode).toBe(404);
+    expect((await start(helperA, firstId)).json().status).toBe('IN_PROGRESS');
+    expect((await start(helperB, secondId)).json().status).toBe('IN_PROGRESS');
+  });
+
+  it('gives each helper chat with the Veteran for their own request only', async () => {
+    const { requester, helperA, helperB, bystander, firstId, secondId } = await twoRequests();
+    await accept(helperA, firstId);
+    await accept(helperB, secondId);
+
+    const send = (who: Person, id: string, body: string) =>
+      app.server.inject({
+        method: 'POST',
+        url: `/api/v0/service-requests/${id}/chat/messages`,
+        headers: keyed(who),
+        payload: { body },
+      });
+    expect((await send(helperA, firstId, 'A here')).statusCode).toBe(201);
+    expect((await send(helperB, secondId, 'B here')).statusCode).toBe(201);
+    // Each helper is shut out of the other's thread, whoever the Veteran is.
+    expect((await send(helperA, secondId, 'let me in')).statusCode).toBe(404);
+    expect((await send(helperB, firstId, 'let me in')).statusCode).toBe(404);
+    expect((await get(helperA, `/service-requests/${secondId}/chat/messages`)).statusCode).toBe(
+      404,
+    );
+    expect((await send(bystander, firstId, 'hello')).statusCode).toBe(404);
+
+    const threadIds = async (who: Person) =>
+      ((await get(who, '/chat/threads')).json().threads as { service_request_id: string }[])
+        .map((thread) => thread.service_request_id)
+        .sort();
+    expect(await threadIds(helperA)).toEqual([firstId]);
+    expect(await threadIds(helperB)).toEqual([secondId]);
+    expect(await threadIds(requester)).toEqual([firstId, secondId].sort());
+  });
+
+  it('answers 409 to a second accept of a held request and 404 to an ineligible caller', async () => {
+    const { tenantId, helperA, helperB, firstId, secondId } = await twoRequests();
+    const faraway = await person(tenantId, 'MERCED', 'faraway');
+    expect((await accept(helperA, firstId)).statusCode).toBe(200);
+
+    // Even though helperA holds the other request, helperB can still lose this one.
+    expect((await accept(helperB, firstId)).statusCode).toBe(409);
+    expect((await accept(helperB, firstId)).json().error.code).toBe('ALREADY_CLAIMED');
+    // A person outside the county learns nothing, held or not.
+    expect((await accept(faraway, firstId)).statusCode).toBe(404);
+    expect((await accept(faraway, secondId)).statusCode).toBe(404);
+  });
+
+  it('allows case-level actions only to a helper who holds a request of the case', async () => {
+    const { requester, helperA, helperB, bystander, caseId, firstId, secondId } =
+      await twoRequests();
+    await accept(helperA, firstId);
+
+    const logContact = (who: Person) =>
+      app.server.inject({
+        method: 'POST',
+        url: `/api/v0/cases/${caseId}/commands/log-contact-attempt`,
+        headers: keyed(who),
+        payload: { channel: 'PHONE' },
+      });
+    // helperB holds nothing here yet, so the case does not exist to them.
+    expect((await logContact(helperB)).statusCode).toBe(404);
+    expect((await logContact(bystander)).statusCode).toBe(404);
+    expect((await logContact(requester)).statusCode).toBe(403);
+    expect((await logContact(helperA)).statusCode).toBe(201);
+
+    // Holding any one request is enough, and it is the same for each holder.
+    await accept(helperB, secondId);
+    expect((await logContact(helperB)).statusCode).toBe(201);
+    const attempts = await get(helperB, `/cases/${caseId}/contact-attempts`);
+    expect(attempts.statusCode).toBe(200);
+    expect(attempts.json().contact_attempts).toHaveLength(2);
+
+    const activate = (who: Person) =>
+      app.server.inject({
+        method: 'POST',
+        url: `/api/v0/cases/${caseId}/commands/activate`,
+        headers: keyed(who),
+        payload: {},
+      });
+    expect((await activate(bystander)).statusCode).toBe(404);
+    expect((await activate(requester)).statusCode).toBe(403);
+    expect((await activate(helperB)).statusCode).toBe(200);
   });
 });

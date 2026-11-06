@@ -74,5 +74,8 @@ test('an unaccepted request widens to a bordering county after the delay', async
   await expect(list(distant)).toContainText('No open requests right now.');
   await sameCounty.reload();
   await expect(list(sameCounty)).toContainText(summary);
+  // Widening is about the viewer: the requester's own county never sees it as nearby.
+  await expect(list(sameCounty).getByText('Nearby county')).toHaveCount(0);
+  await expect(sameCounty.getByText(/and bordering counties/)).toHaveCount(0);
   await shoot(bordering, '03-widened-serve-list');
 });

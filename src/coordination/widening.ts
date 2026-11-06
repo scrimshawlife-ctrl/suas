@@ -22,6 +22,7 @@
 import type { Pool } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendAuditEvent } from '../events/index.js';
+import { OPEN_CASE_STATE_CONDITION } from './open-requests.js';
 
 export const WIDENING_DELAY_SETTING_KEY = 'widening_delay_minutes';
 const DEFAULT_BATCH_SIZE = 200;
@@ -59,11 +60,10 @@ const DUE_CONDITIONS = `
   r.widened_at IS NULL
   AND r.status = ANY(ARRAY['SUBMITTED','TRIAGED','MATCHING']::suas_service_request_status[])
   AND r.submitted_at <= $1::timestamptz
-  AND c.status IN ('OPEN', 'TRIAGED')
+  AND ${OPEN_CASE_STATE_CONDITION}
+  AND r.accepted_by_user_id IS NULL
   AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
-  AND u.county IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM case_assignments a
-                   WHERE a.case_id = c.case_id AND a.status = 'ACTIVE')`;
+  AND u.county IS NOT NULL`;
 
 const FROM_REQUEST_CASE_REQUESTER = `
   service_requests r

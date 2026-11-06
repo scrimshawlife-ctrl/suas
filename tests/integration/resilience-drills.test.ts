@@ -19,7 +19,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createUser, setUserCounty } from '../../src/identity/index.js';
 import {
-  claimCase,
   executeCaseCommand,
   createServiceRequest,
   executeServiceRequestCommand,
@@ -49,6 +48,7 @@ import { recordDrillResult, type DrillResult } from '../../src/resilience/index.
 import type { RecordingChallengeDelivery } from '../../src/auth/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { validEnv } from '../helpers/env.js';
+import { holdCase } from '../helpers/hold-case.js';
 
 /** Two instances, one database. */
 let instanceA: StartedApp;
@@ -550,7 +550,7 @@ describe('RESILIENCE.md §17.9 — concurrent Settlement resolve', () => {
 
     // RESOLVE is legal only from ACTIVE, by the assigned responder, with an
     // active assignment (CASES.md §4). Drive the Case there before racing.
-    await claimCase(poolA(), {
+    await holdCase(poolA(), {
       tenantId,
       caseId: opened.supportCase.caseId,
       acceptedByUserId: userId,

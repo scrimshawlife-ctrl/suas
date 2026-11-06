@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { requireVerifiedVeteran } from '../../identity/index.js';
-import { findNonClosedCase } from '../../coordination/index.js';
+import { findCurrentCase } from '../../coordination/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import {
@@ -138,7 +138,7 @@ export function registerCheckInRoutes(app: FastifyInstance, deps: CheckInRouteDe
       : await effectiveSignal(deps.pool, context.tenantId, context.userId);
     const supportCase =
       signal?.level === 'RED'
-        ? await findNonClosedCase(deps.pool, context.tenantId, context.userId)
+        ? await findCurrentCase(deps.pool, context.tenantId, context.userId)
         : undefined;
     return {
       ...publicCheckIn(outcome.checkIn),
