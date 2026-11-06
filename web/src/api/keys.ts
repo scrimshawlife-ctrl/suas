@@ -27,6 +27,7 @@ export const queryKeys = {
   serviceRequests: resourceKeys('service-requests'),
   chatMessages: (serviceRequestId: string) => ['chat', serviceRequestId, 'messages'] as const,
   chatThreads: ['chat', 'threads'] as const,
+  intake: resourceKeys('intake'),
   notifications: resourceKeys('notifications'),
   resources: resourceKeys('resources'),
   adminDrafts: resourceKeys('admin-resource-drafts'),

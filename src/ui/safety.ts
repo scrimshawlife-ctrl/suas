@@ -39,11 +39,27 @@ export interface ApprovedCrisisResource {
 }
 
 /**
- * SAFETY_COPY.md §1.1 primary actions and the only authorized destinations
- * (SAFETY_COPY.md §0; RELEASE_MANIFEST-0.1.5.md D-012 authority item 1).
+ * Pinned spec 0.7.0 SAFETY_COPY released destinations: 911 and 988 (call or text)
+ * only. No tracking parameters and no other released number.
+ */
+export const APPROVED_CRISIS_DESTINATIONS = ['tel:911', 'tel:988', 'sms:988'] as const;
+
+/**
+ * 838255 (sms:838255, Text 838255): owner-decided as D-050 on 2026-11-05,
+ * pending a spec release; the pinned spec 0.7.0 SAFETY_COPY authorizes only
+ * 911 and 988.
+ * Owner decision (owner (scrimshawlife-ctrl), 2026-11-05 1:20 PM PT): "You can keep those numbers" /
+ * "Just label them appropriately". That does not settle a spec release.
+ * The footer must label 838255 as the Veterans Crisis Line text number.
+ * Do not describe this destination as released in the pinned spec.
+ */
+export const PENDING_RELEASE_CRISIS_DESTINATIONS = ['sms:838255'] as const;
+
+/**
+ * SAFETY_COPY.md §1.1 primary actions (D-012).
  *
- * Labels are the released primary-action wording, verbatim. Destinations are
- * `tel:911` and `tel:988` — no tracking parameters, no other number or URL.
+ * Labels are the released primary-action wording, verbatim. Those slot
+ * destinations are `tel:911` and `tel:988` — no tracking parameters.
  */
 export const APPROVED_CRISIS_RESOURCES: readonly ApprovedCrisisResource[] = [
   {
