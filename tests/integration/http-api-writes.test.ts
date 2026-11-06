@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { findNonClosedCase } from '../../src/coordination/index.js';
-import { createMembership, createOrganization, createUser } from '../../src/identity/index.js';
+import { createUser } from '../../src/identity/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
@@ -50,6 +50,7 @@ async function openRedCase() {
     tenantId,
     email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
+    county: 'SANTA_CLARA',
   });
   await ensurePublishedQv001(pool, user.userId);
   const session = await createSession(pool, TEST_SESSION_SECRET, {
@@ -88,34 +89,33 @@ async function openRedCase() {
   return { pool, tenantId, user, headers, supportCase };
 }
 
-async function responderFor(tenantId: string) {
+/** A signed-in person in the launch county who can accept requests. */
+async function accepterFor(tenantId: string) {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
-  const org = await createOrganization(pool, {
+  const accepter = await createUser(pool, {
     tenantId,
-    name: `Org ${randomUUID().slice(0, 8)}`,
+    email: syntheticEmail(`acc-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
-  });
-  const responder = await createUser(pool, {
-    tenantId,
-    email: syntheticEmail(`resp-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
-  await createMembership(pool, {
-    tenantId,
-    organizationId: org.organizationId,
-    userId: responder.userId,
-    role: 'RESPONDER',
-    status: 'ACTIVE',
+    county: 'SANTA_CLARA',
   });
   const session = await createSession(pool, TEST_SESSION_SECRET, {
     tenantId,
-    userId: responder.userId,
+    userId: accepter.userId,
   });
   return {
-    responder,
+    accepter,
     headers: { authorization: `Bearer ${session.credential}` },
   };
+}
+
+/** The accepter takes the case by accepting the Veteran's submitted request. */
+async function acceptRequest(headers: Record<string, string>, srId: string) {
+  return app.server.inject({
+    method: 'POST',
+    url: `/api/v0/service-requests/${srId}/accept`,
+    headers,
+  });
 }
 
 describe('Service Request create + SUBMIT', () => {
@@ -175,7 +175,7 @@ describe('Service Request create + SUBMIT', () => {
   });
 });
 
-describe('DISPATCH.md §4 — responder commands need the assigned Responder', () => {
+describe('DISPATCH.md §4 — accepter commands need the person who accepted', () => {
   async function command(
     srId: string,
     name: string,
@@ -203,12 +203,13 @@ describe('DISPATCH.md §4 — responder commands need the assigned Responder', (
     return { ...opened, srId };
   }
 
-  it('refuses an unassigned responder and leaves the request unchanged', async () => {
+  it('refuses someone who did not accept and leaves the request unchanged', async () => {
     const { tenantId, srId, headers } = await submittedRequest();
-    const outsider = await responderFor(tenantId);
+    const outsider = await accepterFor(tenantId);
     const refused = await command(srId, 'TRIAGE', outsider.headers);
-    expect(refused.statusCode).toBe(403);
-    expect(refused.json().error?.code).toBe('FORBIDDEN');
+    // A person with no relationship to the request cannot tell it exists.
+    expect(refused.statusCode).toBe(404);
+    expect(refused.json().error?.code).toBe('NOT_FOUND');
     const read = await app.server.inject({
       method: 'GET',
       url: `/api/v0/service-requests/${srId}`,
@@ -217,24 +218,30 @@ describe('DISPATCH.md §4 — responder commands need the assigned Responder', (
     expect(read.json()).toMatchObject({ status: 'SUBMITTED' });
   });
 
-  it('lets the responder who claimed the case run the command', async () => {
-    const { tenantId, srId, supportCase } = await submittedRequest();
-    const assigned = await responderFor(tenantId);
-    const claimed = await app.server.inject({
-      method: 'POST',
-      url: `/api/v0/cases/${supportCase.caseId}/commands/claim`,
-      headers: assigned.headers,
-    });
-    expect(claimed.statusCode).toBe(200);
+  it('lets the person who accepted the request run the command', async () => {
+    const { tenantId, srId } = await submittedRequest();
+    const assigned = await accepterFor(tenantId);
+    expect((await acceptRequest(assigned.headers, srId)).statusCode).toBe(200);
     const triaged = await command(srId, 'TRIAGE', assigned.headers);
     expect(triaged.statusCode).toBe(200);
     expect(triaged.json()).toMatchObject({ status: 'TRIAGED' });
   });
 
-  it('lets the creating responder submit, but not another unassigned responder', async () => {
-    const { tenantId, supportCase } = await openRedCase();
-    const creator = await responderFor(tenantId);
-    const other = await responderFor(tenantId);
+  it('lets the accepter submit a request they created, but not the requester-only commands of others', async () => {
+    const { tenantId, supportCase, headers } = await openRedCase();
+    // The accepter needs a submitted request to accept, then creates another of their own.
+    const first = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
+      headers: { ...headers, 'idempotency-key': `sr-create-${randomUUID()}` },
+      payload: { category: 'FOOD' },
+    });
+    const firstId = first.json().service_request_id as string;
+    expect((await command(firstId, 'SUBMIT', headers)).statusCode).toBe(200);
+    const creator = await accepterFor(tenantId);
+    const other = await accepterFor(tenantId);
+    expect((await acceptRequest(creator.headers, firstId)).statusCode).toBe(200);
+
     const created = await app.server.inject({
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
@@ -243,7 +250,7 @@ describe('DISPATCH.md §4 — responder commands need the assigned Responder', (
     });
     expect(created.statusCode).toBe(201);
     const srId = created.json().service_request_id as string;
-    expect((await command(srId, 'SUBMIT', other.headers)).statusCode).toBe(403);
+    expect((await command(srId, 'SUBMIT', other.headers)).statusCode).toBe(404);
     const submitted = await command(srId, 'SUBMIT', creator.headers);
     expect(submitted.statusCode).toBe(200);
     expect(submitted.json()).toMatchObject({ status: 'SUBMITTED' });
@@ -251,9 +258,23 @@ describe('DISPATCH.md §4 — responder commands need the assigned Responder', (
 });
 
 describe('Follow-Ups', () => {
-  it('lets a responder create and complete a follow-up', async () => {
-    const { tenantId, supportCase } = await openRedCase();
-    const { responder, headers } = await responderFor(tenantId);
+  it('lets the accepter create and complete a follow-up', async () => {
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { accepter: responder, headers } = await accepterFor(tenantId);
+    const sr = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
+      headers: { ...veteranHeaders, 'idempotency-key': `sr-${randomUUID()}` },
+      payload: { category: 'FOOD' },
+    });
+    const srId = sr.json().service_request_id as string;
+    await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${srId}/commands/SUBMIT`,
+      headers: { ...veteranHeaders, 'idempotency-key': `sub-${randomUUID()}` },
+      payload: {},
+    });
+    expect((await acceptRequest(headers, srId)).statusCode).toBe(200);
     const dueAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const created = await app.server.inject({
       method: 'POST',
@@ -262,7 +283,7 @@ describe('Follow-Ups', () => {
       payload: {
         case_id: supportCase.caseId,
         due_at: dueAt,
-        responsible_type: 'RESPONDER',
+        responsible_type: 'USER',
         responsible_id: responder.userId,
         resolution_disposition: 'CARRIED_FORWARD',
       },
@@ -297,7 +318,7 @@ describe('Follow-Ups', () => {
     });
   });
 
-  it('forbids veterans from creating follow-ups', async () => {
+  it('forbids the requester from creating follow-ups', async () => {
     const { headers, supportCase, user } = await openRedCase();
     const response = await app.server.inject({
       method: 'POST',

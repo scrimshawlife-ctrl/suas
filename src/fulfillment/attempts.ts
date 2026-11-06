@@ -80,7 +80,7 @@ function toAttempt(row: AttemptRow): FulfillmentAttempt {
 }
 
 /**
- * FULFILLMENT.md §9: two workers or responders must not concurrently initiate the
+ * FULFILLMENT.md §9: two workers or people must not concurrently initiate the
  * same logical attempt. The partial unique index refuses the second insert.
  */
 export class AttemptAlreadyInFlightError extends Error {
@@ -269,7 +269,7 @@ export interface ServiceFulfillment {
   readonly state: FulfillmentState;
   readonly fulfillmentMode: FulfillmentMode | undefined;
   readonly veteranConfirmedAt: Date | undefined;
-  readonly responderConfirmedAt: Date | undefined;
+  readonly acceptedByConfirmedAt: Date | undefined;
 }
 
 interface FulfillmentRow {
@@ -280,12 +280,12 @@ interface FulfillmentRow {
   state: FulfillmentState;
   fulfillment_mode: FulfillmentMode | null;
   veteran_confirmed_at: Date | null;
-  responder_confirmed_at: Date | null;
+  accepted_by_confirmed_at: Date | null;
 }
 
 const FULFILLMENT_COLUMNS = `
   service_fulfillment_id, tenant_id, service_request_id, fulfillment_attempt_id,
-  state, fulfillment_mode, veteran_confirmed_at, responder_confirmed_at
+  state, fulfillment_mode, veteran_confirmed_at, accepted_by_confirmed_at
 `;
 
 function toFulfillment(row: FulfillmentRow): ServiceFulfillment {
@@ -297,7 +297,7 @@ function toFulfillment(row: FulfillmentRow): ServiceFulfillment {
     state: row.state,
     fulfillmentMode: row.fulfillment_mode ?? undefined,
     veteranConfirmedAt: row.veteran_confirmed_at ?? undefined,
-    responderConfirmedAt: row.responder_confirmed_at ?? undefined,
+    acceptedByConfirmedAt: row.accepted_by_confirmed_at ?? undefined,
   };
 }
 
@@ -307,7 +307,7 @@ export class ConfirmationActorRequiredError extends Error {
 
   constructor() {
     super(
-      'CONFIRMED requires a veteran or responder confirmation timestamp; an external provider ' +
+      'CONFIRMED requires a requester or accepter confirmation timestamp; an external provider ' +
         'completion does not replace human confirmation (SUAS-specs FULFILLMENT.md §6).',
     );
     this.name = 'ConfirmationActorRequiredError';
@@ -320,7 +320,7 @@ export class ConfirmationReasonRequiredError extends Error {
 
   constructor() {
     super(
-      'A responder-only confirmation requires a recorded reason the veteran could not confirm ' +
+      'A confirmation by the accepter alone requires a recorded reason the veteran could not confirm ' +
         '(SUAS-specs FULFILLMENT.md §6).',
     );
     this.name = 'ConfirmationReasonRequiredError';
@@ -396,8 +396,8 @@ export async function upsertFulfillment(
 /**
  * Confirm a fulfillment.
  *
- * FULFILLMENT.md §6: at least one of veteran or responder confirmation is
- * required, and a responder-only confirmation needs a reason. §13 forbids
+ * FULFILLMENT.md §6: at least one of the requester's or the accepter's confirmation is
+ * required, and the accepter's alone needs a reason. §13 forbids
  * auto-confirming on a timer without a recorded actor, which is why there is no
  * code path here that confirms without one.
  */
@@ -407,15 +407,15 @@ export async function confirmFulfillment(
     tenantId: string;
     serviceRequestId: string;
     veteranConfirmed?: boolean;
-    responderConfirmedBy?: string;
+    acceptedByUserId?: string;
     reason?: string;
   },
 ): Promise<ServiceFulfillment> {
   const veteran = input.veteranConfirmed === true;
-  const responder = input.responderConfirmedBy !== undefined;
+  const accepter = input.acceptedByUserId !== undefined;
 
-  if (!veteran && !responder) throw new ConfirmationActorRequiredError();
-  if (!veteran && responder && (input.reason === undefined || input.reason.trim() === '')) {
+  if (!veteran && !accepter) throw new ConfirmationActorRequiredError();
+  if (!veteran && accepter && (input.reason === undefined || input.reason.trim() === '')) {
     throw new ConfirmationReasonRequiredError();
   }
 
@@ -441,9 +441,9 @@ export async function confirmFulfillment(
     `UPDATE service_fulfillments
        SET state = 'CONFIRMED',
            veteran_confirmed_at = CASE WHEN $3::boolean THEN now() ELSE veteran_confirmed_at END,
-           responder_confirmed_at = CASE WHEN $4::uuid IS NOT NULL THEN now()
-                                         ELSE responder_confirmed_at END,
-           responder_confirmed_by = COALESCE($4::uuid, responder_confirmed_by),
+           accepted_by_confirmed_at = CASE WHEN $4::uuid IS NOT NULL THEN now()
+                                         ELSE accepted_by_confirmed_at END,
+           accepted_by_user_id = COALESCE($4::uuid, accepted_by_user_id),
            confirmation_reason = COALESCE($5, confirmation_reason),
            updated_at = now()
      WHERE tenant_id = $1 AND service_request_id = $2
@@ -452,7 +452,7 @@ export async function confirmFulfillment(
       input.tenantId,
       input.serviceRequestId,
       veteran,
-      input.responderConfirmedBy ?? null,
+      input.acceptedByUserId ?? null,
       input.reason ?? null,
     ],
   );

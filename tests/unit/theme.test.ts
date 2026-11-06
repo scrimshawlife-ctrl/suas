@@ -107,7 +107,7 @@ describe('iOS operator visual system — presentation tokens', () => {
     expect(html).toContain('class="brand-name">SUAS');
     expect(html).toContain('SPEC-017 · NOT READY');
     expect(html).toContain('I NEED SUPPORT');
-    expect(html).toContain('I WANT TO SERVE');
+    expect(html).not.toContain('I WANT TO SERVE');
     expect(html).toContain('TAKE ACTION');
     expect(html).toContain('class="loop"');
     for (const step of [

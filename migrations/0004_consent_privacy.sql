@@ -39,10 +39,11 @@ CREATE TYPE suas_consent_scope AS ENUM (
 );
 
 -- CONSENT.md §1 actors: who may hold a grant.
+-- v1: no Responder and no Organization grantee. USER is a signed-in person who
+-- accepted the veteran's request.
 CREATE TYPE suas_grantee_type AS ENUM (
     'TRUSTED_CONTACT',
-    'RESPONDER',
-    'ORGANIZATION',
+    'USER',
     'SERVICE_PROVIDER',
     'SYSTEM'
 );
@@ -151,7 +152,7 @@ CREATE TABLE consent_grants (
     -- Why the grant exists, bound to the accepted template version.
     purpose                  text                      NOT NULL,
     grantee_type             suas_grantee_type         NOT NULL,
-    -- Opaque grantee identity: a trusted_contact_id, organization_id, adapter id,
+    -- Opaque grantee identity: a trusted_contact_id, user_id, adapter id,
     -- or system actor, depending on grantee_type.
     grantee_id               text                      NOT NULL,
     consent_template_version text                      NOT NULL

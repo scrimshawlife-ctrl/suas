@@ -9,6 +9,7 @@ function user(tenantId: string): User {
     status: 'ACTIVE',
     email: 'v@example.invalid',
     phone: undefined,
+    county: undefined,
     deletedAt: undefined,
   };
 }

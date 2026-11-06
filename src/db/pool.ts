@@ -12,6 +12,8 @@
  * node-postgres guidance.
  */
 
+import { readFileSync } from 'node:fs';
+import type { ConnectionOptions } from 'node:tls';
 import { Client, Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
 import type { SuasConfig } from '../config/index.js';
 
@@ -81,6 +83,23 @@ export function createWorkerPool(config: SuasConfig): Pool {
   return workerPool as unknown as Pool;
 }
 
+/**
+ * TLS settings for the long-lived Node pool (config `DATABASE_SSL_MODE`).
+ * `verify` checks the certificate chain and host name; a CA bundle file, such as
+ * the AWS RDS global bundle, replaces the default trust store. Returns undefined
+ * for `disable`, leaving the connection string to decide as before.
+ */
+export function databaseSslOptions(
+  ssl: SuasConfig['database']['ssl'],
+  readFile: (path: string) => string = (path) => readFileSync(path, 'utf8'),
+): ConnectionOptions | undefined {
+  if (ssl.mode === 'disable') return undefined;
+  return {
+    rejectUnauthorized: true,
+    ...(ssl.caFile !== undefined ? { ca: readFile(ssl.caFile) } : {}),
+  };
+}
+
 export function createPool(config: SuasConfig, mode: PoolMode = 'node'): Pool {
   if (mode === 'worker') {
     return createWorkerPool(config);
@@ -90,8 +109,10 @@ export function createPool(config: SuasConfig, mode: PoolMode = 'node'): Pool {
   if (url === undefined) {
     throw new DatabaseNotConfiguredError();
   }
+  const ssl = databaseSslOptions(config.database.ssl);
   return new Pool({
     connectionString: url,
+    ...(ssl !== undefined ? { ssl } : {}),
     max: config.database.poolMax,
     // Finite timeouts, per ARCHITECTURE.md §13. These are implementation
     // mechanism values; no production SLO is implied (RELEASE_MANIFEST-0.1.1.md).

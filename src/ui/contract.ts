@@ -32,10 +32,6 @@ export const SURFACE_IDS = [
   'IMMEDIATE_RESOURCES',
   'RESOURCE_CATEGORIES',
   'RESOURCE_LIST',
-  'RESPONDER_DASHBOARD',
-  'RESPONDER_CASE',
-  'RESPONDER_AVAILABILITY',
-  'ACTIVE_NEEDS',
   'CHAT',
   'MOBILE_NAV',
   'ADMIN_OVERVIEW',
@@ -43,7 +39,7 @@ export const SURFACE_IDS = [
 export type SurfaceId = (typeof SURFACE_IDS)[number];
 
 /** The role a surface is rendered for. MVP_REFERENCE.md §4.4 role recognition. */
-export const SURFACE_AUDIENCES = ['PUBLIC', 'VETERAN', 'RESPONDER', 'ADMIN'] as const;
+export const SURFACE_AUDIENCES = ['PUBLIC', 'VETERAN', 'ADMIN'] as const;
 export type SurfaceAudience = (typeof SURFACE_AUDIENCES)[number];
 
 export interface SurfaceRequirement {
@@ -76,10 +72,10 @@ export interface SurfaceRequirement {
 export const REQUIRED_SURFACES: readonly SurfaceRequirement[] = [
   {
     id: 'LANDING',
-    referenceAnchor: 'TAKE ACTION; I NEED SUPPORT; I WANT TO SERVE',
+    referenceAnchor: 'TAKE ACTION; I NEED SUPPORT',
     conformance: 'MUST_MATCH',
     audience: 'PUBLIC',
-    requiredElements: ['TAKE ACTION', 'I NEED SUPPORT', 'I WANT TO SERVE'],
+    requiredElements: ['TAKE ACTION', 'I NEED SUPPORT'],
     divergences: ['§7.4 mission/statistic/clinical language'],
   },
   {
@@ -90,7 +86,6 @@ export const REQUIRED_SURFACES: readonly SurfaceRequirement[] = [
     requiredElements: ['Join the Mission', 'Sign in to continue', 'Veteran'],
     stateVariants: {
       VETERAN: ['Join the Mission', 'Sign in to continue', 'Veteran'],
-      RESPONDER: ['Join the Mission', 'Sign in to continue', 'Responder or Peer Counselor'],
     },
     divergences: ['§7.1 enrollment copy'],
   },
@@ -146,38 +141,6 @@ export const REQUIRED_SURFACES: readonly SurfaceRequirement[] = [
     audience: 'VETERAN',
     requiredElements: ['Back'],
     divergences: ['§8 resource-screen fidelity'],
-  },
-  {
-    id: 'RESPONDER_CASE',
-    referenceAnchor: 'case claim / open from the queue',
-    conformance: 'MUST_PRESERVE_BEHAVIOR',
-    audience: 'RESPONDER',
-    requiredElements: ['Case', 'Back', 'Contact attempts', 'Service requests'],
-    divergences: [],
-  },
-  {
-    id: 'RESPONDER_DASHBOARD',
-    referenceAnchor: 'on-duty state, active-work emphasis, Quick Resource Share',
-    conformance: 'MUST_MATCH',
-    audience: 'RESPONDER',
-    requiredElements: ['On Duty', 'Unassigned', 'Quick Resource Share', 'Alerts'],
-    divergences: ['§9 responder/QRF dashboard fidelity'],
-  },
-  {
-    id: 'RESPONDER_AVAILABILITY',
-    referenceAnchor: 'on-duty/readiness state',
-    conformance: 'MUST_PRESERVE_BEHAVIOR',
-    audience: 'RESPONDER',
-    requiredElements: ['On Duty'],
-    divergences: [],
-  },
-  {
-    id: 'ACTIVE_NEEDS',
-    referenceAnchor: 'alerts/current work',
-    conformance: 'MUST_PRESERVE_BEHAVIOR',
-    audience: 'RESPONDER',
-    requiredElements: ['Active Needs'],
-    divergences: [],
   },
   {
     id: 'CHAT',

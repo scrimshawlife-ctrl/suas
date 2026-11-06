@@ -4,7 +4,7 @@
  * SUAS-specs ENVIRONMENT.md §2/§5: no production data or real support effects.
  * TESTING.md §11: readiness evidence exercises deployed integration boundaries.
  * AUTH.md §5: authenticated HTML uses the same bearer session gate as JSON.
- * MVP_REFERENCE.md §5/§10: public, veteran, responder, and admin surfaces remain
+ * MVP_REFERENCE.md §5/§10: public, veteran, and admin surfaces remain
  * truthful and structurally usable in a browser.
  *
  * Public checks need no secrets. Authenticated checks run only when an operator
@@ -20,7 +20,6 @@ function optionalCredential(name: string): string | undefined {
 }
 
 const veteranBearer = optionalCredential('SUAS_E2E_VETERAN_BEARER');
-const responderBearer = optionalCredential('SUAS_E2E_RESPONDER_BEARER');
 const adminBearer = optionalCredential('SUAS_E2E_ADMIN_BEARER');
 
 async function authenticatedPage(browser: Browser, credential: string): Promise<Page> {
@@ -243,25 +242,6 @@ test.describe('deployed authenticated synthetic surfaces', () => {
       await expectNoHorizontalOverflow(page, path);
     }
     await expectKeyboardEntry(page, '/app/home');
-  });
-
-  test('responder routes render with an operator-supplied synthetic session', async ({
-    browser,
-  }) => {
-    test.skip(responderBearer === undefined, 'SUAS_E2E_RESPONDER_BEARER is not configured.');
-    const page = await authenticatedPage(browser, responderBearer ?? '');
-    for (const path of ['/app/responder', '/app/responder/availability']) {
-      await expectHtmlSurface(page, path);
-      await expectNoHorizontalOverflow(page, path);
-    }
-    await expectHtmlSurface(page, '/app/responder');
-    const casePath = await page
-      .locator('a[href^="/app/responder/cases/"]')
-      .first()
-      .getAttribute('href');
-    expect(casePath, 'Seeded responder dashboard has no case link.').not.toBeNull();
-    await expectNoHorizontalOverflow(page, casePath ?? '');
-    await expectKeyboardEntry(page, '/app/responder');
   });
 
   test('admin route renders only with an operator-supplied elevated session', async ({

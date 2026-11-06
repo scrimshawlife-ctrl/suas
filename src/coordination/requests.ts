@@ -87,7 +87,7 @@ export interface CreateServiceRequestInput {
   readonly caseId: string;
   readonly category: string;
   readonly createdBy: string;
-  readonly actorType: 'VETERAN' | 'RESPONDER';
+  readonly actorType: 'VETERAN' | 'USER';
   readonly details?: JsonObject;
   readonly correlationId?: string;
 }
@@ -173,7 +173,7 @@ export interface ServiceRequestCommandInput {
   readonly serviceRequestId: string;
   readonly command: ServiceRequestCommand;
   readonly actorId: string;
-  readonly actorType: 'VETERAN' | 'RESPONDER' | 'SERVICE_PROVIDER' | 'SYSTEM';
+  readonly actorType: 'VETERAN' | 'USER' | 'SERVICE_PROVIDER' | 'SYSTEM';
   readonly reason?: string;
   /** Required when the command has more than one documented target. */
   readonly to?: ServiceRequestStatus;

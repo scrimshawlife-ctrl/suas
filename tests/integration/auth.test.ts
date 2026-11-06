@@ -30,10 +30,9 @@ import {
 } from '../../src/auth/index.js';
 import { resolveAuthContext } from '../../src/authz/index.js';
 import {
-  createMembership,
-  createOrganization,
   createUser,
-  setMembershipStatus,
+  grantSuasAdmin,
+  revokeSuasAdmin,
   setUserStatus,
 } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -438,28 +437,21 @@ describe('AUTH.md §4 — MFA elevation is separate from authentication', () => 
 });
 
 describe('AUTH.md §5, §6 — authorization context re-reads authoritative state', () => {
-  it('drops a membership from the context as soon as it is revoked', async () => {
+  it('drops the admin grant from the context as soon as it is revoked', async () => {
     const { tenantId, user } = await enrolledVeteran();
-    const org = await createOrganization(pool, { tenantId, name: 'Org', status: 'ACTIVE' });
-    const membership = await createMembership(pool, {
-      tenantId,
-      userId: user.userId,
-      organizationId: org.organizationId,
-      role: 'RESPONDER',
-      status: 'ACTIVE',
-    });
+    await grantSuasAdmin(pool, user.userId, undefined);
     const issued = await createSession(pool, TEST_SESSION_SECRET, {
       tenantId,
       userId: user.userId,
     });
 
     const before = await resolveAuthContext(pool, TEST_SESSION_SECRET, issued.credential);
-    expect(before.ok && before.context.memberships).toHaveLength(1);
+    expect(before.ok && before.context.isSuasAdmin).toBe(true);
 
-    await setMembershipStatus(pool, tenantId, membership.membershipId, 'REVOKED');
+    await revokeSuasAdmin(pool, user.userId, undefined);
 
     const after = await resolveAuthContext(pool, TEST_SESSION_SECRET, issued.credential);
-    expect(after.ok && after.context.memberships).toHaveLength(0);
+    expect(after.ok && after.context.isSuasAdmin).toBe(false);
   });
 
   it('derives tenant scope from the session, not from the caller', async () => {

@@ -70,18 +70,18 @@ async function activeCase() {
     openCase(tx, {
       tenantId,
       veteranUserId: veteran.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
       actorId: responder.userId,
     }),
   );
   const caseId = opened.supportCase.caseId;
-  await claimCase(pool, { tenantId, caseId, responderUserId: responder.userId });
+  await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
   await executeCaseCommand(pool, {
     tenantId,
     caseId,
     command: 'ACTIVATE',
     actorId: responder.userId,
-    actorType: 'RESPONDER',
+    actorType: 'USER',
   });
   return { tenantId, veteran, responder, caseId };
 }
@@ -93,7 +93,7 @@ function content(responderId: string): SettlementContent {
     fulfilled: { fulfillments: [] },
     unresolved: { notes: 'none' },
     authoredBy: responderId,
-    responderConfirmedBy: responderId,
+    acceptedByUserId: responderId,
   };
 }
 
@@ -104,10 +104,10 @@ describe('FOLLOWUP.md §3, §11 — creation requires the released fields', () =
       tenantId,
       caseId,
       dueAt: new Date(Date.now() + 60_000),
-      responsibleType: 'RESPONDER',
+      responsibleType: 'USER',
       responsibleId: responder.userId,
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     expect(followUp.status).toBe('SCHEDULED');
@@ -131,10 +131,10 @@ describe('FOLLOWUP.md §3, §11 — creation requires the released fields', () =
         tenantId,
         caseId,
         dueAt: new Date('not-a-date'),
-        responsibleType: 'RESPONDER',
+        responsibleType: 'USER',
         responsibleId: responder.userId,
         actorId: responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
     ).rejects.toThrow(FollowUpValidationError);
   });
@@ -146,10 +146,10 @@ describe('FOLLOWUP.md §3, §11 — creation requires the released fields', () =
         tenantId,
         caseId,
         dueAt: new Date(Date.now() + 60_000),
-        responsibleType: 'RESPONDER',
+        responsibleType: 'USER',
         responsibleId: '   ',
         actorId: responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
     ).rejects.toThrow(FollowUpValidationError);
   });
@@ -162,10 +162,10 @@ describe('FOLLOWUP.md §5 — durable due and overdue jobs', () => {
       tenantId: context.tenantId,
       caseId: context.caseId,
       dueAt: new Date(Date.now() - 1000),
-      responsibleType: 'RESPONDER',
+      responsibleType: 'USER',
       responsibleId: context.responder.userId,
       actorId: context.responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
     return { ...context, followUp };
   }
@@ -214,7 +214,7 @@ describe('FOLLOWUP.md §5 — durable due and overdue jobs', () => {
       newDueAt: new Date(Date.now() + 3_600_000),
       reason: 'veteran asked to be called next week',
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
     expect(rescheduled.scheduleVersion).toBe(followUp.scheduleVersion + 1);
 
@@ -233,7 +233,7 @@ describe('FOLLOWUP.md §5 — durable due and overdue jobs', () => {
       newDueAt: new Date(Date.now() + 3_600_000),
       reason: 'rescheduled',
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     expect((await markFollowUpOverdue(pool, tenantId, stale)).transitioned).toBe(false);
@@ -246,7 +246,7 @@ describe('FOLLOWUP.md §5 — durable due and overdue jobs', () => {
       tenantId,
       followUpId: followUp.followUpId,
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     const result = await markFollowUpDue(pool, tenantId, {
@@ -283,10 +283,10 @@ describe('FOLLOWUP.md §5 — durable due and overdue jobs', () => {
       tenantId,
       caseId,
       dueAt: new Date(Date.now() + 3_600_000),
-      responsibleType: 'RESPONDER',
+      responsibleType: 'USER',
       responsibleId: responder.userId,
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     const result = await markFollowUpDue(pool, tenantId, {
@@ -302,10 +302,10 @@ describe('FOLLOWUP.md §5 — durable due and overdue jobs', () => {
       tenantId,
       caseId,
       dueAt: new Date(Date.now() - 1000),
-      responsibleType: 'RESPONDER',
+      responsibleType: 'USER',
       responsibleId: responder.userId,
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     const claimed = await claimDueWork(pool);
@@ -344,10 +344,10 @@ describe('FOLLOWUP.md §6 — completion, reschedule, cancellation', () => {
       tenantId: context.tenantId,
       caseId: context.caseId,
       dueAt: new Date(Date.now() + 60_000),
-      responsibleType: 'RESPONDER',
+      responsibleType: 'USER',
       responsibleId: context.responder.userId,
       actorId: context.responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
     return { ...context, followUp };
   }
@@ -358,7 +358,7 @@ describe('FOLLOWUP.md §6 — completion, reschedule, cancellation', () => {
       tenantId,
       followUpId: followUp.followUpId,
       actorId: responder.userId,
-      actorType: 'RESPONDER' as const,
+      actorType: 'USER' as const,
     };
 
     const first = await completeFollowUp(pool, input);
@@ -397,7 +397,7 @@ describe('FOLLOWUP.md §6 — completion, reschedule, cancellation', () => {
         newDueAt: new Date(Date.now() + 120_000),
         reason: '  ',
         actorId: responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
     ).rejects.toThrow(FollowUpValidationError);
 
@@ -425,7 +425,7 @@ describe('FOLLOWUP.md §6 — completion, reschedule, cancellation', () => {
         tenantId,
         followUpId: followUp.followUpId,
         actorId: responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
     ).rejects.toThrow(FollowUpValidationError);
   });
@@ -438,10 +438,10 @@ describe('FOLLOWUP.md §4 — coordination retry count is business meaning', () 
       tenantId,
       caseId,
       dueAt: new Date(Date.now() - 1000),
-      responsibleType: 'RESPONDER',
+      responsibleType: 'USER',
       responsibleId: responder.userId,
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     expect(await recordCoordinationAttempt(pool, tenantId, followUp.followUpId)).toBe(1);
@@ -485,7 +485,7 @@ describe('SETTLEMENT.md §2, §5 — resolve requires complete Settlement conten
       openCase(tx, {
         tenantId,
         veteranUserId: veteran.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
         actorId: responder.userId,
       }),
     );
@@ -592,10 +592,10 @@ describe('SETTLEMENT.md §4, FOLLOWUP.md §8 — blocking and carried-forward', 
       tenantId: context.tenantId,
       caseId: context.caseId,
       dueAt: new Date(Date.now() + 86_400_000),
-      responsibleType: 'RESPONDER',
+      responsibleType: 'USER',
       responsibleId: context.responder.userId,
       actorId: context.responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
       ...(disposition !== undefined ? { resolutionDisposition: disposition } : {}),
     });
     return { ...context, followUp };
@@ -638,7 +638,7 @@ describe('SETTLEMENT.md §4, FOLLOWUP.md §8 — blocking and carried-forward', 
     expect(result.settlement.remainingFollowUps).toHaveLength(1);
     expect(result.settlement.remainingFollowUps[0]).toMatchObject({
       follow_up_id: followUp.followUpId,
-      responsible_type: 'RESPONDER',
+      responsible_type: 'USER',
       responsible_id: responder.userId,
     });
     expect(result.settlement.remainingFollowUps[0]).toHaveProperty('due_at');
@@ -665,7 +665,7 @@ describe('SETTLEMENT.md §4, FOLLOWUP.md §8 — blocking and carried-forward', 
       tenantId,
       followUpId: followUp.followUpId,
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     const result = await resolveCaseWithSettlement(pool, {
@@ -708,24 +708,24 @@ describe('SETTLEMENT.md §3 — multi-cycle resolution history', () => {
       caseId,
       command: 'CLOSE',
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
     await executeCaseCommand(pool, {
       tenantId,
       caseId,
       command: 'REOPEN',
       actorId: responder.userId,
-      actorType: 'ORG_ADMIN',
+      actorType: 'SUAS_ADMIN',
       reason: 'the need recurred',
     });
 
-    await claimCase(pool, { tenantId, caseId, responderUserId: responder.userId });
+    await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
     await executeCaseCommand(pool, {
       tenantId,
       caseId,
       command: 'ACTIVATE',
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
 
     const second = await resolveCaseWithSettlement(pool, {
@@ -751,23 +751,23 @@ describe('SETTLEMENT.md §3 — multi-cycle resolution history', () => {
       caseId,
       command: 'CLOSE',
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
     await executeCaseCommand(pool, {
       tenantId,
       caseId,
       command: 'REOPEN',
       actorId: responder.userId,
-      actorType: 'ORG_ADMIN',
+      actorType: 'SUAS_ADMIN',
       reason: 'recurrence',
     });
-    await claimCase(pool, { tenantId, caseId, responderUserId: responder.userId });
+    await claimCase(pool, { tenantId, caseId, acceptedByUserId: responder.userId });
     await executeCaseCommand(pool, {
       tenantId,
       caseId,
       command: 'ACTIVATE',
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
     });
     const second = await resolveCaseWithSettlement(pool, {
       tenantId,
@@ -828,7 +828,7 @@ describe('SETTLEMENT.md §6 — veteran visibility', () => {
     // The occurred summary references Contact Attempts and internal responder
     // actions, which a Settlement reference does not make veteran-visible.
     expect(projection).not.toHaveProperty('occurred');
-    expect(projection).not.toHaveProperty('responder_confirmed_by');
+    expect(projection).not.toHaveProperty('accepted_by_user_id');
     expect(projection).not.toHaveProperty('authored_by');
     expect(projection).toHaveProperty('unresolved');
     expect(projection).toHaveProperty('remaining_follow_ups');
@@ -844,7 +844,7 @@ describe('CASES.md §7 — blocking Service Requests still apply', () => {
         caseId,
         category: 'FOOD',
         createdBy: responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
     );
 
@@ -866,7 +866,7 @@ describe('CASES.md §7 — blocking Service Requests still apply', () => {
         caseId,
         category: 'FOOD',
         createdBy: responder.userId,
-        actorType: 'RESPONDER',
+        actorType: 'USER',
       }),
     );
     await executeServiceRequestCommand(pool, {
@@ -874,7 +874,7 @@ describe('CASES.md §7 — blocking Service Requests still apply', () => {
       serviceRequestId: request.serviceRequestId,
       command: 'CANCEL',
       actorId: responder.userId,
-      actorType: 'RESPONDER',
+      actorType: 'USER',
       reason: 'no longer needed',
     });
 

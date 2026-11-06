@@ -15,8 +15,9 @@ import type { JsonObject } from '../jobs/index.js';
 /** EVENT_MODEL.md §2 `actor_type`. */
 export const ACTOR_TYPES = [
   'VETERAN',
-  'RESPONDER',
-  'ORG_ADMIN',
+  // Any signed-in person acting on a request they accepted. The accepter has no
+  // agreed role name yet (V1_PROJECT_PLAN.md §8 #19), so none is invented.
+  'USER',
   'SUAS_ADMIN',
   'TRUSTED_CONTACT',
   'SERVICE_PROVIDER',

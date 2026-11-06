@@ -29,6 +29,7 @@ import {
   type NotificationChannelPort,
   type OutboundMessage,
 } from './channels.js';
+import { buildNotificationSendPayload } from './send-job-payload.js';
 import { renderEmailTemplate } from './templates.js';
 
 export const DELIVERY_STATUSES = [
@@ -294,7 +295,7 @@ export async function enqueueNotification(
   if (deps.jobQueue !== undefined) {
     await deps.jobQueue.enqueue({
       jobType: 'notification.send',
-      payload: { notification_id: notificationId },
+      payload: buildNotificationSendPayload(notificationId, input.disclosure),
       idempotencyKey: notificationId,
       tenantId: input.tenantId,
     });

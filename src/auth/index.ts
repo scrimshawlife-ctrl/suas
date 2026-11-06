@@ -70,7 +70,6 @@ export {
   clearElevation,
   createSession,
   elevateSession,
-  InvalidSessionOrganizationError,
   isElevated,
   resolveSession,
   revokeAllUserSessions,

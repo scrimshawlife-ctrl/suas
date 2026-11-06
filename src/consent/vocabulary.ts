@@ -31,14 +31,8 @@ export const CONSENT_SCOPES = [
 ] as const;
 export type ConsentScope = (typeof CONSENT_SCOPES)[number];
 
-/** CONSENT.md §1 actors that may hold a grant. */
-export const GRANTEE_TYPES = [
-  'TRUSTED_CONTACT',
-  'RESPONDER',
-  'ORGANIZATION',
-  'SERVICE_PROVIDER',
-  'SYSTEM',
-] as const;
+/** CONSENT.md §1 actors that may hold a grant. USER is a signed-in person (V1_PROJECT_PLAN.md §2.1). */
+export const GRANTEE_TYPES = ['TRUSTED_CONTACT', 'USER', 'SERVICE_PROVIDER', 'SYSTEM'] as const;
 export type GranteeType = (typeof GRANTEE_TYPES)[number];
 
 export const CONSENT_GRANT_STATUSES = ['ACTIVE', 'REVOKED', 'EXPIRED'] as const;
@@ -92,13 +86,13 @@ export function assertPermissionScope(permission: ConsentPermission, scope: Cons
  *
  * CONSENT.md §3.5: system actions that do not disclose to a third party do not
  * require a third-party grant.
- * CONSENT.md §3.6: an assigned Responder's least-privilege case access is a
- * separate documented policy, still recorded as `consent_basis` on each access
+ * CONSENT.md §3.6: the accepter's least-privilege case access (v1 has no
+ * Responder) is a separate documented policy, still recorded as `consent_basis` on each access
  * Audit Event.
  *
  * This list is closed. Anything not here is a missing grant, which denies.
  */
-export const SYSTEM_BASES = ['SYSTEM_INTERNAL_PROCESSING', 'RESPONDER_CASE_ASSIGNMENT'] as const;
+export const SYSTEM_BASES = ['SYSTEM_INTERNAL_PROCESSING', 'CASE_ASSIGNMENT'] as const;
 export type SystemBasis = (typeof SYSTEM_BASES)[number];
 
 /** What authorized a disclosure, recorded on the Audit Event. CONSENT.md §5, §8. */

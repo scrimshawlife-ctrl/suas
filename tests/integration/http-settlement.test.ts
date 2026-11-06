@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { findNonClosedCase } from '../../src/coordination/index.js';
-import { createMembership, createOrganization, createUser } from '../../src/identity/index.js';
+import { createUser } from '../../src/identity/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
@@ -57,6 +57,7 @@ async function openRedCase() {
     tenantId,
     email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
+    county: 'SANTA_CLARA',
   });
   await ensurePublishedQv001(pool, veteran.userId);
   const headers = await bearer(tenantId, veteran.userId);
@@ -95,25 +96,15 @@ async function openRedCase() {
   return { pool, tenantId, veteran, headers, supportCase };
 }
 
-async function responderFor(tenantId: string) {
+/** A signed-in person in the launch county who can accept requests. */
+async function accepterFor(tenantId: string) {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
-  const org = await createOrganization(pool, {
-    tenantId,
-    name: `Org ${randomUUID().slice(0, 8)}`,
-    status: 'ACTIVE',
-  });
   const responder = await createUser(pool, {
     tenantId,
-    email: syntheticEmail(`resp-${randomUUID().slice(0, 8)}`),
+    email: syntheticEmail(`acc-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
-  });
-  await createMembership(pool, {
-    tenantId,
-    organizationId: org.organizationId,
-    userId: responder.userId,
-    role: 'RESPONDER',
-    status: 'ACTIVE',
+    county: 'SANTA_CLARA',
   });
   return { responder, headers: await bearer(tenantId, responder.userId) };
 }
@@ -125,15 +116,36 @@ function settlementPayload(responderId: string) {
     fulfilled: { fulfillments: [] },
     unresolved: { notes: 'none' },
     authored_by: responderId,
-    responder_confirmed_by: responderId,
+    accepted_by_user_id: responderId,
   };
 }
 
-async function claimAndActivate(tenantId: string, caseId: string) {
-  const { responder, headers } = await responderFor(tenantId);
+/**
+ * The Veteran submits a request, the accepter accepts it and activates the case, and
+ * the Veteran then withdraws the request: a case cannot resolve while a request is open.
+ */
+async function claimAndActivate(
+  tenantId: string,
+  caseId: string,
+  veteranHeaders: Record<string, string>,
+) {
+  const { responder, headers } = await accepterFor(tenantId);
+  const created = await app.server.inject({
+    method: 'POST',
+    url: `/api/v0/cases/${caseId}/service-requests`,
+    headers: { ...veteranHeaders, 'idempotency-key': `sr-${randomUUID()}` },
+    payload: { category: 'PEER_SUPPORT' },
+  });
+  const requestId = created.json().service_request_id as string;
+  await app.server.inject({
+    method: 'POST',
+    url: `/api/v0/service-requests/${requestId}/commands/SUBMIT`,
+    headers: { ...veteranHeaders, 'idempotency-key': `submit-${randomUUID()}` },
+    payload: {},
+  });
   const claimed = await app.server.inject({
     method: 'POST',
-    url: `/api/v0/cases/${caseId}/commands/claim`,
+    url: `/api/v0/service-requests/${requestId}/accept`,
     headers,
   });
   expect(claimed.statusCode).toBe(200);
@@ -145,13 +157,23 @@ async function claimAndActivate(tenantId: string, caseId: string) {
   });
   expect(activated.statusCode).toBe(200);
   expect(activated.json().status).toBe('ACTIVE');
+  await app.server.inject({
+    method: 'POST',
+    url: `/api/v0/service-requests/${requestId}/commands/CANCEL`,
+    headers: { ...veteranHeaders, 'idempotency-key': `cancel-${randomUUID()}` },
+    payload: { reason: 'withdrawn before resolving' },
+  });
   return { responder, headers };
 }
 
 describe('POST /api/v0/cases/:id/commands/resolve', () => {
   it('resolves an ACTIVE case, replays idempotency, and exposes settlements', async () => {
     const { tenantId, veteran, supportCase, headers: veteranHeaders } = await openRedCase();
-    const { responder, headers } = await claimAndActivate(tenantId, supportCase.caseId);
+    const { responder, headers } = await claimAndActivate(
+      tenantId,
+      supportCase.caseId,
+      veteranHeaders,
+    );
     const key = `resolve-${randomUUID()}`;
     const payload = settlementPayload(responder.userId);
 
@@ -234,10 +256,10 @@ describe('POST /api/v0/cases/:id/commands/resolve', () => {
     expect(veteran.userId).toBeDefined();
   });
 
-  it('requires Idempotency-Key and forbids non-assigned responders', async () => {
-    const { tenantId, supportCase } = await openRedCase();
-    const assigned = await claimAndActivate(tenantId, supportCase.caseId);
-    const other = await responderFor(tenantId);
+  it('requires Idempotency-Key and hides the case from anyone who did not accept it', async () => {
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const assigned = await claimAndActivate(tenantId, supportCase.caseId, veteranHeaders);
+    const other = await accepterFor(tenantId);
 
     const missingKey = await app.server.inject({
       method: 'POST',
@@ -253,13 +275,13 @@ describe('POST /api/v0/cases/:id/commands/resolve', () => {
       headers: { ...other.headers, 'idempotency-key': `other-${randomUUID()}` },
       payload: settlementPayload(other.responder.userId),
     });
-    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.statusCode).toBe(404);
   });
 
   it('hides foreign-tenant cases (cross-tenant isolation)', async () => {
     const a = await openRedCase();
     const b = await openRedCase();
-    const { headers } = await claimAndActivate(a.tenantId, a.supportCase.caseId);
+    const { headers } = await claimAndActivate(a.tenantId, a.supportCase.caseId, a.headers);
 
     const foreign = await app.server.inject({
       method: 'POST',

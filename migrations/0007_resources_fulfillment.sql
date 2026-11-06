@@ -14,7 +14,9 @@
 -- and DATA_MODEL.md §7 both forbid it, and ADMIN.md §3 allows only a
 -- secret-presence indicator, which is deployment configuration rather than data.
 --
--- Destructive-change note (ENVIRONMENT.md §9): additive only.
+-- v1: no Organizations, so providers and Resources carry no organization link
+-- (V1_PROJECT_PLAN.md §4.2). A Resource becomes active only through a SUAS
+-- Administrator's publish, which is the verification act (plan §2.1).
 
 -- ---------------------------------------------------------------------------
 -- Vocabulary
@@ -103,14 +105,11 @@ CREATE TYPE suas_adapter_health AS ENUM (
 CREATE TABLE service_providers (
     service_provider_id uuid        PRIMARY KEY,
     tenant_id           uuid        NOT NULL,
-    organization_id     uuid,
     name                text        NOT NULL,
     active              boolean     NOT NULL DEFAULT true,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
 
-    FOREIGN KEY (organization_id, tenant_id)
-        REFERENCES organizations (organization_id, tenant_id),
     UNIQUE (service_provider_id, tenant_id)
 );
 
@@ -124,7 +123,6 @@ CREATE TABLE resources (
     resource_id         uuid                    PRIMARY KEY,
     tenant_id           uuid                    NOT NULL,
     service_provider_id uuid,
-    organization_id     uuid,
     service_name        text                    NOT NULL,
     category            suas_service_category   NOT NULL,
     -- Recorded criteria only. RESOURCES.md §2: do not invent VA/Medi-Cal rules.
@@ -133,6 +131,12 @@ CREATE TABLE resources (
     hours               text,
     -- Public/operational contact path. Never credentials (RESOURCES.md §2).
     contact_method      text,
+    -- What kind of path contact_method is, so a surface can offer a direct action
+    -- without guessing a scheme. FREEFORM is "recorded, but not an actionable scheme";
+    -- NULL stays unstructured. RESOURCES.md §2, §6; MVP_REFERENCE.md §8.
+    contact_method_kind text
+        CONSTRAINT resources_contact_method_kind_check
+        CHECK (contact_method_kind IN ('PHONE', 'EMAIL', 'URL', 'FREEFORM')),
     referral_method     text,
     cost                text,
     capacity            text,
@@ -148,8 +152,6 @@ CREATE TABLE resources (
 
     FOREIGN KEY (service_provider_id, tenant_id)
         REFERENCES service_providers (service_provider_id, tenant_id),
-    FOREIGN KEY (organization_id, tenant_id)
-        REFERENCES organizations (organization_id, tenant_id),
     UNIQUE (resource_id, tenant_id),
 
     -- An active Resource must carry its verification evidence.
@@ -303,10 +305,10 @@ CREATE TABLE service_fulfillments (
     state                  suas_fulfillment_state NOT NULL,
     fulfillment_mode       suas_fulfillment_mode,
     -- FULFILLMENT.md §6: CONFIRMED requires at least one of these, and a
-    -- responder-only confirmation requires a reason.
+    -- confirmation by the accepter alone requires a reason.
     veteran_confirmed_at   timestamptz,
-    responder_confirmed_at timestamptz,
-    responder_confirmed_by uuid,
+    accepted_by_confirmed_at timestamptz,
+    accepted_by_user_id    uuid,
     confirmation_reason    text,
     dispute_reason         text,
     failure_reason         text,
@@ -325,7 +327,7 @@ CREATE TABLE service_fulfillments (
         CHECK (
             state <> 'CONFIRMED'
             OR veteran_confirmed_at IS NOT NULL
-            OR responder_confirmed_at IS NOT NULL
+            OR accepted_by_confirmed_at IS NOT NULL
         )
 );
 

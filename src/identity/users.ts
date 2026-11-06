@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Queryable } from '../db/transaction.js';
 import { normalizeDestination } from '../auth/secrets.js';
+import type { ServiceCounty } from './counties.js';
 
 export const USER_STATUSES = ['INVITED', 'ACTIVE', 'SUSPENDED', 'REVOKED'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
@@ -15,6 +16,8 @@ export interface User {
   readonly status: UserStatus;
   readonly email: string | undefined;
   readonly phone: string | undefined;
+  /** Null until the person picks a county at sign-up. */
+  readonly county: ServiceCounty | undefined;
   readonly deletedAt: Date | undefined;
 }
 
@@ -24,10 +27,11 @@ interface UserRow {
   status: UserStatus;
   email: string | null;
   phone: string | null;
+  county: ServiceCounty | null;
   deleted_at: Date | null;
 }
 
-const USER_COLUMNS = 'user_id, tenant_id, status, email, phone, deleted_at';
+const USER_COLUMNS = 'user_id, tenant_id, status, email, phone, county, deleted_at';
 
 function toUser(row: UserRow): User {
   return {
@@ -36,6 +40,7 @@ function toUser(row: UserRow): User {
     status: row.status,
     email: row.email ?? undefined,
     phone: row.phone ?? undefined,
+    county: row.county ?? undefined,
     deletedAt: row.deleted_at ?? undefined,
   };
 }
@@ -44,6 +49,7 @@ export interface CreateUserInput {
   readonly tenantId: string;
   readonly email?: string;
   readonly phone?: string;
+  readonly county?: ServiceCounty;
   readonly status?: UserStatus;
 }
 
@@ -81,10 +87,10 @@ export async function createUser(db: Queryable, input: CreateUserInput): Promise
   }
 
   const result = await db.query<UserRow>(
-    `INSERT INTO users (user_id, tenant_id, status, email, phone)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO users (user_id, tenant_id, status, email, phone, county)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING ${USER_COLUMNS}`,
-    [randomUUID(), input.tenantId, input.status ?? 'INVITED', email, phone],
+    [randomUUID(), input.tenantId, input.status ?? 'INVITED', email, phone, input.county ?? null],
   );
   const row = result.rows[0];
   if (row === undefined) throw new Error('User insert returned no row.');
@@ -131,6 +137,23 @@ export async function findUsersByDestination(db: Queryable, destination: string)
     [normalized],
   );
   return result.rows.map(toUser);
+}
+
+/** A person changes their own county; the open-request list follows the new value. */
+export async function setUserCounty(
+  db: Queryable,
+  tenantId: string,
+  userId: string,
+  county: ServiceCounty,
+): Promise<User | undefined> {
+  const result = await db.query<UserRow>(
+    `UPDATE users SET county = $3, updated_at = now()
+     WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL
+     RETURNING ${USER_COLUMNS}`,
+    [tenantId, userId, county],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : toUser(row);
 }
 
 export async function setUserStatus(

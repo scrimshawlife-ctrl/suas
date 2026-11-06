@@ -1,4 +1,4 @@
--- Migration 0012: durable job outbox (D-022 Postgres outbox / SKIP LOCKED)
+-- Migration 0010: durable job outbox (D-022 Postgres outbox / SKIP LOCKED)
 --
 -- Spec citations:
 -- - ARCHITECTURE.md §3 invariant 5 (production-critical async survives restart)

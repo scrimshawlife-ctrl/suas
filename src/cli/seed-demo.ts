@@ -65,12 +65,12 @@ type SeedUser = Awaited<ReturnType<typeof getOrCreateUser>>;
 
 type DemoActors = {
   readonly veteranUserId: string;
-  readonly responderUserId: string;
+  readonly accepterUserId: string;
 };
 
 type AdvanceStep = {
   command: ServiceRequestCommand;
-  actor: 'veteran' | 'responder';
+  actor: 'veteran' | 'accepter';
   reason?: string;
   granteeId?: string;
 };
@@ -110,9 +110,9 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
     serviceName: 'Sample Mobility Desk (synthetic)',
     category: 'TRANSPORTATION',
     counties: ['Sample County'],
-    contactMethod: 'Ask your responder to arrange',
+    contactMethod: 'Ask the person who accepts your request to arrange',
     hours: 'Weekdays 8:00 to 17:00',
-    cost: 'Varies by trip; responders confirm before booking',
+    cost: 'Varies by trip; the accepter confirms before booking',
     eligibility: 'Veterans with a confirmed appointment time.',
   },
   {
@@ -129,7 +129,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
     serviceName: 'Sample Temporary Shelter (synthetic)',
     category: 'SHELTER',
     counties: ['Sample County'],
-    contactMethod: 'Ask your responder to arrange',
+    contactMethod: 'Ask the person who accepts your request to arrange',
     hours: 'Intake 16:00 to 19:00 daily',
     cost: 'No cost',
     eligibility: 'Temporary shelter only, one night at a time, subject to space.',
@@ -148,7 +148,7 @@ const DEMO_RESOURCES: readonly ResourceSpec[] = [
     serviceName: 'Sample Peer Line (synthetic)',
     category: 'PEER_SUPPORT',
     counties: ['Sample County'],
-    contactMethod: 'Ask your responder to arrange',
+    contactMethod: 'Ask the person who accepts your request to arrange',
     hours: 'Weekdays 12:00 to 15:00',
     cost: 'No cost',
     eligibility: 'Veterans looking to talk with another veteran.',
@@ -186,8 +186,8 @@ async function advance(
 ): Promise<ServiceRequest> {
   let current = sr;
   for (const step of steps) {
-    const actorId = step.actor === 'veteran' ? actors.veteranUserId : actors.responderUserId;
-    const actorType = step.actor === 'veteran' ? 'VETERAN' : 'RESPONDER';
+    const actorId = step.actor === 'veteran' ? actors.veteranUserId : actors.accepterUserId;
+    const actorType = step.actor === 'veteran' ? 'VETERAN' : 'USER';
     const options =
       step.granteeId === undefined
         ? {}
@@ -203,7 +203,7 @@ async function advance(
                 veteranUserId: actors.veteranUserId,
                 permission: 'can_view',
                 scope: 'current_requests',
-                granteeType: 'RESPONDER',
+                granteeType: 'USER',
                 granteeId: payload.granteeId,
               });
               if (grant === undefined) {
@@ -256,7 +256,7 @@ async function ensureDemoRequests(
   pool: Pool,
   caseId: string,
   veteran: SeedUser,
-  responder: SeedUser,
+  accepter: SeedUser,
 ): Promise<Record<string, { serviceRequestId: string; status: ServiceRequestStatus }>> {
   const existing = await listCaseServiceRequests(pool, TENANT_ID, caseId);
   const present = new Set<string>();
@@ -266,7 +266,7 @@ async function ensureDemoRequests(
 
   const actors: DemoActors = {
     veteranUserId: veteran.userId,
-    responderUserId: responder.userId,
+    accepterUserId: accepter.userId,
   };
 
   if (!present.has('TRANSPORTATION')) {
@@ -278,8 +278,8 @@ async function ensureDemoRequests(
       created,
       [
         { command: 'SUBMIT', actor: 'veteran' },
-        { command: 'TRIAGE', actor: 'responder' },
-        { command: 'START_MATCHING', actor: 'responder' },
+        { command: 'TRIAGE', actor: 'accepter' },
+        { command: 'START_MATCHING', actor: 'accepter' },
       ],
       actors,
     );
@@ -294,12 +294,12 @@ async function ensureDemoRequests(
       created,
       [
         { command: 'SUBMIT', actor: 'veteran' },
-        { command: 'TRIAGE', actor: 'responder' },
-        { command: 'START_MATCHING', actor: 'responder' },
-        { command: 'ASSIGN', actor: 'responder', granteeId: responder.userId },
-        { command: 'ACCEPT', actor: 'responder' },
-        { command: 'START', actor: 'responder' },
-        { command: 'FULFILL', actor: 'responder' },
+        { command: 'TRIAGE', actor: 'accepter' },
+        { command: 'START_MATCHING', actor: 'accepter' },
+        { command: 'ASSIGN', actor: 'accepter', granteeId: accepter.userId },
+        { command: 'ACCEPT', actor: 'accepter' },
+        { command: 'START', actor: 'accepter' },
+        { command: 'FULFILL', actor: 'accepter' },
       ],
       actors,
     );
@@ -391,7 +391,7 @@ async function ensureVeteranFollowUp(
   pool: Pool,
   caseId: string,
   veteran: SeedUser,
-  responder: SeedUser,
+  accepter: SeedUser,
 ): Promise<string> {
   const existing = await pool.query<{ follow_up_id: string }>(
     `SELECT follow_up_id
@@ -415,8 +415,8 @@ async function ensureVeteranFollowUp(
     dueAt,
     responsibleType: 'VETERAN',
     responsibleId: veteran.userId,
-    actorId: responder.userId,
-    actorType: 'RESPONDER',
+    actorId: accepter.userId,
+    actorType: 'USER',
   });
   return created.followUpId;
 }
@@ -451,9 +451,9 @@ async function main(): Promise<void> {
     const fresh = await getOrCreateUser(pool, FRESH_VETERAN_LOCAL_PART);
 
     const caseId = base.qrf.supportCase.caseId;
-    const serviceRequests = await ensureDemoRequests(pool, caseId, base.veteran, base.responder);
+    const serviceRequests = await ensureDemoRequests(pool, caseId, base.veteran, base.accepter);
     const checkInId = await ensureCompletedCheckIn(pool, base.veteran);
-    const followUpId = await ensureVeteranFollowUp(pool, caseId, base.veteran, base.responder);
+    const followUpId = await ensureVeteranFollowUp(pool, caseId, base.veteran, base.accepter);
 
     const veteranSession = await createSession(pool, config.sessionSecret, {
       tenantId: TENANT_ID,
@@ -465,10 +465,9 @@ async function main(): Promise<void> {
       userId: fresh.userId,
     });
 
-    const responderSession = await createSession(pool, config.sessionSecret, {
+    const accepterSession = await createSession(pool, config.sessionSecret, {
       tenantId: TENANT_ID,
-      userId: base.responder.userId,
-      organizationId: base.org.organizationId,
+      userId: base.accepter.userId,
     });
 
     const adminSession = await withTransaction(pool, async (tx: PoolClient) => {
@@ -493,7 +492,7 @@ async function main(): Promise<void> {
       },
       users: {
         admin: { userId: base.admin.userId, email: base.admin.email ?? null },
-        responder: { userId: base.responder.userId, email: base.responder.email ?? null },
+        accepter: { userId: base.accepter.userId, email: base.accepter.email ?? null },
         veteran: { userId: base.veteran.userId, email: base.veteran.email ?? null },
         veteran2: { userId: base.veteranTwo.userId, email: base.veteranTwo.email ?? null },
         newvet: { userId: fresh.userId, email: fresh.email ?? null },
@@ -515,7 +514,7 @@ async function main(): Promise<void> {
       sessions: {
         veteranBearer: veteranSession.credential,
         newvetBearer: newvetSession.credential,
-        responderBearer: responderSession.credential,
+        accepterBearer: accepterSession.credential,
         adminBearer: adminSession.credential,
       },
       chat: 'UNAVAILABLE: no released message store (SUAS-specs D033_CHAT_PARITY.md)',

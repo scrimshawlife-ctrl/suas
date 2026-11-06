@@ -14,7 +14,7 @@
  *
  * The load-bearing rule is negative. Production must not "guarantee immediate
  * notification/contact unless the system actually knows it occurred", so
- * `RESPONDER_NOTIFIED` requires a recorded delivery fact — an assignment alone
+ * `RESPONDER_NOTIFIED` requires a recorded delivery fact — an acceptance alone
  * reads as still searching.
  */
 
@@ -38,20 +38,20 @@ export type QrfUiState = (typeof QRF_UI_STATES)[number];
  */
 export interface QrfFacts {
   readonly requestStatus: ServiceRequestStatus;
-  /** A responder assignment exists and is active. */
-  readonly responderAssigned: boolean;
+  /** Someone accepted the case: an active assignment exists. */
+  readonly assigned: boolean;
   /**
-   * A notification to the assigned responder reached a delivered state. Not
+   * A notification to the person who accepted reached a delivered state. Not
    * "we enqueued one" — §7.2 forbids claiming contact the system cannot see.
    */
-  readonly responderNotificationDelivered: boolean;
+  readonly assignedNotificationDelivered: boolean;
   /**
    * Coordination could not run normally: the notification channel, job queue,
    * or fulfillment adapter failed closed. Surfaces as `DEGRADED` so a stalled
    * request never reads as a calm ongoing search.
    */
   readonly coordinationDegraded: boolean;
-  /** Matching completed and produced no available responder. */
+  /** Matching completed and produced no one available. */
   readonly matchingExhausted: boolean;
 }
 
@@ -60,7 +60,7 @@ export interface QrfFacts {
  * the spine `ACCEPTED → IN_PROGRESS → FULFILLED → CONFIRMED → CLOSED`, so each
  * of these carries the acceptance evidence the §7.2 `RESPONDER_ACCEPTED` row
  * rests on. Falling through to `SEARCHING` would tell a veteran whose request
- * was fulfilled that SUAS is still looking for a responder.
+ * was fulfilled that SUAS is still looking for someone.
  */
 const ACCEPTANCE_RECORDED: readonly ServiceRequestStatus[] = [
   'ACCEPTED',
@@ -114,7 +114,7 @@ export function presentQrfState(facts: QrfFacts): QrfPresentation {
   if (ACCEPTANCE_RECORDED.includes(facts.requestStatus)) {
     return {
       state: 'RESPONDER_ACCEPTED',
-      headline: 'A responder accepted your request.',
+      headline: 'Someone accepted your request.',
       basis: `Service Request status ${facts.requestStatus}`,
       cancellable,
     };
@@ -137,19 +137,19 @@ export function presentQrfState(facts: QrfFacts): QrfPresentation {
   ) {
     return {
       state: 'NO_RESPONDER_CURRENTLY_AVAILABLE',
-      headline: 'No responder is available right now. Your request is still recorded.',
+      headline: 'No one is available right now. Your request is still recorded.',
       basis:
         facts.requestStatus === 'MATCHING'
-          ? 'Matching completed with no available responder'
+          ? 'Matching completed with no one available'
           : `Service Request status ${facts.requestStatus}`,
       cancellable,
     };
   }
 
-  if (facts.responderAssigned && facts.responderNotificationDelivered) {
+  if (facts.assigned && facts.assignedNotificationDelivered) {
     return {
       state: 'RESPONDER_NOTIFIED',
-      headline: 'A responder has been notified.',
+      headline: 'Someone has been notified.',
       basis: 'Active assignment plus a recorded notification delivery',
       cancellable,
     };
@@ -168,8 +168,8 @@ export function presentQrfState(facts: QrfFacts): QrfPresentation {
   // evidence that anyone was reached (§7.2).
   return {
     state: 'SEARCHING',
-    headline: 'Looking for a responder.',
-    basis: facts.responderAssigned
+    headline: 'Looking for someone to help.',
+    basis: facts.assigned
       ? 'Active assignment with no recorded notification delivery'
       : `Service Request status ${facts.requestStatus}`,
     cancellable,
@@ -190,9 +190,9 @@ export interface ContactAffordances {
 
 export function contactAffordances(input: {
   readonly state: QrfUiState;
-  /** A consented, currently usable voice path to the assigned responder. */
+  /** A consented, currently usable voice path to the person who accepted. */
   readonly authorizedVoicePath: boolean;
-  /** A consented, currently usable message path to the assigned responder. */
+  /** A consented, currently usable message path to the person who accepted. */
   readonly authorizedMessagePath: boolean;
 }): ContactAffordances {
   // Before acceptance there is no counterpart to contact, whatever consent says.

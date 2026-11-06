@@ -63,6 +63,9 @@ describe('PRIVACY.md §10 — deletion drill refuses non-synthetic targets', () 
             url: 'postgresql://suas:suas@prod-db.example.invalid:5432/suas_production',
             poolMax: 5,
             migrationsMode: 'validate',
+            resetAllowlist: [],
+            resetSyntheticMarker: undefined,
+            ssl: { mode: 'disable', caFile: undefined },
           },
         }),
       ),
@@ -73,7 +76,14 @@ describe('PRIVACY.md §10 — deletion drill refuses non-synthetic targets', () 
     expect(() =>
       assertDeletionDrillEnvironment(
         testConfig({
-          database: { url: undefined, poolMax: 5, migrationsMode: 'off' },
+          database: {
+            url: undefined,
+            poolMax: 5,
+            migrationsMode: 'off',
+            resetAllowlist: [],
+            resetSyntheticMarker: undefined,
+            ssl: { mode: 'disable', caFile: undefined },
+          },
         }),
       ),
     ).toThrow(/DATABASE_URL/);

@@ -27,6 +27,17 @@ export {
   type ResendSendOutcome,
 } from './resend-email.js';
 export {
+  createSesEmailChannel,
+  SES_IMPLEMENTATION,
+  SesEmailChannel,
+  SesEmailMisconfiguredError,
+  type SesClientLike,
+  type SesEmailChannelOptions,
+  type SesEmailLogRecord,
+  type SesEmailLogger,
+  type SesSendOutcome,
+} from './ses-email.js';
+export {
   EMAIL_TEMPLATE_CATALOG_VERSION,
   EMAIL_TEMPLATE_KEYS,
   EmailTemplateContextError,
@@ -60,3 +71,8 @@ export {
   type Notification,
   type SendAttemptResult,
 } from './service.js';
+export {
+  buildNotificationSendPayload,
+  parseNotificationSendPayload,
+  type NotificationSendJob,
+} from './send-job-payload.js';

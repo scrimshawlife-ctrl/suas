@@ -75,15 +75,32 @@ export const buildInfoSchema = z.object({
   capabilities: z.record(z.union([z.string(), z.number(), z.boolean()])),
 });
 
-function readAppVersion(): string {
-  try {
-    const raw = readFileSync(new URL('../../package.json', import.meta.url), 'utf8');
-    const parsed: unknown = JSON.parse(raw);
-    const version = (parsed as { version?: unknown }).version;
-    return typeof version === 'string' ? version : UNKNOWN;
-  } catch {
-    return UNKNOWN;
+/**
+ * `package.json` next to the code: two levels up from `src/provenance` or
+ * `dist/provenance`, one level up from a bundle in `dist/`, or beside a bundle
+ * at the deploy root. The working directory is the last resort (Lambda runs from
+ * the deploy directory).
+ */
+function packageJsonCandidates(): (URL | string)[] {
+  return [
+    new URL('../../package.json', import.meta.url),
+    new URL('../package.json', import.meta.url),
+    new URL('./package.json', import.meta.url),
+    'package.json',
+  ];
+}
+
+export function readAppVersion(candidates: (URL | string)[] = packageJsonCandidates()): string {
+  for (const candidate of candidates) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(candidate, 'utf8'));
+      const { name, version } = parsed as { name?: unknown; version?: unknown };
+      if (name === 'suas' && typeof version === 'string') return version;
+    } catch {
+      // Try the next location.
+    }
   }
+  return UNKNOWN;
 }
 
 /**

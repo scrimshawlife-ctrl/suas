@@ -1,5 +1,5 @@
 /**
- * Responder contact-log commands over `/api/v0`.
+ * Contact-log commands for the person who accepted a case, over `/api/v0`.
  *
  * Spec citations:
  * - SUAS-specs RESPONDER_WORKFLOWS.md §2 / §7
@@ -12,11 +12,10 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
-import { assertResponder, ResourceNotVisibleError } from '../../authz/index.js';
+import { assertAccepter, resolveCaseAccess } from '../case-access.js';
 import {
   CONTACT_CHANNELS,
   CONTACT_OUTCOMES,
-  findCase,
   listContactAttempts,
   recordContact,
   type ContactAttempt,
@@ -54,7 +53,7 @@ function publicContactAttempt(attempt: ContactAttempt) {
   return {
     contact_attempt_id: attempt.contactAttemptId,
     case_id: attempt.caseId,
-    responder_user_id: attempt.responderUserId,
+    logged_by_user_id: attempt.loggedByUserId,
     attempted_at: attempt.attemptedAt.toISOString(),
     channel: attempt.channel,
     outcome: attempt.outcome,
@@ -64,21 +63,17 @@ function publicContactAttempt(attempt: ContactAttempt) {
 export function registerContactLogRoutes(app: FastifyInstance, deps: ContactLogRouteDeps): void {
   app.get(`${API_PREFIX}/cases/:caseId/contact-attempts`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    assertResponder(context);
     const { caseId } = caseIdParams.parse(request.params);
-    const supportCase = await findCase(deps.pool, context.tenantId, caseId);
-    if (supportCase === undefined) throw new ResourceNotVisibleError();
+    assertAccepter(await resolveCaseAccess(deps.pool, context, caseId), 'The contact log');
     const attempts = await listContactAttempts(deps.pool, context.tenantId, caseId);
     return { contact_attempts: attempts.map(publicContactAttempt) };
   });
 
   app.post(`${API_PREFIX}/cases/:caseId/commands/log-contact-attempt`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    assertResponder(context);
     const { caseId } = caseIdParams.parse(request.params);
     const body = attemptBody.parse(request.body ?? {});
-    const supportCase = await findCase(deps.pool, context.tenantId, caseId);
-    if (supportCase === undefined) throw new ResourceNotVisibleError();
+    assertAccepter(await resolveCaseAccess(deps.pool, context, caseId), 'Logging contact');
 
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({
@@ -111,7 +106,7 @@ export function registerContactLogRoutes(app: FastifyInstance, deps: ContactLogR
         const recorded = await recordContact(deps.pool, {
           tenantId: context.tenantId,
           caseId,
-          responderUserId: context.userId,
+          loggedByUserId: context.userId,
           command: 'log-contact-attempt',
           channel: body.channel,
           outcome: body.outcome,
@@ -139,11 +134,9 @@ export function registerContactLogRoutes(app: FastifyInstance, deps: ContactLogR
 
   app.post(`${API_PREFIX}/cases/:caseId/commands/complete-contact`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    assertResponder(context);
     const { caseId } = caseIdParams.parse(request.params);
     const body = completeBody.parse(request.body);
-    const supportCase = await findCase(deps.pool, context.tenantId, caseId);
-    if (supportCase === undefined) throw new ResourceNotVisibleError();
+    assertAccepter(await resolveCaseAccess(deps.pool, context, caseId), 'Logging contact');
 
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({
@@ -174,7 +167,7 @@ export function registerContactLogRoutes(app: FastifyInstance, deps: ContactLogR
         const recorded = await recordContact(deps.pool, {
           tenantId: context.tenantId,
           caseId,
-          responderUserId: context.userId,
+          loggedByUserId: context.userId,
           command: 'complete-contact',
           channel: body.channel,
           outcome: body.outcome,

@@ -39,13 +39,16 @@ const STALE_READINESS_PATTERNS = [
  * CASE_COMMANDS that may stay domain-only. Each entry needs a one-line cite.
  * Empty = every released case command must have POST /api/v0/.../commands/<kebab>.
  */
-const INTENTIONALLY_DEFERRED_CASE_COMMANDS: Readonly<Partial<Record<CaseCommand, string>>> = {};
+const INTENTIONALLY_DEFERRED_CASE_COMMANDS: Readonly<Partial<Record<CaseCommand, string>>> = {
+  CLAIM_CASE:
+    'accepted through POST /api/v0/service-requests/{id}/accept, which adds the county ' +
+    'and own-request checks (V1_PROJECT_PLAN.md F4)',
+};
 
 /** Map CASES.md command enum → OpenAPI kebab path segment. */
 const CASE_COMMAND_KEBAB: Readonly<Record<CaseCommand, string>> = {
   TRIAGE: 'triage',
   CLAIM_CASE: 'claim',
-  ASSIGN_CASE: 'assign',
   ACTIVATE: 'activate',
   MOVE_TO_FOLLOWUP: 'move-to-followup',
   RESUME_ACTIVE: 'resume-active',
@@ -74,6 +77,16 @@ const REQUIRED_OPENAPI_ROUTES: readonly { method: string; path: string; reason: 
     method: 'post',
     path: '/api/v0/cases/{caseId}/commands/complete-contact',
     reason: 'recordContact complete-contact (RESPONDER_WORKFLOWS.md §7)',
+  },
+  {
+    method: 'get',
+    path: '/api/v0/service-requests',
+    reason: 'readRequestList (V1_PROJECT_PLAN.md F4)',
+  },
+  {
+    method: 'post',
+    path: '/api/v0/service-requests/{id}/accept',
+    reason: 'acceptServiceRequest (V1_PROJECT_PLAN.md F4)',
   },
   {
     method: 'get',

@@ -326,61 +326,6 @@
             "$ref": "#/components/responses/Error"
           }
         }
-      },
-      "get": {
-        "tags": ["cases"],
-        "summary": "Responder case queue (unassigned or mine)",
-        "operationId": "listCases",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "ownership",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": ["unassigned", "mine"],
-              "default": "unassigned"
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "description": "Opaque keyset cursor taken from a prior response's next_cursor.",
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 512
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Bounded case list with next_cursor"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
       }
     },
     "/api/v0/cases/{id}": {
@@ -406,40 +351,6 @@
             "$ref": "#/components/responses/Error"
           },
           "404": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/api/v0/cases/{id}/commands/claim": {
-      "post": {
-        "tags": ["cases"],
-        "summary": "Claim an unassigned case",
-        "operationId": "claimCase",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/IdPath"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Case claimed"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error"
-          },
-          "409": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -1347,7 +1258,7 @@
     "/api/v0/follow-ups": {
       "post": {
         "tags": ["cases"],
-        "summary": "Create a follow-up (responder)",
+        "summary": "Create a follow-up (person who accepted)",
         "operationId": "createFollowUp",
         "security": [
           {
@@ -1507,7 +1418,7 @@
     "/api/v0/cases/{caseId}/contact-attempts": {
       "get": {
         "tags": ["cases"],
-        "summary": "List contact attempts for a case (responder)",
+        "summary": "List contact attempts for a case (person who accepted)",
         "operationId": "listContactAttempts",
         "security": [
           {
@@ -1544,7 +1455,7 @@
     "/api/v0/cases/{caseId}/commands/log-contact-attempt": {
       "post": {
         "tags": ["cases"],
-        "summary": "Log a contact attempt (assigned responder)",
+        "summary": "Log a contact attempt (person who accepted)",
         "operationId": "logContactAttempt",
         "security": [
           {
@@ -1645,49 +1556,6 @@
         }
       }
     },
-    "/api/v0/cases/{id}/commands/assign": {
-      "post": {
-        "tags": ["cases"],
-        "summary": "Org-admin ASSIGN_CASE (first assign or reassign)",
-        "operationId": "assignCase",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/IdPath"
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Case assigned"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
     "/api/v0/cases/{id}/commands/resolve": {
       "post": {
         "tags": ["cases"],
@@ -1724,7 +1592,7 @@
                   "fulfilled",
                   "unresolved",
                   "authored_by",
-                  "responder_confirmed_by"
+                  "accepted_by_user_id"
                 ],
                 "properties": {
                   "requested": {
@@ -1747,7 +1615,7 @@
                     "type": "string",
                     "format": "uuid"
                   },
-                  "responder_confirmed_by": {
+                  "accepted_by_user_id": {
                     "type": "string",
                     "format": "uuid"
                   },
@@ -1935,7 +1803,7 @@
     "/api/v0/cases/{id}/commands/activate": {
       "post": {
         "tags": ["cases"],
-        "summary": "Activate an ASSIGNED case (assigned responder)",
+        "summary": "Activate an ASSIGNED case (person who accepted)",
         "operationId": "activateCase",
         "security": [
           {
@@ -2381,6 +2249,128 @@
           },
           "422": {
             "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/service-requests": {
+      "get": {
+        "tags": ["cases"],
+        "summary": "List service requests: open ones the caller can accept (their county, plus bordering counties once widened) or ones the caller accepted",
+        "operationId": "listServiceRequests",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ownership",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["open", "mine"],
+              "default": "open"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque keyset cursor taken from a prior response's next_cursor.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded list of service_request_id, case_id, category, status, county, widened, created_at with next_cursor. Details are not shown before accepting."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "description": "COUNTY_REQUIRED: the caller has not chosen a county",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/service-requests/{id}/accept": {
+      "post": {
+        "tags": ["cases"],
+        "summary": "Accept an open service request (first accept wins)",
+        "operationId": "acceptServiceRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accepted, or a repeat by the person who already holds it. Returns service_request_id, case_id, case_status, assignment_id."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "The caller is the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "Someone else accepted first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "COUNTY_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         }
       }
