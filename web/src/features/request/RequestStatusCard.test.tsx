@@ -77,6 +77,22 @@ describe('RequestStatusCard', () => {
     expect(screen.queryByText(/accepted/i)).not.toBeInTheDocument();
   });
 
+  it('names the crisis links and includes text 988', () => {
+    show({ card: 'UNAVAILABLE' });
+    const call911 = screen.getByRole('link', { name: 'Call 911' });
+    const call988 = screen.getByRole('link', { name: 'Call 988' });
+    const text988 = screen.getByRole('link', { name: 'Text 988' });
+    expect(call911).toHaveAttribute('href', 'tel:911');
+    expect(call988).toHaveAttribute('href', 'tel:988');
+    expect(text988).toHaveAttribute('href', 'sms:988');
+    for (const link of [call911, call988, text988]) {
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11');
+    }
+    expect(screen.getByText(/life-threatening/)).toHaveTextContent(
+      /call 911\s*\.\s*For a suicide or emotional crisis, call or text 988/,
+    );
+  });
+
   it('CANCELLED offers a new request and no cancel', () => {
     show({ card: 'CANCELLED', status: 'CANCELLED' });
     expect(screen.getByRole('link', { name: 'Start a new request' })).toHaveAttribute(
