@@ -21,32 +21,33 @@ const admin = {
 } as MeResponse;
 
 /**
- * Every registered route: it must resolve to its own page (no redirect) and never to the
- * not-found or route-error screens. Page content is each feature's own tests' job, so this
- * table survives pages replacing their placeholders. `/sign-in` and `/sign-in/code` are left
- * out: they send a signed-in visitor onwards by design (covered in features/public).
+ * Every registered route: it must stay on that path, take that screen's document title,
+ * and never the not-found or route-error screens. The title is the screen identity while
+ * data fetches are still pending. Shared chrome (the crisis strip, Home/Chat/Serve) is
+ * not used as the check. `/sign-in` and `/sign-in/code` are left out: they send a
+ * signed-in visitor onwards by design (covered in features/public).
  */
-const paths: string[] = [
-  '/',
-  '/welcome',
-  '/verify',
-  '/crisis',
-  '/home',
-  '/request',
-  '/requests/abc',
-  '/resources/food',
-  '/check-in',
-  '/consents',
-  '/trusted-contacts',
-  '/notifications',
-  '/serve',
-  '/serve/requests/abc',
-  '/chat',
-  '/chat/abc',
-  '/admin',
-  '/admin/drafts',
-  '/admin/drafts/abc',
-  '/admin/mfa',
+const screens: { path: string; title: string }[] = [
+  { path: '/', title: 'SUAS · Veterans helping veterans' },
+  { path: '/welcome', title: 'Welcome · SUAS' },
+  { path: '/verify', title: 'Confirm you served · SUAS' },
+  { path: '/crisis', title: 'Immediate resources · SUAS' },
+  { path: '/home', title: 'Home · SUAS' },
+  { path: '/request', title: 'Request help · SUAS' },
+  { path: '/requests/abc', title: 'Your request · SUAS' },
+  { path: '/resources/food', title: 'Food · SUAS' },
+  { path: '/check-in', title: 'Check-In · SUAS' },
+  { path: '/consents', title: 'What you share · SUAS' },
+  { path: '/trusted-contacts', title: 'Trusted contacts · SUAS' },
+  { path: '/notifications', title: 'Notifications · SUAS' },
+  { path: '/serve', title: 'Serve · SUAS' },
+  { path: '/serve/requests/abc', title: 'Case · SUAS' },
+  { path: '/chat', title: 'Chat · SUAS' },
+  { path: '/chat/abc', title: 'Chat · SUAS' },
+  { path: '/admin', title: 'Overview · SUAS Admin' },
+  { path: '/admin/drafts', title: 'Resource drafts · SUAS Admin' },
+  { path: '/admin/drafts/abc', title: 'Resource draft · SUAS Admin' },
+  { path: '/admin/mfa', title: 'Confirm it is you · SUAS' },
 ];
 
 function renderAt(path: string) {
@@ -74,11 +75,12 @@ describe('route table', () => {
     vi.unstubAllGlobals();
   });
 
-  it.each(paths)('resolves %s to its page for a verified, MFA-elevated admin', async (path) => {
+  it.each(screens)('resolves $path to $title', async ({ path, title }) => {
     const router = renderAt(path);
     await waitFor(() => expect(router.state.navigation.state).toBe('idle'));
     await waitFor(() => expect(document.querySelector('main')).not.toBeNull());
     expect(router.state.location.pathname).toBe(path);
+    await waitFor(() => expect(document.title).toBe(title));
     expect(screen.queryByText('We could not find that page.')).toBeNull();
     expect(screen.queryByText('Something went wrong.')).toBeNull();
   });

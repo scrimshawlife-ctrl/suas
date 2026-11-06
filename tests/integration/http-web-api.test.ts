@@ -388,6 +388,23 @@ describe('counterpart names', () => {
     await setName(helper, 'Marcus T.');
     const { id } = await submitForm(requester);
 
+    // R5.11: the open list is category, county, status and the one-line summary.
+    // The requester's display name, timing and meeting place wait until accept.
+    const open = await getJson('/api/v0/service-requests?ownership=open', helper);
+    expect(open.statusCode).toBe(200);
+    const listed = open.json().service_requests[0];
+    expect(listed).toMatchObject({
+      service_request_id: id,
+      summary: 'Groceries for the week',
+      county: 'SANTA_CLARA',
+    });
+    expect(listed).not.toHaveProperty('counterpart_display_name');
+    expect(listed).not.toHaveProperty('timing');
+    expect(listed).not.toHaveProperty('meeting_place');
+    expect(open.body).not.toContain('Dana R.');
+    expect(open.body).not.toContain('Friday afternoon');
+    expect(open.body).not.toContain('Front steps of the library');
+
     // Before anyone accepts, the owner has no counterpart.
     const before = await getJson(`/api/v0/service-requests/${id}`, requester);
     expect(before.json().counterpart_display_name).toBeNull();

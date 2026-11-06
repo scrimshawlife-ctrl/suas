@@ -236,6 +236,35 @@ describe('accept: first wins', () => {
     expect(first.json()).toMatchObject({ service_request_id: serviceRequestId });
     expect((await accept(late, serviceRequestId)).statusCode).toBe(409);
 
+    // Moving the request past ACCEPTED does not turn the holder's retry into a 404.
+    // peerAcceptRequestInTx refuses an already-accepted row, but the HTTP accept
+    // returns the same answer first and writes nothing.
+    const started = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${serviceRequestId}/commands/START`,
+      headers: keyed(winner),
+      payload: {},
+    });
+    expect(started.statusCode).toBe(200);
+    const replayAfterStart = await accept(winner, serviceRequestId);
+    expect(replayAfterStart.statusCode).toBe(200);
+    expect(replayAfterStart.json()).toEqual(first.json());
+
+    const caseId: string = first.json().case_id;
+    const audits = await pool().query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM audit_events
+        WHERE tenant_id = $1 AND event_type = 'SERVICE_REQUEST_PEER_ACCEPTED'
+          AND aggregate_id = $2`,
+      [tenantId, serviceRequestId],
+    );
+    expect(audits.rows[0]?.n).toBe('1');
+    const assigned = await pool().query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM domain_events
+        WHERE tenant_id = $1 AND event_type = 'CASE_ASSIGNED' AND aggregate_id = $2`,
+      [tenantId, caseId],
+    );
+    expect(assigned.rows[0]?.n).toBe('1');
+
     // The chat thread is created with the accept, one per request, between the two people.
     const threads = await pool().query<{ requester_user_id: string; accepted_by_user_id: string }>(
       `SELECT requester_user_id, accepted_by_user_id FROM chat_threads WHERE service_request_id = $1`,
@@ -388,6 +417,38 @@ describe('GET /api/v0/service-requests pagination', () => {
       headers: viewer.headers,
     });
     expect(malformed.statusCode).toBe(400);
+  });
+
+  it('does not let another tenant read rows through a cursor from this tenant', async () => {
+    const tenantId = randomUUID();
+    const viewer = await person(tenantId, 'SANTA_CLARA');
+    const ownIds = [
+      (await request(await person(tenantId, 'SANTA_CLARA', 'requester'))).serviceRequestId,
+      (await request(await person(tenantId, 'SANTA_CLARA', 'requester'))).serviceRequestId,
+    ];
+
+    const firstPage = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/service-requests?ownership=open&limit=1',
+      headers: viewer.headers,
+    });
+    expect(firstPage.statusCode).toBe(200);
+    const cursor: string = firstPage.json().next_cursor;
+    expect(cursor).toBeTruthy();
+
+    const otherTenant = randomUUID();
+    const outsider = await person(otherTenant, 'SANTA_CLARA');
+    await request(await person(otherTenant, 'SANTA_CLARA', 'requester'));
+    const crossed = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/service-requests?ownership=open&cursor=${encodeURIComponent(cursor)}`,
+      headers: outsider.headers,
+    });
+    expect(crossed.statusCode).toBe(200);
+    const ids = (crossed.json().service_requests as { service_request_id: string }[]).map(
+      (row) => row.service_request_id,
+    );
+    for (const ownId of ownIds) expect(ids).not.toContain(ownId);
   });
 });
 
