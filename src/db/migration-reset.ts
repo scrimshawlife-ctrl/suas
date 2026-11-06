@@ -14,10 +14,11 @@
  * authorized target before any schema statement runs.
  */
 
+import { isIP } from 'node:net';
 import type { Pool, PoolClient } from 'pg';
 import { ambientConnectionEnv, type AmbientConnectionEnv } from '../config/ambient-connection.js';
 import { productionDataMarkersIn, type EnvironmentClass } from '../config/schema.js';
-import { runMigrations, SchemaStateError, type SchemaProvenance } from './migrator.js';
+import { runMigrationsOnClient, SchemaStateError, type SchemaProvenance } from './migrator.js';
 
 export interface MigrationResetPolicy {
   readonly environment: EnvironmentClass;
@@ -30,7 +31,8 @@ export interface MigrationResetPolicy {
 }
 
 interface AuthorizedEndpoint {
-  readonly user: string | undefined;
+  readonly user: string;
+  readonly password: string;
   readonly host: string;
   readonly port: number;
   readonly database: string;
@@ -43,6 +45,12 @@ export function databaseNameFromUrl(databaseUrl: string): string | undefined {
   return endpoint?.database;
 }
 
+/**
+ * Reset URLs must name every connection field. A missing user, password, host,
+ * or port would fall back to ambient PG* defaults. Fragments and query
+ * parameters (routing, duplicate, or unknown) are rejected. The same rules
+ * apply to a full URL on the allowlist.
+ */
 function parsePostgresEndpoint(databaseUrl: string): AuthorizedEndpoint | undefined {
   let parsed: URL;
   try {
@@ -51,29 +59,30 @@ function parsePostgresEndpoint(databaseUrl: string): AuthorizedEndpoint | undefi
     return undefined;
   }
   if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') return undefined;
+  if (parsed.hash !== '') return undefined;
+  if (parsed.search !== '') return undefined;
+  if (parsed.username === '' || parsed.password === '') return undefined;
+  if (parsed.hostname === '' || parsed.port === '') return undefined;
   let name: string;
+  let user: string;
+  let password: string;
   try {
     name = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+    user = decodeURIComponent(parsed.username);
+    password = decodeURIComponent(parsed.password);
   } catch {
     return undefined;
   }
-  if (name === '' || name.includes('/')) return undefined;
-  const port = parsed.port === '' ? 5432 : Number(parsed.port);
+  if (name === '' || name.includes('/') || user === '' || password === '') return undefined;
+  const port = Number(parsed.port);
   if (!Number.isInteger(port) || port <= 0) return undefined;
-  let user: string | undefined;
-  if (parsed.username !== '') {
-    try {
-      user = decodeURIComponent(parsed.username);
-    } catch {
-      return undefined;
-    }
-  }
   return {
     user,
-    host: parsed.hostname.toLowerCase(),
+    host: parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase(),
     port,
     database: name,
     url: databaseUrl.trim(),
+    password,
   };
 }
 
@@ -188,7 +197,7 @@ function ambientOverrideRefusal(
     String(authorized.port),
     authorized.database,
     authorized.user,
-    passwordFromUrl(authorized.url),
+    authorized.password,
   ];
   const names = ['PGPORT', 'PGDATABASE', 'PGUSER', 'PGPASSWORD'] as const;
   for (let index = 0; index < names.length; index += 1) {
@@ -202,28 +211,33 @@ function ambientOverrideRefusal(
   return undefined;
 }
 
-function passwordFromUrl(databaseUrl: string): string | undefined {
-  try {
-    const parsed = new URL(databaseUrl);
-    if (parsed.password === '') return undefined;
-    return decodeURIComponent(parsed.password);
-  } catch {
-    return undefined;
-  }
+interface LiveServer {
+  readonly database: string | undefined;
+  readonly address: string | null;
+  readonly port: number | null;
 }
 
-function connectionMatches(
-  client: PoolClient,
-  currentDatabase: string | undefined,
-  authorized: AuthorizedEndpoint,
-): boolean {
-  return (
-    currentDatabase === authorized.database &&
-    client.database === authorized.database &&
-    client.host.toLowerCase() === authorized.host &&
-    client.port === authorized.port &&
-    (authorized.user === undefined || client.user === authorized.user)
-  );
+/**
+ * A hostname is ambiguous (localhost is both 127.0.0.1 and ::1) and a null
+ * server address is an unsupported topology (a local socket, for example).
+ * Only an explicit IP literal can be compared to inet_server_addr().
+ */
+function liveServerRefusal(live: LiveServer, authorized: AuthorizedEndpoint): string | undefined {
+  if (live.address === null || live.port === null || isIP(authorized.host) === 0) {
+    return 'Migration reset refused: the server topology is unsupported or ambiguous.';
+  }
+  const liveAddress = live.address.trim().toLowerCase();
+  if (isIP(liveAddress) === 0) {
+    return 'Migration reset refused: the server topology is unsupported or ambiguous.';
+  }
+  if (
+    liveAddress !== authorized.host ||
+    live.port !== authorized.port ||
+    live.database !== authorized.database
+  ) {
+    return 'Migration reset refused: the checked-out connection does not match the authorized target.';
+  }
+  return undefined;
 }
 
 /**
@@ -253,30 +267,42 @@ export async function resetSyntheticDatabase(
     throw new SchemaStateError([ambient]);
   }
 
-  let client: PoolClient;
+  let client: PoolClient | undefined;
   try {
-    client = await pool.connect();
-  } catch {
-    throw new SchemaStateError([
-      'Migration reset refused: the connection could not be checked against the authorized target.',
-    ]);
-  }
-
-  try {
-    const observed = await client.query<{ current_database: string }>(
-      'SELECT current_database() AS current_database',
-    );
-    const currentDatabase = observed.rows[0]?.current_database;
-    if (!connectionMatches(client, currentDatabase, authorized)) {
+    try {
+      client = await pool.connect();
+    } catch {
       throw new SchemaStateError([
-        'Migration reset refused: the checked-out connection does not match the authorized target.',
+        'Migration reset refused: the connection could not be checked against the authorized target.',
       ]);
     }
-  } finally {
-    client.release();
-  }
 
-  await pool.query('DROP SCHEMA public CASCADE');
-  await pool.query('CREATE SCHEMA public');
-  await runMigrations(pool, { mode: 'apply', provenance });
+    const observed = await client.query<{
+      current_database: string;
+      server_addr: string | null;
+      server_port: number | null;
+    }>(
+      `SELECT current_database() AS current_database,
+              host(inet_server_addr()) AS server_addr,
+              inet_server_port() AS server_port`,
+    );
+    const row = observed.rows[0];
+    const topology = liveServerRefusal(
+      {
+        database: row?.current_database,
+        address: row?.server_addr ?? null,
+        port: row?.server_port ?? null,
+      },
+      authorized,
+    );
+    if (topology !== undefined) {
+      throw new SchemaStateError([topology]);
+    }
+
+    await client.query('DROP SCHEMA public CASCADE');
+    await client.query('CREATE SCHEMA public');
+    await runMigrationsOnClient(client, { mode: 'apply', provenance });
+  } finally {
+    client?.release();
+  }
 }
