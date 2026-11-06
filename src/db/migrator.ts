@@ -188,25 +188,30 @@ export interface MigrationRunResult {
  *   schema version; never mutate the schema.
  * - `apply`: apply pending migrations under an advisory lock, then validate.
  */
-export async function runMigrations(
-  pool: Pool,
+function offResult(options: MigrationRunOptions): MigrationRunResult {
+  return {
+    mode: 'off',
+    schemaVersion: 0,
+    expectedSchemaVersion: options.expectedSchemaVersion ?? EXPECTED_SCHEMA_VERSION,
+    appliedNow: [],
+    specStackDrift: false,
+    schemaProvenance: undefined,
+  };
+}
+
+/**
+ * Apply or validate on a connection the caller already holds.
+ * Does not check out or release that connection.
+ */
+export async function runMigrationsOnClient(
+  client: PoolClient,
   options: MigrationRunOptions,
 ): Promise<MigrationRunResult> {
   const expectedSchemaVersion = options.expectedSchemaVersion ?? EXPECTED_SCHEMA_VERSION;
 
-  if (options.mode === 'off') {
-    return {
-      mode: 'off',
-      schemaVersion: 0,
-      expectedSchemaVersion,
-      appliedNow: [],
-      specStackDrift: false,
-      schemaProvenance: undefined,
-    };
-  }
+  if (options.mode === 'off') return offResult(options);
 
   const files = await loadMigrationFiles(options.migrationsDir);
-  const client = await pool.connect();
   const appliedNow: number[] = [];
 
   try {
@@ -289,6 +294,19 @@ export async function runMigrations(
         // The lock is released with the session regardless; swallow teardown noise.
       });
     }
+  }
+}
+
+export async function runMigrations(
+  pool: Pool,
+  options: MigrationRunOptions,
+): Promise<MigrationRunResult> {
+  if (options.mode === 'off') return offResult(options);
+
+  const client = await pool.connect();
+  try {
+    return await runMigrationsOnClient(client, options);
+  } finally {
     client.release();
   }
 }
