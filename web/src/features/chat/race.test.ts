@@ -41,7 +41,7 @@ describe('a push frame that arrives while a fetch is in flight', () => {
     await vi.waitFor(() => {
       expect(client.GET).toHaveBeenCalledTimes(1);
     });
-    applyMessageToCaches(queryClient, message(2));
+    applyMessageToCaches(queryClient, message(2), false);
 
     // The older request now returns, without the new message.
     resolveStale({ data: { messages: [message(1)], next_cursor: null } });

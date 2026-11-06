@@ -21,6 +21,8 @@ const thread = (request: string, at: string | null): ChatThread => ({
   last_message_body: 'old',
   last_message_at: at,
   closed: false,
+  role: 'REQUESTER',
+  last_message_from_me: null,
 });
 
 function seeded() {
@@ -43,36 +45,47 @@ function seeded() {
 describe('applyMessageToCaches', () => {
   it('adds a pushed message to its thread and moves the thread to the top', () => {
     const queryClient = seeded();
-    applyMessageToCaches(queryClient, message('b', 'r1', '2026-11-04T22:00:00.000000Z', 'newest'));
+    applyMessageToCaches(
+      queryClient,
+      message('b', 'r1', '2026-11-04T22:00:00.000000Z', 'newest'),
+      false,
+    );
 
     const messages = queryClient.getQueryData<MessagesData>(queryKeys.chatMessages('r1'));
     expect(toOldestFirst(messages).map((m) => m.body)).toEqual(['old', 'newest']);
     const threads = queryClient.getQueryData<{ threads: ChatThread[] }>(queryKeys.chatThreads);
     expect(threads?.threads.map((t) => t.service_request_id)).toEqual(['r1', 'r2']);
     expect(threads?.threads[0]?.last_message_body).toBe('newest');
+    expect(threads?.threads[0]?.last_message_from_me).toBe(false);
   });
 
   it('does not duplicate a message delivered twice (push, then refetch or send)', () => {
     const queryClient = seeded();
     const pushed = message('b', 'r1', '2026-11-04T22:00:00.000000Z');
-    applyMessageToCaches(queryClient, pushed);
-    applyMessageToCaches(queryClient, pushed);
+    applyMessageToCaches(queryClient, pushed, false);
+    applyMessageToCaches(queryClient, pushed, false);
     const messages = queryClient.getQueryData<MessagesData>(queryKeys.chatMessages('r1'));
     expect(toOldestFirst(messages)).toHaveLength(2);
   });
 
   it('leaves a thread whose messages were never loaded alone and still bumps the list', () => {
     const queryClient = seeded();
-    applyMessageToCaches(queryClient, message('c', 'r2', '2026-11-04T22:30:00.000000Z', 'ping'));
+    applyMessageToCaches(
+      queryClient,
+      message('c', 'r2', '2026-11-04T22:30:00.000000Z', 'ping'),
+      true,
+    );
     expect(queryClient.getQueryData(queryKeys.chatMessages('r2'))).toBeUndefined();
     const threads = queryClient.getQueryData<{ threads: ChatThread[] }>(queryKeys.chatThreads);
     expect(threads?.threads[0]?.service_request_id).toBe('r2');
     expect(threads?.threads[0]?.last_message_body).toBe('ping');
+    // The flag follows the newest message, so unread stays right after either side writes.
+    expect(threads?.threads[0]?.last_message_from_me).toBe(true);
   });
 
   it('refreshes the list for a thread it has not seen yet', () => {
     const queryClient = seeded();
-    applyMessageToCaches(queryClient, message('d', 'r3', '2026-11-04T23:00:00.000000Z'));
+    applyMessageToCaches(queryClient, message('d', 'r3', '2026-11-04T23:00:00.000000Z'), false);
     expect(queryClient.getQueryState(queryKeys.chatThreads)?.isInvalidated).toBe(true);
   });
 });

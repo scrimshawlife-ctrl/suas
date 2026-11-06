@@ -353,6 +353,17 @@ export class IllegalRequestTransitionError extends Error {
   }
 }
 
+/** A command whose DISPATCH.md §4 edge needs a reason was sent without one. */
+export class RequestReasonRequiredError extends Error {
+  readonly code = 'VALIDATION_FAILED';
+  readonly httpStatus = 400;
+
+  constructor(command: ServiceRequestCommand) {
+    super(`"${command}" requires a reason (SUAS-specs DISPATCH.md §4).`);
+    this.name = 'RequestReasonRequiredError';
+  }
+}
+
 export class StaleRequestStateError extends Error {
   readonly code = 'STALE_STATE';
   readonly httpStatus = 409;
@@ -415,7 +426,7 @@ export function resolveRequestTransition(
     throw new IllegalRequestTransitionError(command, from);
   }
   if (transition.requiresReason && (options.reason === undefined || options.reason.trim() === '')) {
-    throw new Error(`"${command}" requires a reason (SUAS-specs DISPATCH.md §4).`);
+    throw new RequestReasonRequiredError(command);
   }
   return transition;
 }

@@ -1538,7 +1538,7 @@
             }
           }
         },
-        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not."
+        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted the case (403 otherwise). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED."
       }
     },
     "/api/v0/cases/{caseId}/follow-ups": {
@@ -5108,7 +5108,8 @@
               "created_at",
               "widened",
               "county",
-              "counterpart_display_name"
+              "counterpart_display_name",
+              "viewer_role"
             ],
             "properties": {
               "summary": {
@@ -5140,6 +5141,11 @@
               "counterpart_display_name": {
                 "type": ["string", "null"],
                 "description": "For the requester: the display name of the person who accepted (null until accepted or if unnamed). For the accepter: the requester display name."
+              },
+              "viewer_role": {
+                "type": "string",
+                "enum": ["REQUESTER", "ACCEPTER"],
+                "description": "The caller side of this request."
               }
             }
           }
@@ -5987,7 +5993,9 @@
           "counterpart_display_name",
           "last_message_body",
           "last_message_at",
-          "closed"
+          "closed",
+          "role",
+          "last_message_from_me"
         ],
         "properties": {
           "service_request_id": {
@@ -6015,6 +6023,15 @@
           "closed": {
             "type": "boolean",
             "description": "The request is in a terminal status."
+          },
+          "role": {
+            "type": "string",
+            "enum": ["REQUESTER", "ACCEPTER"],
+            "description": "The caller side of the thread."
+          },
+          "last_message_from_me": {
+            "type": ["boolean", "null"],
+            "description": "True when the latest message was sent by the caller; null when there are no messages."
           }
         }
       },

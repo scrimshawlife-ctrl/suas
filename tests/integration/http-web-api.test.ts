@@ -395,8 +395,10 @@ describe('counterpart names', () => {
     expect((await accept(helper, id)).statusCode).toBe(200);
     const asOwner = await getJson(`/api/v0/service-requests/${id}`, requester);
     expect(asOwner.json().counterpart_display_name).toBe('Marcus T.');
+    expect(asOwner.json().viewer_role).toBe('REQUESTER');
     const asAccepter = await getJson(`/api/v0/service-requests/${id}`, helper);
     expect(asAccepter.json().counterpart_display_name).toBe('Dana R.');
+    expect(asAccepter.json().viewer_role).toBe('ACCEPTER');
     expect((await getJson(`/api/v0/service-requests/${id}`, stranger)).statusCode).toBe(404);
 
     const mine = await getJson('/api/v0/service-requests?ownership=mine', helper);
@@ -509,6 +511,8 @@ describe('GET /api/v0/chat/threads', () => {
       counterpart_display_name: 'Marcus T.',
       last_message_body: 'z'.repeat(140),
       closed: false,
+      role: 'REQUESTER',
+      last_message_from_me: false,
     });
     expect(typeof asRequester.json().threads[0].last_message_at).toBe('string');
 
@@ -517,10 +521,16 @@ describe('GET /api/v0/chat/threads', () => {
       service_request_id: string;
       last_message_body: string | null;
       counterpart_display_name: string | null;
+      role: string;
+      last_message_from_me: boolean | null;
     }[] = asHelper.json().threads;
     // Newest activity first: the reply on the older request came last.
     expect(threads.map((t) => t.service_request_id)).toEqual([older.id, newer.id]);
     expect(threads[1]?.last_message_body).toBe('On my way');
+    expect(threads.map((t) => [t.role, t.last_message_from_me])).toEqual([
+      ['ACCEPTER', true],
+      ['ACCEPTER', true],
+    ]);
     expect(threads[0]?.counterpart_display_name).toBeNull();
     expect((await getJson('/api/v0/chat/threads', stranger)).json().threads).toEqual([]);
     expect((await getJson('/api/v0/chat/threads')).statusCode).toBe(401);
@@ -533,7 +543,12 @@ describe('GET /api/v0/chat/threads', () => {
     const { id } = await submitForm(requester);
     expect((await accept(helper, id)).statusCode).toBe(200);
     const open = await getJson('/api/v0/chat/threads', requester);
-    expect(open.json().threads[0]).toMatchObject({ closed: false, last_message_body: null });
+    expect(open.json().threads[0]).toMatchObject({
+      closed: false,
+      last_message_body: null,
+      role: 'REQUESTER',
+      last_message_from_me: null,
+    });
     expect(open.json().threads[0].last_message_at).toBeNull();
 
     const cancelled = await app.server.inject({
@@ -815,5 +830,24 @@ describe('peer accept moves the request to ACCEPTED', () => {
         granteeId: randomUUID(),
       }),
     ).rejects.toBeInstanceOf(DisclosureGuardRequiredError);
+  });
+});
+
+describe('commands that need a reason', () => {
+  it('answers 400 VALIDATION_FAILED, not 500, when CANCEL has no reason', async () => {
+    const requester = await person(randomUUID(), { verified: true, county: 'SANTA_CLARA' });
+    const { id } = await submitForm(requester);
+    const refused = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${id}/commands/CANCEL`,
+      headers: keyed(requester),
+      payload: {},
+    });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.code).toBe('VALIDATION_FAILED');
+    expect(refused.json().error.message).toContain('requires a reason');
+    expect((await getJson(`/api/v0/service-requests/${id}`, requester)).json().status).toBe(
+      'SUBMITTED',
+    );
   });
 });

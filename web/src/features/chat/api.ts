@@ -3,7 +3,6 @@ import { api } from '../../api/client';
 import { isApiError } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
-import { useServiceRequests } from '../../api/service-requests';
 import { useSessionToken } from '../../api/token-store';
 import type { ChatThread } from '../../api/types';
 import { insertMessage, type ChatMessage, type MessagePage, type MessagesData } from './messages';
@@ -62,27 +61,16 @@ export async function issueConnectTicket() {
 }
 
 /**
- * Whether the signed-in person made this request (so its page is /requests/:id) or accepted
- * it (/serve/requests/:id). The thread data carries no role yet, so this checks the person's
- * own requests; `undefined` while that list loads or when the id is not on its first page.
- */
-export function useIsRequester(serviceRequestId: string | undefined): boolean | undefined {
-  const requested = useServiceRequests('requested', { limit: 100 });
-  if (serviceRequestId === undefined || requested.data === undefined) return undefined;
-  const found = requested.data.service_requests.some(
-    (r) => r.service_request_id === serviceRequestId,
-  );
-  // More requests than one page holds: "not here" does not mean "not mine".
-  if (!found && requested.data.next_cursor !== null) return undefined;
-  return found;
-}
-
-/**
  * Puts a message (from a push frame or our own send) into the caches: that thread's
  * messages if they were loaded, and the thread list preview, moved to the top. A message
- * for a thread the list has not seen yet refreshes the list instead.
+ * for a thread the list has not seen yet refreshes the list instead. `fromMe` says whether the
+ * person sent it (our own send) or the other side did (every push frame).
  */
-export function applyMessageToCaches(queryClient: QueryClient, message: ChatMessage): void {
+export function applyMessageToCaches(
+  queryClient: QueryClient,
+  message: ChatMessage,
+  fromMe: boolean,
+): void {
   const id = message.service_request_id;
   const messagesKey = queryKeys.chatMessages(id);
   queryClient.setQueryData<MessagesData>(messagesKey, (data) =>
@@ -111,6 +99,7 @@ export function applyMessageToCaches(queryClient: QueryClient, message: ChatMess
     ...thread,
     last_message_body: message.body.slice(0, PREVIEW_MAX),
     last_message_at: message.created_at,
+    last_message_from_me: fromMe,
   };
   queryClient.setQueryData(queryKeys.chatThreads, {
     ...threads,

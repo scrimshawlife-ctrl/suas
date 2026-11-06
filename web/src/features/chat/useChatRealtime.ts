@@ -49,7 +49,8 @@ export function useChatRealtime(): RealtimeStatus {
       fetchTicket: issueConnectTicket,
       createSocket: (url) => new WebSocket(url),
       onMessage: (message) => {
-        applyMessageToCaches(queryClient, message);
+        // The server pushes a message only to the other participant.
+        applyMessageToCaches(queryClient, message, false);
       },
       onStatus: (next) => {
         current = next;

@@ -54,7 +54,7 @@ export function createOutbox(send: SendFn = postChatMessage): Outbox {
     try {
       const sent = await send(id, item.body, item.key);
       if (startedIn !== epoch) return;
-      applyMessageToCaches(queryClient, sent);
+      applyMessageToCaches(queryClient, sent, true);
       update(id, (list) => list.filter((p) => p.clientId !== item.clientId));
     } catch {
       if (startedIn !== epoch) return;
