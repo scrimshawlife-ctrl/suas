@@ -3,6 +3,9 @@ export interface FooterProps {
   showVeteransCrisisLine?: boolean;
 }
 
+/** 44px minimum tap target. Visible words stay the D-012 sentence; colour stays the default link colour. */
+const crisisLink = 'inline-flex min-h-11 min-w-11 items-center px-1';
+
 /** Footer with the D-012 safety lines, verbatim. Links use the default link colour, as drawn. */
 export function Footer({ showVeteransCrisisLine = false }: FooterProps) {
   return (
@@ -13,13 +16,33 @@ export function Footer({ showVeteransCrisisLine = false }: FooterProps) {
           emergency dispatch.
         </p>
         <p>
-          For immediate danger, call <a href="tel:911">911</a>. For suicide or emotional crisis
-          support, call or text <a href="tel:988">988</a>.
+          For immediate danger,{' '}
+          <a href="tel:911" className={crisisLink} aria-label="Call 911">
+            call 911
+          </a>
+          . For suicide or emotional crisis support,{' '}
+          <a href="tel:988" className={crisisLink} aria-label="Call 988">
+            call
+          </a>{' '}
+          or{' '}
+          <a href="sms:988" className={crisisLink} aria-label="Text 988">
+            text 988
+          </a>
+          .
         </p>
         {showVeteransCrisisLine ? (
           <p>
-            Veterans Crisis Line: Dial <a href="tel:988">988</a>, then press 1 · Text{' '}
-            <a href="sms:838255">838255</a>
+            <a href="tel:988" className={crisisLink}>
+              Dial 988
+            </a>
+            , then press 1 ·{' '}
+            <a
+              href="sms:838255"
+              className={crisisLink}
+              aria-label="Veterans Crisis Line: Text 838255"
+            >
+              Veterans Crisis Line: Text 838255
+            </a>
           </p>
         ) : null}
       </div>

@@ -34,6 +34,27 @@ export const FRESHNESS_STALE_DAYS = 90;
 export const CONTACT_METHOD_KINDS = ['PHONE', 'EMAIL', 'URL', 'FREEFORM'] as const;
 export type ContactMethodKind = (typeof CONTACT_METHOD_KINDS)[number];
 
+/**
+ * A directory listing must not use a crisis-line name, or an arbitrary number
+ * would be presented as a crisis line (SUAS-specs SAFETY.md §2).
+ */
+const CRISIS_LINE_SERVICE_NAMES: readonly RegExp[] = [
+  /^988$/i,
+  /suicide\s*&\s*crisis\s+lifeline/i,
+  /veterans\s+crisis\s+line/i,
+  /crisis\s+line/i,
+];
+
+export function directoryServiceNameCrisisIssue(serviceName: string): string | undefined {
+  const normalized = serviceName.trim().replace(/\s+/g, ' ');
+  const looksLikeCrisisLine = CRISIS_LINE_SERVICE_NAMES.some((pattern) => pattern.test(normalized));
+  if (!looksLikeCrisisLine) return undefined;
+  return (
+    `Resource name "${serviceName}" looks like a crisis line. A directory listing must not ` +
+    'label a number as a crisis line (SUAS-specs SAFETY.md §2).'
+  );
+}
+
 export function assertContactMethodKind(value: string): asserts value is ContactMethodKind {
   if (!(CONTACT_METHOD_KINDS as readonly string[]).includes(value)) {
     throw new ResourceValidationError(
@@ -173,6 +194,8 @@ export interface CreateResourceInput {
 
 export async function createResource(db: Queryable, input: CreateResourceInput): Promise<Resource> {
   assertServiceCategory(input.category);
+  const crisisName = directoryServiceNameCrisisIssue(input.serviceName);
+  if (crisisName !== undefined) throw new ResourceValidationError(crisisName);
 
   const modes = input.integrationModes ?? [];
   for (const mode of modes) {

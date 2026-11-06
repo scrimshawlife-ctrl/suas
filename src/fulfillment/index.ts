@@ -57,6 +57,7 @@ export {
   assertContactMethodKind,
   CONTACT_METHOD_KINDS,
   createResource,
+  directoryServiceNameCrisisIssue,
   findResource,
   freshnessBand,
   FRESHNESS_AGING_DAYS,
