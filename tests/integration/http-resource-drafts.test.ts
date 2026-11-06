@@ -60,6 +60,8 @@ async function credential(
     status: 'ACTIVE',
   });
   if (options.admin) await grantSuasAdmin(pool(target), user.userId, undefined);
+  // Listing Resources needs a passed scan (the onboarding gate).
+  else await markVerifiedVeteran(pool(target), tenantId, user.userId);
   const session = await createSession(pool(target), TEST_SESSION_SECRET, {
     tenantId,
     userId: user.userId,

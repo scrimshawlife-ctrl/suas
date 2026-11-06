@@ -80,6 +80,7 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     model_inference_mode: config.modelInference.mode,
     bedrock_model_configured: config.modelInference.bedrockModelId !== undefined,
     object_storage_mode: config.objectStorage.mode,
+    chat_push_mode: config.chatPush.mode,
     id_verification_mode: config.idVerification.mode,
     public_sign_up: config.publicSignUp,
     staging_auth_email_count: config.stagingAuthEmails.length,

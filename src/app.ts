@@ -42,6 +42,12 @@ import { createFulfillmentAdapterRegistry, type AdapterRegistry } from './fulfil
 import { createChannelRegistry } from './notifications/index.js';
 import { createModelInferencePort, type ModelInferencePort } from './inference/index.js';
 import { createIdVerificationPort, type IdVerificationPort } from './identity/index.js';
+import { createChatConnectionLifecycle } from './chat/index.js';
+import {
+  createConnectionPushPort,
+  LocalWebSocketPush,
+  type ConnectionPushPort,
+} from './realtime/index.js';
 
 export interface StartedApp {
   readonly config: SuasConfig;
@@ -54,6 +60,8 @@ export interface StartedApp {
   readonly modelInference: ModelInferencePort;
   /** Undefined when ID verification is disabled. */
   readonly idVerification: IdVerificationPort | undefined;
+  /** Chat live-update push; undefined when SUAS_CHAT_PUSH_MODE=disabled. */
+  readonly chatPush: ConnectionPushPort | undefined;
   readonly buildInfo: BuildInfo;
   close(): Promise<void>;
 }
@@ -175,6 +183,11 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   const modelInference = createModelInferencePort(config);
   // 5b. ID scan + selfie capability port (fake adapter only until a provider is chosen).
   const idVerification = createIdVerificationPort(config);
+  // 5b. Chat live updates. Messages travel over REST; this only pushes new ones.
+  const chatPush =
+    pool !== undefined
+      ? createConnectionPushPort(config, createChatConnectionLifecycle(pool))
+      : undefined;
 
   // 6. Build provenance.
   const resolveBuildInfo = (): BuildInfo =>
@@ -195,6 +208,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     jobQueue,
     modelInference,
     ...(idVerification !== undefined ? { idVerification } : {}),
+    ...(chatPush !== undefined ? { chatPush } : {}),
     // Pino's default transport uses worker_threads, which Workers do not run.
     ...(runtime === 'worker' ? { logger: false, workerRuntime: true } : {}),
   });
@@ -203,6 +217,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     const port = options.listenPort ?? (runtime === 'worker' ? 8787 : config.http.port);
     const host = runtime === 'worker' ? '127.0.0.1' : config.http.host;
     await server.listen({ host, port });
+    if (chatPush instanceof LocalWebSocketPush) await chatPush.listen(config.chatPush.localPort);
     if (runtime !== 'worker') {
       server.log.info(
         { build_info: resolveBuildInfo(), configuration: describeConfig(config) },
@@ -221,9 +236,11 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     fulfillmentAdapters,
     modelInference,
     idVerification,
+    chatPush,
     buildInfo: resolveBuildInfo(),
     close: async () => {
       await server.close();
+      if (chatPush instanceof LocalWebSocketPush) await chatPush.close();
       if (pool !== undefined) await pool.end();
     },
   };

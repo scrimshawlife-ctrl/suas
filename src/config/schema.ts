@@ -61,6 +61,13 @@ export const OBJECT_STORAGE_MODES = ['disabled', 'fake', 's3'] as const;
 export type ObjectStorageMode = (typeof OBJECT_STORAGE_MODES)[number];
 /** No real provider is chosen yet (plan §8 item 2), so only a fake exists. */
 export const ID_VERIFICATION_MODES = ['disabled', 'fake'] as const;
+/**
+ * Chat push (V1_PROJECT_PLAN.md §2.2): `local` is a process-local WebSocket server
+ * for LOCAL/TEST; `apigw` is the API Gateway WebSocket API. Messages are stored and
+ * listed over REST in every mode, so `disabled` loses only live updates.
+ */
+export const CHAT_PUSH_MODES = ['disabled', 'local', 'apigw'] as const;
+export type ChatPushMode = (typeof CHAT_PUSH_MODES)[number];
 export type IdVerificationMode = (typeof ID_VERIFICATION_MODES)[number];
 
 /** One provisioned synthetic fixture. Identity is the pair, not the email address. */
@@ -104,6 +111,8 @@ export function parseStagingFixtureRegistry(value: string | undefined): {
 }
 
 const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d$/;
+const CHAT_WS_ENDPOINT_PATTERN =
+  /^https:\/\/[a-z0-9]+\.execute-api\.[a-z]{2}(?:-[a-z]+)+-\d\.amazonaws\.com\/[A-Za-z0-9_-]+$/;
 const S3_BUCKET_PATTERN = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 
 export const BROWSER_AUTH_MODES = ['disabled', 'email_otp'] as const;
@@ -324,6 +333,12 @@ const rawConfigSchema = z.object({
   // Explicit tenant-id:user-id pairs STAGING auth admits. Empty admits nobody.
   SUAS_STAGING_FIXTURE_REGISTRY: optionalRaw,
 
+  SUAS_CHAT_PUSH_MODE: optionalEnum('SUAS_CHAT_PUSH_MODE', CHAT_PUSH_MODES, 'disabled'),
+  // `https://{api-id}.execute-api.{region}.amazonaws.com/{stage}` of the WebSocket API.
+  SUAS_CHAT_WS_ENDPOINT: optionalRaw,
+  // Port for the local WebSocket server (SUAS_CHAT_PUSH_MODE=local). Defaults to 3001.
+  SUAS_CHAT_LOCAL_WS_PORT: optionalRaw,
+
   // --- Fulfillment adapters. ENVIRONMENT.md §3. ---
   SUAS_TRANSPORTATION_ADAPTER_MODE: requiredEnum(
     'SUAS_TRANSPORTATION_ADAPTER_MODE',
@@ -461,6 +476,12 @@ export interface SuasConfig {
    * Empty or absent admits nobody. The demo account is not added implicitly.
    */
   readonly stagingFixturePrincipals: readonly StagingFixturePrincipal[];
+  readonly chatPush: {
+    readonly mode: ChatPushMode;
+    /** WebSocket API management endpoint; set only for `apigw`. */
+    readonly apiGatewayEndpoint: string | undefined;
+    readonly localPort: number;
+  };
   readonly adapters: {
     readonly transportation: AdapterMode;
     readonly shelter: AdapterMode;
@@ -611,6 +632,7 @@ function validateAwsCapabilities(
     ['SUAS_EMAIL_MODE', raw.SUAS_EMAIL_MODE, 'ses'],
     ['SUAS_MODEL_INFERENCE_MODE', raw.SUAS_MODEL_INFERENCE_MODE, 'bedrock'],
     ['SUAS_OBJECT_STORAGE_MODE', raw.SUAS_OBJECT_STORAGE_MODE, 's3'],
+    ['SUAS_CHAT_PUSH_MODE', raw.SUAS_CHAT_PUSH_MODE, 'apigw'],
   ];
   const awsEnabled = realModes.filter(([, value, real]) => value === real);
   for (const [varName, value] of awsEnabled) {
@@ -635,6 +657,21 @@ function validateAwsCapabilities(
   }
   if (raw.SUAS_S3_BUCKET !== undefined && !S3_BUCKET_PATTERN.test(raw.SUAS_S3_BUCKET)) {
     issue('SUAS_S3_BUCKET must be a valid S3 bucket name.');
+  }
+
+  if (raw.SUAS_CHAT_PUSH_MODE === 'apigw') {
+    if (raw.SUAS_CHAT_WS_ENDPOINT === undefined) {
+      issue('SUAS_CHAT_WS_ENDPOINT is required when SUAS_CHAT_PUSH_MODE=apigw.');
+    } else if (!CHAT_WS_ENDPOINT_PATTERN.test(raw.SUAS_CHAT_WS_ENDPOINT)) {
+      issue(
+        'SUAS_CHAT_WS_ENDPOINT must be https://<api-id>.execute-api.<region>.amazonaws.com/<stage>.',
+      );
+    }
+  }
+  // The local server keeps its sockets in one process, so it cannot serve a deployed,
+  // multi-instance environment (AGENTS.md rule 8).
+  if (raw.SUAS_CHAT_PUSH_MODE === 'local' && environment !== 'LOCAL' && environment !== 'TEST') {
+    issue(`SUAS_CHAT_PUSH_MODE=local is allowed only in LOCAL and TEST, not ${environment}.`);
   }
 
   if (
@@ -1101,6 +1138,17 @@ export function shapeConfig(
     stagingAuthEmails: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) => email.toLowerCase()),
     stagingFixturePrincipals: parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY)
       .principals,
+    chatPush: {
+      mode: raw.SUAS_CHAT_PUSH_MODE,
+      apiGatewayEndpoint: raw.SUAS_CHAT_WS_ENDPOINT,
+      localPort: parsePositiveInt(
+        'SUAS_CHAT_LOCAL_WS_PORT',
+        raw.SUAS_CHAT_LOCAL_WS_PORT,
+        3001,
+        { min: 0, max: 65535 },
+        ctx,
+      ),
+    },
     adapters: {
       transportation: raw.SUAS_TRANSPORTATION_ADAPTER_MODE,
       shelter: raw.SUAS_SHELTER_ADAPTER_MODE,

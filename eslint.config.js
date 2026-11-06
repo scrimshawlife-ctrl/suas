@@ -6,6 +6,9 @@ export default tseslint.config(
     // `.local-secrets/` is gitignored operator scratch space. Wrangler dry-run
     // bundles and one-off staging audit scripts live there and are deliberately
     // outside the TypeScript project, so repository lint must not discover them.
+    // `web/` is the React app. It has its own package.json, tsconfig and ESLint
+    // config (`cd web && npm run lint`), and root type-checked lint must not
+    // discover its files.
     // `docs/` is the GitHub Pages poster (HTML/CSS plus a browser click-through
     // script). It is not in the TypeScript project. Type-checked lint must not
     // discover those files.
@@ -16,6 +19,7 @@ export default tseslint.config(
       '.local-secrets/**',
       'docs/**',
       '.wrangler/**',
+      'web/**',
     ],
   },
   js.configs.recommended,
@@ -56,6 +60,7 @@ export default tseslint.config(
       'scripts/**/*.ts',
       'eval/**/*.ts',
       'src/main.ts',
+      'src/aws/websocket-lambda.ts',
       'tests/**/*.ts',
       '*.config.ts',
     ],
