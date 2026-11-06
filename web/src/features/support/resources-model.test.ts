@@ -62,6 +62,43 @@ describe('contactAction', () => {
     });
   });
 
+  it('labels synthetic toll-free numbers with the directory name and does not link 911, 988, or 838255', () => {
+    expect(
+      contactAction(
+        resource({
+          service_name: 'National Lifeline',
+          contact_method: '800-555-0142',
+          contact_method_kind: 'PHONE',
+        }),
+      ),
+    ).toEqual({
+      kind: 'phone',
+      label: 'Call National Lifeline at 800-555-0142',
+      href: 'tel:8005550142',
+    });
+    expect(
+      contactAction(
+        resource({
+          service_name: 'Local helpline',
+          contact_method: '(800) 555-0143',
+          contact_method_kind: 'PHONE',
+        }),
+      ),
+    ).toEqual({
+      kind: 'phone',
+      label: 'Call Local helpline at (800) 555-0143',
+      href: 'tel:8005550143',
+    });
+    for (const number of ['911', '988', '838255']) {
+      expect(phoneHref(number)).toBeNull();
+      expect(
+        contactAction(
+          resource({ service_name: number, contact_method: number, contact_method_kind: 'PHONE' }),
+        ),
+      ).toEqual({ kind: 'text', text: number });
+    }
+  });
+
   it('email: Email with a mailto: link', () => {
     expect(
       contactAction(
