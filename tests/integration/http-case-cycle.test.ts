@@ -261,6 +261,50 @@ describe('a new request after the case is resolved or closed', () => {
     });
   });
 
+  it('allows a direct create on a RESOLVED case and keeps that request off the open list', async () => {
+    // Released DISPATCH.md §4 (pin 0.7.0): creation requires the parent Case to exist
+    // and not be CLOSED. RESOLVED is not CLOSED, so this create is still allowed.
+    // Proposal R6.14 records the result: the request is not acceptable. Refusing the
+    // create, or attaching it to a new case, is not authorized until a spec change.
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester', true);
+    const helper = await person(tenantId, 'helper');
+    const first = await submitRequest(requester);
+    expect((await accept(helper, first.requestId)).statusCode).toBe(200);
+    await finishAndClose(requester, helper, first.caseId, first.requestId, { close: false });
+    expect((await get(requester, `/cases/${first.caseId}`)).json().status).toBe('RESOLVED');
+
+    const created = await post(requester, `/cases/${first.caseId}/service-requests`, {
+      category: 'FOOD',
+      details: { summary: 'More groceries', meeting_place: 'Main Street library' },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().case_id).toBe(first.caseId);
+    const stranded: string = created.json().service_request_id;
+    expect(
+      (await post(requester, `/service-requests/${stranded}/commands/SUBMIT`)).statusCode,
+    ).toBe(200);
+
+    const open = await get(helper, '/service-requests?ownership=open');
+    expect(open.statusCode).toBe(200);
+    expect(
+      (open.json().service_requests as { service_request_id: string }[]).map(
+        (item) => item.service_request_id,
+      ),
+    ).not.toContain(stranded);
+    const accepted = await accept(helper, stranded);
+    expect(accepted.statusCode).toBe(404);
+    expect(accepted.json().error.code).toBe('NOT_FOUND');
+
+    expect((await post(helper, `/cases/${first.caseId}/commands/close`)).statusCode).toBe(200);
+    const onClosed = await post(requester, `/cases/${first.caseId}/service-requests`, {
+      category: 'FOOD',
+      details: { summary: 'After close', meeting_place: 'Main Street library' },
+    });
+    expect(onClosed.statusCode).toBe(422);
+    expect(onClosed.json().error.code).toBe('UNPROCESSABLE');
+  });
+
   it('shows no open case while the Veteran only has a RESOLVED one', async () => {
     const tenantId = randomUUID();
     const requester = await person(tenantId, 'requester', true);
