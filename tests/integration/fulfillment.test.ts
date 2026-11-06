@@ -866,6 +866,53 @@ describe('RESOURCES.md — catalog', () => {
         contactMethodKind: 'PHONE',
       }),
     ).rejects.toThrow(/crisis line/);
+    await expect(
+      createResource(pool, {
+        tenantId,
+        serviceName: 'National Lifeline',
+        category: 'PEER_SUPPORT',
+        contactMethod: '800-555-0142',
+        contactMethodKind: 'PHONE',
+      }),
+    ).rejects.toThrow(/crisis line/);
+    await expect(
+      createResource(pool, {
+        tenantId,
+        serviceName: '911',
+        category: 'PEER_SUPPORT',
+        contactMethod: '+1-555-555-0102',
+        contactMethodKind: 'PHONE',
+      }),
+    ).rejects.toThrow(/crisis line/);
+  });
+
+  it('qualifies a legacy crisis-identity directory row on read', async () => {
+    const tenantId = syntheticTenantId();
+    const resourceId = randomUUID();
+    await pool.query(
+      `INSERT INTO resources (
+         resource_id, tenant_id, service_name, category, contact_method, contact_method_kind, active
+       ) VALUES ($1, $2, 'National Lifeline', 'PEER_SUPPORT', '911', 'PHONE', false)`,
+      [resourceId, tenantId],
+    );
+
+    const read = await findResource(pool, tenantId, resourceId);
+    expect(read).toMatchObject({
+      serviceName: 'Directory listing',
+      contactMethod: '911',
+      contactMethodKind: 'FREEFORM',
+    });
+    if (read === undefined) return;
+
+    const visible = veteranVisibleResource(read);
+    expect(visible.service_name).toBe('Directory listing');
+    expect(visible.contact_method_kind).toBe('FREEFORM');
+
+    const page = await searchResources(pool, tenantId, { category: 'PEER_SUPPORT' });
+    expect(page.results.map((result) => result.resource.serviceName)).toEqual([
+      'Directory listing',
+    ]);
+    expect(page.results[0]?.resource.contactMethodKind).toBe('FREEFORM');
   });
 
   it('rejects an unknown contact-method scheme (P-13)', async () => {

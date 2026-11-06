@@ -66,14 +66,14 @@ describe('contactAction', () => {
     expect(
       contactAction(
         resource({
-          service_name: 'National Lifeline',
+          service_name: 'County transit desk',
           contact_method: '800-555-0142',
           contact_method_kind: 'PHONE',
         }),
       ),
     ).toEqual({
       kind: 'phone',
-      label: 'Call National Lifeline at 800-555-0142',
+      label: 'Call County transit desk at 800-555-0142',
       href: 'tel:8005550142',
     });
     expect(
