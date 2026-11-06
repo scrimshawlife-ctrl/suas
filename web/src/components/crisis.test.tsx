@@ -27,10 +27,10 @@ describe('D-012 crisis copy', () => {
       'Emergency: Call 911 Crisis support: Call or text 988 Practical support: Continue with SUAS',
     );
     expect(screen.getByRole('link', { name: 'Call 911' })).toHaveAttribute('href', 'tel:911');
-    expect(screen.getByRole('link', { name: 'Call' })).toHaveAttribute('href', 'tel:988');
-    expect(screen.getByRole('link', { name: 'text 988' })).toHaveAttribute('href', 'sms:988');
+    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+    expect(screen.getByRole('link', { name: 'Text 988' })).toHaveAttribute('href', 'sms:988');
     for (const link of screen.getAllByRole('link')) {
-      expect(link).toHaveClass('text-white');
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11', 'text-white');
       expect(link).not.toHaveClass('bg-sos');
       expect(link.querySelector('svg')).toBeNull();
     }
@@ -69,21 +69,34 @@ describe('D-012 crisis copy', () => {
   it('shows the Veterans Crisis Line only when asked, with the default link colour', () => {
     const { rerender } = wrap(<Footer />);
     expect(screen.queryByText(/Veterans Crisis Line/)).toBeNull();
-    expect(text(screen.getByRole('contentinfo'))).toBe(
+    const footer = screen.getByRole('contentinfo');
+    expect(text(footer)).toBe(
       'SUAS coordinates community support. It does not provide emergency medical care or emergency dispatch. ' +
         'For immediate danger, call 911. For suicide or emotional crisis support, call or text 988.',
     );
+    expect(screen.getByRole('link', { name: 'Call 911' })).toHaveAttribute('href', 'tel:911');
+    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+    expect(screen.getByRole('link', { name: 'Text 988' })).toHaveAttribute('href', 'sms:988');
+    for (const link of screen.getAllByRole('link')) {
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11', 'items-center');
+      expect(link).not.toHaveClass('text-sos', 'text-white');
+    }
     rerender(
       <MemoryRouter>
         <Footer showVeteransCrisisLine />
       </MemoryRouter>,
     );
     expect(text(screen.getByRole('contentinfo'))).toContain(
-      'Veterans Crisis Line: Dial 988, then press 1 · Text 838255',
+      'Dial 988, then press 1 · Veterans Crisis Line: Text 838255',
     );
-    for (const link of screen.getAllByRole('link', { name: '988' })) {
-      expect(link).not.toHaveClass('text-sos');
+    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+    expect(screen.getByRole('link', { name: 'Dial 988' })).toHaveAttribute('href', 'tel:988');
+    const text838255 = screen.getByRole('link', { name: 'Veterans Crisis Line: Text 838255' });
+    expect(text838255).toHaveAttribute('href', 'sms:838255');
+    expect(text838255).toHaveAttribute('aria-label', 'Veterans Crisis Line: Text 838255');
+    for (const link of screen.getAllByRole('link')) {
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11', 'items-center');
+      expect(link).not.toHaveClass('text-sos', 'text-white');
     }
-    expect(screen.getByRole('link', { name: '838255' })).toHaveAttribute('href', 'sms:838255');
   });
 });
