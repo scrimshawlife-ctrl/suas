@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import type { ServiceRequestStatus } from '../../api/types';
+import type { ServiceCategory, ServiceRequestStatus } from '../../api/types';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { ChatIcon, ChevronRightIcon, XIcon } from '../../components/icons';
+import { NEEDS } from '../../components/needs';
 import { ProgressTrack } from '../../components/ProgressTrack';
 import { StatusChip, type ChipMarker } from '../../components/StatusChip';
 import { cardCopy, hasProgressTrack, progressSteps } from './card-copy';
@@ -16,12 +17,21 @@ export interface RequestStatusCardProps {
   variant: 'home' | 'detail';
   card: RequestCard;
   requestId: string;
+  /** The request's category; any category other than peer support names itself in the title. */
+  category?: ServiceCategory | undefined;
   status?: ServiceRequestStatus | undefined;
   /** The display name of the person who accepted, once there is one. */
   counterpartName?: string | null | undefined;
   /** ISO time the request was recorded. */
   createdAt?: string | undefined;
   cancellable: boolean;
+}
+
+/** The home card's title: the QRF name for peer support, the category's own label otherwise. */
+function homeTitle(category: ServiceCategory | undefined): string {
+  return category === undefined || category === 'PEER_SUPPORT'
+    ? 'Your QRF request'
+    : `Your ${NEEDS[category].label.toLowerCase()} request`;
 }
 
 const MARKERS: Partial<Record<RequestCard, ChipMarker>> = {
@@ -38,15 +48,21 @@ function recordedTime(iso: string | undefined): string | undefined {
     : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+/** 44px minimum tap target (WCAG 2.2). Visible words stay the D-012 sentence. */
+const crisisLink = 'inline-flex min-h-11 min-w-11 items-center px-1 font-bold';
+
 const emergencyLinks = (
   <>
-    call{' '}
-    <a href="tel:911" className="font-bold">
-      911
+    <a href="tel:911" className={crisisLink} aria-label="Call 911">
+      call 911
     </a>
-    . For a suicide or emotional crisis, call or text{' '}
-    <a href="tel:988" className="font-bold">
-      988
+    . For a suicide or emotional crisis,{' '}
+    <a href="tel:988" className={crisisLink} aria-label="Call 988">
+      call
+    </a>{' '}
+    or{' '}
+    <a href="sms:988" className={crisisLink} aria-label="Text 988">
+      text 988
     </a>
     .
   </>
@@ -72,7 +88,8 @@ function Chip({ card, variant }: { card: RequestCard; variant: 'home' | 'detail'
  * card comes from `resolveRequestCard`, so nothing later than recorded is ever shown.
  */
 export function RequestStatusCard(props: RequestStatusCardProps) {
-  const { variant, card, requestId, status, counterpartName, createdAt, cancellable } = props;
+  const { variant, card, requestId, category, status, counterpartName, createdAt, cancellable } =
+    props;
   const copy = cardCopy(card, counterpartName);
   const home = variant === 'home';
   const accepted = card === 'ACCEPTED';
@@ -99,7 +116,7 @@ export function RequestStatusCard(props: RequestStatusCardProps) {
       {home ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id={`status-${requestId}`} className="text-18 font-bold">
-            Your QRF request
+            {homeTitle(category)}
           </h2>
           <Chip card={card} variant={variant} />
         </div>
