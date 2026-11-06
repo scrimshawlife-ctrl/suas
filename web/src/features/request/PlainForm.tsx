@@ -4,6 +4,7 @@ import { useIdempotencyKey } from '../../api/idempotency';
 import { isApiError } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
+import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { useCreateRequest } from './api';
 import { gateRedirect, requestErrorMessage } from './errors';
 import { InlineError } from './InlineError';
@@ -37,11 +38,16 @@ export function PlainForm({ initialSummary = '' }: { initialSummary?: string }) 
   const create = useCreateRequest();
   const key = useIdempotencyKey();
   const lastPayload = useRef('');
+  const formRef = useRef<HTMLFormElement>(null);
+  const [attempt, setAttempt] = useState(0);
+  // A failed send puts focus on the first field with a problem, so it is announced.
+  useFocusFirstInvalid(formRef, `${attempt}|${Object.keys(errors).join()}`);
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     const found = validateRequestFields(fields);
     setErrors(found);
+    setAttempt((count) => count + 1);
     if (Object.keys(found).length > 0) return;
 
     const body = toFormBody(fields);
@@ -73,7 +79,13 @@ export function PlainForm({ initialSummary = '' }: { initialSummary?: string }) 
   };
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5" aria-label="Request form">
+    <form
+      ref={formRef}
+      onSubmit={onSubmit}
+      noValidate
+      className="flex flex-col gap-5"
+      aria-label="Request form"
+    >
       <RequestFieldsForm
         fields={fields}
         errors={errors}

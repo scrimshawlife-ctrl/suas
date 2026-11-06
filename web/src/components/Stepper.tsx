@@ -39,6 +39,7 @@ export function Stepper({ steps, current, label }: StepperProps) {
             >
               {isDone ? <CheckIcon size={18} strokeWidth={3} /> : index + 1}
             </span>
+            {isDone ? <span className="sr-only">Done: </span> : null}
             {step}
           </li>
         );

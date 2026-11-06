@@ -42,7 +42,7 @@ export function AdminLayout({
         <Link
           to="/admin"
           aria-label="SUAS Admin home"
-          className="inline-flex items-center gap-2.5 text-white no-underline hover:text-white"
+          className="-my-1.5 inline-flex min-h-11 items-center gap-2.5 text-white no-underline hover:text-white"
         >
           <Logo tone="white" className="max-sm:h-8" />
           <span className="border-l-2 border-harbor-tint pl-3 font-display text-20 font-semibold text-harbor-tint">
@@ -63,7 +63,7 @@ export function AdminLayout({
                 className={cn(itemClass, 'text-harbor-tint')}
               >
                 {item.label}
-                <span className="rounded-pill border border-slate px-2 py-px text-16 font-bold text-harbor-tint">
+                <span className="shrink-0 rounded-pill border border-slate px-2 py-px text-16 font-bold whitespace-nowrap text-harbor-tint">
                   Not yet
                 </span>
               </span>

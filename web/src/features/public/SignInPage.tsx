@@ -8,7 +8,7 @@ import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
 import { RadioCardGroup } from '../../components/RadioCardGroup';
 import { TextField } from '../../components/TextField';
-import { useFocusFirstInvalid } from './focus-invalid';
+import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import {
   afterSignInPath,
   modeToRole,

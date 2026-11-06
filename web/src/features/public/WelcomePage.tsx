@@ -12,7 +12,7 @@ import { Select } from '../../components/Select';
 import { TextField } from '../../components/TextField';
 import { AlertCircleIcon } from '../../components/icons';
 import { isApiError } from '../../api/errors';
-import { useFocusFirstInvalid } from './focus-invalid';
+import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { afterSignInPath, safeFrom } from './signin-flow';
 import { COUNTY_OPTIONS, isCounty, validateWelcome, type WelcomeErrors } from './welcome-form';
 

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useIdempotencyKey } from '../../api/idempotency';
 import { isApiError } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { useSubmitDraft, type IntakeDraft } from './api';
 import type { DraftEditor } from './draft-editor';
 import { gateRedirect, requestErrorMessage } from './errors';
@@ -25,6 +26,9 @@ export function DraftCard({ draft, editor }: { draft: IntakeDraft; editor: Draft
   const key = useIdempotencyKey();
   const submit = useSubmitDraft();
   const [saving, setSaving] = useState(false);
+  const fieldsRef = useRef<HTMLDivElement>(null);
+  const [attempt, setAttempt] = useState(0);
+  useFocusFirstInvalid(fieldsRef, `${attempt}|${Object.keys(errors).join()}`);
 
   const saveQuietly = () => {
     editor.save().catch(() => undefined);
@@ -33,6 +37,7 @@ export function DraftCard({ draft, editor }: { draft: IntakeDraft; editor: Draft
   const onSend = async () => {
     const found = validateRequestFields(editor.fields);
     setErrors(found);
+    setAttempt((count) => count + 1);
     setFailure(null);
     if (Object.keys(found).length > 0) return;
     setSaving(true);
@@ -77,13 +82,15 @@ export function DraftCard({ draft, editor }: { draft: IntakeDraft; editor: Draft
           request.
         </p>
       </div>
-      <RequestFieldsForm
-        fields={editor.fields}
-        errors={errors}
-        disabled={busy}
-        onChange={editor.change}
-        onBlur={saveQuietly}
-      />
+      <div ref={fieldsRef} className="contents">
+        <RequestFieldsForm
+          fields={editor.fields}
+          errors={errors}
+          disabled={busy}
+          onChange={editor.change}
+          onBlur={saveQuietly}
+        />
+      </div>
       {shownError ? <InlineError>{requestErrorMessage(shownError)}</InlineError> : null}
       <div className="flex">
         <Button size="form" disabled={busy} onClick={() => void onSend()}>

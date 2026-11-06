@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { isApiError } from '../../api/errors';
 import { Button } from '../../components/Button';
 import { AlertCircleIcon } from '../../components/icons';
 import { Select } from '../../components/Select';
+import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
 import { useDiscardDraft, useEditDraft, usePublishDraft } from './api';
@@ -66,6 +67,9 @@ export function DraftEditor({
   const [values, setValues] = useState<DraftFormValues>(() => draftToForm(draft));
   const [errors, setErrors] = useState<DraftFormErrors>({});
   const [confirm, setConfirm] = useState<'publish' | 'discard' | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [attempt, setAttempt] = useState(0);
+  useFocusFirstInvalid(formRef, `${attempt}|${Object.keys(errors).join()}`);
 
   const payload = buildEditPayload(draft, values);
   const dirty = payload !== null;
@@ -79,6 +83,7 @@ export function DraftEditor({
     if (edit.isPending || payload === null) return;
     const found = validateDraftForm(values);
     setErrors(found);
+    setAttempt((count) => count + 1);
     if (Object.keys(found).length > 0) return;
     edit.mutate(payload, { onSuccess: onSaved });
   }
@@ -99,7 +104,7 @@ export function DraftEditor({
 
   return (
     <>
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+      <form ref={formRef} onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
         <TextField
           label="Service name"
           value={values.service_name}

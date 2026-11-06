@@ -14,6 +14,7 @@ export interface AvatarMenuProps {
 export function AvatarMenu({ displayName, tone = 'light', onSignOut }: AvatarMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const initial = displayName?.trim().charAt(0).toUpperCase() ?? '';
   const first = displayName?.trim().split(/\s+/)[0];
@@ -24,7 +25,10 @@ export function AvatarMenu({ displayName, tone = 'light', onSignOut }: AvatarMen
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      // Focus was inside the panel: bring it back to the button that opened it.
+      if (rootRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
     };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
@@ -35,8 +39,16 @@ export function AvatarMenu({ displayName, tone = 'light', onSignOut }: AvatarMen
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div
+      ref={rootRef}
+      className="relative"
+      onBlur={(event) => {
+        // Tabbing past the panel closes it.
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+    >
       <button
+        ref={triggerRef}
         type="button"
         aria-label={first ? `Account and sign out for ${first}` : 'Account and sign out'}
         aria-expanded={open}

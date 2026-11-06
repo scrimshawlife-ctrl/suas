@@ -83,6 +83,22 @@ describe('route table', () => {
     expect(screen.queryByText('Something went wrong.')).toBeNull();
   });
 
+  it('sets a page title for a screen that is still loading', async () => {
+    renderAt('/consents');
+    await waitFor(() => expect(document.title).toBe('What you share · SUAS'));
+  });
+
+  it('uses the admin suffix for the fallback title of an admin screen', async () => {
+    renderAt('/admin');
+    await waitFor(() => expect(document.title).toBe('Overview · SUAS Admin'));
+  });
+
+  it("lets a screen's own title replace the route's fallback title", async () => {
+    renderAt('/');
+    // The route fallback is "Veterans helping veterans · SUAS"; the landing page names itself.
+    await waitFor(() => expect(document.title).toBe('SUAS · Veterans helping veterans'));
+  });
+
   it('shows the not-found page for an unknown path', async () => {
     renderAt('/nowhere');
     expect(
