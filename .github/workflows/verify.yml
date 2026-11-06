@@ -118,6 +118,13 @@ jobs:
         # Fails when registered /api/v0 routes and docs/openapi/v0.json disagree.
         run: npm run openapi:check
 
+      - name: Eval (gates CI)
+        # F11: scores the synthetic intake set with the scripted fake adapter, so the
+        # numbers check the harness, not a model. This step gates CI.
+        env:
+          SUAS_MODEL_INFERENCE_MODE: fake
+        run: npm run eval | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Migration harness against a fresh database
         run: npm run migrate -- apply
 

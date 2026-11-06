@@ -54,6 +54,7 @@ export default tseslint.config(
       'src/provenance/**/*.ts',
       'src/cli/**/*.ts',
       'scripts/**/*.ts',
+      'eval/**/*.ts',
       'src/main.ts',
       'tests/**/*.ts',
       '*.config.ts',
