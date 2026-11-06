@@ -9,6 +9,7 @@
 import { isIP } from 'node:net';
 import { Pool, type PoolClient } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { AMBIENT_SESSION_ENV_KEYS } from '../../src/config/ambient-connection.js';
 import {
   databaseNameFromUrl,
   EXPECTED_SCHEMA_VERSION,
@@ -48,7 +49,13 @@ const AMBIENT_KEYS = [
   'PGUSER',
   'PGPASSWORD',
   'PGDATABASE',
+  ...AMBIENT_SESSION_ENV_KEYS,
 ] as const;
+
+/** Session and routing variables the reset must see as unset. */
+function clearedSession(): Partial<Record<(typeof AMBIENT_KEYS)[number], undefined>> {
+  return Object.fromEntries(AMBIENT_SESSION_ENV_KEYS.map((key) => [key, undefined]));
+}
 
 async function withAmbient(
   values: Partial<Record<(typeof AMBIENT_KEYS)[number], string | undefined>>,
@@ -131,12 +138,13 @@ function captureQueries(target: Pool): { queries: string[]; restore: () => void 
   };
 }
 
-function expectNoDestructiveStatement(queries: readonly string[]): void {
+/** Any DDL, not only the statements the reset itself uses. */
+const DDL_STATEMENT =
+  /\b(create|drop|alter|truncate|grant|revoke|comment|reindex|cluster|vacuum|refresh\s+materialized|security\s+label)\b/i;
+
+function expectNoDdl(queries: readonly string[]): void {
   for (const query of queries) {
-    expect(query).not.toMatch(/\bdrop\s+schema\b/i);
-    expect(query).not.toMatch(/\bdrop\s+table\b/i);
-    expect(query).not.toMatch(/\btruncate\b/i);
-    expect(query).not.toMatch(/\bdrop\s+database\b/i);
+    expect(query).not.toMatch(DDL_STATEMENT);
   }
 }
 
@@ -244,42 +252,49 @@ describe('D-053 — reset only a named synthetic disposable database', () => {
 
   it('refuses an unnamed or non-synthetic target and leaves the schema', async () => {
     await runMigrations(pool, { mode: 'apply', provenance });
-    await expect(
-      resetSyntheticDatabase(
-        pool,
-        {
-          environment: 'TEST',
-          databaseUrl: url,
-          allowlist: [],
-          syntheticMarker: name,
-        },
-        provenance,
-      ),
-    ).rejects.toThrow(/unnamed target/);
-    await expect(
-      resetSyntheticDatabase(
-        pool,
-        {
-          environment: 'TEST',
-          databaseUrl: url,
-          allowlist: name === undefined ? [] : [name],
-          syntheticMarker: 'synthetic',
-        },
-        provenance,
-      ),
-    ).rejects.toThrow(/does not contain the synthetic marker/);
-    await expect(
-      resetSyntheticDatabase(
-        pool,
-        {
-          environment: 'PRODUCTION',
-          databaseUrl: url,
-          allowlist: name === undefined ? [] : [name],
-          syntheticMarker: name,
-        },
-        provenance,
-      ),
-    ).rejects.toThrow(/PRODUCTION/);
+    const captured = captureQueries(pool);
+    try {
+      await expect(
+        resetSyntheticDatabase(
+          pool,
+          {
+            environment: 'TEST',
+            databaseUrl: url,
+            allowlist: [],
+            syntheticMarker: name,
+          },
+          provenance,
+        ),
+      ).rejects.toThrow(/unnamed target/);
+      await expect(
+        resetSyntheticDatabase(
+          pool,
+          {
+            environment: 'TEST',
+            databaseUrl: url,
+            allowlist: name === undefined ? [] : [name],
+            syntheticMarker: 'synthetic',
+          },
+          provenance,
+        ),
+      ).rejects.toThrow(/does not contain the synthetic marker/);
+      await expect(
+        resetSyntheticDatabase(
+          pool,
+          {
+            environment: 'PRODUCTION',
+            databaseUrl: url,
+            allowlist: name === undefined ? [] : [name],
+            syntheticMarker: name,
+          },
+          provenance,
+        ),
+      ).rejects.toThrow(/PRODUCTION/);
+    } finally {
+      captured.restore();
+    }
+    expectNoDdl(captured.queries);
+    expect(captured.queries).toEqual([]);
     expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
   });
 
@@ -296,6 +311,7 @@ describe('D-053 — reset only a named synthetic disposable database', () => {
         PGUSER: undefined,
         PGPASSWORD: undefined,
         PGDATABASE: undefined,
+        ...clearedSession(),
       },
       async () => {
         await resetSyntheticDatabase(
@@ -319,6 +335,96 @@ describe('D-053 — reset only a named synthetic disposable database', () => {
     await expect(runMigrations(pool, { mode: 'validate', provenance })).rejects.toThrow(
       /was modified after it was applied/,
     );
+  });
+
+  it('uses one real client for the endpoint check, the rebuild, and the baseline, and releases it last', async () => {
+    expect(name).toBeDefined();
+    await runMigrations(pool, { mode: 'apply', provenance });
+    await pool.query('CREATE TABLE public.reset_probe (id int)');
+    const explicit = await explicitResetUrl(url, name ?? '');
+    const events: string[] = [];
+    const clientSql: string[] = [];
+    let clients = 0;
+    const originalConnect = pool.connect.bind(pool);
+    const originalQuery = pool.query.bind(pool);
+    pool.query = ((...args: unknown[]) => {
+      events.push('pool.query');
+      return (originalQuery as (...queryArgs: unknown[]) => unknown).apply(pool, args);
+    }) as Pool['query'];
+    pool.connect = (async () => {
+      clients += 1;
+      const id = clients;
+      events.push(`connect:${String(id)}`);
+      const client = await originalConnect();
+      const originalClientQuery = client.query.bind(client);
+      const originalRelease = client.release.bind(client);
+      client.query = ((...args: unknown[]) => {
+        const text = args[0];
+        const sql = typeof text === 'string' ? text : '';
+        clientSql.push(sql);
+        const kind = /inet_server_addr/i.test(sql)
+          ? 'observe'
+          : /^\s*drop\s+schema\b/i.test(sql)
+            ? 'drop'
+            : /^\s*create\s+schema\b/i.test(sql)
+              ? 'create-schema'
+              : 'statement';
+        events.push(`query:${String(id)}:${kind}`);
+        return (originalClientQuery as (...queryArgs: unknown[]) => unknown).apply(client, args);
+      }) as PoolClient['query'];
+      client.release = (...args: unknown[]) => {
+        events.push(`release:${String(id)}`);
+        return (originalRelease as (...releaseArgs: unknown[]) => void).apply(client, args);
+      };
+      return client;
+    }) as Pool['connect'];
+    try {
+      await withAmbient(
+        {
+          DATABASE_URL: explicit,
+          PGHOST: undefined,
+          PGPORT: undefined,
+          PGUSER: undefined,
+          PGPASSWORD: undefined,
+          PGDATABASE: undefined,
+          ...clearedSession(),
+        },
+        async () => {
+          await resetSyntheticDatabase(
+            pool,
+            {
+              environment: 'TEST',
+              databaseUrl: explicit,
+              allowlist: [name ?? ''],
+              syntheticMarker: name,
+            },
+            provenance,
+          );
+        },
+      );
+    } finally {
+      pool.connect = originalConnect;
+      pool.query = originalQuery;
+    }
+    expect(clients).toBe(1);
+    expect(events).not.toContain('pool.query');
+    expect(clientSql[0] ?? '').toMatch(/inet_server_addr/i);
+    expect(clientSql[1] ?? '').toMatch(/^\s*drop\s+schema\b/i);
+    expect(clientSql[2] ?? '').toMatch(/^\s*create\s+schema\b/i);
+    expect(clientSql.slice(3).some((sql) => /\bcreate\b/i.test(sql))).toBe(true);
+    expect(events.indexOf('query:1:observe')).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf('query:1:drop')).toBeGreaterThan(events.indexOf('query:1:observe'));
+    expect(events.indexOf('query:1:create-schema')).toBeGreaterThan(events.indexOf('query:1:drop'));
+    expect(events.indexOf('query:1:statement')).toBeGreaterThan(
+      events.indexOf('query:1:create-schema'),
+    );
+    expect(events.at(-1)).toBe('release:1');
+    expect(events.filter((event) => event.startsWith('connect:'))).toEqual(['connect:1']);
+    expect(events.filter((event) => event.startsWith('release:'))).toEqual(['release:1']);
+    const probe = await pool.query<{ present: string | null }>(
+      `SELECT to_regclass('public.reset_probe') AS present`,
+    );
+    expect(probe.rows[0]?.present).toBeNull();
   });
 });
 
@@ -344,7 +450,7 @@ describe('D-053 — destructive reset is refused before any schema change', () =
     } finally {
       captured.restore();
     }
-    expectNoDestructiveStatement(captured.queries);
+    expectNoDdl(captured.queries);
     await expectSchemaUnchanged(version);
     return captured.queries;
   }
@@ -407,36 +513,39 @@ describe('D-053 — destructive reset is refused before any schema change', () =
     const sharedUrl = testDatabaseUrl();
     const sharedName = databaseNameFromUrl(sharedUrl);
     const sharedPool = new Pool({ connectionString: sharedUrl, max: 1 });
-    const version = await preparedSchema();
-    const captured = captureQueries(pool);
-    const sharedCaptured = captureQueries(sharedPool);
     try {
+      const version = await preparedSchema();
       await sharedPool.query('CREATE TABLE public.reset_ambient_probe (id int)');
-      await withAmbient({ DATABASE_URL: sharedUrl, PGDATABASE: sharedName }, async () => {
-        await expect(
-          resetSyntheticDatabase(
-            pool,
-            {
-              environment: 'TEST',
-              databaseUrl: url,
-              allowlist: [name],
-              syntheticMarker: name,
-            },
-            provenance,
-          ),
-        ).rejects.toThrow(/DATABASE_URL does not match/);
-      });
-      expectNoDestructiveStatement(captured.queries);
-      expectNoDestructiveStatement(sharedCaptured.queries);
-      await expectSchemaUnchanged(version);
-      const probe = await sharedPool.query<{ present: string | null }>(
-        `SELECT to_regclass('public.reset_ambient_probe') AS present`,
-      );
-      expect(probe.rows[0]?.present).not.toBeNull();
+      const captured = captureQueries(pool);
+      const sharedCaptured = captureQueries(sharedPool);
+      try {
+        await withAmbient({ DATABASE_URL: sharedUrl, PGDATABASE: sharedName }, async () => {
+          await expect(
+            resetSyntheticDatabase(
+              pool,
+              {
+                environment: 'TEST',
+                databaseUrl: url,
+                allowlist: [name],
+                syntheticMarker: name,
+              },
+              provenance,
+            ),
+          ).rejects.toThrow(/DATABASE_URL does not match/);
+        });
+        expectNoDdl(captured.queries);
+        expectNoDdl(sharedCaptured.queries);
+        await expectSchemaUnchanged(version);
+        const probe = await sharedPool.query<{ present: string | null }>(
+          `SELECT to_regclass('public.reset_ambient_probe') AS present`,
+        );
+        expect(probe.rows[0]?.present).not.toBeNull();
+      } finally {
+        captured.restore();
+        sharedCaptured.restore();
+        await sharedPool.query('DROP TABLE IF EXISTS public.reset_ambient_probe');
+      }
     } finally {
-      captured.restore();
-      sharedCaptured.restore();
-      await sharedPool.query('DROP TABLE IF EXISTS public.reset_ambient_probe');
       await sharedPool.end();
     }
   });
@@ -471,7 +580,7 @@ describe('D-053 — destructive reset is refused before any schema change', () =
     } finally {
       captured.restore();
     }
-    expectNoDestructiveStatement(captured.queries);
+    expectNoDdl(captured.queries);
     await expectSchemaUnchanged(version);
   });
 
@@ -536,7 +645,7 @@ describe('D-053 — destructive reset is refused before any schema change', () =
     }
     expect(checkouts).toBe(1);
     expect(queriesBeforeRelease).toBeGreaterThan(0);
-    expectNoDestructiveStatement(queries);
+    expectNoDdl(queries);
     await expectSchemaUnchanged(version);
   });
 
@@ -639,6 +748,7 @@ describe('D-053 — destructive reset is refused before any schema change', () =
             PGUSER: undefined,
             PGPASSWORD: undefined,
             PGDATABASE: undefined,
+            ...clearedSession(),
             ...override,
           },
           async () => {
@@ -659,10 +769,39 @@ describe('D-053 — destructive reset is refused before any schema change', () =
       } finally {
         captured.restore();
       }
-      expectNoDestructiveStatement(captured.queries);
+      expectNoDdl(captured.queries);
       await expectSchemaUnchanged(version);
     },
   );
+
+  it.each(AMBIENT_SESSION_ENV_KEYS)('refuses a set %s and runs no DDL', async (variable) => {
+    const explicit = await explicitResetUrl(url, name);
+    let queries: readonly string[] = [];
+    await withAmbient(
+      {
+        DATABASE_URL: explicit,
+        PGHOST: undefined,
+        PGPORT: undefined,
+        PGUSER: undefined,
+        PGPASSWORD: undefined,
+        PGDATABASE: undefined,
+        ...clearedSession(),
+        [variable]: 'reset-must-not-apply',
+      },
+      async () => {
+        queries = await refuseWithoutChange(
+          {
+            environment: 'TEST',
+            databaseUrl: explicit,
+            allowlist: [name],
+            syntheticMarker: name,
+          },
+          new RegExp(`${variable} is set`),
+        );
+      },
+    );
+    expect(queries).toEqual([]);
+  });
 
   it('refuses a malformed URL or allowlist entry and leaves the schema', async () => {
     await refuseWithoutChange(
