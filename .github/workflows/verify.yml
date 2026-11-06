@@ -120,9 +120,7 @@ jobs:
 
       - name: Eval (reporting only)
         # F11: scores the synthetic intake set with the scripted fake adapter, so the
-        # numbers check the harness, not a model. Reports only; it does not gate the
-        # build (gates are undecided, V1_PROJECT_PLAN.md §8 item 13).
-        continue-on-error: true
+        # numbers check the harness, not a model. This step gates the workflow.
         env:
           SUAS_MODEL_INFERENCE_MODE: fake
         run: npm run eval | tee -a "$GITHUB_STEP_SUMMARY"
