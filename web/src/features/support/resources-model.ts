@@ -115,9 +115,17 @@ export function contactAction(resource: CatalogResource): ContactAction {
   switch (resource.contact_method_kind) {
     case 'PHONE': {
       const href = phoneHref(method);
+      // Directory phones, including hotline-shaped numbers, are resources.
+      // Label with the listed name, not a crisis-line label.
+      // Owner decision (owner (scrimshawlife-ctrl), 2026-11-05 1:20 PM PT): "You can keep those numbers" /
+      // "Just label them appropriately".
       return href === null
         ? { kind: 'text', text: method }
-        : { kind: 'phone', label: `Call ${method}`, href };
+        : {
+            kind: 'phone',
+            label: `${href.startsWith('sms:') ? 'Text' : 'Call'} ${resource.service_name} at ${method}`,
+            href,
+          };
     }
     case 'EMAIL': {
       const href = mailHref(method);
