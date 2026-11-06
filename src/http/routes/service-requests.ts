@@ -15,6 +15,7 @@ import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { ForbiddenError, ResourceNotVisibleError } from '../../authz/index.js';
 import type { AuthContext } from '../../authz/index.js';
+import { draftDetailsInput } from '../../intake/tools.js';
 import { requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
 import { resolveCaseAccess, type CaseAccess } from '../case-access.js';
 import { requireDisclosure } from '../../consent/index.js';
@@ -25,17 +26,19 @@ import {
   executeServiceRequestCommandInTx,
   findActiveAssignment,
   findCase,
+  findDisplayName,
   findServiceRequest,
   listCaseServiceRequests,
   MAX_PAGE_SIZE,
   readRequestList,
+  readServiceRequestDetail,
   SERVICE_CATEGORIES,
   SERVICE_REQUEST_COMMANDS,
   type ServiceRequest,
   type ServiceRequestCommand,
 } from '../../coordination/index.js';
-import type { Queryable } from '../../db/index.js';
 import type { JsonObject } from '../../jobs/index.js';
+import type { Queryable } from '../../db/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 
@@ -53,11 +56,12 @@ const commandParams = z.object({
 
 const createBody = z.object({
   category: z.enum(SERVICE_CATEGORIES),
-  details: z.record(z.unknown()).optional(),
+  // The same bounded fields the plain form and drafts use; unknown keys are refused.
+  details: draftDetailsInput.partial().optional(),
 });
 
 const listQuery = z.object({
-  ownership: z.enum(['open', 'mine']).default('open'),
+  ownership: z.enum(['open', 'mine', 'requested']).default('open'),
   // API.md §5: cursor + limit, default 20, maximum 100.
   cursor: z.string().min(1).max(512).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
@@ -70,7 +74,11 @@ const commandBody = z.object({
   grantee_id: z.string().uuid().optional(),
 });
 
-/** Commands the requester may issue on their own request. */
+/**
+ * Commands only the requester may issue on their own request. The accepter runs every
+ * other command and never these three: submitting is asking for help, cancelling
+ * withdraws the ask, and confirming is the requester saying the need was met.
+ */
 const VETERAN_COMMANDS: readonly ServiceRequestCommand[] = ['SUBMIT', 'CANCEL', 'CONFIRM'];
 
 function publicServiceRequest(request: ServiceRequest) {
@@ -84,22 +92,14 @@ function publicServiceRequest(request: ServiceRequest) {
 
 /**
  * DISPATCH.md §4 names the *assigned* actor for every non-requester transition. In v1
- * that is the person who accepted the case. The one wider row is
- * `CREATED → SUBMITTED`, whose actor is "creator / assigned", so the creator may
- * also submit.
+ * that is the person who accepted the case.
  *
  * Runs inside the command transaction: CASES.md §5 requires authorization to be
  * re-checked at mutation time, not trusted from an earlier read.
  */
-async function assertAssignedAccepter(
-  db: Queryable,
-  context: AuthContext,
-  serviceRequest: ServiceRequest,
-  command: ServiceRequestCommand,
-): Promise<void> {
-  const assignment = await findActiveAssignment(db, serviceRequest.caseId);
+async function assertAssignedAccepter(db: Queryable, context: AuthContext, caseId: string) {
+  const assignment = await findActiveAssignment(db, caseId);
   if (assignment?.acceptedByUserId === context.userId) return;
-  if (command === 'SUBMIT' && serviceRequest.createdBy === context.userId) return;
   throw new ForbiddenError(
     'Only the person who accepted this case may run this command (SUAS-specs DISPATCH.md §4).',
   );
@@ -178,9 +178,12 @@ export function registerServiceRequestRoutes(
   });
 
   /**
-   * The list for people who can accept (plan F4): `open` is requests in the caller's
-   * county, plus bordering counties once widened; `mine` is requests the caller
-   * accepted. Only category, county and status are shown before accepting.
+   * Three lists (plan F4). `open`: requests the caller could accept, in their county plus
+   * bordering counties once widened, with category, county, status and the one-line
+   * summary (never timing or the meeting place). `mine`: requests the caller accepted,
+   * with the requester's display name. `requested`: the caller's own requests in any
+   * status, newest first. Only `open` and `mine` need a county; `requested` needs only
+   * a signed-in person.
    */
   app.get(`${API_PREFIX}/service-requests`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
@@ -193,15 +196,33 @@ export function registerServiceRequestRoutes(
       { limit: query.limit, ...(query.cursor !== undefined ? { cursor: query.cursor } : {}) },
     );
     return {
-      service_requests: page.requests.map((item) => ({
-        service_request_id: item.serviceRequestId,
-        case_id: item.caseId,
-        category: item.category,
-        status: item.status,
-        county: item.county,
-        widened: item.widened,
-        created_at: item.createdAt.toISOString(),
-      })),
+      service_requests: page.requests.map((item) => {
+        if (query.ownership === 'requested') {
+          return {
+            service_request_id: item.serviceRequestId,
+            case_id: item.caseId,
+            category: item.category,
+            status: item.status,
+            summary: item.summary,
+            created_at: item.createdAt.toISOString(),
+            updated_at: item.updatedAt.toISOString(),
+            closed_at: item.closedAt?.toISOString() ?? null,
+          };
+        }
+        return {
+          service_request_id: item.serviceRequestId,
+          case_id: item.caseId,
+          category: item.category,
+          status: item.status,
+          county: item.county,
+          widened: item.widened,
+          summary: item.summary,
+          created_at: item.createdAt.toISOString(),
+          ...(query.ownership === 'mine'
+            ? { counterpart_display_name: item.requesterDisplayName }
+            : {}),
+        };
+      }),
       next_cursor: page.nextCursor ?? null,
     };
   });
@@ -224,13 +245,37 @@ export function registerServiceRequestRoutes(
     };
   });
 
+  /**
+   * The whole request, for its requester and its accepter only (anyone else gets the
+   * same 404 as a request that does not exist). The counterpart name is the other
+   * person's: the accepter's for the requester (null until someone accepts), the
+   * requester's for the accepter.
+   */
   app.get(`${API_PREFIX}/service-requests/:id`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
     const serviceRequest = await findServiceRequest(deps.pool, context.tenantId, id);
     if (serviceRequest === undefined) throw new ResourceNotVisibleError();
-    await resolveCaseAccess(deps.pool, context, serviceRequest.caseId);
-    return publicServiceRequest(serviceRequest);
+    const access = await resolveCaseAccess(deps.pool, context, serviceRequest.caseId);
+    const detail = await readServiceRequestDetail(deps.pool, context.tenantId, id);
+    if (detail === undefined) throw new ResourceNotVisibleError();
+    const counterpartUserId = access.owner
+      ? access.assignment?.acceptedByUserId
+      : access.supportCase.veteranUserId;
+    const counterpartDisplayName =
+      counterpartUserId === undefined
+        ? null
+        : await findDisplayName(deps.pool, context.tenantId, counterpartUserId);
+    return {
+      ...publicServiceRequest(serviceRequest),
+      summary: detail.summary,
+      timing: detail.timing,
+      meeting_place: detail.meetingPlace,
+      created_at: detail.createdAt.toISOString(),
+      widened: detail.widened,
+      county: detail.county,
+      counterpart_display_name: counterpartDisplayName,
+    };
   });
 
   app.post(`${API_PREFIX}/service-requests/:id/commands/:command`, async (request) => {
@@ -240,11 +285,13 @@ export function registerServiceRequestRoutes(
     const serviceRequest = await findServiceRequest(deps.pool, context.tenantId, id);
     if (serviceRequest === undefined) throw new ResourceNotVisibleError();
     const access = await resolveCaseAccess(deps.pool, context, serviceRequest.caseId);
-    if (access.owner && !VETERAN_COMMANDS.includes(command)) {
-      // The requester gets only their own commands, unless they also hold the case,
-      // which resolveCaseAccess never allows (no accepting your own request).
+    // CONFIRM, CANCEL and SUBMIT belong to the requester alone; every other command
+    // belongs to the accepter alone (resolveCaseAccess never makes one person both).
+    if (access.owner !== VETERAN_COMMANDS.includes(command)) {
       throw new ForbiddenError(
-        'Only the person who accepted this case may run this command (SUAS-specs DISPATCH.md §4).',
+        access.owner
+          ? 'Only the person who accepted this case may run this command (SUAS-specs DISPATCH.md §4).'
+          : 'Only the person who asked for help may run this command (SUAS-specs DISPATCH.md §4).',
       );
     }
     // Submitting is the act of requesting help; cancelling or confirming is not.
@@ -277,7 +324,7 @@ export function registerServiceRequestRoutes(
       },
       async (tx) => {
         if (actorType === 'USER') {
-          await assertAssignedAccepter(tx, context, serviceRequest, command);
+          await assertAssignedAccepter(tx, context, serviceRequest.caseId);
         }
         const updated = await executeServiceRequestCommandInTx(
           tx,

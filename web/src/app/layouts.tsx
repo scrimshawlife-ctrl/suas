@@ -5,6 +5,7 @@ import { useSessionToken } from '../api/token-store';
 import { AdminLayout, type AdminNavItem } from '../components/AdminLayout';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { CrisisStrip } from '../components/CrisisStrip';
+import { SkipLink } from '../components/SkipLink';
 import { Footer } from '../components/Footer';
 import { ModeSwitch, type Mode } from '../components/ModeSwitch';
 import { PublicHeader } from '../components/PublicHeader';
@@ -38,10 +39,19 @@ function PageFrame({
 }) {
   const signedInChrome = mode !== undefined;
   return (
-    <div className="flex min-h-screen flex-col">
+    <div
+      className={
+        // Phones: leave room under the footer for the fixed tab bar (64 px plus its bottom
+        // padding, which grows with the device safe-area inset).
+        signedInChrome
+          ? 'flex min-h-screen flex-col max-sm:pb-[calc(4.25rem+max(1.125rem,env(safe-area-inset-bottom)))]'
+          : 'flex min-h-screen flex-col'
+      }
+    >
+      <SkipLink />
       <CrisisStrip />
       {header}
-      <main id="main" className="flex-1 max-sm:pb-24">
+      <main id="main" className="flex-1">
         {signedInChrome ? (
           <div className="mx-auto max-w-[1200px] px-6 pt-4 sm:hidden max-sm:px-4">
             <ModeSwitch mode={mode} fullWidth onSelect={setMode} />
@@ -62,6 +72,7 @@ export function PublicLayout() {
   const landing = pathname === paths.landing;
   return (
     <div className="flex min-h-screen flex-col">
+      <SkipLink />
       <CrisisStrip />
       <PublicHeader
         onSignOut={token ? signOut : undefined}

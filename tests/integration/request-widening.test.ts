@@ -74,7 +74,7 @@ async function submittedRequest(requester: Person, now: Date, waitedMinutes: num
     method: 'POST',
     url: `/api/v0/cases/${caseId}/service-requests`,
     headers: keyed(requester),
-    payload: { category: 'FOOD' },
+    payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
   });
   expect(created.statusCode).toBe(201);
   const serviceRequestId: string = created.json().service_request_id;

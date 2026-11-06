@@ -25,6 +25,7 @@ import {
   CaseNotFoundError,
   findActiveAssignment,
   findCase,
+  findRequesterConfirmation,
   NoActiveAssignmentError,
   resolveCaseTransition,
   StaleCaseStateError,
@@ -80,6 +81,12 @@ export interface ResolveCaseInput {
    * resolve must not create a duplicate Settlement or `CASE_RESOLVED` event.
    */
   readonly idempotencyKey?: string;
+  /**
+   * Derive `veteranConfirmedBy` and its time from the requests of the current resolution
+   * cycle, read inside the resolve transaction. The HTTP route sets this instead of trusting
+   * the caller to say who confirmed.
+   */
+  readonly deriveRequesterConfirmation?: boolean;
   readonly correlationId?: string;
 }
 
@@ -163,12 +170,24 @@ async function resolveInTransaction(
     (followUp) => followUp.resolutionDisposition === 'CARRIED_FORWARD',
   );
 
+  let content = input.content;
+  if (input.deriveRequesterConfirmation === true) {
+    const confirmation = await findRequesterConfirmation(tx, input.tenantId, input.caseId);
+    if (confirmation !== undefined) {
+      content = {
+        ...content,
+        veteranConfirmedBy: row.veteran_user_id,
+        veteranConfirmedAt: confirmation.confirmedAt,
+      };
+    }
+  }
+
   const cycle = await nextResolutionCycle(tx, input.caseId);
   const settlement = await createSettlement(tx, {
     tenantId: input.tenantId,
     caseId: input.caseId,
     resolutionCycle: cycle,
-    content: input.content,
+    content,
     remainingFollowUps: carriedForward.map(carriedForwardReference),
   });
 

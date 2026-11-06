@@ -274,7 +274,13 @@ export interface ClaimCaseInput {
   /** Status the caller believed the case was in, from a possibly stale list. */
   readonly expectedStatus?: CaseStatus;
   /**
-   * Eligibility check run inside the case row lock, after the replay shortcut and
+   * Visibility check run inside the case row lock, after the replay shortcut and
+   * before "someone else already holds it". A caller who may not see the case is
+   * refused here, so only a caller who could see it learns that another person won.
+   */
+  readonly visibilityGuard?: (tx: PoolClient, supportCase: SupportCase) => Promise<void>;
+  /**
+   * Eligibility check run inside the case row lock, after the already-claimed check and
    * before anything is written. It throws to refuse. The accept flow uses it so
    * "may this person accept?" and "did someone else win?" are one atomic decision.
    */
@@ -315,6 +321,10 @@ export async function claimCase(pool: Pool, input: ClaimCaseInput): Promise<Assi
     const held = await findActiveAssignment(tx, input.caseId);
     if (held?.acceptedByUserId === input.acceptedByUserId) {
       return { supportCase, assignment: held };
+    }
+
+    if (input.visibilityGuard !== undefined) {
+      await input.visibilityGuard(tx, supportCase);
     }
 
     // First accept wins: anyone else finds the case already held and conflicts.

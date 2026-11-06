@@ -31,6 +31,11 @@ export interface AuthRouteDeps {
   readonly mfa: MfaPort;
   /** LOCAL demo only; see src/auth/demo-fixed-code.ts. */
   readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
+  /**
+   * Tenant that new email addresses sign up into. Taken from deployment config, never
+   * from the request (API.md §4). Absent means self sign-up is off.
+   */
+  readonly signUpTenantId?: string | undefined;
   readonly stagingAccess?: StagingAccess | undefined;
 }
 
@@ -53,20 +58,37 @@ const mfaVerifyBody = z.object({
   response: z.string().min(1).max(512),
 });
 
+/**
+ * Which tenant a sign-in request is for, and whether an unknown address may sign up
+ * there. Sign-up needs the configured tenant, and no enrolled person elsewhere with
+ * this address and no tenant asserted (that case stays ambiguous and sends nothing).
+ */
 async function tenantForSignIn(
   pool: Pool,
   destination: string,
   assertedTenantId: string | undefined,
-): Promise<string> {
+  signUpTenantId: string | undefined,
+): Promise<{ tenantId: string; allowSignUp: boolean }> {
   const matches = await findUsersByDestination(pool, destination);
   const user = selectUserForSignIn(matches, assertedTenantId);
-  return user?.tenantId ?? assertedTenantId ?? UNKNOWN_TENANT;
+  if (user !== undefined) return { tenantId: user.tenantId, allowSignUp: false };
+  const mayJoin =
+    signUpTenantId !== undefined &&
+    (assertedTenantId === undefined || assertedTenantId === signUpTenantId) &&
+    !matches.some((match) => match.tenantId !== signUpTenantId && assertedTenantId === undefined);
+  if (mayJoin) return { tenantId: signUpTenantId, allowSignUp: true };
+  return { tenantId: assertedTenantId ?? UNKNOWN_TENANT, allowSignUp: false };
 }
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   app.post(`${API_PREFIX}/auth/challenges`, async (request, reply) => {
     const body = issueBody.parse(request.body);
-    const tenantId = await tenantForSignIn(deps.pool, body.destination, body.tenant_id);
+    const { tenantId, allowSignUp } = await tenantForSignIn(
+      deps.pool,
+      body.destination,
+      body.tenant_id,
+      deps.signUpTenantId,
+    );
 
     await issueChallenge(
       {
@@ -80,6 +102,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         tenantId,
         destination: body.destination,
         method: body.method as (typeof CHALLENGE_METHODS)[number],
+        allowSignUp,
         correlationId: String(request.id),
       },
     );
@@ -89,7 +112,12 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
 
   app.post(`${API_PREFIX}/auth/challenges/commands/verify`, async (request, reply) => {
     const body = verifyBody.parse(request.body);
-    const tenantId = await tenantForSignIn(deps.pool, body.destination, body.tenant_id);
+    const { tenantId } = await tenantForSignIn(
+      deps.pool,
+      body.destination,
+      body.tenant_id,
+      deps.signUpTenantId,
+    );
 
     const issued = await verifyAndCreateSession(
       {

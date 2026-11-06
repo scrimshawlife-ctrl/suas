@@ -72,6 +72,34 @@ export class ServiceRequestNotFoundError extends Error {
   }
 }
 
+/** Longest meeting place a request may carry. */
+export const MEETING_PLACE_MAX = 200;
+
+/** Categories where the helper must know where to meet, so submit refuses without one. */
+const MEETING_PLACE_REQUIRED: readonly ServiceCategory[] = ['TRANSPORTATION', 'FOOD', 'SHELTER'];
+
+/**
+ * A free-text field of `details` that is present, a string, and within bounds, else null.
+ * `meeting_place` is sensitive free text: it is read here and returned to the
+ * request's owner and accepter only. It never goes in a log, event or audit payload.
+ */
+export function readDetailText(details: JsonObject, key: string, max: number): string | null {
+  const value = details[key];
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' || trimmed.length > max ? null : trimmed;
+}
+
+export class MeetingPlaceRequiredError extends Error {
+  readonly code = 'UNPROCESSABLE';
+  readonly httpStatus = 422;
+
+  constructor() {
+    super('Say where to meet (meeting_place) before submitting this kind of request.');
+    this.name = 'MeetingPlaceRequiredError';
+  }
+}
+
 export class ClosedCaseError extends Error {
   readonly code = 'UNPROCESSABLE';
   readonly httpStatus = 422;
@@ -225,6 +253,15 @@ export async function executeServiceRequestCommandInTx(
     ...(input.reason !== undefined ? { reason: input.reason } : {}),
   });
 
+  // Submitting puts the request on the helper list, so it needs a meeting place first.
+  if (
+    input.command === 'SUBMIT' &&
+    MEETING_PLACE_REQUIRED.includes(request.category) &&
+    readDetailText(request.details, 'meeting_place', MEETING_PLACE_MAX) === null
+  ) {
+    throw new MeetingPlaceRequiredError();
+  }
+
   // CONSENT.md §3.10: evaluated before the mutation commits, every time — a
   // previous assignment never carries authority forward to a new one.
   if (transition.mayDiscloseExternally) {
@@ -303,4 +340,37 @@ export async function listCaseServiceRequests(
     [tenantId, caseId, Math.min(limit, 100)],
   );
   return result.rows.map(toRequest);
+}
+
+/**
+ * When the requester confirmed a request in the case's current resolution cycle, or
+ * undefined if they did not. The cycle starts at the latest Settlement, or at the active
+ * assignment when there is none, so an old confirmation from before a reopen does not count.
+ *
+ * `CLOSED` is reachable only from `CONFIRMED` (DISPATCH.md §4) and only the requester runs
+ * `CONFIRM`, so either status is the requester's confirmation. No confirmation time is stored,
+ * so the time returned is the best one on record: `updated_at` for a request still CONFIRMED
+ * (exact), and `terminal_at` for a CLOSED one (when it was closed, never before the
+ * confirmation). The earliest such time is returned.
+ */
+export async function findRequesterConfirmation(
+  db: Queryable,
+  tenantId: string,
+  caseId: string,
+): Promise<{ readonly confirmedAt: Date } | undefined> {
+  const result = await db.query<{ confirmed_at: Date | null }>(
+    `SELECT min(t.at) AS confirmed_at
+       FROM (
+         SELECT CASE WHEN r.status = 'CONFIRMED' THEN r.updated_at ELSE r.terminal_at END AS at
+           FROM service_requests r
+          WHERE r.tenant_id = $1 AND r.case_id = $2 AND r.status IN ('CONFIRMED', 'CLOSED')
+       ) t
+      WHERE t.at > COALESCE(
+        (SELECT max(settled_at) FROM settlements WHERE tenant_id = $1 AND case_id = $2),
+        (SELECT assigned_at FROM case_assignments WHERE case_id = $2 AND status = 'ACTIVE'),
+        '-infinity'::timestamptz)`,
+    [tenantId, caseId],
+  );
+  const confirmedAt = result.rows[0]?.confirmed_at;
+  return confirmedAt === null || confirmedAt === undefined ? undefined : { confirmedAt };
 }

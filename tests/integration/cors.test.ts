@@ -65,7 +65,9 @@ describe('preflight', () => {
     });
     expect(response.statusCode).toBe(204);
     expect(response.headers['access-control-allow-origin']).toBe(ALLOWED);
-    expect(response.headers['access-control-allow-methods']).toBe('GET, HEAD, POST, PUT, OPTIONS');
+    expect(response.headers['access-control-allow-methods']).toBe(
+      'GET, HEAD, POST, PUT, PATCH, OPTIONS',
+    );
     // Only the headers this API reads are echoed; X-Evil is dropped.
     expect(response.headers['access-control-allow-headers']).toBe(
       'authorization, content-type, idempotency-key',
@@ -87,6 +89,16 @@ describe('preflight', () => {
     });
     expect(response.statusCode).toBe(204);
     expect(response.headers['access-control-allow-credentials']).toBe('true');
+  });
+
+  it('lists PATCH so a draft can be edited cross-origin', async () => {
+    const response = await app.server.inject({
+      method: 'OPTIONS',
+      url: `/api/v0/intake/drafts/${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}`,
+      headers: { origin: ALLOWED, 'access-control-request-method': 'PATCH' },
+    });
+    expect(response.statusCode).toBe(204);
+    expect(String(response.headers['access-control-allow-methods'])).toContain('PATCH');
   });
 
   it('lists PUT for the one PUT route', async () => {

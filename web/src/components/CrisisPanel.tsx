@@ -58,7 +58,10 @@ export function CrisisPanel({ layout = 'compact', continueTo = '/home' }: Crisis
             SUAS coordinates practical support. It is not an emergency service and cannot replace
             police, fire, EMS, or emergency medical care.
           </p>
-          <Link to="/crisis" className="text-16 font-bold text-white hover:text-harbor-tint">
+          <Link
+            to="/crisis"
+            className="inline-flex min-h-11 items-center self-start text-16 font-bold text-white hover:text-harbor-tint"
+          >
             More crisis options
           </Link>
         </>

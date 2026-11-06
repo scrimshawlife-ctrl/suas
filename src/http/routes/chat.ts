@@ -15,6 +15,7 @@ import { readIdempotencyKey } from '../idempotency-header.js';
 import {
   issueConnectTicket,
   listChatMessages,
+  listChatThreads,
   MAX_MESSAGE_LENGTH,
   pushToCounterpart,
   resolveChatAccess,
@@ -68,6 +69,23 @@ function publicMessage(message: ChatMessage) {
 }
 
 export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): void {
+  /** The caller's own threads (as requester or accepter), newest activity first. */
+  app.get(`${API_PREFIX}/chat/threads`, async (request) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const threads = await listChatThreads(deps.pool, context.tenantId, context.userId);
+    return {
+      threads: threads.map((thread) => ({
+        service_request_id: thread.serviceRequestId,
+        category: thread.category,
+        summary: thread.summary,
+        counterpart_display_name: thread.counterpartDisplayName,
+        last_message_body: thread.lastMessageBody,
+        last_message_at: thread.lastMessageAt?.toISOString() ?? null,
+        closed: thread.closed,
+      })),
+    };
+  });
+
   app.get(`${API_PREFIX}/service-requests/:id/chat/messages`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);

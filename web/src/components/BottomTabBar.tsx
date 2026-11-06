@@ -26,7 +26,7 @@ export function BottomTabBar({ mode, current, embedded = false }: BottomTabBarPr
     <nav
       aria-label="Primary"
       className={cn(
-        'grid-cols-2 gap-2 border-t border-line bg-white px-3 pt-2 pb-4.5',
+        'grid-cols-2 gap-2 border-t border-line bg-white px-3 pt-2 pb-[max(1.125rem,env(safe-area-inset-bottom))]',
         embedded ? 'grid' : 'fixed inset-x-0 bottom-0 z-30 hidden max-sm:grid',
       )}
     >

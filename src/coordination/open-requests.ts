@@ -6,8 +6,9 @@
  *   requests in their own county, plus requests from bordering counties once the
  *   widening job has opened them. An accepted request leaves everyone else's list.
  * - SUAS-specs CASES.md §9 / API.md §5 (lists are bounded and keyset-paginated).
- * - SUAS-specs PRIVACY.md §4 (minimum necessary): the list shows category, county and
- *   status only. Request details wait until the person has accepted.
+ * - SUAS-specs PRIVACY.md §4 (minimum necessary): the open list shows category, county,
+ *   status and the one-line summary. Timing and the meeting place wait until the person
+ *   has accepted.
  *
  * The list is advisory. `acceptServiceRequest` repeats the same eligibility check
  * under the case row lock, so a stale list can never produce a second winner.
@@ -30,7 +31,14 @@ export interface OpenRequestSummary {
   readonly county: ServiceCounty;
   /** True once the widening job has opened the request to bordering counties. */
   readonly widened: boolean;
+  /** The requester's one-line summary; null if the request carries none. */
+  readonly summary: string | null;
+  /** The requester's display name, for the accepter's own list. */
+  readonly requesterDisplayName: string | null;
   readonly createdAt: Date;
+  readonly updatedAt: Date;
+  /** When the request reached a terminal status; null while it is live. */
+  readonly closedAt: Date | null;
 }
 
 export interface RequestListPage {
@@ -108,13 +116,24 @@ export async function findUserCounty(
  */
 export function openToViewerConditions(viewerIdParam: string, viewerCountyParam: string): string[] {
   return [
-    `r.status = ANY(ARRAY['SUBMITTED','TRIAGED','MATCHING']::suas_service_request_status[])`,
-    `c.status IN ('OPEN', 'TRIAGED')`,
+    ...OPEN_REQUEST_STATE_CONDITIONS,
+    ...visibleToViewerConditions(viewerIdParam, viewerCountyParam),
+  ];
+}
+
+/**
+ * The conditions that make a request visible to one viewer by who and where they are,
+ * not by what state the request is in. The accept guard runs these first, so a person
+ * who could never see a request cannot tell it exists from the answer to an accept.
+ */
+export function visibleToViewerConditions(
+  viewerIdParam: string,
+  viewerCountyParam: string,
+): string[] {
+  return [
     // Never your own request.
     `c.veteran_user_id <> ${viewerIdParam}::uuid`,
     `u.status = 'ACTIVE' AND u.deleted_at IS NULL`,
-    `NOT EXISTS (SELECT 1 FROM case_assignments a
-                 WHERE a.case_id = c.case_id AND a.status = 'ACTIVE')`,
     `(u.county = ${viewerCountyParam}::suas_county
       OR (r.widened_at IS NOT NULL
           AND EXISTS (SELECT 1 FROM county_adjacency adj
@@ -122,6 +141,14 @@ export function openToViewerConditions(viewerIdParam: string, viewerCountyParam:
                          AND adj.adjacent_county = u.county)))`,
   ];
 }
+
+/** The state conditions: the request is still waiting for someone to accept it. */
+export const OPEN_REQUEST_STATE_CONDITIONS: readonly string[] = [
+  `r.status = ANY(ARRAY['SUBMITTED','TRIAGED','MATCHING']::suas_service_request_status[])`,
+  `c.status IN ('OPEN', 'TRIAGED')`,
+  `NOT EXISTS (SELECT 1 FROM case_assignments a
+               WHERE a.case_id = c.case_id AND a.status = 'ACTIVE')`,
+];
 
 export const REQUEST_REQUESTER_FROM = `
   service_requests r
@@ -135,12 +162,19 @@ interface ListRow {
   status: ServiceRequestStatus;
   county: ServiceCounty;
   widened_at: Date | null;
+  summary: string | null;
+  requester_display_name: string | null;
   created_at: Date;
+  updated_at: Date;
+  terminal_at: Date | null;
 }
 
 export interface ListRequestsFilters {
-  /** `open`: requests this person could accept. `mine`: requests they accepted. */
-  readonly ownership: 'open' | 'mine';
+  /**
+   * `open`: requests this person could accept. `mine`: requests they accepted.
+   * `requested`: requests they made themselves, in any status.
+   */
+  readonly ownership: 'open' | 'mine' | 'requested';
 }
 
 /**
@@ -165,6 +199,9 @@ export async function readRequestList(
     if (county === undefined) throw new CountyRequiredError();
     values.push(viewerUserId, county);
     conditions.push(...openToViewerConditions('$2', '$3'));
+  } else if (filters.ownership === 'requested') {
+    values.push(viewerUserId);
+    conditions.push(`c.veteran_user_id = $2::uuid`);
   } else {
     values.push(viewerUserId);
     conditions.push(
@@ -188,7 +225,10 @@ export async function readRequestList(
 
   const result = await db.query<ListRow>(
     `SELECT r.service_request_id, r.case_id, r.category, r.status, u.county,
-            r.widened_at, r.created_at
+            r.widened_at, CASE WHEN jsonb_typeof(r.details->'summary') = 'string'
+                 THEN left(r.details->>'summary', 280) END AS summary,
+            u.display_name AS requester_display_name,
+            r.created_at, r.updated_at, r.terminal_at
        FROM ${REQUEST_REQUESTER_FROM}
       WHERE ${conditions.join(' AND ')}
       ORDER BY r.created_at DESC, r.service_request_id DESC
@@ -208,7 +248,11 @@ export async function readRequestList(
       status: row.status,
       county: row.county,
       widened: row.widened_at !== null,
+      summary: row.summary,
+      requesterDisplayName: row.requester_display_name,
       createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      closedAt: row.terminal_at,
     })),
     nextCursor:
       hasMore && last !== undefined

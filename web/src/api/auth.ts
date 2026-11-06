@@ -30,16 +30,11 @@ export function useVerifyChallenge() {
   });
 }
 
-/** Revokes the session on the server, then always clears it locally, even if the call fails. */
+/** Revokes the session on the server. Clearing local state is `useSignOut`'s job (see there). */
 export function useLogout() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       await api.POST('/api/v0/auth/sessions/commands/logout');
-    },
-    onSettled: () => {
-      tokenStore.clear();
-      queryClient.clear();
     },
   });
 }

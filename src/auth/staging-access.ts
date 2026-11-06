@@ -41,13 +41,12 @@ export function stagingAccessFromConfig(config: SuasConfig): StagingAccess {
   };
 }
 
-/** Public self sign-up is permitted only when LOCAL or TEST opted in. */
+/**
+ * Public self sign-up is permitted only in LOCAL and TEST. STAGING and
+ * PRODUCTION refuse it even when a caller sets `allowSignUp`.
+ */
 export function assertPublicSignUpPermitted(access: StagingAccess | undefined): void {
-  if (
-    access !== undefined &&
-    access.publicSignUp &&
-    (access.environment === 'LOCAL' || access.environment === 'TEST')
-  ) {
+  if (access !== undefined && (access.environment === 'LOCAL' || access.environment === 'TEST')) {
     return;
   }
   throw new PublicSignUpRefusedError();

@@ -15,7 +15,12 @@ type Listener = () => void;
 export interface TokenStore {
   getToken: () => string | null;
   setToken: (token: string, options?: { mfaElevated?: boolean }) => void;
+  /** Drops the session (expiry, 401). Guards send the person to /sign-in and remember where they were. */
   clear: () => void;
+  /** Drops the session because the person chose to sign out. Guards then go to "/", with no `from`. */
+  signOut: () => void;
+  /** True after `signOut` until the next sign-in. */
+  isSignedOut: () => boolean;
   isMfaElevated: () => boolean;
   setMfaElevated: (value: boolean) => void;
   subscribe: (listener: Listener) => () => void;
@@ -41,6 +46,7 @@ function writeStorage(key: string, value: string | null): void {
 export function createTokenStore(): TokenStore {
   let token = readStorage(TOKEN_KEY);
   let mfa = readStorage(MFA_KEY) === '1';
+  let signedOut = false;
   const listeners = new Set<Listener>();
   const emit = () => listeners.forEach((listener) => listener());
 
@@ -48,6 +54,7 @@ export function createTokenStore(): TokenStore {
     getToken: () => token,
     setToken(next, options) {
       token = next;
+      signedOut = false;
       mfa = options?.mfaElevated ?? false;
       writeStorage(TOKEN_KEY, next);
       writeStorage(MFA_KEY, mfa ? '1' : null);
@@ -60,6 +67,15 @@ export function createTokenStore(): TokenStore {
       writeStorage(MFA_KEY, null);
       emit();
     },
+    signOut() {
+      signedOut = true;
+      token = null;
+      mfa = false;
+      writeStorage(TOKEN_KEY, null);
+      writeStorage(MFA_KEY, null);
+      emit();
+    },
+    isSignedOut: () => signedOut,
     isMfaElevated: () => mfa,
     setMfaElevated(value) {
       mfa = value;

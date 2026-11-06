@@ -20,17 +20,19 @@ const text = (element: HTMLElement) =>
     .trim();
 
 describe('D-012 crisis copy', () => {
-  it('renders the crisis strip verbatim with 911 and 988 as SOS red links', () => {
+  it('renders the crisis strip verbatim as plain white links, as the boards draw it', () => {
     wrap(<CrisisStrip />);
     const strip = screen.getByRole('complementary', { name: 'Crisis support' });
     expect(text(strip)).toBe(
       'Emergency: Call 911 Crisis support: Call or text 988 Practical support: Continue with SUAS',
     );
     expect(screen.getByRole('link', { name: 'Call 911' })).toHaveAttribute('href', 'tel:911');
-    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+    expect(screen.getByRole('link', { name: 'Call' })).toHaveAttribute('href', 'tel:988');
     expect(screen.getByRole('link', { name: 'text 988' })).toHaveAttribute('href', 'sms:988');
-    for (const link of ['Call 911', 'Call 988', 'text 988']) {
-      expect(screen.getByRole('link', { name: link })).toHaveClass('bg-sos');
+    for (const link of screen.getAllByRole('link')) {
+      expect(link).toHaveClass('text-white');
+      expect(link).not.toHaveClass('bg-sos');
+      expect(link.querySelector('svg')).toBeNull();
     }
   });
 
@@ -64,7 +66,7 @@ describe('D-012 crisis copy', () => {
     );
   });
 
-  it('shows the Veterans Crisis Line only when asked, with 988 in SOS red', () => {
+  it('shows the Veterans Crisis Line only when asked, with the default link colour', () => {
     const { rerender } = wrap(<Footer />);
     expect(screen.queryByText(/Veterans Crisis Line/)).toBeNull();
     expect(text(screen.getByRole('contentinfo'))).toBe(
@@ -80,7 +82,7 @@ describe('D-012 crisis copy', () => {
       'Veterans Crisis Line: Dial 988, then press 1 · Text 838255',
     );
     for (const link of screen.getAllByRole('link', { name: '988' })) {
-      expect(link).toHaveClass('text-sos');
+      expect(link).not.toHaveClass('text-sos');
     }
     expect(screen.getByRole('link', { name: '838255' })).toHaveAttribute('href', 'sms:838255');
   });

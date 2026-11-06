@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useMe } from '../api/me';
-import { useMfaElevated, useSessionToken } from '../api/token-store';
+import { tokenStore, useMfaElevated, useSessionToken } from '../api/token-store';
 import { paths } from './paths';
 import { LoadFailedScreen, LoadingScreen } from './status-screens';
 
@@ -14,6 +14,8 @@ export function RequireSignedIn() {
   const token = useSessionToken();
   const location = useLocation();
   if (token === null) {
+    // Signing out on purpose ends on the landing page, not on a sign-in prompt with a return path.
+    if (tokenStore.isSignedOut()) return <Navigate to={paths.landing} replace />;
     return (
       <Navigate
         to={paths.signIn}

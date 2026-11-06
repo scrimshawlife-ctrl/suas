@@ -120,7 +120,7 @@ async function submitRequest(headers: Record<string, string>, caseId: string): P
     method: 'POST',
     url: `/api/v0/cases/${caseId}/service-requests`,
     headers: { ...headers, 'idempotency-key': `sr-${randomUUID()}` },
-    payload: { category: 'FOOD' },
+    payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
   });
   expect(created.statusCode).toBe(201);
   const id: string = created.json().service_request_id;

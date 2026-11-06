@@ -100,6 +100,8 @@ export interface SettlementContent {
   readonly authoredBy: string;
   readonly acceptedByUserId: string;
   readonly veteranConfirmedBy?: string;
+  /** When the requester confirmed; defaults to now when `veteranConfirmedBy` is set. */
+  readonly veteranConfirmedAt?: Date;
 }
 
 /**
@@ -170,7 +172,9 @@ export async function createSettlement(
       JSON.stringify(input.remainingFollowUps),
       input.content.acceptedByUserId,
       input.content.veteranConfirmedBy ?? null,
-      input.content.veteranConfirmedBy === undefined ? null : new Date(),
+      input.content.veteranConfirmedBy === undefined
+        ? null
+        : (input.content.veteranConfirmedAt ?? new Date()),
       input.content.authoredBy,
     ],
   );

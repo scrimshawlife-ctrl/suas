@@ -3,9 +3,7 @@ export interface FooterProps {
   showVeteransCrisisLine?: boolean;
 }
 
-const sosLink = 'font-bold text-sos underline underline-offset-3 hover:text-sos';
-
-/** Footer with the D-012 safety lines, verbatim. 911 and 988 are SOS red. */
+/** Footer with the D-012 safety lines, verbatim. Links use the default link colour, as drawn. */
 export function Footer({ showVeteransCrisisLine = false }: FooterProps) {
   return (
     <footer className="border-t border-line">
@@ -15,23 +13,13 @@ export function Footer({ showVeteransCrisisLine = false }: FooterProps) {
           emergency dispatch.
         </p>
         <p>
-          For immediate danger, call{' '}
-          <a href="tel:911" className={sosLink}>
-            911
-          </a>
-          . For suicide or emotional crisis support, call or text{' '}
-          <a href="tel:988" className={sosLink}>
-            988
-          </a>
-          .
+          For immediate danger, call <a href="tel:911">911</a>. For suicide or emotional crisis
+          support, call or text <a href="tel:988">988</a>.
         </p>
         {showVeteransCrisisLine ? (
           <p>
-            Veterans Crisis Line: Dial{' '}
-            <a href="tel:988" className={sosLink}>
-              988
-            </a>
-            , then press 1 · Text <a href="sms:838255">838255</a>
+            Veterans Crisis Line: Dial <a href="tel:988">988</a>, then press 1 · Text{' '}
+            <a href="sms:838255">838255</a>
           </p>
         ) : null}
       </div>

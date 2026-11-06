@@ -284,6 +284,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       sessionSecret: deps.config.sessionSecret,
       delivery: deps.challengeDelivery,
       mfa: deps.mfa,
+      signUpTenantId: deps.config.browserAuth.tenantId,
       // Undefined unless the LOCAL gates pass, or this is the synthetic STAGING
       // Worker with SUAS_DEMO_FIXED_CODE=enabled. Every other path keeps random codes.
       fixedOtpCodeFor: demoFixedCodeFor({
@@ -303,6 +304,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
         pool,
         sessionSecret: deps.config.sessionSecret,
         delivery: deps.challengeDelivery,
+        modelInference: deps.modelInference,
       });
     }
 
