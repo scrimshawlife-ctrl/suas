@@ -34,6 +34,26 @@ beforeEach(() => {
 });
 
 describe('Verify page', () => {
+  it('names the crisis links and includes text 988', async () => {
+    client.GET.mockResolvedValue(check('NOT_STARTED'));
+    renderVerify();
+    const call911 = await screen.findByRole('link', { name: 'Call 911' });
+    const call988 = screen.getByRole('link', { name: 'Call 988' });
+    const text988 = screen.getByRole('link', { name: 'Text 988' });
+    expect(call911).toHaveAttribute('href', 'tel:911');
+    expect(call988).toHaveAttribute('href', 'tel:988');
+    expect(text988).toHaveAttribute('href', 'sms:988');
+    for (const link of [call911, call988, text988]) {
+      expect(link).toHaveClass('inline-flex', 'min-h-11', 'min-w-11');
+    }
+    expect(
+      screen.getByRole('heading', { name: /Immediate danger\? Call 911/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /Immediate danger\? Call 911/ })).toHaveTextContent(
+      /For suicide or emotional crisis support,\s*call\s*or\s*text 988/,
+    );
+  });
+
   it('has one start button and no camera or upload', async () => {
     client.GET.mockResolvedValue(check('NOT_STARTED'));
     renderVerify();

@@ -16,7 +16,11 @@
 
 import { isIP } from 'node:net';
 import type { Pool, PoolClient } from 'pg';
-import { ambientConnectionEnv, type AmbientConnectionEnv } from '../config/ambient-connection.js';
+import {
+  AMBIENT_SESSION_ENV_KEYS,
+  ambientConnectionEnv,
+  type AmbientConnectionEnv,
+} from '../config/ambient-connection.js';
 import { productionDataMarkersIn, type EnvironmentClass } from '../config/schema.js';
 import { runMigrationsOnClient, SchemaStateError, type SchemaProvenance } from './migrator.js';
 
@@ -171,7 +175,9 @@ function ambientValue(value: string | undefined): string | undefined {
 /**
  * libpq-style environment and DATABASE_URL can redirect a connection that does
  * not pin every field. A value that disagrees with the authorized target refuses
- * the reset before any connection is checked out.
+ * the reset before any connection is checked out. Session and routing variables
+ * the pinned driver can apply, and that the reset URL is not allowed to name,
+ * refuse the reset when they are set at all.
  */
 function ambientOverrideRefusal(
   authorized: AuthorizedEndpoint,
@@ -206,6 +212,12 @@ function ambientOverrideRefusal(
     if (actual === undefined) continue;
     if (wanted === undefined || actual !== wanted) {
       return `Migration reset refused: ${names[index] ?? 'PG'} does not match the authorized target.`;
+    }
+  }
+
+  for (const key of AMBIENT_SESSION_ENV_KEYS) {
+    if (ambientValue(ambient.session[key]) !== undefined) {
+      return `Migration reset refused: ${key} is set.`;
     }
   }
   return undefined;

@@ -238,16 +238,32 @@ export default function VerifyPage() {
             className="flex flex-col gap-3 border-ink bg-harbor text-white"
           >
             <h2 id="now" className="text-20 font-bold">
-              Immediate danger? Call{' '}
-              <a href="tel:911" className="text-white">
-                911
+              Immediate danger?{' '}
+              <a
+                href="tel:911"
+                aria-label="Call 911"
+                className="inline-flex min-h-11 min-w-11 items-center px-1 text-white"
+              >
+                Call 911
               </a>
               .
             </h2>
             <p>
-              For suicide or emotional crisis support, call or text{' '}
-              <a href="tel:988" className="font-bold text-white">
-                988
+              For suicide or emotional crisis support,{' '}
+              <a
+                href="tel:988"
+                aria-label="Call 988"
+                className="inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white"
+              >
+                call
+              </a>{' '}
+              or{' '}
+              <a
+                href="sms:988"
+                aria-label="Text 988"
+                className="inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white"
+              >
+                text 988
               </a>
               .
             </p>
