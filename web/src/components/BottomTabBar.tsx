@@ -6,12 +6,19 @@ export interface BottomTabBarProps {
   /** `serve` points Home at /serve and uses the Harbor active tab. */
   mode: 'support' | 'serve';
   current: 'home' | 'chat' | 'none';
+  /** Conversations with a message the person has not opened yet; 0 hides the badge. */
+  chatUnread?: number;
   /** Render in the flow, always visible (component gallery). Otherwise fixed and phone only. */
   embedded?: boolean;
 }
 
 /** Phone only (640 px and below): two tabs, Home and Chat. */
-export function BottomTabBar({ mode, current, embedded = false }: BottomTabBarProps) {
+export function BottomTabBar({
+  mode,
+  current,
+  chatUnread = 0,
+  embedded = false,
+}: BottomTabBarProps) {
   const homeTo = mode === 'serve' ? '/serve' : '/home';
   const tab = (active: boolean) =>
     cn(
@@ -43,7 +50,20 @@ export function BottomTabBar({ mode, current, embedded = false }: BottomTabBarPr
         aria-current={current === 'chat' ? 'page' : undefined}
         className={tab(current === 'chat')}
       >
-        <ChatIcon />
+        <span className="relative">
+          <ChatIcon />
+          {chatUnread > 0 ? (
+            <span
+              aria-label={`${chatUnread} unread`}
+              className={cn(
+                'absolute -top-2 left-4 inline-grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-16 font-bold',
+                current === 'chat' ? 'bg-white text-service-blue' : 'bg-service-blue text-white',
+              )}
+            >
+              {chatUnread}
+            </span>
+          ) : null}
+        </span>
         Chat
       </Link>
     </nav>
