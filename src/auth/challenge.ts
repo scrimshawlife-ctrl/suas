@@ -156,6 +156,17 @@ export async function issueChallenge(
       deps.stagingAccess,
       user === undefined ? undefined : { tenantId: user.tenantId, userId: user.userId },
     );
+  if (fixtureRefused) {
+    await recordChallengeAudit(deps.pool, {
+      tenantId: input.tenantId,
+      action: 'AUTH_CHALLENGE_ISSUE_SKIPPED',
+      outcome: 'NOT_STAGING_FIXTURE',
+      method: input.method,
+      actorId: user?.userId ?? 'anonymous',
+      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    });
+    return { issued: false, challengeId: undefined, expiresAt: undefined };
+  }
 
   // Every branch does the same database work: one challenge row and one audit event in a
   // transaction, and the same hashing. They differ only in whether a code is delivered, so
