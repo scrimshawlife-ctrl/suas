@@ -106,7 +106,8 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
 describe('TESTING.md §12 — fixtures are synthetic', () => {
   it('contains no routable contact data in tracked source, fixture, or doc files', () => {
     const scannable = repositoryFiles().filter(
-      (file) => /\.(ts|js|sql|json|jsonc|md|yml|yaml)$/.test(file) && file !== 'package-lock.json',
+      (file) =>
+        /\.(tsx|ts|js|sql|json|jsonc|md|yml|yaml)$/.test(file) && file !== 'package-lock.json',
     );
 
     const findings: string[] = [];
