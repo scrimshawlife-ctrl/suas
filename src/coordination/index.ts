@@ -78,6 +78,7 @@ export {
   listCaseServiceRequests,
   MEETING_PLACE_MAX,
   MeetingPlaceRequiredError,
+  peerAcceptRequestInTx,
   readDetailText,
   ServiceRequestNotFoundError,
   type CreateServiceRequestInput,

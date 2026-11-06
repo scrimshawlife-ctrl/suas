@@ -1,9 +1,9 @@
-import type { paths as GeneratedPaths } from './schema';
-import type { SupplementedPath, SupplementPaths } from './supplement';
+import type { paths } from './schema';
 
 /**
- * Every write sends `Idempotency-Key` from the client middleware, so callers never pass
- * it. This makes the generated required header optional in the request types.
+ * Every write sends `Idempotency-Key` from the client middleware, so callers never have to
+ * pass it. The document marks the header required on many writes; this makes it optional in
+ * the request types (a caller may still pass one for a stable key, see idempotency.ts).
  */
 type LoosenIdempotency<Operation> = Operation extends { parameters: infer P }
   ? Omit<Operation, 'parameters'> & {
@@ -19,5 +19,5 @@ type Loosened<T> = {
   [Path in keyof T]: { [Method in keyof T[Path]]: LoosenIdempotency<T[Path][Method]> };
 };
 
-/** The `/api/v0` contract as the web client sees it: generated paths plus the supplement. */
-export type ApiPaths = Loosened<Omit<GeneratedPaths, SupplementedPath>> & SupplementPaths;
+/** The `/api/v0` contract as the web client sees it. */
+export type ApiPaths = Loosened<paths>;

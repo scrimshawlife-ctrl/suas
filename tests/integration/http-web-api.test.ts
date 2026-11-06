@@ -10,6 +10,10 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession, type RecordingChallengeDelivery } from '../../src/auth/index.js';
+import {
+  DisclosureGuardRequiredError,
+  executeServiceRequestCommand,
+} from '../../src/coordination/index.js';
 import { createUser, grantSuasAdmin, setUserStatus } from '../../src/identity/index.js';
 import type { ModelToolCall, ScriptedModelInference } from '../../src/inference/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -562,7 +566,7 @@ describe('requester-only commands', () => {
       expect(refused.statusCode).toBe(403);
     }
     const detail = await getJson(`/api/v0/service-requests/${id}`, requester);
-    expect(detail.json().status).toBe('SUBMITTED');
+    expect(detail.json().status).toBe('ACCEPTED');
 
     const cancelled = await app.server.inject({
       method: 'POST',
@@ -709,5 +713,107 @@ describe('request summaries and case-route details are bounded', () => {
       details: { summary: 'Groceries', timing: 'Friday', meeting_place: 'Library' },
     });
     expect(ok.statusCode).toBe(201);
+  });
+});
+
+describe('peer accept moves the request to ACCEPTED', () => {
+  function command(who: Person, id: string, name: string, payload: Record<string, unknown> = {}) {
+    return app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${id}/commands/${name}`,
+      headers: keyed(who),
+      payload,
+    });
+  }
+
+  it('accepts the request with the case, then runs START, FULFILL and the owner CONFIRM', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, { verified: true, county: 'SANTA_CLARA' });
+    const helper = await person(tenantId, { county: 'SANTA_CLARA' });
+    const waiting = await person(tenantId, { county: 'SANTA_CLARA' });
+    const { id, caseId } = await submitForm(requester, {
+      category: 'PEER_SUPPORT',
+      meeting_place: undefined,
+    });
+    const before = await getJson('/api/v0/veterans/me', requester);
+    expect(before.json().active_qrf.state).toBe('REQUESTED');
+
+    expect((await accept(helper, id)).statusCode).toBe(200);
+
+    for (const who of [requester, helper]) {
+      expect((await getJson(`/api/v0/service-requests/${id}`, who)).json().status).toBe('ACCEPTED');
+    }
+    expect((await getJson(`/api/v0/cases/${caseId}`, helper)).json().status).toBe('ASSIGNED');
+    const me = await getJson('/api/v0/veterans/me', requester);
+    expect(me.json().active_qrf).toMatchObject({
+      service_request_id: id,
+      state: 'RESPONDER_ACCEPTED',
+    });
+
+    // It leaves the open list, and one audit event records the peer accept (ids only).
+    expect(
+      (await getJson('/api/v0/service-requests?ownership=open', waiting)).json(),
+    ).toMatchObject({
+      service_requests: [],
+    });
+    const audit = await pool().query<{ payload: Record<string, unknown> }>(
+      `SELECT payload FROM audit_events
+        WHERE target_id = $1 AND event_type = 'SERVICE_REQUEST_PEER_ACCEPTED'`,
+      [id],
+    );
+    expect(audit.rows).toEqual([
+      { payload: { case_id: caseId, category: 'PEER_SUPPORT', from_status: 'SUBMITTED' } },
+    ]);
+
+    const started = await command(helper, id, 'START');
+    expect(started.statusCode).toBe(200);
+    expect(started.json().status).toBe('IN_PROGRESS');
+    const fulfilled = await command(helper, id, 'FULFILL');
+    expect(fulfilled.json().status).toBe('FULFILLED');
+    const confirmed = await command(requester, id, 'CONFIRM');
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json().status).toBe('CONFIRMED');
+  });
+
+  it('leaves exactly one ACCEPTED transition when two people race', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, { verified: true, county: 'SANTA_CLARA' });
+    const a = await person(tenantId, { county: 'SANTA_CLARA' });
+    const b = await person(tenantId, { county: 'SANTA_CLARA' });
+    const { id } = await submitForm(requester);
+    const results = await Promise.all([accept(a, id), accept(b, id)]);
+    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+    const audit = await pool().query(
+      `SELECT 1 FROM audit_events WHERE target_id = $1 AND event_type = 'SERVICE_REQUEST_PEER_ACCEPTED'`,
+      [id],
+    );
+    expect(audit.rowCount).toBe(1);
+  });
+
+  it('refuses a request that is no longer waiting, and keeps the consent guard on ASSIGN', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, { verified: true, county: 'SANTA_CLARA' });
+    const helper = await person(tenantId, { county: 'SANTA_CLARA' });
+    const { id } = await submitForm(requester);
+    const cancelled = await command(requester, id, 'CANCEL', { reason: 'sorted it out' });
+    expect(cancelled.statusCode).toBe(200);
+    expect((await accept(helper, id)).statusCode).toBe(404);
+
+    // ASSIGN is unchanged: a request reaching MATCHING still needs a consent evaluation.
+    const second = await submitForm(requester);
+    await pool().query(
+      `UPDATE service_requests SET status = 'MATCHING' WHERE service_request_id = $1`,
+      [second.id],
+    );
+    await expect(
+      executeServiceRequestCommand(pool(), {
+        tenantId,
+        serviceRequestId: second.id,
+        command: 'ASSIGN',
+        actorId: requester.userId,
+        actorType: 'SYSTEM',
+        granteeId: randomUUID(),
+      }),
+    ).rejects.toBeInstanceOf(DisclosureGuardRequiredError);
   });
 });

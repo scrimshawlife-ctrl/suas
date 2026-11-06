@@ -1,10 +1,10 @@
 /**
  * Generates src/api/schema.d.ts from ../docs/openapi/v0.json (read only).
  *
- * The document references #/components/parameters/IdempotencyKey on POST /api/v0/cases
- * but never defines it, which stops openapi-typescript. The in-memory copy defines it
- * exactly as every other route declares the header. Any other unresolved reference
- * still fails generation. Remove the patch once the document defines the parameter.
+ * Guard: if the document ever references #/components/parameters/IdempotencyKey without
+ * defining it (it did before OpenAPI 3.1), the in-memory copy defines it exactly as every
+ * other route declares the header, so openapi-typescript does not stop. A no-op while the
+ * document defines the parameter. Any other unresolved reference still fails generation.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

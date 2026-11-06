@@ -4,6 +4,11 @@ import { tokenStore, useMfaElevated, useSessionToken } from '../api/token-store'
 import { paths } from './paths';
 import { LoadFailedScreen, LoadingScreen } from './status-screens';
 
+/** Where to come back to after an onboarding or step-up detour. */
+function returnPath(location: { pathname: string; search: string }): string {
+  return `${location.pathname}${location.search}`;
+}
+
 /**
  * Route guards, applied by nesting in router.tsx in this order:
  * signed in, profile complete, verified (requester routes only), admin.
@@ -30,18 +35,24 @@ export function RequireSignedIn() {
 /** 2. `display_name` and `county` are both set. Otherwise onboarding at /welcome. */
 export function RequireProfile() {
   const me = useMe();
+  const location = useLocation();
   if (me.isPending) return <LoadingScreen />;
   if (me.isError) return <LoadFailedScreen onRetry={() => void me.refetch()} />;
-  if (!me.data.display_name || !me.data.county) return <Navigate to={paths.welcome} replace />;
+  if (!me.data.display_name || !me.data.county) {
+    return <Navigate to={paths.welcome} replace state={{ from: returnPath(location) }} />;
+  }
   return <Outlet />;
 }
 
 /** 3. The ID scan is VERIFIED. Requester routes only: helping and Serve never need it. */
 export function RequireVerified() {
   const me = useMe();
+  const location = useLocation();
   if (me.isPending) return <LoadingScreen />;
   if (me.isError) return <LoadFailedScreen onRetry={() => void me.refetch()} />;
-  if (me.data.id_verification.status !== 'VERIFIED') return <Navigate to={paths.verify} replace />;
+  if (me.data.id_verification.status !== 'VERIFIED') {
+    return <Navigate to={paths.verify} replace state={{ from: returnPath(location) }} />;
+  }
   return <Outlet />;
 }
 
@@ -57,6 +68,15 @@ export function RequireAdmin() {
 /** 4b. Admin session has passed MFA step-up. Otherwise the step-up screen. */
 export function RequireMfa() {
   const elevated = useMfaElevated();
-  if (!elevated) return <Navigate to={paths.adminMfa} replace />;
+  const location = useLocation();
+  if (!elevated) {
+    return (
+      <Navigate
+        to={paths.adminMfa}
+        replace
+        state={{ from: `${location.pathname}${location.search}` }}
+      />
+    );
+  }
   return <Outlet />;
 }

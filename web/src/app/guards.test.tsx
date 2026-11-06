@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { queryKeys } from '../api/keys';
-import type { MeResponse } from '../api/supplement';
+import type { Me as MeResponse } from '../api/types';
 import { tokenStore } from '../api/token-store';
 import {
   RequireAdmin,
@@ -107,6 +107,14 @@ describe('route guards', () => {
   it('sends an unverified requester to /verify but lets them into Serve', () => {
     visit('/request', me({}, 'NOT_STARTED'));
     expect(screen.getByText('verify page')).toBeInTheDocument();
+  });
+
+  it('remembers where the person was going on the /welcome and /verify detours', () => {
+    const toWelcome = visit('/serve?tab=open', me({ display_name: null }));
+    expect(toWelcome.state.location.state).toEqual({ from: '/serve?tab=open' });
+    cleanup();
+    const toVerify = visit('/request?category=FOOD', me({}, 'NOT_STARTED'));
+    expect(toVerify.state.location.state).toEqual({ from: '/request?category=FOOD' });
   });
 
   it('does not require the scan for Serve', () => {
