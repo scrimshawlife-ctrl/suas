@@ -71,6 +71,7 @@ export {
   type EffectiveSignalCaseDecision,
   type EffectiveSignalCaseReason,
 } from './case-action.js';
+export { alertTrustedContactsOfRed, type RedAlertSummary } from './red-alert.js';
 export { ensurePublishedQv001 } from './qv-001-publish.js';
 export {
   parseComputeJobPayload,

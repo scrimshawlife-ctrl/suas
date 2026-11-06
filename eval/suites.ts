@@ -2,5 +2,6 @@
 
 import type { RunnableSuite } from './harness.js';
 import { intakeSuite } from './intake/suite.js';
+import { resourceExtractionSuite } from './resource-extraction/suite.js';
 
-export const SUITES: readonly RunnableSuite[] = [intakeSuite];
+export const SUITES: readonly RunnableSuite[] = [intakeSuite, resourceExtractionSuite];
