@@ -37,19 +37,19 @@ Synth needs no Docker. esbuild bundles the Lambda code locally (see "Lambda pack
 
 Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user confirmed on 2026-11-05.
 
-| Context                  | Default                                | Meaning                                                                                                                          |
-| ------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                        |
-| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                             |
-| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                         |
-| `wsHostname`             | `ws.staging.suasqrf.com`               | WebSocket API                                                                                                                    |
+| Context                  | Default                                | Meaning                                                                                                                                             |
+| ------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                                           |
+| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                                                |
+| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                                            |
+| `wsHostname`             | `ws.staging.suasqrf.com`               | WebSocket API                                                                                                                                       |
 | `bedrockModelId`         | none: **required**                     | Bedrock model or inference profile id. D-054 approves the v1 model path; no id is selected, so synth fails without this or `allowPlaceholderModel`. |
-| `allowPlaceholderModel`  | unset                                  | `true` lets CI synth without a model. The template is marked "PLACEHOLDER MODEL"; never deploy it.                               |
-| `emailFrom`              | `no-reply@` + root domain              | SES sender (`SUAS_EMAIL_FROM`); must be in the verified domain                                                                   |
-| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches today's `wrangler.jsonc` staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
-| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value as `wrangler.jsonc`)                                          |
-| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of `us-west-2` zones, if an endpoint service is missing in one                                                        |
-| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                            |
+| `allowPlaceholderModel`  | unset                                  | `true` lets CI synth without a model. The template is marked "PLACEHOLDER MODEL"; never deploy it.                                                  |
+| `emailFrom`              | `no-reply@` + root domain              | SES sender (`SUAS_EMAIL_FROM`); must be in the verified domain                                                                                      |
+| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches today's `wrangler.jsonc` staging; set `approved` to show the D-012 crisis copy. **Owner call.**                    |
+| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value as `wrangler.jsonc`)                                                             |
+| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of `us-west-2` zones, if an endpoint service is missing in one                                                                           |
+| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                                               |
 
 Hostnames must be inside `rootDomain`, because certificates are validated in the zone this app owns.
 
@@ -137,33 +137,33 @@ user (`suas_admin`, an `rds_superuser`), the same user the Proxy and the migrate
 All values are plain except the two marked secret. Other functions get the subset they need (see `lib/backend-stack.ts`);
 each function's environment is checked against the application's own config validator in the tests.
 
-| Variable                                                                                        | Value                                                                                                                                                                    |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SUAS_ENV`                                                                                      | `STAGING`                                                                                                                                                                |
-| `SUAS_SPEC_VERSION`, `SUAS_RELEASE_MANIFEST`                                                    | from `src/release/pins.ts` (so a re-pin follows automatically)                                                                                                           |
-| `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS`                                                              | `false`                                                                                                                                                                  |
-| `SUAS_SESSION_SECRET`                                                                           | secret (Secrets Manager)                                                                                                                                                 |
-| `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<proxy endpoint>:5432/suas`                                                                                                          |
-| `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3`                                                                                                                                                            |
-| `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; WebSocket and job worker `off`)                                                                                           |
-| `SUAS_BROWSER_AUTH_MODE`, `SUAS_BROWSER_TENANT_ID`                                              | `email_otp`, the `browserTenantId` context                                                                                                                               |
-| `SUAS_EMAIL_MODE`, `SUAS_EMAIL_FROM`                                                            | `ses`, the `emailFrom` context                                                                                                                                           |
-| `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                                                              |
-| `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                                                                                              |
-| `SUAS_MODEL_INFERENCE_MODE`, `SUAS_BEDROCK_MODEL_ID`                                            | `bedrock`, the `bedrockModelId` context                                                                                                                                  |
-| `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket                                                                                                                                                  |
-| `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052).                                                                                                   |
-| `SUAS_CHAT_PUSH_MODE`                                                                           | `apigw`                                                                                                                                                                  |
-| `SUAS_CHAT_WS_ENDPOINT`                                                                         | `https://<ws api id>.execute-api.us-west-2.amazonaws.com/staging` (management endpoint)                                                                                  |
-| `SUAS_CHAT_WS_PUBLIC_URL`                                                                       | `wss://ws.staging.suasqrf.com` (what browsers open; no stage path)                                                                                                       |
-| `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | unset (empty allowlist). Stays empty until a separate frontend domain exists and the cross-site cookie question is settled. The Worker origin serves `/app` same-origin. |
-| `SUAS_TRANSPORTATION_ADAPTER_MODE`, `SUAS_SHELTER_ADAPTER_MODE`, `SUAS_FOOD_ADAPTER_MODE`       | `fake`                                                                                                                                                                   |
-| `SUAS_PEER_SUPPORT_ADAPTER_MODE`                                                                | `manual`                                                                                                                                                                 |
-| `SUAS_SUPPORT_SIGNAL_MODE`, `SUAS_SAFETY_COPY_MODE`, `SUAS_SENSITIVE_AGGREGATE_REPORTING`       | `fixture`, the `safetyCopyMode` context, `disabled`                                                                                                                      |
-| `SUAS_HTTP_HOST`, `SUAS_HTTP_PORT`                                                              | `0.0.0.0`, `8080`                                                                                                                                                        |
-| `SUAS_LOG_LEVEL`                                                                                | `info`                                                                                                                                                                   |
-| `SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`                                                     | stamped at synth                                                                                                                                                         |
-| `AWS_LAMBDA_EXEC_WRAPPER`, `AWS_LWA_PORT`, `AWS_LWA_READINESS_CHECK_PATH`, `AWS_LWA_ASYNC_INIT` | `/opt/bootstrap`, `8080`, `/api/v0/health`, `true` (Lambda Web Adapter)                                                                                                  |
+| Variable                                                                                        | Value                                                                                                                             |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `SUAS_ENV`                                                                                      | `STAGING`                                                                                                                         |
+| `SUAS_SPEC_VERSION`, `SUAS_RELEASE_MANIFEST`                                                    | from `src/release/pins.ts` (so a re-pin follows automatically)                                                                    |
+| `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS`                                                              | `false`                                                                                                                           |
+| `SUAS_SESSION_SECRET`                                                                           | secret (Secrets Manager)                                                                                                          |
+| `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<proxy endpoint>:5432/suas` (migrate uses the instance address, not the proxy)                |
+| `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3` on the API, WebSocket, and job worker; the migrate function sets `DATABASE_POOL_MAX` to `1`                         |
+| `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; WebSocket and job worker `off`)                                                    |
+| `SUAS_BROWSER_AUTH_MODE`, `SUAS_BROWSER_TENANT_ID`                                              | `email_otp`, the `browserTenantId` context                                                                                        |
+| `SUAS_EMAIL_MODE`, `SUAS_EMAIL_FROM`                                                            | `ses`, the `emailFrom` context                                                                                                    |
+| `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                       |
+| `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                                                       |
+| `SUAS_MODEL_INFERENCE_MODE`, `SUAS_BEDROCK_MODEL_ID`                                            | `bedrock`, the `bedrockModelId` context                                                                                           |
+| `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket                                                                                                           |
+| `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052).                                                            |
+| `SUAS_CHAT_PUSH_MODE`                                                                           | `apigw`                                                                                                                           |
+| `SUAS_CHAT_WS_ENDPOINT`                                                                         | `https://<ws api id>.execute-api.us-west-2.amazonaws.com/staging` (management endpoint)                                           |
+| `SUAS_CHAT_WS_PUBLIC_URL`                                                                       | `wss://ws.staging.suasqrf.com` (what browsers open; no stage path)                                                                |
+| `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | not set on the API Lambda, so the allowlist is empty. `staging.suasqrf.com` is a different origin from the API and is not listed. |
+| `SUAS_TRANSPORTATION_ADAPTER_MODE`, `SUAS_SHELTER_ADAPTER_MODE`, `SUAS_FOOD_ADAPTER_MODE`       | `fake`                                                                                                                            |
+| `SUAS_PEER_SUPPORT_ADAPTER_MODE`                                                                | `manual`                                                                                                                          |
+| `SUAS_SUPPORT_SIGNAL_MODE`, `SUAS_SAFETY_COPY_MODE`, `SUAS_SENSITIVE_AGGREGATE_REPORTING`       | `fixture`, the `safetyCopyMode` context, `disabled`                                                                               |
+| `SUAS_HTTP_HOST`, `SUAS_HTTP_PORT`                                                              | `0.0.0.0`, `8080`                                                                                                                 |
+| `SUAS_LOG_LEVEL`                                                                                | `info`                                                                                                                            |
+| `SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`                                                     | stamped at synth                                                                                                                  |
+| `AWS_LAMBDA_EXEC_WRAPPER`, `AWS_LWA_PORT`, `AWS_LWA_READINESS_CHECK_PATH`, `AWS_LWA_ASYNC_INIT` | `/opt/bootstrap`, `8080`, `/api/v0/health`, `true` (Lambda Web Adapter)                                                           |
 
 `SUAS_DEMO_FIXED_CODE` is not set. `RESEND_API_KEY` is not used.
 
@@ -197,11 +197,11 @@ do not match.
 
 ### Log retention of CDK-owned helper functions
 
-All application log groups and the `BucketDeployment` function have 30-day retention. The Lambda functions that
-CDK itself adds have no retention (their log groups never expire): the cross-region export reader/writer (Dns,
-WebCert and Web stacks), the VPC default-security-group restrictor, and the S3 auto-delete helper. These constructs
-expose no log group property, so a fix would need an aspect that overrides CloudFormation properties, which is
-neither simple nor a supported use. They log only a few lines per deploy. Left as is.
+Application function log groups use 30-day retention (`RetentionDays.ONE_MONTH`). The site upload sets that
+same retention on its own log group, and only when `web/dist/index.html` exists at synth so the upload is created.
+CDK-owned helper functions that do not take a log group in this code (the cross-region export reader/writer, the
+VPC default-security-group restrictor, and the S3 auto-delete helper) are left on the AWS default, which does not
+expire those logs. No alarm topic and no Content-Security-Policy are added by this app.
 
 ### Web
 

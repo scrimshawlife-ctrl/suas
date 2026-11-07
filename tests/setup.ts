@@ -8,6 +8,17 @@
  * ENVIRONMENT.md §2 ("never inferred from ... NODE_ENV").
  */
 
+import { readFileSync } from 'node:fs';
+import { nodeEngineIssue } from '../scripts/node-engine.js';
+
+const declaredNode = (
+  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+    engines: { node: string };
+  }
+).engines.node;
+const nodeIssue = nodeEngineIssue(process.version, declaredNode);
+if (nodeIssue !== undefined) throw new Error(nodeIssue);
+
 process.env.SUAS_ENV = 'TEST';
 process.env.SUAS_SPEC_VERSION ??= '0.7.0';
 process.env.SUAS_RELEASE_MANIFEST ??= 'RELEASE_MANIFEST-0.7.0.md';
