@@ -213,6 +213,8 @@ export async function buildPilotExport(
     audit_events: 'SELECT * FROM audit_events WHERE tenant_id=$1 AND aggregate_id=$2',
     consent_events: 'SELECT * FROM consent_events WHERE tenant_id=$1 AND veteran_user_id=$2',
     consent_grants: 'SELECT * FROM consent_grants WHERE tenant_id=$1 AND veteran_user_id=$2',
+    service_request_drafts:
+      'SELECT draft_id, tenant_id, user_id, status, category, details, intake_text, service_request_id, created_at, updated_at, submitted_at FROM service_request_drafts WHERE tenant_id=$1 AND user_id=$2',
   })) {
     datasets[name] = (
       await pool.query<Record<string, unknown>>(sql, [input.tenantId, input.subjectUserId])

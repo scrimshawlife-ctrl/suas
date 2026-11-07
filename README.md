@@ -47,7 +47,7 @@ If you change `/api/v0`, auth, environment class, or a Veteran journey, consider
 
 ## Local development
 
-Requirements: Node.js 22+ and a reachable PostgreSQL 17 instance.
+Requirements: Node.js 22.13 or newer and a reachable PostgreSQL 17 instance.
 
 ```bash
 npm ci
@@ -68,7 +68,7 @@ the synthetic demo seed loaded. LOCAL only: it refuses non-loopback database
 hosts, never targets staging or any production host, and all data is synthetic
 (`@example.invalid` emails, 555-0100 to 555-0199 phone numbers).
 
-Requirements: Node.js 22+ and PostgreSQL 17 on localhost with a `suas` / `suas`
+Requirements: Node.js 22.13 or newer and PostgreSQL 17 on localhost with a `suas` / `suas`
 role that can create databases. If Postgres is not reachable and Docker is
 running, the script starts the `suas-postgres17-local` container; otherwise it
 prints install steps.

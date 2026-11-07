@@ -38,6 +38,7 @@ export {
   createAssignmentVerifier,
   executeCaseCommand,
   holdsRequestInCase,
+  requestHeldInCurrentCycle,
   lockCase,
   findCase,
   findCurrentCase,

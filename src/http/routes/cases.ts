@@ -89,7 +89,7 @@ function publicCase(supportCase: SupportCase) {
   };
 }
 
-function publicSettlement(settlement: Settlement) {
+export function publicSettlement(settlement: Settlement) {
   return {
     settlement_id: settlement.settlementId,
     case_id: settlement.caseId,

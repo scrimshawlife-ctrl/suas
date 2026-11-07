@@ -5,7 +5,7 @@
   "description": "SUAS v1 web app (React SPA). Talks to the /api/v0 JSON API; never served by the Fastify server.",
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.22.2"
   },
   "scripts": {
     "dev": "vite",

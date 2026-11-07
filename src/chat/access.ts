@@ -11,6 +11,7 @@
  */
 
 import { ResourceNotVisibleError } from '../authz/index.js';
+import { requestHeldInCurrentCycle } from '../coordination/cases.js';
 import type { Queryable } from '../db/index.js';
 
 /** The request has not been accepted, so there is nobody to chat with yet. */
@@ -54,6 +55,13 @@ export async function resolveChatAccess(
       return access(row, serviceRequestId, row.accepted_by_user_id);
     }
     if (row.accepted_by_user_id === caller.userId) {
+      const stands = await requestHeldInCurrentCycle(
+        db,
+        caller.tenantId,
+        serviceRequestId,
+        caller.userId,
+      );
+      if (!stands) throw new ResourceNotVisibleError();
       return access(row, serviceRequestId, row.requester_user_id);
     }
     throw new ResourceNotVisibleError();

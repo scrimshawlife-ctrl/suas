@@ -29,20 +29,33 @@ export class DatabaseNotConfiguredError extends Error {
 
 export type PoolMode = 'node' | 'worker';
 
+/** Connection settings shared by the Node pool and the per-request Worker client. */
+export function databaseClientSettings(config: SuasConfig): {
+  connectionString: string;
+  ssl?: ConnectionOptions;
+} {
+  const url = config.database.url;
+  if (url === undefined) throw new DatabaseNotConfiguredError();
+  const ssl = databaseSslOptions(config.database.ssl);
+  return {
+    connectionString: url,
+    ...(ssl !== undefined ? { ssl } : {}),
+  };
+}
+
 /**
  * Per-request Client factory that satisfies the `Pool` surface used by SUAS
  * (`query`, `connect`/`release`, `end`). No connections are retained between
- * calls — required on Workers with Hyperdrive.
+ * calls — required on Workers with Hyperdrive. TLS matches the Node pool.
  */
 export function createWorkerPool(config: SuasConfig): Pool {
-  const url = config.database.url;
-  if (url === undefined) {
-    throw new DatabaseNotConfiguredError();
-  }
+  // Missing DATABASE_URL fails here, before a request opens a client. The same
+  // settings, including TLS, are what each per-request Client is constructed with.
+  const settings = databaseClientSettings(config);
 
   const openClient = async (): Promise<Client> => {
     const client = new Client({
-      connectionString: url,
+      ...settings,
       connectionTimeoutMillis: 10_000,
     });
     await client.connect();
@@ -84,7 +97,7 @@ export function createWorkerPool(config: SuasConfig): Pool {
 }
 
 /**
- * TLS settings for the long-lived Node pool (config `DATABASE_SSL_MODE`).
+ * TLS settings for both pools (config `DATABASE_SSL_MODE`).
  * `verify` checks the certificate chain and host name; a CA bundle file, such as
  * the AWS RDS global bundle, replaces the default trust store. Returns undefined
  * for `disable`, leaving the connection string to decide as before.
@@ -105,14 +118,9 @@ export function createPool(config: SuasConfig, mode: PoolMode = 'node'): Pool {
     return createWorkerPool(config);
   }
 
-  const url = config.database.url;
-  if (url === undefined) {
-    throw new DatabaseNotConfiguredError();
-  }
-  const ssl = databaseSslOptions(config.database.ssl);
+  const settings = databaseClientSettings(config);
   return new Pool({
-    connectionString: url,
-    ...(ssl !== undefined ? { ssl } : {}),
+    ...settings,
     max: config.database.poolMax,
     // Finite timeouts, per ARCHITECTURE.md §13. These are implementation
     // mechanism values; no production SLO is implied (RELEASE_MANIFEST-0.1.1.md).

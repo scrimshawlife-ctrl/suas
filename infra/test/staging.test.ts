@@ -35,6 +35,8 @@ describe('network', () => {
   it('spreads isolated subnets over two zones, with no public IPs', () => {
     const subnets = ofType(s.backend, 'AWS::EC2::Subnet');
     expect(subnets).toHaveLength(2);
+    const zones = subnets.map(([, subnet]) => JSON.stringify(subnet.Properties?.AvailabilityZone));
+    expect(new Set(zones).size).toBe(2);
     for (const [, subnet] of subnets) expect(subnet.Properties?.MapPublicIpOnLaunch).toBe(false);
   });
 
@@ -80,6 +82,8 @@ describe('network', () => {
         Record<string, unknown>
       >) {
         if (rule.CidrIp === '255.255.255.255/32') continue; // CDK's "no outbound" placeholder.
+        expect(rule.CidrIpv6).toBeUndefined();
+        expect(JSON.stringify(rule)).not.toContain('::/0');
         expect(rule).toMatchObject({
           CidrIp: '0.0.0.0/0',
           IpProtocol: 'tcp',
@@ -315,9 +319,19 @@ describe('IAM', () => {
   });
 
   it('lets the API list the assets bucket, so a missing key is NoSuchKey and not AccessDenied', () => {
-    const list = statements(s.backend).find((st) => [st.Action].flat().includes('s3:ListBucket'));
-    expect(JSON.stringify(list?.Resource)).toContain('AssetsBucket');
-    expect(JSON.stringify(list?.Resource)).not.toContain('/*');
+    const lists = statements(s.backend).filter((st) =>
+      [st.Action].flat().includes('s3:ListBucket'),
+    );
+    expect(lists.length).toBeGreaterThan(0);
+    for (const st of lists) {
+      expect([st.Action].flat()).toEqual(['s3:ListBucket']);
+      for (const resource of [st.Resource].flat()) {
+        expect(resource).not.toBe('*');
+        const text = JSON.stringify(resource);
+        expect(text).toContain('AssetsBucket');
+        expect(text).not.toContain('*');
+      }
+    }
   });
 
   it('never uses a wildcard resource for Bedrock or SES actions', () => {
@@ -326,8 +340,10 @@ describe('IAM', () => {
     );
     expect(sensitive.length).toBeGreaterThanOrEqual(2);
     for (const st of sensitive) {
-      for (const resource of [st.Resource].flat())
+      for (const resource of [st.Resource].flat()) {
+        expect(resource).not.toBe('*');
         expect(JSON.stringify(resource)).not.toMatch(/^"\*"$/);
+      }
     }
   });
 

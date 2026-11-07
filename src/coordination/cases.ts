@@ -167,6 +167,31 @@ export async function holdsRequestInCase(
   return (result.rowCount ?? 0) > 0;
 }
 
+/**
+ * Whether this person accepted this Service Request and that request is still in the
+ * case's current cycle. Closing the case, or reopening it, ends that standing: a
+ * previous-cycle accept does not keep the request, its commands, or its chat.
+ */
+export async function requestHeldInCurrentCycle(
+  db: Queryable,
+  tenantId: string,
+  serviceRequestId: string,
+  userId: string,
+): Promise<boolean> {
+  const result = await db.query(
+    `SELECT 1
+       FROM service_requests r
+       JOIN support_cases c ON c.case_id = r.case_id AND c.tenant_id = r.tenant_id
+      WHERE r.tenant_id = $1 AND r.service_request_id = $2
+        AND r.accepted_by_user_id = $3
+        AND c.status <> 'CLOSED'
+        AND (c.closed_at IS NULL OR r.created_at > c.closed_at)
+      LIMIT 1`,
+    [tenantId, serviceRequestId, userId],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 /** Whether anyone has accepted a Service Request of the case's current cycle. */
 export async function caseHasAcceptedRequest(
   db: Queryable,

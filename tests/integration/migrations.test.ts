@@ -7,15 +7,18 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { cp, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Pool, type PoolClient } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { AMBIENT_SESSION_ENV_KEYS } from '../../src/config/ambient-connection.js';
 import {
+  checksumOf,
   databaseNameFromUrl,
+  ensureMigrationsTable,
   EXPECTED_SCHEMA_VERSION,
   loadMigrationFiles,
   resolveMigrationsDir,
@@ -967,7 +970,7 @@ describe('0017 request holder backfill', () => {
       const closedNoChat = await insertRequest(tenantId, caseB, veteranB, 'CLOSED');
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([17, 18]);
+      expect(result.appliedNow).toEqual([17, 18, 19]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const holders = await pool.query<{ id: string; holder: string | null }>(
@@ -1034,5 +1037,56 @@ describe('0018 current case index', () => {
     }
     // Another Veteran is unaffected.
     await insertCase(tenantId, await insertUser(tenantId), 'OPEN');
+  });
+});
+
+describe('previous baseline versus this build', () => {
+  // migrations/ at 823fc7e5b2933ec0e045e397ad747507e9b805fd, vendored so a
+  // depth-1 checkout (actions/checkout default) still has the bytes. git
+  // ls-tree of that commit fails there with "fatal: not a tree object".
+  const previousBaselineDir = fileURLToPath(
+    new URL('../fixtures/old-baseline-823fc7e/migrations', import.meta.url),
+  );
+
+  it('stops with SchemaStateError when 0001-0014 from that baseline are already applied, and does not drop the schema', async () => {
+    const fileNames = (await readdir(previousBaselineDir))
+      .filter((name) => name.endsWith('.sql'))
+      .sort();
+    expect(fileNames).toEqual([
+      '0001_baseline.sql',
+      '0002_event_idempotency_kernel.sql',
+      '0003_identity_tenancy.sql',
+      '0004_consent_privacy.sql',
+      '0005_coordination.sql',
+      '0006_followup_settlement.sql',
+      '0007_resources_fulfillment.sql',
+      '0008_notifications.sql',
+      '0009_checkins_signals.sql',
+      '0010_notification_subject.sql',
+      '0011_resource_contact_method_kind.sql',
+      '0012_job_outbox.sql',
+      '0013_pilot_data_operations.sql',
+      '0014_va_sandbox_oauth_evidence.sql',
+    ]);
+    await ensureMigrationsTable(pool);
+    for (const fileName of fileNames) {
+      const sql = await readFile(join(previousBaselineDir, fileName), 'utf8');
+      await pool.query(sql);
+      const match = /^(\d{4})_([a-z0-9_]+)\.sql$/.exec(fileName);
+      if (match === null) throw new Error(`unexpected migration name ${fileName}`);
+      await pool.query(
+        `INSERT INTO ${MIGRATIONS_TABLE} (version, name, checksum) VALUES ($1, $2, $3)`,
+        [Number(match[1]), match[2], checksumOf(sql)],
+      );
+    }
+    await pool.query('CREATE TABLE public.old_baseline_sentinel (id int)');
+
+    const refusal = runMigrations(pool, { mode: 'apply', provenance });
+    await expect(refusal).rejects.toBeInstanceOf(SchemaStateError);
+    await expect(refusal).rejects.toThrow(/modified after it was applied/);
+    const sentinel = await pool.query<{ present: string | null }>(
+      `SELECT to_regclass('public.old_baseline_sentinel') AS present`,
+    );
+    expect(sentinel.rows[0]?.present).not.toBeNull();
   });
 });

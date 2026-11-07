@@ -5,7 +5,7 @@
   "description": "SUAS implementation — conforms to SUAS-specs released stack 0.7.0",
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "build": "tsc --build tsconfig.build.json",

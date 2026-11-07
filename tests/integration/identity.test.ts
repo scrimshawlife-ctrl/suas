@@ -173,6 +173,9 @@ describe('V1_PROJECT_PLAN.md §2.1 — county', () => {
       'SANTA_CRUZ',
     ]);
     expect(await listBorderingCounties(pool, 'ALAMEDA')).toContain('SAN_MATEO');
+    // Alameda borders San Joaquin, not Stanislaus. 0013's Wikipedia source does not
+    // list that pair; 0019 removes it. Santa Clara–Stanislaus stays.
+    expect(await listBorderingCounties(pool, 'ALAMEDA')).not.toContain('STANISLAUS');
     // Symmetry: every row has its mirror.
     const unmatched = await pool.query(
       `SELECT 1 FROM county_adjacency a

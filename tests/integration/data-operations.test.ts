@@ -1,6 +1,6 @@
 /** D-007 pilot data operations: audited, tenant-scoped, no external delivery. */
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { createDecipheriv, randomBytes } from 'node:crypto';
+import { createDecipheriv, randomBytes, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { createTestPool, resetKernelTables, syntheticTenantId } from '../helpers/db.js';
 import { createUser } from '../../src/identity/index.js';
@@ -73,6 +73,22 @@ describe('D-007 approved pilot data operations', () => {
       status: 'ACTIVE',
     });
     const key = randomBytes(32);
+    const marker = 'synthetic-intake-not-for-logs';
+    await pool.query(
+      `INSERT INTO service_request_drafts (draft_id, tenant_id, user_id, status, details, intake_text)
+       VALUES ($1, $2, $3, 'DRAFT', '{}'::jsonb, $4)`,
+      [randomUUID(), user.tenantId, user.userId, marker],
+    );
+    const other = await createUser(pool, {
+      tenantId: user.tenantId,
+      email: 'd007-other-draft@synthetic.suas.test',
+      status: 'ACTIVE',
+    });
+    await pool.query(
+      `INSERT INTO service_request_drafts (draft_id, tenant_id, user_id, status, details, intake_text)
+       VALUES ($1, $2, $3, 'DRAFT', '{}'::jsonb, 'other-person-intake')`,
+      [randomUUID(), other.tenantId, other.userId],
+    );
     const result = await buildPilotExport(pool, {
       tenantId: user.tenantId,
       subjectUserId: user.userId,
@@ -90,10 +106,14 @@ describe('D-007 approved pilot data operations', () => {
     d.setAuthTag(result.authTag);
     const plaintext = Buffer.concat([d.update(result.ciphertext), d.final()]).toString();
     expect(plaintext).toContain('d007-export@synthetic.suas.test');
+    expect(plaintext).toContain(marker);
+    expect(plaintext).not.toContain('other-person-intake');
+    expect(Object.keys(result.manifest.checksums)).toContain('service_request_drafts.json');
     const audit = await pool.query<{ payload: Record<string, unknown> }>(
       'SELECT payload FROM audit_events WHERE event_type=$1',
       ['DATA_EXPORT_COMPLETED'],
     );
+    expect(JSON.stringify(audit.rows[0]?.payload ?? {})).not.toContain(marker);
     expect(audit.rows[0]?.payload).toMatchObject({
       delivery: 'NOT_ACTIVATED',
       encryption: 'AES-256-GCM',
