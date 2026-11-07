@@ -9,9 +9,6 @@ import type { Node } from 'constructs';
 
 export const REGION = 'us-west-2';
 
-/** The placeholder a CI synth uses when the Bedrock model is undecided. Never deploy it. */
-export const PLACEHOLDER_MODEL_ID = 'placeholder.ci-synth-only-model-v1:0';
-
 /** Version of the AWS-published Lambda Web Adapter layer (pinned; override with context). */
 const DEFAULT_WEB_ADAPTER_LAYER_VERSION = 30;
 
@@ -23,10 +20,7 @@ export interface EnvironmentConfig {
   readonly rootDomain: string;
   readonly webHostname: string;
   readonly apiHostname: string;
-  readonly wsHostname: string;
   readonly emailFrom: string;
-  readonly bedrockModelId: string;
-  readonly usingPlaceholderModel: boolean;
   readonly safetyCopyMode: 'placeholder_test_only' | 'approved';
   /** Tenant that new sign-ups join (SUAS_BROWSER_TENANT_ID); a plain UUID, not a secret. */
   readonly browserTenantId: string;
@@ -76,24 +70,17 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
     'apiHostname',
     text(node, 'apiHostname') ?? 'api.staging.suasqrf.com',
   );
-  const wsHostname = hostnameWithin(
-    rootDomain,
-    'wsHostname',
-    text(node, 'wsHostname') ?? 'ws.staging.suasqrf.com',
-  );
 
-  const modelId = text(node, 'bedrockModelId');
-  const placeholderAllowed = text(node, 'allowPlaceholderModel') === 'true';
-  if (modelId === undefined && !placeholderAllowed) {
+  // R2.15 is not approved. A model id must not turn inference on.
+  if (
+    text(node, 'bedrockModelId') !== undefined ||
+    text(node, 'allowPlaceholderModel') !== undefined
+  ) {
     throw new Error(
-      'Context "bedrockModelId" is required: the Bedrock model is not chosen yet ' +
-        '(V1_PROJECT_PLAN.md §8 item 5), so there is no default. Pass -c bedrockModelId=<model id or ' +
-        'inference profile id>. For a CI synth that will never be deployed, pass ' +
-        '-c allowPlaceholderModel=true instead.',
+      'Staging leaves SUAS_MODEL_INFERENCE_MODE=disabled. R2.15 is not approved, so ' +
+        'bedrockModelId and allowPlaceholderModel are refused. The Bedrock adapter in ' +
+        'src/inference/bedrock-inference.ts stays unused by this template.',
     );
-  }
-  if (modelId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(modelId)) {
-    throw new Error(`Context "bedrockModelId" is not a valid Bedrock model id: "${modelId}".`);
   }
 
   const safety = text(node, 'safetyCopyMode') ?? 'placeholder_test_only';
@@ -127,10 +114,7 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
     rootDomain,
     webHostname,
     apiHostname,
-    wsHostname,
     emailFrom: text(node, 'emailFrom') ?? `no-reply@${rootDomain}`,
-    bedrockModelId: modelId ?? PLACEHOLDER_MODEL_ID,
-    usingPlaceholderModel: modelId === undefined,
     safetyCopyMode: safety,
     browserTenantId: tenant,
     webAdapterLayerVersion: layerVersion,

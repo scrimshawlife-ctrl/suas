@@ -1,6 +1,8 @@
 /**
- * The STAGING backend (synthetic data only): network, database, the API, the WebSocket
- * API, the scheduled job worker, the migrate function, and the assets bucket.
+ * The STAGING backend (synthetic data only): network, database, the API, the scheduled
+ * job worker, the migrate function, and the assets bucket. Inference stays disabled
+ * (R2.15 is not approved) and chat push stays off (R6.12 is not accepted). The Bedrock
+ * and API Gateway push adapters remain in src/ and are not selected here.
  *
  * Design rules (user decisions of 2026-11-05):
  *  - The VPC has isolated subnets only. There is no NAT gateway and no internet gateway
@@ -73,7 +75,7 @@ export class BackendStack extends Stack {
 
     const lambdaSg = new ec2.SecurityGroup(this, 'LambdaSg', {
       vpc,
-      description: 'API, WebSocket and job worker functions',
+      description: 'API and job worker functions',
       allowAllOutbound: false,
     });
     const migrateSg = new ec2.SecurityGroup(this, 'MigrateSg', {
@@ -115,12 +117,10 @@ export class BackendStack extends Stack {
 
     vpc.addGatewayEndpoint('S3Endpoint', { service: ec2.GatewayVpcEndpointAwsService.S3 });
     // One interface endpoint per AWS service the code calls (see README for the source files).
+    // SES only. Bedrock Runtime and execute-api are not endpoints while inference
+    // and chat push stay off.
     const interfaceEndpoints: ReadonlyArray<readonly [string, ec2.InterfaceVpcEndpointAwsService]> =
-      [
-        ['BedrockRuntimeEndpoint', ec2.InterfaceVpcEndpointAwsService.BEDROCK_RUNTIME],
-        ['SesApiEndpoint', ec2.InterfaceVpcEndpointAwsService.EMAIL],
-        ['ExecuteApiEndpoint', ec2.InterfaceVpcEndpointAwsService.APIGATEWAY],
-      ];
+      [['SesApiEndpoint', ec2.InterfaceVpcEndpointAwsService.EMAIL]];
     for (const [endpointId, service] of interfaceEndpoints) {
       vpc.addInterfaceEndpoint(endpointId, {
         service,
@@ -204,18 +204,6 @@ export class BackendStack extends Stack {
 
     // -------------------------------------------------------------------- api
     const code = suasLambdaCode();
-
-    const wsApi = new apigw.WebSocketApi(this, 'WebSocketApi', {
-      apiName: `suas-${config.name}-chat`,
-    });
-    const wsStageName = config.name;
-    // Management (@connections) endpoint, which the push adapter posts to.
-    const wsManagementEndpoint = Fn.join('', [
-      'https://',
-      wsApi.apiId,
-      `.execute-api.${REGION}.${this.urlSuffix}/`,
-      wsStageName,
-    ]);
 
     // Settings every function needs for configuration to validate (src/config/schema.ts).
     const baseEnv: Env = {
@@ -325,33 +313,19 @@ export class BackendStack extends Stack {
         // do not list the staging web hostname.
         SUAS_EMAIL_MODE: 'ses',
         SUAS_EMAIL_FROM: config.emailFrom,
-        SUAS_MODEL_INFERENCE_MODE: 'bedrock',
-        SUAS_BEDROCK_MODEL_ID: config.bedrockModelId,
+        // R2.15 is not approved. The Bedrock adapter is not selected.
+        SUAS_MODEL_INFERENCE_MODE: 'disabled',
         SUAS_OBJECT_STORAGE_MODE: 's3',
         SUAS_S3_BUCKET: assetsBucket.bucketName,
         // No identity-check provider is chosen (plan §8 item 2). Fake ID verification
         // is refused on STAGING (D-052), so the gate stays disabled.
         SUAS_ID_VERIFICATION_MODE: 'disabled',
-        SUAS_CHAT_PUSH_MODE: 'apigw',
-        SUAS_CHAT_WS_ENDPOINT: wsManagementEndpoint,
-        SUAS_CHAT_WS_PUBLIC_URL: `wss://${config.wsHostname}`,
+        // R6.12 is not accepted. Chat still works over REST. The push adapter is not selected.
+        SUAS_CHAT_PUSH_MODE: 'disabled',
         AWS_LAMBDA_EXEC_WRAPPER: '/opt/bootstrap',
         AWS_LWA_PORT: API_PORT,
         AWS_LWA_READINESS_CHECK_PATH: '/api/v0/health',
         AWS_LWA_ASYNC_INIT: 'true',
-      },
-    });
-
-    const webSocketFunction = newFunction('WebSocketFunction', {
-      handler: 'websocket.handler',
-      sg: lambdaSg,
-      memory: 256,
-      timeout: Duration.seconds(10),
-      env: {
-        ...baseEnv,
-        ...viaProxy,
-        SUAS_CHAT_PUSH_MODE: 'apigw',
-        SUAS_CHAT_WS_ENDPOINT: wsManagementEndpoint,
       },
     });
 
@@ -383,19 +357,13 @@ export class BackendStack extends Stack {
     });
 
     // ------------------------------------------------------- IAM (least privilege)
-    // SES: send from the one domain identity. Bedrock: invoke the one chosen model.
+    // SES: send from the one domain identity. No bedrock:InvokeModel: inference is disabled.
     const sendEmail = new iam.PolicyStatement({
       actions: ['ses:SendEmail'],
       resources: [props.sesIdentityArn],
     });
     apiFunction.addToRolePolicy(sendEmail);
     jobWorkerFunction.addToRolePolicy(sendEmail);
-    apiFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['bedrock:InvokeModel'],
-        resources: this.bedrockModelArns(config.bedrockModelId),
-      }),
-    );
     apiFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
@@ -410,12 +378,9 @@ export class BackendStack extends Stack {
         resources: [assetsBucket.bucketArn],
       }),
     );
-    wsApi.grantManageConnections(apiFunction);
-
     // ---------------------------------------------------- certificate and domains
     const certificate = new acm.Certificate(this, 'ApiCertificate', {
       domainName: config.apiHostname,
-      subjectAlternativeNames: [config.wsHostname],
       validation: acm.CertificateValidation.fromDns(zone),
     });
     const regionalDomain = (domainId: string, domainName: string): apigw.DomainName =>
@@ -477,24 +442,6 @@ export class BackendStack extends Stack {
     });
     aliasTo('ApiAlias', config.apiHostname, apiDomain);
 
-    // WebSocket API: $connect (ticket in the query string), $disconnect and $default all go to
-    // the WebSocket function. No access log is kept, because it could capture the ticket.
-    const wsIntegration = (name: string): apigwIntegrations.WebSocketLambdaIntegration =>
-      new apigwIntegrations.WebSocketLambdaIntegration(name, webSocketFunction);
-    wsApi.addRoute('$connect', { integration: wsIntegration('WsConnectIntegration') });
-    wsApi.addRoute('$disconnect', { integration: wsIntegration('WsDisconnectIntegration') });
-    wsApi.addRoute('$default', { integration: wsIntegration('WsDefaultIntegration') });
-    const wsDomain = regionalDomain('WebSocketDomain', config.wsHostname);
-    new apigw.WebSocketStage(this, 'WebSocketStage', {
-      webSocketApi: wsApi,
-      stageName: wsStageName,
-      autoDeploy: true,
-      throttle: { rateLimit: 50, burstLimit: 100 },
-      // Root mapping: the public URL needs no stage path.
-      domainMapping: { domainName: wsDomain },
-    });
-    aliasTo('WebSocketAlias', config.wsHostname, wsDomain);
-
     // ------------------------------------------------------------------- jobs
     // One pass of the job worker each minute (outbox drain plus request widening).
     new scheduler.Schedule(this, 'JobWorkerSchedule', {
@@ -542,28 +489,10 @@ export class BackendStack extends Stack {
     }
 
     new CfnOutput(this, 'ApiUrl', { value: `https://${config.apiHostname}` });
-    new CfnOutput(this, 'WebSocketUrl', { value: `wss://${config.wsHostname}` });
     new CfnOutput(this, 'MigrateFunctionName', {
       description: 'Invoke once after each deploy that adds migrations.',
       value: migrateFunction.functionName,
     });
     new CfnOutput(this, 'DatabaseSecretName', { value: dbSecret.secretName });
-  }
-
-  /**
-   * IAM resources for one model. A model id with a geography prefix (us., eu., global., ...)
-   * is an inference profile: invoking it needs the profile in this account and the underlying
-   * foundation model in whichever region the profile routes to, so the region is the only
-   * wildcard. A plain id is that one foundation model in this region.
-   */
-  private bedrockModelArns(modelId: string): string[] {
-    const profile = /^(us|eu|apac|global|ca|jp|au)\.(.+)$/.exec(modelId);
-    if (profile === null || profile[2] === undefined) {
-      return [`arn:${this.partition}:bedrock:${REGION}::foundation-model/${modelId}`];
-    }
-    return [
-      `arn:${this.partition}:bedrock:${REGION}:${this.account}:inference-profile/${modelId}`,
-      `arn:${this.partition}:bedrock:*::foundation-model/${profile[2]}`,
-    ];
   }
 }
