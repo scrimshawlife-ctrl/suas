@@ -71,9 +71,13 @@ if (invokedDirectly) {
     );
     process.exit(1);
   }
-  const result = spawnSync(launch.command[0], [...launch.command.slice(1), ...cdkSynthArgs(extra)], {
-    env: offlineSynthEnv(process.env),
-    stdio: 'inherit',
-  });
+  const result = spawnSync(
+    launch.command[0],
+    [...launch.command.slice(1), ...cdkSynthArgs(extra)],
+    {
+      env: offlineSynthEnv(process.env),
+      stdio: 'inherit',
+    },
+  );
   process.exit(result.status ?? 1);
 }

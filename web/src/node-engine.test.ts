@@ -1,12 +1,8 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import packageJson from '../package.json' with { type: 'json' };
 import { nodeEngineIssue } from '../../scripts/node-engine.js';
 
-const range = (
-  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
-    engines: { node: string };
-  }
-).engines.node;
+const range = packageJson.engines.node;
 
 describe('web Node engine', () => {
   it('rejects Node 22.0 and versions below the locked jsdom engine', () => {
