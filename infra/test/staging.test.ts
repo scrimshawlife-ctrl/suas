@@ -48,14 +48,9 @@ describe('network', () => {
         p,
       ]),
     );
-    expect(Object.keys(byService).sort()).toEqual([
-      'bedrock-runtime',
-      'email',
-      'execute-api',
-      's3',
-    ]);
+    expect(Object.keys(byService).sort()).toEqual(['email', 's3']);
     expect(byService.s3?.VpcEndpointType).toBe('Gateway');
-    for (const name of ['bedrock-runtime', 'email', 'execute-api']) {
+    for (const name of ['email']) {
       expect(byService[name]?.VpcEndpointType).toBe('Interface');
       expect(byService[name]?.PrivateDnsEnabled).toBe(true);
     }
@@ -193,16 +188,11 @@ describe('functions', () => {
         r.Properties?.VpcConfig !== undefined,
     );
 
-  it('puts the API, WebSocket, job worker and migrate functions in the isolated subnets', () => {
+  it('puts the API, job worker and migrate functions in the isolated subnets', () => {
     const handlers = functions()
       .map(([, r]) => r.Properties?.Handler)
       .sort();
-    expect(handlers).toEqual([
-      'job-worker.handler',
-      'migrate.handler',
-      'run.sh',
-      'websocket.handler',
-    ]);
+    expect(handlers).toEqual(['job-worker.handler', 'migrate.handler', 'run.sh']);
     const subnetIds = ofType(s.backend, 'AWS::EC2::Subnet').map(([id]) => id);
     for (const [, fn] of functions()) {
       const refs = (fn.Properties?.VpcConfig.SubnetIds as Array<{ Ref: string }>).map((r) => r.Ref);
@@ -246,20 +236,23 @@ describe('functions', () => {
       if (result.ok && fn.Properties?.Handler === 'run.sh') {
         expect(result.config.environment).toBe('STAGING');
         expect(result.config.notifications.email).toBe('ses');
-        expect(result.config.modelInference.mode).toBe('bedrock');
+        expect(result.config.modelInference.mode).toBe('disabled');
+        expect(result.config.modelInference.bedrockModelId).toBeUndefined();
         expect(result.config.idVerification.mode).toBe('disabled');
         expect(result.config.publicSignUp).toBe(false);
         expect(result.config.stagingFixturePrincipals).toEqual([]);
         expect(env.SUAS_CORS_ALLOWED_ORIGINS).toBeUndefined();
         expect(result.config.corsAllowedOrigins).toEqual([]);
-        expect(result.config.chatPush.publicUrl).toBe('wss://ws.staging.suasqrf.com');
+        expect(result.config.chatPush.mode).toBe('disabled');
+        expect(result.config.chatPush.publicUrl).toBeUndefined();
+        expect(env.SUAS_CHAT_WS_ENDPOINT).toBeUndefined();
       }
     }
   });
 
   it('retains logs for a set time on every log group', () => {
     const groups = ofType(s.backend, 'AWS::Logs::LogGroup');
-    expect(groups.length).toBeGreaterThanOrEqual(5);
+    expect(groups.length).toBeGreaterThanOrEqual(4);
     for (const [, group] of groups) expect(group.Properties?.RetentionInDays).toBe(30);
   });
 
@@ -305,7 +298,7 @@ describe('IAM', () => {
     const eni = statements(s.backend).filter((st) =>
       [st.Action].flat().includes('ec2:CreateNetworkInterface'),
     );
-    expect(eni).toHaveLength(4);
+    expect(eni).toHaveLength(3);
     for (const st of eni) {
       expect([st.Action].flat().sort()).toEqual([
         'ec2:AssignPrivateIpAddresses',
@@ -334,11 +327,14 @@ describe('IAM', () => {
     }
   });
 
-  it('never uses a wildcard resource for Bedrock or SES actions', () => {
+  it('never uses a wildcard resource for SES, and does not grant Bedrock', () => {
     const sensitive = statements(s.backend).filter((st) =>
       [st.Action].flat().some((a) => /^(bedrock|ses):/.test(a)),
     );
-    expect(sensitive.length).toBeGreaterThanOrEqual(2);
+    expect(sensitive.length).toBeGreaterThanOrEqual(1);
+    expect(
+      statements(s.backend).some((st) => [st.Action].flat().some((a) => a.startsWith('bedrock:'))),
+    ).toBe(false);
     for (const st of sensitive) {
       for (const resource of [st.Resource].flat()) {
         expect(resource).not.toBe('*');
@@ -347,26 +343,9 @@ describe('IAM', () => {
     }
   });
 
-  it('scopes Bedrock to the configured model and SES to the domain identity', () => {
-    const bedrock = statements(s.backend).find((st) =>
-      [st.Action].flat().includes('bedrock:InvokeModel'),
-    );
-    expect(JSON.stringify(bedrock?.Resource)).toContain(
-      'foundation-model/placeholder.ci-synth-only-model-v1:0',
-    );
+  it('scopes SES to the domain identity', () => {
     const ses = statements(s.backend).find((st) => [st.Action].flat().includes('ses:SendEmail'));
     expect(JSON.stringify(ses?.Resource)).toContain('identity/suasqrf.com');
-  });
-
-  it('scopes an inference profile model to the profile plus the underlying foundation model', () => {
-    const profile = synthesize({ bedrockModelId: 'us.example.model-v1:0' });
-    const bedrock = statements(profile.backend).find((st) =>
-      [st.Action].flat().includes('bedrock:InvokeModel'),
-    );
-    const text = JSON.stringify(bedrock?.Resource);
-    expect(text).toContain('inference-profile/us.example.model-v1:0');
-    expect(text).toContain('foundation-model/example.model-v1:0');
-    expect(text).not.toMatch(/"\*"/);
   });
 });
 
@@ -403,26 +382,18 @@ describe('DNS and email', () => {
       'api.staging.suasqrf.com.',
       'staging.suasqrf.com.',
       'staging.suasqrf.com.',
-      'ws.staging.suasqrf.com.',
     ]);
   });
 });
 
 describe('configuration and hygiene', () => {
-  it('fails with a clear message when the Bedrock model is not given', () => {
-    expect(() => createStagingApp(new App())).toThrow(/bedrockModelId.*not chosen yet/s);
-  });
-
-  it('marks a placeholder-model synth so it is not mistaken for a deployable one', () => {
-    expect(s.stacks.backend.templateOptions.description).toContain('PLACEHOLDER MODEL');
-    const real = synthesize({ bedrockModelId: 'us.example.model-v1:0' });
-    expect(real.stacks.backend.templateOptions.description).not.toContain('PLACEHOLDER');
+  it('refuses a Bedrock model id so inference cannot be turned on from context', () => {
+    expect(() => synthesize({ bedrockModelId: 'us.example.model-v1:0' })).toThrow(/R2\.15/);
+    expect(() => createStagingApp(new App())).not.toThrow();
   });
 
   it('rejects a hostname outside the hosted zone', () => {
-    expect(() =>
-      synthesize({ allowPlaceholderModel: 'true', webHostname: 'staging.example.com' }),
-    ).toThrow(/inside suasqrf\.com/);
+    expect(() => synthesize({ webHostname: 'staging.example.com' })).toThrow(/inside suasqrf\.com/);
   });
 
   it('contains no AWS account id (the Lambda Web Adapter layer publisher is AWS-owned)', () => {

@@ -7,9 +7,8 @@
  * shared config files are disabled, lookups are refused, and the CLI notices and telemetry
  * are off. If anything tried to read from AWS, the synth would fail instead of calling it.
  *
- * Usage: npm run synth [-- extra cdk args, such as -c bedrockModelId=<id>]
- * With no bedrockModelId given, the placeholder context is added: that output is only for
- * checking the app, never for deploying.
+ * Usage: npm run synth [-- extra cdk args]
+ * Staging leaves inference disabled and chat push off. Do not pass bedrockModelId.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -45,18 +44,7 @@ export function prepareCdkLaunch(root = infraRoot) {
 }
 
 export function cdkSynthArgs(extra) {
-  const givesModel = extra.some(
-    (arg) => arg.includes('bedrockModelId=') || arg.includes('allowPlaceholderModel='),
-  );
-  return [
-    'synth',
-    '--quiet',
-    '--no-lookups',
-    '--no-notices',
-    '--no-version-reporting',
-    ...(givesModel ? [] : ['-c', 'allowPlaceholderModel=true']),
-    ...extra,
-  ];
+  return ['synth', '--quiet', '--no-lookups', '--no-notices', '--no-version-reporting', ...extra];
 }
 
 const invokedDirectly =
