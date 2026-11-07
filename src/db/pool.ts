@@ -49,9 +49,13 @@ export function databaseClientSettings(config: SuasConfig): {
  * calls — required on Workers with Hyperdrive. TLS matches the Node pool.
  */
 export function createWorkerPool(config: SuasConfig): Pool {
+  // Missing DATABASE_URL fails here, before a request opens a client. The same
+  // settings, including TLS, are what each per-request Client is constructed with.
+  const settings = databaseClientSettings(config);
+
   const openClient = async (): Promise<Client> => {
     const client = new Client({
-      ...databaseClientSettings(config),
+      ...settings,
       connectionTimeoutMillis: 10_000,
     });
     await client.connect();

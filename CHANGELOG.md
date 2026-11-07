@@ -23,7 +23,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 ### Fixed
 
 - **Helper standing on a request ends with the case cycle.** Closing a case, or reopening it, removes the former helper's access to that request, its commands, and its chat. The requester still reads their own request and thread. Case routes already used this cycle check; request and chat routes now use it too.
-- **Worker database clients use the same TLS settings as the Node pool.** `DATABASE_SSL_MODE=verify` and `DATABASE_SSL_CA_FILE` apply to the per-request Worker client.
+- **Worker database clients use the same TLS settings as the Node pool.** `DATABASE_SSL_MODE=verify` and `DATABASE_SSL_CA_FILE` apply to the per-request Worker client. A missing `DATABASE_URL` still throws when that pool is created.
 - **Settlement OpenAPI.** `VeteranSettlement` rejects extra properties, so a full Settlement matches only the accepter schema under `oneOf`.
 - **Pilot export includes the subject's intake drafts.** `service_request_drafts` rows for that user are in the encrypted package. Another person's draft is not. The audit record stores checksums, not the intake text.
 - **Migration reset reads `SUAS_ENV`.** A caller-supplied environment of TEST does not reset when the process `SUAS_ENV` is STAGING or anything other than LOCAL or TEST. Allowlist, synthetic-marker, and checksum checks are unchanged.
