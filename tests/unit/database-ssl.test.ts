@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { loadConfig, tryLoadConfig } from '../../src/config/index.js';
-import { databaseSslOptions } from '../../src/db/pool.js';
+import { databaseClientSettings, databaseSslOptions } from '../../src/db/pool.js';
 import { validEnv } from '../helpers/env.js';
 
 function issuesFor(env: Record<string, string | undefined>): readonly string[] {
@@ -18,6 +18,13 @@ describe('database TLS configuration', () => {
     const { ssl } = loadConfig(validEnv()).database;
     expect(ssl).toEqual({ mode: 'disable', caFile: undefined });
     expect(databaseSslOptions(ssl)).toBeUndefined();
+  });
+
+  it('gives the Worker client the same verify TLS settings as the Node pool', () => {
+    const verify = loadConfig(validEnv({ DATABASE_SSL_MODE: 'verify' }));
+    expect(databaseClientSettings(verify).ssl).toEqual({ rejectUnauthorized: true });
+    const plain = loadConfig(validEnv());
+    expect(databaseClientSettings(plain).ssl).toBeUndefined();
   });
 
   it('verify mode checks the server certificate and uses the default trust store', () => {

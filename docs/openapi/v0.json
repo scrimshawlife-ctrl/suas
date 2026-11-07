@@ -4779,6 +4779,7 @@
       },
       "VeteranSettlement": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "settlement_id",
           "resolution_cycle",

@@ -22,6 +22,7 @@ import {
   type AmbientConnectionEnv,
 } from '../config/ambient-connection.js';
 import { productionDataMarkersIn, type EnvironmentClass } from '../config/schema.js';
+import { trustedEnvironmentClass } from '../config/trusted-environment.js';
 import { runMigrationsOnClient, SchemaStateError, type SchemaProvenance } from './migrator.js';
 
 export interface MigrationResetPolicy {
@@ -104,15 +105,23 @@ function allowlistEntryWellFormed(entry: string): boolean {
 
 /**
  * Why this target must not be reset, or undefined when the policy itself passes.
- * Pure: no database connection and no schema change.
+ * No database connection and no schema change. The environment class is the
+ * process `SUAS_ENV` from the config module, not the caller-supplied policy field.
  */
 export function migrationResetRefusal(policy: MigrationResetPolicy): string | undefined {
-  if (policy.environment !== 'LOCAL' && policy.environment !== 'TEST') {
+  // The process environment is the trusted class. A caller cannot pass TEST while
+  // SUAS_ENV is STAGING and reach the DROP. D-053 allows the reset only for LOCAL
+  // and TEST, and only for the rest of the allowlist checks below.
+  const trusted = trustedEnvironmentClass();
+  if (trusted !== 'LOCAL' && trusted !== 'TEST') {
     return (
-      `Migration reset is refused when SUAS_ENV=${policy.environment}. Only LOCAL and TEST ` +
-      'may reset a named synthetic disposable database. There is no in-place upgrade and ' +
-      'no down migration.'
+      `Migration reset is refused when SUAS_ENV=${trusted ?? 'unset'}. Only LOCAL and TEST ` +
+      'may reset a named synthetic disposable database. A caller-supplied environment does not override SUAS_ENV. ' +
+      'There is no in-place upgrade and no down migration.'
     );
+  }
+  if (policy.environment !== trusted) {
+    return `Migration reset is refused: claimed environment ${policy.environment} does not match SUAS_ENV=${trusted}.`;
   }
 
   const marker = policy.syntheticMarker?.trim() ?? '';

@@ -122,6 +122,11 @@ async function scenario(options: { accepted: boolean }) {
        VALUES ($1, $2, $3, $4, $5)`,
       [randomUUID(), tenantId, serviceRequestId, requester.userId, accepter.userId],
     );
+    await pool().query(
+      `UPDATE service_requests SET accepted_by_user_id = $2
+        WHERE tenant_id = $1 AND service_request_id = $3`,
+      [tenantId, accepter.userId, serviceRequestId],
+    );
   }
   return { tenantId, requester, accepter, stranger, serviceRequestId };
 }

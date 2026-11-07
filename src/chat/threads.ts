@@ -57,6 +57,8 @@ export async function listChatThreads(
        FROM chat_threads t
        JOIN service_requests r
          ON r.service_request_id = t.service_request_id AND r.tenant_id = t.tenant_id
+       JOIN support_cases c
+         ON c.case_id = r.case_id AND c.tenant_id = r.tenant_id
        JOIN users cp
          ON cp.tenant_id = t.tenant_id
         AND cp.user_id = CASE WHEN t.requester_user_id = $2::uuid
@@ -69,7 +71,14 @@ export async function listChatThreads(
           LIMIT 1
        ) m ON true
       WHERE t.tenant_id = $1
-        AND (t.requester_user_id = $2::uuid OR t.accepted_by_user_id = $2::uuid)
+        AND (
+          t.requester_user_id = $2::uuid
+          OR (
+            t.accepted_by_user_id = $2::uuid
+            AND c.status <> 'CLOSED'
+            AND (c.closed_at IS NULL OR r.created_at > c.closed_at)
+          )
+        )
       ORDER BY COALESCE(m.created_at, t.created_at) DESC, t.chat_thread_id DESC
       LIMIT $4::int`,
     [tenantId, userId, LAST_MESSAGE_PREVIEW_MAX, CHAT_THREAD_LIST_MAX],

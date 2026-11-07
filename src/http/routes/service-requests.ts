@@ -31,6 +31,7 @@ import {
   MAX_PAGE_SIZE,
   readRequestList,
   readServiceRequestDetail,
+  requestHeldInCurrentCycle,
   SERVICE_CATEGORIES,
   SERVICE_REQUEST_COMMANDS,
   type ServiceRequest,
@@ -97,8 +98,9 @@ function publicServiceRequest(request: ServiceRequest) {
  * re-checked at mutation time, not trusted from an earlier read.
  */
 async function assertRequestHolder(db: Queryable, context: AuthContext, requestId: string) {
-  const current = await findServiceRequest(db, context.tenantId, requestId);
-  if (current?.acceptedByUserId === context.userId) return;
+  if (await requestHeldInCurrentCycle(db, context.tenantId, requestId, context.userId)) {
+    return;
+  }
   throw new ForbiddenError(
     'Only the person who accepted this request may run this command (SUAS-specs DISPATCH.md §4).',
   );

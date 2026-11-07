@@ -6,6 +6,7 @@
  * SUAS-specs TESTING.md §2 "Migration/restore" layer.
  */
 
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { cp, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { isIP } from 'node:net';
@@ -15,7 +16,9 @@ import { Pool, type PoolClient } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { AMBIENT_SESSION_ENV_KEYS } from '../../src/config/ambient-connection.js';
 import {
+  checksumOf,
   databaseNameFromUrl,
+  ensureMigrationsTable,
   EXPECTED_SCHEMA_VERSION,
   loadMigrationFiles,
   resolveMigrationsDir,
@@ -967,7 +970,7 @@ describe('0017 request holder backfill', () => {
       const closedNoChat = await insertRequest(tenantId, caseB, veteranB, 'CLOSED');
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([17, 18]);
+      expect(result.appliedNow).toEqual([17, 18, 19]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const holders = await pool.query<{ id: string; holder: string | null }>(
@@ -1034,5 +1037,44 @@ describe('0018 current case index', () => {
     }
     // Another Veteran is unaffected.
     await insertCase(tenantId, await insertUser(tenantId), 'OPEN');
+  });
+});
+
+describe('previous baseline versus this build', () => {
+  const previousBaseline = '823fc7e5b2933ec0e045e397ad747507e9b805fd';
+
+  it('stops with SchemaStateError when 0001-0014 from that baseline are already applied, and does not drop the schema', async () => {
+    const paths = execFileSync('git', ['ls-tree', '--name-only', previousBaseline, 'migrations/'], {
+      encoding: 'utf8',
+    })
+      .trim()
+      .split('\n')
+      .filter((path) => path.endsWith('.sql'))
+      .sort();
+    expect(paths).toHaveLength(14);
+    await ensureMigrationsTable(pool);
+    for (const path of paths) {
+      const sql = execFileSync('git', ['show', `${previousBaseline}:${path}`], {
+        encoding: 'utf8',
+        maxBuffer: 20_000_000,
+      });
+      await pool.query(sql);
+      const fileName = path.slice(path.lastIndexOf('/') + 1);
+      const match = /^(\d{4})_([a-z0-9_]+)\.sql$/.exec(fileName);
+      if (match === null) throw new Error(`unexpected migration name ${fileName}`);
+      await pool.query(
+        `INSERT INTO ${MIGRATIONS_TABLE} (version, name, checksum) VALUES ($1, $2, $3)`,
+        [Number(match[1]), match[2], checksumOf(sql)],
+      );
+    }
+    await pool.query('CREATE TABLE public.old_baseline_sentinel (id int)');
+
+    await expect(runMigrations(pool, { mode: 'apply', provenance })).rejects.toBeInstanceOf(
+      SchemaStateError,
+    );
+    const sentinel = await pool.query<{ present: string | null }>(
+      `SELECT to_regclass('public.old_baseline_sentinel') AS present`,
+    );
+    expect(sentinel.rows[0]?.present).not.toBeNull();
   });
 });

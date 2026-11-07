@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export interface MigrationFile {
@@ -21,11 +21,11 @@ export interface MigrationFile {
 }
 
 /**
- * The `migrations/` directory, found from where this code runs: the repository
- * root for `src/db` and `dist/db`, beside a bundle in `dist/` or at the deploy
- * root, or under the working directory (Lambda runs from the deploy directory).
- * The first candidate that exists wins; if none does, the first is returned and
- * loading fails with a clear missing-directory error.
+ * The `migrations/` directory beside this build: the repository root for
+ * `src/db` and `dist/db`, or beside a bundle (`./migrations`, which the Lambda
+ * package copies next to the entry file). The working directory is not a
+ * candidate. If none of the build-relative directories exist, resolution throws
+ * rather than loading some other tree.
  *
  * Lazily evaluated: Cloudflare Workers may import this module through the db
  * barrel during isolate startup, and a top-level `new URL(..., import.meta.url)`
@@ -35,17 +35,24 @@ export interface MigrationFile {
 let migrationsDirCache: string | undefined;
 
 export function resolveMigrationsDir(): string {
-  migrationsDirCache ??= firstExistingDir([
+  migrationsDirCache ??= chooseMigrationsDir([
     fileURLToPath(new URL('../../migrations', import.meta.url)),
     fileURLToPath(new URL('../migrations', import.meta.url)),
     fileURLToPath(new URL('./migrations', import.meta.url)),
-    resolve('migrations'),
   ]);
   return migrationsDirCache;
 }
 
-function firstExistingDir(candidates: readonly [string, ...string[]]): string {
-  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
+/** First existing directory. Throws when every candidate is missing. */
+export function chooseMigrationsDir(candidates: readonly string[]): string {
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (found === undefined) {
+    throw new Error(
+      `Migration directory not found beside this build. Refusing to use the working directory. ` +
+        `Looked in: ${candidates.join(', ')}`,
+    );
+  }
+  return found;
 }
 
 /** @deprecated Prefer `resolveMigrationsDir()`. */

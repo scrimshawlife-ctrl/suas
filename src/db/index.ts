@@ -16,6 +16,7 @@ export {
 } from './migrator.js';
 export {
   checksumOf,
+  chooseMigrationsDir,
   loadMigrationFiles,
   MIGRATIONS_DIR,
   resolveMigrationsDir,

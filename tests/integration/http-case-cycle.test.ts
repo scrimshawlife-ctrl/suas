@@ -159,8 +159,29 @@ describe('holder standing ends with the case cycle', () => {
       channel: 'PHONE',
     });
     expect(logged.statusCode).toBe(404);
-    // The requester still reads their own closed case.
+    // The same cycle rule covers the request, its commands, and its chat. Case
+    // sub-resources alone do not. The requester still reads their own closed request.
+    expect((await get(helper, `/service-requests/${requestId}`)).statusCode).toBe(404);
+    expect((await post(helper, `/service-requests/${requestId}/commands/START`)).statusCode).toBe(
+      404,
+    );
+    expect((await get(helper, `/service-requests/${requestId}/chat/messages`)).statusCode).toBe(
+      404,
+    );
+    const helperThreads = await get(helper, '/chat/threads');
+    expect(
+      (helperThreads.json().threads as { service_request_id: string }[]).map(
+        (thread) => thread.service_request_id,
+      ),
+    ).not.toContain(requestId);
     expect((await get(requester, `/cases/${caseId}`)).statusCode).toBe(200);
+    expect((await get(requester, `/service-requests/${requestId}`)).statusCode).toBe(200);
+    const requesterThreads = await get(requester, '/chat/threads');
+    expect(
+      (requesterThreads.json().threads as { service_request_id: string }[]).map(
+        (thread) => thread.service_request_id,
+      ),
+    ).toContain(requestId);
   });
 
   it('refuses a previous-cycle holder the case commands after REOPEN and a new accept', async () => {
@@ -200,6 +221,12 @@ describe('holder standing ends with the case cycle', () => {
     });
     expect(resolved.statusCode).toBe(404);
     expect((await get(former, `/cases/${first.caseId}`)).statusCode).toBe(404);
+    // A previous-cycle accept does not keep the old request or its chat.
+    expect((await get(former, `/service-requests/${first.requestId}`)).statusCode).toBe(404);
+    expect(
+      (await get(former, `/service-requests/${first.requestId}/chat/messages`)).statusCode,
+    ).toBe(404);
+    expect((await get(next, `/service-requests/${second.requestId}`)).statusCode).toBe(200);
 
     // The helper who accepted in this cycle can.
     expect((await post(next, `/cases/${first.caseId}/commands/activate`)).statusCode).toBe(200);

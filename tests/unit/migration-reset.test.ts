@@ -77,6 +77,16 @@ describe('migration reset refusal', () => {
     expect(migrationResetRefusal(policy({ environment: 'STAGING' }))).toMatch(/STAGING/);
   });
 
+  it('refuses a TEST claim when the process SUAS_ENV is STAGING', () => {
+    const saved = process.env.SUAS_ENV;
+    process.env.SUAS_ENV = 'STAGING';
+    try {
+      expect(migrationResetRefusal(policy({ environment: 'TEST' }))).toMatch(/SUAS_ENV=STAGING/);
+    } finally {
+      process.env.SUAS_ENV = saved;
+    }
+  });
+
   it('refuses a production-like URL', () => {
     expect(
       migrationResetRefusal(

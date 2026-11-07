@@ -8,12 +8,12 @@
  * - SUAS-specs SECURITY.md §2 / API.md §4: row-level authorization, with no
  *   existence leakage to anyone outside the relationship.
  *
- * Two levels. A Service Request is touched by its requester and by the one helper who
- * accepted it (`resolveRequestAccess`). A case-level action (contact log, follow-ups,
- * case commands, resolve) is allowed to the requester for reads and to any helper who
- * holds at least one request of the case (`resolveCaseAccess`). Anyone else gets a 404,
- * the same as a case that does not exist; there is no tenant-wide role that reads other
- * people's cases.
+ * Two levels. A Service Request is touched by its requester, and by the helper who
+ * accepted it only while that request is in the case's current cycle
+ * (`resolveRequestAccess`). Closing the case, or reopening it, ends that helper's
+ * standing. A case-level action (contact log, follow-ups, case commands, resolve) uses
+ * the same cycle (`resolveCaseAccess`). Anyone else gets a 404, the same as a case
+ * that does not exist; there is no tenant-wide role that reads other people's cases.
  */
 
 import type { Queryable } from '../db/index.js';
@@ -21,6 +21,7 @@ import { ForbiddenError, ResourceNotVisibleError, type AuthContext } from '../au
 import {
   findCase,
   holdsRequestInCase,
+  requestHeldInCurrentCycle,
   type ServiceRequest,
   type SupportCase,
 } from '../coordination/index.js';
@@ -72,7 +73,14 @@ export async function resolveRequestAccess(
   const supportCase = await findCase(db, context.tenantId, serviceRequest.caseId);
   if (supportCase === undefined) throw new ResourceNotVisibleError();
   const owner = supportCase.veteranUserId === context.userId;
-  const holder = !owner && serviceRequest.acceptedByUserId === context.userId;
+  const holder =
+    !owner &&
+    (await requestHeldInCurrentCycle(
+      db,
+      context.tenantId,
+      serviceRequest.serviceRequestId,
+      context.userId,
+    ));
   if (!owner && !holder) throw new ResourceNotVisibleError();
   return { supportCase, owner, holder };
 }

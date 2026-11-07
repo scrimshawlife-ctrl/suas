@@ -212,6 +212,14 @@ export async function runMigrationsOnClient(
   if (options.mode === 'off') return offResult(options);
 
   const files = await loadMigrationFiles(options.migrationsDir);
+  const lastFile = files.at(-1);
+  if (lastFile === undefined || lastFile.version !== expectedSchemaVersion) {
+    throw new SchemaStateError([
+      `Migration directory ends at version ${lastFile?.version ?? 'none'} but this build requires ` +
+        `${expectedSchemaVersion}. Refusing to apply a set that is not this build's schema ` +
+        `(ENVIRONMENT.md §9).`,
+    ]);
+  }
   const appliedNow: number[] = [];
 
   try {
