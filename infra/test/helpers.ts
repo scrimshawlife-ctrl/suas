@@ -11,9 +11,7 @@ export interface Synthesized {
 }
 
 /** Synthesizes the staging app in memory. Offline: no lookups, no credentials. */
-export function synthesize(
-  context: Record<string, string> = { allowPlaceholderModel: 'true' },
-): Synthesized {
+export function synthesize(context: Record<string, string> = {}): Synthesized {
   const app = new App({ context });
   const stacks = createStagingApp(app);
   return {

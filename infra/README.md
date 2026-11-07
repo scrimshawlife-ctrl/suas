@@ -28,7 +28,7 @@ validate configuration with the application's own validator. Then:
 cd infra
 npm ci
 npm run check      # typecheck + vitest assertion tests + offline synth
-npm run synth -- -c bedrockModelId=<model or inference profile id>
+npm run synth
 ```
 
 Synth needs no Docker. esbuild bundles the Lambda code locally (see "Lambda package").
@@ -37,30 +37,29 @@ Synth needs no Docker. esbuild bundles the Lambda code locally (see "Lambda pack
 
 Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user confirmed on 2026-11-05.
 
-| Context                  | Default                                | Meaning                                                                                                                                             |
-| ------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                                           |
-| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                                                |
-| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                                            |
-| `wsHostname`             | `ws.staging.suasqrf.com`               | WebSocket API                                                                                                                                       |
-| `bedrockModelId`         | none: **required**                     | Bedrock model or inference profile id. D-054 approves the v1 model path; no id is selected, so synth fails without this or `allowPlaceholderModel`. |
-| `allowPlaceholderModel`  | unset                                  | `true` lets CI synth without a model. The template is marked "PLACEHOLDER MODEL"; never deploy it.                                                  |
-| `emailFrom`              | `no-reply@` + root domain              | SES sender (`SUAS_EMAIL_FROM`); must be in the verified domain                                                                                      |
-| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches today's `wrangler.jsonc` staging; set `approved` to show the D-012 crisis copy. **Owner call.**                    |
-| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value as `wrangler.jsonc`)                                                             |
-| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of `us-west-2` zones, if an endpoint service is missing in one                                                                           |
-| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                                               |
+| Context                  | Default                                | Meaning                                                                                                                          |
+| ------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                        |
+| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                             |
+| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                         |
+| `bedrockModelId`         | refused                                | R2.15 is not approved. Passing this context fails synth. Inference stays `disabled`.                                             |
+| `allowPlaceholderModel`  | refused                                | Same refusal. It does not select a model and it does not mark a deployable template.                                             |
+| `emailFrom`              | `no-reply@` + root domain              | SES sender (`SUAS_EMAIL_FROM`); must be in the verified domain                                                                   |
+| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches today's `wrangler.jsonc` staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
+| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value as `wrangler.jsonc`)                                          |
+| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of `us-west-2` zones, if an endpoint service is missing in one                                                        |
+| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                            |
 
 Hostnames must be inside `rootDomain`, because certificates are validated in the zone this app owns.
 
 ## Stacks
 
-| Stack                  | Region    | Contents                                                                                                                                                                                                          |
-| ---------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), SES domain identity with Easy DKIM CNAMEs, the Resend mail records carried over from Cloudflare, `NameServers` output. No apex or `www` record.        |
-| `Suas-Staging-WebCert` | us-east-1 | DNS-validated ACM certificate for the web hostname (CloudFront needs us-east-1). Passed to the web stack with `crossRegionReferences`.                                                                            |
-| `Suas-Staging-Backend` | us-west-2 | VPC (isolated subnets), VPC endpoints, RDS PostgreSQL 17 + RDS Proxy, secrets, assets bucket, API / WebSocket / job worker / migrate Lambdas, HTTP and WebSocket APIs with custom domains, EventBridge Scheduler. |
-| `Suas-Staging-Web`     | us-west-2 | Private S3 bucket, CloudFront distribution with OAC, `staging.suasqrf.com` A and AAAA alias, `web/dist` upload (only if `web/dist` exists at synth time).                                                         |
+| Stack                  | Region    | Contents                                                                                                                                                                                                   |
+| ---------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), SES domain identity with Easy DKIM CNAMEs, the Resend mail records carried over from Cloudflare, `NameServers` output. No apex or `www` record. |
+| `Suas-Staging-WebCert` | us-east-1 | DNS-validated ACM certificate for the web hostname (CloudFront needs us-east-1). Passed to the web stack with `crossRegionReferences`.                                                                     |
+| `Suas-Staging-Backend` | us-west-2 | VPC (isolated subnets), VPC endpoints, RDS PostgreSQL 17 + RDS Proxy, secrets, assets bucket, API / job worker / migrate Lambdas, HTTP API with a custom domain, EventBridge Scheduler. No WebSocket API.  |
+| `Suas-Staging-Web`     | us-west-2 | Private S3 bucket, CloudFront distribution with OAC, `staging.suasqrf.com` A and AAAA alias, `web/dist` upload (only if `web/dist` exists at synth time).                                                  |
 
 The SES identity is in `Suas-Dns` because an SES identity belongs to a domain, not to an environment.
 
@@ -71,16 +70,17 @@ The SES identity is in `Suas-Dns` because an SES identity belongs to a domain, n
 - Security groups: Lambda to RDS Proxy on 5432, RDS Proxy to RDS on 5432, migrate function to RDS on 5432.
   Lambda egress is HTTPS only, and only the endpoint security group accepts it. The database is not public.
 
-### AWS services the API calls, and the endpoints they need
+### AWS services the staging template calls, and the endpoints they need
 
-Found by reading `src/` (no other `@aws-sdk` client exists; `package.json` lists exactly these four).
+The Bedrock adapter (`src/inference/bedrock-inference.ts`) and the API Gateway push adapter
+(`src/realtime/apigw-connection-push.ts`) stay in the repository. This template does not select
+them and does not create `bedrock-runtime` or `execute-api` endpoints. R2.15 is not approved.
+R6.12 is not accepted.
 
-| Service                    | SDK client                                | Code that uses it                                                   | Endpoint                    |
-| -------------------------- | ----------------------------------------- | ------------------------------------------------------------------- | --------------------------- |
-| Amazon SES (SESv2 API)     | `@aws-sdk/client-sesv2`                   | `src/notifications/ses-email.ts` (`SendEmailCommand`)               | interface `email`           |
-| Amazon Bedrock Runtime     | `@aws-sdk/client-bedrock-runtime`         | `src/inference/bedrock-inference.ts` (`ConverseCommand`)            | interface `bedrock-runtime` |
-| Amazon S3                  | `@aws-sdk/client-s3`                      | `src/storage/s3-object-storage.ts` (put, get, delete object)        | gateway `s3`                |
-| API Gateway Management API | `@aws-sdk/client-apigatewaymanagementapi` | `src/realtime/apigw-connection-push.ts` (`PostToConnectionCommand`) | interface `execute-api`     |
+| Service                | SDK client              | Code that uses it                                     | Endpoint          |
+| ---------------------- | ----------------------- | ----------------------------------------------------- | ----------------- |
+| Amazon SES (SESv2 API) | `@aws-sdk/client-sesv2` | `src/notifications/ses-email.ts` (`SendEmailCommand`) | interface `email` |
+| Amazon S3              | `@aws-sdk/client-s3`    | `src/storage/s3-object-storage.ts` (put, get, delete) | gateway `s3`      |
 
 Not needed: **Secrets Manager** (the code never calls it: configuration is read from environment
 variables), **CloudWatch Logs** (the code never calls it; Lambda logging does not use the VPC), **STS/KMS**
@@ -102,9 +102,9 @@ as `assets/rds-global-bundle.crt` (public certificates, from `truststore.pki.rds
 
 ### Lambda package
 
-`lib/lambda-code.ts` builds one directory used by all four functions. esbuild bundles each entry from the
-repository (`src/main.ts`, `src/aws/websocket-lambda.ts`, `src/aws/job-worker-lambda.ts`,
-`src/aws/migrate-lambda.ts`) into ESM `.mjs` files, and the directory also carries `package.json`,
+`lib/lambda-code.ts` builds one directory used by the three functions. esbuild still bundles
+`src/aws/websocket-lambda.ts` with the other entries so the push handler keeps compiling, and the
+directory also carries `package.json`,
 `migrations/`, `run.sh` and the RDS CA bundle. These are the on-disk files the code resolves beside the
 bundle (`src/provenance/build-info.ts`, `src/db/migration-files.ts`). The AWS SDK is bundled, not taken from
 the runtime. Provenance (`SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`) is stamped from git at synth time
@@ -113,7 +113,6 @@ the runtime. Provenance (`SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`) is stamped
 | Function   | Handler                | Network SG | Notes                                                                               |
 | ---------- | ---------------------- | ---------- | ----------------------------------------------------------------------------------- |
 | API        | `run.sh` (Web Adapter) | Lambda     | Node 22, arm64, 512 MB, 30 s, behind the HTTP API. `SUAS_MIGRATIONS_MODE=validate`. |
-| WebSocket  | `websocket.handler`    | Lambda     | `$connect` (ticket in the query), `$disconnect`, `$default` all to one function     |
 | Job worker | `job-worker.handler`   | Lambda     | One pass (`job-worker --once`): widening sweep, then one batch of due outbox jobs   |
 | Migrate    | `migrate.handler`      | Migrate    | `migrate apply`, direct to RDS. Invoked by hand. No custom resource.                |
 
@@ -129,7 +128,7 @@ The application reads configuration from environment variables only (`src/config
 dynamic references (`{{resolve:secretsmanager:...}}`), resolved at deploy time. **The template never contains the
 values, but the resolved values are visible to anyone who can read the Lambda configuration** (for example
 `lambda:GetFunctionConfiguration`). The owner accepted this for synthetic staging data. See "Before production".
-Rotating a secret needs a redeploy. The API, WebSocket and job worker functions connect as the generated master
+Rotating a secret needs a redeploy. The API and job worker functions connect as the generated master
 user (`suas_admin`, an `rds_superuser`), the same user the Proxy and the migrate function use.
 
 ### Environment variables (API function)
@@ -144,18 +143,16 @@ each function's environment is checked against the application's own config vali
 | `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS`                                                              | `false`                                                                                                                           |
 | `SUAS_SESSION_SECRET`                                                                           | secret (Secrets Manager)                                                                                                          |
 | `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<proxy endpoint>:5432/suas` (migrate uses the instance address, not the proxy)                |
-| `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3` on the API, WebSocket, and job worker; the migrate function sets `DATABASE_POOL_MAX` to `1`                         |
-| `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; WebSocket and job worker `off`)                                                    |
+| `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3` on the API and job worker; the migrate function sets `DATABASE_POOL_MAX` to `1`                                     |
+| `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; the job worker uses `off`)                                                         |
 | `SUAS_BROWSER_AUTH_MODE`, `SUAS_BROWSER_TENANT_ID`                                              | `email_otp`, the `browserTenantId` context                                                                                        |
 | `SUAS_EMAIL_MODE`, `SUAS_EMAIL_FROM`                                                            | `ses`, the `emailFrom` context                                                                                                    |
 | `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                       |
 | `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                                                       |
-| `SUAS_MODEL_INFERENCE_MODE`, `SUAS_BEDROCK_MODEL_ID`                                            | `bedrock`, the `bedrockModelId` context                                                                                           |
+| `SUAS_MODEL_INFERENCE_MODE`                                                                     | `disabled`. R2.15 is not approved, so no model id is set.                                                                         |
 | `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket                                                                                                           |
 | `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052).                                                            |
-| `SUAS_CHAT_PUSH_MODE`                                                                           | `apigw`                                                                                                                           |
-| `SUAS_CHAT_WS_ENDPOINT`                                                                         | `https://<ws api id>.execute-api.us-west-2.amazonaws.com/staging` (management endpoint)                                           |
-| `SUAS_CHAT_WS_PUBLIC_URL`                                                                       | `wss://ws.staging.suasqrf.com` (what browsers open; no stage path)                                                                |
+| `SUAS_CHAT_PUSH_MODE`                                                                           | `disabled`. R6.12 is not accepted. `SUAS_CHAT_WS_ENDPOINT` and `SUAS_CHAT_WS_PUBLIC_URL` are not set.                             |
 | `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | not set on the API Lambda, so the allowlist is empty. `staging.suasqrf.com` is a different origin from the API and is not listed. |
 | `SUAS_TRANSPORTATION_ADAPTER_MODE`, `SUAS_SHELTER_ADAPTER_MODE`, `SUAS_FOOD_ADAPTER_MODE`       | `fake`                                                                                                                            |
 | `SUAS_PEER_SUPPORT_ADAPTER_MODE`                                                                | `manual`                                                                                                                          |
@@ -171,18 +168,16 @@ each function's environment is checked against the application's own config vali
 
 Each function has its own role with no managed policies: write to its own log group, plus the ENI actions Lambda
 needs in a VPC (not scopable). Added grants: SES `ses:SendEmail` on the one domain identity (API and job worker);
-Bedrock `bedrock:InvokeModel` on the configured model only (API); S3 get/put/delete on the assets bucket objects
-plus `s3:ListBucket` on the bucket itself (API; without it a missing key returns AccessDenied instead of
-NoSuchKey); `execute-api:ManageConnections` on the WebSocket API (API). The ENI actions are the six in
-`AWSLambdaVPCAccessExecutionRole`, including `ec2:DescribeSubnets`. A model id with a geography prefix (`us.`,
-`eu.`, `global.`...) is treated as an inference profile: the profile in this account plus the underlying
-foundation model with a wildcard **region** only, because the profile routes across regions.
+S3 get/put/delete on the assets bucket objects plus `s3:ListBucket` on the bucket itself (API; without it a
+missing key returns AccessDenied instead of NoSuchKey). There is no `bedrock:InvokeModel` grant and no
+`execute-api:ManageConnections` grant. The ENI actions are the six in `AWSLambdaVPCAccessExecutionRole`,
+including `ec2:DescribeSubnets`.
 
 ### Logs
 
 CloudWatch log groups for every function and the HTTP API access log, retained 30 days. The API access log is a
 fixed metadata record (request id, route key, status, latency): no bodies, paths, query strings or addresses.
-No WebSocket access log is kept, since it could capture the connect ticket. The API (Fastify/pino) logs
+The API (Fastify/pino) logs
 method, path and status per request, never bodies: no code in `src/intake`, `src/catalog`, `src/inference` or
 `src/http` logs request bodies or intake text, and `src/inference/bedrock-inference.ts` logs only the outcome.
 
@@ -214,7 +209,7 @@ not set yet. **Build the SPA for staging before deploying the web stack:**
 ## Deploy order (not done yet)
 
 Do not deploy until the AWS account layout is decided. When it is, from `infra/` with credentials for the chosen
-account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it) and `-c bedrockModelId=...`:
+account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pass `bedrockModelId`:
 
 1. `cdk bootstrap` the account for `us-west-2` **and** `us-east-1` (cross-region references and the certificate need both).
 2. Export the Cloudflare zone (manual step 1), then `cdk deploy Suas-Dns`. Note the `NameServers` output. That note is prep only.
@@ -245,8 +240,8 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it) and `-c bed
    Verify test recipient addresses for staging, or open an AWS support request for production access (plan §7).
    Check that the domain identity shows "Verified" and DKIM "Successful" only after a cutover that has passed the
    suas-specs #61 R6.8 gate and an owner decision. Do not change name servers in order to check this.
-3. **Enable Bedrock model access** for the chosen model in the Bedrock console (us-west-2). Without it, the API
-   reports the model capability unavailable and the plain request form is shown.
+3. **Do not enable Bedrock for this template.** R2.15 is not approved, and the API sets
+   `SUAS_MODEL_INFERENCE_MODE=disabled`. Model access in the Bedrock console is not a step for this synth.
 4. **Run the migrate function** after every deploy that adds migrations. From a shell with credentials:
    `aws lambda invoke --function-name <MigrateFunctionName output> --cli-binary-format raw-in-base64-out out.json`
    and read `out.json` (`schema_version`, `applied_now`). Until it has run, the API fails closed at startup
@@ -275,19 +270,12 @@ owner decision.
 
 ## Known risks (unverified offline)
 
-- **WebSocket push from isolated subnets.** AWS docs say that with private DNS on the `execute-api` endpoint, "you
-  can't access the default endpoint of a public API Gateway API from your VPC endpoint. You can access an API with
-  a custom domain name." The push adapter posts to the default execute-api URL
-  (`src/config/schema.ts` accepts nothing else for `SUAS_CHAT_WS_ENDPOINT`). If `PostToConnection` fails in staging,
-  chat still works over REST and only live updates are lost (look for `chat push failed` in the API log group; the
-  API alarm fires on it). The user accepted this risk on 2026-11-05: ship as built and test on the first deploy.
-  Fallbacks if it fails: (B) loosen the `SUAS_CHAT_WS_ENDPOINT` pattern so the custom domain can be the
-  management URL; (C) add a non-VPC pusher function the API invokes through a `lambda` endpoint; (D) a NAT
-  gateway for the API function (reverses the VPC decision).
+- **Chat push is not in this template.** R6.12 is not accepted. `SUAS_CHAT_PUSH_MODE=disabled`. The push
+  adapter remains in `src/realtime/` and is not selected. Chat over REST does not need it.
 - **Endpoint availability by zone.** An interface endpoint cannot be created in a zone that does not offer the
   service. If a deploy fails for that reason, pass `-c availabilityZones=us-west-2a,us-west-2b` (or other zones).
-- **Cold starts and the API Gateway limit.** The HTTP API integration times out after 29 seconds; the Bedrock call
-  in the adapter allows 30 seconds.
+- **Cold starts and the API Gateway limit.** The HTTP API integration times out after 29 seconds. Inference is
+  disabled, so this template does not make a Bedrock call.
 - `npm audit` reports a moderate `minimatch` issue bundled inside `aws-cdk-lib` itself; it affects build-time code
   only, and the fix is a CDK upgrade.
 

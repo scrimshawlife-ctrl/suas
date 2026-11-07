@@ -23,7 +23,6 @@ export interface StagingStacks {
 export function createStagingApp(app: App): StagingStacks {
   const config = loadEnvironmentConfig(app.node);
   const env = stackEnv();
-  const note = config.usingPlaceholderModel ? ' (PLACEHOLDER MODEL: synth only, never deploy)' : '';
   const prefix = `Suas-${config.name === 'staging' ? 'Staging' : config.name}`;
 
   // Shared by every environment: the hosted zone and the SES domain identity.
@@ -39,7 +38,7 @@ export function createStagingApp(app: App): StagingStacks {
     crossRegionReferences: true,
     zone: dns.zone,
     webHostname: config.webHostname,
-    description: `SUAS ${config.name} CloudFront certificate (us-east-1)${note}`,
+    description: `SUAS ${config.name} CloudFront certificate (us-east-1)`,
   });
 
   const backend = new BackendStack(app, `${prefix}-Backend`, {
@@ -47,7 +46,7 @@ export function createStagingApp(app: App): StagingStacks {
     config,
     zone: dns.zone,
     sesIdentityArn: dns.sesIdentityArn,
-    description: `SUAS ${config.name} backend: VPC, RDS, API, WebSocket, jobs${note}`,
+    description: `SUAS ${config.name} backend: VPC, RDS, API, jobs. Inference and chat push stay off.`,
   });
 
   const web = new WebStack(app, `${prefix}-Web`, {
@@ -56,7 +55,7 @@ export function createStagingApp(app: App): StagingStacks {
     zone: dns.zone,
     webHostname: config.webHostname,
     certificate: webCert.certificate,
-    description: `SUAS ${config.name} web app: S3 and CloudFront${note}`,
+    description: `SUAS ${config.name} web app: S3 and CloudFront`,
   });
 
   return { dns, webCert, backend, web };

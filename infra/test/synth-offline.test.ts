@@ -32,11 +32,9 @@ describe('offline synth', () => {
       '--no-lookups',
       '--no-notices',
       '--no-version-reporting',
-      '-c',
-      'allowPlaceholderModel=true',
     ]);
-    expect(cdkSynthArgs(['-c', 'bedrockModelId=example.model-v1:0'])).not.toContain(
-      'allowPlaceholderModel=true',
+    expect(cdkSynthArgs(['-c', 'safetyCopyMode=placeholder_test_only'])).toContain(
+      'safetyCopyMode=placeholder_test_only',
     );
   });
 
