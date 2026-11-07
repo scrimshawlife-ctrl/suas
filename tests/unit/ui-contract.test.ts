@@ -398,7 +398,7 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
         },
         {
           resource_id: '55555555-5555-4555-8555-555555555555',
-          service_name: 'National Lifeline',
+          service_name: 'County transit desk',
           category: 'PEER_SUPPORT',
           counties: ['SANTA_CLARA'],
           hours: null,

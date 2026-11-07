@@ -140,9 +140,9 @@ jobs:
           npm ci
           npm run check
 
-      - name: Eval (reporting only)
+      - name: Eval (gates CI)
         # F11: scores the synthetic intake set with the scripted fake adapter, so the
-        # numbers check the harness, not a model. This step gates the workflow.
+        # numbers check the harness, not a model. This step gates CI.
         # An unspecified Linux `run` shell is `bash -e {0}` (workflow syntax,
         # jobs.<job_id>.steps[*].shell). That does not set pipefail, so
         # `false | tee` exits 0. `shell: bash` is the documented command
