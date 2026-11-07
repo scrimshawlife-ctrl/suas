@@ -10,7 +10,7 @@ production set can be added later without restructuring.
 
 ## Safe by construction
 
-- `npm run synth` runs `cdk synth` with every `AWS_*` and `CDK_*` variable removed, the metadata service
+- `npm run synth` runs the `aws-cdk` binary installed by `npm ci` (it does not call `npx`). Every `AWS_*` and `CDK_*` variable is removed, the metadata service
   and shared config files disabled, and `--no-lookups`. If anything tried to read from AWS, synth would
   fail rather than call it.
 - No context lookup is used (`Vpc.fromLookup`, `HostedZone.fromLookup`, AMI lookups). The two availability
@@ -43,7 +43,7 @@ Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user c
 | `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                             |
 | `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                         |
 | `wsHostname`             | `ws.staging.suasqrf.com`               | WebSocket API                                                                                                                    |
-| `bedrockModelId`         | none: **required**                     | Bedrock model or inference profile id. Undecided (plan §8 item 5), so synth fails without it.                                    |
+| `bedrockModelId`         | none: **required**                     | Bedrock model or inference profile id. D-054 approves the v1 model path; no id is selected, so synth fails without this or `allowPlaceholderModel`. |
 | `allowPlaceholderModel`  | unset                                  | `true` lets CI synth without a model. The template is marked "PLACEHOLDER MODEL"; never deploy it.                               |
 | `emailFrom`              | `no-reply@` + root domain              | SES sender (`SUAS_EMAIL_FROM`); must be in the verified domain                                                                   |
 | `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches today's `wrangler.jsonc` staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
