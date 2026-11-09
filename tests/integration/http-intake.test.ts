@@ -444,3 +444,40 @@ describe('intake text is never logged', () => {
     expect(written.join('')).not.toContain(MARKER);
   });
 });
+
+describe('ride destination on a draft (R8.7)', () => {
+  it('is drafted for a ride and refused when the category changes', async () => {
+    const { headers } = await veteran();
+    model.enqueue(
+      toolTurn(
+        draftTool({
+          category: 'TRANSPORTATION',
+          summary: 'Ride to the clinic',
+          meeting_place: 'Front door',
+          destination: 'County clinic',
+        }),
+      ),
+      textTurn('Drafted.'),
+    );
+    const created = await post('/api/v0/intake/drafts', headers, { text: 'I need a ride.' });
+    expect(created.json().draft.destination).toBe('County clinic');
+    const draftId: string = created.json().draft.draft_id;
+
+    const toFood = await app.server.inject({
+      method: 'PATCH',
+      url: `/api/v0/intake/drafts/${draftId}`,
+      headers,
+      payload: { category: 'FOOD' },
+    });
+    expect(toFood.statusCode).toBe(422);
+
+    const cleared = await app.server.inject({
+      method: 'PATCH',
+      url: `/api/v0/intake/drafts/${draftId}`,
+      headers,
+      payload: { category: 'FOOD', destination: null },
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json()).toMatchObject({ category: 'FOOD', destination: null });
+  });
+});

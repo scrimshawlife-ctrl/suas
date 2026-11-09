@@ -229,9 +229,8 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
     expect(started.json()).toMatchObject({ status: 'IN_PROGRESS' });
   });
 
-  it('keeps SUBMIT with the requester, even for a request the accepter created', async () => {
+  it('refuses a helper creating a request on the case, so SUBMIT stays with the requester', async () => {
     const { tenantId, supportCase, headers } = await openRedCase();
-    // The accepter needs a submitted request to accept, then creates another of their own.
     const first = await app.server.inject({
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
@@ -244,17 +243,25 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
     const other = await accepterFor(tenantId);
     expect((await acceptRequest(creator.headers, firstId)).statusCode).toBe(200);
 
-    const created = await app.server.inject({
+    // R8.3: only the requester adds a need to the case.
+    const refused = await app.server.inject({
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
       headers: { ...creator.headers, 'idempotency-key': `sr-create-${randomUUID()}` },
       payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
     });
+    expect(refused.statusCode).toBe(403);
+
+    const created = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
+      headers: { ...headers, 'idempotency-key': `sr-create-${randomUUID()}` },
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
+    });
     expect(created.statusCode).toBe(201);
     const srId = created.json().service_request_id as string;
     expect((await command(srId, 'SUBMIT', other.headers)).statusCode).toBe(404);
-    // The helper created it, but submitting is the requester's act. They hold a different
-    // request of the case, not this one, so they have no standing on it at all.
+    // The helper holds a different request of the case, so has no standing on this one.
     expect((await command(srId, 'SUBMIT', creator.headers)).statusCode).toBe(404);
     const submitted = await command(srId, 'SUBMIT', headers);
     expect(submitted.statusCode).toBe(200);
