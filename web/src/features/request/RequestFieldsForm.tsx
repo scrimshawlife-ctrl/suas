@@ -2,8 +2,17 @@ import { NEEDS } from '../../components/needs';
 import { Select } from '../../components/Select';
 import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
-import { CATEGORIES, MEETING_PLACE_MAX, SUMMARY_MAX, TIMING_MAX } from './request-fields';
-import { meetingPlaceRequired, type FieldErrors, type RequestFields } from './request-fields';
+import {
+  CATEGORIES,
+  DESTINATION_MAX,
+  MEETING_PLACE_MAX,
+  SUMMARY_MAX,
+  TIMING_MAX,
+  destinationAllowed,
+  meetingPlaceRequired,
+  type FieldErrors,
+  type RequestFields,
+} from './request-fields';
 
 const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({ value, label: NEEDS[value].label }));
 
@@ -11,19 +20,22 @@ export interface RequestFieldsFormProps {
   fields: RequestFields;
   errors: FieldErrors;
   disabled?: boolean;
+  /** The category is shown but cannot change (editing a sent request). */
+  categoryLocked?: boolean;
   onChange: (patch: Partial<RequestFields>) => void;
   /** Called when a field loses focus; the draft card saves its edits here. */
   onBlur?: () => void;
 }
 
 /**
- * The four request fields, shared by the draft card and the plain form so the meeting-place
- * rule and the limits are stated once.
+ * The request fields, shared by the draft card, the plain form and the edit form so the
+ * meeting-place rule and the limits are stated once. The destination shows for rides only.
  */
 export function RequestFieldsForm({
   fields,
   errors,
   disabled,
+  categoryLocked,
   onChange,
   onBlur,
 }: RequestFieldsFormProps) {
@@ -36,7 +48,7 @@ export function RequestFieldsForm({
         options={CATEGORY_OPTIONS}
         value={fields.category}
         error={errors.category}
-        disabled={disabled}
+        disabled={disabled || categoryLocked}
         onChange={(event) =>
           onChange({ category: event.target.value as RequestFields['category'] })
         }
@@ -78,6 +90,18 @@ export function RequestFieldsForm({
         onChange={(event) => onChange({ meetingPlace: event.target.value })}
         onBlur={onBlur}
       />
+      {destinationAllowed(fields.category) ? (
+        <TextField
+          label="Where are you going? (optional)"
+          helper={`Only you and the person who accepts it see this. Up to ${DESTINATION_MAX} characters.`}
+          maxLength={DESTINATION_MAX}
+          value={fields.destination}
+          error={errors.destination}
+          disabled={disabled}
+          onChange={(event) => onChange({ destination: event.target.value })}
+          onBlur={onBlur}
+        />
+      ) : null}
     </div>
   );
 }
