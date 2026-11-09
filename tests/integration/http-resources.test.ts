@@ -72,6 +72,8 @@ async function activeResource(
     counties?: readonly string[];
     contactMethod?: string;
     contactMethodKind?: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+    contacts?: readonly { kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM'; value: string }[];
+    area?: string;
     hours?: string;
     cost?: string;
     eligibility?: string;
@@ -159,6 +161,67 @@ describe('GET /api/v0/resources', () => {
     expect(row).not.toHaveProperty('verification_source');
     expect(row).not.toHaveProperty('integration_modes');
     expect(body).toMatchObject({ next_cursor: null });
+  });
+
+  it('returns the contact list and area, and refuses a crisis number at creation', async () => {
+    const { tenantId, user, headers } = await veteranInTenant();
+    const contacts = [
+      { kind: 'PHONE', value: '408-555-0100' },
+      { kind: 'URL', value: 'https://pantry.example.invalid' },
+    ] as const;
+    const pantry = await activeResource(tenantId, user.userId, {
+      serviceName: 'Contact Pantry',
+      category: 'FOOD',
+      contacts,
+      area: 'San Jose, east side',
+    });
+    await expect(
+      createResource(app.pool as NonNullable<typeof app.pool>, {
+        tenantId,
+        serviceName: 'Crisis Number Pantry',
+        category: 'FOOD',
+        contacts: [{ kind: 'PHONE', value: '988' }],
+      }),
+    ).rejects.toThrow(/crisis number/);
+
+    const response = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/resources/${pantry.resourceId}`,
+      headers,
+    });
+    expect(response.json()).toMatchObject({
+      contacts,
+      contact_method: '408-555-0100',
+      contact_method_kind: 'PHONE',
+      area: 'San Jose, east side',
+      verified_at: pantry.lastVerifiedAt?.toISOString(),
+    });
+  });
+
+  it('downgrades a legacy crisis number in the single contact and in the list', async () => {
+    const { tenantId, headers } = await veteranInTenant();
+    const pool = app.pool;
+    if (pool === undefined) throw new Error('no pool');
+    const resourceId = randomUUID();
+    await pool.query(
+      `INSERT INTO resources
+         (resource_id, tenant_id, service_name, category, contact_method, contact_method_kind,
+          contacts, active, last_verified_at, verification_source)
+       VALUES ($1, $2, 'Legacy Pantry', 'FOOD', '988', 'PHONE',
+               '[{"kind":"PHONE","value":"988"}]'::jsonb, true, now(), 'synthetic-legacy-row')`,
+      [resourceId, tenantId],
+    );
+
+    const response = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/resources/${resourceId}`,
+      headers,
+    });
+    expect(response.json()).toMatchObject({
+      contact_method: '988',
+      contact_method_kind: 'FREEFORM',
+      contacts: [{ kind: 'FREEFORM', value: '988' }],
+    });
   });
 
   it('walks every active resource across cursor pages', async () => {

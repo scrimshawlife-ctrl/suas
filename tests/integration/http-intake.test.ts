@@ -241,6 +241,11 @@ describe('needs outside the four categories', () => {
       serviceName: 'Example Job Help',
       category: 'PEER_SUPPORT',
       eligibility: 'job search help',
+      contacts: [
+        { kind: 'PHONE', value: '408-555-0100' },
+        { kind: 'URL', value: 'https://jobs.example.invalid' },
+      ],
+      area: 'San Jose',
     });
     await withTransaction(pool(), async (tx) => {
       await verifyResource(tx, {
@@ -269,12 +274,20 @@ describe('needs outside the four categories', () => {
     const body = res.json<{
       notice: string;
       draft: { category: string | null };
-      resources: { service_name: string }[];
+      resources: { service_name: string; contacts: unknown[]; area: string; verified_at: string }[];
     }>();
     expect(body).toMatchObject({ outcome: 'NO_DRAFT', not_available_yet: true });
     expect(body.notice).toContain('cannot take requests for that need yet');
     expect(body.draft.category).toBeNull();
     expect(body.resources.map((r) => r.service_name)).toEqual(['Example Job Help']);
+    expect(body.resources[0]).toMatchObject({
+      contacts: [
+        { kind: 'PHONE', value: '408-555-0100' },
+        { kind: 'URL', value: 'https://jobs.example.invalid' },
+      ],
+      area: 'San Jose',
+    });
+    expect(Date.parse(body.resources[0]?.verified_at ?? '')).not.toBeNaN();
   });
 });
 
