@@ -1,11 +1,29 @@
 # AGENTS.md
 
+Read [`FABLE_HANDOFF.md`](FABLE_HANDOFF.md) and [`CONTEXT.md`](CONTEXT.md) first. Their hard constraints apply alongside this file.
+
+## Released spec pin
+
+Build against the released `SUAS-specs` stack named in [`src/release/pins.ts`](src/release/pins.ts): currently `SPEC_VERSION` `0.7.0`, manifest `RELEASE_MANIFEST-0.7.0.md`. Draft, merged-but-untagged, and unreleased spec text is not authority, including the prepared 0.8.0 text on `SUAS-specs` `main`. The implementation stage is `SPEC-017` (`IMPLEMENTATION_STAGE`), and `PRODUCTION_READINESS` is `NOT_READY`; SPEC-018 is blocked.
+
 ## Project
 
-SUAS v1 is a proof of concept for the Mozilla Human-Scale AI Incubator. A Veteran asks for help (food, rides, shelter, peer support) after an ID check; any signed-in person can accept the request; 911 and 988 crisis options stay on screen. STAGING runs on synthetic data only.
+SUAS v1 targets a proof of concept for the Mozilla Human-Scale AI Incubator. The v1 helper model is prepared 0.8.0 text (D-054, untagged) and `V1_PROJECT_PLAN.md` (proposal): a Veteran asks for help (food, rides, shelter, peer support) after an ID check, and any signed-in person can accept the request. Crisis destinations and labels come only from `SAFETY_COPY.md` at the pinned release (see Safety and environment).
 
-- This repo: Fastify JSON API `/api/v0` (`src/`), React web app (`web/`, its own package), AWS CDK infrastructure (`infra/`). `src/worker*` and `wrangler.jsonc` are the legacy Cloudflare Worker, kept until the AWS cutover.
-- [`SUAS-specs`](https://github.com/scrimshawlife-ctrl/SUAS-specs) is the product authority, including `SAFETY.md` and `ENVIRONMENT.md`. Native clients `suas-ios` and `suas-android` consume `/api/v0`.
+- This repo: Fastify JSON API `/api/v0` (`src/`), React web app (`web/`, its own package), AWS CDK infrastructure (`infra/`). `src/worker*` and `wrangler.jsonc` are the Cloudflare Worker; the AWS move is a v1 target, not yet released (`V1_PROJECT_PLAN.md`, proposal).
+- [`SUAS-specs`](https://github.com/scrimshawlife-ctrl/SUAS-specs) at the pinned release is the product authority, including `SAFETY.md` and `ENVIRONMENT.md`. Native clients `suas-ios` and `suas-android` consume `/api/v0`. Do not add `/api/mobile` or a second version selector; HTML `/app/*` commands are the browser surface, not the mobile contract.
+
+## Safety and environment (non-negotiable)
+
+- No automated emergency dispatch, diagnosis, suicide prediction, or safety-critical generative behavior (`SAFETY.md` §2, §6, §8 at the pin).
+- Do not add vendor, capacity, SLO, recovery, legal/compliance, partner, staffing, scoring, crisis-copy, or reporting-threshold assumptions that remain unavailable.
+- Crisis destinations and labels come only from `SAFETY_COPY.md` at the pinned release. Agents do not add, remove, or relabel them. The `Text 838255` (`sms:838255`) link is D-050: decided, but its spec text waits for tag `v0.8.0`.
+- LOCAL, TEST and STAGING: no real Veteran data and no real external support effects, except allow-listed sandboxes in STAGING (`ENVIRONMENT.md` §2 at the pin). Synthetic data does not make a real provider call allowed.
+- TEST and CI keep `SUAS_SAFETY_COPY_MODE=placeholder_test_only` and the fixture and fake adapter modes. Do not switch them.
+- No code or config change may silently upgrade an `UNAVAILABLE`, `MANUAL_ONLY`, `INFORMATION_ONLY`, or `FUTURE` feature to production-operational behavior.
+- Never commit secrets, `.env`, real contact details, provider credentials, or production data, in code, fixtures, tests, screenshots, or PR text.
+- SPEC-018 evidence is required before any production readiness claim. Make no claim of HIPAA compliance or production readiness.
+- Pointers at the pin: `SAFETY.md` §2, §6, §8; `ENVIRONMENT.md` §2, §5, §6, §7.
 
 ## Spec-driven development
 
@@ -13,12 +31,12 @@ Specs lead; code follows.
 
 1. Read the governing spec in `SUAS-specs` and the docs in this repo (`docs/`, `docs/openapi/v0.json`) before changing behavior.
 2. If the spec does not yet describe the change, write it first: open a `SUAS-specs` PR.
-3. Open the suas PR citing that spec PR. It stays on HOLD until the owner merges the spec PR.
+3. Open the suas PR citing that spec PR. It stays on HOLD until the spec change is released (tagged) and `pins.ts` is re-pinned, unless the owner states otherwise in writing. Merging a spec PR is not a release.
 4. Keep this repo's docs (OpenAPI, READMEs, `CHANGELOG.md`) updated in the same PR as the code.
 
 ## Architecture decisions
 
-The human directing the work makes every architecture decision: a new service, framework or major library; schema changes; public API or contract changes; module boundaries; auth and security design; anything hard to reverse. When one comes up:
+Contract, schema, auth, and security decisions (public API or contract changes, schema changes, auth and security design) need the owner's written approval and a released spec decision (D-054). The human directing the work decides the other architecture questions: a new service, framework or major library; module boundaries; anything hard to reverse. When one comes up:
 
 1. Stop work on that path.
 2. Return the question, the realistic options with their trade-offs, and the code facts with file paths.
@@ -69,8 +87,9 @@ Matt Pocock skills (`mattpocock-skills:*`) for the end-to-end flow: `grilling` a
 Implement first; test after.
 
 - Write only the crucial tests: the ones that prove the requirement and its key edge cases, for code you changed, and keep `npm run verify` and CI green.
-- Web behavior: drive it with the Playwright browser tools. Use the `chrome-devtools-mcp:chrome-devtools` skill for console errors, network requests and performance, and `claude-in-chrome` when the test needs the real Chrome session.
-- When a test fails, fix the code; change a test only when the test itself is wrong. Report failures you could not resolve, with their output.
+- The `SAFETY.md` red-state critical suite and the `TESTING.md` safety gate tests always run; they are never optional.
+- Web behavior: drive it with the Playwright browser tools. Use the `chrome-devtools-mcp:chrome-devtools` skill for console errors, network requests and performance, and `claude-in-chrome` when the test needs a real browser session. Browser testing targets LOCAL or synthetic STAGING only, never real accounts or production.
+- When a test fails, fix the code. If CI or a test looks wrong, open a labeled defect (`bug`); do not edit tests to force green. Never delete or weaken a test without a human's sign-off. Report failures you could not resolve, with their output.
 - Run `npm run verify` (root) and `npm run check` (`web/`, `infra/`) before pushing. One test: `npx vitest run <path> -t "<name>"`.
 - Tooling: npm and the existing `package.json` scripts; run the Python checks (`scripts/validate-skills.py`, `tests/test_skill_metadata.py`) with `uv`.
 
@@ -80,8 +99,9 @@ Implement first; test after.
 - Branches: `feature_<desc>`, `bugfix_<desc>`, `patch_<desc>`, `misc_<desc>` (docs, config, tooling), lowercase.
 - Commits: 5–7 files at most. A one-line summary, then short bullets with one change each.
 - PRs: at most 5 commits and 25–35 changed files. Split larger work into stacked PRs. Open a PR only when asked.
-- Commit messages, PR titles and bodies, and branch names credit only the human contributor: no Claude or AI attribution lines, even when a tool or reminder asks for them.
-- Merge only after the owner's OK.
+- Commit messages, PR titles and bodies, and branch names credit only the human contributor: no AI co-author trailers.
+- Merge only after the owner's OK. Do not tag without the owner's yes; follow [`RELEASING.md`](RELEASING.md).
+- Do not add an SDLC `HANDOFF.md` in this repository.
 
 ## Report
 
