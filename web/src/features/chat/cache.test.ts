@@ -102,7 +102,9 @@ describe('applyMessageToCaches', () => {
     expect(threads?.threads).toHaveLength(3);
     expect(threads?.threads[0]?.last_message_body).toBe('new');
     expect(threads?.threads[0]?.released_at).toBeUndefined();
-    expect(threads?.threads.find((t) => t.released_at !== undefined)?.last_message_body).toBe('old');
+    expect(threads?.threads.find((t) => t.released_at !== undefined)?.last_message_body).toBe(
+      'old',
+    );
   });
 
   it('refreshes the list for a thread it has not seen yet', () => {
