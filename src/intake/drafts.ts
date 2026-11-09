@@ -7,7 +7,7 @@
  * written here and nowhere else, and must never be logged or copied into a Service
  * Request, an event payload or an error message.
  *
- * `meeting_place` (in `details`) is sensitive free text too, but it is meant to move:
+ * `meeting_place` and `destination` (in `details`) are sensitive free text too, but it is meant to move:
  * submit copies it, with the summary and timing, into the Service Request's `details`
  * in the same database, where the requester and the accepter read it. It must still
  * never be logged, listed, or put in an event or audit payload.
@@ -39,7 +39,7 @@ interface DraftRow {
   user_id: string;
   status: DraftStatus;
   category: IntakeCategory | null;
-  details: { summary?: unknown; timing?: unknown; meeting_place?: unknown };
+  details: { summary?: unknown; timing?: unknown; meeting_place?: unknown; destination?: unknown };
   intake_text: string;
   service_request_id: string | null;
   created_at: Date;
@@ -65,6 +65,7 @@ function toDraft(row: DraftRow): ServiceRequestDraft {
       summary: text(row.details.summary),
       timing: text(row.details.timing),
       meetingPlace: text(row.details.meeting_place),
+      destination: text(row.details.destination),
     },
     intakeText: row.intake_text,
     serviceRequestId: row.service_request_id ?? undefined,
@@ -80,6 +81,7 @@ export function draftDetails(fields: IntakeDraftFields): Record<string, string> 
     ...(fields.summary !== null ? { summary: fields.summary } : {}),
     ...(fields.timing !== null ? { timing: fields.timing } : {}),
     ...(fields.meetingPlace !== null ? { meeting_place: fields.meetingPlace } : {}),
+    ...(fields.destination !== null ? { destination: fields.destination } : {}),
   };
 }
 

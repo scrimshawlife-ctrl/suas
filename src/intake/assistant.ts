@@ -67,6 +67,7 @@ export interface IntakeDraftFields {
   readonly summary: string | null;
   readonly timing: string | null;
   readonly meetingPlace: string | null;
+  readonly destination: string | null;
 }
 
 export const EMPTY_DRAFT_FIELDS: IntakeDraftFields = {
@@ -74,6 +75,7 @@ export const EMPTY_DRAFT_FIELDS: IntakeDraftFields = {
   summary: null,
   timing: null,
   meetingPlace: null,
+  destination: null,
 };
 
 /**
@@ -114,6 +116,7 @@ function renderUserMessage(input: IntakeRunInput): string {
           summary: input.draft.summary,
           timing: input.draft.timing,
           meeting_place: input.draft.meetingPlace,
+          destination: input.draft.destination,
         });
   return `<intake_text>\n${safeText}\n</intake_text>\n\nCurrent draft: ${current}`;
 }
@@ -202,14 +205,18 @@ function runDraft(call: ModelToolCall, state: RunState): ToolOutcome {
   const parsed = draftServiceRequestInput.safeParse(input);
   if (!parsed.success) {
     return error(
-      'Invalid input. Provide category and summary; timing and meeting_place are optional.',
+      'Invalid input. Provide category and summary; timing, meeting_place and destination are optional.',
     );
+  }
+  if (parsed.data.destination !== undefined && parsed.data.category !== 'TRANSPORTATION') {
+    return error('destination is only for TRANSPORTATION requests. Leave it out.');
   }
   state.draft = {
     category: parsed.data.category,
     summary: parsed.data.summary,
     timing: parsed.data.timing ?? null,
     meetingPlace: parsed.data.meeting_place ?? null,
+    destination: parsed.data.destination ?? null,
   };
   return { content: 'Draft saved. The Veteran will review it before submitting.' };
 }

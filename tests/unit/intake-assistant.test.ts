@@ -96,6 +96,7 @@ describe('the two-tool contract', () => {
       summary: 'Groceries',
       timing: 'Friday',
       meetingPlace: null,
+      destination: null,
     });
   });
 

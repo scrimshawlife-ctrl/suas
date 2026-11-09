@@ -15,20 +15,23 @@ import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { ForbiddenError, ResourceNotVisibleError } from '../../authz/index.js';
 import type { AuthContext } from '../../authz/index.js';
-import { draftDetailsInput } from '../../intake/tools.js';
+import { draftDetailsInput, SUMMARY_MAX, TIMING_MAX } from '../../intake/tools.js';
 import { requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
-import { resolveCaseAccess, resolveRequestAccess } from '../case-access.js';
+import { resolveCaseAccess, resolveRequestAccess, type RequestAccess } from '../case-access.js';
 import { requireDisclosure } from '../../consent/index.js';
 import {
   acceptServiceRequest,
   createServiceRequest,
   DEFAULT_PAGE_SIZE,
+  DESTINATION_MAX,
+  editServiceRequestInTx,
   executeServiceRequestCommandInTx,
   findCase,
   findDisplayName,
   findServiceRequest,
   listCaseServiceRequests,
   MAX_PAGE_SIZE,
+  MEETING_PLACE_MAX,
   readHelperRequestCounts,
   readRequestList,
   readServiceRequestDetail,
@@ -75,6 +78,20 @@ const commandBody = z.object({
   grantee_id: z.string().uuid().optional(),
 });
 
+/** Same bounds as the plain form; `null` clears an optional field. */
+const editBody = z
+  .object({
+    summary: z.string().trim().min(1).max(SUMMARY_MAX).optional(),
+    timing: z.string().trim().min(1).max(TIMING_MAX).nullable().optional(),
+    meeting_place: z.string().trim().min(1).max(MEETING_PLACE_MAX).nullable().optional(),
+    destination: z.string().trim().min(1).max(DESTINATION_MAX).nullable().optional(),
+    expected_status: z.string().min(1).max(64).optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).some((key) => key !== 'expected_status'), {
+    message: 'Provide at least one field to change.',
+  });
+
 /**
  * Commands only the requester may issue on their own request. The accepter runs every
  * other command and never these three: submitting is asking for help, cancelling
@@ -111,6 +128,40 @@ function actorTypeFor(owner: boolean): 'VETERAN' | 'USER' {
   return owner ? 'VETERAN' : 'USER';
 }
 
+/**
+ * The whole request for its requester or accepter. Callers pass an access already resolved
+ * by `resolveRequestAccess`; the counterpart name is the other person's.
+ */
+async function buildRequestDetail(
+  pool: Pool,
+  tenantId: string,
+  serviceRequest: ServiceRequest,
+  access: RequestAccess,
+) {
+  const detail = await readServiceRequestDetail(pool, tenantId, serviceRequest.serviceRequestId);
+  if (detail === undefined) throw new ResourceNotVisibleError();
+  const counterpartUserId = access.owner
+    ? serviceRequest.acceptedByUserId
+    : access.supportCase.veteranUserId;
+  const counterpartDisplayName =
+    counterpartUserId === undefined
+      ? null
+      : await findDisplayName(pool, tenantId, counterpartUserId);
+  return {
+    ...publicServiceRequest(serviceRequest),
+    viewer_role: access.owner ? 'REQUESTER' : 'ACCEPTER',
+    summary: detail.summary,
+    timing: detail.timing,
+    meeting_place: detail.meetingPlace,
+    destination: detail.destination,
+    created_at: detail.createdAt.toISOString(),
+    accepted_at: detail.acceptedAt?.toISOString() ?? null,
+    widened: detail.widened,
+    county: detail.county,
+    counterpart_display_name: counterpartDisplayName,
+  };
+}
+
 export function registerServiceRequestRoutes(
   app: FastifyInstance,
   deps: ServiceRequestRouteDeps,
@@ -135,11 +186,14 @@ export function registerServiceRequestRoutes(
     const { caseId } = caseIdParams.parse(request.params);
     const body = createBody.parse(request.body);
     const access = await resolveCaseAccess(deps.pool, context, caseId);
-    if (access.owner) {
-      await requireVerifiedVeteran(deps.pool, context);
-      await requireCounty(deps.pool, context);
+    // R8.3: only the requester adds needs; a helper on the case is refused.
+    if (!access.owner) {
+      throw new ForbiddenError(
+        'Only the person who asked for help may add a request to this case.',
+      );
     }
-    const actorType = actorTypeFor(access.owner);
+    await requireVerifiedVeteran(deps.pool, context);
+    await requireCounty(deps.pool, context);
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const fingerprint = fingerprintRequest({
       case_id: caseId,
@@ -168,7 +222,7 @@ export function registerServiceRequestRoutes(
           caseId,
           category: body.category,
           createdBy: context.userId,
-          actorType,
+          actorType: 'VETERAN',
           ...(body.details !== undefined ? { details: body.details as JsonObject } : {}),
           correlationId: String(request.id),
         });
@@ -277,26 +331,77 @@ export function registerServiceRequestRoutes(
     const serviceRequest = await findServiceRequest(deps.pool, context.tenantId, id);
     if (serviceRequest === undefined) throw new ResourceNotVisibleError();
     const access = await resolveRequestAccess(deps.pool, context, serviceRequest);
-    const detail = await readServiceRequestDetail(deps.pool, context.tenantId, id);
-    if (detail === undefined) throw new ResourceNotVisibleError();
-    const counterpartUserId = access.owner
-      ? serviceRequest.acceptedByUserId
-      : access.supportCase.veteranUserId;
-    const counterpartDisplayName =
-      counterpartUserId === undefined
-        ? null
-        : await findDisplayName(deps.pool, context.tenantId, counterpartUserId);
+    return buildRequestDetail(deps.pool, context.tenantId, serviceRequest, access);
+  });
+
+  /**
+   * R8.1: the requester edits a request nobody has accepted yet. Registered as a fixed route
+   * so it is not read as a `:command`. Strangers get 404 and the accepter 403, as for the
+   * requester-only commands. The stored result holds ids only (the text is never kept in
+   * the idempotency table), so the response re-reads the current detail, replay or not.
+   */
+  app.post(`${API_PREFIX}/service-requests/:id/commands/edit`, async (request) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const { id } = idParams.parse(request.params);
+    const body = editBody.parse(request.body);
+    const serviceRequest = await findServiceRequest(deps.pool, context.tenantId, id);
+    if (serviceRequest === undefined) throw new ResourceNotVisibleError();
+    const access = await resolveRequestAccess(deps.pool, context, serviceRequest);
+    if (!access.owner) {
+      throw new ForbiddenError(
+        'Only the person who asked for help may run this command (SUAS-specs DISPATCH.md §4).',
+      );
+    }
+    const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
+    const scope = commandScope({
+      command: 'POST /service-requests/{id}/commands/edit',
+      aggregateType: 'ServiceRequest',
+      aggregateId: id,
+      actorId: context.userId,
+    });
+
+    const run = await runIdempotentCommand(
+      deps.pool,
+      {
+        tenantId: context.tenantId,
+        commandScope: scope,
+        idempotencyKey,
+        // The edited text is fingerprinted as a hash only, never stored.
+        requestFingerprint: fingerprintRequest({
+          service_request_id: id,
+          changes: JSON.stringify(body),
+          actor_id: context.userId,
+        }),
+      },
+      async (tx) => {
+        const edited = await editServiceRequestInTx(tx, {
+          tenantId: context.tenantId,
+          serviceRequestId: id,
+          actorId: context.userId,
+          changes: {
+            ...(body.summary !== undefined ? { summary: body.summary } : {}),
+            ...(body.timing !== undefined ? { timing: body.timing } : {}),
+            ...(body.meeting_place !== undefined ? { meetingPlace: body.meeting_place } : {}),
+            ...(body.destination !== undefined ? { destination: body.destination } : {}),
+          },
+          ...(body.expected_status !== undefined
+            ? { expectedStatus: body.expected_status as ServiceRequest['status'] }
+            : {}),
+          correlationId: String(request.id),
+        });
+        return {
+          result: publicServiceRequest(edited),
+          aggregateType: 'ServiceRequest',
+          aggregateId: edited.serviceRequestId,
+        };
+      },
+    );
+
+    const current = await findServiceRequest(deps.pool, context.tenantId, id);
+    if (current === undefined) throw new ResourceNotVisibleError();
     return {
-      ...publicServiceRequest(serviceRequest),
-      viewer_role: access.owner ? 'REQUESTER' : 'ACCEPTER',
-      summary: detail.summary,
-      timing: detail.timing,
-      meeting_place: detail.meetingPlace,
-      created_at: detail.createdAt.toISOString(),
-      accepted_at: detail.acceptedAt?.toISOString() ?? null,
-      widened: detail.widened,
-      county: detail.county,
-      counterpart_display_name: counterpartDisplayName,
+      ...(await buildRequestDetail(deps.pool, context.tenantId, current, access)),
+      replayed: run.replayed,
     };
   });
 

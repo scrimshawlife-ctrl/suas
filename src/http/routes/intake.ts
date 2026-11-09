@@ -44,7 +44,11 @@ import {
 } from '../../intake/drafts.js';
 import { createDatabaseIntakeHost } from '../../intake/resource-search.js';
 import { createSubmittedRequestInTx, submitDraftInTx } from '../../intake/submit.js';
-import { MEETING_PLACE_MAX } from '../../coordination/index.js';
+import {
+  assertDestinationAllowed,
+  DESTINATION_MAX,
+  MEETING_PLACE_MAX,
+} from '../../coordination/index.js';
 import {
   draftDetailsInput,
   INTAKE_CATEGORIES,
@@ -72,6 +76,7 @@ const editBody = z
     summary: z.string().trim().min(1).max(SUMMARY_MAX).optional(),
     timing: z.string().trim().min(1).max(TIMING_MAX).nullable().optional(),
     meeting_place: z.string().trim().min(1).max(MEETING_PLACE_MAX).nullable().optional(),
+    destination: z.string().trim().min(1).max(DESTINATION_MAX).nullable().optional(),
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0, { message: 'Provide at least one field.' });
@@ -88,6 +93,7 @@ function draftView(draft: ServiceRequestDraft) {
     summary: draft.fields.summary,
     timing: draft.fields.timing,
     meeting_place: draft.fields.meetingPlace,
+    destination: draft.fields.destination,
     service_request_id: draft.serviceRequestId ?? null,
     created_at: draft.createdAt.toISOString(),
     updated_at: draft.updatedAt.toISOString(),
@@ -192,15 +198,16 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     const { id } = idParams.parse(request.params);
     const body = editBody.parse(request.body);
     const draft = await findOwnedDraft(deps.pool, context.tenantId, context.userId, id);
-    const saved = await saveDraftContent(deps.pool, draft, {
-      fields: {
-        category: body.category ?? draft.fields.category,
-        summary: body.summary ?? draft.fields.summary,
-        timing: body.timing === undefined ? draft.fields.timing : body.timing,
-        meetingPlace:
-          body.meeting_place === undefined ? draft.fields.meetingPlace : body.meeting_place,
-      },
-    });
+    const fields = {
+      category: body.category ?? draft.fields.category,
+      summary: body.summary ?? draft.fields.summary,
+      timing: body.timing === undefined ? draft.fields.timing : body.timing,
+      meetingPlace:
+        body.meeting_place === undefined ? draft.fields.meetingPlace : body.meeting_place,
+      destination: body.destination === undefined ? draft.fields.destination : body.destination,
+    };
+    assertDestinationAllowed(fields.category, fields.destination);
+    const saved = await saveDraftContent(deps.pool, draft, { fields });
     return draftView(saved);
   });
 
@@ -268,6 +275,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
       summary: body.summary,
       timing: body.timing ?? null,
       meetingPlace: body.meeting_place ?? null,
+      destination: body.destination ?? null,
     });
     const scope = commandScope({
       command: 'POST /service-requests',

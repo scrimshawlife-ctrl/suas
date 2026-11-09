@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod';
-import { MEETING_PLACE_MAX, type ServiceCategory } from '../coordination/index.js';
+import { DESTINATION_MAX, MEETING_PLACE_MAX, type ServiceCategory } from '../coordination/index.js';
 import type { ModelToolDefinition } from '../inference/index.js';
 
 /** Categories the Intake Assistant may draft. Anything else is "not available yet". */
@@ -43,6 +43,7 @@ export const draftDetailsInput = z
     summary: z.string().trim().min(1).max(SUMMARY_MAX),
     timing: z.string().trim().min(1).max(TIMING_MAX).optional(),
     meeting_place: z.string().trim().min(1).max(MEETING_PLACE_MAX).optional(),
+    destination: z.string().trim().min(1).max(DESTINATION_MAX).optional(),
   })
   .strict();
 export type DraftDetails = z.infer<typeof draftDetailsInput>;
@@ -93,6 +94,12 @@ export const INTAKE_TOOLS: readonly ModelToolDefinition[] = [
           description:
             'Where to meet, such as a public place or a pickup spot, if the Veteran said. ' +
             'Needed for FOOD, TRANSPORTATION and SHELTER. Do not guess one.',
+        },
+        destination: {
+          type: 'string',
+          maxLength: DESTINATION_MAX,
+          description:
+            'Where a ride is going, for TRANSPORTATION only, if the Veteran said. Do not guess one.',
         },
       },
       required: ['category', 'summary'],
