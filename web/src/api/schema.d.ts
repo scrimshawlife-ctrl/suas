@@ -2004,6 +2004,11 @@ export interface components {
     ChatThread: {
       /** Format: uuid */
       service_request_id: string;
+      /**
+       * Format: uuid
+       * @description Proposal: suas-specs V1_MVP_PROPOSAL.md R8.11, not released. Pass as `thread` to read this thread's messages. Always present in responses; optional in the contract so clients written before it still type-check.
+       */
+      chat_thread_id?: string;
       category: components['schemas']['ServiceCategory'];
       summary: string | null;
       counterpart_display_name: string | null;
@@ -4379,6 +4384,8 @@ export interface operations {
         limit?: number;
         /** @description Opaque next_cursor from the previous page; returns older messages */
         cursor?: string;
+        /** @description Proposal: suas-specs V1_MVP_PROPOSAL.md R8.11, not released. A chat_thread_id of this request. Without it the live thread is returned. A closed thread is readable only by the requester; for anyone else, or for a thread of another request, the response is 404. */
+        thread?: string;
       };
       header?: never;
       path: {

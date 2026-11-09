@@ -48,6 +48,8 @@ const idParams = z.object({ id: z.string().uuid() });
 const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().min(1).max(512).optional(),
+  /** A chat_thread_id of this request; absent means the live thread. */
+  thread: z.string().uuid().optional(),
 });
 
 const sendBody = z.object({
@@ -75,6 +77,7 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
     const threads = await listChatThreads(deps.pool, context.tenantId, context.userId);
     return {
       threads: threads.map((thread) => ({
+        chat_thread_id: thread.chatThreadId,
         service_request_id: thread.serviceRequestId,
         category: thread.category,
         summary: thread.summary,
@@ -94,7 +97,7 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
     const query = listQuery.parse(request.query);
-    const access = await resolveChatAccess(deps.pool, context, id);
+    const access = await resolveChatAccess(deps.pool, context, id, query.thread);
     const page = await listChatMessages(deps.pool, {
       tenantId: context.tenantId,
       chatThreadId: access.chatThreadId,
