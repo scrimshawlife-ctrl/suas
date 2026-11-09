@@ -9,7 +9,7 @@ import { useResumableCheckIn } from './api';
  */
 export function CheckInCard({ verified }: { verified: boolean }) {
   const resumable = useResumableCheckIn(verified);
-  const resuming = resumable.data != null;
+  const resuming = Boolean(resumable.data);
   // Hold the button until the answer is known, so the label never flips under the person.
   const settled = !verified || resumable.isSuccess || resumable.isError;
   return (

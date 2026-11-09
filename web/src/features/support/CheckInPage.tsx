@@ -260,22 +260,25 @@ function CheckInFlow({
 export default function CheckInPage() {
   const resumable = useResumableCheckIn();
   const start = useStartCheckIn();
-  const [resumeId, setResumeId] = useState<string | undefined>(undefined);
-  const resumed = useCheckIn(resumeId);
-  // Decide once: later list refetches (after complete) must not start another Check-In.
-  const decided = useRef(false);
+  // undefined: not decided yet. null: start a new one. Set once from the first list read,
+  // so a later refetch (after complete) can neither swap the Check-In nor start another.
+  const [resumeId, setResumeId] = useState<string | null | undefined>(undefined);
+  if (resumeId === undefined && resumable.isSuccess) {
+    setResumeId(resumable.data?.check_in_id ?? null);
+  }
+  const resumed = useCheckIn(resumeId ?? undefined);
+  const started = useRef(false);
 
   useEffect(() => {
-    if (decided.current || !resumable.isSuccess) return;
-    decided.current = true;
-    if (resumable.data === null) start.mutate();
-    else setResumeId(resumable.data.check_in_id);
-  }, [resumable.isSuccess, resumable.data, start]);
+    if (resumeId !== null || started.current) return;
+    started.current = true;
+    start.mutate();
+  }, [resumeId, start]);
 
   function startAgain() {
-    setResumeId(undefined);
+    started.current = false;
+    setResumeId(null);
     start.reset();
-    start.mutate();
   }
 
   const checkIn = start.data ?? resumed.data;
