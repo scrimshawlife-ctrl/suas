@@ -10,6 +10,8 @@ export const REASON_TEXT: Readonly<Record<string, string>> = {
   followup_due: 'A follow-up is due.',
   'qrf.responder_notified': 'You were told about a request that needs help.',
   service_request_update: 'A request you can see was updated.',
+  service_request_expired: 'Your request expired. No one accepted it within 72 hours.',
+  service_request_released: 'The helper released your request. It is back on the open list.',
 };
 
 export const FALLBACK_TEXT = 'You have a new update.';

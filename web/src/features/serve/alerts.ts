@@ -9,6 +9,8 @@ const REASON_TEXT: Record<string, string> = {
   followup_due: 'A follow-up is due',
   'qrf.responder_notified': 'Someone was told about a request',
   trusted_contact_alert: 'A trusted contact alert',
+  service_request_expired: 'Your request expired. No one accepted it within 72 hours',
+  service_request_released: 'The helper released your request. It is back on the open list',
 };
 
 const FALLBACK_TEXT = 'You have a new update';

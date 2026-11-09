@@ -8,6 +8,8 @@ export const UNNAMED = 'The other person';
 
 export const EMPTY_THREADS = 'You have no conversations yet.';
 export const SYSTEM_LINE = 'Chat is open for this request.';
+export const CHECKING_LINE = 'Checking this chat…';
+export const CLOSED_LINE = 'This helper released the request. This chat is closed.';
 
 /** The opening line of a conversation: when it was accepted, if the thread says and who is asking. */
 export function systemLine(thread: ChatThread | undefined, now: Date = new Date()): string {
