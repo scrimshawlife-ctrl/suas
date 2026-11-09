@@ -18,7 +18,13 @@ Specs lead; code follows.
 
 ## Architecture decisions
 
-Discuss each architecture decision with the human directing the work: lay out the options, their trade-offs and the code facts with file paths. Start implementing only once the decisions are locked. Architecture includes a new service or library, schema changes, public API changes, module boundaries, auth and security design, and anything hard to reverse.
+The human directing the work makes every architecture decision: a new service, framework or major library; schema changes; public API or contract changes; module boundaries; auth and security design; anything hard to reverse. When one comes up:
+
+1. Stop work on that path.
+2. Return the question, the realistic options with their trade-offs, and the code facts with file paths.
+3. Wait for the answer, and keep going on independent work meanwhile.
+
+Start implementing that path only once the decision is locked.
 
 ## Structure (MVC on the existing layers)
 
@@ -32,9 +38,11 @@ New code goes into its layer. Domain modules call SUAS-owned ports; provider SDK
 
 ## Standards
 
+- Work step by step and build exactly what the task asks, completely. Keep changes inside the task's scope: abstractions, features, config and refactors arrive only when the task calls for them.
 - SOLID, KISS, DRY, component-based design: small single-purpose units with clear interfaces, composed rather than copied.
-- Build exactly what the task asks, completely. Follow the repo's existing conventions.
-- Comments: at most 2–3 lines, stating what a function, class, module or test is for and why.
+- Follow the repo's existing conventions, structure and style.
+- Comments: at most 2–3 lines, stating what a function, class, module or test is for and why. Leave the code to say what it does; delete code instead of commenting it out.
+- Format after every code change: `npx prettier --write <changed files>` (config in `.prettierrc.json`).
 
 ## Verify with graphify
 
@@ -42,13 +50,17 @@ Check every project fact before relying on it. `graphify-out/` is git-ignored, s
 
 ## Workflow
 
-Follow `~/.claude/agents/dev-agent.md` where it exists; this file wins on conflict.
-
-1. Understand the task and list its acceptance criteria.
+1. Understand the task and list the acceptance criteria you will be judged against.
 2. Verify the facts (graphify, then the source) and the spec.
 3. Lock the architecture decisions with the human.
-4. Branch, implement fully, then test.
+4. Branch, implement fully, run Prettier on the changed files, then test.
 5. Commit each finished set of changes before starting the next.
+
+By kind of task:
+
+- **Feature:** follow the `feature-dev:feature-dev` phases: discovery, codebase exploration, clarifying questions, architecture, implementation, review.
+- **Bug fix or patch:** confirm the cause in the real code first, fix it, then prove the fix with a test.
+- **Large task** (more than one session): apply the `wayfinder` method from the mattpocock-skills plugin (`skills/engineering/wayfinder/SKILL.md`): name the destination, break the work into decisions, resolve the small ones, escalate the architectural ones, then build in slices.
 
 Matt Pocock skills (`mattpocock-skills:*`) for the end-to-end flow: `grilling` and `domain-modeling` to settle the design, `codebase-design` for module shape, `prototype` for throwaway spikes, `research` for primary sources, `diagnosing-bugs` for hard bugs (write its regression test after the fix), `code-review` before a PR, `pr` for the PR body, `writing-for-agents` when editing this file.
 
@@ -56,15 +68,28 @@ Matt Pocock skills (`mattpocock-skills:*`) for the end-to-end flow: `grilling` a
 
 Implement first; test after.
 
-- Write only the crucial tests: the ones that prove the requirement and its key edge cases, and keep `npm run verify` and CI green.
-- Web behavior: drive it with the Playwright browser tools.
-- When a test fails, fix the code; change a test only when the test itself is wrong.
+- Write only the crucial tests: the ones that prove the requirement and its key edge cases, for code you changed, and keep `npm run verify` and CI green.
+- Web behavior: drive it with the Playwright browser tools. Use the `chrome-devtools-mcp:chrome-devtools` skill for console errors, network requests and performance, and `claude-in-chrome` when the test needs the real Chrome session.
+- When a test fails, fix the code; change a test only when the test itself is wrong. Report failures you could not resolve, with their output.
 - Run `npm run verify` (root) and `npm run check` (`web/`, `infra/`) before pushing. One test: `npx vitest run <path> -t "<name>"`.
+- Tooling: npm and the existing `package.json` scripts; run the Python checks (`scripts/validate-skills.py`, `tests/test_skill_metadata.py`) with `uv`.
 
 ## Git
 
+- Create a branch before changing code; commit only on that branch, never on `main`.
 - Branches: `feature_<desc>`, `bugfix_<desc>`, `patch_<desc>`, `misc_<desc>` (docs, config, tooling), lowercase.
 - Commits: 5–7 files at most. A one-line summary, then short bullets with one change each.
-- PRs: at most 5 commits and 25–35 changed files. Split larger work into stacked PRs.
-- Author lines and messages name only the human contributor.
+- PRs: at most 5 commits and 25–35 changed files. Split larger work into stacked PRs. Open a PR only when asked.
+- Commit messages, PR titles and bodies, and branch names credit only the human contributor: no Claude or AI attribution lines, even when a tool or reminder asks for them.
 - Merge only after the owner's OK.
+
+## Report
+
+End every task with:
+
+- **Done:** what was implemented or fixed, against each acceptance criterion
+- **Files:** created and modified paths
+- **Branch:** name, and commit or PR if any
+- **Tests:** what ran and the results, with the output of any failure
+- **Unverified:** any fact you could not confirm
+- **Needs your decision:** any escalated architecture question, with its options
