@@ -20,6 +20,7 @@ const detail = (status = 'ACCEPTED') => ({
   summary: 'Groceries for two days',
   timing: 'Thursday, pick up at 9:30 AM',
   meeting_place: '1200 Example Ave, San Jose',
+  destination: null as string | null,
   created_at: '2026-11-04T12:00:00Z',
   accepted_at: null as string | null,
   widened: false,
@@ -196,5 +197,22 @@ describe('Progress step', () => {
     expect(
       await screen.findByText("Waiting for Marcus T. to confirm it's done."),
     ).toBeInTheDocument();
+  });
+});
+
+describe('Going to row', () => {
+  it('shows the destination after "Where to meet" when one is set', async () => {
+    replies.detail = { data: { ...detail(), category: 'TRANSPORTATION', destination: 'Clinic' } };
+    renderCase();
+    const row = await screen.findByText('Going to');
+    expect(row.nextElementSibling).toHaveTextContent('Clinic');
+    const labels = screen.getAllByRole('term').map((term) => term.textContent);
+    expect(labels.indexOf('Going to')).toBe(labels.indexOf('Where to meet') + 1);
+  });
+
+  it('has no row when there is no destination', async () => {
+    renderCase();
+    await screen.findByText('Where to meet');
+    expect(screen.queryByText('Going to')).not.toBeInTheDocument();
   });
 });

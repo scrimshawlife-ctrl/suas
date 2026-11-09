@@ -4,6 +4,7 @@ import { progressSteps } from './card-copy';
 import {
   canCancel,
   cardFromStatus,
+  isEditableStatus,
   isSettled,
   listChipForStatus,
   resolveRequestCard,
@@ -217,5 +218,12 @@ describe('list chips and polling', () => {
     expect(isSettled('MATCHING')).toBe(false);
     expect(isSettled('DECLINED')).toBe(false);
     expect(isSettled(undefined)).toBe(false);
+  });
+});
+
+describe('isEditableStatus', () => {
+  it('is true only while nobody has accepted', () => {
+    const editable = (Object.keys(EXPECTED) as ServiceRequestStatus[]).filter(isEditableStatus);
+    expect(editable).toEqual(['SUBMITTED', 'TRIAGED', 'MATCHING']);
   });
 });

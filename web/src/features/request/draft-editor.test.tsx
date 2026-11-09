@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IntakeDraft } from './api';
-import { useDraftEditor } from './draft-editor';
+import { draftEdit, fieldsFromDraft, useDraftEditor } from './draft-editor';
 
 const { patch } = vi.hoisted(() => ({ patch: vi.fn() }));
 vi.mock('../../api/client', () => ({ api: { PATCH: patch } }));
@@ -70,5 +70,28 @@ describe('useDraftEditor', () => {
     act(() => result.current.change({ meetingPlace: 'Library' }));
     await expect(result.current.save()).rejects.toThrow('boom');
     await expect(result.current.save()).resolves.toMatchObject({ meeting_place: 'Library' });
+  });
+});
+
+describe('draft destination', () => {
+  const ride: IntakeDraft = { ...draft, category: 'TRANSPORTATION', destination: 'Clinic' };
+
+  it('reads the destination from the draft', () => {
+    expect(fieldsFromDraft(ride).destination).toBe('Clinic');
+    expect(fieldsFromDraft(draft).destination).toBe('');
+  });
+
+  it('sends a changed or cleared destination, and nothing when it is unchanged', () => {
+    const fields = fieldsFromDraft(ride);
+    expect(draftEdit(fields, ride)).toEqual({});
+    expect(draftEdit({ ...fields, destination: ' Pharmacy ' }, ride)).toEqual({
+      destination: 'Pharmacy',
+    });
+    expect(draftEdit({ ...fields, destination: '' }, ride)).toEqual({ destination: null });
+  });
+
+  it('clears the saved destination when the category moves away from a ride', () => {
+    const fields = { ...fieldsFromDraft(ride), category: 'FOOD' as const };
+    expect(draftEdit(fields, ride)).toEqual({ category: 'FOOD', destination: null });
   });
 });
