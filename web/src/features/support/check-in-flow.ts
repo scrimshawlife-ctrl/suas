@@ -45,3 +45,17 @@ export function skipQuestion(
 export function previousQuestion(position: Position): Position {
   return { ...position, index: Math.max(0, position.index - 1) };
 }
+
+/**
+ * Where a resumed Check-In opens: the first question with no saved answer, or the last
+ * question when every one is answered. The server keeps ids, not choices, so `answers` is empty.
+ */
+export function resumePosition(
+  questions: readonly Question[],
+  answeredQuestionIds: readonly string[],
+): Position {
+  const answered = new Set(answeredQuestionIds);
+  const first = questions.findIndex((question) => !answered.has(question.question_id));
+  const index = first === -1 ? Math.max(0, questions.length - 1) : first;
+  return { index, answers: {} };
+}

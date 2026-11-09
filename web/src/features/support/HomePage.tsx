@@ -12,6 +12,7 @@ import { ActiveRequest } from '../request/home/ActiveRequest';
 import { FindHelp } from '../request/home/FindHelp';
 import { greeting } from '../request/home/greeting';
 import { YourRequests } from '../request/home/YourRequests';
+import { CheckInCard } from './CheckInCard';
 
 const PRIVACY_LINKS = [
   { to: paths.consents, label: 'Consents' },
@@ -50,19 +51,7 @@ export default function HomePage() {
         <FindHelp categories={categories} compact={active_qrf !== null} />
         <aside className="flex flex-col gap-4 pt-12.5 max-md:pt-0">
           <YourRequests />
-          <Card aria-labelledby="check-in" className="flex flex-col gap-3 p-6">
-            <h2 id="check-in" className="text-20 font-bold">
-              Check-In
-            </h2>
-            <p className="text-slate">
-              Four short questions about how things are going. This is not a diagnosis.
-            </p>
-            <div className="flex">
-              <Button variant="secondary" href={paths.checkIn} size="small" className="min-h-12">
-                Start Check-In
-              </Button>
-            </div>
-          </Card>
+          <CheckInCard verified={me.data.id_verification.status === 'VERIFIED'} />
           <Card as="nav" aria-label="Privacy and messages" className="px-6 py-2.5">
             {PRIVACY_LINKS.map((link) => (
               <Link
