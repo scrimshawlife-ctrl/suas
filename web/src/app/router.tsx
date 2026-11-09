@@ -19,7 +19,7 @@ import {
 import { paths } from './paths';
 import RouteErrorPage from './RouteErrorPage';
 import { FocusRescue, RouteFocus } from './RouteFocus';
-import { LoadingScreen } from './status-screens';
+import { HydrateFallbackScreen } from './status-screens';
 
 /**
  * One wrapper component per loaded screen and title. Routes that load the same screen with the
@@ -88,7 +88,7 @@ export const routes: RouteObject[] = [
   {
     element: <RootRoute />,
     errorElement: <RouteErrorPage />,
-    HydrateFallback: LoadingScreen,
+    HydrateFallback: HydrateFallbackScreen,
     children: [
       {
         // Public header. /welcome and /verify are signed in but still onboarding.
@@ -111,7 +111,7 @@ export const routes: RouteObject[] = [
                 ...page('Welcome', () => import('../features/public/WelcomePage')),
               },
               {
-                element: <RequireProfile />,
+                element: <RequireProfile framed />,
                 children: [
                   {
                     path: paths.verify,

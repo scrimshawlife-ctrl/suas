@@ -1,8 +1,9 @@
+import type { ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useMe } from '../api/me';
 import { tokenStore, useMfaElevated, useSessionToken } from '../api/token-store';
 import { paths } from './paths';
-import { LoadFailedScreen, LoadingScreen } from './status-screens';
+import { LoadFailedScreen, LoadingScreen, WithCrisisStrip } from './status-screens';
 
 /** Where to come back to after an onboarding or step-up detour. */
 function returnPath(location: { pathname: string; search: string }): string {
@@ -32,12 +33,18 @@ export function RequireSignedIn() {
   return <Outlet />;
 }
 
-/** 2. `display_name` and `county` are both set. Otherwise onboarding at /welcome. */
-export function RequireProfile() {
+/**
+ * 2. `display_name` and `county` are both set. Otherwise onboarding at /welcome. Its loading
+ * and failed screens render outside any layout, so they carry the crisis strip, unless
+ * `framed` says a layout above already shows it (/verify sits in the public layout).
+ */
+export function RequireProfile({ framed = false }: { framed?: boolean }) {
   const me = useMe();
   const location = useLocation();
-  if (me.isPending) return <LoadingScreen />;
-  if (me.isError) return <LoadFailedScreen onRetry={() => void me.refetch()} />;
+  const standalone = (screen: ReactNode) =>
+    framed ? screen : <WithCrisisStrip>{screen}</WithCrisisStrip>;
+  if (me.isPending) return standalone(<LoadingScreen />);
+  if (me.isError) return standalone(<LoadFailedScreen onRetry={() => void me.refetch()} />);
   if (!me.data.display_name || !me.data.county) {
     return <Navigate to={paths.welcome} replace state={{ from: returnPath(location) }} />;
   }

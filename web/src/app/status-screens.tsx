@@ -1,5 +1,20 @@
+import type { ReactNode } from 'react';
 import { Button } from '../components/Button';
+import { CrisisStrip } from '../components/CrisisStrip';
 import { Page } from '../components/Page';
+
+/**
+ * The Harbor crisis band above a screen that renders outside every layout (root error,
+ * hydrate fallback, guard loading), so a veteran never sees one without it.
+ */
+export function WithCrisisStrip({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <CrisisStrip />
+      {children}
+    </>
+  );
+}
 
 export function LoadingScreen() {
   return (
@@ -20,5 +35,14 @@ export function LoadFailedScreen({ onRetry }: { onRetry: () => void }) {
         <Button onClick={onRetry}>Try again</Button>
       </div>
     </Page>
+  );
+}
+
+/** The router's `HydrateFallback`: the first load, before any layout has rendered. */
+export function HydrateFallbackScreen() {
+  return (
+    <WithCrisisStrip>
+      <LoadingScreen />
+    </WithCrisisStrip>
   );
 }
