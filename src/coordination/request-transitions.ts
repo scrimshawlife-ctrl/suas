@@ -62,6 +62,7 @@ export const SERVICE_REQUEST_COMMANDS = [
   'MARK_UNFULFILLABLE',
   'ESCALATE',
   'RETURN_FROM_ESCALATION',
+  'RELEASE',
 ] as const;
 export type ServiceRequestCommand = (typeof SERVICE_REQUEST_COMMANDS)[number];
 
@@ -313,6 +314,15 @@ export const SERVICE_REQUEST_TRANSITIONS: readonly ServiceRequestTransition[] = 
     from: 'IN_PROGRESS',
     to: 'ESCALATED',
     command: 'ESCALATE',
+    requiresReason: true,
+    mayDiscloseExternally: false,
+  },
+  // Helper release (suas-specs V1_MVP_PROPOSAL.md R8.5, proposal): the accepter hands the
+  // request back, and it waits for a new accept like a fresh submit.
+  {
+    from: 'ACCEPTED',
+    to: 'SUBMITTED',
+    command: 'RELEASE',
     requiresReason: true,
     mayDiscloseExternally: false,
   },

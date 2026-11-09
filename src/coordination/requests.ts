@@ -17,6 +17,7 @@ import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendAuditEvent, appendDomainEvent } from '../events/index.js';
 import type { JsonObject } from '../jobs/index.js';
 import { findCase, CaseNotFoundError } from './cases.js';
+import { closeChatThreadInTx } from './chat-threads.js';
 import {
   assertServiceCategory,
   resolveRequestTransition,
@@ -36,7 +37,7 @@ export interface ServiceRequest {
   readonly details: JsonObject;
   /** The user who created the request (DISPATCH.md §4 "creator"). */
   readonly createdBy: string;
-  /** The helper who accepted this request; undefined until someone does. Set once. */
+  /** The helper holding this request; undefined until someone accepts, and again after a release. */
   readonly acceptedByUserId: string | undefined;
 }
 
@@ -245,6 +246,19 @@ export interface ServiceRequestCommandInput {
   readonly correlationId?: string;
 }
 
+/** The actor does not hold this request (checked under the request row lock). */
+export class NotRequestHolderError extends Error {
+  readonly code = 'FORBIDDEN';
+  readonly httpStatus = 403;
+
+  constructor() {
+    super(
+      'Only the person who accepted this request may run this command (SUAS-specs DISPATCH.md §4).',
+    );
+    this.name = 'NotRequestHolderError';
+  }
+}
+
 export class DisclosureGuardRequiredError extends Error {
   readonly code = 'CONSENT_DENIED';
   readonly httpStatus = 403;
@@ -282,6 +296,12 @@ export async function executeServiceRequestCommandInTx(
     throw new StaleRequestStateError(input.expectedStatus, request.status);
   }
 
+  // Under the row lock: only the current holder releases, even if the route's earlier
+  // check went stale (a release and re-accept by someone else in between).
+  if (input.command === 'RELEASE' && request.acceptedByUserId !== input.actorId) {
+    throw new NotRequestHolderError();
+  }
+
   const transition = resolveRequestTransition(input.command, request.status, {
     ...(input.to !== undefined ? { to: input.to } : {}),
     ...(input.reason !== undefined ? { reason: input.reason } : {}),
@@ -312,19 +332,55 @@ export async function executeServiceRequestCommandInTx(
 
   // One terminal list for the state machine and the helper counts (DISPATCH.md §4).
   const terminal = TERMINAL_REQUEST_STATUSES.includes(transition.to);
+  // A release hands the request back: the holder goes, and submitted_at restarts below.
+  const released = input.command === 'RELEASE';
   const updated = await tx.query<RequestRow>(
     `UPDATE service_requests
        SET status = $3::suas_service_request_status,
            updated_at = now(),
            status_reason = COALESCE($4, status_reason),
            submitted_at = CASE WHEN $3::text = 'SUBMITTED' THEN now() ELSE submitted_at END,
-           terminal_at = CASE WHEN $5::boolean THEN now() ELSE terminal_at END
+           terminal_at = CASE WHEN $5::boolean THEN now() ELSE terminal_at END,
+           accepted_by_user_id = CASE WHEN $6::boolean THEN NULL ELSE accepted_by_user_id END,
+           accepted_at = CASE WHEN $6::boolean THEN NULL ELSE accepted_at END
      WHERE tenant_id = $1 AND service_request_id = $2
      RETURNING ${REQUEST_COLUMNS}`,
-    [input.tenantId, input.serviceRequestId, transition.to, input.reason ?? null, terminal],
+    [
+      input.tenantId,
+      input.serviceRequestId,
+      transition.to,
+      input.reason ?? null,
+      terminal,
+      released,
+    ],
   );
   const updatedRow = updated.rows[0];
   if (updatedRow === undefined) throw new ServiceRequestNotFoundError();
+
+  if (released) {
+    await closeChatThreadInTx(tx, {
+      tenantId: input.tenantId,
+      serviceRequestId: input.serviceRequestId,
+    });
+    // Ids only: the reason is free text and stays on the request (status_reason).
+    await appendAuditEvent(tx, {
+      eventType: 'SERVICE_REQUEST_RELEASED',
+      action: 'RELEASE_SERVICE_REQUEST',
+      targetType: 'ServiceRequest',
+      targetId: input.serviceRequestId,
+      aggregateType: 'ServiceRequest',
+      aggregateId: input.serviceRequestId,
+      tenantId: input.tenantId,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      payload: {
+        case_id: request.caseId,
+        category: request.category,
+        released_by_user_id: input.actorId,
+      },
+      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    });
+  }
 
   if (input.command === 'ASSIGN') {
     await appendDomainEvent(tx, {
@@ -347,7 +403,11 @@ export async function executeServiceRequestCommandInTx(
 }
 
 /** Statuses in which a Service Request is still waiting for someone to accept it. */
-const PEER_ACCEPTABLE: readonly ServiceRequestStatus[] = ['SUBMITTED', 'TRIAGED', 'MATCHING'];
+export const PEER_ACCEPTABLE: readonly ServiceRequestStatus[] = [
+  'SUBMITTED',
+  'TRIAGED',
+  'MATCHING',
+];
 
 /**
  * Peer accept: the one transition that takes a waiting request straight to `ACCEPTED`.
@@ -392,7 +452,7 @@ export async function peerAcceptRequestInTx(
 
   const updated = await tx.query<RequestRow>(
     `UPDATE service_requests
-        SET status = 'ACCEPTED', accepted_by_user_id = $3, updated_at = now()
+        SET status = 'ACCEPTED', accepted_by_user_id = $3, accepted_at = now(), updated_at = now()
       WHERE tenant_id = $1 AND service_request_id = $2
       RETURNING ${REQUEST_COLUMNS}`,
     [input.tenantId, input.serviceRequestId, input.actorId],
