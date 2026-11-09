@@ -52,11 +52,17 @@ describe('validateDraftForm', () => {
       ...base,
       service_name: ' ',
       category: '',
-      contact_method: '',
     });
     expect(errors.service_name).toBeDefined();
     expect(errors.category).toBeDefined();
-    expect(errors.contact_method_kind).toMatch(/contact method/);
+  });
+
+  it('refuses a contact row with no value and an area over 80 characters', () => {
+    const base = draftToForm(makeDraft());
+    const blank = validateDraftForm({ ...base, contacts: [{ kind: 'URL', value: '  ' }] });
+    expect(blank.contacts).toMatch(/Enter each contact method/);
+    const area = validateDraftForm({ ...base, area: 'a'.repeat(LIMITS.area + 1) });
+    expect(area.area).toMatch(/over 80 characters/);
   });
 });
 
@@ -72,18 +78,45 @@ describe('buildEditPayload', () => {
     expect(buildEditPayload(draft, values)).toEqual({ service_name: 'New name', cost: 'Free' });
   });
 
-  it('sends null for a cleared optional field and for a cleared kind', () => {
+  it('sends null for a cleared optional field', () => {
+    const values = { ...draftToForm(draft), hours: '', area: '' };
+    expect(buildEditPayload(draft, values)).toEqual({ hours: null });
+    const withArea = makeDraft({ area: 'San José' });
+    expect(buildEditPayload(withArea, { ...draftToForm(withArea), area: '' })).toEqual({
+      area: null,
+    });
+  });
+
+  it('sends the contact list and area without the legacy single fields', () => {
     const values = {
       ...draftToForm(draft),
-      hours: '',
-      contact_method: '',
-      contact_method_kind: '' as const,
+      contacts: [
+        { kind: 'PHONE' as const, value: ' 408-555-0100 ' },
+        { kind: 'URL' as const, value: 'https://example.org' },
+      ],
+      area: ' San José, east side ',
     };
-    expect(buildEditPayload(draft, values)).toEqual({
-      hours: null,
-      contact_method: null,
-      contact_method_kind: null,
+    const payload = buildEditPayload(draft, values);
+    expect(payload).toEqual({
+      contacts: [
+        { kind: 'PHONE', value: '408-555-0100' },
+        { kind: 'URL', value: 'https://example.org' },
+      ],
+      area: 'San José, east side',
     });
+    expect(payload).not.toHaveProperty('contact_method');
+    expect(payload).not.toHaveProperty('contact_method_kind');
+  });
+
+  it('sends null when every contact is removed, and nothing when only spacing differs', () => {
+    expect(buildEditPayload(draft, { ...draftToForm(draft), contacts: [] })).toEqual({
+      contacts: null,
+    });
+    const spaced = {
+      ...draftToForm(draft),
+      contacts: [{ kind: 'PHONE' as const, value: ' 408-555-0100 ' }],
+    };
+    expect(buildEditPayload(draft, spaced)).toBeNull();
   });
 
   it('sends counties in canonical order, and an empty list when all are cleared', () => {

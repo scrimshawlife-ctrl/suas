@@ -11,10 +11,17 @@ export const LIMITS = {
   serviceName: 200,
   eligibility: 1000,
   hours: 300,
-  contactMethod: 300,
+  contact: 300,
+  contacts: 3,
+  area: 80,
   referralMethod: 500,
   cost: 300,
 } as const;
+
+export interface ContactRow {
+  kind: ContactKind;
+  value: string;
+}
 
 export interface DraftFormValues {
   service_name: string;
@@ -22,8 +29,8 @@ export interface DraftFormValues {
   counties: County[];
   eligibility: string;
   hours: string;
-  contact_method: string;
-  contact_method_kind: ContactKind | '';
+  contacts: ContactRow[];
+  area: string;
   referral_method: string;
   cost: string;
 }
@@ -37,8 +44,8 @@ export function draftToForm(draft: ResourceDraft): DraftFormValues {
     counties: COUNTIES.filter((county) => draft.counties.includes(county)),
     eligibility: draft.eligibility ?? '',
     hours: draft.hours ?? '',
-    contact_method: draft.contact_method ?? '',
-    contact_method_kind: draft.contact_method_kind ?? '',
+    contacts: draft.contacts.map(({ kind, value }) => ({ kind, value })),
+    area: draft.area ?? '',
     referral_method: draft.referral_method ?? '',
     cost: draft.cost ?? '',
   };
@@ -47,7 +54,7 @@ export function draftToForm(draft: ResourceDraft): DraftFormValues {
 const optionalFields = [
   ['eligibility', 'Eligibility', LIMITS.eligibility],
   ['hours', 'Hours', LIMITS.hours],
-  ['contact_method', 'Contact method', LIMITS.contactMethod],
+  ['area', 'Area', LIMITS.area],
   ['referral_method', 'Referral method', LIMITS.referralMethod],
   ['cost', 'Cost', LIMITS.cost],
 ] as const;
@@ -64,10 +71,15 @@ export function validateDraftForm(values: DraftFormValues): DraftFormErrors {
     if (values[field].trim().length > max)
       errors[field] = `${label} is over ${max.toLocaleString('en-US')} characters.`;
   }
-  if (values.contact_method_kind !== '' && values.contact_method.trim() === '')
-    errors.contact_method_kind = 'Add a contact method, or choose no kind.';
+  if (values.contacts.some((row) => row.value.trim() === ''))
+    errors.contacts = 'Enter each contact method, or remove the empty row.';
+  else if (values.contacts.some((row) => row.value.trim().length > LIMITS.contact))
+    errors.contacts = `A contact method is over ${LIMITS.contact} characters.`;
   return errors;
 }
+
+const trimmedContacts = (rows: ContactRow[]): ContactRow[] =>
+  rows.map(({ kind, value }) => ({ kind, value: value.trim() }));
 
 const orNull = (value: string): string | null => (value.trim() === '' ? null : value.trim());
 
@@ -91,9 +103,10 @@ export function buildEditPayload(
   for (const [field] of optionalFields) {
     if (values[field].trim() !== saved[field].trim()) payload[field] = orNull(values[field]);
   }
-  if (values.contact_method_kind !== saved.contact_method_kind) {
-    payload.contact_method_kind =
-      values.contact_method_kind === '' ? null : values.contact_method_kind;
+  const contacts = trimmedContacts(values.contacts);
+  if (JSON.stringify(contacts) !== JSON.stringify(trimmedContacts(saved.contacts))) {
+    // The list replaces the saved one; the legacy single fields are never sent with it.
+    payload.contacts = contacts.length === 0 ? null : contacts;
   }
   return Object.keys(payload).length === 0 ? null : payload;
 }
