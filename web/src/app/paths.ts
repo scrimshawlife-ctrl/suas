@@ -11,6 +11,7 @@ export const paths = {
   crisis: '/crisis',
   home: '/home',
   request: '/request',
+  requests: '/requests',
   requestDetail: (id: string) => `/requests/${id}`,
   resources: (category: string) => `/resources/${category}`,
   checkIn: '/check-in',

@@ -166,6 +166,10 @@ export const routes: RouteObject[] = [
                         ...page('Request help', () => import('../features/request/RequestPage')),
                       },
                       {
+                        path: paths.requests,
+                        ...page('Your requests', () => import('../features/request/RequestsPage')),
+                      },
+                      {
                         path: '/requests/:id',
                         ...page(
                           'Your request',
