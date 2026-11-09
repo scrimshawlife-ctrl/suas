@@ -139,6 +139,7 @@ function WhatsNeeded({ request }: { request: ServiceRequestDetail }) {
     { label: 'Requested by', value: request.counterpart_display_name },
     { label: 'When', value: request.timing },
     { label: 'Where to meet', value: request.meeting_place, pin: true },
+    { label: 'Going to', value: request.destination ?? null },
   ];
   return (
     <Card aria-labelledby="details" padding="lg" className="flex flex-col gap-5 max-sm:p-5">
