@@ -324,8 +324,12 @@ describe('D-052 STAGING fixture registry', () => {
           [tenantId],
         );
         expect(audit.rows).toHaveLength(1);
-        expect(audit.rows[0]?.payload.sign_up_refused).toBe(true);
-        expect(JSON.stringify(audit.rows[0]?.payload)).not.toContain('@');
+        // Exactly these keys: no destination is recorded.
+        expect(audit.rows[0]?.payload).toEqual({
+          method: 'EMAIL_OTP',
+          outcome: environment === 'STAGING' ? 'NOT_STAGING_FIXTURE' : 'NO_ENROLLED_USER',
+          sign_up_refused: true,
+        });
         // On STAGING the fixture registry refuses first (an unknown address has no principal),
         // so this row cannot reach publicSignUpPermitted on STAGING. That predicate is covered
         // directly by tests/unit/staging-access.test.ts.
