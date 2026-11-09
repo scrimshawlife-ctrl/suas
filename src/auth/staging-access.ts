@@ -21,16 +21,6 @@ export interface StagingAccess {
   readonly fixturePrincipals: readonly StagingFixturePrincipal[];
 }
 
-export class PublicSignUpRefusedError extends Error {
-  readonly code = 'PUBLIC_SIGN_UP_REFUSED';
-  readonly httpStatus = 403;
-
-  constructor() {
-    super('Public sign-up is refused outside LOCAL and TEST.');
-    this.name = 'PublicSignUpRefusedError';
-  }
-}
-
 export function stagingAccessFromConfig(config: SuasConfig): StagingAccess {
   return {
     environment: config.environment,
@@ -42,14 +32,15 @@ export function stagingAccessFromConfig(config: SuasConfig): StagingAccess {
 }
 
 /**
- * Public self sign-up is permitted only in LOCAL and TEST. STAGING and
- * PRODUCTION refuse it even when a caller sets `allowSignUp`.
+ * Public self sign-up is permitted only in LOCAL and TEST. A refusal is silent: the caller
+ * treats the address like any unenrolled one (the same 202), so a refusal never reveals whether
+ * an address is enrolled. Released basis: AUTH.md §9.3 at 0.7.0 ("Challenge issuance remains
+ * non-enumerating"). AUTH.md §9.4 and ENVIRONMENT.md §3 / D-052 are prepared 0.8.0 text,
+ * untagged. The predicate deliberately ignores `publicSignUp`: the opt-in flag is owned by
+ * startup config, which refuses it outside LOCAL and TEST.
  */
-export function assertPublicSignUpPermitted(access: StagingAccess | undefined): void {
-  if (access !== undefined && (access.environment === 'LOCAL' || access.environment === 'TEST')) {
-    return;
-  }
-  throw new PublicSignUpRefusedError();
+export function publicSignUpPermitted(access: StagingAccess | undefined): boolean {
+  return access !== undefined && (access.environment === 'LOCAL' || access.environment === 'TEST');
 }
 
 /**

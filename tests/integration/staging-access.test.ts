@@ -12,11 +12,6 @@ import { issueChallenge } from '../../src/auth/challenge.js';
 import { RecordingChallengeDelivery } from '../../src/auth/delivery.js';
 import { verifyAndCreateSession } from '../../src/auth/login.js';
 import { createSession } from '../../src/auth/session.js';
-import {
-  assertPublicSignUpPermitted,
-  PublicSignUpRefusedError,
-  type StagingAccess,
-} from '../../src/auth/staging-access.js';
 import { BROWSER_SESSION_COOKIE } from '../../src/http/authenticate.js';
 import { createIdVerificationPort } from '../../src/identity/id-verification.js';
 import { createUser } from '../../src/identity/users.js';
@@ -57,6 +52,7 @@ async function effectCounts(pool: Pool, app: StartedApp): Promise<EffectCounts> 
 async function stagingApp(
   registry: readonly { tenantId: string; userId: string }[],
   demo: 'enabled' | 'disabled' | undefined = undefined,
+  extraEnv: Record<string, string> = {},
 ): Promise<StartedApp> {
   return startApp({
     env: validEnv({
@@ -68,6 +64,7 @@ async function stagingApp(
         .map((pair) => `${pair.tenantId}:${pair.userId}`)
         .join(','),
       ...(demo === undefined ? {} : { SUAS_DEMO_FIXED_CODE: demo }),
+      ...extraEnv,
     }),
     listen: false,
   });
@@ -119,7 +116,7 @@ describe('D-052 STAGING fixture registry', () => {
     }
   });
 
-  it('refuses runtime fake ID and public sign-up on STAGING and PRODUCTION', async () => {
+  it('refuses runtime fake ID on STAGING and PRODUCTION', async () => {
     const app = await stagingApp([]);
     try {
       const pool = app.pool;
@@ -133,31 +130,6 @@ describe('D-052 STAGING fixture registry', () => {
       expect(() =>
         createIdVerificationPort({ ...base, environment: 'PRODUCTION', idVerification: fakeId }),
       ).toThrow(/refused outside LOCAL and TEST/);
-      const empty: StagingAccess = {
-        environment: 'STAGING',
-        publicSignUp: true,
-        fixturePrincipals: [],
-      };
-      expect(() => assertPublicSignUpPermitted(empty)).toThrow(PublicSignUpRefusedError);
-      expect(() => assertPublicSignUpPermitted({ ...empty, environment: 'PRODUCTION' })).toThrow(
-        PublicSignUpRefusedError,
-      );
-      await expect(
-        issueChallenge(
-          {
-            pool,
-            sessionSecret: TEST_SESSION_SECRET,
-            delivery: app.challengeDelivery,
-            stagingAccess: empty,
-          },
-          {
-            tenantId: randomUUID(),
-            destination: syntheticEmail('signup-refused'),
-            method: 'EMAIL_OTP',
-            allowSignUp: true,
-          },
-        ),
-      ).rejects.toThrow(PublicSignUpRefusedError);
       expect(await effectCounts(pool, app)).toEqual(before);
     } finally {
       await app.close();
@@ -318,35 +290,92 @@ describe('D-052 STAGING fixture registry', () => {
   });
 
   it.each(['STAGING', 'PRODUCTION'] as const)(
-    'refuses public sign-up through issueChallenge on %s and creates nothing',
+    'quietly skips public sign-up through issueChallenge on %s and creates nothing',
     async (environment) => {
       const app = await stagingApp([]);
       try {
         const pool = app.pool;
         if (pool === undefined) throw new Error('The test app has no database pool.');
         const before = await effectCounts(pool, app);
-        await expect(
-          issueChallenge(
-            {
-              pool,
-              sessionSecret: TEST_SESSION_SECRET,
-              delivery: app.challengeDelivery,
-              stagingAccess: { environment, publicSignUp: true, fixturePrincipals: [] },
-            },
-            {
-              tenantId: randomUUID(),
-              destination: syntheticEmail(`signup-${environment.toLowerCase()}`),
-              method: 'EMAIL_OTP',
-              allowSignUp: true,
-            },
-          ),
-        ).rejects.toThrow(PublicSignUpRefusedError);
-        expect(await effectCounts(pool, app)).toEqual(before);
+        const tenantId = randomUUID();
+        const result = await issueChallenge(
+          {
+            pool,
+            sessionSecret: TEST_SESSION_SECRET,
+            delivery: app.challengeDelivery,
+            stagingAccess: { environment, publicSignUp: true, fixturePrincipals: [] },
+          },
+          {
+            tenantId,
+            destination: syntheticEmail(`signup-${environment.toLowerCase()}`),
+            method: 'EMAIL_OTP',
+            allowSignUp: true,
+          },
+        );
+        expect(result.issued).toBe(false);
+        const after = await effectCounts(pool, app);
+        // PRODUCTION keeps the uniform already-revoked row for an unknown address; STAGING stores none.
+        expect(after).toEqual(
+          environment === 'STAGING' ? before : { ...before, challenges: after.challenges },
+        );
+        // The refusal is audited as a refused sign-up, with no destination.
+        const audit = await pool.query<{ payload: Record<string, unknown> }>(
+          'SELECT payload FROM audit_events WHERE tenant_id = $1',
+          [tenantId],
+        );
+        expect(audit.rows).toHaveLength(1);
+        // Exactly these keys: no destination is recorded.
+        expect(audit.rows[0]?.payload).toEqual({
+          method: 'EMAIL_OTP',
+          outcome: environment === 'STAGING' ? 'NOT_STAGING_FIXTURE' : 'NO_ENROLLED_USER',
+          sign_up_refused: true,
+        });
+        // On STAGING the fixture registry refuses first (an unknown address has no principal),
+        // so this row cannot reach publicSignUpPermitted on STAGING. That predicate is covered
+        // directly by tests/unit/staging-access.test.ts.
       } finally {
         await app.close();
       }
     },
   );
+
+  it('answers an unknown and a known address with the same status, body and headers on STAGING', async () => {
+    const tenantId = randomUUID();
+    const userId = randomUUID();
+    const knownEmail = syntheticEmail(`known-${userId.slice(0, 8)}`);
+    const app = await stagingApp([{ tenantId, userId }], undefined, {
+      SUAS_BROWSER_AUTH_MODE: 'email_otp',
+      SUAS_BROWSER_TENANT_ID: tenantId,
+    });
+    try {
+      const pool = app.pool;
+      if (pool === undefined) throw new Error('The test app has no database pool.');
+      await createUser(pool, { userId, tenantId, email: knownEmail, status: 'ACTIVE' });
+      const request = (destination: string) =>
+        app.server.inject({
+          method: 'POST',
+          url: `${API_PREFIX}/auth/challenges`,
+          payload: { destination, method: 'EMAIL_OTP' },
+        });
+
+      const known = await request(knownEmail);
+      const beforeUnknown = await effectCounts(pool, app);
+      const unknown = await request(syntheticEmail(`unknown-${randomUUID().slice(0, 8)}`));
+
+      expect(known.statusCode).toBe(202);
+      expect(unknown.statusCode).toBe(known.statusCode);
+      expect(unknown.json()).toEqual(known.json());
+      // Headers match too, apart from per-request values.
+      const comparable = (headers: Record<string, unknown>) => {
+        const { date: _date, 'x-request-id': _id, ...rest } = headers;
+        return rest;
+      };
+      expect(comparable(unknown.headers)).toEqual(comparable(known.headers));
+      expect(await effectCounts(pool, app)).toEqual(beforeUnknown);
+    } finally {
+      await app.close();
+    }
+  });
 
   it('refuses a previously issued challenge after the principal is not admitted', async () => {
     const tenantId = randomUUID();
