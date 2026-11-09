@@ -78,6 +78,12 @@ test('an admin turns a pasted source into a draft, reviews and publishes it, and
   await expect(admin.getByRole('heading', { name })).toBeVisible();
   await expect(admin.getByRole('region', { name: 'Source' })).toContainText(sourceLink);
   await admin.getByLabel('Hours').fill('Weekdays 9 am to 5 pm');
+  await admin.getByRole('button', { name: 'Add a contact method' }).click();
+  await admin.getByLabel('Contact 1', { exact: true }).fill('(408) 555-0199');
+  await admin.getByRole('button', { name: 'Add a contact method' }).click();
+  await admin.getByLabel('Contact 2 kind').selectOption('URL');
+  await admin.getByLabel('Contact 2', { exact: true }).fill('https://pantry.example.invalid');
+  await admin.getByLabel('Area').fill('San José, east side');
   await admin.getByRole('button', { name: 'Save changes' }).click();
   await expect(admin.getByText('Changes saved.')).toBeVisible();
   await admin.getByRole('button', { name: 'Publish', exact: true }).click();
@@ -92,5 +98,14 @@ test('an admin turns a pasted source into a draft, reviews and publishes it, and
     .filter({ has: veteran.page.getByRole('heading', { name }) });
   await expect(listing).toBeVisible();
   await expect(listing).toContainText('Weekdays 9 am to 5 pm');
+  await expect(
+    listing.getByRole('link', { name: `Call ${name} at (408) 555-0199` }),
+  ).toHaveAttribute('href', 'tel:4085550199');
+  await expect(listing.getByRole('link', { name: 'Visit website' })).toHaveAttribute(
+    'href',
+    'https://pantry.example.invalid/',
+  );
+  await expect(listing.getByText('San José, east side')).toBeVisible();
+  await expect(listing.getByText(/^Verified [A-Z][a-z]{2} \d{1,2}$/)).toBeVisible();
   await shoot(veteran.page, '05-veteran-sees-resource');
 });

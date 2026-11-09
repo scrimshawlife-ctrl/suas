@@ -100,7 +100,7 @@ describe('draft detail', () => {
     renderDraft();
     await user.type(await screen.findByLabelText('Contact 1'), '5');
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
-    const fieldset = (await screen.findByRole('group', { name: 'Contact methods' })) as HTMLElement;
+    const fieldset = await screen.findByRole('group', { name: 'Contact methods' });
     expect(within(fieldset).getByRole('alert')).toHaveTextContent('crisis number');
     expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
