@@ -183,7 +183,7 @@ export default function VerifyPage() {
       <div className="flex max-w-[760px] flex-col gap-2.5">
         <h1 className="heading text-56 max-sm:text-40">Confirm you served</h1>
         <p className="text-20 text-slate">
-          Asking for help needs a quick ID check. It keeps requests coming from real veterans.
+          Anyone signed in can help. Asking for help needs a quick ID check.
         </p>
       </div>
 
