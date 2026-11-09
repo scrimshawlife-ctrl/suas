@@ -428,11 +428,9 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
       .href;
     const model = (await import(modelUrl)) as {
       phoneHref: (text: string) => string | null;
-      contactAction: (resource: DirectoryResource) => {
-        kind: string;
-        href?: string;
-        label?: string;
-      };
+      contactActions: (
+        resource: DirectoryResource & { contacts: [] },
+      ) => { kind: string; href?: string; label?: string }[];
     };
     const produced: string[] = [];
     const consider = (href: string | null): void => {
@@ -445,14 +443,16 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
     for (const resource of directory.resources) {
       const method = resource.contact_method ?? '';
       consider(model.phoneHref(method));
-      const action = model.contactAction(resource);
-      if (action.kind === 'phone') {
-        const verb = (action.href ?? '').startsWith('sms:') ? 'Text' : 'Call';
-        expect(action.label).toBe(`${verb} ${resource.service_name} at ${method}`);
-        expect(action.label).toContain(method);
-        expect(action.href ?? '').toMatch(/^tel:/);
+      // An empty contact list falls back to the single contact fields (R8.8).
+      for (const action of model.contactActions({ ...resource, contacts: [] })) {
+        if (action.kind === 'phone') {
+          const verb = (action.href ?? '').startsWith('sms:') ? 'Text' : 'Call';
+          expect(action.label).toBe(`${verb} ${resource.service_name} at ${method}`);
+          expect(action.label).toContain(method);
+          expect(action.href ?? '').toMatch(/^tel:/);
+        }
+        consider(action.href ?? null);
       }
-      consider(action.href ?? null);
     }
     expect(produced.length).toBeGreaterThan(0);
     expect(produced).toEqual(expect.arrayContaining(['tel:8005550142', 'tel:8005550143']));

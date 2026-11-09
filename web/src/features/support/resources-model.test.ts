@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CatalogResource } from './api';
 import {
   categoryFromParam,
-  contactAction,
+  contactActions,
   describeFreshness,
   mailHref,
   phoneHref,
@@ -49,135 +49,109 @@ describe('categoryFromParam', () => {
   });
 });
 
-describe('contactAction', () => {
-  it('phone: Call with a tel: link', () => {
+/** The single-contact shape every older listing has: no `contacts` list. */
+const single = (
+  method: string | null,
+  kind: CatalogResource['contact_method_kind'],
+  name = 'Pantry',
+) => resource({ service_name: name, contact_method: method, contact_method_kind: kind });
+
+describe('contactActions', () => {
+  it('maps each kind: PHONE to tel, URL to website, EMAIL to mailto, FREEFORM to text', () => {
     expect(
-      contactAction(resource({ contact_method: '(408) 555-0142', contact_method_kind: 'PHONE' })),
-    ).toEqual({
-      kind: 'phone',
-      label: 'Call Pantry at (408) 555-0142',
-      href: 'tel:4085550142',
-    });
+      contactActions(
+        resource({
+          contacts: [
+            { kind: 'PHONE', value: '(408) 555-0142' },
+            { kind: 'URL', value: 'https://example.org' },
+            { kind: 'EMAIL', value: 'locker@example.org' },
+          ],
+        }),
+      ),
+    ).toEqual([
+      { kind: 'phone', label: 'Call Pantry at (408) 555-0142', href: 'tel:4085550142' },
+      { kind: 'url', label: 'Visit website', href: 'https://example.org/' },
+      { kind: 'email', label: 'Email locker@example.org', href: 'mailto:locker@example.org' },
+    ]);
     expect(
-      contactAction(resource({ contact_method: '+1-555-555-0101', contact_method_kind: 'PHONE' })),
-    ).toMatchObject({
-      href: 'tel:+15555550101',
-    });
+      contactActions(resource({ contacts: [{ kind: 'FREEFORM', value: 'Walk in' }] })),
+    ).toEqual([{ kind: 'text', text: 'Walk in' }]);
   });
 
-  it('labels synthetic toll-free numbers with the directory name and does not link 911, 988, or 838255', () => {
+  it('keeps the listed order and ignores the single fields when a list exists', () => {
+    const actions = contactActions(
+      resource({
+        contact_method: '408-555-0100',
+        contact_method_kind: 'PHONE',
+        contacts: [
+          { kind: 'URL', value: 'https://example.org' },
+          { kind: 'PHONE', value: '408-555-0100' },
+        ],
+      }),
+    );
+    expect(actions.map((action) => action.kind)).toEqual(['url', 'phone']);
+  });
+
+  it('falls back to the single contact when the list is empty', () => {
+    expect(contactActions(single('(408) 555-0142', 'PHONE'))).toEqual([
+      { kind: 'phone', label: 'Call Pantry at (408) 555-0142', href: 'tel:4085550142' },
+    ]);
+    expect(contactActions(single('Ask at the desk', null))).toEqual([
+      { kind: 'text', text: 'Ask at the desk' },
+    ]);
+  });
+
+  it('is empty when no contact is recorded', () => {
+    expect(contactActions(resource({}))).toEqual([]);
+    expect(contactActions(single('  ', 'PHONE'))).toEqual([]);
+  });
+
+  it('only links http and https, and shows other web text as written', () => {
     expect(
-      contactAction(
-        resource({
-          service_name: 'County transit desk',
-          contact_method: '800-555-0142',
-          contact_method_kind: 'PHONE',
-        }),
-      ),
-    ).toEqual({
-      kind: 'phone',
-      label: 'Call County transit desk at 800-555-0142',
-      href: 'tel:8005550142',
-    });
-    expect(
-      contactAction(
-        resource({
-          service_name: 'Local helpline',
-          contact_method: '(800) 555-0143',
-          contact_method_kind: 'PHONE',
-        }),
-      ),
-    ).toEqual({
-      kind: 'phone',
-      label: 'Call Local helpline at (800) 555-0143',
-      href: 'tel:8005550143',
-    });
+      contactActions(resource({ contacts: [{ kind: 'URL', value: 'javascript:alert(1)' }] })),
+    ).toEqual([{ kind: 'text', text: 'javascript:alert(1)' }]);
+  });
+
+  it('never makes 911, 988 or 838255 an action, in the list or the single fields', () => {
     for (const number of ['911', '988', '838255']) {
       expect(phoneHref(number)).toBeNull();
-      expect(
-        contactAction(
-          resource({ service_name: number, contact_method: number, contact_method_kind: 'PHONE' }),
-        ),
-      ).toEqual({ kind: 'text', text: number });
+      const expected = [{ kind: 'text', text: number }];
+      expect(contactActions(resource({ contacts: [{ kind: 'PHONE', value: number }] }))).toEqual(
+        expected,
+      );
+      expect(contactActions(single(number, 'PHONE', number))).toEqual(expected);
     }
-  });
-
-  it('email: Email with a mailto: link', () => {
-    expect(
-      contactAction(
-        resource({ contact_method: 'locker@example.org', contact_method_kind: 'EMAIL' }),
-      ),
-    ).toEqual({
-      kind: 'email',
-      label: 'Email locker@example.org',
-      href: 'mailto:locker@example.org',
-    });
-  });
-
-  it('url: Visit website, only for http and https', () => {
-    expect(
-      contactAction(
-        resource({ contact_method: 'https://example.org', contact_method_kind: 'URL' }),
-      ),
-    ).toMatchObject({
-      kind: 'url',
-      label: 'Visit website',
-      href: 'https://example.org/',
-    });
-    expect(
-      contactAction(
-        resource({ contact_method: 'javascript:alert(1)', contact_method_kind: 'URL' }),
-      ),
-    ).toEqual({
-      kind: 'text',
-      text: 'javascript:alert(1)',
-    });
-  });
-
-  it('free text is shown as written, and no method is stated plainly', () => {
-    expect(
-      contactAction(resource({ contact_method: 'Walk in', contact_method_kind: 'FREEFORM' })),
-    ).toEqual({
-      kind: 'text',
-      text: 'Walk in',
-    });
-    expect(
-      contactAction(resource({ contact_method: 'Ask at the desk', contact_method_kind: null })),
-    ).toEqual({
-      kind: 'text',
-      text: 'Ask at the desk',
-    });
-    expect(contactAction(resource({}))).toEqual({ kind: 'none' });
-    expect(contactAction(resource({ contact_method: '  ', contact_method_kind: 'PHONE' }))).toEqual(
-      { kind: 'none' },
-    );
   });
 });
 
 describe('describeFreshness', () => {
-  it('fresh is the ok chip with no out-of-date line', () => {
-    expect(describeFreshness(resource({ freshness: 'FRESH' }))).toEqual({
-      label: 'Checked recently',
-      chip: 'ok',
-      outOfDate: false,
-    });
+  it('fresh is the ok chip with the verified date and no out-of-date line', () => {
+    expect(
+      describeFreshness(resource({ freshness: 'FRESH', verified_at: '2026-10-28T19:00:00Z' })),
+    ).toEqual({ label: 'Verified Oct 28', chip: 'ok', outOfDate: false });
   });
 
-  it('stale uses the stale chip and the out-of-date line', () => {
-    expect(describeFreshness(resource({ freshness: 'STALE', stale_warning: true }))).toMatchObject({
-      chip: 'stale',
-      outOfDate: true,
-    });
-    expect(describeFreshness(resource({ freshness: 'STALE', stale_warning: false }))).toMatchObject(
-      { outOfDate: true },
+  it('uses the Pacific calendar day for the verified date', () => {
+    expect(describeFreshness(resource({ verified_at: '2026-10-29T03:30:00Z' })).label).toBe(
+      'Verified Oct 28',
     );
   });
 
-  it('follows stale_warning for aging and unverified listings', () => {
-    expect(describeFreshness(resource({ freshness: 'AGING', stale_warning: true }))).toMatchObject({
-      label: 'Checked a while ago',
-      outOfDate: true,
-    });
+  it('stale uses the stale chip, the date and the out-of-date line', () => {
+    expect(
+      describeFreshness(
+        resource({ freshness: 'STALE', stale_warning: true, verified_at: '2026-07-02T19:00:00Z' }),
+      ),
+    ).toEqual({ label: 'Verified Jul 2', chip: 'stale', outOfDate: true });
+    expect(describeFreshness(resource({ freshness: 'STALE', stale_warning: false }))).toMatchObject(
+      { chip: 'stale', outOfDate: true },
+    );
+  });
+
+  it('follows stale_warning for aging listings and keeps the band words with no date', () => {
+    expect(
+      describeFreshness(resource({ freshness: 'AGING', stale_warning: true, verified_at: null })),
+    ).toMatchObject({ label: 'Checked a while ago', chip: 'stale', outOfDate: true });
     expect(
       describeFreshness(resource({ freshness: 'UNVERIFIED', stale_warning: true })),
     ).toMatchObject({ label: 'Not checked yet', outOfDate: true });

@@ -55,24 +55,38 @@ export function countyName(county: string): string {
 }
 
 export interface Freshness {
-  /** Plain words for the chip. The API has no verified date, only a band. */
+  /** "Verified Oct 28" from the publish date; plain band words only when there is none. */
   label: string;
   chip: 'ok' | 'stale';
   /** Show "This listing may be out of date." */
   outOfDate: boolean;
 }
 
+/** Listings serve California counties, so the date is the Pacific calendar day. */
+const VERIFIED_DATE = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'America/Los_Angeles',
+});
+
+function verifiedLabel(verifiedAt: string | null): string | null {
+  if (verifiedAt === null) return null;
+  const date = new Date(verifiedAt);
+  return Number.isNaN(date.getTime()) ? null : `Verified ${VERIFIED_DATE.format(date)}`;
+}
+
 export function describeFreshness(resource: CatalogResource): Freshness {
   const outOfDate = resource.stale_warning || resource.freshness === 'STALE';
+  const verified = verifiedLabel(resource.verified_at);
   switch (resource.freshness) {
     case 'FRESH':
-      return { label: 'Checked recently', chip: 'ok', outOfDate };
+      return { label: verified ?? 'Checked recently', chip: 'ok', outOfDate };
     case 'AGING':
-      return { label: 'Checked a while ago', chip: 'stale', outOfDate };
+      return { label: verified ?? 'Checked a while ago', chip: 'stale', outOfDate };
     case 'STALE':
-      return { label: 'Not checked recently', chip: 'stale', outOfDate };
+      return { label: verified ?? 'Not checked recently', chip: 'stale', outOfDate };
     default:
-      return { label: 'Not checked yet', chip: 'stale', outOfDate };
+      return { label: verified ?? 'Not checked yet', chip: 'stale', outOfDate };
   }
 }
 
@@ -81,8 +95,7 @@ export type ContactAction =
   | { kind: 'email'; label: string; href: string }
   | { kind: 'url'; label: string; href: string }
   /** Stored as free text: shown as written, not a link. */
-  | { kind: 'text'; text: string }
-  | { kind: 'none' };
+  | { kind: 'text'; text: string };
 
 /**
  * A `tel:` target only when the whole string is one phone number: digits, spaces and the
@@ -108,43 +121,61 @@ export function mailHref(text: string): string | null {
   return `mailto:${encodeURIComponent(match[1]!)}@${encodeURIComponent(match[2]!)}`;
 }
 
-/** What to offer for a listing's contact method, by `contact_method_kind`. */
-export function contactAction(resource: CatalogResource): ContactAction {
-  const method = resource.contact_method?.trim() ?? '';
-  if (method === '') return { kind: 'none' };
-  switch (resource.contact_method_kind) {
+type ListedContact = CatalogResource['contacts'][number];
+
+function actionFor(
+  resource: CatalogResource,
+  kind: ListedContact['kind'] | null,
+  value: string,
+): ContactAction {
+  switch (kind) {
     case 'PHONE': {
-      const href = phoneHref(method);
+      const href = phoneHref(value);
       // Directory phones, including hotline-shaped numbers, are resources.
       // Label with the listed name, not a crisis-line label.
       // Owner decision (owner (scrimshawlife-ctrl), 2026-11-05 1:20 PM PT): "You can keep those numbers" /
       // "Just label them appropriately".
       return href === null
-        ? { kind: 'text', text: method }
+        ? { kind: 'text', text: value }
         : {
             kind: 'phone',
-            label: `${href.startsWith('sms:') ? 'Text' : 'Call'} ${resource.service_name} at ${method}`,
+            label: `${href.startsWith('sms:') ? 'Text' : 'Call'} ${resource.service_name} at ${value}`,
             href,
           };
     }
     case 'EMAIL': {
-      const href = mailHref(method);
+      const href = mailHref(value);
       return href === null
-        ? { kind: 'text', text: method }
-        : { kind: 'email', label: `Email ${method}`, href };
+        ? { kind: 'text', text: value }
+        : { kind: 'email', label: `Email ${value}`, href };
     }
     case 'URL': {
       try {
-        const url = new URL(method);
+        const url = new URL(value);
         if (url.protocol === 'https:' || url.protocol === 'http:') {
           return { kind: 'url', label: 'Visit website', href: url.href };
         }
       } catch {
         // Not a web address: show it as written.
       }
-      return { kind: 'text', text: method };
+      return { kind: 'text', text: value };
     }
     default:
-      return { kind: 'text', text: method };
+      return { kind: 'text', text: value };
   }
+}
+
+/**
+ * One action per listed contact, in order. An older listing with only the single contact
+ * fields yields that one. Empty when no contact is recorded.
+ */
+export function contactActions(resource: CatalogResource): ContactAction[] {
+  const listed: { kind: ListedContact['kind'] | null; value: string }[] =
+    resource.contacts.length > 0
+      ? resource.contacts
+      : [{ kind: resource.contact_method_kind, value: resource.contact_method ?? '' }];
+  return listed
+    .map(({ kind, value }) => ({ kind, value: value.trim() }))
+    .filter(({ value }) => value !== '')
+    .map(({ kind, value }) => actionFor(resource, kind, value));
 }
