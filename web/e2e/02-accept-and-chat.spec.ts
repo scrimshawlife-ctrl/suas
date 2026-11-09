@@ -48,7 +48,9 @@ test('a second account accepts the request, sees the meeting place and chats liv
   await expect(helper).toHaveURL(new RegExp(`/serve/requests/${requestId}$`));
   await expect(helper.getByRole('region', { name: "What's needed" })).toContainText(meetingPlace);
   await expect(helper.getByRole('region', { name: "What's needed" })).toContainText('Marcus T.');
-  await expect(helper.getByText('You accepted')).toBeVisible();
+  // The status chip and the History row both read "You accepted" (Case board).
+  await expect(helper.getByText('You accepted').first()).toBeVisible();
+  await expect(helper.getByLabel('History').getByText('You accepted')).toBeVisible();
 
   // The first accept wins: the request leaves the list for everyone else.
   await helper.goto('/serve');
