@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { ensurePublishedQv001 } from '../../src/signals/index.js';
+import { abandonStaleCheckIns, ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
@@ -169,5 +169,144 @@ describe('Check-In answer and complete', () => {
     expect(result.support_signal?.level).toBe('RED');
     expect(result.support_case?.status).toBe('OPEN');
     expect(result.support_case?.priority_signal_level).toBe('RED');
+  });
+
+  async function listUnfinished(headers: { authorization: string }, status = 'IN_PROGRESS') {
+    return app.server.inject({
+      method: 'GET',
+      url: `/api/v0/check-ins?status=${status}`,
+      headers,
+    });
+  }
+
+  async function ageCheckIn(checkInId: string, hours: number) {
+    await app.pool?.query(
+      `UPDATE check_ins SET started_at = now() - make_interval(hours => $2) WHERE check_in_id = $1`,
+      [checkInId, hours],
+    );
+  }
+
+  it("lists the caller's fresh unfinished Check-In and no one else's", async () => {
+    const { session, body } = await startOwned();
+    const stranger = await veteranSession();
+
+    const own = await listUnfinished(session.headers);
+    expect(own.statusCode).toBe(200);
+    const ownBody: { check_ins: { check_in_id: string; status: string }[] } = own.json();
+    expect(ownBody.check_ins.map((entry) => entry.check_in_id)).toEqual([body.check_in_id]);
+    expect(ownBody.check_ins[0]?.status).toBe('STARTED');
+
+    const other = await listUnfinished(stranger.headers);
+    expect(other.json()).toEqual({ check_ins: [] });
+  });
+
+  it('does not list a completed Check-In', async () => {
+    const { session, body } = await startOwned();
+    await answerAll(session.headers, body.check_in_id, body.questions, A0);
+    await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/check-ins/${body.check_in_id}/commands/complete`,
+      headers: session.headers,
+    });
+    expect((await listUnfinished(session.headers)).json()).toEqual({ check_ins: [] });
+  });
+
+  it('does not list a Check-In started more than 24 hours ago', async () => {
+    const { session, body } = await startOwned();
+    await ageCheckIn(body.check_in_id, 25);
+    expect((await listUnfinished(session.headers)).json()).toEqual({ check_ins: [] });
+  });
+
+  it('rejects a missing or other status filter with 400', async () => {
+    const { session } = await startOwned();
+    expect((await listUnfinished(session.headers, 'COMPLETED')).statusCode).toBe(400);
+    const missing = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/check-ins',
+      headers: session.headers,
+    });
+    expect(missing.statusCode).toBe(400);
+  });
+
+  it('refuses an unauthenticated list', async () => {
+    const response = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/check-ins?status=IN_PROGRESS',
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('returns the answered question ids on the detail read', async () => {
+    const { session, body } = await startOwned();
+    const before = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/check-ins/${body.check_in_id}`,
+      headers: session.headers,
+    });
+    expect(before.json().answered_question_ids).toEqual([]);
+
+    const [first, second] = body.questions;
+    if (first === undefined || second === undefined) throw new Error('need two questions');
+    await answerAll(
+      session.headers,
+      body.check_in_id,
+      [first, second],
+      Object.fromEntries(
+        [first, second].map((question) => [question.question_key, question.options[0]!.option_key]),
+      ),
+    );
+
+    const after = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/check-ins/${body.check_in_id}`,
+      headers: session.headers,
+    });
+    const detail: { answered_question_ids: string[]; status: string } = after.json();
+    expect([...detail.answered_question_ids].sort()).toEqual(
+      [first.question_id, second.question_id].sort(),
+    );
+    expect(detail.status).toBe('IN_PROGRESS');
+  });
+});
+
+describe('abandonStaleCheckIns', () => {
+  async function startAged(hours: number) {
+    const session = await veteranSession();
+    const started = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/check-ins',
+      headers: session.headers,
+    });
+    const checkInId: string = started.json().check_in_id;
+    await app.pool?.query(
+      `UPDATE check_ins SET started_at = now() - make_interval(hours => $2) WHERE check_in_id = $1`,
+      [checkInId, hours],
+    );
+    return checkInId;
+  }
+
+  async function statusOf(checkInId: string) {
+    const result = await app.pool?.query<{ status: string; abandoned_at: Date | null }>(
+      `SELECT status, abandoned_at FROM check_ins WHERE check_in_id = $1`,
+      [checkInId],
+    );
+    return result?.rows[0];
+  }
+
+  it('abandons a stale Check-In, keeps a fresh one, and is replay-safe', async () => {
+    const pool = app.pool;
+    if (pool === undefined) throw new Error('no pool');
+    const stale = await startAged(25);
+    const fresh = await startAged(1);
+
+    await abandonStaleCheckIns(pool);
+    const firstPass = await statusOf(stale);
+    expect(firstPass?.status).toBe('ABANDONED');
+    expect(firstPass?.abandoned_at).not.toBeNull();
+    expect((await statusOf(fresh))?.status).toBe('STARTED');
+
+    const replay = await abandonStaleCheckIns(pool);
+    expect(replay.abandoned).toBe(0);
+    expect((await statusOf(stale))?.abandoned_at).toEqual(firstPass?.abandoned_at);
   });
 });
