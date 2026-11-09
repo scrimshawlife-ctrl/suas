@@ -16,6 +16,7 @@ import { useAcceptRequest, useAlerts, useOpenRequests } from './api';
 import { alertSubjectPath, alertText, type Notification } from './alerts';
 import {
   activeHelping,
+  helpingNowCount,
   boardSubtitle,
   classifyAcceptError,
   firstName,
@@ -199,7 +200,7 @@ function HelpingCard() {
 /** "Your summary": how many requests this person is helping with now. */
 function SummaryCard() {
   const mine = useServiceRequests('mine');
-  const count = activeHelping(mine.data?.service_requests ?? []).length;
+  const count = mine.isSuccess ? helpingNowCount(mine.data) : undefined;
   return (
     <Card aria-labelledby="summary" padding="none" className="flex flex-col">
       <h2 id="summary" className="px-6 pt-5.5 text-18 font-bold">
@@ -207,7 +208,7 @@ function SummaryCard() {
       </h2>
       <dl className="flex flex-col-reverse px-6 pt-2 pb-5">
         <dt className="text-16 text-slate">You're helping now</dt>
-        <dd className="heading text-44">{mine.isSuccess ? count : '–'}</dd>
+        <dd className="heading text-44">{count ?? '–'}</dd>
       </dl>
     </Card>
   );

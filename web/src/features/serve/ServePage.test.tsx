@@ -40,12 +40,14 @@ function renderServe() {
 }
 
 let listed: ReturnType<typeof open>[];
+let mine: { service_requests: ReturnType<typeof open>[]; next_cursor: string | null };
 
 beforeEach(() => {
   tokenStore.setToken('tok');
   client.GET.mockReset();
   client.POST.mockReset();
   listed = [open('r1', 'Groceries for two days'), open('r2', null)];
+  mine = { service_requests: [], next_cursor: null };
   client.GET.mockImplementation(
     (path: string, options?: { params?: { query?: { ownership?: string } } }) => {
       if (path === '/api/v0/veterans/me') {
@@ -53,7 +55,7 @@ beforeEach(() => {
       }
       if (path === '/api/v0/notifications') return Promise.resolve({ data: { notifications: [] } });
       if (options?.params?.query?.ownership === 'mine') {
-        return Promise.resolve({ data: { service_requests: [], next_cursor: null } });
+        return Promise.resolve({ data: mine });
       }
       return Promise.resolve({ data: { service_requests: listed, next_cursor: null } });
     },
@@ -129,5 +131,30 @@ describe('Serve board', () => {
       'aria-disabled',
       'true',
     );
+  });
+
+  it("shows the helper's active count in the summary", async () => {
+    mine = {
+      service_requests: [
+        { ...open('m1', 'Ride to the clinic'), status: 'ACCEPTED' },
+        { ...open('m2', 'Dinner'), status: 'CONFIRMED' },
+        { ...open('m3', 'Old ride'), status: 'CLOSED' },
+      ],
+      next_cursor: null,
+    };
+    renderServe();
+    const summary = await screen.findByRole('region', { name: 'Your summary' });
+    await waitFor(() => expect(summary).toHaveTextContent("You're helping now2"));
+  });
+
+  it('shows a dash, not a short count, when the helper has more requests than one page', async () => {
+    mine = {
+      service_requests: [{ ...open('m1', 'Ride to the clinic'), status: 'ACCEPTED' }],
+      next_cursor: 'more',
+    };
+    renderServe();
+    await screen.findByText('Ride to the clinic');
+    const summary = screen.getByRole('region', { name: 'Your summary' });
+    expect(summary).toHaveTextContent("You're helping now–");
   });
 });
