@@ -91,11 +91,19 @@ describe('RequestDetailPage edit action and destination', () => {
     open({ status: 'MATCHING', category: 'TRANSPORTATION', destination: 'Clinic on Main St' });
     expect(await screen.findByText('Going to')).toBeInTheDocument();
     expect(screen.getByText('Clinic on Main St')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Only you and the person who accepts this request see the meeting place and where you are going.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('has no "Going to" row without a destination', async () => {
     open({ status: 'MATCHING', category: 'TRANSPORTATION' });
     await screen.findByRole('heading', { name: 'What you sent' });
     expect(screen.queryByText('Going to')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Only you and the person who accepts this request see the meeting place.'),
+    ).toBeInTheDocument();
   });
 });

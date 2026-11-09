@@ -101,7 +101,9 @@ export default function RequestDetailPage() {
                 <Fact label="Going to">{detail.destination ?? null}</Fact>
               </dl>
               <p className="text-16 text-slate">
-                Only you and the person who accepts this request see the meeting place.
+                {detail.destination
+                  ? 'Only you and the person who accepts this request see the meeting place and where you are going.'
+                  : 'Only you and the person who accepts this request see the meeting place.'}
               </p>
               {editable ? (
                 <div className="flex">
