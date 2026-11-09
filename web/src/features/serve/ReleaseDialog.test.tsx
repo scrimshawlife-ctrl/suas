@@ -56,7 +56,7 @@ describe('ReleaseDialog', () => {
       expect.objectContaining({
         params: { path: { id: 'r1', command: 'RELEASE' } },
         body: { reason: 'My car broke down.' },
-        headers: { 'Idempotency-Key': expect.any(String) },
+        headers: { 'Idempotency-Key': expect.stringMatching(/^[0-9a-f-]{36}$/) as string },
       }),
     );
   });
