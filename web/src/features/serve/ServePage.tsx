@@ -4,7 +4,8 @@ import { Link, Navigate, useNavigate } from 'react-router';
 import { useMe } from '../../api/me';
 import { hasApiCode } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
-import { useServiceRequests } from '../../api/service-requests';
+import { useServiceRequest, useServiceRequests } from '../../api/service-requests';
+import type { ServiceRequestListItem } from '../../api/types';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -12,7 +13,7 @@ import { AlertCircleIcon, ChatIcon } from '../../components/icons';
 import { NEEDS } from '../../components/needs';
 import { Page } from '../../components/Page';
 import { useAcceptRequest, useAlerts, useOpenRequests } from './api';
-import { alertText } from './alerts';
+import { alertSubjectPath, alertText, type Notification } from './alerts';
 import {
   activeHelping,
   boardSubtitle,
@@ -119,6 +120,7 @@ export default function ServePage() {
         </section>
 
         <aside className="flex flex-col gap-4 md:pt-12.5">
+          <SummaryCard />
           <HelpingCard />
           <AlertsCard now={now} />
         </aside>
@@ -186,41 +188,78 @@ function HelpingCard() {
         <p className="text-slate">You're not helping anyone right now. Take a request to start.</p>
       ) : null}
       <ul className="flex flex-col gap-5">
-        {items.map((item) => {
-          const need = NEEDS[item.category];
-          return (
-            <li key={item.service_request_id} className="flex flex-col gap-3.5">
-              <div className="flex items-center gap-3.5">
-                <span
-                  aria-hidden="true"
-                  className={`grid size-12 shrink-0 place-items-center rounded-10 text-white ${need.fill}`}
-                >
-                  <need.Icon />
-                </span>
-                <span className="flex min-w-0 flex-col">
-                  <span className="font-bold [overflow-wrap:anywhere]">
-                    {summaryOrCategory(item.summary, item.category)}
-                  </span>
-                  {item.counterpart_display_name ? (
-                    <span className="text-16 text-slate">{item.counterpart_display_name}</span>
-                  ) : null}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2.5">
-                <Button href={paths.case(item.service_request_id)}>Open case</Button>
-                <Button
-                  variant="secondary"
-                  icon={<ChatIcon />}
-                  href={paths.chatThread(item.service_request_id)}
-                >
-                  Chat
-                </Button>
-              </div>
-            </li>
-          );
-        })}
+        {items.map((item) => (
+          <HelpingRow key={item.service_request_id} item={item} />
+        ))}
       </ul>
     </Card>
+  );
+}
+
+/** "Your summary": how many requests this person is helping with now. */
+function SummaryCard() {
+  const mine = useServiceRequests('mine');
+  const count = activeHelping(mine.data?.service_requests ?? []).length;
+  return (
+    <Card aria-labelledby="summary" padding="none" className="flex flex-col">
+      <h2 id="summary" className="px-6 pt-5.5 text-18 font-bold">
+        Your summary
+      </h2>
+      <dl className="flex flex-col-reverse px-6 pt-2 pb-5">
+        <dt className="text-16 text-slate">You're helping now</dt>
+        <dd className="heading text-44">{mine.isSuccess ? count : '–'}</dd>
+      </dl>
+    </Card>
+  );
+}
+
+/** One held request. The timing comes from its detail; the list never carries it. */
+function HelpingRow({ item }: { item: ServiceRequestListItem }) {
+  const detail = useServiceRequest(item.service_request_id);
+  const need = NEEDS[item.category];
+  const subLine = [item.counterpart_display_name, detail.data?.timing]
+    .filter((part): part is string => typeof part === 'string' && part.trim() !== '')
+    .join(', ');
+  return (
+    <li className="flex flex-col gap-3.5">
+      <div className="flex items-center gap-3.5">
+        <span
+          aria-hidden="true"
+          className={`grid size-12 shrink-0 place-items-center rounded-10 text-white ${need.fill}`}
+        >
+          <need.Icon />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="font-bold [overflow-wrap:anywhere]">
+            {summaryOrCategory(item.summary, item.category)}
+          </span>
+          {subLine ? <span className="text-16 text-slate">{subLine}</span> : null}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2.5">
+        <Button href={paths.case(item.service_request_id)}>Open case</Button>
+        <Button
+          variant="secondary"
+          icon={<ChatIcon />}
+          href={paths.chatThread(item.service_request_id)}
+        >
+          Chat
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+/** An alert line; a link only when its subject maps to a route. */
+function AlertLine({ alert }: { alert: Notification }) {
+  const to = alertSubjectPath(alert);
+  const text = alertText(alert.reason);
+  return to === null ? (
+    <span className="font-bold">{text}</span>
+  ) : (
+    <Link to={to} className="font-bold">
+      {text}
+    </Link>
   );
 }
 
@@ -240,7 +279,7 @@ function AlertsCard({ now }: { now: number }) {
       <ul>
         {rows.map((alert) => (
           <li key={alert.notification_id} className="flex flex-col border-t border-line py-3.5">
-            <span className="font-bold">{alertText(alert.reason)}</span>
+            <AlertLine alert={alert} />
             {alert.sent_at ? (
               <span className="text-16 text-slate">{relativeTime(alert.sent_at, now)}</span>
             ) : null}
