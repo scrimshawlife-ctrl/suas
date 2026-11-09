@@ -65,14 +65,16 @@ export function runEnds(messages: readonly ChatMessage[]): ReadonlySet<string> {
 
 /** "Tue at 7:58 PM" within the last week; "Nov 3 at 7:58 PM" otherwise. Empty if not a date. */
 export function formatAcceptedAt(iso: string, now: Date = new Date()): string {
+  // en-US, like the Case history formatter (case-logic.ts formatWhen), so one accept time
+  // reads the same on both screens.
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const ageMs = now.getTime() - date.getTime();
   const day =
     ageMs >= 0 && ageMs < 6 * 86_400_000
-      ? date.toLocaleDateString(undefined, { weekday: 'short' })
-      : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      ? date.toLocaleDateString('en-US', { weekday: 'short' })
+      : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return `${day} at ${time}`;
 }
 

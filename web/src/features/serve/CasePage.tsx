@@ -108,6 +108,8 @@ function CaseView({ request, attempts }: { request: ServiceRequestDetail; attemp
             >
               {need.label}
             </span>
+            {/* Role-based: this is the accepter's view. History below is the timed fact and is
+                omitted when no accept time is recorded (accepted_at null). */}
             <StatusChip kind="ok">You accepted</StatusChip>
           </div>
           <h1 className="heading text-48 [overflow-wrap:anywhere] max-sm:text-32">{title}</h1>
