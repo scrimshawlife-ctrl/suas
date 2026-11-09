@@ -5077,6 +5077,23 @@
           },
           "next_cursor": {
             "type": ["string", "null"]
+          },
+          "counts": {
+            "type": "object",
+            "required": ["helping_now", "closed_last_30_days"],
+            "description": "ownership=mine only: summary counts for the caller as a helper, over all their requests (not just this page).",
+            "properties": {
+              "helping_now": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Requests the caller holds that are not in a terminal status."
+              },
+              "closed_last_30_days": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Requests the caller held that reached CLOSED, CANCELLED, EXPIRED or UNFULFILLABLE in the last 30 days."
+              }
+            }
           }
         }
       },

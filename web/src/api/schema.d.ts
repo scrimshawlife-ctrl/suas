@@ -1674,6 +1674,13 @@ export interface components {
     ServiceRequestList: {
       service_requests: components['schemas']['ServiceRequestListItem'][];
       next_cursor: string | null;
+      /** @description ownership=mine only: summary counts for the caller as a helper, over all their requests (not just this page). */
+      counts?: {
+        /** @description Requests the caller holds that are not in a terminal status. */
+        helping_now: number;
+        /** @description Requests the caller held that reached CLOSED, CANCELLED, EXPIRED or UNFULFILLABLE in the last 30 days. */
+        closed_last_30_days: number;
+      };
     };
     AcceptServiceRequestResult: {
       /** Format: uuid */

@@ -16,7 +16,11 @@
 
 import type { Queryable } from '../db/transaction.js';
 import type { ServiceCounty } from '../identity/counties.js';
-import type { ServiceCategory, ServiceRequestStatus } from './request-transitions.js';
+import {
+  TERMINAL_REQUEST_STATUSES,
+  type ServiceCategory,
+  type ServiceRequestStatus,
+} from './request-transitions.js';
 
 /** API.md §5. */
 export const DEFAULT_PAGE_SIZE = 20;
@@ -39,6 +43,11 @@ export interface OpenRequestSummary {
   readonly updatedAt: Date;
   /** When the request reached a terminal status; null while it is live. */
   readonly closedAt: Date | null;
+}
+
+export interface HelperRequestCounts {
+  readonly helpingNow: number;
+  readonly closedLast30Days: number;
 }
 
 export interface RequestListPage {
@@ -260,5 +269,34 @@ export async function readRequestList(
       hasMore && last !== undefined
         ? encodeCursor(last.created_at, last.service_request_id)
         : undefined,
+  };
+}
+
+/**
+ * A helper's summary counts: requests they hold that are not terminal, and requests of
+ * theirs that reached a terminal status in the last 30 days (by `terminal_at`).
+ */
+export async function readHelperRequestCounts(
+  db: Queryable,
+  tenantId: string,
+  helperUserId: string,
+): Promise<HelperRequestCounts> {
+  const result = await db.query<{ helping_now: string; closed_last_30_days: string }>(
+    `WITH held AS (
+       SELECT r.status = ANY($3::suas_service_request_status[]) AS terminal, r.terminal_at
+         FROM service_requests r
+        WHERE r.tenant_id = $1 AND r.accepted_by_user_id = $2::uuid
+     )
+     SELECT count(*) FILTER (WHERE NOT terminal) AS helping_now,
+            count(*) FILTER (
+              WHERE terminal AND terminal_at >= now() - interval '30 days'
+            ) AS closed_last_30_days
+       FROM held`,
+    [tenantId, helperUserId, [...TERMINAL_REQUEST_STATUSES]],
+  );
+  const row = result.rows[0];
+  return {
+    helpingNow: Number(row?.helping_now ?? 0),
+    closedLast30Days: Number(row?.closed_last_30_days ?? 0),
   };
 }

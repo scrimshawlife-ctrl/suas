@@ -29,6 +29,7 @@ import {
   findServiceRequest,
   listCaseServiceRequests,
   MAX_PAGE_SIZE,
+  readHelperRequestCounts,
   readRequestList,
   readServiceRequestDetail,
   requestHeldInCurrentCycle,
@@ -203,6 +204,10 @@ export function registerServiceRequestRoutes(
       { ownership: query.ownership },
       { limit: query.limit, ...(query.cursor !== undefined ? { cursor: query.cursor } : {}) },
     );
+    const counts =
+      query.ownership === 'mine'
+        ? await readHelperRequestCounts(deps.pool, context.tenantId, context.userId)
+        : undefined;
     return {
       service_requests: page.requests.map((item) => {
         if (query.ownership === 'requested') {
@@ -232,6 +237,14 @@ export function registerServiceRequestRoutes(
         };
       }),
       next_cursor: page.nextCursor ?? null,
+      ...(counts !== undefined
+        ? {
+            counts: {
+              helping_now: counts.helpingNow,
+              closed_last_30_days: counts.closedLast30Days,
+            },
+          }
+        : {}),
     };
   });
 

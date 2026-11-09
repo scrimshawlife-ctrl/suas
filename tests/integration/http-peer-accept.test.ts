@@ -667,6 +667,54 @@ describe('accepting is per request, not per case', () => {
   });
 });
 
+describe('GET /api/v0/service-requests?ownership=mine counts', () => {
+  const get = (who: Person, url: string) =>
+    app.server.inject({ method: 'GET', url: `/api/v0${url}`, headers: who.headers });
+
+  it('counts the helper active and recently closed requests, for ownership=mine only', async () => {
+    const tenantId = randomUUID();
+    const helper = await person(tenantId, 'SANTA_CLARA', 'helper');
+    const other = await person(tenantId, 'SANTA_CLARA', 'other-helper');
+    const active = await request(await person(tenantId, 'SANTA_CLARA', 'requester-a'));
+    const recent = await request(await person(tenantId, 'SANTA_CLARA', 'requester-b'));
+    const old = await request(await person(tenantId, 'SANTA_CLARA', 'requester-c'));
+    const others = await request(await person(tenantId, 'SANTA_CLARA', 'requester-d'));
+    for (const { serviceRequestId } of [active, recent, old]) {
+      expect((await accept(helper, serviceRequestId)).statusCode).toBe(200);
+    }
+    expect((await accept(other, others.serviceRequestId)).statusCode).toBe(200);
+    await pool().query(
+      `UPDATE service_requests
+          SET status = 'CANCELLED', terminal_at = now() - interval '1 day'
+        WHERE service_request_id = $1`,
+      [recent.serviceRequestId],
+    );
+    await pool().query(
+      `UPDATE service_requests
+          SET status = 'CANCELLED', terminal_at = now() - interval '45 days'
+        WHERE service_request_id = $1`,
+      [old.serviceRequestId],
+    );
+    await pool().query(
+      `UPDATE service_requests SET status = 'CLOSED', terminal_at = now()
+        WHERE service_request_id = $1`,
+      [others.serviceRequestId],
+    );
+
+    const mine = await get(helper, '/service-requests?ownership=mine&limit=1');
+    expect(mine.statusCode).toBe(200);
+    expect(mine.json().counts).toEqual({ helping_now: 1, closed_last_30_days: 1 });
+    expect(mine.json().service_requests).toHaveLength(1);
+
+    expect((await get(helper, '/service-requests?ownership=open')).json()).not.toHaveProperty(
+      'counts',
+    );
+    expect((await get(helper, '/service-requests?ownership=requested')).json()).not.toHaveProperty(
+      'counts',
+    );
+  });
+});
+
 describe('accepted_at', () => {
   const get = (who: Person, url: string) =>
     app.server.inject({ method: 'GET', url: `/api/v0${url}`, headers: who.headers });
