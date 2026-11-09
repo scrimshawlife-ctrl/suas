@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,6 +21,7 @@ const detail = (status = 'ACCEPTED') => ({
   timing: 'Thursday, pick up at 9:30 AM',
   meeting_place: '1200 Example Ave, San Jose',
   created_at: '2026-11-04T12:00:00Z',
+  accepted_at: null as string | null,
   widened: false,
   county: 'SANTA_CLARA',
   counterpart_display_name: 'Marcus T.',
@@ -125,6 +126,42 @@ describe('Contact attempt saving', () => {
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(3));
     expect(keyOf(1)).toBe(keyOf(0));
     expect(keyOf(2)).not.toBe(keyOf(0));
+  });
+});
+
+describe('History', () => {
+  it('lists "You accepted" by time between the opened and contact rows, and not before accept', async () => {
+    replies.detail = { data: { ...detail(), accepted_at: '2026-11-04T12:16:00Z' } };
+    replies.attempts = {
+      data: {
+        contact_attempts: [
+          {
+            contact_attempt_id: 'a1',
+            case_id: 'c1',
+            logged_by_user_id: 'u1',
+            channel: 'PHONE',
+            outcome: 'REACHED',
+            attempted_at: '2026-11-04T12:30:00Z',
+          },
+        ],
+      },
+    };
+    const view = renderCase();
+    const history = await screen.findByRole('region', { name: 'History' });
+    await within(history).findByText('You accepted');
+    const rows = within(history).getAllByRole('listitem');
+    expect(rows.map((row) => row.querySelector('span.font-bold')?.textContent)).toEqual([
+      'Request opened',
+      'You accepted',
+      'Phone call, reached Marcus',
+    ]);
+    view.unmount();
+
+    replies.detail = { data: detail() };
+    renderCase();
+    const before = await screen.findByRole('region', { name: 'History' });
+    await within(before).findByText('Request opened');
+    expect(before).not.toHaveTextContent('You accepted');
   });
 });
 
