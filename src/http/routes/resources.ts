@@ -27,6 +27,7 @@ import {
   RESOURCE_MAX_PAGE_SIZE,
   countResources,
   searchResources,
+  verifiedAtIso,
   type Resource,
   type ResourceSearchResult,
 } from '../../fulfillment/index.js';
@@ -66,6 +67,9 @@ function publicCatalogResource(result: ResourceSearchResult) {
     cost: resource.cost ?? null,
     contact_method: resource.contactMethod ?? null,
     contact_method_kind: resource.contactMethodKind ?? null,
+    contacts: resource.contacts.map((contact) => ({ kind: contact.kind, value: contact.value })),
+    area: resource.area ?? null,
+    verified_at: verifiedAtIso(resource.lastVerifiedAt),
     freshness: result.freshness,
     stale_warning: result.staleWarning,
   };

@@ -84,6 +84,8 @@ function publicDraft(draft: ResourceDraft) {
     hours: draft.hours ?? null,
     contact_method: draft.contactMethod ?? null,
     contact_method_kind: draft.contactMethodKind ?? null,
+    contacts: draft.contacts.map((contact) => ({ kind: contact.kind, value: contact.value })),
+    area: draft.area ?? null,
     referral_method: draft.referralMethod ?? null,
     cost: draft.cost ?? null,
     published_resource_id: draft.publishedResourceId ?? null,

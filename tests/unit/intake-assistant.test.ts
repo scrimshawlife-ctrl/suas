@@ -28,6 +28,9 @@ const RESOURCE: IntakeResource = {
   cost: null,
   contactMethod: null,
   contactMethodKind: null,
+  contacts: [],
+  area: null,
+  verifiedAt: null,
   freshness: 'FRESH',
   staleWarning: false,
 };

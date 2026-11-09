@@ -111,6 +111,9 @@ function resourceView(resource: IntakeResource) {
     cost: resource.cost,
     contact_method: resource.contactMethod,
     contact_method_kind: resource.contactMethodKind,
+    contacts: resource.contacts.map((contact) => ({ kind: contact.kind, value: contact.value })),
+    area: resource.area,
+    verified_at: resource.verifiedAt,
     freshness: resource.freshness,
     stale_warning: resource.staleWarning,
   };
