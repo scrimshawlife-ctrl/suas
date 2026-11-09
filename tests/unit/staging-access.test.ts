@@ -5,8 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  assertPublicSignUpPermitted,
-  PublicSignUpRefusedError,
+  publicSignUpPermitted,
   stagingAccessFromConfig,
   stagingFixturePrincipalRefused,
 } from '../../src/auth/staging-access.js';
@@ -64,32 +63,12 @@ describe('D-052 startup refusal', () => {
 });
 
 describe('D-052 sign-up and fake ID', () => {
-  it('refuses public sign-up on STAGING even if a caller asks for it', () => {
-    expect(() =>
-      assertPublicSignUpPermitted({
-        environment: 'STAGING',
-        publicSignUp: true,
-        fixturePrincipals: [],
-      }),
-    ).toThrow(PublicSignUpRefusedError);
-    expect(() =>
-      assertPublicSignUpPermitted({
-        environment: 'PRODUCTION',
-        publicSignUp: true,
-        fixturePrincipals: [],
-      }),
-    ).toThrow(PublicSignUpRefusedError);
-    expect(() => assertPublicSignUpPermitted(undefined)).toThrow(PublicSignUpRefusedError);
-  });
-
-  it('allows public sign-up only when LOCAL or TEST opted in', () => {
-    expect(() =>
-      assertPublicSignUpPermitted({
-        environment: 'TEST',
-        publicSignUp: true,
-        fixturePrincipals: [],
-      }),
-    ).not.toThrow();
+  it('permits public sign-up only in LOCAL or TEST', () => {
+    const access = { publicSignUp: true, fixturePrincipals: [] };
+    expect(publicSignUpPermitted({ ...access, environment: 'STAGING' })).toBe(false);
+    expect(publicSignUpPermitted({ ...access, environment: 'PRODUCTION' })).toBe(false);
+    expect(publicSignUpPermitted(undefined)).toBe(false);
+    expect(publicSignUpPermitted({ ...access, environment: 'TEST' })).toBe(true);
   });
 
   it('does not auto-verify a fake ID check on STAGING or PRODUCTION', () => {

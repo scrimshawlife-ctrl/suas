@@ -45,7 +45,7 @@ import {
 } from './secrets.js';
 import type { FixedOtpCodeFor } from './demo-fixed-code.js';
 import {
-  assertPublicSignUpPermitted,
+  publicSignUpPermitted,
   stagingFixturePrincipalRefused,
   type StagingAccess,
 } from './staging-access.js';
@@ -119,9 +119,6 @@ export async function issueChallenge(
   deps: ChallengeServiceDeps,
   input: IssueChallengeInput,
 ): Promise<IssueChallengeResult> {
-  if (input.allowSignUp === true) {
-    assertPublicSignUpPermitted(deps.stagingAccess);
-  }
   const destination = normalizeDestination(input.destination);
   const channel = channelForMethod(input.method);
   const fixedCode = input.method === 'EMAIL_OTP' ? deps.fixedOtpCodeFor?.(destination) : undefined;
@@ -148,6 +145,7 @@ export async function issueChallenge(
   const signUp =
     user === undefined &&
     input.allowSignUp === true &&
+    publicSignUpPermitted(deps.stagingAccess) &&
     input.method === 'EMAIL_OTP' &&
     SIGN_UP_EMAIL_PATTERN.test(destination);
   const fixtureRefused =
