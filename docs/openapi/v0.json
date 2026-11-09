@@ -3965,6 +3965,9 @@
           "cost",
           "contact_method",
           "contact_method_kind",
+          "contacts",
+          "area",
+          "verified_at",
           "freshness",
           "stale_warning"
         ],
@@ -3999,6 +4002,34 @@
             "type": ["string", "null"],
             "enum": ["PHONE", "EMAIL", "URL", "FREEFORM", null]
           },
+          "contacts": {
+            "type": "array",
+            "description": "Up to three contact methods, in order. The first is mirrored in contact_method.",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "required": ["kind", "value"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": ["PHONE", "EMAIL", "URL", "FREEFORM"]
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 300
+                }
+              }
+            }
+          },
+          "area": {
+            "type": ["string", "null"],
+            "maxLength": 80
+          },
+          "verified_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The stored last_verified_at under a client-facing name; the publish date until a re-verify command exists."
+          },
           "freshness": {
             "type": "string",
             "enum": ["FRESH", "AGING", "STALE", "UNVERIFIED"]
@@ -4022,6 +4053,8 @@
           "hours",
           "contact_method",
           "contact_method_kind",
+          "contacts",
+          "area",
           "referral_method",
           "cost",
           "published_resource_id",
@@ -4080,6 +4113,29 @@
           "contact_method_kind": {
             "type": ["string", "null"],
             "enum": ["PHONE", "EMAIL", "URL", "FREEFORM", null]
+          },
+          "contacts": {
+            "type": "array",
+            "description": "Up to three contact methods, in order. 911, 988 and 838255 are refused.",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "required": ["kind", "value"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": ["PHONE", "EMAIL", "URL", "FREEFORM"]
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 300
+                }
+              }
+            }
+          },
+          "area": {
+            "type": ["string", "null"],
+            "maxLength": 80
           },
           "referral_method": {
             "type": ["string", "null"],
@@ -4213,6 +4269,29 @@
           "contact_method_kind": {
             "type": ["string", "null"],
             "enum": ["PHONE", "EMAIL", "URL", "FREEFORM", null]
+          },
+          "contacts": {
+            "type": ["array", "null"],
+            "description": "Up to three contact methods, in order. 911, 988 and 838255 are refused.",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "required": ["kind", "value"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": ["PHONE", "EMAIL", "URL", "FREEFORM"]
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 300
+                }
+              }
+            }
+          },
+          "area": {
+            "type": ["string", "null"],
+            "maxLength": 80
           },
           "referral_method": {
             "type": ["string", "null"],
@@ -5963,6 +6042,9 @@
           "cost",
           "contact_method",
           "contact_method_kind",
+          "contacts",
+          "area",
+          "verified_at",
           "freshness",
           "stale_warning"
         ],
@@ -5994,6 +6076,34 @@
           },
           "contact_method_kind": {
             "type": ["string", "null"]
+          },
+          "contacts": {
+            "type": "array",
+            "description": "Up to three contact methods, in order. The first is mirrored in contact_method.",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "required": ["kind", "value"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": ["PHONE", "EMAIL", "URL", "FREEFORM"]
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 300
+                }
+              }
+            }
+          },
+          "area": {
+            "type": ["string", "null"],
+            "maxLength": 80
+          },
+          "verified_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The stored last_verified_at under a client-facing name; the publish date until a re-verify command exists."
           },
           "freshness": {
             "type": "string"

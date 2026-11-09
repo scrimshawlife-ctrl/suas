@@ -171,7 +171,15 @@
       "contact_method": "demo-pantry@example.invalid",
       "contact_method_kind": "EMAIL",
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "EMAIL",
+          "value": "demo-pantry@example.invalid"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000010",
@@ -185,7 +193,23 @@
       "contact_method": "+1-555-555-0110",
       "contact_method_kind": "PHONE",
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "PHONE",
+          "value": "+1-555-555-0110"
+        },
+        {
+          "kind": "URL",
+          "value": "https://harbor-food.example.invalid"
+        },
+        {
+          "kind": "EMAIL",
+          "value": "demo-harbor@example.invalid"
+        }
+      ],
+      "area": "Example County, east side",
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000011",
@@ -199,7 +223,15 @@
       "contact_method": "+1-555-555-0101",
       "contact_method_kind": "PHONE",
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "PHONE",
+          "value": "+1-555-555-0101"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000012",
@@ -213,7 +245,15 @@
       "contact_method": "Ask your responder to arrange",
       "contact_method_kind": null,
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "FREEFORM",
+          "value": "Ask your responder to arrange"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000013",
@@ -227,7 +267,15 @@
       "contact_method": "+1-555-555-0111",
       "contact_method_kind": "PHONE",
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "PHONE",
+          "value": "+1-555-555-0111"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000014",
@@ -241,7 +289,15 @@
       "contact_method": "Request through a responder",
       "contact_method_kind": null,
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "FREEFORM",
+          "value": "Request through a responder"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000015",
@@ -255,7 +311,15 @@
       "contact_method": "Ask your responder to arrange",
       "contact_method_kind": null,
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "FREEFORM",
+          "value": "Ask your responder to arrange"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000016",
@@ -269,7 +333,15 @@
       "contact_method": "+1-555-555-0112",
       "contact_method_kind": "PHONE",
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "PHONE",
+          "value": "+1-555-555-0112"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000017",
@@ -283,7 +355,15 @@
       "contact_method": "Walk-in intake at the front desk",
       "contact_method_kind": null,
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "FREEFORM",
+          "value": "Walk-in intake at the front desk"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000018",
@@ -297,7 +377,15 @@
       "contact_method": "Ask your responder to arrange",
       "contact_method_kind": null,
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "FREEFORM",
+          "value": "Ask your responder to arrange"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000019",
@@ -311,7 +399,15 @@
       "contact_method": "+1-555-555-0113",
       "contact_method_kind": "PHONE",
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "PHONE",
+          "value": "+1-555-555-0113"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     },
     {
       "resource_id": "de000000-0000-4000-8000-000000000020",
@@ -325,7 +421,15 @@
       "contact_method": "peer-support@example.invalid",
       "contact_method_kind": "EMAIL",
       "freshness": "FRESH",
-      "stale_warning": false
+      "stale_warning": false,
+      "contacts": [
+        {
+          "kind": "EMAIL",
+          "value": "peer-support@example.invalid"
+        }
+      ],
+      "area": null,
+      "verified_at": "2026-01-15T17:00:00.000Z"
     }
   ],
   "consents": [

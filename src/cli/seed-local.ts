@@ -49,6 +49,7 @@ import {
   setResourceActive,
   verifyResource,
   type Resource,
+  type ResourceContact,
 } from '../fulfillment/index.js';
 import { ensurePublishedQv001 } from '../signals/index.js';
 import {
@@ -130,6 +131,10 @@ export interface ResourceSpec {
   readonly contactMethod: string;
   /** P-13 scheme, so the seeded catalog shows direct call/email/web actions. */
   readonly contactMethodKind?: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+  /** R8.8 list; its first entry must match `contactMethod` and its kind. */
+  readonly contacts?: readonly ResourceContact[];
+  /** R8.9 area line. */
+  readonly area?: string;
   readonly hours: string;
   readonly cost: string;
   readonly eligibility: string;
@@ -143,6 +148,12 @@ const RESOURCE_SPECS: readonly ResourceSpec[] = [
     // Structured PHONE: the veteran resource list renders a direct `tel:` action.
     contactMethod: syntheticPhone(1),
     contactMethodKind: 'PHONE',
+    contacts: [
+      { kind: 'PHONE', value: syntheticPhone(1) },
+      { kind: 'URL', value: 'https://pantry.example.invalid' },
+      { kind: 'EMAIL', value: syntheticEmail('pantry') },
+    ],
+    area: 'San Jose, east side',
     hours: 'Weekdays, morning to afternoon',
     cost: 'No cost',
     eligibility: 'All veterans',
@@ -198,6 +209,14 @@ export async function ensureResource(
        WHERE tenant_id = $1 AND resource_id = $2 AND counties IS DISTINCT FROM $3::text[]`,
       [TENANT_ID, existingId, [...spec.counties]],
     );
+    if (spec.contacts !== undefined || spec.area !== undefined) {
+      await pool.query(
+        `UPDATE resources SET contacts = $3::jsonb, area = $4
+         WHERE tenant_id = $1 AND resource_id = $2
+           AND (contacts IS DISTINCT FROM $3::jsonb OR area IS DISTINCT FROM $4)`,
+        [TENANT_ID, existingId, JSON.stringify(spec.contacts ?? []), spec.area ?? null],
+      );
+    }
     await setResourceActive(pool, {
       tenantId: TENANT_ID,
       resourceId: existingId,
@@ -214,6 +233,8 @@ export async function ensureResource(
     counties: spec.counties,
     contactMethod: spec.contactMethod,
     ...(spec.contactMethodKind === undefined ? {} : { contactMethodKind: spec.contactMethodKind }),
+    ...(spec.contacts === undefined ? {} : { contacts: spec.contacts }),
+    ...(spec.area === undefined ? {} : { area: spec.area }),
     hours: spec.hours,
     cost: spec.cost,
     eligibility: spec.eligibility,
