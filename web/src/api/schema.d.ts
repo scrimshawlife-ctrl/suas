@@ -1984,9 +1984,9 @@ export interface components {
       last_message_at: string | null;
       /**
        * Format: date-time
-       * @description When the request was accepted. The thread exists only after accept, so it is never null here.
+       * @description When the request was accepted. Always present in responses (a thread exists only after accept); optional in the contract so clients written before it still type-check.
        */
-      accepted_at: string;
+      accepted_at?: string;
       /** @description The request is in a terminal status. */
       closed: boolean;
       /**
