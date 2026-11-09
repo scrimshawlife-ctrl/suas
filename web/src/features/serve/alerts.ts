@@ -1,6 +1,7 @@
 import type { Schemas } from '../../api/types';
+import { paths } from '../../app/paths';
 
-type Notification = Schemas['Notification'];
+export type Notification = Schemas['Notification'];
 
 /** Plain words for notification reason codes. Unknown codes get a neutral line. */
 const REASON_TEXT: Record<string, string> = {
@@ -28,4 +29,13 @@ export function latestAlerts(notifications: readonly Notification[], count = 4):
     .filter(isAlert)
     .sort((a, b) => time(b) - time(a))
     .slice(0, count);
+}
+
+/**
+ * Where an alert leads. Only a Service Request subject maps to a route (its Serve case page);
+ * any other subject, or none, stays plain text.
+ */
+export function alertSubjectPath(notification: Notification): string | null {
+  const { subject_type, subject_id } = notification;
+  return subject_type === 'ServiceRequest' && subject_id ? paths.case(subject_id) : null;
 }

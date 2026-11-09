@@ -176,9 +176,7 @@ export function RequestStatusCard(props: RequestStatusCardProps) {
             Message
           </Button>
         ) : null}
-        {card === 'CANCELLED' || card === 'UNAVAILABLE' ? (
-          <Button href={paths.request}>Start a new request</Button>
-        ) : null}
+        {card === 'CANCELLED' ? <Button href={paths.request}>Start a new request</Button> : null}
         {cancellable ? <CancelRequest requestId={requestId} /> : null}
         {home ? (
           <Link

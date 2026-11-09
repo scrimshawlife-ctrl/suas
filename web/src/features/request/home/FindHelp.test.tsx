@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import type { Me } from '../../../api/types';
@@ -73,5 +74,47 @@ describe('FindHelp', () => {
   it('shortens the Housing note to its first sentence for phones', () => {
     expect(phoneTag(housing.note ?? '')).toBe('Temporary shelter');
     expect(phoneTag('One sentence only.')).toBe('One sentence only');
+  });
+
+  it('compact mode expands in place, reports its state, and collapses again', async () => {
+    const transport: Card = {
+      label: 'Transportation',
+      disposition: 'OPERATIONAL',
+      category: 'TRANSPORTATION',
+      note: null,
+    };
+    const extra: Card = {
+      label: 'Peer support',
+      disposition: 'OPERATIONAL',
+      category: 'PEER_SUPPORT',
+      note: null,
+    };
+    render(
+      <MemoryRouter>
+        <FindHelp categories={[food, housing, transport, extra, counseling]} compact />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByRole('link')).toHaveLength(3);
+    const more = screen.getByRole('button', {
+      name: /All categories, including Peer support and Counseling/,
+    });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(more);
+    expect(screen.getByRole('link', { name: /Peer support/ })).toBeInTheDocument();
+    const fewer = screen.getByRole('button', { name: 'Show fewer categories' });
+    expect(fewer).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(fewer);
+    expect(screen.getAllByRole('link')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: /All categories/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('has no collapse control outside compact mode', () => {
+    show([food, housing]);
+    expect(screen.queryByRole('button', { name: 'Show fewer categories' })).not.toBeInTheDocument();
   });
 });

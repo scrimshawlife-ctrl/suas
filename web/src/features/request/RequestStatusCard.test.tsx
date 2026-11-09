@@ -93,6 +93,15 @@ describe('RequestStatusCard', () => {
     );
   });
 
+  it('UNAVAILABLE offers another category and no new request', () => {
+    show({ card: 'UNAVAILABLE' });
+    expect(screen.getByRole('link', { name: 'Try another support category' })).toHaveAttribute(
+      'href',
+      '/home',
+    );
+    expect(screen.queryByRole('link', { name: 'Start a new request' })).not.toBeInTheDocument();
+  });
+
   it('CANCELLED offers a new request and no cancel', () => {
     show({ card: 'CANCELLED', status: 'CANCELLED' });
     expect(screen.getByRole('link', { name: 'Start a new request' })).toHaveAttribute(

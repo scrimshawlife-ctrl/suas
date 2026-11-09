@@ -47,7 +47,7 @@ export default function HomePage() {
       </div>
 
       <div className="grid grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] items-start gap-6 max-md:grid-cols-1">
-        <FindHelp categories={categories} />
+        <FindHelp categories={categories} compact={active_qrf !== null} />
         <aside className="flex flex-col gap-4 pt-12.5 max-md:pt-0">
           <YourRequests />
           <Card aria-labelledby="check-in" className="flex flex-col gap-3 p-6">

@@ -34,6 +34,7 @@ const screens: { path: string; title: string }[] = [
   { path: '/crisis', title: 'Immediate resources · SUAS' },
   { path: '/home', title: 'Home · SUAS' },
   { path: '/request', title: 'Request help · SUAS' },
+  { path: '/requests', title: 'Your requests · SUAS' },
   { path: '/requests/abc', title: 'Your request · SUAS' },
   { path: '/resources/food', title: 'Food · SUAS' },
   { path: '/check-in', title: 'Check-In · SUAS' },

@@ -1,4 +1,4 @@
-import { queryOptions, useQuery } from '@tanstack/react-query';
+import { queryOptions, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from './client';
 import { queryKeys } from './keys';
 import { requireData } from './require-data';
@@ -58,5 +58,30 @@ export function useServiceRequest(id: string | undefined) {
   return useQuery({
     ...serviceRequestQueryOptions(id ?? ''),
     enabled: token !== null && id !== undefined && id !== '',
+  });
+}
+
+const PAGE_SIZE = 20;
+
+/** The same list as `useServiceRequests`, paged by `next_cursor` for a "Show more" button. */
+export function useInfiniteServiceRequests(ownership: Ownership) {
+  const token = useSessionToken();
+  return useInfiniteQuery({
+    queryKey: queryKeys.serviceRequests.list({ ownership, limit: PAGE_SIZE, paged: true }),
+    enabled: token !== null,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
+      const { data } = await api.GET('/api/v0/service-requests', {
+        params: {
+          query: {
+            ownership,
+            limit: PAGE_SIZE,
+            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+          },
+        },
+      });
+      return requireData(data, 'requests');
+    },
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
 }
