@@ -211,6 +211,72 @@ describe('Check-In answer and complete', () => {
     expect((await listUnfinished(session.headers)).json()).toEqual({ check_ins: [] });
   });
 
+  async function checkInStatus(checkInId: string) {
+    const result = await app.pool?.query<{ status: string; abandoned_at: Date | null }>(
+      `SELECT status, abandoned_at FROM check_ins WHERE check_in_id = $1`,
+      [checkInId],
+    );
+    return result?.rows[0];
+  }
+
+  it('refuses an answer to a Check-In past 24 hours and abandons it, without the sweep', async () => {
+    const { session, body } = await startOwned();
+    const [first] = body.questions;
+    if (first === undefined) throw new Error('need a question');
+    await ageCheckIn(body.check_in_id, 25);
+    const saved = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/check-ins/${body.check_in_id}/responses`,
+      headers: session.headers,
+      payload: {
+        question_id: first.question_id,
+        answer_option_id: first.options[0]!.answer_option_id,
+      },
+    });
+    expect(saved.statusCode).toBe(409);
+    expect(saved.json().error.code).toBe('ILLEGAL_TRANSITION');
+    const stored = await checkInStatus(body.check_in_id);
+    expect(stored?.status).toBe('ABANDONED');
+    expect(stored?.abandoned_at).not.toBeNull();
+    const responses = await app.pool?.query(
+      `SELECT 1 FROM check_in_responses WHERE check_in_id = $1`,
+      [body.check_in_id],
+    );
+    expect(responses?.rowCount).toBe(0);
+  });
+
+  it('refuses to complete a Check-In that is too old, with no completion fact', async () => {
+    const { session, body } = await startOwned();
+    await answerAll(session.headers, body.check_in_id, body.questions, A0);
+    await ageCheckIn(body.check_in_id, 25);
+    const completed = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/check-ins/${body.check_in_id}/commands/complete`,
+      headers: session.headers,
+    });
+    expect(completed.statusCode).toBe(409);
+    expect(completed.json().error.code).toBe('ILLEGAL_TRANSITION');
+    expect((await checkInStatus(body.check_in_id))?.status).toBe('ABANDONED');
+    const facts = await app.pool?.query(
+      `SELECT 1 FROM domain_events WHERE event_type = 'CHECKIN_COMPLETED' AND aggregate_id = $1`,
+      [body.check_in_id],
+    );
+    expect(facts?.rowCount).toBe(0);
+  });
+
+  it('still takes answers and completes just inside the 24-hour window', async () => {
+    const { session, body } = await startOwned();
+    await ageCheckIn(body.check_in_id, 23);
+    await answerAll(session.headers, body.check_in_id, body.questions, A0);
+    const completed = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/check-ins/${body.check_in_id}/commands/complete`,
+      headers: session.headers,
+    });
+    expect(completed.statusCode).toBe(200);
+    expect((await checkInStatus(body.check_in_id))?.status).toBe('COMPLETED');
+  });
+
   it('does not list a Check-In started more than 24 hours ago', async () => {
     const { session, body } = await startOwned();
     await ageCheckIn(body.check_in_id, 25);

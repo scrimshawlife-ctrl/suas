@@ -114,7 +114,7 @@ export interface paths {
     };
     /**
      * List the caller's unfinished Check-In that can still be resumed
-     * @description Round 8 R8.10 (contributor proposal): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.
+     * @description Round 8 R8.10 (accepted as proposal text in suas-specs D-059, not released): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.
      */
     get: operations['listCheckIns'];
     put?: never;
