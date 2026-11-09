@@ -7,18 +7,31 @@
  *   §10 (no generative resource invention, no eligibility invention).
  *
  * One schema serves model output and admin edits, so a draft can never hold values
- * the publish step would refuse. There is no verification field: the model never
- * sets `last_verified_at`.
+ * the publish step would refuse. `contacts` is the list (R8.8); `contact_method` and
+ * `contact_method_kind` stay as the alias of its first entry. There is no verification
+ * field: the model never sets `last_verified_at`.
  */
 
 import { z } from 'zod';
 import { SERVICE_CATEGORIES } from '../coordination/index.js';
-import { CONTACT_METHOD_KINDS } from '../fulfillment/index.js';
+import {
+  CONTACT_METHOD_KINDS,
+  contactInputIssue,
+  MAX_RESOURCE_CONTACTS,
+} from '../fulfillment/index.js';
 import { SERVICE_COUNTIES } from '../identity/index.js';
 
 export const MAX_DRAFTS_PER_EXTRACTION = 25;
 
 const optionalText = (max: number) => z.string().trim().min(1).max(max).nullish();
+
+/** One contact of the list (R8.8). The crisis-number refusal is in `contactInputIssue`. */
+const contactEntrySchema = z
+  .object({
+    kind: z.enum(CONTACT_METHOD_KINDS),
+    value: z.string().trim().min(1).max(300),
+  })
+  .strict();
 
 /** Fields every draft carries, whether the model or an admin wrote them. */
 export const draftFieldsBase = z
@@ -30,17 +43,28 @@ export const draftFieldsBase = z
     hours: optionalText(300),
     contact_method: optionalText(300),
     contact_method_kind: z.enum(CONTACT_METHOD_KINDS).nullish(),
+    contacts: z.array(contactEntrySchema).max(MAX_RESOURCE_CONTACTS).nullish(),
+    area: optionalText(80),
     referral_method: optionalText(500),
     cost: optionalText(300),
   })
   .strict();
 
-export const draftFieldsSchema = draftFieldsBase.refine(
-  (fields) =>
-    (fields.contact_method_kind ?? undefined) === undefined ||
-    (fields.contact_method ?? undefined) !== undefined,
-  { message: 'contact_method_kind requires a contact_method value.' },
-);
+export const draftFieldsSchema = draftFieldsBase
+  .refine(
+    (fields) =>
+      (fields.contact_method_kind ?? undefined) === undefined ||
+      (fields.contact_method ?? undefined) !== undefined,
+    { message: 'contact_method_kind requires a contact_method value.' },
+  )
+  .superRefine((fields, ctx) => {
+    const issue = contactInputIssue({
+      contacts: fields.contacts ?? undefined,
+      contactMethod: fields.contact_method ?? undefined,
+      contactMethodKind: fields.contact_method_kind ?? undefined,
+    });
+    if (issue !== undefined) ctx.addIssue({ code: 'custom', message: issue, path: ['contacts'] });
+  });
 
 export type DraftFields = z.infer<typeof draftFieldsSchema>;
 
@@ -85,14 +109,25 @@ export const draftFieldsJsonSchema = {
     },
     eligibility: { type: 'string', description: 'Eligibility exactly as the source states it.' },
     hours: { type: 'string', description: 'Opening hours as stated.' },
-    contact_method: {
-      type: 'string',
-      description: 'Public phone, email or web address as stated.',
+    contacts: {
+      type: 'array',
+      maxItems: MAX_RESOURCE_CONTACTS,
+      description:
+        'Public phone, website or email contacts as stated, most useful first. Never list ' +
+        '911, 988 or 838255.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'value'],
+        properties: {
+          kind: { type: 'string', enum: [...CONTACT_METHOD_KINDS] },
+          value: { type: 'string', description: 'The number, address or text as stated.' },
+        },
+      },
     },
-    contact_method_kind: {
+    area: {
       type: 'string',
-      enum: [...CONTACT_METHOD_KINDS],
-      description: 'Kind of contact_method. Only with a contact_method.',
+      description: 'Short area line as stated, for example a city or neighborhood. 80 characters.',
     },
     referral_method: { type: 'string', description: 'How a person is referred, as stated.' },
     cost: { type: 'string', description: 'Cost as stated.' },
