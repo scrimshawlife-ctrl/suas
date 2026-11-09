@@ -87,6 +87,7 @@ export {
   listCaseServiceRequests,
   MEETING_PLACE_MAX,
   MeetingPlaceRequiredError,
+  NotRequestHolderError,
   peerAcceptRequestInTx,
   readDetailText,
   ServiceRequestNotFoundError,
@@ -117,6 +118,11 @@ export {
   type AcceptServiceRequestResult,
 } from './accept.js';
 export { createChatThreadInTx, type ChatThread } from './chat-threads.js';
+export {
+  notifyRequester,
+  REQUEST_EXPIRED_REASON,
+  REQUEST_RELEASED_REASON,
+} from './request-notices.js';
 export {
   findDisplayName,
   readServiceRequestDetail,

@@ -32,9 +32,11 @@ import {
   listCaseServiceRequests,
   MAX_PAGE_SIZE,
   MEETING_PLACE_MAX,
+  notifyRequester,
   readHelperRequestCounts,
   readRequestList,
   readServiceRequestDetail,
+  REQUEST_RELEASED_REASON,
   requestHeldInCurrentCycle,
   SERVICE_CATEGORIES,
   SERVICE_REQUEST_COMMANDS,
@@ -493,6 +495,21 @@ export function registerServiceRequestRoutes(
         };
       },
     );
+
+    // After the commit, tell the requester. A failed notice never undoes the release.
+    if (command === 'RELEASE' && !run.replayed) {
+      try {
+        await notifyRequester(deps.pool, {
+          tenantId: context.tenantId,
+          requesterUserId: access.supportCase.veteranUserId,
+          serviceRequestId: id,
+          reason: REQUEST_RELEASED_REASON,
+          dedupeKey: `request-released:${id}:${idempotencyKey}`,
+        });
+      } catch {
+        request.log.warn({ service_request_id: id }, 'release notice could not be queued');
+      }
+    }
 
     return { ...run.result, replayed: run.replayed };
   });

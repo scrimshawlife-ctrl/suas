@@ -3,12 +3,13 @@
  * the AWS Lambda handler so there is one implementation.
  *
  * Each pass also runs the time-driven sweeps that no request enqueues work for. Today
- * that is request widening (V1_PROJECT_PLAN.md F6), so a scheduler running one pass
+ * that is request widening (V1_PROJECT_PLAN.md F6) and request expiry (R8.4), so a scheduler running one pass
  * (`once`) is the only schedule that has to exist.
  */
 
 import type { Pool } from 'pg';
 import type { SuasConfig } from '../config/index.js';
+import { expireDueRequests } from '../coordination/expiry.js';
 import { widenDueRequests } from '../coordination/widening.js';
 import { createChannelRegistry } from '../notifications/index.js';
 import {
@@ -53,7 +54,7 @@ async function handleJob(
 
 /**
  * A failed sweep is logged and does not stop the outbox drain: the next pass
- * repeats it, and widening is idempotent.
+ * repeats it, and widening and expiry are idempotent.
  */
 async function runSweeps(pool: Pool): Promise<void> {
   try {
@@ -72,6 +73,27 @@ async function runSweeps(pool: Pool): Promise<void> {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(JSON.stringify({ msg: 'sweep_failed', sweep: 'widening', error: message }));
+  }
+
+  try {
+    const { expired, ttlHours, noticeFailures } = await expireDueRequests(pool);
+    for (const request of expired) {
+      console.log(
+        JSON.stringify({
+          msg: 'request_expired',
+          service_request_id: request.serviceRequestId,
+          ttl_hours: ttlHours,
+        }),
+      );
+    }
+    if (noticeFailures > 0) {
+      console.error(
+        JSON.stringify({ msg: 'sweep_notice_failed', sweep: 'expiry', failed: noticeFailures }),
+      );
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(JSON.stringify({ msg: 'sweep_failed', sweep: 'expiry', error: message }));
   }
 }
 
