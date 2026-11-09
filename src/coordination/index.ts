@@ -69,8 +69,16 @@ export {
   type RecordContactResult,
 } from './contact.js';
 export {
+  editServiceRequestInTx,
+  RequestNotEditableError,
+  type RequestEditChanges,
+} from './request-edit.js';
+export {
+  assertDestinationAllowed,
   ClosedCaseError,
   createServiceRequest,
+  DESTINATION_MAX,
+  DestinationNotAllowedError,
   DisclosureGuardRequiredError,
   executeServiceRequestCommand,
   executeServiceRequestCommandInTx,

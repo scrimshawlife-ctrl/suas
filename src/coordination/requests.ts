@@ -80,12 +80,19 @@ export class ServiceRequestNotFoundError extends Error {
 /** Longest meeting place a request may carry. */
 export const MEETING_PLACE_MAX = 200;
 
+/** Longest destination ("going to") a ride request may carry. */
+export const DESTINATION_MAX = 200;
+
 /** Categories where the helper must know where to meet, so submit refuses without one. */
 const MEETING_PLACE_REQUIRED: readonly ServiceCategory[] = ['TRANSPORTATION', 'FOOD', 'SHELTER'];
 
+export function requiresMeetingPlace(category: ServiceCategory): boolean {
+  return MEETING_PLACE_REQUIRED.includes(category);
+}
+
 /**
  * A free-text field of `details` that is present, a string, and within bounds, else null.
- * `meeting_place` is sensitive free text: it is read here and returned to the
+ * `meeting_place` and `destination` are sensitive free text: read here and returned to the
  * request's owner and accepter only. It never goes in a log, event or audit payload.
  */
 export function readDetailText(details: JsonObject, key: string, max: number): string | null {
@@ -102,6 +109,26 @@ export class MeetingPlaceRequiredError extends Error {
   constructor() {
     super('Say where to meet (meeting_place) before submitting this kind of request.');
     this.name = 'MeetingPlaceRequiredError';
+  }
+}
+
+/** `destination` belongs to ride requests only (R8.7), so any other category refuses it. */
+export class DestinationNotAllowedError extends Error {
+  readonly code = 'UNPROCESSABLE';
+  readonly httpStatus = 422;
+
+  constructor() {
+    super('A destination can only be given for a TRANSPORTATION request.');
+    this.name = 'DestinationNotAllowedError';
+  }
+}
+
+export function assertDestinationAllowed(
+  category: string | null,
+  destination: string | null | undefined,
+): void {
+  if (destination !== null && destination !== undefined && category !== 'TRANSPORTATION') {
+    throw new DestinationNotAllowedError();
   }
 }
 
@@ -136,6 +163,8 @@ export async function createServiceRequest(
   input: CreateServiceRequestInput,
 ): Promise<ServiceRequest> {
   assertServiceCategory(input.category);
+  const destination = input.details?.destination;
+  assertDestinationAllowed(input.category, typeof destination === 'string' ? destination : null);
 
   const parent = await findCase(tx, input.tenantId, input.caseId);
   if (parent === undefined) throw new CaseNotFoundError();
@@ -261,7 +290,7 @@ export async function executeServiceRequestCommandInTx(
   // Submitting puts the request on the helper list, so it needs a meeting place first.
   if (
     input.command === 'SUBMIT' &&
-    MEETING_PLACE_REQUIRED.includes(request.category) &&
+    requiresMeetingPlace(request.category) &&
     readDetailText(request.details, 'meeting_place', MEETING_PLACE_MAX) === null
   ) {
     throw new MeetingPlaceRequiredError();
