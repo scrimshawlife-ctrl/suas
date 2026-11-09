@@ -83,6 +83,28 @@ describe('applyMessageToCaches', () => {
     expect(threads?.threads[0]?.last_message_from_me).toBe(true);
   });
 
+  it('moves the live thread, not the closed one, when a request has both', () => {
+    const queryClient = seeded();
+    const closed = {
+      ...thread('r1', '2026-11-04T23:00:00.000Z'),
+      closed_at: '2026-11-04T23:30:00Z',
+    };
+    const liveOne = thread('r1', '2026-11-04T20:00:00.000Z');
+    queryClient.setQueryData(queryKeys.chatThreads, {
+      threads: [closed, thread('r2', null), liveOne],
+    });
+    applyMessageToCaches(
+      queryClient,
+      message('e', 'r1', '2026-11-05T01:00:00.000000Z', 'new'),
+      false,
+    );
+    const threads = queryClient.getQueryData<{ threads: ChatThread[] }>(queryKeys.chatThreads);
+    expect(threads?.threads).toHaveLength(3);
+    expect(threads?.threads[0]?.last_message_body).toBe('new');
+    expect(threads?.threads[0]?.closed_at).toBeUndefined();
+    expect(threads?.threads.find((t) => t.closed_at !== undefined)?.last_message_body).toBe('old');
+  });
+
   it('refreshes the list for a thread it has not seen yet', () => {
     const queryClient = seeded();
     applyMessageToCaches(queryClient, message('d', 'r3', '2026-11-04T23:00:00.000000Z'), false);
