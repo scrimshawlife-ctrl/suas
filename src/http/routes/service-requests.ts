@@ -280,6 +280,7 @@ export function registerServiceRequestRoutes(
       timing: detail.timing,
       meeting_place: detail.meetingPlace,
       created_at: detail.createdAt.toISOString(),
+      accepted_at: detail.acceptedAt?.toISOString() ?? null,
       widened: detail.widened,
       county: detail.county,
       counterpart_display_name: counterpartDisplayName,

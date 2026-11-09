@@ -1688,6 +1688,11 @@ export interface components {
       meeting_place: string | null;
       /** Format: date-time */
       created_at: string;
+      /**
+       * Format: date-time
+       * @description When someone accepted the request; null before. Shown only to the requester and the accepter, like meeting_place.
+       */
+      accepted_at: string | null;
       widened: boolean;
       county: components['schemas']['ServiceCounty'] | null;
       /** @description For the requester: the display name of the person who accepted (null until accepted or if unnamed). For the accepter: the requester display name. */
@@ -1970,6 +1975,11 @@ export interface components {
       last_message_body: string | null;
       /** Format: date-time */
       last_message_at: string | null;
+      /**
+       * Format: date-time
+       * @description When the request was accepted. The thread exists only after accept, so it is never null here.
+       */
+      accepted_at: string;
       /** @description The request is in a terminal status. */
       closed: boolean;
       /**

@@ -666,3 +666,41 @@ describe('accepting is per request, not per case', () => {
     expect((await activate(helperB)).statusCode).toBe(200);
   });
 });
+
+describe('accepted_at', () => {
+  const get = (who: Person, url: string) =>
+    app.server.inject({ method: 'GET', url: `/api/v0${url}`, headers: who.headers });
+
+  it('shows when a request was accepted to its requester and accepter only', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'SANTA_CLARA', 'requester');
+    const accepter = await person(tenantId, 'SANTA_CLARA');
+    const bystander = await person(tenantId, 'SANTA_CLARA');
+    const { serviceRequestId } = await request(requester);
+
+    const detailOf = (who: Person) => get(who, `/service-requests/${serviceRequestId}`);
+    expect((await detailOf(requester)).json().accepted_at).toBeNull();
+
+    expect((await accept(accepter, serviceRequestId)).statusCode).toBe(200);
+    const stored = await pool().query<{ created_at: Date }>(
+      `SELECT created_at FROM chat_threads WHERE service_request_id = $1`,
+      [serviceRequestId],
+    );
+    const acceptedAt = stored.rows[0]?.created_at.toISOString();
+    expect(acceptedAt).toBeDefined();
+
+    expect((await detailOf(requester)).json().accepted_at).toBe(acceptedAt);
+    expect((await detailOf(accepter)).json().accepted_at).toBe(acceptedAt);
+    const hidden = await detailOf(bystander);
+    expect(hidden.statusCode).toBe(404);
+    expect(hidden.json()).not.toHaveProperty('accepted_at');
+
+    for (const who of [requester, accepter]) {
+      const threads: { threads: { accepted_at: string }[] } = (
+        await get(who, '/chat/threads')
+      ).json();
+      expect(threads.threads.map((thread) => thread.accepted_at)).toEqual([acceptedAt]);
+    }
+    expect((await get(bystander, '/chat/threads')).json().threads).toEqual([]);
+  });
+});

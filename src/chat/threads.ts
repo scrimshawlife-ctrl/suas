@@ -22,6 +22,8 @@ export interface ChatThreadSummary {
   readonly counterpartDisplayName: string | null;
   readonly lastMessageBody: string | null;
   readonly lastMessageAt: Date | null;
+  /** When the request was accepted: the thread is created in the accept transaction. */
+  readonly acceptedAt: Date;
   /** The request is in a terminal status. */
   readonly closed: boolean;
   /** The caller's side of the thread. */
@@ -38,6 +40,7 @@ interface ThreadRow {
   counterpart_display_name: string | null;
   last_message_body: string | null;
   last_message_at: Date | null;
+  accepted_at: Date;
   role: 'REQUESTER' | 'ACCEPTER';
   last_message_from_me: boolean | null;
 }
@@ -51,7 +54,7 @@ export async function listChatThreads(
     `SELECT t.service_request_id, r.category, r.status, CASE WHEN jsonb_typeof(r.details->'summary') = 'string'
                  THEN left(r.details->>'summary', 280) END AS summary,
             cp.display_name AS counterpart_display_name,
-            m.preview AS last_message_body, m.created_at AS last_message_at,
+            m.preview AS last_message_body, m.created_at AS last_message_at, t.created_at AS accepted_at,
             CASE WHEN t.requester_user_id = $2::uuid THEN 'REQUESTER' ELSE 'ACCEPTER' END AS role,
             m.sender_user_id = $2::uuid AS last_message_from_me
        FROM chat_threads t
@@ -90,6 +93,7 @@ export async function listChatThreads(
     counterpartDisplayName: row.counterpart_display_name,
     lastMessageBody: row.last_message_body,
     lastMessageAt: row.last_message_at,
+    acceptedAt: row.accepted_at,
     role: row.role,
     lastMessageFromMe: row.last_message_from_me,
     closed: (TERMINAL_REQUEST_STATUSES as readonly string[]).includes(row.status),
