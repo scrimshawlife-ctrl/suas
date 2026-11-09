@@ -1674,11 +1674,11 @@ export interface components {
     ServiceRequestList: {
       service_requests: components['schemas']['ServiceRequestListItem'][];
       next_cursor: string | null;
-      /** @description ownership=mine only: summary counts for the caller as a helper, over all their requests (not just this page). */
+      /** @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. ownership=mine only: summary counts for the caller as a helper, over the same requests as the mine list (all pages, not just this one). Never returned for another user or aggregated across users. */
       counts?: {
-        /** @description Requests the caller holds that are not in a terminal status. */
+        /** @description Requests the caller accepted that are not in a terminal status (CLOSED, CANCELLED, EXPIRED, UNFULFILLABLE). Includes CONFIRMED, which waits for the helper's CLOSE, and ESCALATED. */
         helping_now: number;
-        /** @description Requests the caller held that reached CLOSED, CANCELLED, EXPIRED or UNFULFILLABLE in the last 30 days. */
+        /** @description Requests the caller accepted that reached CLOSED in the last 30 days (rolling 30 x 24 hours on the server clock, by terminal time, inclusive). CANCELLED is not counted as closed. */
         closed_last_30_days: number;
       };
     };
@@ -1697,7 +1697,7 @@ export interface components {
       created_at: string;
       /**
        * Format: date-time
-       * @description When someone accepted the request; null before. Shown only to the requester and the accepter, like meeting_place.
+       * @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. When the request was accepted (the chat thread's creation time). null when no accept time is recorded: before accept, or legacy accepted requests. null does not mean not accepted. Not consent evidence (D-051). Shown only to the requester and the user recorded as having accepted, like meeting_place.
        */
       accepted_at: string | null;
       widened: boolean;
@@ -1950,7 +1950,7 @@ export interface components {
     CatalogResourceList: {
       resources: components['schemas']['CatalogResource'][];
       limit: number;
-      /** @description Resources matching the category and county filters across all pages. */
+      /** @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. Resources matching the category and county filters across all pages, under the same tenant and visibility filters as the listed items. */
       total: number;
       next_cursor: string | null;
     };
@@ -1984,7 +1984,7 @@ export interface components {
       last_message_at: string | null;
       /**
        * Format: date-time
-       * @description When the request was accepted. Always present in responses (a thread exists only after accept); optional in the contract so clients written before it still type-check.
+       * @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. When the request was accepted (the thread's creation time; a thread exists only after accept). Always present in responses; optional in the contract so clients written before it still type-check. Not consent evidence (D-051).
        */
       accepted_at?: string;
       /** @description The request is in a terminal status. */

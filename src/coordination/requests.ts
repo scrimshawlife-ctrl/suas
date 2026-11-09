@@ -21,6 +21,7 @@ import {
   assertServiceCategory,
   resolveRequestTransition,
   StaleRequestStateError,
+  TERMINAL_REQUEST_STATUSES,
   type ServiceCategory,
   type ServiceRequestCommand,
   type ServiceRequestStatus,
@@ -280,7 +281,8 @@ export async function executeServiceRequestCommandInTx(
     });
   }
 
-  const terminal = ['CLOSED', 'CANCELLED', 'EXPIRED', 'UNFULFILLABLE'].includes(transition.to);
+  // One terminal list for the state machine and the helper counts (DISPATCH.md §4).
+  const terminal = TERMINAL_REQUEST_STATUSES.includes(transition.to);
   const updated = await tx.query<RequestRow>(
     `UPDATE service_requests
        SET status = $3::suas_service_request_status,

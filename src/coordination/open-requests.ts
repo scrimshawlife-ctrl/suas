@@ -273,8 +273,14 @@ export async function readRequestList(
 }
 
 /**
- * A helper's summary counts: requests they hold that are not terminal, and requests of
- * theirs that reached a terminal status in the last 30 days (by `terminal_at`).
+ * A helper's summary counts, over the same rows as the `ownership=mine` list (the requests the
+ * helper is recorded as having accepted). Proposal: suas-specs #69 Round 7 (D-057), not
+ * released.
+ * - `helping_now`: not in a terminal status of DISPATCH.md §4 (0.7.0). That includes
+ *   CONFIRMED, which waits for the helper's CLOSE, and ESCALATED, which can return.
+ * - `closed_last_30_days`: reached CLOSED in a rolling 30 x 24 hours on the database clock,
+ *   by `terminal_at`, inclusive. CANCELLED is not counted as closed, and EXPIRED and
+ *   UNFULFILLABLE cannot follow an accept.
  */
 export async function readHelperRequestCounts(
   db: Queryable,
@@ -283,13 +289,15 @@ export async function readHelperRequestCounts(
 ): Promise<HelperRequestCounts> {
   const result = await db.query<{ helping_now: string; closed_last_30_days: string }>(
     `WITH held AS (
-       SELECT r.status = ANY($3::suas_service_request_status[]) AS terminal, r.terminal_at
+       SELECT r.status = ANY($3::suas_service_request_status[]) AS terminal,
+              r.status = 'CLOSED' AS closed,
+              r.terminal_at
          FROM service_requests r
         WHERE r.tenant_id = $1 AND r.accepted_by_user_id = $2::uuid
      )
      SELECT count(*) FILTER (WHERE NOT terminal) AS helping_now,
             count(*) FILTER (
-              WHERE terminal AND terminal_at >= now() - interval '30 days'
+              WHERE closed AND terminal_at >= now() - interval '30 days'
             ) AS closed_last_30_days
        FROM held`,
     [tenantId, helperUserId, [...TERMINAL_REQUEST_STATUSES]],
