@@ -11,7 +11,7 @@ import {
 } from './helpers';
 
 const RELEASED_NOTICE = 'The helper released your request. It is back on the open list.';
-const EXPIRED_NOTICE = 'Your request expired. No one accepted it within 72 hours.';
+const EXPIRED_NOTICE = 'Your request expired 72 hours after you sent it.';
 const CLOSED_LINE = 'This helper released the request. This chat is closed.';
 
 async function newHelper(

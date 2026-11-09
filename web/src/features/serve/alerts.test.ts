@@ -35,7 +35,11 @@ describe('alertSubjectPath', () => {
 
 describe('alertText', () => {
   it('words the expiry and release notices', () => {
-    expect(alertText('service_request_expired')).toMatch(/^Your request expired\./);
+    // True whether or not someone accepted and then released it: release keeps the clock (R8.4).
+    expect(alertText('service_request_expired')).toBe(
+      'Your request expired 72 hours after you sent it',
+    );
+    expect(alertText('service_request_expired')).not.toMatch(/No one accepted/);
     expect(alertText('service_request_released')).toMatch(/^The helper released your request\./);
   });
 });

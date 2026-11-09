@@ -4,9 +4,9 @@ import { paths } from '../../app/paths';
 /** The query parameter that names one thread of a request, as in `?thread=<chat_thread_id>`. */
 export const THREAD_PARAM = 'thread';
 
-/** A release closed the thread: it can be read but not written to. */
+/** A release ended the thread (`released_at` set): it can be read but not written to. */
 export function isReadOnly(thread: ChatThread | undefined): boolean {
-  return typeof thread?.closed_at === 'string';
+  return typeof thread?.released_at === 'string';
 }
 
 /** One request can have several threads, so the thread id (when sent) identifies a row. */

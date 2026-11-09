@@ -42,7 +42,7 @@ describe('notification reasons', () => {
 
   it('words the expiry and release notices plainly', () => {
     expect(describeReason('service_request_expired')).toBe(
-      'Your request expired. No one accepted it within 72 hours.',
+      'Your request expired 72 hours after you sent it.',
     );
     expect(describeReason('service_request_released')).toBe(
       'The helper released your request. It is back on the open list.',

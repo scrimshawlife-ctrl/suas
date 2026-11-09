@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChatThread } from '../../api/types';
 import { isReadOnly, pickThread, threadHref, threadKey } from './threads';
 
-const thread = (id: string, closedAt: string | null, request = 'r1'): ChatThread => ({
+const thread = (id: string, releasedAt: string | null, request = 'r1'): ChatThread => ({
   chat_thread_id: id,
   service_request_id: request,
   category: 'FOOD',
@@ -11,7 +11,7 @@ const thread = (id: string, closedAt: string | null, request = 'r1'): ChatThread
   last_message_body: null,
   last_message_at: null,
   closed: false,
-  closed_at: closedAt,
+  released_at: releasedAt,
   role: 'REQUESTER',
   last_message_from_me: null,
 });
@@ -20,10 +20,10 @@ const live = thread('t-live', null);
 const old = thread('t-old', '2026-11-09T10:00:00Z');
 
 describe('thread helpers', () => {
-  it('reads closed_at as read-only, and a missing or null one as live', () => {
+  it('reads a released_at thread as read-only, and a missing or null one as live', () => {
     expect(isReadOnly(old)).toBe(true);
     expect(isReadOnly(live)).toBe(false);
-    expect(isReadOnly({ ...live, closed_at: undefined })).toBe(false);
+    expect(isReadOnly({ ...live, released_at: undefined })).toBe(false);
     expect(isReadOnly(undefined)).toBe(false);
   });
 

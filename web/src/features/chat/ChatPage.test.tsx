@@ -460,7 +460,7 @@ describe('threads closed by a release', () => {
     chat_thread_id: LIVE_ID,
     counterpart_display_name: 'Dee R.',
     last_message_body: 'Hello from Dee',
-    closed_at: null,
+    released_at: null,
   };
   const oldThread = {
     ...base,
@@ -468,7 +468,7 @@ describe('threads closed by a release', () => {
     counterpart_display_name: 'Marcus T.',
     last_message_body: 'Sorry, I have to step back',
     last_message_at: '2026-11-04T19:00:00.000Z',
-    closed_at: '2026-11-04T19:30:00.000Z',
+    released_at: '2026-11-04T19:30:00.000Z',
   };
 
   function mockThreads(threadList: unknown[]) {
