@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
+import { expireDueRequests } from '../../src/coordination/expiry.js';
 import {
   executeServiceRequestCommand,
   NotRequestHolderError,
@@ -118,7 +119,7 @@ async function openIds(who: Person): Promise<string[]> {
 async function threadsOf(who: Person) {
   const response = await get(who, '/chat/threads');
   expect(response.statusCode).toBe(200);
-  const body: { threads: { service_request_id: string; closed_at: string | null }[] } =
+  const body: { threads: { service_request_id: string; released_at: string | null }[] } =
     response.json();
   return body.threads;
 }
@@ -175,7 +176,7 @@ describe('who may release, and why', () => {
     );
     expect(stored.rows[0]).toEqual({ status: 'ACCEPTED', accepted_by_user_id: bystander.userId });
     const live = await pool().query(
-      `SELECT 1 FROM chat_threads WHERE service_request_id = $1 AND closed_at IS NULL`,
+      `SELECT 1 FROM chat_threads WHERE service_request_id = $1 AND released_at IS NULL`,
       [id],
     );
     expect(live.rowCount).toBe(1);
@@ -254,7 +255,7 @@ describe('after a release', () => {
     expect(refused.json().error.code).toBe('CHAT_CLOSED');
     const threads = await threadsOf(requester);
     expect(threads).toHaveLength(1);
-    expect(threads[0]?.closed_at).not.toBeNull();
+    expect(threads[0]?.released_at).not.toBeNull();
   });
 });
 
@@ -272,11 +273,11 @@ describe('accepting again', () => {
     const detail = (await get(helper, `/service-requests/${id}`)).json();
     expect(detail.status).toBe('ACCEPTED');
     expect(Date.parse(detail.accepted_at)).toBeGreaterThan(Date.parse(firstAt));
-    const threads = await pool().query<{ closed_at: Date | null }>(
-      `SELECT closed_at FROM chat_threads WHERE service_request_id = $1 ORDER BY created_at`,
+    const threads = await pool().query<{ released_at: Date | null }>(
+      `SELECT released_at FROM chat_threads WHERE service_request_id = $1 ORDER BY created_at`,
       [id],
     );
-    expect(threads.rows.map((row) => row.closed_at !== null)).toEqual([true, false]);
+    expect(threads.rows.map((row) => row.released_at !== null)).toEqual([true, false]);
 
     // The new thread starts empty and takes messages from both sides.
     const empty = await get(helper, `/service-requests/${id}/chat/messages`);
@@ -286,9 +287,46 @@ describe('accepting again', () => {
 
     // The helper lists only the live thread; the requester also sees the closed one.
     expect(await threadsOf(helper)).toHaveLength(1);
-    const requesterClosed = (await threadsOf(requester)).map((t) => t.closed_at !== null);
+    const requesterClosed = (await threadsOf(requester)).map((t) => t.released_at !== null);
     expect(requesterClosed.sort()).toEqual([false, true]);
     const counts = await get(helper, '/service-requests?ownership=mine');
     expect(counts.json().counts.helping_now).toBe(1);
+  });
+});
+
+describe('the expiry clock after a release', () => {
+  it('keeps the original submitted_at through a release and a re-accept (R8.4, D-061)', async () => {
+    const { helper, id } = await acceptedRequest();
+    // Stand in for a request first submitted 73 hours ago.
+    const original = await pool().query<{ submitted_at: Date }>(
+      `UPDATE service_requests SET submitted_at = now() - interval '73 hours'
+        WHERE service_request_id = $1 RETURNING submitted_at`,
+      [id],
+    );
+    const submittedAt = original.rows[0]?.submitted_at.toISOString();
+    const storedSubmittedAt = async () =>
+      (
+        await pool().query<{ submitted_at: Date }>(
+          `SELECT submitted_at FROM service_requests WHERE service_request_id = $1`,
+          [id],
+        )
+      ).rows[0]?.submitted_at.toISOString();
+
+    expect((await command(helper, id, 'RELEASE', { reason: 'cannot make it' })).statusCode).toBe(
+      200,
+    );
+    expect(await storedSubmittedAt()).toBe(submittedAt);
+    expect((await accept(helper, id)).statusCode).toBe(200);
+    expect((await command(helper, id, 'RELEASE', { reason: 'still cannot' })).statusCode).toBe(200);
+    expect(await storedSubmittedAt()).toBe(submittedAt);
+
+    // Waiting again after the release, it expires on the first submit's 72-hour clock.
+    const result = await expireDueRequests(pool());
+    expect(result.expired.map((item) => item.serviceRequestId)).toContain(id);
+    const after = await pool().query<{ status: string }>(
+      `SELECT status FROM service_requests WHERE service_request_id = $1`,
+      [id],
+    );
+    expect(after.rows[0]?.status).toBe('EXPIRED');
   });
 });

@@ -50,7 +50,7 @@ export async function readRequestExpiryHours(db: Queryable): Promise<number> {
 /**
  * Due: still waiting for an accept, no holder, and submitted at or before the cutoff.
  * `$1` is the cutoff (the clock minus the TTL) and `$2` the waiting statuses. A release
- * restarts `submitted_at`, so a released request gets a fresh TTL.
+ * keeps `submitted_at`, so a released request expires on its original clock (R8.4, D-061).
  */
 const DUE_CONDITIONS = `
   r.status = ANY($2::suas_service_request_status[])

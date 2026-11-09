@@ -49,7 +49,7 @@ interface ThreadRow {
   chat_thread_id: string;
   requester_user_id: string;
   accepted_by_user_id: string;
-  closed_at: Date | null;
+  released_at: Date | null;
 }
 
 export async function resolveChatAccess(
@@ -58,10 +58,10 @@ export async function resolveChatAccess(
   serviceRequestId: string,
 ): Promise<ChatAccess> {
   const thread = await db.query<ThreadRow>(
-    `SELECT chat_thread_id, requester_user_id, accepted_by_user_id, closed_at
+    `SELECT chat_thread_id, requester_user_id, accepted_by_user_id, released_at
        FROM chat_threads
       WHERE tenant_id = $1 AND service_request_id = $2
-      ORDER BY (closed_at IS NULL) DESC, created_at DESC
+      ORDER BY (released_at IS NULL) DESC, created_at DESC
       LIMIT 1`,
     [caller.tenantId, serviceRequestId],
   );
@@ -70,7 +70,7 @@ export async function resolveChatAccess(
     if (row.requester_user_id === caller.userId) {
       return access(row, serviceRequestId, row.accepted_by_user_id);
     }
-    if (row.accepted_by_user_id === caller.userId && row.closed_at === null) {
+    if (row.accepted_by_user_id === caller.userId && row.released_at === null) {
       const stands = await requestHeldInCurrentCycle(
         db,
         caller.tenantId,

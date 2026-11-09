@@ -1124,9 +1124,9 @@ describe('0020 request expiry and release', () => {
            VALUES ($1, $2, $3, $4, $5)`,
           [randomUUID(), tenantId, accepted, requester, other],
         );
-      // A second live thread is refused; once the first is closed, a new one is allowed.
+      // A second live thread is refused; once the first is released, a new one is allowed.
       await expect(insertThread()).rejects.toThrow(/chat_threads_one_live_per_request_idx/);
-      await pool.query(`UPDATE chat_threads SET closed_at = now() WHERE chat_thread_id = $1`, [
+      await pool.query(`UPDATE chat_threads SET released_at = now() WHERE chat_thread_id = $1`, [
         threadId,
       ]);
       await insertThread();

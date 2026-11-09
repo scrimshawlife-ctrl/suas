@@ -12,7 +12,7 @@
 -- and a re-accept opens a new one. Backfilled from the thread made in the accept transaction.
 --
 -- chat_threads: a request may now have many threads over time, but only one live one. A
--- release sets closed_at; the next accept inserts a new row. The partial unique index
+-- release sets released_at; the next accept inserts a new row. The partial unique index
 -- keeps "one live thread per request" and is the ON CONFLICT target of the accept.
 
 INSERT INTO app_settings (setting_key, value) VALUES ('request_expiry_hours', '72'::jsonb);
@@ -26,11 +26,11 @@ UPDATE service_requests r
 
 ALTER TABLE chat_threads
     DROP CONSTRAINT chat_threads_service_request_id_key,
-    ADD COLUMN closed_at timestamptz;
+    ADD COLUMN released_at timestamptz;
 
 CREATE UNIQUE INDEX chat_threads_one_live_per_request_idx
     ON chat_threads (service_request_id)
-    WHERE closed_at IS NULL;
+    WHERE released_at IS NULL;
 
 -- Expiry pickup. The widening index above skips requests that already widened, and the
 -- expiry job must find those too.

@@ -70,7 +70,7 @@ export async function insertChatMessage(
     `INSERT INTO chat_messages (chat_message_id, tenant_id, chat_thread_id, sender_user_id, body)
      SELECT $1, t.tenant_id, t.chat_thread_id, $4, $5
        FROM chat_threads t
-      WHERE t.tenant_id = $2 AND t.chat_thread_id = $3 AND t.closed_at IS NULL`,
+      WHERE t.tenant_id = $2 AND t.chat_thread_id = $3 AND t.released_at IS NULL`,
     [chatMessageId, input.tenantId, input.chatThreadId, input.senderUserId, input.body],
   );
   if ((inserted.rowCount ?? 0) === 0) throw new ChatClosedError();

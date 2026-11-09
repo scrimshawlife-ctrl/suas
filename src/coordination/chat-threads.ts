@@ -37,14 +37,14 @@ export async function createChatThreadInTx(
        INSERT INTO chat_threads
          (chat_thread_id, tenant_id, service_request_id, requester_user_id, accepted_by_user_id)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (service_request_id) WHERE closed_at IS NULL DO NOTHING
+       ON CONFLICT (service_request_id) WHERE released_at IS NULL DO NOTHING
        RETURNING chat_thread_id, service_request_id, requester_user_id, accepted_by_user_id
      )
      SELECT * FROM inserted
      UNION ALL
      SELECT chat_thread_id, service_request_id, requester_user_id, accepted_by_user_id
        FROM chat_threads
-      WHERE service_request_id = $3 AND tenant_id = $2 AND closed_at IS NULL
+      WHERE service_request_id = $3 AND tenant_id = $2 AND released_at IS NULL
      LIMIT 1`,
     [
       randomUUID(),
@@ -70,8 +70,8 @@ export async function closeChatThreadInTx(
   input: { tenantId: string; serviceRequestId: string },
 ): Promise<boolean> {
   const result = await tx.query(
-    `UPDATE chat_threads SET closed_at = now()
-      WHERE tenant_id = $1 AND service_request_id = $2 AND closed_at IS NULL`,
+    `UPDATE chat_threads SET released_at = now()
+      WHERE tenant_id = $1 AND service_request_id = $2 AND released_at IS NULL`,
     [input.tenantId, input.serviceRequestId],
   );
   return (result.rowCount ?? 0) > 0;

@@ -332,14 +332,15 @@ export async function executeServiceRequestCommandInTx(
 
   // One terminal list for the state machine and the helper counts (DISPATCH.md §4).
   const terminal = TERMINAL_REQUEST_STATUSES.includes(transition.to);
-  // A release hands the request back: the holder goes, and submitted_at restarts below.
+  // A release hands the request back: the holder goes. submitted_at is kept, so the 72-hour
+  // expiry clock keeps running from the first submit (suas-specs R8.4, D-061).
   const released = input.command === 'RELEASE';
   const updated = await tx.query<RequestRow>(
     `UPDATE service_requests
        SET status = $3::suas_service_request_status,
            updated_at = now(),
            status_reason = COALESCE($4, status_reason),
-           submitted_at = CASE WHEN $3::text = 'SUBMITTED' THEN now() ELSE submitted_at END,
+           submitted_at = CASE WHEN $3::text = 'SUBMITTED' AND NOT $6::boolean THEN now() ELSE submitted_at END,
            terminal_at = CASE WHEN $5::boolean THEN now() ELSE terminal_at END,
            accepted_by_user_id = CASE WHEN $6::boolean THEN NULL ELSE accepted_by_user_id END,
            accepted_at = CASE WHEN $6::boolean THEN NULL ELSE accepted_at END

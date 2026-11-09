@@ -82,7 +82,7 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
         last_message_body: thread.lastMessageBody,
         last_message_at: thread.lastMessageAt?.toISOString() ?? null,
         accepted_at: thread.acceptedAt.toISOString(),
-        closed_at: thread.closedAt?.toISOString() ?? null,
+        released_at: thread.releasedAt?.toISOString() ?? null,
         closed: thread.closed,
         role: thread.role,
         last_message_from_me: thread.lastMessageFromMe,
