@@ -112,7 +112,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    get?: never;
+    /**
+     * List the caller's unfinished Check-In that can still be resumed
+     * @description Round 8 R8.10 (contributor proposal): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.
+     */
+    get: operations['listCheckIns'];
     put?: never;
     /** Start a Check-In on the published questionnaire */
     post: operations['startCheckIn'];
@@ -1515,6 +1519,10 @@ export interface components {
     CheckInWithQuestions: components['schemas']['CheckIn'] & {
       questions: components['schemas']['CheckInQuestion'][];
     };
+    CheckInDetail: components['schemas']['CheckInWithQuestions'] & {
+      /** @description Questions that already have a saved answer, so a resumed Check-In can skip them. */
+      answered_question_ids: string[];
+    };
     CheckInResponseRequest: {
       /** Format: uuid */
       question_id: string;
@@ -2293,6 +2301,41 @@ export interface operations {
       401: components['responses']['Error'];
     };
   };
+  listCheckIns: {
+    parameters: {
+      query: {
+        status: 'IN_PROGRESS' | 'in_progress';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded list; at most one is expected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            check_ins: components['schemas']['CheckIn'][];
+          };
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
   startCheckIn: {
     parameters: {
       query?: never;
@@ -2334,13 +2377,13 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Check-in with its questions */
+      /** @description Check-in with its questions and the questions already answered */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['CheckInWithQuestions'];
+          'application/json': components['schemas']['CheckInDetail'];
         };
       };
       401: components['responses']['Error'];

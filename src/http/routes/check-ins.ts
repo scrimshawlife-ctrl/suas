@@ -25,7 +25,9 @@ import {
   completeCheckIn,
   effectiveSignal,
   findCheckIn,
+  listAnsweredQuestionIds,
   listQuestionsWithOptions,
+  listResumableCheckIns,
   saveResponse,
   startCheckIn,
   type CheckIn,
@@ -39,6 +41,9 @@ export interface CheckInRouteDeps {
 }
 
 const idParams = z.object({ id: z.string().uuid() });
+
+// R8.10: the only list filter is the caller's own unfinished Check-In.
+const listQuery = z.object({ status: z.enum(['IN_PROGRESS', 'in_progress']) });
 
 const responseBody = z.object({
   question_id: z.string().uuid(),
@@ -97,13 +102,26 @@ export function registerCheckInRoutes(app: FastifyInstance, deps: CheckInRouteDe
     });
   });
 
+  app.get(`${API_PREFIX}/check-ins`, async (request) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    await requireVerifiedVeteran(deps.pool, context);
+    listQuery.parse(request.query);
+    const checkIns = await listResumableCheckIns(deps.pool, context.tenantId, context.userId);
+    return { check_ins: checkIns.map(publicCheckIn) };
+  });
+
   app.get(`${API_PREFIX}/check-ins/:id`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     await requireVerifiedVeteran(deps.pool, context);
     const { id } = idParams.parse(request.params);
     const checkIn = await loadOwnedCheckIn(deps.pool, context.tenantId, context.userId, id);
     const questions = await listQuestionsWithOptions(deps.pool, checkIn.questionnaireVersion);
-    return { ...publicCheckIn(checkIn), questions: publicQuestions(questions) };
+    const answered = await listAnsweredQuestionIds(deps.pool, checkIn.checkInId);
+    return {
+      ...publicCheckIn(checkIn),
+      questions: publicQuestions(questions),
+      answered_question_ids: answered,
+    };
   });
 
   app.post(`${API_PREFIX}/check-ins/:id/responses`, async (request) => {

@@ -374,6 +374,33 @@ export async function findInProgressCheckIn(
   return row === undefined ? undefined : toCheckIn(row);
 }
 
+// Round 8 R8.10 (contributor proposal): an unfinished Check-In is resumable for
+// 24 h after it started; after that the idle sweep marks it ABANDONED (kept).
+export const CHECK_IN_RESUME_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** The most unfinished Check-Ins the resume list returns; one is expected. */
+const RESUMABLE_LIST_LIMIT = 5;
+
+/** The veteran's in-flight Check-Ins still inside the resume window, newest first. */
+export async function listResumableCheckIns(
+  db: Queryable,
+  tenantId: string,
+  veteranUserId: string,
+  now: Date = new Date(),
+): Promise<readonly CheckIn[]> {
+  const cutoff = new Date(now.getTime() - CHECK_IN_RESUME_WINDOW_MS);
+  const result = await db.query<CheckInRow>(
+    `SELECT ${CHECK_IN_COLUMNS} FROM check_ins
+     WHERE tenant_id = $1 AND veteran_user_id = $2
+       AND status IN ('STARTED', 'IN_PROGRESS')
+       AND started_at >= $3
+     ORDER BY started_at DESC, check_in_id DESC
+     LIMIT $4`,
+    [tenantId, veteranUserId, cutoff.toISOString(), RESUMABLE_LIST_LIMIT],
+  );
+  return result.rows.map(toCheckIn);
+}
+
 /** Question ids that already have a response on this Check-In. */
 export async function listAnsweredQuestionIds(
   db: Queryable,
@@ -561,6 +588,26 @@ export async function abandonCheckIn(
     throw new CheckInStateError('Only an in-flight Check-In can be abandoned.');
   }
   return toCheckIn(row);
+}
+
+/**
+ * Mark in-flight Check-Ins started before the resume window as ABANDONED.
+ *
+ * One guarded UPDATE: a row completed or abandoned meanwhile no longer matches,
+ * so a replay or a concurrent worker changes nothing. Rows stay stored (§4.2).
+ */
+export async function abandonStaleCheckIns(
+  pool: Pool,
+  options: { now?: Date } = {},
+): Promise<{ abandoned: number }> {
+  const now = options.now ?? new Date();
+  const cutoff = new Date(now.getTime() - CHECK_IN_RESUME_WINDOW_MS);
+  const result = await pool.query(
+    `UPDATE check_ins SET status = 'ABANDONED', abandoned_at = $2, updated_at = $2
+     WHERE status IN ('STARTED', 'IN_PROGRESS') AND started_at < $1`,
+    [cutoff.toISOString(), now.toISOString()],
+  );
+  return { abandoned: result.rowCount ?? 0 };
 }
 
 export async function findCheckIn(

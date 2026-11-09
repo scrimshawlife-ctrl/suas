@@ -37,7 +37,9 @@ export {
 } from './sv-001.js';
 export {
   abandonCheckIn,
+  abandonStaleCheckIns,
   canonicalInputFor,
+  CHECK_IN_RESUME_WINDOW_MS,
   CHECK_IN_STATUSES,
   CheckInStateError,
   completeCheckIn,
@@ -46,6 +48,7 @@ export {
   findCheckIn,
   findInProgressCheckIn,
   listAnsweredQuestionIds,
+  listResumableCheckIns,
   listQuestions,
   listQuestionsWithOptions,
   publishQuestionnaireVersion,

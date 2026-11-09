@@ -277,6 +277,66 @@
       }
     },
     "/api/v0/check-ins": {
+      "get": {
+        "tags": ["check-ins"],
+        "summary": "List the caller's unfinished Check-In that can still be resumed",
+        "description": "Round 8 R8.10 (contributor proposal): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.",
+        "operationId": "listCheckIns",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["IN_PROGRESS", "in_progress"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded list; at most one is expected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["check_ins"],
+                  "properties": {
+                    "check_ins": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CheckIn"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "x-requires": ["verified_veteran"]
+      },
       "post": {
         "tags": ["check-ins"],
         "summary": "Start a Check-In on the published questionnaire",
@@ -331,11 +391,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Check-in with its questions",
+            "description": "Check-in with its questions and the questions already answered",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CheckInWithQuestions"
+                  "$ref": "#/components/schemas/CheckInDetail"
                 }
               }
             }
@@ -4665,6 +4725,27 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/CheckInQuestion"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CheckInDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CheckInWithQuestions"
+          },
+          {
+            "type": "object",
+            "required": ["answered_question_ids"],
+            "properties": {
+              "answered_question_ids": {
+                "type": "array",
+                "description": "Questions that already have a saved answer, so a resumed Check-In can skip them.",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
