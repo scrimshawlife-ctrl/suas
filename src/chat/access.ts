@@ -45,6 +45,8 @@ export interface ChatAccess {
   readonly serviceRequestId: string;
   /** The other participant: the one who should receive a push of the caller's message. */
   readonly counterpartUserId: string;
+  /** A release ended this thread (R8.5): it is read-only. */
+  readonly released?: boolean;
 }
 
 interface ThreadRow {
@@ -100,5 +102,10 @@ export async function resolveChatAccess(
 }
 
 function access(row: ThreadRow, serviceRequestId: string, counterpartUserId: string): ChatAccess {
-  return { chatThreadId: row.chat_thread_id, serviceRequestId, counterpartUserId };
+  return {
+    chatThreadId: row.chat_thread_id,
+    serviceRequestId,
+    counterpartUserId,
+    released: row.released_at !== null,
+  };
 }

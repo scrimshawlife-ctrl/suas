@@ -188,17 +188,29 @@ describe('the requester and earlier threads', () => {
     ).rejects.toBeInstanceOf(ChatClosedError);
   });
 
-  it('keeps posting on the live thread when a thread is named in the query', async () => {
-    const { requester, id, oldId } = await releasedAndReaccepted();
-    const posted = await app.server.inject({
-      method: 'POST',
-      url: `/api/v0${messagesUrl(id, oldId)}`,
-      headers: keyed(requester),
-      payload: { body: 'Still live' },
-    });
-    expect(posted.statusCode).toBe(201);
+  it('refuses a post naming an earlier thread with the same 404 as an unknown id', async () => {
+    const { requester, id, oldId, liveId } = await releasedAndReaccepted();
+    const post = (thread: string) =>
+      app.server.inject({
+        method: 'POST',
+        url: `/api/v0${messagesUrl(id, thread)}`,
+        headers: keyed(requester),
+        payload: { body: 'Meant for the old chat' },
+      });
+    const old = await post(oldId);
+    const unknown = await post(randomUUID());
+    expect(old.statusCode).toBe(404);
+    expect(unknown.statusCode).toBe(404);
+    expect(old.json().error.code).toBe(unknown.json().error.code);
+    expect(old.json().error.message).toBe(unknown.json().error.message);
+    // Nothing was written to either thread.
     expect(await bodies(requester, id, oldId)).toEqual(['Old reply', 'Old hello']);
-    expect(await bodies(requester, id)).toEqual(['Still live', 'New hello']);
+    expect(await bodies(requester, id)).toEqual(['New hello']);
+
+    // Naming the live thread posts to it.
+    const live = await post(liveId);
+    expect(live.statusCode).toBe(201);
+    expect(await bodies(requester, id)).toEqual(['Meant for the old chat', 'New hello']);
   });
 });
 
