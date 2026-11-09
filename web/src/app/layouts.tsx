@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { useMe } from '../api/me';
-import { useSessionToken } from '../api/token-store';
+import { useMfaElevated, useSessionToken } from '../api/token-store';
 import { AdminLayout, type AdminNavItem } from '../components/AdminLayout';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { CrisisStrip } from '../components/CrisisStrip';
@@ -11,6 +11,8 @@ import { ModeSwitch, type Mode } from '../components/ModeSwitch';
 import { PublicHeader } from '../components/PublicHeader';
 import { ServeHeader } from '../components/ServeHeader';
 import { VeteranHeader } from '../components/VeteranHeader';
+import { useBuildInfo } from '../features/admin/api';
+import { adminScopeLine } from '../features/admin/scope';
 import { useChatUnreadCount } from '../features/chat/unread';
 import { setMode, useMode } from './mode-store';
 import { navCurrent, type NavCurrent } from './nav-current';
@@ -143,6 +145,8 @@ export function AutoLayout() {
 const adminNav: readonly AdminNavItem[] = [
   { label: 'Overview', to: paths.admin },
   { label: 'Resource drafts', to: paths.adminDrafts },
+  { label: 'Access', to: paths.admin, soon: true },
+  { label: 'Published artifacts', to: paths.admin, soon: true },
   { label: 'Platform operations', to: paths.admin, soon: true },
   { label: 'Audit explorer', to: paths.admin, soon: true },
 ];
@@ -150,6 +154,8 @@ const adminNav: readonly AdminNavItem[] = [
 export function AdminShell() {
   const signOut = useSignOut();
   const { pathname } = useLocation();
+  const info = useBuildInfo(useMfaElevated());
+  const scope = adminScopeLine(info.data?.environment);
   const nav = adminNav.map((item) => ({
     ...item,
     current:
@@ -157,7 +163,7 @@ export function AdminShell() {
       (item.to === paths.admin ? pathname === paths.admin : pathname.startsWith(item.to)),
   }));
   return (
-    <AdminLayout nav={nav} onSignOut={signOut}>
+    <AdminLayout nav={nav} onSignOut={signOut} scope={scope}>
       <Outlet />
     </AdminLayout>
   );

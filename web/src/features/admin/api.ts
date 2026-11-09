@@ -25,10 +25,12 @@ const adapterCatalogKeys = resourceKeys('admin-adapter-catalog');
 const retry = (failureCount: number, error: unknown) =>
   !(isApiError(error) && error.status < 500) && failureCount < 2;
 
-export function useBuildInfo() {
+/** `enabled` is false before the MFA step-up, when the route would refuse the request. */
+export function useBuildInfo(enabled = true) {
   return useQuery(
     queryOptions({
       queryKey: buildInfoKeys.all,
+      enabled,
       queryFn: async () => {
         const { data } = await api.GET('/api/v0/admin/build-info');
         return requireData(data, 'build information');
