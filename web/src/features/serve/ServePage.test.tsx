@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,6 +40,7 @@ function renderServe() {
 }
 
 let listed: ReturnType<typeof open>[];
+let mineCounts: { helping_now: number; closed_last_30_days: number } | undefined;
 let mine: { service_requests: ReturnType<typeof open>[]; next_cursor: string | null };
 
 beforeEach(() => {
@@ -47,6 +48,7 @@ beforeEach(() => {
   client.GET.mockReset();
   client.POST.mockReset();
   listed = [open('r1', 'Groceries for two days'), open('r2', null)];
+  mineCounts = undefined;
   mine = { service_requests: [], next_cursor: null };
   client.GET.mockImplementation(
     (path: string, options?: { params?: { query?: { ownership?: string } } }) => {
@@ -55,7 +57,7 @@ beforeEach(() => {
       }
       if (path === '/api/v0/notifications') return Promise.resolve({ data: { notifications: [] } });
       if (options?.params?.query?.ownership === 'mine') {
-        return Promise.resolve({ data: mine });
+        return Promise.resolve({ data: { ...mine, counts: mineCounts } });
       }
       return Promise.resolve({ data: { service_requests: listed, next_cursor: null } });
     },
@@ -71,6 +73,21 @@ describe('Serve board', () => {
       await screen.findByRole('heading', { name: 'Ready to serve, Dee.' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Santa Clara County, newest first')).toBeInTheDocument();
+  });
+
+  it('summarises from the server counts, and falls back to the list when they are absent', async () => {
+    mineCounts = { helping_now: 2, closed_last_30_days: 4 };
+    const first = renderServe();
+    const summary = await screen.findByRole('region', { name: 'Your summary' });
+    expect(await within(summary).findByText('Closed in the last 30 days')).toBeInTheDocument();
+    expect(summary).toHaveTextContent(/You're helping now2Closed in the last 30 days4/);
+    first.unmount();
+
+    mineCounts = undefined;
+    renderServe();
+    const fallback = await screen.findByRole('region', { name: 'Your summary' });
+    await waitFor(() => expect(fallback).toHaveTextContent(/You're helping now0/));
+    expect(fallback).not.toHaveTextContent('Closed in the last 30 days');
   });
 
   it('removes the card and says so when someone else took the request (409)', async () => {
