@@ -481,24 +481,11 @@ function decodeResourceCursor(
   }
 }
 
-/**
- * Bounded, tenant-scoped catalog search.
- *
- * RESOURCES.md §8 and §10: never load the full catalog, never cross a tenant,
- * and never make an eligibility judgement — filters are recorded criteria only.
- * API.md §5: keyset cursor + limit (default 20, maximum 100).
- */
-export async function searchResources(
-  db: Queryable,
+/** WHERE conditions and bound values shared by the page query and the total. */
+function filterConditions(
   tenantId: string,
-  filters: ResourceSearchFilters = {},
-  page: { cursor?: string; limit?: number } = {},
-): Promise<ResourceSearchPage> {
-  const limit = Math.min(
-    Math.max(page.limit ?? RESOURCE_DEFAULT_PAGE_SIZE, 1),
-    RESOURCE_MAX_PAGE_SIZE,
-  );
-
+  filters: ResourceSearchFilters,
+): { conditions: string[]; values: unknown[] } {
   const conditions: string[] = ['tenant_id = $1'];
   const values: unknown[] = [tenantId];
 
@@ -517,6 +504,42 @@ export async function searchResources(
     values.push(filters.integrationMode);
     conditions.push(`$${values.length}::suas_integration_mode = ANY(integration_modes)`);
   }
+  return { conditions, values };
+}
+
+/** How many resources match the filters across all pages; cursor and limit do not apply. */
+export async function countResources(
+  db: Queryable,
+  tenantId: string,
+  filters: ResourceSearchFilters = {},
+): Promise<number> {
+  const { conditions, values } = filterConditions(tenantId, filters);
+  const result = await db.query<{ total: string }>(
+    `SELECT count(*) AS total FROM resources WHERE ${conditions.join(' AND ')}`,
+    values,
+  );
+  return Number(result.rows[0]?.total ?? 0);
+}
+
+/**
+ * Bounded, tenant-scoped catalog search.
+ *
+ * RESOURCES.md §8 and §10: never load the full catalog, never cross a tenant,
+ * and never make an eligibility judgement — filters are recorded criteria only.
+ * API.md §5: keyset cursor + limit (default 20, maximum 100).
+ */
+export async function searchResources(
+  db: Queryable,
+  tenantId: string,
+  filters: ResourceSearchFilters = {},
+  page: { cursor?: string; limit?: number } = {},
+): Promise<ResourceSearchPage> {
+  const limit = Math.min(
+    Math.max(page.limit ?? RESOURCE_DEFAULT_PAGE_SIZE, 1),
+    RESOURCE_MAX_PAGE_SIZE,
+  );
+
+  const { conditions, values } = filterConditions(tenantId, filters);
 
   if (page.cursor !== undefined) {
     const decoded = decodeResourceCursor(page.cursor);

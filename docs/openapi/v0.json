@@ -5906,7 +5906,7 @@
       },
       "CatalogResourceList": {
         "type": "object",
-        "required": ["resources", "limit", "next_cursor"],
+        "required": ["resources", "limit", "next_cursor", "total"],
         "properties": {
           "resources": {
             "type": "array",
@@ -5916,6 +5916,11 @@
           },
           "limit": {
             "type": "integer"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Resources matching the category and county filters across all pages."
           },
           "next_cursor": {
             "type": ["string", "null"]

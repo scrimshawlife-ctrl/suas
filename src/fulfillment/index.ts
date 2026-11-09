@@ -72,6 +72,7 @@ export {
   RESOURCE_MAX_PAGE_SIZE,
   ResourceValidationError,
   searchResources,
+  countResources,
   setResourceActive,
   veteranVisibleResource,
   verifyResource,

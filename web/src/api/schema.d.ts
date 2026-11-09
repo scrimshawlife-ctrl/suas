@@ -1938,6 +1938,8 @@ export interface components {
     CatalogResourceList: {
       resources: components['schemas']['CatalogResource'][];
       limit: number;
+      /** @description Resources matching the category and county filters across all pages. */
+      total: number;
       next_cursor: string | null;
     };
     ImmediateResources: {
