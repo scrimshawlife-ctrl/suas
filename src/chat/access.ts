@@ -7,7 +7,9 @@
  *
  * A thread is created when a request is accepted (migration 0013), so "no thread"
  * means "not accepted yet". Only the requester is told chat is unavailable; anyone
- * else gets the same 404 as a request that does not exist.
+ * else gets the same 404 as a request that does not exist. A release closes the thread
+ * (migration 0020): the requester can still read it, the released helper loses it, and
+ * the next accept opens a new live thread, which is the one a request resolves to.
  */
 
 import { ResourceNotVisibleError } from '../authz/index.js';
@@ -25,6 +27,17 @@ export class ChatUnavailableError extends Error {
   }
 }
 
+/** The thread was closed by a release, so nobody can post to it. */
+export class ChatClosedError extends Error {
+  readonly code = 'CHAT_CLOSED';
+  readonly httpStatus = 409;
+
+  constructor() {
+    super('This chat is closed. A new chat opens if someone accepts the request again.');
+    this.name = 'ChatClosedError';
+  }
+}
+
 export interface ChatAccess {
   readonly chatThreadId: string;
   readonly serviceRequestId: string;
@@ -36,6 +49,7 @@ interface ThreadRow {
   chat_thread_id: string;
   requester_user_id: string;
   accepted_by_user_id: string;
+  closed_at: Date | null;
 }
 
 export async function resolveChatAccess(
@@ -44,9 +58,11 @@ export async function resolveChatAccess(
   serviceRequestId: string,
 ): Promise<ChatAccess> {
   const thread = await db.query<ThreadRow>(
-    `SELECT chat_thread_id, requester_user_id, accepted_by_user_id
+    `SELECT chat_thread_id, requester_user_id, accepted_by_user_id, closed_at
        FROM chat_threads
-      WHERE tenant_id = $1 AND service_request_id = $2`,
+      WHERE tenant_id = $1 AND service_request_id = $2
+      ORDER BY (closed_at IS NULL) DESC, created_at DESC
+      LIMIT 1`,
     [caller.tenantId, serviceRequestId],
   );
   const row = thread.rows[0];
@@ -54,7 +70,7 @@ export async function resolveChatAccess(
     if (row.requester_user_id === caller.userId) {
       return access(row, serviceRequestId, row.accepted_by_user_id);
     }
-    if (row.accepted_by_user_id === caller.userId) {
+    if (row.accepted_by_user_id === caller.userId && row.closed_at === null) {
       const stands = await requestHeldInCurrentCycle(
         db,
         caller.tenantId,

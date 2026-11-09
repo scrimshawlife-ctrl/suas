@@ -1,4 +1,9 @@
-export { ChatUnavailableError, resolveChatAccess, type ChatAccess } from './access.js';
+export {
+  ChatClosedError,
+  ChatUnavailableError,
+  resolveChatAccess,
+  type ChatAccess,
+} from './access.js';
 export {
   CONNECT_TICKET_TTL_SECONDS,
   issueConnectTicket,

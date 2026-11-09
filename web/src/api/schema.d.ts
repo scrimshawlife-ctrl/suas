@@ -2019,6 +2019,11 @@ export interface components {
       /** @description The request is in a terminal status. */
       closed: boolean;
       /**
+       * Format: date-time
+       * @description Proposal: suas-specs V1_MVP_PROPOSAL.md R8.5, not released. When a release closed this thread; null while it is live. A closed thread is read-only and only its requester sees it. Always present in responses; optional in the contract so clients written before it still type-check.
+       */
+      closed_at?: string | null;
+      /**
        * @description The caller side of the thread.
        * @enum {string}
        */
@@ -3156,7 +3161,8 @@ export interface operations {
           | 'EXPIRE'
           | 'MARK_UNFULFILLABLE'
           | 'ESCALATE'
-          | 'RETURN_FROM_ESCALATION';
+          | 'RETURN_FROM_ESCALATION'
+          | 'RELEASE';
       };
       cookie?: never;
     };
@@ -4446,7 +4452,7 @@ export interface operations {
       400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
-      /** @description CHAT_UNAVAILABLE (not accepted yet) or IDEMPOTENCY_CONFLICT */
+      /** @description CHAT_UNAVAILABLE (not accepted yet), CHAT_CLOSED (a release closed the thread; the requester can still read it), or IDEMPOTENCY_CONFLICT */
       409: {
         headers: {
           [name: string]: unknown;
