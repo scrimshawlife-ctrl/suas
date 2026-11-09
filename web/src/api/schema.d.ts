@@ -405,7 +405,7 @@ export interface paths {
     /** List service requests for a visible case */
     get: operations['listCaseServiceRequests'];
     put?: never;
-    /** Create a service request under a visible case */
+    /** Create a service request under the caller's own case */
     post: operations['createCaseServiceRequest'];
     delete?: never;
     options?: never;
@@ -476,6 +476,26 @@ export interface paths {
     put?: never;
     /** Revoke an owned consent grant */
     post: operations['revokeConsent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/service-requests/{id}/commands/edit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Edit a service request nobody has accepted yet
+     * @description Requester only (404 for anyone who is neither requester nor accepter). Category never changes. Idempotency-Key is required.
+     */
+    post: operations['editServiceRequest'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1631,6 +1651,8 @@ export interface components {
         summary?: string;
         timing?: string;
         meeting_place?: string;
+        /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+        destination?: string;
       };
     };
     ServiceRequestFormRequest: {
@@ -1639,6 +1661,8 @@ export interface components {
       timing?: string;
       /** @description Where to meet. Required to submit FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE); optional for PEER_SUPPORT. Never shown in lists. */
       meeting_place?: string;
+      /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+      destination?: string;
     };
     ServiceRequestFormResult: components['schemas']['ServiceRequestRef'] & {
       replayed: boolean;
@@ -1693,6 +1717,8 @@ export interface components {
       summary: string | null;
       timing: string | null;
       meeting_place: string | null;
+      /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+      destination: string | null;
       /** Format: date-time */
       created_at: string;
       /**
@@ -1886,6 +1912,7 @@ export interface components {
       summary: string | null;
       timing: string | null;
       meeting_place: string | null;
+      destination: string | null;
       /** Format: uuid */
       service_request_id: string | null;
       /** Format: date-time */
@@ -1941,6 +1968,8 @@ export interface components {
       summary?: string;
       timing?: string | null;
       meeting_place?: string | null;
+      /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+      destination?: string | null;
     };
     IntakeSubmitResult: {
       service_request: components['schemas']['ServiceRequestRef'];
@@ -2054,6 +2083,21 @@ export interface components {
     /** @description Build provenance (app commit/version, spec version, manifest, environment, schema version). No secrets. */
     BuildInfo: {
       [key: string]: unknown;
+    };
+    /** @description Fields to change. Absent keys stay as they are. At least one field other than expected_status is required (400). */
+    ServiceRequestEditRequest: {
+      summary?: string;
+      /** @description null clears the timing. */
+      timing?: string | null;
+      /** @description null clears the meeting place; refused (422) for FOOD, TRANSPORTATION and SHELTER. */
+      meeting_place?: string | null;
+      /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+      destination?: string | null;
+      /** @description Optional stale-state check; 409 STALE_STATE when the request is in another status. */
+      expected_status?: string;
+    };
+    ServiceRequestEditResult: components['schemas']['ServiceRequestDetail'] & {
+      replayed: boolean;
     };
   };
   responses: {
@@ -2853,7 +2897,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has not passed the ID scan + selfie check */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2864,7 +2908,7 @@ export interface operations {
       };
       404: components['responses']['Error'];
       409: components['responses']['Error'];
-      /** @description COUNTY_REQUIRED: the person has not chosen a county */
+      /** @description COUNTY_REQUIRED: the person has not chosen a county; UNPROCESSABLE: destination given for a category other than TRANSPORTATION */
       422: {
         headers: {
           [name: string]: unknown;
@@ -3026,6 +3070,65 @@ export interface operations {
       401: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+    };
+  };
+  editServiceRequest: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ServiceRequestEditRequest'];
+      };
+    };
+    responses: {
+      /** @description The request after the edit, with the same fields as the detail read. On an idempotent replay the current detail is returned with replayed true; the edited text is never stored with the idempotency record. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ServiceRequestEditResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description FORBIDDEN: the caller is the person who accepted this request, not the requester */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+      /** @description ILLEGAL_TRANSITION when the request was accepted or is not SUBMITTED, TRIAGED or MATCHING; STALE_STATE when expected_status does not match */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description UNPROCESSABLE: meeting_place cleared on FOOD, TRANSPORTATION or SHELTER, or destination given for another category */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
     };
   };
   executeServiceRequestCommand: {

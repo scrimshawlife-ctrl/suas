@@ -1140,7 +1140,7 @@
       },
       "post": {
         "tags": ["cases"],
-        "summary": "Create a service request under a visible case",
+        "summary": "Create a service request under the caller's own case",
         "operationId": "createCaseServiceRequest",
         "security": [
           {
@@ -1186,7 +1186,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has not passed the ID scan + selfie check",
             "content": {
               "application/json": {
                 "schema": {
@@ -1202,7 +1202,7 @@
             "$ref": "#/components/responses/Error"
           },
           "422": {
-            "description": "COUNTY_REQUIRED: the person has not chosen a county",
+            "description": "COUNTY_REQUIRED: the person has not chosen a county; UNPROCESSABLE: destination given for a category other than TRANSPORTATION",
             "content": {
               "application/json": {
                 "schema": {
@@ -1444,6 +1444,89 @@
             "$ref": "#/components/responses/Error"
           }
         }
+      }
+    },
+    "/api/v0/service-requests/{id}/commands/edit": {
+      "post": {
+        "tags": ["cases"],
+        "summary": "Edit a service request nobody has accepted yet",
+        "operationId": "editServiceRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request after the edit, with the same fields as the detail read. On an idempotent replay the current detail is returned with replayed true; the edited text is never stored with the idempotency record.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequestEditResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "FORBIDDEN: the caller is the person who accepted this request, not the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "ILLEGAL_TRANSITION when the request was accepted or is not SUBMITTED, TRIAGED or MATCHING; STALE_STATE when expected_status does not match",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "UNPROCESSABLE: meeting_place cleared on FOOD, TRANSPORTATION or SHELTER, or destination given for another category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "x-requires": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceRequestEditRequest"
+              }
+            }
+          }
+        },
+        "description": "Requester only (404 for anyone who is neither requester nor accepter). Category never changes. Idempotency-Key is required."
       }
     },
     "/api/v0/service-requests/{id}/commands/{command}": {
@@ -4961,6 +5044,12 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 200
+              },
+              "destination": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events."
               }
             }
           }
@@ -4988,6 +5077,12 @@
             "minLength": 1,
             "maxLength": 200,
             "description": "Where to meet. Required to submit FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE); optional for PEER_SUPPORT. Never shown in lists."
+          },
+          "destination": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events."
           }
         },
         "additionalProperties": false
@@ -5125,6 +5220,7 @@
               "summary",
               "timing",
               "meeting_place",
+              "destination",
               "created_at",
               "accepted_at",
               "widened",
@@ -5141,6 +5237,10 @@
               },
               "meeting_place": {
                 "type": ["string", "null"]
+              },
+              "destination": {
+                "type": ["string", "null"],
+                "description": "Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events."
               },
               "created_at": {
                 "type": "string",
@@ -5674,6 +5774,7 @@
           "summary",
           "timing",
           "meeting_place",
+          "destination",
           "service_request_id",
           "created_at",
           "updated_at",
@@ -5707,6 +5808,10 @@
             "maxLength": 120
           },
           "meeting_place": {
+            "type": ["string", "null"],
+            "maxLength": 200
+          },
+          "destination": {
             "type": ["string", "null"],
             "maxLength": 200
           },
@@ -5907,6 +6012,12 @@
             "type": ["string", "null"],
             "minLength": 1,
             "maxLength": 200
+          },
+          "destination": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events."
           }
         },
         "additionalProperties": false,
@@ -6278,6 +6389,60 @@
         "type": "object",
         "additionalProperties": true,
         "description": "Build provenance (app commit/version, spec version, manifest, environment, schema version). No secrets."
+      },
+      "ServiceRequestEditRequest": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 280
+          },
+          "timing": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "null clears the timing."
+          },
+          "meeting_place": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "null clears the meeting place; refused (422) for FOOD, TRANSPORTATION and SHELTER."
+          },
+          "destination": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events."
+          },
+          "expected_status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Optional stale-state check; 409 STALE_STATE when the request is in another status."
+          }
+        },
+        "additionalProperties": false,
+        "minProperties": 1,
+        "description": "Fields to change. Absent keys stay as they are. At least one field other than expected_status is required (400)."
+      },
+      "ServiceRequestEditResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ServiceRequestDetail"
+          },
+          {
+            "type": "object",
+            "required": ["replayed"],
+            "properties": {
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
       }
     },
     "responses": {
