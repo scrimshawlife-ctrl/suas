@@ -32,10 +32,21 @@ describe('notification reasons', () => {
     expect(Object.keys(REASON_TEXT).sort()).toEqual([
       'followup_due',
       'qrf.responder_notified',
+      'service_request_expired',
+      'service_request_released',
       'service_request_update',
       'trusted_contact_alert',
     ]);
     expect(describeReason('followup_due')).toBe('A follow-up is due.');
+  });
+
+  it('words the expiry and release notices plainly', () => {
+    expect(describeReason('service_request_expired')).toBe(
+      'Your request expired. No one accepted it within 72 hours.',
+    );
+    expect(describeReason('service_request_released')).toBe(
+      'The helper released your request. It is back on the open list.',
+    );
   });
 
   it('falls back for a code it does not know, including inherited object keys', () => {
