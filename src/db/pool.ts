@@ -119,7 +119,7 @@ export function createPool(config: SuasConfig, mode: PoolMode = 'node'): Pool {
   }
 
   const settings = databaseClientSettings(config);
-  return new Pool({
+  const pool = new Pool({
     ...settings,
     max: config.database.poolMax,
     // Finite timeouts, per ARCHITECTURE.md §13. These are implementation
@@ -127,4 +127,17 @@ export function createPool(config: SuasConfig, mode: PoolMode = 'node'): Pool {
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
   });
+  // An idle client can fail (database restart, dropped connection). pg-pool has already
+  // removed it, and an unhandled 'error' event would crash the process, so log and carry on.
+  pool.on('error', (error) => {
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        msg: 'db_pool_idle_client_error',
+        error_name: error.name,
+        error_message: error.message.slice(0, 300),
+      }),
+    );
+  });
+  return pool;
 }
