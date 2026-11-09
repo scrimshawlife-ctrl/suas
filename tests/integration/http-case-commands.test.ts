@@ -314,3 +314,42 @@ describe('CASES.md §5 item 5 — accept replay over /api/v0', () => {
     expect(loser.statusCode).toBe(409);
   });
 });
+
+describe('V1_PROJECT_PLAN.md §2.1 — RED never goes to peers', () => {
+  it('shows the priority level to the requester and a SUAS admin, and null to the accepter', async () => {
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const accepter = await person(tenantId, 'accepter');
+    const staff = await person(tenantId, 'staff', { admin: true });
+    const url = `/api/v0/cases/${supportCase.caseId}`;
+    const adminCommand = await app.server.inject({
+      method: 'POST',
+      url: `${url}/commands/triage`,
+      headers: { ...staff.headers, 'idempotency-key': `triage-${randomUUID()}` },
+      payload: {},
+    });
+    expect(adminCommand.json().priority_signal_level).toBe('RED');
+
+    const requestId = await submitRequest(veteranHeaders, supportCase.caseId);
+    const accepted = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${requestId}/accept`,
+      headers: accepter.headers,
+    });
+    expect(accepted.statusCode).toBe(200);
+
+    const owner = await app.server.inject({ method: 'GET', url, headers: veteranHeaders });
+    expect(owner.json().priority_signal_level).toBe('RED');
+    const peer = await app.server.inject({ method: 'GET', url, headers: accepter.headers });
+    expect(peer.statusCode).toBe(200);
+    expect(peer.json().priority_signal_level).toBeNull();
+
+    const peerCommand = await app.server.inject({
+      method: 'POST',
+      url: `${url}/commands/escalate`,
+      headers: { ...accepter.headers, 'idempotency-key': `peer-${randomUUID()}` },
+      payload: { reason: 'needs more help' },
+    });
+    expect(peerCommand.statusCode).toBe(200);
+    expect(peerCommand.json().priority_signal_level).toBeNull();
+  });
+});
