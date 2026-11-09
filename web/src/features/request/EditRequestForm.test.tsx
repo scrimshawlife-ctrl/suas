@@ -55,7 +55,7 @@ describe('EditRequestForm', () => {
   });
 
   it('hides the destination for a request that is not a ride', () => {
-    open({ ...ride, category: 'FOOD', destination: null } as ServiceRequestDetail);
+    open({ ...ride, category: 'FOOD', destination: null });
     expect(screen.queryByLabelText(/Where are you going/)).not.toBeInTheDocument();
   });
 
