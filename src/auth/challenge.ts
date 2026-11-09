@@ -148,6 +148,11 @@ export async function issueChallenge(
     publicSignUpPermitted(deps.stagingAccess) &&
     input.method === 'EMAIL_OTP' &&
     SIGN_UP_EMAIL_PATTERN.test(destination);
+  // A sign-up the environment policy refused (D-052) is answered like any unenrolled address,
+  // but the audit marks it so operators can tell a refused sign-up from an unknown address.
+  // The flag carries no destination.
+  const signUpRefused =
+    user === undefined && input.allowSignUp === true && !publicSignUpPermitted(deps.stagingAccess);
   const fixtureRefused =
     deps.stagingAccess !== undefined &&
     stagingFixturePrincipalRefused(
@@ -161,14 +166,17 @@ export async function issueChallenge(
       outcome: 'NOT_STAGING_FIXTURE',
       method: input.method,
       actorId: user?.userId ?? 'anonymous',
+      ...(signUpRefused ? { signUpRefused: true } : {}),
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
     return { issued: false, challengeId: undefined, expiresAt: undefined };
   }
 
-  // Every branch does the same database work: one challenge row and one audit event in a
-  // transaction, and the same hashing. They differ only in whether a code is delivered, so
-  // neither the answer nor the database time says whether an address is enrolled. A person who
+  // Outside STAGING every branch does the same database work: one challenge row and one audit
+  // event in a transaction, and the same hashing. They differ only in whether a code is
+  // delivered. The answer (status, body, rate limit) is the same for every address; response
+  // time is not yet uniform, because a deliverable address waits for the send below (AUTH.md
+  // §9.4 timing parity is a known follow-up, not claimed here). A person who
   // may not receive a code gets a row that is already REVOKED, which verify never selects.
   // A STAGING account that is not an admitted fixture pair is not deliverable.
   const deliverable =
@@ -220,6 +228,7 @@ export async function issueChallenge(
               : user === undefined
                 ? 'NO_ENROLLED_USER'
                 : `USER_${user.status}`,
+            ...(signUpRefused ? { sign_up_refused: true } : {}),
           },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
@@ -463,6 +472,7 @@ async function recordChallengeAudit(
     outcome: string;
     actorId: string;
     method?: ChallengeMethod;
+    signUpRefused?: boolean;
     correlationId?: string;
   },
 ): Promise<void> {
@@ -480,6 +490,7 @@ async function recordChallengeAudit(
       payload: {
         outcome: input.outcome,
         ...(input.method !== undefined ? { method: input.method } : {}),
+        ...(input.signUpRefused === true ? { sign_up_refused: true } : {}),
       },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     }),

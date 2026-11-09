@@ -224,6 +224,8 @@ describe('CASE_COMMANDS over /api/v0', () => {
     });
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json().status).toBe('RESOLVED');
+    // The resolve answer never carries the level, whoever resolves.
+    expect(resolved.json().priority_signal_level).toBeNull();
 
     const closed = await app.server.inject({
       method: 'POST',
@@ -315,7 +317,7 @@ describe('CASES.md §5 item 5 — accept replay over /api/v0', () => {
   });
 });
 
-describe('V1_PROJECT_PLAN.md §2.1 — RED never goes to peers', () => {
+describe('CASES.md §3 / SAFETY.md §3.3 — the priority level is not shown to helpers', () => {
   it('shows the priority level to the requester and a SUAS admin, and null to the accepter', async () => {
     const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
     const accepter = await person(tenantId, 'accepter');
@@ -351,5 +353,36 @@ describe('V1_PROJECT_PLAN.md §2.1 — RED never goes to peers', () => {
     });
     expect(peerCommand.statusCode).toBe(200);
     expect(peerCommand.json().priority_signal_level).toBeNull();
+  });
+
+  it('returns no priority field on any helper-facing request or chat route', async () => {
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const helper = await person(tenantId, 'helper');
+    const requestId = await submitRequest(veteranHeaders, supportCase.caseId);
+
+    const get = (url: string) => app.server.inject({ method: 'GET', url, headers: helper.headers });
+    const open = await get('/api/v0/service-requests?ownership=open');
+    expect(open.statusCode).toBe(200);
+    expect(open.body).toContain(requestId);
+    expect(open.body).not.toMatch(/priority|"RED"/);
+
+    const accepted = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${requestId}/accept`,
+      headers: helper.headers,
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.body).not.toMatch(/priority/);
+
+    for (const url of [
+      `/api/v0/service-requests/${requestId}`,
+      '/api/v0/service-requests?ownership=mine',
+      '/api/v0/chat/threads',
+      `/api/v0/service-requests/${requestId}/chat/messages`,
+    ]) {
+      const response = await get(url);
+      expect(response.statusCode, url).toBe(200);
+      expect(response.body, url).not.toMatch(/priority|"RED"/);
+    }
   });
 });

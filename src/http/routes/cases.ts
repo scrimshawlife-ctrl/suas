@@ -82,8 +82,12 @@ const resolveBody = z.object({
 });
 
 /**
- * RED never goes to peers (V1_PROJECT_PLAN.md §2.1): only the case owner and a SUAS admin get
- * the real level; an accepter always sees null.
+ * Only the case owner and a SUAS admin get the real level; an accepter always sees null.
+ * Released basis (0.7.0): CASES.md §3 (priority_signal_level is a queue-filter fact only) and
+ * §8 (Org-queue readers get bounded limited fields) and SAFETY.md §3.3 (RED reaches Trusted
+ * Contacts only under an ACTIVE grant). An admin keeps the level so a human can review RED
+ * (SAFETY.md §3.2). V1_PROJECT_PLAN.md §2.1 ("RED never goes to peers") is a proposal, not
+ * authority.
  */
 function publicCase(supportCase: SupportCase, revealPriority: boolean) {
   return {

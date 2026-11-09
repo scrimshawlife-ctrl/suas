@@ -13,9 +13,17 @@ describe('createPool (node)', () => {
     const pool = createPool(loadConfig(validEnv({ SUAS_MIGRATIONS_MODE: 'off' })), 'node');
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      expect(() => pool.emit('error', new Error('connection terminated'))).not.toThrow();
+      const error = Object.assign(
+        new Error('connect ECONNREFUSED db.internal.example:5432 for role suas_app'),
+        { code: 'ECONNREFUSED' },
+      );
+      expect(() => pool.emit('error', error)).not.toThrow();
       expect(log).toHaveBeenCalledOnce();
-      expect(String(log.mock.calls[0]?.[0])).toContain('db_pool_idle_client_error');
+      const line = String(log.mock.calls[0]?.[0]);
+      expect(line).toContain('db_pool_idle_client_error');
+      expect(JSON.parse(line).error_code).toBe('ECONNREFUSED');
+      // The driver message can name the host, port or role; none of it is logged.
+      expect(line).not.toMatch(/db\.internal|5432|suas_app/);
     } finally {
       log.mockRestore();
       await pool.end();

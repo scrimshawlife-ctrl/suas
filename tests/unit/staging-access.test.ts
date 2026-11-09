@@ -69,6 +69,13 @@ describe('D-052 sign-up and fake ID', () => {
     expect(publicSignUpPermitted({ ...access, environment: 'PRODUCTION' })).toBe(false);
     expect(publicSignUpPermitted(undefined)).toBe(false);
     expect(publicSignUpPermitted({ ...access, environment: 'TEST' })).toBe(true);
+    expect(publicSignUpPermitted({ ...access, environment: 'LOCAL' })).toBe(true);
+  });
+
+  it('decides by environment only; the opt-in flag belongs to startup config', () => {
+    const access = { publicSignUp: false, fixturePrincipals: [] };
+    expect(publicSignUpPermitted({ ...access, environment: 'TEST' })).toBe(true);
+    expect(publicSignUpPermitted({ ...access, environment: 'STAGING' })).toBe(false);
   });
 
   it('does not auto-verify a fake ID check on STAGING or PRODUCTION', () => {

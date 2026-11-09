@@ -297,6 +297,7 @@ describe('D-052 STAGING fixture registry', () => {
         const pool = app.pool;
         if (pool === undefined) throw new Error('The test app has no database pool.');
         const before = await effectCounts(pool, app);
+        const tenantId = randomUUID();
         const result = await issueChallenge(
           {
             pool,
@@ -305,7 +306,7 @@ describe('D-052 STAGING fixture registry', () => {
             stagingAccess: { environment, publicSignUp: true, fixturePrincipals: [] },
           },
           {
-            tenantId: randomUUID(),
+            tenantId,
             destination: syntheticEmail(`signup-${environment.toLowerCase()}`),
             method: 'EMAIL_OTP',
             allowSignUp: true,
@@ -317,13 +318,24 @@ describe('D-052 STAGING fixture registry', () => {
         expect(after).toEqual(
           environment === 'STAGING' ? before : { ...before, challenges: after.challenges },
         );
+        // The refusal is audited as a refused sign-up, with no destination.
+        const audit = await pool.query<{ payload: Record<string, unknown> }>(
+          'SELECT payload FROM audit_events WHERE tenant_id = $1',
+          [tenantId],
+        );
+        expect(audit.rows).toHaveLength(1);
+        expect(audit.rows[0]?.payload.sign_up_refused).toBe(true);
+        expect(JSON.stringify(audit.rows[0]?.payload)).not.toContain('@');
+        // On STAGING the fixture registry refuses first (an unknown address has no principal),
+        // so this row cannot reach publicSignUpPermitted on STAGING. That predicate is covered
+        // directly by tests/unit/staging-access.test.ts.
       } finally {
         await app.close();
       }
     },
   );
 
-  it('answers an unknown and a known address alike on STAGING (AUTH.md §9.4)', async () => {
+  it('answers an unknown and a known address with the same status, body and headers on STAGING', async () => {
     const tenantId = randomUUID();
     const userId = randomUUID();
     const knownEmail = syntheticEmail(`known-${userId.slice(0, 8)}`);
@@ -349,6 +361,12 @@ describe('D-052 STAGING fixture registry', () => {
       expect(known.statusCode).toBe(202);
       expect(unknown.statusCode).toBe(known.statusCode);
       expect(unknown.json()).toEqual(known.json());
+      // Headers match too, apart from per-request values.
+      const comparable = (headers: Record<string, unknown>) => {
+        const { date: _date, 'x-request-id': _id, ...rest } = headers;
+        return rest;
+      };
+      expect(comparable(unknown.headers)).toEqual(comparable(known.headers));
       expect(await effectCounts(pool, app)).toEqual(beforeUnknown);
     } finally {
       await app.close();
