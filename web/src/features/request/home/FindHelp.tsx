@@ -68,7 +68,7 @@ export function FindHelp({
         <h2 id="find-help" className="heading text-28 leading-[1.1]">
           Find help
         </h2>
-        <ul className="grid grid-cols-3 gap-3.5 max-md:grid-cols-1">
+        <ul id="find-help-categories" className="grid grid-cols-3 gap-3.5 max-md:grid-cols-1">
           {shown.map((card) =>
             card.category === null ? null : (
               <li key={card.label} className="flex">
@@ -86,7 +86,8 @@ export function FindHelp({
         {rest.length > 0 ? (
           <button
             type="button"
-            aria-expanded={false}
+            aria-expanded={expanded}
+            aria-controls="find-help-categories"
             onClick={() => setExpanded(true)}
             className="inline-flex min-h-11 cursor-pointer items-center self-start text-left font-bold text-service-blue underline underline-offset-3"
           >
@@ -102,7 +103,10 @@ export function FindHelp({
       <h2 id="find-help" className="heading text-28 leading-[1.1]">
         Find help
       </h2>
-      <ul className="grid grid-cols-3 gap-3.5 max-md:grid-cols-[repeat(2,minmax(0,1fr))] max-sm:gap-2.5 max-[359px]:grid-cols-1!">
+      <ul
+        id="find-help-categories"
+        className="grid grid-cols-3 gap-3.5 max-md:grid-cols-[repeat(2,minmax(0,1fr))] max-sm:gap-2.5 max-[359px]:grid-cols-1!"
+      >
         {categories.map((card) => {
           if (card.disposition === 'OPERATIONAL') {
             if (card.category === null) return null;
@@ -135,6 +139,17 @@ export function FindHelp({
           );
         })}
       </ul>
+      {compact ? (
+        <button
+          type="button"
+          aria-expanded={true}
+          aria-controls="find-help-categories"
+          onClick={() => setExpanded(false)}
+          className="inline-flex min-h-11 cursor-pointer items-center self-start text-left font-bold text-service-blue underline underline-offset-3"
+        >
+          Show fewer categories
+        </button>
+      ) : null}
     </section>
   );
 }

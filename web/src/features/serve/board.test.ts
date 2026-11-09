@@ -8,6 +8,7 @@ import {
   boardSubtitle,
   classifyAcceptError,
   firstName,
+  helpingNowCount,
   relativeTime,
   toOpenCard,
 } from './board';
@@ -128,5 +129,30 @@ describe('accept failures', () => {
   it('keeps the card for any other failure', () => {
     expect(classifyAcceptError(new ApiError(500, 'INTERNAL', 'x')).kind).toBe('other');
     expect(classifyAcceptError(new Error('offline')).kind).toBe('other');
+  });
+});
+
+describe('helpingNowCount', () => {
+  const active = (id: string) => item({ service_request_id: id, status: 'ACCEPTED' });
+  const done = (id: string) => item({ service_request_id: id, status: 'CLOSED' });
+
+  it('counts the unfinished requests on a complete list', () => {
+    expect(
+      helpingNowCount({
+        service_requests: [active('a'), done('b'), active('c')],
+        next_cursor: null,
+      }),
+    ).toBe(2);
+    expect(helpingNowCount({ service_requests: [], next_cursor: null })).toBe(0);
+  });
+
+  it('gives no number when the list has more pages, so it never undercounts', () => {
+    const page = [...Array.from({ length: 19 }, (_, i) => done(`d${i}`)), active('newest-active')];
+    expect(page).toHaveLength(20);
+    expect(helpingNowCount({ service_requests: page, next_cursor: 'next' })).toBeUndefined();
+  });
+
+  it('gives no number before the list loads', () => {
+    expect(helpingNowCount(undefined)).toBeUndefined();
   });
 });

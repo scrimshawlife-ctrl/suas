@@ -83,6 +83,22 @@ export function activeHelping(items: readonly ServiceRequestListItem[]): Service
   return items.filter((item) => !FINISHED.includes(item.status));
 }
 
+/**
+ * The "You're helping now" number from the `ownership=mine` list, or undefined when that list
+ * has more pages (`next_cursor` set). The list is newest first across all statuses, so an older
+ * active request can sit past the first page; a short count would be untrue, so the board shows
+ * a dash instead.
+ */
+export function helpingNowCount(
+  list:
+    | { service_requests: readonly ServiceRequestListItem[]; next_cursor?: string | null }
+    | undefined,
+): number | undefined {
+  if (list === undefined) return undefined;
+  if (typeof list.next_cursor === 'string' && list.next_cursor !== '') return undefined;
+  return activeHelping(list.service_requests).length;
+}
+
 export type AcceptFailure =
   | { kind: 'taken'; message: string }
   | { kind: 'gone'; message: string }
