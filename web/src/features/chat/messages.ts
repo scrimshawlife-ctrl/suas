@@ -63,6 +63,19 @@ export function runEnds(messages: readonly ChatMessage[]): ReadonlySet<string> {
   return ends;
 }
 
+/** "Tue at 7:58 PM" within the last week; "Nov 3 at 7:58 PM" otherwise. Empty if not a date. */
+export function formatAcceptedAt(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const ageMs = now.getTime() - date.getTime();
+  const day =
+    ageMs >= 0 && ageMs < 6 * 86_400_000
+      ? date.toLocaleDateString(undefined, { weekday: 'short' })
+      : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return `${day} at ${time}`;
+}
+
 /** "8:14 PM" today; "Tue 8:14 PM" within a week; "Nov 3, 8:14 PM" otherwise. Local time. */
 export function formatMessageTime(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);

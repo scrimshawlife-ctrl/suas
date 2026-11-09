@@ -1,12 +1,22 @@
 import { isApiError } from '../../api/errors';
 import { NEEDS } from '../../components/needs';
 import type { ChatThread } from '../../api/types';
+import { formatAcceptedAt } from './messages';
 
 /** Shown when a thread has no counterpart name (the other person never set one). */
 export const UNNAMED = 'The other person';
 
 export const EMPTY_THREADS = 'You have no conversations yet.';
 export const SYSTEM_LINE = 'Chat is open for this request.';
+
+/** The opening line of a conversation: when it was accepted, if the thread says and who is asking. */
+export function systemLine(thread: ChatThread | undefined, now: Date = new Date()): string {
+  const when = thread?.accepted_at ? formatAcceptedAt(thread.accepted_at, now) : '';
+  if (thread === undefined || when === '') return SYSTEM_LINE;
+  if (thread.role === 'ACCEPTER') return `You accepted this request on ${when}. ${SYSTEM_LINE}`;
+  const name = thread.counterpart_display_name?.trim();
+  return name ? `${name} accepted your request on ${when}.` : SYSTEM_LINE;
+}
 
 export function counterpartName(thread: ChatThread | undefined): string {
   return thread?.counterpart_display_name?.trim() || UNNAMED;
