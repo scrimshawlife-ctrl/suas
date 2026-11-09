@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { chatThreadsQueryOptions } from '../../api/chat';
 import { tokenStore, useSessionToken } from '../../api/token-store';
 import type { ChatThread } from '../../api/types';
+import { threadKey } from './threads';
 
 /**
  * Which conversations the person has read, kept per browser tab in sessionStorage.
@@ -19,7 +20,7 @@ const STORAGE_KEY = 'suas.chat.seen';
 
 export interface SeenStore {
   getState: () => SeenState;
-  markSeen: (serviceRequestId: string, atMs: number) => void;
+  markSeen: (threadKey: string, atMs: number) => void;
   /** Starts over with a new baseline (sign-out: the next person has read nothing). */
   reset: () => void;
   subscribe: (listener: () => void) => () => void;
@@ -86,7 +87,7 @@ export function countUnread(threads: readonly ChatThread[], state: SeenState): n
   return threads.filter((thread) => {
     if (thread.last_message_at === null || thread.last_message_from_me === true) return false;
     const last = Date.parse(thread.last_message_at);
-    return last > (state.seen[thread.service_request_id] ?? state.baseline);
+    return last > (state.seen[threadKey(thread)] ?? state.baseline);
   }).length;
 }
 

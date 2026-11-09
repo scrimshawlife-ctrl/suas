@@ -5,6 +5,7 @@ import { queryKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { useSessionToken } from '../../api/token-store';
 import type { ChatThread } from '../../api/types';
+import { isReadOnly } from './threads';
 import { insertMessage, type ChatMessage, type MessagePage, type MessagesData } from './messages';
 
 /** Prefix of every chat query key (threads and each thread's messages). */
@@ -14,15 +15,19 @@ export const CHAT_KEY_ROOT = ['chat'] as const;
 const PREVIEW_MAX = 140;
 
 /** GET /service-requests/{id}/chat/messages, newest first, paged by `next_cursor`. */
-export function chatMessagesQueryOptions(serviceRequestId: string) {
+export function chatMessagesQueryOptions(serviceRequestId: string, threadId?: string) {
   return infiniteQueryOptions({
-    queryKey: queryKeys.chatMessages(serviceRequestId),
+    queryKey: queryKeys.chatMessages(serviceRequestId, threadId),
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }): Promise<MessagePage> => {
       const { data } = await api.GET('/api/v0/service-requests/{id}/chat/messages', {
         params: {
           path: { id: serviceRequestId },
-          query: { limit: 50, ...(pageParam !== undefined ? { cursor: pageParam } : {}) },
+          query: {
+            limit: 50,
+            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+            ...(threadId !== undefined ? { thread: threadId } : {}),
+          },
         },
       });
       return requireData(data, 'messages');
@@ -33,10 +38,11 @@ export function chatMessagesQueryOptions(serviceRequestId: string) {
   });
 }
 
-export function useChatMessages(serviceRequestId: string | undefined) {
+/** Without `threadId` the server returns the request's live thread. */
+export function useChatMessages(serviceRequestId: string | undefined, threadId?: string) {
   const token = useSessionToken();
   return useInfiniteQuery({
-    ...chatMessagesQueryOptions(serviceRequestId ?? ''),
+    ...chatMessagesQueryOptions(serviceRequestId ?? '', threadId),
     enabled: token !== null && serviceRequestId !== undefined,
   });
 }
@@ -83,7 +89,8 @@ export function applyMessageToCaches(
   }
 
   const threads = queryClient.getQueryData<{ threads: ChatThread[] }>(queryKeys.chatThreads);
-  const thread = threads?.threads.find((t) => t.service_request_id === id);
+  // A push frame belongs to the request's live thread, never to a closed one.
+  const thread = threads?.threads.find((t) => t.service_request_id === id && !isReadOnly(t));
   if (threads === undefined || thread === undefined) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.chatThreads });
     return;
@@ -103,7 +110,7 @@ export function applyMessageToCaches(
   };
   queryClient.setQueryData(queryKeys.chatThreads, {
     ...threads,
-    threads: [updated, ...threads.threads.filter((t) => t.service_request_id !== id)],
+    threads: [updated, ...threads.threads.filter((t) => t !== thread)],
   });
   if (queryClient.isFetching({ queryKey: queryKeys.chatThreads }) > 0) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.chatThreads });
