@@ -970,7 +970,7 @@ describe('0017 request holder backfill', () => {
       const closedNoChat = await insertRequest(tenantId, caseB, veteranB, 'CLOSED');
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([17, 18, 19]);
+      expect(result.appliedNow).toEqual([17, 18, 19, 20]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const holders = await pool.query<{ id: string; holder: string | null }>(
@@ -1037,6 +1037,102 @@ describe('0018 current case index', () => {
     }
     // Another Veteran is unaffected.
     await insertCase(tenantId, await insertUser(tenantId), 'OPEN');
+  });
+});
+
+describe('0020 request expiry and release', () => {
+  /** A migrations directory holding only versions 1 to 19, to build the old shape first. */
+  async function migrationsUpTo19(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'suas-migrations-'));
+    const source = resolveMigrationsDir();
+    for (const name of await readdir(source)) {
+      if (/^\d{4}_/.test(name) && Number.parseInt(name.slice(0, 4), 10) <= 19) {
+        await cp(join(source, name), join(dir, name));
+      }
+    }
+    return dir;
+  }
+
+  it('seeds the TTL, backfills accepted_at, and allows one live thread per request', async () => {
+    const dir = await migrationsUpTo19();
+    try {
+      await runMigrations(pool, {
+        mode: 'apply',
+        provenance,
+        migrationsDir: dir,
+        expectedSchemaVersion: 19,
+      });
+
+      const tenantId = randomUUID();
+      const person = async () => {
+        const id = randomUUID();
+        await pool.query(
+          `INSERT INTO users (user_id, tenant_id, status) VALUES ($1, $2, 'ACTIVE')`,
+          [id, tenantId],
+        );
+        return id;
+      };
+      const [requester, helper, other] = await Promise.all([person(), person(), person()]);
+      const caseId = randomUUID();
+      await pool.query(
+        `INSERT INTO support_cases (case_id, tenant_id, veteran_user_id, status)
+         VALUES ($1, $2, $3, 'ASSIGNED')`,
+        [caseId, tenantId, requester],
+      );
+      const request = async (status: string) => {
+        const id = randomUUID();
+        await pool.query(
+          `INSERT INTO service_requests
+             (service_request_id, tenant_id, case_id, category, status, created_by)
+           VALUES ($1, $2, $3, 'FOOD', $4::suas_service_request_status, $5)`,
+          [id, tenantId, caseId, status, requester],
+        );
+        return id;
+      };
+      const accepted = await request('ACCEPTED');
+      const waiting = await request('SUBMITTED');
+      const threadId = randomUUID();
+      const threadCreatedAt = '2026-01-02T03:04:05.000Z';
+      await pool.query(
+        `INSERT INTO chat_threads
+           (chat_thread_id, tenant_id, service_request_id, requester_user_id,
+            accepted_by_user_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [threadId, tenantId, accepted, requester, helper, threadCreatedAt],
+      );
+
+      const result = await runMigrations(pool, { mode: 'apply', provenance });
+      expect(result.appliedNow).toEqual([20]);
+      expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
+
+      const setting = await pool.query<{ value: unknown }>(
+        `SELECT value FROM app_settings WHERE setting_key = 'request_expiry_hours'`,
+      );
+      expect(setting.rows[0]?.value).toBe(72);
+
+      const accepts = await pool.query<{ id: string; accepted_at: Date | null }>(
+        `SELECT service_request_id AS id, accepted_at FROM service_requests`,
+      );
+      const byId = Object.fromEntries(accepts.rows.map((row) => [row.id, row.accepted_at]));
+      expect(byId[accepted]?.toISOString()).toBe(threadCreatedAt);
+      expect(byId[waiting]).toBeNull();
+
+      const insertThread = () =>
+        pool.query(
+          `INSERT INTO chat_threads
+             (chat_thread_id, tenant_id, service_request_id, requester_user_id, accepted_by_user_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [randomUUID(), tenantId, accepted, requester, other],
+        );
+      // A second live thread is refused; once the first is closed, a new one is allowed.
+      await expect(insertThread()).rejects.toThrow(/chat_threads_one_live_per_request_idx/);
+      await pool.query(`UPDATE chat_threads SET closed_at = now() WHERE chat_thread_id = $1`, [
+        threadId,
+      ]);
+      await insertThread();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 
