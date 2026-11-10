@@ -9,6 +9,7 @@ import { Page } from '../../components/Page';
 import { RadioCardGroup } from '../../components/RadioCardGroup';
 import { TextField } from '../../components/TextField';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { useSingleFlight } from '../../lib/single-flight';
 import {
   afterSignInPath,
   modeToRole,
@@ -40,6 +41,7 @@ export default function SignInPage() {
   const navigate = useNavigate();
   const token = useSessionToken();
   const start = useStartChallenge();
+  const flight = useSingleFlight();
   const from = safeFrom((location.state as { from?: unknown } | null)?.from);
   const [role, setRole] = useState<Role>(() =>
     parseRole(params.get('role'), modeToRole(getMode())),
@@ -55,20 +57,22 @@ export default function SignInPage() {
   // Already signed in: nothing to do here.
   if (token !== null) return <Navigate to={afterSignInPath(from, getMode())} replace />;
 
-  const submit = async (event: FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     setAttempt((count) => count + 1);
     const invalid = validateEmail(email);
     setFieldError(invalid);
-    if (invalid || start.isPending) return;
+    if (invalid) return;
     const destination = email.trim();
-    try {
-      await start.mutateAsync(destination);
-    } catch {
-      return; // shown from `start.error`
-    }
-    setMode(roleToMode(role));
-    await navigate('/sign-in/code', { state: { email: destination, from } });
+    flight(async () => {
+      try {
+        await start.mutateAsync(destination);
+      } catch {
+        return; // shown from `start.error`
+      }
+      setMode(roleToMode(role));
+      await navigate('/sign-in/code', { state: { email: destination, from } });
+    });
   };
 
   return (

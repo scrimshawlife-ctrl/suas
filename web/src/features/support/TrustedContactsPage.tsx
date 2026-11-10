@@ -9,6 +9,7 @@ import { Page } from '../../components/Page';
 import { StatusChip, type StatusKind } from '../../components/StatusChip';
 import { TextField } from '../../components/TextField';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { useSingleFlight } from '../../lib/single-flight';
 import {
   useConsents,
   useInviteTrustedContact,
@@ -28,6 +29,7 @@ const STATUS: Record<string, { label: string; kind: StatusKind }> = {
 
 function InviteForm() {
   const invite = useInviteTrustedContact();
+  const flight = useSingleFlight();
   const key = useIdempotencyKey();
   const [label, setLabel] = useState('');
   const [email, setEmail] = useState('');
@@ -47,15 +49,17 @@ function InviteForm() {
     setProblem(next);
     setAttempt((count) => count + 1);
     if (next.label || next.email) return;
-    invite.mutate(
-      { relationshipLabel: trimmedLabel, email: trimmedEmail, headers: key.headers() },
-      {
-        onSuccess: () => {
-          key.renew();
-          setLabel('');
-          setEmail('');
+    flight(() =>
+      invite.mutateAsync(
+        { relationshipLabel: trimmedLabel, email: trimmedEmail, headers: key.headers() },
+        {
+          onSuccess: () => {
+            key.renew();
+            setLabel('');
+            setEmail('');
+          },
         },
-      },
+      ),
     );
   }
 

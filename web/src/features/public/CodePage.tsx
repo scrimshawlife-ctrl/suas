@@ -9,6 +9,7 @@ import { Page } from '../../components/Page';
 import { ChevronLeftIcon } from '../../components/icons';
 import { cn } from '../../lib/cn';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { useSingleFlight } from '../../lib/single-flight';
 import {
   afterSignInPath,
   cleanCode,
@@ -33,6 +34,7 @@ export default function CodePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const verify = useVerifyChallenge();
+  const flight = useSingleFlight();
   const state = (location.state ?? {}) as CodeState;
   const email = typeof state.email === 'string' && state.email !== '' ? state.email : null;
   const from = safeFrom(state.from);
@@ -45,18 +47,20 @@ export default function CodePage() {
 
   if (email === null) return <Navigate to="/sign-in" replace />;
 
-  const submit = async (event: FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     setAttempt((count) => count + 1);
     const invalid = validateCode(code);
     setFieldError(invalid);
-    if (invalid || verify.isPending) return;
-    try {
-      await verify.mutateAsync({ destination: email, code });
-    } catch {
-      return; // shown from `verify.error`
-    }
-    await navigate(afterSignInPath(from, getMode()), { replace: true });
+    if (invalid) return;
+    flight(async () => {
+      try {
+        await verify.mutateAsync({ destination: email, code });
+      } catch {
+        return; // shown from `verify.error`
+      }
+      await navigate(afterSignInPath(from, getMode()), { replace: true });
+    });
   };
 
   const onPaste = (event: ClipboardEvent<HTMLInputElement>) => {
