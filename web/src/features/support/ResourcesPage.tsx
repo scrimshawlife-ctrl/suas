@@ -15,10 +15,11 @@ import { useResources, type CatalogResource } from './api';
 import { ErrorNotice } from './errors';
 import {
   categoryFromParam,
-  contactAction,
+  contactActions,
   countyName,
   describeFreshness,
   REQUEST_BAND,
+  type ContactAction,
 } from './resources-model';
 
 /** Long addresses wrap inside the button instead of widening the page. */
@@ -33,13 +34,52 @@ function ClockIcon() {
   );
 }
 
+type LinkAction = Exclude<ContactAction, { kind: 'text' }>;
+const isLink = (action: ContactAction): action is LinkAction => action.kind !== 'text';
+
+function ContactButton({ action }: { action: LinkAction }) {
+  if (action.kind === 'phone')
+    return (
+      <Button size="small" className={WRAP} icon={<PhoneIcon />} href={action.href}>
+        {action.label}
+      </Button>
+    );
+  if (action.kind === 'email')
+    return (
+      <Button
+        size="small"
+        variant="secondary"
+        className={WRAP}
+        icon={<MailIcon />}
+        href={action.href}
+      >
+        {action.label}
+      </Button>
+    );
+  return (
+    <Button
+      size="small"
+      variant="secondary"
+      className={WRAP}
+      href={action.href}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {action.label}
+    </Button>
+  );
+}
+
 function ResourceCard({ resource }: { resource: CatalogResource }) {
   const freshness = describeFreshness(resource);
-  const contact = contactAction(resource);
+  const actions = contactActions(resource);
+  const links = actions.filter(isLink);
+  const texts = actions.filter((action) => !isLink(action));
   const where =
-    resource.counties.length > 0
+    resource.area ??
+    (resource.counties.length > 0
       ? resource.counties.map(countyName).join(', ')
-      : 'Serves any county';
+      : 'Serves any county');
   return (
     <Card as="li" padding="lg" className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
@@ -59,40 +99,21 @@ function ResourceCard({ resource }: { resource: CatalogResource }) {
         <dt className="text-slate">Cost</dt>
         <dd>{resource.cost ?? 'Not recorded'}</dd>
       </dl>
-      {contact.kind === 'none' ? (
+      {actions.length === 0 ? (
         <p className="pt-1.5 text-slate">No contact method recorded.</p>
-      ) : contact.kind === 'text' ? (
-        <p className="pt-1.5 break-words">{contact.text}</p>
-      ) : (
+      ) : null}
+      {links.length > 0 ? (
         <div className="flex flex-wrap gap-2.5 pt-1.5">
-          {contact.kind === 'phone' ? (
-            <Button size="small" className={WRAP} icon={<PhoneIcon />} href={contact.href}>
-              {contact.label}
-            </Button>
-          ) : contact.kind === 'email' ? (
-            <Button
-              size="small"
-              variant="secondary"
-              className={WRAP}
-              icon={<MailIcon />}
-              href={contact.href}
-            >
-              {contact.label}
-            </Button>
-          ) : (
-            <Button
-              size="small"
-              variant="secondary"
-              className={WRAP}
-              href={contact.href}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {contact.label}
-            </Button>
-          )}
+          {links.map((action, index) => (
+            <ContactButton key={index} action={action} />
+          ))}
         </div>
-      )}
+      ) : null}
+      {texts.map((action, index) => (
+        <p key={index} className="break-words">
+          {action.text}
+        </p>
+      ))}
     </Card>
   );
 }

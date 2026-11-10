@@ -56,6 +56,55 @@ describe('draft detail', () => {
     expect(await screen.findByText('Changes saved.')).toBeInTheDocument();
   });
 
+  it('sends the contact list and area, and not the legacy single fields', async () => {
+    const user = userEvent.setup();
+    client.GET.mockResolvedValue({ data: draft });
+    client.POST.mockResolvedValue({ data: draft });
+    renderDraft();
+    await user.click(await screen.findByRole('button', { name: 'Add a contact method' }));
+    await user.selectOptions(screen.getByLabelText('Contact 2 kind'), 'URL');
+    await user.type(screen.getByLabelText('Contact 2'), 'https://pantry.example.invalid');
+    await user.type(screen.getByLabelText('Area'), 'San José, east side');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(client.POST).toHaveBeenCalled());
+    expect(client.POST).toHaveBeenCalledWith(
+      '/api/v0/admin/resource-drafts/{id}/commands/edit',
+      expect.objectContaining({
+        body: {
+          contacts: [
+            { kind: 'PHONE', value: '408-555-0100' },
+            { kind: 'URL', value: 'https://pantry.example.invalid' },
+          ],
+          area: 'San José, east side',
+        },
+      }),
+    );
+  });
+
+  it('checks an empty contact row before sending', async () => {
+    const user = userEvent.setup();
+    client.GET.mockResolvedValue({ data: draft });
+    renderDraft();
+    await user.click(await screen.findByRole('button', { name: 'Add a contact method' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText(/Enter each contact method/)).toBeInTheDocument();
+    expect(client.POST).not.toHaveBeenCalled();
+  });
+
+  it('shows a server refusal of the contacts on the contact field', async () => {
+    const user = userEvent.setup();
+    client.GET.mockResolvedValue({ data: draft });
+    client.POST.mockRejectedValue(
+      new ApiError(400, 'VALIDATION', '"500" is a crisis number and is refused.'),
+    );
+    renderDraft();
+    await user.type(await screen.findByLabelText('Contact 1'), '5');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    const fieldset = await screen.findByRole('group', { name: 'Contact methods' });
+    expect(within(fieldset).getByRole('alert')).toHaveTextContent('crisis number');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
   it('opens the source in a new tab without leaking the opener', async () => {
     client.GET.mockResolvedValue({ data: draft });
     renderDraft();
@@ -138,6 +187,24 @@ describe('draft detail', () => {
     expect(await screen.findByText(/Published as a verified Resource/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Cost')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Publish' })).not.toBeInTheDocument();
+  });
+
+  it('lists every contact and the area on a read-only draft', async () => {
+    client.GET.mockResolvedValue({
+      data: {
+        ...draft,
+        status: 'PUBLISHED',
+        area: 'San José, east side',
+        contacts: [
+          { kind: 'PHONE', value: '408-555-0100' },
+          { kind: 'URL', value: 'https://pantry.example.invalid' },
+        ],
+      },
+    });
+    renderDraft();
+    expect(await screen.findByText('Contact 2 (Web address)')).toBeInTheDocument();
+    expect(screen.getByText('https://pantry.example.invalid')).toBeInTheDocument();
+    expect(screen.getByText('San José, east side')).toBeInTheDocument();
   });
 
   it('explains a publish that raced with another change', async () => {

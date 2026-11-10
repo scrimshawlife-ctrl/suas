@@ -32,15 +32,19 @@ export function SourceLink({ link }: { link: string }) {
 }
 
 function ReadOnlyFields({ draft }: { draft: ResourceDraft }) {
-  const kind = draft.contact_method_kind ? CONTACT_KIND_LABELS[draft.contact_method_kind] : null;
   const rows: [string, string][] = [
     ['Service name', draft.service_name],
     ['Category', CATEGORY_LABELS[draft.category]],
     ['Counties served', countiesLabel(draft.counties)],
     ['Eligibility', draft.eligibility ?? 'Not stated'],
     ['Hours', draft.hours ?? 'Not stated'],
-    ['Contact method', draft.contact_method ?? 'Not stated'],
-    ['Contact method kind', kind ?? 'No kind'],
+    ...(draft.contacts.length === 0
+      ? ([['Contact methods', 'Not stated']] as [string, string][])
+      : draft.contacts.map((contact, index): [string, string] => [
+          `Contact ${index + 1} (${CONTACT_KIND_LABELS[contact.kind]})`,
+          contact.value,
+        ])),
+    ['Area', draft.area ?? 'Not stated'],
     ['Referral method', draft.referral_method ?? 'Not stated'],
     ['Cost', draft.cost ?? 'Not stated'],
   ];

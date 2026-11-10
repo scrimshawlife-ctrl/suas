@@ -8,6 +8,7 @@ import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
 import { useDiscardDraft, useEditDraft, usePublishDraft } from './api';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ContactListField } from './ContactListField';
 import {
   buildEditPayload,
   draftToForm,
@@ -17,15 +18,7 @@ import {
   type DraftFormValues,
   type ResourceDraft,
 } from './draft-form';
-import {
-  CATEGORIES,
-  CATEGORY_LABELS,
-  CONTACT_KINDS,
-  CONTACT_KIND_LABELS,
-  COUNTIES,
-  COUNTY_LABELS,
-  type ContactKind,
-} from './labels';
+import { CATEGORIES, CATEGORY_LABELS, COUNTIES, COUNTY_LABELS } from './labels';
 import type { ServiceCategory } from '../../api/types';
 
 export const PUBLISH_CONFIRM_TEXT =
@@ -69,10 +62,16 @@ export function DraftEditor({
   const [confirm, setConfirm] = useState<'publish' | 'discard' | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [attempt, setAttempt] = useState(0);
+  const [sentContacts, setSentContacts] = useState(false);
   useFocusFirstInvalid(formRef, `${attempt}|${Object.keys(errors).join()}`);
 
   const payload = buildEditPayload(draft, values);
   const dirty = payload !== null;
+  // A 400 on a save that carried the list is a contact refusal (for example a crisis number).
+  const serverContactError =
+    sentContacts && edit.isError && isApiError(edit.error) && edit.error.status === 400
+      ? edit.error.message
+      : undefined;
   const set = <K extends keyof DraftFormValues>(field: K, value: DraftFormValues[K]) => {
     onEdit();
     setValues((current) => ({ ...current, [field]: value }));
@@ -85,6 +84,7 @@ export function DraftEditor({
     setErrors(found);
     setAttempt((count) => count + 1);
     if (Object.keys(found).length > 0) return;
+    setSentContacts(payload.contacts !== undefined);
     edit.mutate(payload, { onSuccess: onSaved });
   }
 
@@ -156,22 +156,19 @@ export function DraftEditor({
           onChange={(event) => set('hours', event.target.value)}
           error={errors.hours}
         />
-        <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
-          <TextField
-            label="Contact method"
-            value={values.contact_method}
-            onChange={(event) => set('contact_method', event.target.value)}
-            error={errors.contact_method}
-          />
-          <Select
-            label="Contact method kind"
-            value={values.contact_method_kind}
-            onChange={(event) => set('contact_method_kind', event.target.value as ContactKind | '')}
-            error={errors.contact_method_kind}
-            placeholder="No kind"
-            options={options(CONTACT_KINDS, CONTACT_KIND_LABELS)}
-          />
-        </div>
+        <ContactListField
+          rows={values.contacts}
+          onChange={(rows) => set('contacts', rows)}
+          error={errors.contacts ?? serverContactError}
+        />
+        <TextField
+          label="Area"
+          value={values.area}
+          onChange={(event) => set('area', event.target.value)}
+          error={errors.area}
+          maxLength={LIMITS.area}
+          helper="A short line such as a city or neighborhood, as the source states it."
+        />
         <TextArea
           label="Referral method"
           rows={2}
@@ -186,7 +183,7 @@ export function DraftEditor({
           error={errors.cost}
         />
 
-        {edit.isError ? (
+        {edit.isError && serverContactError === undefined ? (
           <p role="alert" className="flex items-start gap-2 font-bold">
             <AlertCircleIcon className="mt-1 shrink-0" />
             {draftErrorMessage(edit.error)}
