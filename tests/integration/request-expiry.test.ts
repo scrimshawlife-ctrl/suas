@@ -168,6 +168,42 @@ describe('the 72-hour boundary', () => {
     expect(await noticesFor(accepted)).toEqual([]);
   });
 
+  it('expires an assigned request nobody accepted, and not a draft with no submit time', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester');
+    const assigned = await submittedRequest(requester, 73);
+    await pool().query(
+      `UPDATE service_requests SET status = 'ASSIGNED' WHERE service_request_id = $1`,
+      [assigned],
+    );
+
+    const opened = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/cases',
+      headers: keyed(requester),
+    });
+    expect([200, 201]).toContain(opened.statusCode);
+    const draft = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${opened.json().case_id}/service-requests`,
+      headers: keyed(requester),
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
+    });
+    expect(draft.statusCode).toBe(201);
+    const draftId: string = draft.json().service_request_id;
+    await pool().query(
+      `UPDATE service_requests SET created_at = now() - interval '10 days'
+        WHERE service_request_id = $1`,
+      [draftId],
+    );
+
+    await expireDueRequests(pool());
+
+    expect((await statusOf(assigned))?.status).toBe('EXPIRED');
+    expect((await statusOf(draftId))?.status).toBe('CREATED');
+    expect(await noticesFor(draftId)).toEqual([]);
+  });
+
   it('is safe to replay and to run twice at once: one expiry, one notice', async () => {
     const tenantId = randomUUID();
     const requester = await person(tenantId, 'requester');

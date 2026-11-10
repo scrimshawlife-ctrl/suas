@@ -1,8 +1,8 @@
 -- 0020_request_expiry_release.sql — request expiry and helper release (Round 8 R8.4, R8.5)
 --
--- Implements suas-specs V1_MVP_PROPOSAL.md R8.4 (an unaccepted request expires 72 hours
--- after submit) and R8.5 (the accepter may release a request, which returns to SUBMITTED
--- and may be accepted again, by the same helper too). Both are proposals, not released.
+-- Implements DISPATCH.md §14.6 (v0.9.0, R8.4: an unaccepted request expires 72 hours
+-- after submit) and §14.7 (R8.5: the accepter may release a request, which returns to
+-- SUBMITTED and may be accepted again, by the same helper too).
 --
 -- TTL: read by the expiry job like widening_delay_minutes (0013); the job fails closed
 -- when the row is missing or not a whole number of hours of at least one.
@@ -36,4 +36,5 @@ CREATE UNIQUE INDEX chat_threads_one_live_per_request_idx
 -- expiry job must find those too.
 CREATE INDEX service_requests_expiry_idx
     ON service_requests (submitted_at)
-    WHERE accepted_by_user_id IS NULL AND status IN ('SUBMITTED', 'TRIAGED', 'MATCHING');
+    WHERE accepted_by_user_id IS NULL
+      AND status IN ('CREATED', 'SUBMITTED', 'TRIAGED', 'MATCHING', 'ASSIGNED');

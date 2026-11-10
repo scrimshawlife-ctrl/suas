@@ -2,9 +2,9 @@
  * Expiry: a Service Request nobody accepted within the TTL expires.
  *
  * Spec citations:
- * - suas-specs V1_MVP_PROPOSAL.md R8.4 (proposal, not released): the TTL is 72 hours from
- *   `submitted_at` on the server clock; the actor is System; only a request nobody has
- *   accepted expires. DISPATCH.md §4: `EXPIRE` runs from the pre-accept states, and the
+ * - DISPATCH.md §14.6 (v0.9.0, R8.4): the TTL is 72 hours from `submitted_at` on the
+ *   server clock; the actor is System; only a request nobody has accepted expires.
+ *   §4: `EXPIRE` runs from CREATED, SUBMITTED, TRIAGED, MATCHING or ASSIGNED, and the
  *   expected-status check still applies.
  * - AGENTS.md rules 8-9: state is shared and persistent, and the job is replay-safe.
  *
@@ -20,8 +20,8 @@ import type { Pool } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendAuditEvent } from '../events/index.js';
 import { notifyRequester, REQUEST_EXPIRED_REASON } from './request-notices.js';
-import { executeServiceRequestCommandInTx, PEER_ACCEPTABLE } from './requests.js';
-import type { ServiceRequestStatus } from './request-transitions.js';
+import { executeServiceRequestCommandInTx } from './requests.js';
+import { EXPIRABLE_REQUEST_STATUSES, type ServiceRequestStatus } from './request-transitions.js';
 
 export const REQUEST_EXPIRY_SETTING_KEY = 'request_expiry_hours';
 const DEFAULT_BATCH_SIZE = 200;
@@ -105,7 +105,7 @@ async function expireOne(
         FOR UPDATE`,
       [
         cutoff.toISOString(),
-        [...PEER_ACCEPTABLE],
+        [...EXPIRABLE_REQUEST_STATUSES],
         candidate.tenant_id,
         candidate.service_request_id,
       ],
@@ -166,7 +166,7 @@ export async function expireDueRequests(
         WHERE ${DUE_CONDITIONS}
         ORDER BY r.submitted_at, r.service_request_id
         LIMIT $3`,
-      [cutoff.toISOString(), [...PEER_ACCEPTABLE], batchSize],
+      [cutoff.toISOString(), [...EXPIRABLE_REQUEST_STATUSES], batchSize],
     );
 
     let expiredInBatch = 0;

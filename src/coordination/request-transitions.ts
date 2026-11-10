@@ -342,6 +342,15 @@ export const SERVICE_REQUEST_TRANSITIONS: readonly ServiceRequestTransition[] = 
   },
 ];
 
+/**
+ * Statuses from which DISPATCH.md §4 allows `EXPIRE` (v0.9.0 §14.6).
+ * The expiry job uses this list so an assigned request is not left open past the TTL.
+ */
+export const EXPIRABLE_REQUEST_STATUSES: readonly ServiceRequestStatus[] =
+  SERVICE_REQUEST_TRANSITIONS.filter((transition) => transition.command === 'EXPIRE').map(
+    (transition) => transition.from,
+  );
+
 /** Statuses from which no further transition is documented. */
 export const TERMINAL_REQUEST_STATUSES: readonly ServiceRequestStatus[] = [
   'CLOSED',
