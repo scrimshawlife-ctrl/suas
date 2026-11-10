@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
@@ -103,6 +103,17 @@ describe('AlertToggle', () => {
     expect(client.POST).toHaveBeenCalledTimes(1);
     finish({ data: activeGrant });
     await waitFor(() => expect(toggle).not.toHaveAttribute('aria-disabled'));
+  });
+
+  it('sends one grant on a same-tick double click and shows no error', async () => {
+    client.POST.mockResolvedValue({ data: activeGrant });
+    render(wrap([]));
+    const toggle = screen.getByRole('switch');
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toHaveAttribute('aria-disabled'));
+    expect(client.POST).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('reuses the key on a retry after an error and renews it only after a success', async () => {
