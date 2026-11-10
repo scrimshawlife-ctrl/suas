@@ -33,6 +33,9 @@ export interface Outbox {
  */
 export function createOutbox(send: SendFn = postChatMessage): Outbox {
   let byRequest = new Map<string, readonly PendingMessage[]>();
+  // The tail of each conversation's send chain: one POST in flight at a time, so the server
+  // stores messages in the order they were typed (it orders by arrival).
+  let queues = new Map<string, Promise<void>>();
   let epoch = 0;
   const listeners = new Set<() => void>();
   const emit = () => {
@@ -63,6 +66,13 @@ export function createOutbox(send: SendFn = postChatMessage): Outbox {
       );
     }
   };
+  const enqueue = (queryClient: QueryClient, id: string, item: PendingMessage) => {
+    const queuedIn = epoch;
+    const tail = (queues.get(id) ?? Promise.resolve()).then(() =>
+      queuedIn === epoch ? attempt(queryClient, id, item) : undefined,
+    );
+    queues.set(id, tail);
+  };
 
   return {
     get: (id) => byRequest.get(id) ?? NONE,
@@ -74,18 +84,19 @@ export function createOutbox(send: SendFn = postChatMessage): Outbox {
         status: 'sending',
       };
       update(id, (list) => [...list, item]);
-      void attempt(queryClient, id, item);
+      enqueue(queryClient, id, item);
     },
     retry(queryClient, id, clientId) {
       const item = (byRequest.get(id) ?? NONE).find((p) => p.clientId === clientId);
       if (item === undefined || item.status === 'sending') return;
       const again: PendingMessage = { ...item, status: 'sending' };
       update(id, (list) => list.map((p) => (p.clientId === clientId ? again : p)));
-      void attempt(queryClient, id, again);
+      enqueue(queryClient, id, again);
     },
     clear() {
       epoch += 1;
       byRequest = new Map();
+      queues = new Map();
       emit();
     },
     subscribe(listener) {

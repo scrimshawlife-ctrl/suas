@@ -51,4 +51,33 @@ describe('outbox', () => {
     expect(outbox.get('r1')).toHaveLength(0);
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
   });
+
+  it('sends one message at a time per conversation, in the order typed (SERVE-6)', async () => {
+    const finish: (() => void)[] = [];
+    const send = vi.fn(
+      (_id: string, body: string) =>
+        new Promise<ChatMessage>((resolve) => {
+          finish.push(() => {
+            resolve(sent(body));
+          });
+        }),
+    );
+    const outbox = createOutbox(send);
+    const queryClient = new QueryClient();
+
+    outbox.send(queryClient, 'r1', 'first');
+    outbox.send(queryClient, 'r1', 'second');
+    outbox.send(queryClient, 'r2', 'elsewhere');
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(2);
+    });
+    expect(send.mock.calls.map((call) => call[1])).toEqual(['first', 'elsewhere']);
+
+    finish[0]?.();
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(3);
+    });
+    expect(send.mock.calls[2]?.[1]).toBe('second');
+    expect(outbox.get('r1').map((p) => p.body)).toEqual(['second']);
+  });
 });
