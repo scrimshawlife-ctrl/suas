@@ -62,6 +62,7 @@ export const SERVICE_REQUEST_COMMANDS = [
   'MARK_UNFULFILLABLE',
   'ESCALATE',
   'RETURN_FROM_ESCALATION',
+  'RELEASE',
 ] as const;
 export type ServiceRequestCommand = (typeof SERVICE_REQUEST_COMMANDS)[number];
 
@@ -316,6 +317,15 @@ export const SERVICE_REQUEST_TRANSITIONS: readonly ServiceRequestTransition[] = 
     requiresReason: true,
     mayDiscloseExternally: false,
   },
+  // Helper release (suas-specs V1_MVP_PROPOSAL.md R8.5, proposal): the accepter hands the
+  // request back, and it waits for a new accept like a fresh submit.
+  {
+    from: 'ACCEPTED',
+    to: 'SUBMITTED',
+    command: 'RELEASE',
+    requiresReason: true,
+    mayDiscloseExternally: false,
+  },
   {
     from: 'ESCALATED',
     to: 'TRIAGED',
@@ -331,6 +341,15 @@ export const SERVICE_REQUEST_TRANSITIONS: readonly ServiceRequestTransition[] = 
     mayDiscloseExternally: false,
   },
 ];
+
+/**
+ * Statuses from which DISPATCH.md §4 allows `EXPIRE` (v0.9.0 §14.6).
+ * The expiry job uses this list so an assigned request is not left open past the TTL.
+ */
+export const EXPIRABLE_REQUEST_STATUSES: readonly ServiceRequestStatus[] =
+  SERVICE_REQUEST_TRANSITIONS.filter((transition) => transition.command === 'EXPIRE').map(
+    (transition) => transition.from,
+  );
 
 /** Statuses from which no further transition is documented. */
 export const TERMINAL_REQUEST_STATUSES: readonly ServiceRequestStatus[] = [

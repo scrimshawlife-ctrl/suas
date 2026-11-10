@@ -8,6 +8,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Queryable } from '../db/index.js';
+import { ChatClosedError } from './access.js';
 
 export const MAX_MESSAGE_LENGTH = 2000;
 const DEFAULT_PAGE_SIZE = 50;
@@ -54,6 +55,7 @@ function toMessage(row: MessageRow, serviceRequestId: string): ChatMessage {
   };
 }
 
+/** Stores a message on a live thread; a thread closed by a release refuses it. */
 export async function insertChatMessage(
   db: Queryable,
   input: {
@@ -64,11 +66,14 @@ export async function insertChatMessage(
   },
 ): Promise<string> {
   const chatMessageId = randomUUID();
-  await db.query(
+  const inserted = await db.query(
     `INSERT INTO chat_messages (chat_message_id, tenant_id, chat_thread_id, sender_user_id, body)
-     VALUES ($1, $2, $3, $4, $5)`,
+     SELECT $1, t.tenant_id, t.chat_thread_id, $4, $5
+       FROM chat_threads t
+      WHERE t.tenant_id = $2 AND t.chat_thread_id = $3 AND t.released_at IS NULL`,
     [chatMessageId, input.tenantId, input.chatThreadId, input.senderUserId, input.body],
   );
+  if ((inserted.rowCount ?? 0) === 0) throw new ChatClosedError();
   return chatMessageId;
 }
 

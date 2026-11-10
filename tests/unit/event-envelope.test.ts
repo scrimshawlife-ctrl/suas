@@ -18,7 +18,16 @@ import { EVENT_SCHEMA_VERSION } from '../../src/release/pins.js';
 
 describe('EVENT_MODEL.md §3 — released catalog', () => {
   it('carries exactly the 22 types released in v0.1', () => {
-    expect(DOMAIN_EVENT_TYPES).toHaveLength(22);
+    expect(DOMAIN_EVENT_TYPES.filter((type) => type !== 'SERVICE_REQUEST_RELEASED')).toHaveLength(
+      22,
+    );
+  });
+
+  it('adds exactly SERVICE_REQUEST_RELEASED after v0.1 (DISPATCH.md §4, R8.5)', () => {
+    expect(DOMAIN_EVENT_TYPES).toHaveLength(23);
+    expect(DOMAIN_EVENT_TYPES.filter((type) => type === 'SERVICE_REQUEST_RELEASED')).toEqual([
+      'SERVICE_REQUEST_RELEASED',
+    ]);
   });
 
   it('includes the types named by the domain sections', () => {

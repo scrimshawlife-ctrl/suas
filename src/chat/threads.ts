@@ -3,7 +3,8 @@
  *
  * Plan citations: V1_PROJECT_PLAN.md §2.1 "Peer flow" (a thread exists only between the
  * requester and the person who accepted), §4.3 F7. A person sees only threads they are
- * a participant of. The last message body is sensitive free text: it is shortened here,
+ * a participant of. A released thread stays listed for the requester, with `releasedAt`; the
+ * released helper no longer sees it. The last message body is sensitive free text: it is shortened here,
  * returned to the participant, and never logged.
  */
 
@@ -22,8 +23,10 @@ export interface ChatThreadSummary {
   readonly counterpartDisplayName: string | null;
   readonly lastMessageBody: string | null;
   readonly lastMessageAt: Date | null;
-  /** When the request was accepted: the thread is created in the accept transaction. */
+  /** When this thread was made: the accept transaction that opened it. */
   readonly acceptedAt: Date;
+  /** When a release ended this thread; null while it is live. */
+  readonly releasedAt: Date | null;
   /** The request is in a terminal status. */
   readonly closed: boolean;
   /** The caller's side of the thread. */
@@ -41,6 +44,7 @@ interface ThreadRow {
   last_message_body: string | null;
   last_message_at: Date | null;
   accepted_at: Date;
+  released_at: Date | null;
   role: 'REQUESTER' | 'ACCEPTER';
   last_message_from_me: boolean | null;
 }
@@ -54,7 +58,7 @@ export async function listChatThreads(
     `SELECT t.service_request_id, r.category, r.status, CASE WHEN jsonb_typeof(r.details->'summary') = 'string'
                  THEN left(r.details->>'summary', 280) END AS summary,
             cp.display_name AS counterpart_display_name,
-            m.preview AS last_message_body, m.created_at AS last_message_at, t.created_at AS accepted_at,
+            m.preview AS last_message_body, m.created_at AS last_message_at, t.created_at AS accepted_at, t.released_at,
             CASE WHEN t.requester_user_id = $2::uuid THEN 'REQUESTER' ELSE 'ACCEPTER' END AS role,
             m.sender_user_id = $2::uuid AS last_message_from_me
        FROM chat_threads t
@@ -78,6 +82,7 @@ export async function listChatThreads(
           t.requester_user_id = $2::uuid
           OR (
             t.accepted_by_user_id = $2::uuid
+            AND t.released_at IS NULL
             AND c.status <> 'CLOSED'
             AND (c.closed_at IS NULL OR r.created_at > c.closed_at)
           )
@@ -94,6 +99,7 @@ export async function listChatThreads(
     lastMessageBody: row.last_message_body,
     lastMessageAt: row.last_message_at,
     acceptedAt: row.accepted_at,
+    releasedAt: row.released_at,
     role: row.role,
     lastMessageFromMe: row.last_message_from_me,
     closed: (TERMINAL_REQUEST_STATUSES as readonly string[]).includes(row.status),

@@ -1533,6 +1533,7 @@
       "post": {
         "tags": ["cases"],
         "summary": "Execute a released service-request command",
+        "description": "RELEASE (proposal: suas-specs V1_MVP_PROPOSAL.md R8.5, not released) is the accepter's command: it needs a reason (400 VALIDATION_FAILED without one) and moves an ACCEPTED request back to SUBMITTED. The holder and accept time are cleared, the chat thread is closed, the request returns to the open list, and the requester gets an in-app notice. The same helper may accept it again; the next accept opens a new chat thread.",
         "operationId": "executeServiceRequestCommand",
         "security": [
           {
@@ -1565,7 +1566,8 @@
                 "EXPIRE",
                 "MARK_UNFULFILLABLE",
                 "ESCALATE",
-                "RETURN_FROM_ESCALATION"
+                "RETURN_FROM_ESCALATION",
+                "RELEASE"
               ]
             }
           },
@@ -3693,7 +3695,7 @@
             "$ref": "#/components/responses/Error"
           },
           "409": {
-            "description": "CHAT_UNAVAILABLE (not accepted yet) or IDEMPOTENCY_CONFLICT",
+            "description": "CHAT_UNAVAILABLE (not accepted yet), CHAT_CLOSED (a release ended the thread; it is read-only and the requester can still read it), or IDEMPOTENCY_CONFLICT",
             "content": {
               "application/json": {
                 "schema": {
@@ -6170,6 +6172,11 @@
           "closed": {
             "type": "boolean",
             "description": "The request is in a terminal status."
+          },
+          "released_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "suas-specs D-061 (owner-approved by ID 2026-11-09 3:19 PM PT), proposal text, not released: R8.5, R8.11. When a release ended this thread; null while it is live. A released thread is read-only and only its requester sees it. Always present in responses; optional in the contract so clients written before it still type-check."
           },
           "role": {
             "type": "string",

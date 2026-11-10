@@ -32,9 +32,11 @@ import {
   listCaseServiceRequests,
   MAX_PAGE_SIZE,
   MEETING_PLACE_MAX,
+  notifyRequester,
   readHelperRequestCounts,
   readRequestList,
   readServiceRequestDetail,
+  REQUEST_RELEASED_REASON,
   requestHeldInCurrentCycle,
   SERVICE_CATEGORIES,
   SERVICE_REQUEST_COMMANDS,
@@ -43,7 +45,12 @@ import {
 } from '../../coordination/index.js';
 import type { JsonObject } from '../../jobs/index.js';
 import type { Queryable } from '../../db/index.js';
-import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
+import {
+  commandScope,
+  fingerprintRequest,
+  readCommandRecord,
+  runIdempotentCommand,
+} from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 
 export interface ServiceRequestRouteDeps {
@@ -126,6 +133,59 @@ async function assertRequestHolder(db: Queryable, context: AuthContext, requestI
 
 function actorTypeFor(owner: boolean): 'VETERAN' | 'USER' {
   return owner ? 'VETERAN' : 'USER';
+}
+
+/** The idempotency scope and fingerprint of one caller's request command. */
+function commandIdentity(
+  id: string,
+  command: ServiceRequestCommand,
+  body: z.infer<typeof commandBody>,
+  userId: string,
+): { fingerprint: string; scope: string } {
+  return {
+    fingerprint: fingerprintRequest({
+      service_request_id: id,
+      command,
+      reason: body.reason ?? null,
+      to: body.to ?? null,
+      expected_status: body.expected_status ?? null,
+      grantee_id: body.grantee_id ?? null,
+      actor_id: userId,
+    }),
+    scope: commandScope({
+      command: `POST /service-requests/{id}/commands/${command}`,
+      aggregateType: 'ServiceRequest',
+      aggregateId: id,
+      actorId: userId,
+    }),
+  };
+}
+
+/**
+ * The stored result of an identical, completed command, or undefined. It never throws: a
+ * missing key falls through to the normal checks, so it cannot tell an outsider anything.
+ */
+async function readCompletedReplay(
+  db: Queryable,
+  input: {
+    tenantId: string;
+    header: string | string[] | undefined;
+    commandScope: string;
+    requestFingerprint: string;
+  },
+): Promise<JsonObject | undefined> {
+  const raw = Array.isArray(input.header) ? input.header[0] : input.header;
+  const idempotencyKey = raw?.trim();
+  if (idempotencyKey === undefined || idempotencyKey === '') return undefined;
+  const record = await readCommandRecord(db, {
+    tenantId: input.tenantId,
+    commandScope: input.commandScope,
+    idempotencyKey,
+  });
+  if (record?.state !== 'COMPLETED' || record.requestFingerprint !== input.requestFingerprint) {
+    return undefined;
+  }
+  return record.result ?? {};
 }
 
 /**
@@ -411,6 +471,18 @@ export function registerServiceRequestRoutes(
     const body = commandBody.parse(request.body ?? {});
     const serviceRequest = await findServiceRequest(deps.pool, context.tenantId, id);
     if (serviceRequest === undefined) throw new ResourceNotVisibleError();
+    const { fingerprint, scope } = commandIdentity(id, command, body, context.userId);
+    // A release ends the helper's access, so their retry reads the stored result first
+    // (API.md §7). Scope and fingerprint carry the caller's id, so it is only ever theirs.
+    if (command === 'RELEASE') {
+      const replay = await readCompletedReplay(deps.pool, {
+        tenantId: context.tenantId,
+        header: request.headers['idempotency-key'],
+        commandScope: scope,
+        requestFingerprint: fingerprint,
+      });
+      if (replay !== undefined) return { ...replay, replayed: true };
+    }
     const access = await resolveRequestAccess(deps.pool, context, serviceRequest);
     // CONFIRM, CANCEL and SUBMIT belong to the requester alone; every other command
     // belongs to this request's accepter alone (resolveRequestAccess never makes one
@@ -426,21 +498,6 @@ export function registerServiceRequestRoutes(
     if (access.owner && command === 'SUBMIT') await requireVerifiedVeteran(deps.pool, context);
     const actorType = actorTypeFor(access.owner);
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
-    const fingerprint = fingerprintRequest({
-      service_request_id: id,
-      command,
-      reason: body.reason ?? null,
-      to: body.to ?? null,
-      expected_status: body.expected_status ?? null,
-      grantee_id: body.grantee_id ?? null,
-      actor_id: context.userId,
-    });
-    const scope = commandScope({
-      command: `POST /service-requests/{id}/commands/${command}`,
-      aggregateType: 'ServiceRequest',
-      aggregateId: id,
-      actorId: context.userId,
-    });
 
     const run = await runIdempotentCommand(
       deps.pool,
@@ -493,6 +550,21 @@ export function registerServiceRequestRoutes(
         };
       },
     );
+
+    // After the commit, tell the requester. A failed notice never undoes the release.
+    if (command === 'RELEASE' && !run.replayed) {
+      try {
+        await notifyRequester(deps.pool, {
+          tenantId: context.tenantId,
+          requesterUserId: access.supportCase.veteranUserId,
+          serviceRequestId: id,
+          reason: REQUEST_RELEASED_REASON,
+          dedupeKey: `request-released:${id}:${idempotencyKey}`,
+        });
+      } catch {
+        request.log.warn({ service_request_id: id }, 'release notice could not be queued');
+      }
+    }
 
     return { ...run.result, replayed: run.replayed };
   });

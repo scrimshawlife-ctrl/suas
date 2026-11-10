@@ -1,10 +1,10 @@
 /**
- * Chat thread creation.
+ * Chat thread creation and closing.
  *
- * V1_PROJECT_PLAN.md §2.1 "Peer flow": one chat thread per Service Request, only between
- * the requester and the person who accepted. The thread is created in the accept
- * transaction, so a request has a thread exactly when someone has accepted it. Reading
- * and posting messages belong to the chat feature (plan F7).
+ * V1_PROJECT_PLAN.md §2.1 "Peer flow": one live chat thread per Service Request, only
+ * between the requester and the person who accepted. The thread is created in the accept
+ * transaction. A release (R8.5) closes it; the next accept opens a new one. Reading and
+ * posting messages belong to the chat feature (plan F7).
  */
 
 import type { Queryable } from '../db/transaction.js';
@@ -17,7 +17,7 @@ export interface ChatThread {
   readonly acceptedByUserId: string;
 }
 
-/** Idempotent: a second call for the same request returns the existing thread. */
+/** Idempotent: a second call for the same request returns its live thread. */
 export async function createChatThreadInTx(
   tx: Queryable,
   input: {
@@ -37,13 +37,14 @@ export async function createChatThreadInTx(
        INSERT INTO chat_threads
          (chat_thread_id, tenant_id, service_request_id, requester_user_id, accepted_by_user_id)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (service_request_id) DO NOTHING
+       ON CONFLICT (service_request_id) WHERE released_at IS NULL DO NOTHING
        RETURNING chat_thread_id, service_request_id, requester_user_id, accepted_by_user_id
      )
      SELECT * FROM inserted
      UNION ALL
      SELECT chat_thread_id, service_request_id, requester_user_id, accepted_by_user_id
-       FROM chat_threads WHERE service_request_id = $3 AND tenant_id = $2
+       FROM chat_threads
+      WHERE service_request_id = $3 AND tenant_id = $2 AND released_at IS NULL
      LIMIT 1`,
     [
       randomUUID(),
@@ -61,4 +62,17 @@ export async function createChatThreadInTx(
     requesterUserId: row.requester_user_id,
     acceptedByUserId: row.accepted_by_user_id,
   };
+}
+
+/** Close the request's live thread, if any. Returns whether one was closed. */
+export async function closeChatThreadInTx(
+  tx: Queryable,
+  input: { tenantId: string; serviceRequestId: string },
+): Promise<boolean> {
+  const result = await tx.query(
+    `UPDATE chat_threads SET released_at = now()
+      WHERE tenant_id = $1 AND service_request_id = $2 AND released_at IS NULL`,
+    [input.tenantId, input.serviceRequestId],
+  );
+  return (result.rowCount ?? 0) > 0;
 }

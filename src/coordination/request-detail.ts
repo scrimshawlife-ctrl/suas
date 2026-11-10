@@ -23,7 +23,7 @@ export interface ServiceRequestDetail {
   /** Ride requests only; shown to the requester and the accepter like the meeting place. */
   readonly destination: string | null;
   readonly createdAt: Date;
-  /** When someone accepted, from the chat thread made in the accept transaction; null before. */
+  /** When the current holder accepted; null before an accept and after a release. */
   readonly acceptedAt: Date | null;
   readonly widened: boolean;
   /** The requester's county. */
@@ -44,12 +44,10 @@ export async function readServiceRequestDetail(
   serviceRequestId: string,
 ): Promise<ServiceRequestDetail | undefined> {
   const result = await db.query<DetailRow>(
-    `SELECT r.details, r.created_at, t.created_at AS accepted_at, r.widened_at, u.county
+    `SELECT r.details, r.created_at, r.accepted_at, r.widened_at, u.county
        FROM service_requests r
        JOIN support_cases c ON c.case_id = r.case_id AND c.tenant_id = r.tenant_id
        JOIN users u ON u.user_id = c.veteran_user_id AND u.tenant_id = c.tenant_id
-       LEFT JOIN chat_threads t
-         ON t.service_request_id = r.service_request_id AND t.tenant_id = r.tenant_id
       WHERE r.tenant_id = $1 AND r.service_request_id = $2`,
     [tenantId, serviceRequestId],
   );

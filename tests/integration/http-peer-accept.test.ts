@@ -830,10 +830,11 @@ describe('accepted_at', () => {
     const accepter = await person(tenantId, 'SANTA_CLARA');
     const { serviceRequestId } = await request(requester);
     expect((await accept(accepter, serviceRequestId)).statusCode).toBe(200);
-    // A request backfilled by migration 0017 has an accepter but no chat thread.
-    await pool().query('DELETE FROM chat_threads WHERE service_request_id = $1', [
-      serviceRequestId,
-    ]);
+    // A request backfilled by migration 0017 has an accepter but no chat thread to date it.
+    await pool().query(
+      'UPDATE service_requests SET accepted_at = NULL WHERE service_request_id = $1',
+      [serviceRequestId],
+    );
     const detail = await get(requester, `/service-requests/${serviceRequestId}`);
     expect(detail.statusCode).toBe(200);
     expect(detail.json().status).toBe('ACCEPTED');
