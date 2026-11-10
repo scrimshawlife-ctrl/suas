@@ -122,7 +122,7 @@ async function submittedRequest(requester: Person): Promise<string> {
 interface ListedThread {
   chat_thread_id: string;
   service_request_id: string;
-  closed_at: string | null;
+  released_at: string | null;
 }
 
 async function threadsOf(who: Person, id: string): Promise<ListedThread[]> {
@@ -150,8 +150,8 @@ async function releasedAndReaccepted() {
   expect((await say(helper2, id, 'New hello')).statusCode).toBe(201);
 
   const listed = await threadsOf(requester, id);
-  const oldThread = listed.find((thread) => thread.closed_at !== null);
-  const liveThread = listed.find((thread) => thread.closed_at === null);
+  const oldThread = listed.find((thread) => thread.released_at !== null);
+  const liveThread = listed.find((thread) => thread.released_at === null);
   if (oldThread === undefined || liveThread === undefined) throw new Error('threads missing');
   return {
     tenantId,
@@ -170,8 +170,8 @@ describe('the requester and earlier threads', () => {
 
     const listed = await threadsOf(requester, id);
     expect(listed.map((thread) => thread.chat_thread_id)).toEqual([liveId, oldId]);
-    expect(listed[0]?.closed_at).toBeNull();
-    expect(listed[1]?.closed_at).not.toBeNull();
+    expect(listed[0]?.released_at).toBeNull();
+    expect(listed[1]?.released_at).not.toBeNull();
 
     expect(await bodies(requester, id, oldId)).toEqual(['Old reply', 'Old hello']);
     expect(await bodies(requester, id, liveId)).toEqual(['New hello']);
