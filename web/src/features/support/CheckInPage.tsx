@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { hasApiCode } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { CrisisPanel } from '../../components/CrisisPanel';
@@ -25,7 +26,7 @@ import {
   type Position,
   type Question,
 } from './check-in-flow';
-import { INCOMPLETE_TEXT, NOT_A_DIAGNOSIS, resultCopy } from './check-in-result';
+import { EXPIRED_TEXT, INCOMPLETE_TEXT, NOT_A_DIAGNOSIS, resultCopy } from './check-in-result';
 import { ErrorNotice } from './errors';
 
 function Segments({ total, index }: { total: number; index: number }) {
@@ -148,11 +149,14 @@ function CheckInFlow({
 
   if (result) return <Result result={result} />;
 
-  if (incomplete) {
+  const failure = save.error ?? complete.error;
+  const expired = hasApiCode(failure, 'ILLEGAL_TRANSITION');
+
+  if (incomplete || expired) {
     return (
       <Page width="narrow" className="max-w-[760px] gap-5 pt-12">
         <p role="alert" className="text-20 font-bold">
-          {INCOMPLETE_TEXT}
+          {expired ? EXPIRED_TEXT : INCOMPLETE_TEXT}
         </p>
         <div className="flex flex-wrap gap-3">
           <Button size="form" onClick={onStartAgain}>
@@ -177,7 +181,6 @@ function CheckInFlow({
     );
   }
 
-  const failure = save.error ?? complete.error;
   const isFirst = position.index === 0;
 
   return (

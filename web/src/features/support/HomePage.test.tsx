@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderScreen } from '../request/test-utils';
 import HomePage from './HomePage';
@@ -54,5 +54,14 @@ describe('Home Check-In card', () => {
     renderScreen(<HomePage />, '/home');
     expect(await screen.findByRole('link', { name: 'Start Check-In' })).toBeInTheDocument();
     expect(get).not.toHaveBeenCalledWith('/api/v0/check-ins', expect.anything());
+  });
+
+  it('does not promise a number of questions the Check-In may not have (SUPPORT-1)', async () => {
+    backend('VERIFIED', false);
+    renderScreen(<HomePage />, '/home');
+    const card = await screen.findByRole('region', { name: 'Check-In' });
+    expect(within(card).getByText(/short questions/)).not.toHaveTextContent(
+      /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten) short questions/i,
+    );
   });
 });

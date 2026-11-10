@@ -2,9 +2,10 @@ import { StrictMode } from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/errors';
 import { renderScreen } from '../request/test-utils';
 import CheckInPage from './CheckInPage';
-import { INCOMPLETE_TEXT, NOT_A_DIAGNOSIS } from './check-in-result';
+import { EXPIRED_TEXT, INCOMPLETE_TEXT, NOT_A_DIAGNOSIS } from './check-in-result';
 
 const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() }));
 vi.mock('../../api/client', () => ({ api: client }));
@@ -185,6 +186,22 @@ describe('CheckInPage', () => {
     await waitFor(() => expect(startCalls()).toHaveLength(2));
     expect(await screen.findByText('Question 1 of 2')).toBeInTheDocument();
     expect(screen.queryByText(INCOMPLETE_TEXT)).toBeNull();
+  });
+
+  it('says a Check-In past its window expired and offers a fresh one (SUPPORT-4)', async () => {
+    route(completed());
+    const user = renderPage();
+    await user.click(await screen.findByLabelText('Option one B'));
+    client.POST.mockRejectedValueOnce(
+      new ApiError(409, 'ILLEGAL_TRANSITION', 'started more than 24 hours ago'),
+    );
+    await user.click(screen.getByRole('button', { name: 'Save answer' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(EXPIRED_TEXT);
+    expect(screen.queryByText(/Check your connection/)).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Start again' }));
+    await waitFor(() => expect(startCalls()).toHaveLength(2));
+    expect(await screen.findByText('Question 1 of 2')).toBeInTheDocument();
   });
 
   it('starts a new Check-In exactly once when none is unfinished', async () => {
