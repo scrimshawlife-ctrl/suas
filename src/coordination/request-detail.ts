@@ -11,7 +11,7 @@
 import type { Queryable } from '../db/transaction.js';
 import type { ServiceCounty } from '../identity/counties.js';
 import type { JsonObject } from '../jobs/index.js';
-import { MEETING_PLACE_MAX, readDetailText } from './requests.js';
+import { DESTINATION_MAX, MEETING_PLACE_MAX, readDetailText } from './requests.js';
 
 const SUMMARY_READ_MAX = 280;
 const TIMING_READ_MAX = 120;
@@ -20,6 +20,8 @@ export interface ServiceRequestDetail {
   readonly summary: string | null;
   readonly timing: string | null;
   readonly meetingPlace: string | null;
+  /** Ride requests only; shown to the requester and the accepter like the meeting place. */
+  readonly destination: string | null;
   readonly createdAt: Date;
   /** When someone accepted, from the chat thread made in the accept transaction; null before. */
   readonly acceptedAt: Date | null;
@@ -57,6 +59,7 @@ export async function readServiceRequestDetail(
     summary: readDetailText(row.details, 'summary', SUMMARY_READ_MAX),
     timing: readDetailText(row.details, 'timing', TIMING_READ_MAX),
     meetingPlace: readDetailText(row.details, 'meeting_place', MEETING_PLACE_MAX),
+    destination: readDetailText(row.details, 'destination', DESTINATION_MAX),
     createdAt: row.created_at,
     acceptedAt: row.accepted_at,
     widened: row.widened_at !== null,
