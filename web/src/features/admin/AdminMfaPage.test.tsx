@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
@@ -28,6 +28,18 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('MFA step-up', () => {
+  it('starts one check on a same-tick double click on Start check', async () => {
+    client.POST.mockResolvedValue({
+      data: { challenge_id: 'mfa-test-3', factor_type: 'TEST_FACTOR' },
+    });
+    renderMfa();
+    const button = screen.getByRole('button', { name: 'Start check' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(await screen.findByLabelText('Your response')).toBeInTheDocument();
+    expect(client.POST).toHaveBeenCalledTimes(1);
+  });
+
   it('starts a check, never fills the response, and elevates on a valid answer', async () => {
     const user = userEvent.setup();
     client.POST.mockResolvedValueOnce({

@@ -8,6 +8,7 @@ import { AlertCircleIcon } from '../../components/icons';
 import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useExtractDrafts } from './api';
 import { LIMITS, validateExtract, type ExtractErrors, type ResourceDraft } from './draft-form';
 
@@ -29,6 +30,7 @@ export function extractErrorMessage(error: unknown): string {
 /** "Add from a source": pasted text plus the link it came from. Drafts are never public. */
 export function ExtractForm({ builderAvailable }: { builderAvailable: boolean }) {
   const extract = useExtractDrafts();
+  const flight = useSingleFlight();
   const [text, setText] = useState('');
   const [link, setLink] = useState('');
   const [errors, setErrors] = useState<ExtractErrors>({});
@@ -39,25 +41,26 @@ export function ExtractForm({ builderAvailable }: { builderAvailable: boolean })
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (extract.isPending) return;
     const found = validateExtract({ source_text: text, source_link: link });
     setErrors(found);
     setAttempt((count) => count + 1);
     if (Object.keys(found).length > 0) return;
-    setCreated(null);
-    extract.mutate(
-      { source_text: text.trim(), source_link: link.trim() },
-      {
-        onSuccess: (drafts) => {
-          setCreated(drafts);
-          // With nothing found, keep the text so the admin can adjust it and retry.
-          if (drafts.length > 0) {
-            setText('');
-            setLink('');
-          }
+    flight(() => {
+      setCreated(null);
+      return extract.mutateAsync(
+        { source_text: text.trim(), source_link: link.trim() },
+        {
+          onSuccess: (drafts) => {
+            setCreated(drafts);
+            // With nothing found, keep the text so the admin can adjust it and retry.
+            if (drafts.length > 0) {
+              setText('');
+              setLink('');
+            }
+          },
         },
-      },
-    );
+      );
+    });
   }
 
   return (

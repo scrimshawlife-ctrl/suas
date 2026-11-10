@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
@@ -146,6 +146,24 @@ describe('draft detail', () => {
     // Published drafts become read-only.
     expect(await screen.findByText(/Published as a verified Resource/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+  });
+
+  it('sends one publish on a same-tick double click on Publish resource', async () => {
+    const user = userEvent.setup();
+    client.GET.mockResolvedValue({ data: draft });
+    client.POST.mockResolvedValue({
+      data: {
+        draft: { ...draft, status: 'PUBLISHED', reviewed_at: '2026-11-04T11:00:00.000Z' },
+        resource_id: 'r1',
+      },
+    });
+    renderDraft();
+    await user.click(await screen.findByRole('button', { name: 'Publish' }));
+    const confirm = await screen.findByRole('button', { name: 'Publish resource' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(await screen.findByText(/Published as a verified Resource/)).toBeInTheDocument();
+    expect(client.POST).toHaveBeenCalledTimes(1);
   });
 
   it('asks before discarding', async () => {

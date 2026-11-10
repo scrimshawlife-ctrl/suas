@@ -4,6 +4,7 @@ import { Button } from '../../components/Button';
 import { AlertCircleIcon } from '../../components/icons';
 import { Select } from '../../components/Select';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { useSingleFlight } from '../../lib/single-flight';
 import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
 import { useDiscardDraft, useEditDraft, usePublishDraft } from './api';
@@ -59,6 +60,7 @@ export function DraftEditor({
   const edit = useEditDraft(id);
   const publish = usePublishDraft(id);
   const discard = useDiscardDraft(id);
+  const flight = useSingleFlight();
   const [values, setValues] = useState<DraftFormValues>(() => draftToForm(draft));
   const [errors, setErrors] = useState<DraftFormErrors>({});
   const [confirm, setConfirm] = useState<'publish' | 'discard' | null>(null);
@@ -81,13 +83,13 @@ export function DraftEditor({
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (edit.isPending || payload === null) return;
+    if (payload === null) return;
     const found = validateDraftForm(values);
     setErrors(found);
     setAttempt((count) => count + 1);
     if (Object.keys(found).length > 0) return;
     setSentContacts(payload.contacts !== undefined);
-    edit.mutate(payload, { onSuccess: onSaved });
+    flight(() => edit.mutateAsync(payload, { onSuccess: onSaved }));
   }
 
   const toggleCounty = (county: (typeof COUNTIES)[number]) =>
@@ -225,7 +227,7 @@ export function DraftEditor({
         cancelLabel="Cancel"
         pending={publish.isPending}
         error={publish.isError ? draftErrorMessage(publish.error) : undefined}
-        onConfirm={() => publish.mutate(undefined)}
+        onConfirm={() => flight(() => publish.mutateAsync(undefined))}
         onClose={closeConfirm}
       >
         <p>{PUBLISH_CONFIRM_TEXT}</p>
@@ -240,7 +242,7 @@ export function DraftEditor({
         cancelLabel="Keep draft"
         pending={discard.isPending}
         error={discard.isError ? draftErrorMessage(discard.error) : undefined}
-        onConfirm={() => discard.mutate(undefined)}
+        onConfirm={() => flight(() => discard.mutateAsync(undefined))}
         onClose={closeConfirm}
       >
         <p>This draft will not be published. You can still read it under Discarded.</p>

@@ -6,6 +6,7 @@ import { Card } from '../../components/Card';
 import { AlertCircleIcon } from '../../components/icons';
 import { TextField } from '../../components/TextField';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useStartMfaChallenge, useVerifyMfaChallenge } from './api';
 import { mfaErrorMessage, mfaIsUnavailable, mfaReturnPath, testFactorHint } from './mfa';
 
@@ -24,6 +25,7 @@ export default function AdminMfaPage() {
   const location = useLocation();
   const start = useStartMfaChallenge();
   const verify = useVerifyMfaChallenge();
+  const flight = useSingleFlight();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [response, setResponse] = useState('');
   const [fieldError, setFieldError] = useState<string>();
@@ -36,10 +38,12 @@ export default function AdminMfaPage() {
   const busy = start.isPending || verify.isPending;
 
   function onStart() {
-    verify.reset();
-    setResponse('');
-    setFieldError(undefined);
-    start.mutate(undefined, { onSuccess: (data) => setChallenge(data) });
+    flight(() => {
+      verify.reset();
+      setResponse('');
+      setFieldError(undefined);
+      return start.mutateAsync(undefined, { onSuccess: (data) => setChallenge(data) });
+    });
   }
 
   function onConfirm(event: FormEvent) {
@@ -51,16 +55,18 @@ export default function AdminMfaPage() {
       return;
     }
     setFieldError(undefined);
-    verify.mutate(
-      { challenge_id: challenge.challenge_id, response: response.trim() },
-      {
-        onSuccess: () => {
-          tokenStore.setMfaElevated(true);
-          void navigate(mfaReturnPath(location.state), { replace: true });
+    flight(() =>
+      verify.mutateAsync(
+        { challenge_id: challenge.challenge_id, response: response.trim() },
+        {
+          onSuccess: () => {
+            tokenStore.setMfaElevated(true);
+            void navigate(mfaReturnPath(location.state), { replace: true });
+          },
+          // A check works once, so a failed response needs a new check.
+          onError: () => setChallenge(null),
         },
-        // A check works once, so a failed response needs a new check.
-        onError: () => setChallenge(null),
-      },
+      ),
     );
   }
 
