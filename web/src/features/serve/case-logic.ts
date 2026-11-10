@@ -1,4 +1,4 @@
-import { hasApiCode, isApiError } from '../../api/errors';
+import { hasApiCode, isApiError, isMissingRecord } from '../../api/errors';
 import type { Schemas, ServiceRequestStatus } from '../../api/types';
 import type { StatusKind } from '../../components/StatusChip';
 
@@ -155,9 +155,12 @@ export function statusKind(status: ServiceRequestStatus): StatusKind {
 
 export const NOT_FOUND_MESSAGE = "We couldn't find that request.";
 
-/** The helper view is a 404 for anyone who is not the accepter (a 403 on the contact log too). */
+/**
+ * The helper view is a 404 for anyone who is not the accepter (a 403 on the contact log too);
+ * a malformed id in the address (400) is just as missing.
+ */
 export function isNotHelperError(error: unknown): boolean {
-  return isApiError(error) && (error.status === 404 || error.status === 403);
+  return isMissingRecord(error) || (isApiError(error) && error.status === 403);
 }
 
 /** Plain words for a failed progress command. */

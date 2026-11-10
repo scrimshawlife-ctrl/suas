@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { ApiError } from '../../api/errors';
 import type { ServiceRequestStatus } from '../../api/types';
-import { attemptLabel, canRelease, contactSave, nextStep, statusLabel } from './case-logic';
+import {
+  attemptLabel,
+  canRelease,
+  contactSave,
+  isNotHelperError,
+  nextStep,
+  statusLabel,
+} from './case-logic';
 
 describe('canRelease', () => {
   it('is true only for ACCEPTED, the one status with a RELEASE edge', () => {
@@ -73,5 +81,15 @@ describe('contact attempt payloads', () => {
     expect(attemptLabel({ ...base, channel: 'EMAIL', outcome: 'NO_ANSWER' }, '')).toBe(
       'Email, no answer',
     );
+  });
+});
+
+describe('isNotHelperError', () => {
+  it('reads a malformed id in the address (400) as not found, like a 404 or 403', () => {
+    expect(isNotHelperError(new ApiError(400, 'VALIDATION_FAILED', 'Bad id.'))).toBe(true);
+    expect(isNotHelperError(new ApiError(404, 'NOT_FOUND', 'Not found.'))).toBe(true);
+    expect(isNotHelperError(new ApiError(403, 'FORBIDDEN', 'No.'))).toBe(true);
+    expect(isNotHelperError(new ApiError(500, 'INTERNAL', 'Oops.'))).toBe(false);
+    expect(isNotHelperError(new TypeError('Failed to fetch'))).toBe(false);
   });
 });

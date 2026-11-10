@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/errors';
 import RequestDetailPage from './RequestDetailPage';
 import { renderScreen } from './test-utils';
 
@@ -55,6 +56,21 @@ describe('RequestDetailPage viewer role', () => {
     renderScreen(<RequestDetailPage />, `/requests/${ID}`, '/requests/:id');
     expect(await screen.findByRole('heading', { name: 'Your request' })).toBeInTheDocument();
     expect(screen.getByTestId('where')).toHaveTextContent(`/requests/${ID}`);
+  });
+});
+
+describe('RequestDetailPage missing request', () => {
+  it('reads a malformed id (400) as not found, with no Try again', async () => {
+    get.mockImplementation((path: string) =>
+      path === '/api/v0/veterans/me'
+        ? Promise.resolve({ data: { active_qrf: null, categories: [] } })
+        : Promise.reject(new ApiError(400, 'VALIDATION_FAILED', 'Invalid id.')),
+    );
+    renderScreen(<RequestDetailPage />, '/requests/not-a-real-id', '/requests/:id');
+    expect(
+      await screen.findByRole('heading', { name: 'We could not find that request.' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 });
 

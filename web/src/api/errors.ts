@@ -36,6 +36,14 @@ export function hasApiCode(value: unknown, code: string): boolean {
 }
 
 /**
+ * A read by the id in the address found nothing: 404 for an unknown id, 400 for one that is
+ * not even well formed (only the path is checked on those reads). Neither changes on retry.
+ */
+export function isMissingRecord(value: unknown): boolean {
+  return isApiError(value) && (value.status === 404 || value.status === 400);
+}
+
+/**
  * Builds an ApiError from a failed response. A body that is not the documented envelope
  * (a proxy error page, an empty 502) still yields a typed error with a stable code.
  */
