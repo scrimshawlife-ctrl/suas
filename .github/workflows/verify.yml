@@ -158,3 +158,68 @@ jobs:
 
       - name: Build provenance surface
         run: npm run provenance
+
+  web-e2e:
+    # The web app's Playwright suite (web/e2e) against the LOCAL fake stack that
+    # web/e2e/stack.ts builds: a throwaway suas_local_* database on this runner,
+    # fake and sink adapters, no real external effects (ENVIRONMENT.md §2).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: suas
+          POSTGRES_PASSWORD: suas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U suas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # The stack drops and recreates its database through this server
+      # (assertDisposableDatabase: localhost only, suas_local_<name> only).
+      SUAS_E2E_DB_HOST_URL: postgresql://suas:suas@localhost:5432
+      # AGENTS.md: CI keeps the placeholder safety copy.
+      SUAS_E2E_SAFETY_COPY_MODE: placeholder_test_only
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Install dependencies
+        # The stack runs the API, migrator and seed from the root package.
+        run: npm ci
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Install Chromium for Playwright
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Web end-to-end tests
+        working-directory: web
+        run: npm run test:e2e
+
+      - name: Upload the Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-e2e-results
+          path: web/e2e-results/
+          retention-days: 7

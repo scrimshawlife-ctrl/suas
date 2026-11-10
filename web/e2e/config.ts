@@ -84,7 +84,8 @@ export function stackEnv(sessionSecret: string): NodeJS.ProcessEnv {
     SUAS_MODEL_INFERENCE_MODE: 'fake',
     SUAS_CHAT_PUSH_MODE: 'local',
     SUAS_CHAT_LOCAL_WS_PORT: String(WS_PORT),
-    SUAS_SAFETY_COPY_MODE: 'approved',
+    // CI keeps placeholder_test_only (AGENTS.md); local runs default to the approved copy.
+    SUAS_SAFETY_COPY_MODE: process.env['SUAS_E2E_SAFETY_COPY_MODE'] ?? 'approved',
     SUAS_HTTP_HOST: '127.0.0.1',
     SUAS_HTTP_PORT: String(API_PORT),
     SUAS_LOG_LEVEL: 'warn',
