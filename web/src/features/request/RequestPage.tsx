@@ -55,7 +55,7 @@ export default function RequestPage() {
       <section aria-label="Simple form" className="flex flex-col gap-4">
         {showAssistant ? <h2 className="heading text-26">Or fill in the form</h2> : null}
         {assistantFailed ? <p className="font-bold">{FALLBACK_NOTICE}</p> : null}
-        <PlainForm key={typedText} initialSummary={typedText} />
+        <PlainForm fallbackSummary={typedText} />
       </section>
 
       {assistantAvailable ? null : (

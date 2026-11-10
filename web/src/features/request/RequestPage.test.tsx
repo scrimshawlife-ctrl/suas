@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
 import type { IntakeDraft, IntakeTurn } from './api';
+import { FALLBACK_NOTICE } from './IntakeTurnView';
 import RequestPage from './RequestPage';
 import { renderScreen } from './test-utils';
 
@@ -221,11 +222,27 @@ describe('RequestPage with the assistant', () => {
     });
     renderScreen(<RequestPage />);
     await talkToAssistant('a'.repeat(300));
-    const summary = await screen.findByLabelText('Short summary');
-    expect(summary).toHaveValue('a'.repeat(280));
+    const form = within(screen.getByRole('region', { name: 'Simple form' }));
+    expect(await form.findByText(FALLBACK_NOTICE)).toBeInTheDocument();
+    expect(form.getByLabelText('Short summary')).toHaveValue('a'.repeat(280));
     expect(
       screen.queryByRole('textbox', { name: 'Tell us what you need' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps what was entered in the plain form when the assistant falls back to it', async () => {
+    mocks.post.mockResolvedValue({
+      data: turn({ outcome: 'FALLBACK_FORM', assistant_message: null, draft: null }),
+    });
+    renderScreen(<RequestPage />, '/request?category=FOOD');
+    const form = within(await screen.findByRole('region', { name: 'Simple form' }));
+    await userEvent.click(form.getByLabelText('Where should the helper meet you?'));
+    await userEvent.paste('Library steps');
+    await talkToAssistant('I need groceries for the week.');
+    expect(await form.findByText(FALLBACK_NOTICE)).toBeInTheDocument();
+    expect(form.getByLabelText('Short summary')).toHaveValue('I need groceries for the week.');
+    expect(form.getByLabelText('Where should the helper meet you?')).toHaveValue('Library steps');
+    expect(form.getByLabelText('What kind of help do you need?')).toHaveValue('FOOD');
   });
 
   it('shows the plain form under the assistant, with no toggle (R5.15)', async () => {
