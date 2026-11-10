@@ -81,6 +81,7 @@ export {
   contactCrisisIssue,
   contactsFromRow,
   contactInputIssue,
+  contactValueIssue,
   resolveContacts,
   type ContactInput,
   type ContactMethodKind,

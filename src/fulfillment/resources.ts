@@ -74,9 +74,15 @@ export function directoryServiceNameForDisplay(serviceName: string): string {
 
 const CRISIS_DIRECTORY_NUMBERS = new Set(['911', '988', '838255']);
 
+/**
+ * The digits only, so separators and a leading `+1` / `1` country code do not hide a crisis
+ * number: "+1 988" and "1-911" are caught like "988" and "911".
+ */
 function isCrisisDirectoryNumber(contactMethod: string | undefined): boolean {
   if (contactMethod === undefined) return false;
-  return CRISIS_DIRECTORY_NUMBERS.has(contactMethod.replace(/\D/g, ''));
+  const digits = contactMethod.replace(/\D/g, '');
+  if (CRISIS_DIRECTORY_NUMBERS.has(digits)) return true;
+  return digits.startsWith('1') && CRISIS_DIRECTORY_NUMBERS.has(digits.slice(1));
 }
 
 /**
@@ -134,6 +140,32 @@ export function contactCrisisIssue(value: string): string | undefined {
   );
 }
 
+/** One plain email address: no scheme, no spaces, no list, no query. */
+const PLAIN_EMAIL = /^[^\s@<>()[\]\\,;:"?&/]+@[^\s@<>()[\]\\,;:"?&/]+\.[^\s@<>()[\]\\,;:"?&/.]+$/;
+
+/**
+ * A URL contact must be an http or https URL and an EMAIL contact one plain address, so no
+ * `javascript:`, `data:` or other scheme is ever served as an actionable contact (R8.8).
+ */
+export function contactValueIssue(kind: string | undefined, value: string): string | undefined {
+  const trimmed = value.trim();
+  if (kind === 'URL') {
+    let protocol: string | undefined;
+    try {
+      protocol = new URL(trimmed).protocol;
+    } catch {
+      protocol = undefined;
+    }
+    if (protocol !== 'http:' && protocol !== 'https:') {
+      return 'A URL contact must be an http or https web address (R8.8).';
+    }
+  }
+  if (kind === 'EMAIL' && !PLAIN_EMAIL.test(trimmed)) {
+    return 'An EMAIL contact must be one plain email address, like name@example.org (R8.8).';
+  }
+  return undefined;
+}
+
 /**
  * The one validator for contacts on every write path (draft edit, model extraction,
  * publish, createResource). Returns the first problem, or undefined.
@@ -150,10 +182,14 @@ export function contactInputIssue(input: ContactInput): string | undefined {
     if (contact.value.trim() === '') return 'A contact method needs a value.';
     const crisis = contactCrisisIssue(contact.value);
     if (crisis !== undefined) return crisis;
+    const bad = contactValueIssue(contact.kind, contact.value);
+    if (bad !== undefined) return bad;
   }
   if (input.contactMethod !== undefined) {
     const crisis = contactCrisisIssue(input.contactMethod);
     if (crisis !== undefined) return crisis;
+    const bad = contactValueIssue(input.contactMethodKind, input.contactMethod);
+    if (bad !== undefined) return bad;
     const first = contacts[0];
     if (
       first !== undefined &&

@@ -531,6 +531,43 @@ describe('contacts and area (R8.8, R8.9)', () => {
     expect(read.json().contacts).toEqual(threeContacts);
   });
 
+  it.each([
+    ['a script URL', { contacts: [{ kind: 'URL', value: `java${'script'}:alert(1)` }] }],
+    ['a data URL', { contacts: [{ kind: 'URL', value: 'data:text/html,<b>hi</b>' }] }],
+    ['a mailto as EMAIL', { contacts: [{ kind: 'EMAIL', value: 'mailto:a@example.invalid' }] }],
+    [
+      'a script URL as the single contact',
+      { contact_method: `Java${'Script'}:alert(1)`, contact_method_kind: 'URL' },
+    ],
+    ['+1 988 as a phone', { contacts: [{ kind: 'PHONE', value: '+1 988' }] }],
+  ])('refuses %s on edit and leaves the draft unchanged', async (_label, change) => {
+    const admin = await credential(app, randomUUID(), { admin: true, elevate: true });
+    const draft = await draftWith(admin.headers, { contacts: threeContacts });
+
+    const response = await edit(admin.headers, draft.resource_draft_id, change);
+    expect(response.statusCode).toBe(400);
+
+    const read = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/admin/resource-drafts/${draft.resource_draft_id}`,
+      headers: admin.headers,
+    });
+    expect(read.json().contacts).toEqual(threeContacts);
+  });
+
+  it('refuses a model-extracted data: URL contact and keeps no draft', async () => {
+    const tenantId = randomUUID();
+    const admin = await credential(app, tenantId, { admin: true, elevate: true });
+    scriptResources([
+      validResource,
+      { ...validResource, contacts: [{ kind: 'URL', value: 'data:text/html,<b>hi</b>' }] },
+    ]);
+
+    const response = await extract(admin.headers);
+    expect(response.statusCode).toBe(502);
+    expect(await draftCount(tenantId)).toBe(0);
+  });
+
   it('refuses a model-extracted crisis contact and keeps no draft', async () => {
     const tenantId = randomUUID();
     const admin = await credential(app, tenantId, { admin: true, elevate: true });

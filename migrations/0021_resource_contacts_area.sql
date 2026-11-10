@@ -1,8 +1,8 @@
 -- 0021_resource_contacts_area.sql — contact list and area line (Round 8 R8.8, R8.9, D-059)
 --
 -- Implements suas-specs V1_MVP_PROPOSAL.md R8.8 (up to three contact methods per resource,
--- each with a kind) and R8.9 (an optional short `area` line). Both are proposals, not
--- released.
+-- each with a kind) and R8.9 (an optional short `area` line). suas-specs D-059 accepted both
+-- as proposal text; they are not released.
 --
 -- contacts: one bounded jsonb array of {kind, value} on the resource and the draft. The
 -- single contact_method / contact_method_kind columns stay and mirror the first entry, so

@@ -1305,7 +1305,7 @@ export interface components {
       contact_method: string | null;
       /** @enum {string|null} */
       contact_method_kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
-      /** @description Up to three contact methods, in order. 911, 988 and 838255 are refused. */
+      /** @description Up to three contact methods, in order (R8.8, accepted as proposal text in suas-specs D-059, not released). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
       contacts: {
         /** @enum {string} */
         kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
@@ -1360,7 +1360,7 @@ export interface components {
       contact_method?: string | null;
       /** @enum {string|null} */
       contact_method_kind?: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
-      /** @description Up to three contact methods, in order. 911, 988 and 838255 are refused. */
+      /** @description Up to three contact methods, in order (R8.8, accepted as proposal text in suas-specs D-059, not released). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
       contacts?:
         | {
             /** @enum {string} */
