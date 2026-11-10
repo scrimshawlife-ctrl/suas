@@ -24,12 +24,14 @@ import type { ServiceCategory } from '../../api/types';
 export const PUBLISH_CONFIRM_TEXT =
   'Publishing makes this a verified Resource that veterans can see.';
 
+export const DRAFT_NOT_FOUND = 'We could not find this draft.';
+
 /** Plain words for a failed draft command. */
 export function draftErrorMessage(error: unknown): string {
   if (isApiError(error)) {
     if (error.status === 409)
       return 'This draft was already published or discarded. The page now shows its current state.';
-    if (error.status === 404) return 'We could not find this draft.';
+    if (error.status === 404) return DRAFT_NOT_FOUND;
     if (error.status < 500) return error.message;
   }
   return 'That did not go through. Check your connection and try again.';
