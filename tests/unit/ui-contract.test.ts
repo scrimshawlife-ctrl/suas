@@ -273,30 +273,51 @@ describe('SAFETY.md §2 / SAFETY_COPY.md — D-012 approved crisis copy', () => 
     ).not.toThrow();
   });
 
-  it('renders the released 911/988 destinations only in approved mode', () => {
+  it('renders the released 911, 988 and 838255 destinations only in approved mode', () => {
     const slot = resolveImmediateResourceSlot('approved');
     expect(slot.state).toBe('APPROVED');
     expect(slot.resources).toEqual(APPROVED_CRISIS_RESOURCES);
-    expect(slot.resources.map((resource) => resource.destination)).toEqual(['tel:911', 'tel:988']);
+    expect(slot.resources.map((resource) => resource.destination)).toEqual([
+      'tel:911',
+      'tel:988',
+      'sms:838255',
+    ]);
+    // SAFETY_COPY.md §1.1 primary-action labels, verbatim.
     expect(slot.resources.map((resource) => resource.label)).toEqual([
       'Call 911',
       'Call or text 988',
+      'Text 838255',
     ]);
+    // SAFETY_COPY.md §0: the D-050 link's accessible name.
+    expect(slot.resources.map((resource) => resource.accessibleName)).toEqual([
+      undefined,
+      undefined,
+      'Veterans Crisis Line: Text 838255',
+    ]);
+    expect(resolveImmediateResourceSlot('placeholder_test_only').resources).toEqual([]);
   });
 
-  it('authorizes no released destination other than 911 and 988', async () => {
+  it('authorizes no released destination other than 911, 988 and 838255', async () => {
     const source = readFileSync(new URL('../../src/ui/safety.ts', import.meta.url), 'utf8');
     const prose = source.replace(/\n\s*\*\s?/g, ' ').replace(/\s+/g, ' ');
     expect(prose).toContain(
-      '838255 (sms:838255, Text 838255): owner-decided as D-050 on 2026-11-05, pending a spec release; the pinned spec 0.7.0 SAFETY_COPY authorizes only 911 and 988.',
+      'Pinned spec 0.9.0 SAFETY_COPY.md §0 dialable destinations: `tel:911`, `tel:988`, `sms:988`, and `sms:838255` (D-050, released in 0.8.0).',
     );
+    expect(prose).not.toContain('pending a spec release');
+    expect(prose).not.toContain('0.7.0');
     expect(source).not.toMatch(/\b1-?800-?\d{3}-?\d{4}\b/);
     expect(source).not.toMatch(/https?:\/\//);
-    expect([...APPROVED_CRISIS_DESTINATIONS]).toEqual(['tel:911', 'tel:988', 'sms:988']);
-    expect([...PENDING_RELEASE_CRISIS_DESTINATIONS]).toEqual(['sms:838255']);
+    expect([...APPROVED_CRISIS_DESTINATIONS]).toEqual([
+      'tel:911',
+      'tel:988',
+      'sms:988',
+      'sms:838255',
+    ]);
+    expect([...PENDING_RELEASE_CRISIS_DESTINATIONS]).toEqual([]);
     expect(APPROVED_CRISIS_RESOURCES.map((resource) => resource.destination)).toEqual([
       'tel:911',
       'tel:988',
+      'sms:838255',
     ]);
     const allowed = new Set<string>([
       ...APPROVED_CRISIS_DESTINATIONS,

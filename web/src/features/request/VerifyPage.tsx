@@ -267,6 +267,17 @@ export default function VerifyPage() {
               </a>
               .
             </p>
+            <p className="font-bold">
+              Veterans Crisis Line:{' '}
+              <a
+                href="sms:838255"
+                aria-label="Veterans Crisis Line: Text 838255"
+                className="inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white"
+              >
+                Text 838255
+              </a>
+              .
+            </p>
             <p className="text-harbor-tint">
               SUAS provides practical support coordination and is not an emergency-response service.
             </p>

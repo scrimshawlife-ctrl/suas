@@ -4,17 +4,19 @@
  * Spec citations:
  * - SUAS-specs SAFETY.md §2 (approved on-screen safety copy is released by D-012
  *   in SAFETY_COPY.md; implementations render it and must not invent alternative
- *   crisis wording presented as official; authorized destinations are 911 / 988)
+ *   crisis wording presented as official; authorized destinations are 911, 988 and the
+ *   D-050 Veterans Crisis Line text number 838255)
  * - SUAS-specs SAFETY.md §3.1 (show the veteran the *approved* crisis-resource list)
  * - SUAS-specs SAFETY.md §5.1 / SAFETY_COPY.md §5 (state truthfulness)
  * - SUAS-specs SAFETY.md §9 (`RED` surfaces the approved-resource slot and does
  *   not call an emergency API)
- * - SUAS-specs SAFETY_COPY.md §1, §2 (approved copy + destinations, v0.1.5)
+ * - SUAS-specs SAFETY_COPY.md §0, §1, §2 (approved copy + destinations, v0.1.5; D-050
+ *   `sms:838255` / `Text 838255` released in v0.8.0, pinned at 0.9.0)
  * - SUAS-specs MVP_REFERENCE.md §7.3 (placement `MUST_MATCH`; exact copy
  *   `MUST_MATCH` the D-012 approved wording)
  * - SUAS-specs ENVIRONMENT.md §3 (`SUAS_SAFETY_COPY_MODE=approved` renders the
  *   released copy; `placeholder_test_only` renders the reserved placeholder)
- * - SUAS-specs DECISIONS.md D-012 (`DECIDED`, v0.1.5)
+ * - SUAS-specs DECISIONS.md D-012 (`DECIDED`, v0.1.5) and D-050 (`DECIDED`, v0.8.0)
  *
  * The reference gives crisis resources a prominent, dominant placement, and §7.3
  * requires production to *preserve that placement*. D-012 released the approved
@@ -32,34 +34,42 @@ export const D_012_APPROVED_SAFETY_COPY = 'DECIDED' as const;
 
 export interface ApprovedCrisisResource {
   readonly label: string;
-  /** Destination approved by D-012. Not a link this implementation chose. */
+  /** Destination approved by D-012 or D-050. Not a link this implementation chose. */
   readonly destination: string;
+  /**
+   * Accessible name when it differs from the visible label. SAFETY_COPY.md §0: the
+   * D-050 link's accessible name is `Veterans Crisis Line: Text 838255`.
+   */
+  readonly accessibleName?: string;
   /** The released decision text this entry transcribes. */
   readonly approvedUnder: string;
 }
 
 /**
- * Pinned spec 0.7.0 SAFETY_COPY released destinations: 911 and 988 (call or text)
- * only. No tracking parameters and no other released number.
+ * Pinned spec 0.9.0 SAFETY_COPY.md §0 dialable destinations: `tel:911`, `tel:988`,
+ * `sms:988`, and `sms:838255` (D-050, released in 0.8.0). No tracking parameters and
+ * no other released number.
  */
-export const APPROVED_CRISIS_DESTINATIONS = ['tel:911', 'tel:988', 'sms:988'] as const;
+export const APPROVED_CRISIS_DESTINATIONS = [
+  'tel:911',
+  'tel:988',
+  'sms:988',
+  'sms:838255',
+] as const;
 
 /**
- * 838255 (sms:838255, Text 838255): owner-decided as D-050 on 2026-11-05,
- * pending a spec release; the pinned spec 0.7.0 SAFETY_COPY authorizes only
- * 911 and 988.
- * Owner decision (owner (scrimshawlife-ctrl), 2026-11-05 1:20 PM PT): "You can keep those numbers" /
- * "Just label them appropriately". That does not settle a spec release.
- * The footer must label 838255 as the Veterans Crisis Line text number.
- * Do not describe this destination as released in the pinned spec.
+ * Crisis destinations shipped ahead of a spec release. None at the 0.9.0 pin: D-050
+ * (`sms:838255`, link label `Text 838255`, the Veterans Crisis Line text number) was
+ * released in SUAS-specs 0.8.0 and is in APPROVED_CRISIS_DESTINATIONS.
  */
-export const PENDING_RELEASE_CRISIS_DESTINATIONS = ['sms:838255'] as const;
+export const PENDING_RELEASE_CRISIS_DESTINATIONS: readonly string[] = [];
 
 /**
- * SAFETY_COPY.md §1.1 primary actions (D-012).
+ * SAFETY_COPY.md §1.1 primary actions (D-012, D-050).
  *
- * Labels are the released primary-action wording, verbatim. Those slot
- * destinations are `tel:911` and `tel:988` — no tracking parameters.
+ * Labels are the released primary-action wording, verbatim. The slot
+ * destinations are `tel:911`, `tel:988` and `sms:838255` — no tracking parameters.
+ * "Continue with SUAS support" is a navigation action, not a crisis destination.
  */
 export const APPROVED_CRISIS_RESOURCES: readonly ApprovedCrisisResource[] = [
   {
@@ -71,6 +81,12 @@ export const APPROVED_CRISIS_RESOURCES: readonly ApprovedCrisisResource[] = [
     label: 'Call or text 988',
     destination: 'tel:988',
     approvedUnder: 'SAFETY_COPY.md §1.1 (D-012, v0.1.5)',
+  },
+  {
+    label: 'Text 838255',
+    destination: 'sms:838255',
+    accessibleName: 'Veterans Crisis Line: Text 838255',
+    approvedUnder: 'SAFETY_COPY.md §0, §1.1 (D-050, v0.8.0)',
   },
 ];
 
@@ -91,11 +107,11 @@ export const CRISIS_ENTRY_LIFELINE =
 
 /** SAFETY_COPY.md §2.1 compact banner, joined as one paragraph. */
 export const CRISIS_BANNER_COMPACT =
-  'Immediate danger? Call 911. For suicide or emotional crisis support, call or text 988. SUAS provides practical support coordination and is not an emergency-response service.';
+  'Immediate danger? Call 911. For suicide or emotional crisis support, call or text 988. Veterans Crisis Line: Text 838255. SUAS provides practical support coordination and is not an emergency-response service.';
 
 /** SAFETY_COPY.md §2.3 persistent footer, joined as one paragraph. */
 export const CRISIS_FOOTER =
-  'SUAS coordinates community support. It does not provide emergency medical care or emergency dispatch. For immediate danger, call 911. For suicide or emotional crisis support, call or text 988.';
+  'SUAS coordinates community support. It does not provide emergency medical care or emergency dispatch. For immediate danger, call 911. For suicide or emotional crisis support, call or text 988. Veterans Crisis Line: Text 838255.';
 
 export const IMMEDIATE_RESOURCE_SLOT_STATES = ['APPROVED', 'PLACEHOLDER'] as const;
 export type ImmediateResourceSlotState = (typeof IMMEDIATE_RESOURCE_SLOT_STATES)[number];
@@ -115,7 +131,7 @@ export interface ImmediateResourceSlot {
 /**
  * Resolve what the reserved immediate-resource slot renders for a safety-copy mode.
  *
- * Fail-closed: only `approved` (D-012) renders the released 911/988 copy; every
+ * Fail-closed: only `approved` (D-012) renders the released 911, 988 and 838255 copy; every
  * other mode renders a visible, labelled placeholder. Never throws — §7.3
  * requires the placement to survive regardless of mode.
  */

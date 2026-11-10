@@ -140,6 +140,7 @@ describe('MVP_REFERENCE.md §7.2 — the veteran home is truthful about QRF', ()
   it('keeps the default crisis slot as a placeholder', () => {
     expect(markup).toContain('not available in this build');
     expect(markup).not.toMatch(/\b988\b/);
+    expect(markup).not.toMatch(/\b838255\b/);
   });
 
   it('shows iOS-reference chrome without adding a Check-In surface to the §11 fixture', () => {
@@ -181,6 +182,23 @@ describe('SAFETY_COPY.md §1 / MVP_REFERENCE.md §7.3 — approved crisis copy',
       expect(page).toContain('Call 911');
       expect(page).toContain('Call or text 988');
     }
+  });
+
+  it('renders the D-050 Veterans Crisis Line text action (SAFETY_COPY.md §0, §1.1)', () => {
+    for (const page of [approvedHome, approvedSlot]) {
+      expect(page).toContain('href="sms:838255"');
+      expect(page).toContain('aria-label="Veterans Crisis Line: Text 838255"');
+      expect(page).toContain('>Text 838255</a>');
+    }
+  });
+
+  it('renders the SAFETY_COPY.md §2.1 compact banner and §2.3 footer, verbatim', () => {
+    expect(approvedSlot).toContain(
+      'Immediate danger? Call 911. For suicide or emotional crisis support, call or text 988. Veterans Crisis Line: Text 838255. SUAS provides practical support coordination and is not an emergency-response service.',
+    );
+    expect(approvedSlot).toContain(
+      'SUAS coordinates community support. It does not provide emergency medical care or emergency dispatch. For immediate danger, call 911. For suicide or emotional crisis support, call or text 988. Veterans Crisis Line: Text 838255.',
+    );
   });
 
   it('renders the released crisis-entry wording', () => {

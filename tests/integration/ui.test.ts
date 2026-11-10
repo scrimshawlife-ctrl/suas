@@ -231,6 +231,8 @@ describe('API.md §4 — authenticated surfaces require a session', () => {
       expect(response.body).toContain('href="tel:988"');
       expect(response.body).toContain('Call 911');
       expect(response.body).toContain('Call or text 988');
+      expect(response.body).toContain('href="sms:838255"');
+      expect(response.body).toContain('aria-label="Veterans Crisis Line: Text 838255"');
       expect(auditAccessibility(response.body)).toEqual([]);
     } finally {
       await approved.close();

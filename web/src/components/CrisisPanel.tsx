@@ -13,7 +13,10 @@ export interface CrisisPanelProps {
   continueTo?: string;
 }
 
-/** The Harbor "Need help right now?" panel. D-012 wording, verbatim; 911 and 988 in SOS red. */
+/**
+ * The Harbor "Need help right now?" panel: SAFETY_COPY.md §1.1 (D-012, D-050), verbatim;
+ * 911, 988 and the Veterans Crisis Line text number 838255 in SOS red.
+ */
 export function CrisisPanel({ layout = 'compact', continueTo = '/home' }: CrisisPanelProps) {
   const headingId = useId();
   const full = layout === 'full';
@@ -45,6 +48,9 @@ export function CrisisPanel({ layout = 'compact', continueTo = '/home' }: Crisis
         </Button>
         <Button variant="sos" href="tel:988">
           Call or text 988
+        </Button>
+        <Button variant="sos" href="sms:838255" aria-label="Veterans Crisis Line: Text 838255">
+          Text 838255
         </Button>
         {full ? (
           <Button variant="onHarborOutline" href={continueTo}>

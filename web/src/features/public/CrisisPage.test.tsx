@@ -23,6 +23,11 @@ describe('crisis result per answer', () => {
     }
   });
 
+  it('offers Text 838255 on the immediate danger and unsure answers (SAFETY_COPY.md §1.4, §1.5)', () => {
+    expect(crisisResult('yes').buttons).toContain('text838255');
+    expect(crisisResult('unsure').buttons).toContain('text838255');
+  });
+
   it('leaves "Continue with SUAS" out of the immediate danger answer', () => {
     expect(crisisResult('yes').buttons).not.toContain('continue');
     expect(crisisResult('no').buttons).toContain('continue');
@@ -52,7 +57,7 @@ describe('crisis result copy', () => {
       'yes',
       'Yes, immediate danger',
       [BOARD_SENTENCES.immediate, BOARD_SENTENCES.call988, BOARD_SENTENCES.notEmergencyService],
-      ['call911', 'call988'],
+      ['call911', 'call988', 'text838255'],
     ],
     [
       'no',
@@ -69,7 +74,7 @@ describe('crisis result copy', () => {
       'unsure',
       'If you are unsure, treat immediate safety first.',
       [BOARD_SENTENCES.threat, BOARD_SENTENCES.call988, BOARD_SENTENCES.noDanger],
-      ['call911', 'call988', 'continue'],
+      ['call911', 'call988', 'text838255', 'continue'],
     ],
   ] as const)('%s uses exactly the board wording', (answer, heading, paragraphs, buttons) => {
     expect(crisisResult(answer)).toEqual({
@@ -100,6 +105,19 @@ describe('Crisis page', () => {
     expect(status).toHaveTextContent('call 911 or go to the nearest emergency department');
     expect(status).not.toHaveTextContent('Continue with SUAS');
     expect(status.querySelectorAll('a[href="tel:911"], a[href="tel:988"]')).toHaveLength(2);
+    const text838255 = status.querySelector('a[href="sms:838255"]');
+    expect(text838255).toHaveTextContent('Text 838255');
+    expect(text838255).toHaveAttribute('aria-label', 'Veterans Crisis Line: Text 838255');
+  });
+
+  it('offers Text 838255 in the Veteran crisis option (SAFETY_COPY.md §1.2)', () => {
+    renderPage();
+    const alone = screen.getByRole('heading', { name: 'You do not have to handle this alone.' })
+      .parentElement as HTMLElement;
+    const link = alone.querySelector('a[href="sms:838255"]');
+    expect(link).toHaveTextContent('Text 838255');
+    expect(link).toHaveAttribute('aria-label', 'Veterans Crisis Line: Text 838255');
+    expect(alone.querySelector('a[href="tel:988"]')).toHaveTextContent('Contact crisis support');
   });
 
   it('shows a result for "No, urgent support needed"', async () => {

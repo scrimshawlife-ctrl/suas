@@ -43,8 +43,11 @@ const URL_ATTRIBUTES: ReadonlySet<string> = new Set([
   'xlink:href',
 ]);
 
-/** Schemes safe to keep on a URL attribute. Everything else is defanged. */
-const SAFE_URL_SCHEME = /^(?:https?:|mailto:|tel:)/i;
+/**
+ * Schemes safe to keep on a URL attribute. Everything else is defanged. `sms:` carries
+ * the SAFETY_COPY.md §0 crisis text destinations (`sms:988`, `sms:838255`).
+ */
+const SAFE_URL_SCHEME = /^(?:https?:|mailto:|tel:|sms:)/i;
 /** A leading scheme token, e.g. `javascript:` or `data:`. */
 const LEADING_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
