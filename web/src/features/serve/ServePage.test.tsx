@@ -174,4 +174,18 @@ describe('Serve board', () => {
     const summary = screen.getByRole('region', { name: 'Your summary' });
     expect(summary).toHaveTextContent("You're helping now–");
   });
+
+  it('prefers the server count over the page, even when the list has more pages', async () => {
+    mine = {
+      service_requests: [{ ...open('m1', 'Ride to the clinic'), status: 'ACCEPTED' }],
+      next_cursor: 'more',
+    };
+    mineCounts = { helping_now: 23, closed_last_30_days: 5 };
+    renderServe();
+    await screen.findByText('Ride to the clinic');
+    const summary = screen.getByRole('region', { name: 'Your summary' });
+    await waitFor(() =>
+      expect(summary).toHaveTextContent(/You're helping now23Closed in the last 30 days5/),
+    );
+  });
 });
