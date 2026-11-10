@@ -229,6 +229,37 @@ describe('after a release', () => {
     expect(JSON.stringify(audit.rows[0]?.payload)).not.toContain('Private reason');
   });
 
+  it('emits one SERVICE_REQUEST_RELEASED domain event with ids only (DISPATCH.md §4, R8.5)', async () => {
+    const { helper, id } = await acceptedRequest();
+    const released = await command(helper, id, 'RELEASE', { reason: 'Private reason text' });
+    expect(released.statusCode, released.body).toBe(200);
+
+    const events = await pool().query<{
+      aggregate_type: string;
+      actor_id: string;
+      payload: Record<string, unknown>;
+    }>(
+      `SELECT aggregate_type, actor_id, payload FROM domain_events
+        WHERE event_type = 'SERVICE_REQUEST_RELEASED' AND aggregate_id = $1`,
+      [id],
+    );
+    expect(events.rows).toHaveLength(1);
+    expect(events.rows[0]?.aggregate_type).toBe('ServiceRequest');
+    expect(events.rows[0]?.actor_id).toBe(helper.userId);
+    expect(Object.keys(events.rows[0]?.payload ?? {}).sort()).toEqual(['case_id', 'category']);
+    expect(JSON.stringify(events.rows[0]?.payload)).not.toContain('Private reason');
+
+    // A refused second release writes no second event.
+    const again = await command(helper, id, 'RELEASE', { reason: 'Again' });
+    expect(again.statusCode).not.toBe(200);
+    const after = await pool().query(
+      `SELECT 1 FROM domain_events
+        WHERE event_type = 'SERVICE_REQUEST_RELEASED' AND aggregate_id = $1`,
+      [id],
+    );
+    expect(after.rows).toHaveLength(1);
+  });
+
   it('removes the released helper: detail, chat and counts all go', async () => {
     const { requester, helper, id } = await acceptedRequest();
     expect((await say(helper, id, 'On my way')).statusCode).toBe(201);

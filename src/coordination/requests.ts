@@ -364,7 +364,19 @@ export async function executeServiceRequestCommandInTx(
       tenantId: input.tenantId,
       serviceRequestId: input.serviceRequestId,
     });
-    // Ids only: the reason is free text and stays on the request (status_reason).
+    // Ids only: the reason is free text and stays on the request (status_reason). The
+    // release is both a cataloged Domain Event (suas-specs DISPATCH.md §4, §14.7, R8.5) and
+    // an Audit Event (EVENT_MODEL.md §4), written in the same transaction.
+    await appendDomainEvent(tx, {
+      eventType: 'SERVICE_REQUEST_RELEASED',
+      aggregateType: 'ServiceRequest',
+      aggregateId: input.serviceRequestId,
+      tenantId: input.tenantId,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      payload: { case_id: request.caseId, category: request.category },
+      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    });
     await appendAuditEvent(tx, {
       eventType: 'SERVICE_REQUEST_RELEASED',
       action: 'RELEASE_SERVICE_REQUEST',

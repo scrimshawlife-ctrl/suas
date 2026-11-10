@@ -17,8 +17,9 @@ import {
 import { EVENT_SCHEMA_VERSION } from '../../src/release/pins.js';
 
 describe('EVENT_MODEL.md §3 — released catalog', () => {
-  it('carries exactly the 22 types released in v0.1', () => {
-    expect(DOMAIN_EVENT_TYPES).toHaveLength(22);
+  it('carries exactly the 22 types released in v0.1 plus SERVICE_REQUEST_RELEASED (R8.5)', () => {
+    expect(DOMAIN_EVENT_TYPES).toHaveLength(23);
+    expect(DOMAIN_EVENT_TYPES).toContain('SERVICE_REQUEST_RELEASED');
   });
 
   it('includes the types named by the domain sections', () => {
