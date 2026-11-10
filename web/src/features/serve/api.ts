@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { api } from '../../api/client';
-import { isApiError } from '../../api/errors';
+import { retryServerErrors } from '../../api/errors';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { useSessionToken } from '../../api/token-store';
@@ -17,11 +17,6 @@ const caseKeys = {
 const BOARD_PAGE_SIZE = 20;
 /** The open board refreshes about every 30 seconds so taken requests drop off. */
 const BOARD_REFRESH_MS = 30_000;
-
-/** A 4xx will not change on retry; a 5xx or dropped connection gets two more tries. */
-function retryServerErrors(failureCount: number, error: unknown): boolean {
-  return !(isApiError(error) && error.status < 500) && failureCount < 2;
-}
 
 /** GET /service-requests?ownership=open, paged by `next_cursor`. */
 export function useOpenRequests() {

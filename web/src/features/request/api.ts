@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { isApiError } from '../../api/errors';
+import { retryServerErrors } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { serviceRequestQueryOptions } from '../../api/service-requests';
@@ -27,7 +27,7 @@ export function useIntakeStatus() {
     },
     enabled: token !== null,
     // A gate error will not change on retry; the page redirects.
-    retry: (count, error) => !(isApiError(error) && error.status < 500) && count < 2,
+    retry: retryServerErrors,
     staleTime: 0,
   });
 }

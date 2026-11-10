@@ -47,6 +47,11 @@ export function isMissingRecord(value: unknown): boolean {
  * Builds an ApiError from a failed response. A body that is not the documented envelope
  * (a proxy error page, an empty 502) still yields a typed error with a stable code.
  */
+/** Query `retry`: a 4xx will not change on retry; a 5xx or a dropped connection gets two more tries. */
+export function retryServerErrors(failureCount: number, error: unknown): boolean {
+  return !(isApiError(error) && error.status < 500) && failureCount < 2;
+}
+
 export async function apiErrorFromResponse(response: Response): Promise<ApiError> {
   let code = `HTTP_${response.status}`;
   let message = response.statusText || 'The request did not go through.';

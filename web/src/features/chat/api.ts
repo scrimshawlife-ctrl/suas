@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, useInfiniteQuery, type QueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { isApiError } from '../../api/errors';
+import { retryServerErrors } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { useSessionToken } from '../../api/token-store';
@@ -33,8 +33,7 @@ export function chatMessagesQueryOptions(serviceRequestId: string, threadId?: st
       return requireData(data, 'messages');
     },
     getNextPageParam: (page) => page.next_cursor ?? undefined,
-    // 404 and 409 will not change on retry; a 5xx or a dropped connection gets two more tries.
-    retry: (failureCount, error) => !(isApiError(error) && error.status < 500) && failureCount < 2,
+    retry: retryServerErrors,
   });
 }
 

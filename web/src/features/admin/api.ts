@@ -7,7 +7,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { isApiError } from '../../api/errors';
+import { isApiError, retryServerErrors } from '../../api/errors';
 import { useIdempotencyKey } from '../../api/idempotency';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
@@ -21,10 +21,6 @@ export type BuildInfo = Schemas['BuildInfo'];
 const buildInfoKeys = resourceKeys('admin-build-info');
 const adapterCatalogKeys = resourceKeys('admin-adapter-catalog');
 
-/** A 4xx will not change on retry; a 5xx or a dropped connection gets two more tries. */
-const retry = (failureCount: number, error: unknown) =>
-  !(isApiError(error) && error.status < 500) && failureCount < 2;
-
 /** `enabled` is false before the MFA step-up, when the route would refuse the request. */
 export function useBuildInfo(enabled = true) {
   return useQuery(
@@ -35,7 +31,7 @@ export function useBuildInfo(enabled = true) {
         const { data } = await api.GET('/api/v0/admin/build-info');
         return requireData(data, 'build information');
       },
-      retry,
+      retry: retryServerErrors,
     }),
   );
 }
@@ -48,7 +44,7 @@ export function useAdapterCatalog() {
         const { data } = await api.GET('/api/v0/admin/adapter-catalog');
         return requireData(data, 'adapter catalog').adapters;
       },
-      retry,
+      retry: retryServerErrors,
     }),
   );
 }
@@ -74,7 +70,7 @@ export function useResourceDrafts(status: DraftStatus) {
     },
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     placeholderData: keepPreviousData,
-    retry,
+    retry: retryServerErrors,
   });
 }
 
@@ -87,7 +83,7 @@ export function useResourceDraft(id: string) {
       });
       return requireData(data, 'draft');
     },
-    retry,
+    retry: retryServerErrors,
   });
 }
 
