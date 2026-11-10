@@ -1,12 +1,12 @@
-# PIN_INVENTORY.md — SPEC-017 pin audit 2026-09-17 (re-pinned to 0.7.0 on 2026-11-02)
+# PIN_INVENTORY.md — SPEC-017 pin audit 2026-09-17 (re-pinned to 0.7.0 on 2026-11-02 and to 0.9.0 on 2026-11-09)
 
 Live runtime pin from `src/release/pins.ts`:
 
 | Identity               | Value                                      |
 | ---------------------- | ------------------------------------------ |
-| `SPEC_VERSION`         | `0.7.0`                                    |
-| `RELEASE_MANIFEST`     | `RELEASE_MANIFEST-0.7.0.md`                |
-| `SPECS_COMMIT`         | `2572520fa98ca62e038ae127096a5a9123479127` |
+| `SPEC_VERSION`         | `0.9.0`                                    |
+| `RELEASE_MANIFEST`     | `RELEASE_MANIFEST-0.9.0.md`                |
+| `SPECS_COMMIT`         | `208705cfd2b6aa1ce913ac9e70a2d42a1c9487ad` |
 | `API_VERSION`          | `v0`                                       |
 | `EVENT_SCHEMA_VERSION` | `0.1.0`                                    |
 
@@ -19,6 +19,10 @@ These no longer advertise `0.2.0` as the current pin:
 `AGENTS.md`, `README.md` start-here, `FABLE_HANDOFF.md`, `CONTEXT.md`, `IMPLEMENTATION_BOOTSTRAP.md`, `SPEC017_PLAN.md`, `SPEC017_NEXT.md`, `docs/readiness/env-config-matrix.md`, `docs/runbooks/deployment-rollback.md`, `docs/readiness/spec-runtime-consistency-audit.md`, `src/release/pins.ts` comments.
 
 `suas-specs` STATUS “Next stage” no longer says pin `0.4.0`.
+
+## Living docs re-pinned to 0.9.0 on 2026-11-09
+
+The same pin lines as the 0.7.0 re-pin below, plus `docs/PIN_INVENTORY.md` itself. `SPECS_COMMIT` is the suas-specs #71 squash-merge commit that carries tag `v0.9.0`. The `0.8.0` release (tag `v0.8.0`) was never pinned on its own.
 
 ## Living docs re-pinned to 0.7.0 on 2026-11-02
 

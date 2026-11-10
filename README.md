@@ -18,15 +18,15 @@ The former `demo.html` URL remains as a compatibility redirect to the Product UI
 
 Canonical released specs:
 
-- specification stack: `0.7.0`
-- specs merge pin: `2572520fa98ca62e038ae127096a5a9123479127` (`src/release/pins.ts`)
-- manifest: `RELEASE_MANIFEST-0.7.0.md`
+- specification stack: `0.9.0`
+- specs merge pin: `208705cfd2b6aa1ce913ac9e70a2d42a1c9487ad` (`src/release/pins.ts`)
+- manifest: `RELEASE_MANIFEST-0.9.0.md`
 - current stage: `SPEC-018` (blocked); SPEC-017 evidence recorded against pin `0.6.0`
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - pilot readiness: `NOT_READY`
 - production readiness: `NOT_READY`
 - pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
-- application version: `0.2.0` (`package.json`). Tag `v0.2.0` implements SUAS-specs `0.6.0`; `main` pins `0.7.0` (unreleased, see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`); see [CHANGELOG.md](CHANGELOG.md) and [RELEASING.md](RELEASING.md)
+- application version: `0.2.0` (`package.json`). Tag `v0.2.0` implements SUAS-specs `0.6.0`; `main` pins `0.9.0` (unreleased, see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`); see [CHANGELOG.md](CHANGELOG.md) and [RELEASING.md](RELEASING.md)
 - work tracking: [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6) (all four repositories)
 
 ## Product surfaces
@@ -384,7 +384,7 @@ Logical classes are `LOCAL`, `TEST`, `STAGING`, `PRODUCTION`. LOCAL/TEST/STAGING
 
 ## Release boundary
 
-v0.7.0 authorizes implementation but not production operation.
+v0.9.0 authorizes implementation but not production operation.
 
 Production-unavailable until later decision/evidence closure:
 

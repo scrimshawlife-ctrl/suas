@@ -199,6 +199,34 @@ describe('GET /api/v0/resources', () => {
     expect([...seen].sort()).toEqual([...opened].sort());
   });
 
+  it('reports the filtered total across pages, not the page size', async () => {
+    const { headers, tenantId, user } = await veteranInTenant();
+    for (let index = 0; index < 3; index += 1) {
+      await activeResource(tenantId, user.userId, {
+        serviceName: `Total Pantry ${index}`,
+        category: 'FOOD',
+        counties: ['Santa Clara'],
+      });
+    }
+    await activeResource(tenantId, user.userId, {
+      serviceName: 'Total Shelter',
+      category: 'SHELTER',
+      counties: ['Santa Clara'],
+    });
+
+    const food = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/resources?category=FOOD&county=Santa%20Clara&limit=2',
+      headers,
+    });
+    const foodBody: { resources: unknown[]; total: number } = food.json();
+    expect(foodBody.resources).toHaveLength(2);
+    expect(foodBody.total).toBe(3);
+
+    const all = await app.server.inject({ method: 'GET', url: '/api/v0/resources', headers });
+    expect(all.json()).toMatchObject({ total: 4 });
+  });
+
   it('rejects a malformed cursor and an oversized limit', async () => {
     const { headers } = await veteranInTenant();
     const badCursor = await app.server.inject({

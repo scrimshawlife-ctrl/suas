@@ -3,7 +3,7 @@
  *
  * Spec citations:
  * - SUAS-specs VERSIONING.md §3 "Version identities must stay separate"
- * - SUAS-specs RELEASE_MANIFEST-0.7.0.md "Runtime pins"
+ * - SUAS-specs RELEASE_MANIFEST-0.9.0.md "Runtime pins"
  * - SUAS-specs ENVIRONMENT.md §3 (SUAS_SPEC_VERSION / SUAS_RELEASE_MANIFEST rules 1-2)
  *
  * These values are the specification identities this build claims to implement.
@@ -12,7 +12,7 @@
  */
 
 /** Specification stack version this build implements. VERSIONING.md §2. */
-export const SPEC_VERSION = '0.7.0' as const;
+export const SPEC_VERSION = '0.9.0' as const;
 
 /**
  * Spec version the D-038 CORS startup guard compares (`corsPinIssue`). Always
@@ -20,14 +20,14 @@ export const SPEC_VERSION = '0.7.0' as const;
  */
 export const CORS_GUARD_SPEC_VERSION: string = SPEC_VERSION;
 
-/** Release manifest identifier this build claims. RELEASE_MANIFEST-0.7.0.md. */
-export const RELEASE_MANIFEST = 'RELEASE_MANIFEST-0.7.0.md' as const;
+/** Release manifest identifier this build claims. RELEASE_MANIFEST-0.9.0.md. */
+export const RELEASE_MANIFEST = 'RELEASE_MANIFEST-0.9.0.md' as const;
 
 /**
- * Specs repository merge commit for the pinned release.
+ * Specs repository merge commit for the pinned release (suas-specs #71, tag `v0.9.0`).
  * VERSIONING.md §2: a git SHA is provenance, not the specification version.
  */
-export const SPECS_COMMIT = '2572520fa98ca62e038ae127096a5a9123479127' as const;
+export const SPECS_COMMIT = '208705cfd2b6aa1ce913ac9e70a2d42a1c9487ad' as const;
 
 /** Canonical API version selector. API.md §2; unchanged since v0.1.0. */
 export const API_VERSION = 'v0' as const;
@@ -41,14 +41,14 @@ export const EVENT_SCHEMA_VERSION = '0.1.0' as const;
 /**
  * Implementation stage and readiness, restated from the released manifest so that
  * runtime provenance cannot silently drift from the release boundary.
- * RELEASE_MANIFEST-0.7.0.md "Readiness boundary"; HANDOFF.md §2.
+ * RELEASE_MANIFEST-0.9.0.md "Readiness boundary"; HANDOFF.md §2.
  */
 export const IMPLEMENTATION_STAGE = 'SPEC-017' as const;
 export const PRODUCTION_READINESS = 'NOT_READY' as const;
 
 /**
  * Production operation is authorized only by SPEC-018.
- * HANDOFF.md §2, §12; ENVIRONMENT.md §3 rule 4; RELEASE_MANIFEST-0.7.0.md.
+ * HANDOFF.md §2, §12; ENVIRONMENT.md §3 rule 4; RELEASE_MANIFEST-0.9.0.md.
  *
  * While this is false, real external effects fail closed in every environment
  * class, including PRODUCTION.

@@ -1,15 +1,15 @@
-# IMPLEMENTATION_BOOTSTRAP.md — Released v0.7.0 handoff
+# IMPLEMENTATION_BOOTSTRAP.md — Released v0.9.0 handoff
 
 **Status:** `ACTIVE`  
-**Released specification:** `0.7.0`  
+**Released specification:** `0.9.0`  
 **Implementation authority:** `RELEASED_FOR_IMPLEMENTATION`  
 **Current stage:** `SPEC-018` (blocked). SPEC-017 evidence recorded against pin `0.6.0`.
 
 ## Canonical source
 
-- Specs release merge pin: `2572520fa98ca62e038ae127096a5a9123479127` (`src/release/pins.ts`)
-- Release manifest: `RELEASE_MANIFEST-0.7.0.md`
-- Release decision ledger: `RELEASE_DECISIONS-0.7.0.md` (D-038, with the D-037 record); inherited `RELEASE_DECISIONS-0.6.0.md` (D-004); `RELEASE_DECISIONS-0.5.0.md` / `0.4.0.md` (D-035); `RELEASE_DECISIONS-0.3.0.md` (D-033); `RELEASE_DECISIONS-0.2.0.md` (D-011); `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise
+- Specs release merge pin: `208705cfd2b6aa1ce913ac9e70a2d42a1c9487ad` (`src/release/pins.ts`)
+- Release manifest: `RELEASE_MANIFEST-0.9.0.md`
+- Release decision ledger: `RELEASE_DECISIONS-0.9.0.md` (D-055 to D-063); inherited `RELEASE_DECISIONS-0.8.0.md` (D-050 to D-054); `RELEASE_DECISIONS-0.7.0.md` (D-038, with the D-037 record); `RELEASE_DECISIONS-0.6.0.md` (D-004); `RELEASE_DECISIONS-0.5.0.md` / `0.4.0.md` (D-035); `RELEASE_DECISIONS-0.3.0.md` (D-033); `RELEASE_DECISIONS-0.2.0.md` (D-011); `RELEASE_DECISIONS-0.1.5.md` (D-012); `RELEASE_DECISIONS-0.1.3.md` (D-018); `RELEASE_DECISIONS-0.1.2.md` (D-017); `RELEASE_DECISIONS-0.1.0.md` otherwise
 - Handoff: `HANDOFF.md` in `SUAS-specs`; current residual: `SPEC017_NEXT.md`
 - Environment contract: `ENVIRONMENT.md`
 - Pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
@@ -17,7 +17,7 @@
 ## Implementation sequence
 
 1. Read `FABLE_HANDOFF.md`, `CONTEXT.md`, AGENTS, `SPEC017_PLAN.md`, and `SPEC017_NEXT.md` here.
-2. Read the released `0.7.0` manifest, HANDOFF, ENVIRONMENT, STATUS, PRODUCT, GLOSSARY in specs.
+2. Read the released `0.9.0` manifest, HANDOFF, ENVIRONMENT, STATUS, PRODUCT, GLOSSARY in specs.
 3. Create a change map from every implementation package/file to released spec sections.
 4. Read `SPEC017_NEXT.md` and specs `REMAINING.md`. SPEC-017 evidence is recorded; do not restart at Foundation. Do not invent SPEC-018 product.
 5. Keep typed configuration/startup validation, build provenance, and schema/migration/test harness intact.
@@ -42,4 +42,4 @@ LOCAL/TEST/STAGING are synthetic-only and real-external-effect forbidden under `
 
 ## Definition of SPEC-017 start
 
-Implementation stays on the pinned `0.7.0` stack. SPEC-017 evidence is recorded and does not authorize production; SPEC-018 remains the blocked go/no-go stage.
+Implementation stays on the pinned `0.9.0` stack. SPEC-017 evidence is recorded and does not authorize production; SPEC-018 remains the blocked go/no-go stage.

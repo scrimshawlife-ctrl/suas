@@ -16,7 +16,11 @@
 
 import type { Queryable } from '../db/transaction.js';
 import type { ServiceCounty } from '../identity/counties.js';
-import type { ServiceCategory, ServiceRequestStatus } from './request-transitions.js';
+import {
+  TERMINAL_REQUEST_STATUSES,
+  type ServiceCategory,
+  type ServiceRequestStatus,
+} from './request-transitions.js';
 
 /** API.md §5. */
 export const DEFAULT_PAGE_SIZE = 20;
@@ -39,6 +43,11 @@ export interface OpenRequestSummary {
   readonly updatedAt: Date;
   /** When the request reached a terminal status; null while it is live. */
   readonly closedAt: Date | null;
+}
+
+export interface HelperRequestCounts {
+  readonly helpingNow: number;
+  readonly closedLast30Days: number;
 }
 
 export interface RequestListPage {
@@ -260,5 +269,42 @@ export async function readRequestList(
       hasMore && last !== undefined
         ? encodeCursor(last.created_at, last.service_request_id)
         : undefined,
+  };
+}
+
+/**
+ * A helper's summary counts, over the same rows as the `ownership=mine` list (the requests the
+ * helper is recorded as having accepted). Proposal: suas-specs #69 Round 7 (D-057), not
+ * released.
+ * - `helping_now`: not in a terminal status of DISPATCH.md §4 (0.7.0). That includes
+ *   CONFIRMED, which waits for the helper's CLOSE, and ESCALATED, which can return.
+ * - `closed_last_30_days`: reached CLOSED in a rolling 30 x 24 hours on the database clock,
+ *   by `terminal_at`, inclusive. CANCELLED is not counted as closed, and EXPIRED and
+ *   UNFULFILLABLE cannot follow an accept.
+ */
+export async function readHelperRequestCounts(
+  db: Queryable,
+  tenantId: string,
+  helperUserId: string,
+): Promise<HelperRequestCounts> {
+  const result = await db.query<{ helping_now: string; closed_last_30_days: string }>(
+    `WITH held AS (
+       SELECT r.status = ANY($3::suas_service_request_status[]) AS terminal,
+              r.status = 'CLOSED' AS closed,
+              r.terminal_at
+         FROM service_requests r
+        WHERE r.tenant_id = $1 AND r.accepted_by_user_id = $2::uuid
+     )
+     SELECT count(*) FILTER (WHERE NOT terminal) AS helping_now,
+            count(*) FILTER (
+              WHERE closed AND terminal_at >= now() - interval '30 days'
+            ) AS closed_last_30_days
+       FROM held`,
+    [tenantId, helperUserId, [...TERMINAL_REQUEST_STATUSES]],
+  );
+  const row = result.rows[0];
+  return {
+    helpingNow: Number(row?.helping_now ?? 0),
+    closedLast30Days: Number(row?.closed_last_30_days ?? 0),
   };
 }

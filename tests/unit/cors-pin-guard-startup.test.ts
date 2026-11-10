@@ -6,7 +6,7 @@
  * `cors-pin-guard.test.ts` covers the comparison function. This file proves that
  * `loadConfig` actually calls it, so removing the call from the config schema fails the
  * suite. The mock is file-scoped, so it lives in its own file: only the guard's pin is
- * lowered; SPEC_VERSION and SUAS_SPEC_VERSION stay 0.7.0.
+ * lowered; SPEC_VERSION and SUAS_SPEC_VERSION stay at the build pin.
  */
 
 import { describe, expect, it, vi } from 'vitest';

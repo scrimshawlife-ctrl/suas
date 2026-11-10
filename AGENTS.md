@@ -4,7 +4,7 @@ Read [`FABLE_HANDOFF.md`](FABLE_HANDOFF.md) and [`CONTEXT.md`](CONTEXT.md) first
 
 ## Released spec pin
 
-Build against the released `SUAS-specs` stack named in [`src/release/pins.ts`](src/release/pins.ts): currently `SPEC_VERSION` `0.7.0`, manifest `RELEASE_MANIFEST-0.7.0.md`. Draft, merged-but-untagged, and unreleased spec text is not authority, including the prepared 0.8.0 text on `SUAS-specs` `main`. The implementation stage is `SPEC-017` (`IMPLEMENTATION_STAGE`), and `PRODUCTION_READINESS` is `NOT_READY`; SPEC-018 is blocked.
+Build against the released `SUAS-specs` stack named in [`src/release/pins.ts`](src/release/pins.ts): currently `SPEC_VERSION` `0.9.0`, manifest `RELEASE_MANIFEST-0.9.0.md` (tag `v0.9.0`). Draft, merged-but-untagged, and unreleased spec text is not authority. The implementation stage is `SPEC-017` (`IMPLEMENTATION_STAGE`), and `PRODUCTION_READINESS` is `NOT_READY`; SPEC-018 is blocked.
 
 ## Project
 

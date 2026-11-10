@@ -12,7 +12,7 @@ import { validEnv } from '../helpers/env.js';
 
 describe('CORS allowlist pin guard (unmocked)', () => {
   it('compares the released pin itself', () => {
-    expect(SPEC_VERSION).toBe('0.7.0');
+    expect(SPEC_VERSION).toBe('0.9.0');
     expect(CORS_GUARD_SPEC_VERSION).toBe(SPEC_VERSION);
   });
 

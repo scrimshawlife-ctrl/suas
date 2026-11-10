@@ -25,6 +25,7 @@ import {
   requiresStaleWarning,
   RESOURCE_DEFAULT_PAGE_SIZE,
   RESOURCE_MAX_PAGE_SIZE,
+  countResources,
   searchResources,
   type Resource,
   type ResourceSearchResult,
@@ -84,22 +85,22 @@ export function registerResourceRoutes(app: FastifyInstance, deps: ResourceRoute
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     await requireVerifiedVeteran(deps.pool, context);
     const query = listQuery.parse(request.query);
-    const page = await searchResources(
-      deps.pool,
-      context.tenantId,
-      {
-        activeOnly: true,
-        ...(query.category !== undefined ? { category: query.category } : {}),
-        ...(query.county !== undefined ? { county: query.county } : {}),
-      },
-      {
+    const filters = {
+      activeOnly: true,
+      ...(query.category !== undefined ? { category: query.category } : {}),
+      ...(query.county !== undefined ? { county: query.county } : {}),
+    };
+    const [page, total] = await Promise.all([
+      searchResources(deps.pool, context.tenantId, filters, {
         limit: query.limit,
         ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
-      },
-    );
+      }),
+      countResources(deps.pool, context.tenantId, filters),
+    ]);
     return {
       resources: page.results.map(publicCatalogResource),
       limit: query.limit,
+      total,
       next_cursor: page.nextCursor ?? null,
     };
   });

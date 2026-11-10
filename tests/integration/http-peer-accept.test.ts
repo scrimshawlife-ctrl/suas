@@ -666,3 +666,177 @@ describe('accepting is per request, not per case', () => {
     expect((await activate(helperB)).statusCode).toBe(200);
   });
 });
+
+describe('GET /api/v0/service-requests?ownership=mine counts', () => {
+  const get = (who: Person, url: string) =>
+    app.server.inject({ method: 'GET', url: `/api/v0${url}`, headers: who.headers });
+
+  it('counts the helper active and recently closed requests, for ownership=mine only', async () => {
+    const tenantId = randomUUID();
+    const helper = await person(tenantId, 'SANTA_CLARA', 'helper');
+    const other = await person(tenantId, 'SANTA_CLARA', 'other-helper');
+    const active = await request(await person(tenantId, 'SANTA_CLARA', 'requester-a'));
+    const recent = await request(await person(tenantId, 'SANTA_CLARA', 'requester-b'));
+    const old = await request(await person(tenantId, 'SANTA_CLARA', 'requester-c'));
+    const cancelled = await request(await person(tenantId, 'SANTA_CLARA', 'requester-e'));
+    const others = await request(await person(tenantId, 'SANTA_CLARA', 'requester-d'));
+    for (const { serviceRequestId } of [active, recent, old, cancelled]) {
+      expect((await accept(helper, serviceRequestId)).statusCode).toBe(200);
+    }
+    expect((await accept(other, others.serviceRequestId)).statusCode).toBe(200);
+    const setTerminal = (id: string, status: string, ago: string) =>
+      pool().query(
+        `UPDATE service_requests
+            SET status = $2::suas_service_request_status, terminal_at = now() - $3::interval
+          WHERE service_request_id = $1`,
+        [id, status, ago],
+      );
+    await setTerminal(recent.serviceRequestId, 'CLOSED', '1 day');
+    await setTerminal(old.serviceRequestId, 'CLOSED', '45 days');
+    // Cancelled is not counted as closed (suas-specs #69 R7.3, D-057).
+    await setTerminal(cancelled.serviceRequestId, 'CANCELLED', '1 day');
+    await setTerminal(others.serviceRequestId, 'CLOSED', '0 seconds');
+
+    const mine = await get(helper, '/service-requests?ownership=mine&limit=1');
+    expect(mine.statusCode).toBe(200);
+    expect(mine.json().counts).toEqual({ helping_now: 1, closed_last_30_days: 1 });
+    expect(mine.json().service_requests).toHaveLength(1);
+
+    expect((await get(helper, '/service-requests?ownership=open')).json()).not.toHaveProperty(
+      'counts',
+    );
+    expect((await get(helper, '/service-requests?ownership=requested')).json()).not.toHaveProperty(
+      'counts',
+    );
+  });
+
+  it('counts closes inside the rolling 30-day window and not just outside it', async () => {
+    const tenantId = randomUUID();
+    const helper = await person(tenantId, 'SANTA_CLARA', 'helper');
+    const inside = await request(await person(tenantId, 'SANTA_CLARA', 'requester-a'));
+    const outside = await request(await person(tenantId, 'SANTA_CLARA', 'requester-b'));
+    for (const { serviceRequestId } of [inside, outside]) {
+      expect((await accept(helper, serviceRequestId)).statusCode).toBe(200);
+    }
+    await pool().query(
+      `UPDATE service_requests SET status = 'CLOSED',
+              terminal_at = now() - interval '30 days' + interval '1 minute'
+        WHERE service_request_id = $1`,
+      [inside.serviceRequestId],
+    );
+    await pool().query(
+      `UPDATE service_requests SET status = 'CLOSED',
+              terminal_at = now() - interval '30 days' - interval '1 minute'
+        WHERE service_request_id = $1`,
+      [outside.serviceRequestId],
+    );
+    const mine = await get(helper, '/service-requests?ownership=mine');
+    expect(mine.json().counts).toEqual({ helping_now: 0, closed_last_30_days: 1 });
+  });
+
+  it('follows real CANCEL and CLOSE commands through the API', async () => {
+    const tenantId = randomUUID();
+    const helper = await person(tenantId, 'SANTA_CLARA', 'helper');
+    const requesterA = await person(tenantId, 'SANTA_CLARA', 'requester-a');
+    const requesterB = await person(tenantId, 'SANTA_CLARA', 'requester-b');
+    const toCancel = await request(requesterA);
+    const toClose = await request(requesterB);
+    for (const { serviceRequestId } of [toCancel, toClose]) {
+      expect((await accept(helper, serviceRequestId)).statusCode).toBe(200);
+    }
+    const counts = async (): Promise<unknown> => {
+      const body: { counts?: unknown } = (
+        await get(helper, '/service-requests?ownership=mine')
+      ).json();
+      return body.counts;
+    };
+    expect(await counts()).toEqual({ helping_now: 2, closed_last_30_days: 0 });
+
+    const command = (who: Person, id: string, name: string, payload: object = {}) =>
+      app.server.inject({
+        method: 'POST',
+        url: `/api/v0/service-requests/${id}/commands/${name}`,
+        headers: keyed(who),
+        payload,
+      });
+    const cancel = await command(requesterA, toCancel.serviceRequestId, 'CANCEL', {
+      reason: 'No longer needed',
+    });
+    expect(cancel.statusCode, cancel.body).toBe(200);
+    expect(await counts()).toEqual({ helping_now: 1, closed_last_30_days: 0 });
+
+    for (const [who, name] of [
+      [helper, 'START'],
+      [helper, 'FULFILL'],
+      [requesterB, 'CONFIRM'],
+    ] as const) {
+      const step = await command(who, toClose.serviceRequestId, name);
+      expect(step.statusCode, `${name}: ${step.body}`).toBe(200);
+    }
+    // CONFIRMED waits for the helper's CLOSE, so it still counts as helping now.
+    expect(await counts()).toEqual({ helping_now: 1, closed_last_30_days: 0 });
+    const close = await command(helper, toClose.serviceRequestId, 'CLOSE');
+    expect(close.statusCode, close.body).toBe(200);
+    expect(await counts()).toEqual({ helping_now: 0, closed_last_30_days: 1 });
+
+    const stamped = await pool().query<{ terminal_at: Date | null }>(
+      'SELECT terminal_at FROM service_requests WHERE service_request_id = ANY($1::uuid[])',
+      [[toCancel.serviceRequestId, toClose.serviceRequestId]],
+    );
+    expect(stamped.rows.every((row) => row.terminal_at !== null)).toBe(true);
+  });
+});
+
+describe('accepted_at', () => {
+  const get = (who: Person, url: string) =>
+    app.server.inject({ method: 'GET', url: `/api/v0${url}`, headers: who.headers });
+
+  it('shows when a request was accepted to its requester and accepter only', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'SANTA_CLARA', 'requester');
+    const accepter = await person(tenantId, 'SANTA_CLARA');
+    const bystander = await person(tenantId, 'SANTA_CLARA');
+    const { serviceRequestId } = await request(requester);
+
+    const detailOf = (who: Person) => get(who, `/service-requests/${serviceRequestId}`);
+    expect((await detailOf(requester)).json().accepted_at).toBeNull();
+
+    expect((await accept(accepter, serviceRequestId)).statusCode).toBe(200);
+    const stored = await pool().query<{ created_at: Date }>(
+      `SELECT created_at FROM chat_threads WHERE service_request_id = $1`,
+      [serviceRequestId],
+    );
+    const acceptedAt = stored.rows[0]?.created_at.toISOString();
+    expect(acceptedAt).toBeDefined();
+
+    expect((await detailOf(requester)).json().accepted_at).toBe(acceptedAt);
+    expect((await detailOf(accepter)).json().accepted_at).toBe(acceptedAt);
+    const hidden = await detailOf(bystander);
+    expect(hidden.statusCode).toBe(404);
+    expect(hidden.json()).not.toHaveProperty('accepted_at');
+
+    for (const who of [requester, accepter]) {
+      const threads: { threads: { accepted_at: string }[] } = (
+        await get(who, '/chat/threads')
+      ).json();
+      expect(threads.threads.map((thread) => thread.accepted_at)).toEqual([acceptedAt]);
+    }
+    expect((await get(bystander, '/chat/threads')).json().threads).toEqual([]);
+  });
+
+  it('returns null, not a made-up time, for an accepted request with no recorded accept time', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'SANTA_CLARA', 'requester');
+    const accepter = await person(tenantId, 'SANTA_CLARA');
+    const { serviceRequestId } = await request(requester);
+    expect((await accept(accepter, serviceRequestId)).statusCode).toBe(200);
+    // A request backfilled by migration 0017 has an accepter but no chat thread.
+    await pool().query('DELETE FROM chat_threads WHERE service_request_id = $1', [
+      serviceRequestId,
+    ]);
+    const detail = await get(requester, `/service-requests/${serviceRequestId}`);
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().status).toBe('ACCEPTED');
+    expect(detail.json().accepted_at).toBeNull();
+  });
+});

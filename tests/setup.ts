@@ -20,8 +20,8 @@ const nodeIssue = nodeEngineIssue(process.version, declaredNode);
 if (nodeIssue !== undefined) throw new Error(nodeIssue);
 
 process.env.SUAS_ENV = 'TEST';
-process.env.SUAS_SPEC_VERSION ??= '0.7.0';
-process.env.SUAS_RELEASE_MANIFEST ??= 'RELEASE_MANIFEST-0.7.0.md';
+process.env.SUAS_SPEC_VERSION ??= '0.9.0';
+process.env.SUAS_RELEASE_MANIFEST ??= 'RELEASE_MANIFEST-0.9.0.md';
 process.env.SUAS_ALLOW_REAL_EXTERNAL_EFFECTS = 'false';
 process.env.SUAS_MIGRATIONS_MODE ??= 'apply';
 process.env.SUAS_EMAIL_MODE ??= 'fake';
