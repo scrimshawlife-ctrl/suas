@@ -5,6 +5,7 @@ import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
 import { Stepper } from '../../components/Stepper';
 import { AlertCircleIcon, CheckIcon, LockIcon } from '../../components/icons';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useIdVerification, useStartIdVerification } from '../public/api';
 import { safeFrom } from '../public/signin-flow';
 import {
@@ -172,6 +173,7 @@ export default function VerifyPage() {
   const continueTo = safeFrom((location.state as { from?: unknown } | null)?.from) ?? '/home';
   const status = useIdVerification();
   const start = useStartIdVerification();
+  const flight = useSingleFlight();
 
   // The status route is the source of truth; a failed start can only add "unavailable".
   const view = verifyView(status.data?.status, start.error);
@@ -209,7 +211,7 @@ export default function VerifyPage() {
           <StatusCard
             view={view}
             starting={start.isPending}
-            onStart={() => start.mutate()}
+            onStart={() => flight(() => start.mutateAsync())}
             continueTo={continueTo}
             startFailed={startFailed}
           />
