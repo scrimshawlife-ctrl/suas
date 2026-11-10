@@ -420,6 +420,11 @@ describe('GET /api/v0/immediate-resources', () => {
         destination: 'tel:988',
         approved_under: 'SAFETY_COPY.md §1.1 (D-012, v0.1.5)',
       },
+      {
+        label: 'Text 838255',
+        destination: 'sms:838255',
+        approved_under: 'SAFETY_COPY.md §0, §1.1 (D-050, v0.8.0)',
+      },
     ]);
   });
 });

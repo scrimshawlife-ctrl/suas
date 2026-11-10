@@ -43,6 +43,7 @@ describe('sanitizeUrl', () => {
     expect(sanitizeUrl('HTTP://example.org')).toBe('HTTP://example.org');
     expect(sanitizeUrl('mailto:intake@example.org')).toBe('mailto:intake@example.org');
     expect(sanitizeUrl('tel:frontdesk')).toBe('tel:frontdesk');
+    expect(sanitizeUrl('sms:838255')).toBe('sms:838255');
   });
 
   it('defangs dangerous schemes to "#"', () => {

@@ -4,7 +4,8 @@
  */
 export type TriageAnswer = 'yes' | 'no' | 'unsure';
 
-export type CrisisButton = 'call911' | 'call988' | 'continue';
+/** `text838255` is the D-050 Veterans Crisis Line text action (SAFETY_COPY.md §1.4, §1.5). */
+export type CrisisButton = 'call911' | 'call988' | 'text838255' | 'continue';
 
 export interface CrisisResult {
   heading: string;
@@ -52,7 +53,7 @@ export function crisisResult(answer: TriageAnswer): CrisisResult {
       return {
         heading: 'Yes, immediate danger',
         paragraphs: [EMERGENCY, CALL_988, NOT_EMERGENCY_SERVICE],
-        buttons: ['call911', 'call988'],
+        buttons: ['call911', 'call988', 'text838255'],
       };
     case 'no':
       return {
@@ -69,7 +70,7 @@ export function crisisResult(answer: TriageAnswer): CrisisResult {
       return {
         heading: 'If you are unsure, treat immediate safety first.',
         paragraphs: [CALL_911, CALL_988, NO_DANGER],
-        buttons: ['call911', 'call988', 'continue'],
+        buttons: ['call911', 'call988', 'text838255', 'continue'],
       };
   }
 }

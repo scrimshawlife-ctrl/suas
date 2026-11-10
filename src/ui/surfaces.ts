@@ -204,7 +204,19 @@ function approvedCrisisCopy(slot: ImmediateResourceSlot): Renderable {
     ul(
       { class: 'card-grid' },
       slot.resources.map((resource) =>
-        li({}, a({ class: 'card action', href: resource.destination }, resource.label)),
+        li(
+          {},
+          a(
+            {
+              class: 'card action',
+              href: resource.destination,
+              ...(resource.accessibleName !== undefined
+                ? { 'aria-label': resource.accessibleName }
+                : {}),
+            },
+            resource.label,
+          ),
+        ),
       ),
     ),
     p({ class: 'muted' }, CRISIS_FOOTER),

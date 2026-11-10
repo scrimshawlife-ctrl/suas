@@ -53,6 +53,17 @@ export default function CrisisPage() {
         Call or text 988
       </Button>
     ),
+    text838255: (
+      <Button
+        key="838255"
+        variant="sos"
+        href="sms:838255"
+        aria-label="Veterans Crisis Line: Text 838255"
+        className="max-sm:w-full"
+      >
+        Text 838255
+      </Button>
+    ),
     continue: (
       <Button key="continue" variant="secondary" href={continueTo} className="max-sm:w-full">
         Continue with SUAS
@@ -116,6 +127,14 @@ export default function CrisisPage() {
             <div className="mt-1 flex flex-wrap gap-2.5">
               <Button variant="sos" href="tel:988" className="max-sm:w-full">
                 Contact crisis support
+              </Button>
+              <Button
+                variant="sos"
+                href="sms:838255"
+                aria-label="Veterans Crisis Line: Text 838255"
+                className="max-sm:w-full"
+              >
+                Text 838255
               </Button>
               <Button
                 variant="secondary"

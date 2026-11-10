@@ -52,6 +52,13 @@ describe('Verify page', () => {
     expect(screen.getByRole('region', { name: /Immediate danger\? Call 911/ })).toHaveTextContent(
       /For suicide or emotional crisis support,\s*call\s*or\s*text 988/,
     );
+    // SAFETY_COPY.md §2.1 compact banner, Veterans Crisis Line line (D-050).
+    expect(screen.getByRole('region', { name: /Immediate danger\? Call 911/ })).toHaveTextContent(
+      /Veterans Crisis Line:\s*Text 838255\./,
+    );
+    const text838255 = screen.getByRole('link', { name: 'Veterans Crisis Line: Text 838255' });
+    expect(text838255).toHaveAttribute('href', 'sms:838255');
+    expect(text838255).toHaveClass('inline-flex', 'min-h-11', 'min-w-11');
   });
 
   it('has one start button and no camera or upload', async () => {

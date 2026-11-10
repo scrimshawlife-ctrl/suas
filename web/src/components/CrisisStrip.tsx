@@ -4,8 +4,8 @@ const link =
   'inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white underline underline-offset-3 hover:text-harbor-tint';
 
 /**
- * The Harbor band at the top of every veteran screen, signed in or not (D-012 wording,
- * verbatim). White bold links as drawn on the boards; the SOS red buttons live in the
+ * The Harbor band at the top of every veteran screen, signed in or not: SAFETY_COPY.md §2.2
+ * minimal banner (D-012, with the D-050 Veterans Crisis Line line), verbatim. White bold links as drawn on the boards; the SOS red buttons live in the
  * crisis panel.
  */
 export function CrisisStrip() {
@@ -26,6 +26,12 @@ export function CrisisStrip() {
           or{' '}
           <a href="sms:988" className={link} aria-label="Text 988">
             text 988
+          </a>
+        </p>
+        <p>
+          <span className={label}>Veterans Crisis Line:</span>{' '}
+          <a href="sms:838255" className={link} aria-label="Veterans Crisis Line: Text 838255">
+            Text 838255
           </a>
         </p>
         <p>
