@@ -19,7 +19,12 @@ const base: Me = {
   county: null,
   display_name: null,
   is_admin: false,
-  id_verification: { method: 'ID_SCAN_SELFIE', status: 'NOT_STARTED', verified_at: null },
+  id_verification: {
+    method: 'VA_VETERAN_STATUS',
+    status: 'NOT_STARTED',
+    not_confirmed_reason: null,
+    verified_at: null,
+  },
   open_case: null,
   active_qrf: null,
   categories: [],
