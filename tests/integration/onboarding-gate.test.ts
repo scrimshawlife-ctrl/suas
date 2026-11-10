@@ -1,36 +1,33 @@
 /**
- * County, the ID scan + selfie check, and the verified-Veteran gate
- * (V1_PROJECT_PLAN.md §2.1, §4.3 F1/F2/F10). Requires PostgreSQL.
+ * County, the Veteran confirmation flow, and the verified-Veteran gate (V1_PROJECT_PLAN.md
+ * §2.1, §4.3 F1/F2/F10). The gate is now a VERIFIED VA Veteran Confirmation (suas-specs #72
+ * R9.1) in place of the ID scan + selfie; the flow tests below keep the properties the ID
+ * scan tests checked. Route edge cases are in va-confirmation.test.ts. Requires PostgreSQL.
  */
 
 import { randomUUID } from 'node:crypto';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import {
-  createUser,
-  FakeIdVerification,
-  readIdScanStatus,
-  startIdScan,
-  IdVerificationUnavailableError,
-} from '../../src/identity/index.js';
+import { createUser, VA_CONFIRMATION_FIXTURE_ZIPS } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
-let appWithoutScan: StartedApp;
+let appWithoutConfirmation: StartedApp;
 
 const env = (extra: Record<string, string>) =>
   validEnv({ SUAS_MIGRATIONS_MODE: 'apply', DATABASE_URL: testDatabaseUrl(), ...extra });
 
 beforeAll(async () => {
-  app = await startApp({ env: env({ SUAS_ID_VERIFICATION_MODE: 'fake' }), listen: false });
-  appWithoutScan = await startApp({ env: env({}), listen: false });
+  app = await startApp({ env: env({ SUAS_VA_CONFIRMATION_MODE: 'fixture' }), listen: false });
+  appWithoutConfirmation = await startApp({ env: env({}), listen: false });
 });
 
 afterAll(async () => {
-  await appWithoutScan.close();
+  await appWithoutConfirmation.close();
   await app.close();
 });
 
@@ -93,100 +90,105 @@ describe('county', () => {
   });
 });
 
-describe('ID scan + selfie flow over HTTP (config fake passes immediately)', () => {
-  it('starts, shows the standing on the me view, and does not open a second check', async () => {
-    const { headers, pool, tenantId, user } = await person();
-    const start = () =>
-      app.server.inject({
-        method: 'POST',
-        url: '/api/v0/veterans/me/id-verification/commands/start',
-        headers,
-      });
-
-    const first = await start();
-    expect(first.statusCode).toBe(201);
-    expect(first.json<{ method: string; status: string }>()).toMatchObject({
-      method: 'ID_SCAN_SELFIE',
-      status: 'VERIFIED',
-    });
-    expect((await start()).statusCode).toBe(200);
-
-    const me = await app.server.inject({ method: 'GET', url: '/api/v0/veterans/me', headers });
-    expect(me.json<{ id_verification: { status: string } }>().id_verification.status).toBe(
-      'VERIFIED',
-    );
-    const rows = await pool.query(
-      `SELECT 1 FROM veteran_verifications WHERE tenant_id = $1 AND user_id = $2`,
-      [tenantId, user.userId],
-    );
-    expect(rows.rowCount).toBe(1);
+/** One confirm call with a synthetic person; the fixture answers by ZIP. */
+const confirm = (headers: Record<string, string>, zipCode: string, started: StartedApp = app) =>
+  started.server.inject({
+    method: 'POST',
+    url: '/api/v0/veterans/me/verification/va/confirm',
+    headers: { ...headers, 'idempotency-key': randomUUID() },
+    payload: {
+      firstName: 'Synthetic',
+      lastName: 'Veteran',
+      birthDate: '1970-01-01',
+      streetAddressLine1: '1 Example Way',
+      city: 'Exampleton',
+      state: 'CA',
+      zipCode,
+    },
   });
 
-  it('reads NOT_STARTED before any check, and 503 when no provider is configured', async () => {
-    const { headers } = await person();
-    const status = await app.server.inject({
-      method: 'GET',
-      url: '/api/v0/veterans/me/id-verification',
-      headers,
-    });
-    expect(status.json<{ status: string }>().status).toBe('NOT_STARTED');
+const standing = async (headers: Record<string, string>) =>
+  (await app.server.inject({ method: 'GET', url: '/api/v0/veterans/me', headers })).json<{
+    id_verification: { status: string; verified_at: string | null };
+  }>().id_verification;
 
-    const disabled = await person(appWithoutScan);
-    const start = await appWithoutScan.server.inject({
-      method: 'POST',
-      url: '/api/v0/veterans/me/id-verification/commands/start',
-      headers: disabled.headers,
-    });
-    expect(start.statusCode).toBe(503);
-    expect(start.json<{ error: { code: string } }>().error.code).toBe(
+const resources = (headers: Record<string, string>) =>
+  app.server.inject({ method: 'GET', url: '/api/v0/resources', headers });
+
+const attemptCount = async (pool: Pool, tenantId: string, userId: string) =>
+  (
+    await pool.query(
+      `SELECT 1 FROM veteran_verifications
+       WHERE tenant_id = $1 AND user_id = $2 AND method = 'VA_VETERAN_STATUS'`,
+      [tenantId, userId],
+    )
+  ).rowCount;
+
+describe('Veteran confirmation flow over HTTP (fixture answers at once)', () => {
+  it('confirms, shows the standing on the me view, and does not take a second attempt', async () => {
+    const { headers, pool, tenantId, user } = await person();
+
+    const first = await confirm(headers, VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED);
+    expect(first.statusCode).toBe(200);
+    expect(first.json<{ status: string }>().status).toBe('VERIFIED');
+    const again = await confirm(headers, VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED);
+    expect(again.statusCode).toBe(200);
+    expect(again.json<{ status: string }>().status).toBe('VERIFIED');
+
+    expect((await standing(headers)).status).toBe('VERIFIED');
+    expect(await attemptCount(pool, tenantId, user.userId)).toBe(1);
+  });
+
+  it('reads NOT_STARTED before any attempt, and 503 when no provider is configured', async () => {
+    const { headers } = await person();
+    expect((await standing(headers)).status).toBe('NOT_STARTED');
+
+    const disabled = await person(appWithoutConfirmation);
+    const response = await confirm(
+      disabled.headers,
+      VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED,
+      appWithoutConfirmation,
+    );
+    expect(response.statusCode).toBe(503);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe(
       'ID_VERIFICATION_UNAVAILABLE',
     );
   });
 });
 
-describe('ID scan + selfie flow with a controllable port', () => {
-  it('moves PENDING to VERIFIED or NOT_CONFIRMED only when the port answers', async () => {
-    const { pool, tenantId, user } = await person();
-    const port = new FakeIdVerification();
+describe('Veteran confirmation outcomes', () => {
+  it('moves to VERIFIED or NOT_CONFIRMED only when VA answers, and a retry can pass', async () => {
+    const { headers } = await person();
 
-    const started = await startIdScan(pool, port, tenantId, user.userId);
-    expect(started).toMatchObject({ created: true, view: { status: 'PENDING' } });
-    // A retried start reuses the pending check.
-    expect((await startIdScan(pool, port, tenantId, user.userId)).created).toBe(false);
-    expect((await readIdScanStatus(pool, port, tenantId, user.userId)).status).toBe('PENDING');
+    const notFound = await confirm(headers, VA_CONFIRMATION_FIXTURE_ZIPS.PERSON_NOT_FOUND);
+    expect(notFound.json<{ status: string }>().status).toBe('NOT_CONFIRMED');
+    expect((await standing(headers)).status).toBe('NOT_CONFIRMED');
+    expect((await resources(headers)).statusCode).toBe(403);
 
-    port.resolve('fake-id-check-1', 'NOT_CONFIRMED');
-    expect((await readIdScanStatus(pool, port, tenantId, user.userId)).status).toBe(
-      'NOT_CONFIRMED',
-    );
-
-    // A person who was not confirmed may try again; the new check can pass.
-    const retry = await startIdScan(pool, port, tenantId, user.userId);
-    expect(retry).toMatchObject({ created: true, view: { status: 'PENDING' } });
-    port.resolve('fake-id-check-2', 'VERIFIED');
-    const done = await readIdScanStatus(pool, port, tenantId, user.userId);
+    // A person who was not confirmed may try again; the new attempt can pass.
+    const retry = await confirm(headers, VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED);
+    expect(retry.json<{ status: string }>().status).toBe('VERIFIED');
+    const done = await standing(headers);
     expect(done.status).toBe('VERIFIED');
-    expect(done.verifiedAt).toBeInstanceOf(Date);
+    expect(done.verified_at).not.toBeNull();
+    expect((await resources(headers)).statusCode).toBe(200);
   });
 
-  it('reports unavailable when the provider is down and keeps a pending check pending', async () => {
-    const { pool, tenantId, user } = await person();
-    const port = new FakeIdVerification();
+  it('reports unavailable when VA is down, keeps the gate closed, and a later attempt can pass', async () => {
+    const { headers } = await person();
 
-    port.setAvailable(false);
-    await expect(startIdScan(pool, port, tenantId, user.userId)).rejects.toBeInstanceOf(
-      IdVerificationUnavailableError,
-    );
+    const down = await confirm(headers, VA_CONFIRMATION_FIXTURE_ZIPS.UNAVAILABLE_ERROR);
+    expect(down.statusCode).toBe(200);
+    expect(down.json<{ status: string }>().status).toBe('UNAVAILABLE');
+    expect((await resources(headers)).statusCode).toBe(403);
 
-    port.setAvailable(true);
-    await startIdScan(pool, port, tenantId, user.userId);
-    port.setAvailable(false);
-    expect((await readIdScanStatus(pool, port, tenantId, user.userId)).status).toBe('PENDING');
+    const later = await confirm(headers, VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED);
+    expect(later.json<{ status: string }>().status).toBe('VERIFIED');
   });
 });
 
 describe('verified-Veteran gate', () => {
-  it('blocks a signed-in person with no passed scan from every Veteran-only route', async () => {
+  it('blocks a signed-in person with no confirmation from every Veteran-only route', async () => {
     const { headers, tenantId } = await person();
     const id = randomUUID();
     const routes: { method: 'GET' | 'POST'; url: string; payload?: object }[] = [
@@ -223,7 +225,7 @@ describe('verified-Veteran gate', () => {
     expect(noCounty.statusCode).toBe(422);
     expect(noCounty.json<{ error: { code: string } }>().error.code).toBe('COUNTY_REQUIRED');
 
-    // Check-Ins and Resources need the scan but not a county.
+    // Check-Ins and Resources need the confirmation but not a county.
     expect(
       (await app.server.inject({ method: 'GET', url: '/api/v0/resources', headers })).statusCode,
     ).toBe(200);
@@ -247,8 +249,10 @@ describe('verified-Veteran gate', () => {
     await markVerifiedVeteran(pool, tenantId, user.userId);
     await pool.query(
       `INSERT INTO veteran_verifications
-         (verification_id, tenant_id, user_id, method, status, source, source_contract_version)
-       VALUES ($1, $2, $3, 'ID_SCAN_SELFIE', 'REVOKED', 'SUAS', 'test')`,
+         (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
+        provider_environment, projection_id, settled_at)
+       VALUES ($1, $2, $3, 'VA_VETERAN_STATUS', 'REVOKED', 'SUAS', 'test', 'NONE',
+               'VA_CONFIRMATION_V1_REQUIRED_ONLY', now())`,
       [randomUUID(), tenantId, user.userId],
     );
     const response = await app.server.inject({ method: 'GET', url: '/api/v0/resources', headers });
@@ -256,7 +260,7 @@ describe('verified-Veteran gate', () => {
   });
 });
 
-describe('helping others needs no scan', () => {
+describe('helping others needs no confirmation', () => {
   it("lets an unverified person list, and accept, a verified requester's request", async () => {
     const tenantId = randomUUID();
     const make = async (county: string | null) => {
@@ -301,7 +305,7 @@ describe('helping others needs no scan', () => {
       payload: {},
     });
 
-    // The helper list needs a county, and says so; it does not need a scan.
+    // The helper list needs a county, and says so; it does not need a confirmation.
     const noCounty = await app.server.inject({
       method: 'GET',
       url: '/api/v0/service-requests?ownership=open',
@@ -338,7 +342,7 @@ describe('helping others needs no scan', () => {
 });
 
 describe('crisis screen', () => {
-  it('is public: signed out, with no scan, and with no database session', async () => {
+  it('is public: signed out, with no confirmation, and with no database session', async () => {
     const signedOut = await app.server.inject({
       method: 'GET',
       url: '/api/v0/immediate-resources',

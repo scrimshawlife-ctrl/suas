@@ -71,6 +71,8 @@ export interface ServerDependencies {
    * worker_threads). Default keeps the Node structured logger.
    */
   readonly logger?: boolean;
+  /** Where pino writes; stdout when absent. Lets a test inspect what the server logs. */
+  readonly logStream?: { write(line: string): void };
   /**
    * True only for the Cloudflare Worker isolate. Synthetic STAGING may offer
    * the fixed demo code on that runtime and nowhere else.
@@ -133,6 +135,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
         ? false
         : {
             level: deps.config.logLevel,
+            ...(deps.logStream !== undefined ? { stream: deps.logStream } : {}),
             // ENVIRONMENT.md §6: secret material is never written to logs.
             redact: {
               paths: [
