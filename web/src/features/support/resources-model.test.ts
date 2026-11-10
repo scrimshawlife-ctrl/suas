@@ -112,6 +112,19 @@ describe('contactActions', () => {
     ).toEqual([{ kind: 'text', text: 'javascript:alert(1)' }]);
   });
 
+  it.each([
+    'JavaScript:alert(1)',
+    ' javascript:alert(1)',
+    'data:text/html,<b>hi</b>',
+    'DATA:text/html;base64,PGI+aGk8L2I+',
+    'vbscript:msgbox(1)',
+  ])('shows %s as text, never a link', (value) => {
+    expect(contactActions(resource({ contacts: [{ kind: 'URL', value }] }))).toEqual([
+      { kind: 'text', text: value.trim() },
+    ]);
+    expect(contactActions(single(value, 'URL'))).toEqual([{ kind: 'text', text: value.trim() }]);
+  });
+
   it('never makes 911, 988 or 838255 an action, in the list or the single fields', () => {
     for (const number of ['911', '988', '838255']) {
       expect(phoneHref(number)).toBeNull();
@@ -129,6 +142,11 @@ describe('describeFreshness', () => {
     expect(
       describeFreshness(resource({ freshness: 'FRESH', verified_at: '2026-10-28T19:00:00Z' })),
     ).toEqual({ label: 'Verified Oct 28', chip: 'ok', outOfDate: false });
+    expect(describeFreshness(resource({ freshness: 'FRESH', verified_at: null }))).toEqual({
+      label: 'Checked recently',
+      chip: 'ok',
+      outOfDate: false,
+    });
   });
 
   it('uses the Pacific calendar day for the verified date', () => {
