@@ -41,7 +41,12 @@ import { RELEASE_MANIFEST, SPEC_VERSION } from './release/pins.js';
 import { createFulfillmentAdapterRegistry, type AdapterRegistry } from './fulfillment/index.js';
 import { createChannelRegistry } from './notifications/index.js';
 import { createModelInferencePort, type ModelInferencePort } from './inference/index.js';
-import { createIdVerificationPort, type IdVerificationPort } from './identity/index.js';
+import {
+  createIdVerificationPort,
+  createVeteranConfirmationPort,
+  type IdVerificationPort,
+  type VeteranConfirmationPort,
+} from './identity/index.js';
 import { createChatConnectionLifecycle } from './chat/index.js';
 import {
   createConnectionPushPort,
@@ -58,8 +63,10 @@ export interface StartedApp {
   readonly mfa: MfaPort;
   readonly fulfillmentAdapters: AdapterRegistry;
   readonly modelInference: ModelInferencePort;
-  /** Undefined when ID verification is disabled. */
+  /** Undefined when ID verification is disabled. It no longer feeds the request gate (R9.1). */
   readonly idVerification: IdVerificationPort | undefined;
+  /** VA Veteran Confirmation, the request gate; undefined when disabled. */
+  readonly veteranConfirmation: VeteranConfirmationPort | undefined;
   /** Chat live-update push; undefined when SUAS_CHAT_PUSH_MODE=disabled. */
   readonly chatPush: ConnectionPushPort | undefined;
   readonly buildInfo: BuildInfo;
@@ -181,8 +188,12 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   // 5b. Model inference (Intake Assistant, catalog builder). The unavailable port
   // when no model is configured, so callers fall back to the plain form.
   const modelInference = createModelInferencePort(config);
-  // 5b. ID scan + selfie capability port (fake adapter only until a provider is chosen).
+  // 5b. ID scan + selfie port: still validated at startup, no longer the gate.
   const idVerification = createIdVerificationPort(config);
+  // 5b. VA Veteran Confirmation (suas-specs #72 R9.1, proposal). Content-free logs only.
+  const veteranConfirmation = createVeteranConfirmationPort(config, {
+    logger: (record) => console.info(JSON.stringify({ msg: 'va_confirmation', ...record })),
+  });
   // 5b. Chat live updates. Messages travel over REST; this only pushes new ones.
   const chatPush =
     pool !== undefined
@@ -207,7 +218,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     mfa,
     jobQueue,
     modelInference,
-    ...(idVerification !== undefined ? { idVerification } : {}),
+    ...(veteranConfirmation !== undefined ? { veteranConfirmation } : {}),
     ...(chatPush !== undefined ? { chatPush } : {}),
     // Pino's default transport uses worker_threads, which Workers do not run.
     ...(runtime === 'worker' ? { logger: false, workerRuntime: true } : {}),
@@ -236,6 +247,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     fulfillmentAdapters,
     modelInference,
     idVerification,
+    veteranConfirmation,
     chatPush,
     buildInfo: resolveBuildInfo(),
     close: async () => {

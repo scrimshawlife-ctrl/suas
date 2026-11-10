@@ -22,7 +22,10 @@ import type { BuildInfo } from '../provenance/build-info.js';
 import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
 import { UnavailableModelInference, type ModelInferencePort } from '../inference/index.js';
-import type { IdVerificationPort } from '../identity/index.js';
+import {
+  VA_CONFIRMATION_PROJECTION_FIELDS,
+  type VeteranConfirmationPort,
+} from '../identity/va-confirmation.js';
 import type { ConnectionPushPort } from '../realtime/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { stagingAccessFromConfig } from '../auth/staging-access.js';
@@ -59,8 +62,8 @@ export interface ServerDependencies {
   readonly mfa?: MfaPort;
   readonly jobQueue?: DurableJobQueuePort;
   readonly modelInference?: ModelInferencePort;
-  /** ID scan + selfie port; absent when `SUAS_ID_VERIFICATION_MODE=disabled`. */
-  readonly idVerification?: IdVerificationPort;
+  /** VA Veteran Confirmation port; absent when `SUAS_VA_CONFIRMATION_MODE=disabled`. */
+  readonly veteranConfirmation?: VeteranConfirmationPort;
   /** Pushes new chat messages to live connections; absent when disabled. */
   readonly chatPush?: ConnectionPushPort;
   /**
@@ -136,6 +139,11 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
                 'req.headers.authorization',
                 'req.headers.cookie',
                 'req.headers["idempotency-key"]',
+                // suas-specs #72 R9.1 (proposal): projection values are never logged.
+                ...VA_CONFIRMATION_PROJECTION_FIELDS.flatMap((field) => [
+                  `body.${field}`,
+                  `req.body.${field}`,
+                ]),
               ],
               remove: true,
             },
@@ -351,7 +359,9 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerVeteranRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
-      ...(deps.idVerification !== undefined ? { idVerification: deps.idVerification } : {}),
+      ...(deps.veteranConfirmation !== undefined
+        ? { veteranConfirmation: deps.veteranConfirmation }
+        : {}),
     });
 
     registerConsentRoutes(app, {
