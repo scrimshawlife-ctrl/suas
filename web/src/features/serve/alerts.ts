@@ -33,11 +33,15 @@ export function latestAlerts(notifications: readonly Notification[], count = 4):
     .slice(0, count);
 }
 
+/** Notices sent only to the person who made the request (the server's request-notices). */
+const REQUESTER_REASONS = new Set(['service_request_expired', 'service_request_released']);
+
 /**
- * Where an alert leads. Only a Service Request subject maps to a route (its Serve case page);
- * any other subject, or none, stays plain text.
+ * Where an alert leads. Only a Service Request subject maps to a route: the requester's own
+ * request page for a requester notice, otherwise its Serve case page. Anything else stays text.
  */
 export function alertSubjectPath(notification: Notification): string | null {
-  const { subject_type, subject_id } = notification;
-  return subject_type === 'ServiceRequest' && subject_id ? paths.case(subject_id) : null;
+  const { reason, subject_type, subject_id } = notification;
+  if (subject_type !== 'ServiceRequest' || !subject_id) return null;
+  return REQUESTER_REASONS.has(reason) ? paths.requestDetail(subject_id) : paths.case(subject_id);
 }

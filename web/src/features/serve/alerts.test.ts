@@ -23,6 +23,14 @@ describe('alertSubjectPath', () => {
     );
   });
 
+  it("links a requester notice to the person's own request, not the Serve case page", () => {
+    for (const reason of ['service_request_released', 'service_request_expired']) {
+      expect(
+        alertSubjectPath(alert({ reason, subject_type: 'ServiceRequest', subject_id: 'r1' })),
+      ).toBe('/requests/r1');
+    }
+  });
+
   it('leaves any other subject, or a missing id, as plain text', () => {
     expect(alertSubjectPath(alert({ subject_type: 'SupportCase', subject_id: 'c1' }))).toBeNull();
     expect(
