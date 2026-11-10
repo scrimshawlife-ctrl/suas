@@ -91,6 +91,14 @@ export function nextStep(status: ServiceRequestStatus): NextStep | null {
   }
 }
 
+/** The server accepts RELEASE only from ACCEPTED, and only for the accepter (the case page's viewer). */
+export function canRelease(status: ServiceRequestStatus): boolean {
+  return status === 'ACCEPTED';
+}
+
+/** Matches `reason` max(512) in src/http/routes/service-requests.ts. */
+export const RELEASE_REASON_MAX = 512;
+
 /** Plain-word status for the chips and the progress line. */
 export function statusLabel(status: ServiceRequestStatus): string {
   switch (status) {

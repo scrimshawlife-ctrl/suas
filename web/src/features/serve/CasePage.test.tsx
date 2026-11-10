@@ -166,6 +166,31 @@ describe('History', () => {
   });
 });
 
+describe('Release', () => {
+  it('is offered on an accepted request and opens the reason dialog', async () => {
+    renderCase();
+    await userEvent.click(await screen.findByRole('button', { name: 'Release this request' }));
+    expect(screen.getByRole('dialog', { name: 'Release this request?' })).toBeInTheDocument();
+  });
+
+  it.each(['SUBMITTED', 'ASSIGNED', 'IN_PROGRESS', 'FULFILLED', 'EXPIRED'])(
+    'is not offered while the status is %s',
+    async (status) => {
+      replies.detail = { data: detail(status) };
+      renderCase();
+      await screen.findByRole('region', { name: 'Progress' });
+      expect(screen.queryByRole('button', { name: 'Release this request' })).toBeNull();
+    },
+  );
+
+  it('is not offered to a non-accepter, who gets the not-found page', async () => {
+    replies.detail = new ApiError(404, 'NOT_FOUND', 'Resource not found.');
+    renderCase();
+    await screen.findByRole('heading', { name: "We couldn't find that request." });
+    expect(screen.queryByRole('button', { name: 'Release this request' })).toBeNull();
+  });
+});
+
 describe('Progress step', () => {
   it.each([
     ['ACCEPTED', "I've started helping", 'START'],

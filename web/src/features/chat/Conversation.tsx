@@ -7,6 +7,8 @@ import { Button } from '../../components/Button';
 import { useChatMessages } from './api';
 import { Composer } from './Composer';
 import {
+  CHECKING_LINE,
+  CLOSED_LINE,
   conversationErrorText,
   counterpartName,
   isPermanentConversationError,
@@ -16,27 +18,33 @@ import {
 import { isMine, toOldestFirst } from './messages';
 import { MessageList } from './MessageList';
 import { useOutbox } from './outbox';
+import { isReadOnly, threadKey } from './threads';
 import { seenStore } from './unread';
+
+const NOTE_CLASS = 'border-t border-line px-5 py-4 text-slate max-sm:px-4';
 
 export interface ConversationProps {
   serviceRequestId: string;
+  /** A named earlier thread to read; absent means the live thread. */
+  threadId?: string | undefined;
   thread: ChatThread | undefined;
   meUserId: string | undefined;
 }
 
 /** Header, message column and composer for one request's chat. */
-export function Conversation({ serviceRequestId, thread, meUserId }: ConversationProps) {
-  const messagesQuery = useChatMessages(serviceRequestId);
+export function Conversation({ serviceRequestId, threadId, thread, meUserId }: ConversationProps) {
+  const messagesQuery = useChatMessages(serviceRequestId, threadId);
   const outbox = useOutbox(serviceRequestId);
   const name = counterpartName(thread);
   const messages = toOldestFirst(messagesQuery.data);
   const newest = messages[messages.length - 1];
 
+  const seenKey = thread === undefined ? serviceRequestId : threadKey(thread);
   // The conversation is on screen, so everything up to its newest message counts as read.
   const newestAt = newest?.created_at;
   useEffect(() => {
-    if (newestAt !== undefined) seenStore.markSeen(serviceRequestId, Date.parse(newestAt));
-  }, [serviceRequestId, newestAt]);
+    if (newestAt !== undefined) seenStore.markSeen(seenKey, Date.parse(newestAt));
+  }, [seenKey, newestAt]);
 
   // Screen readers hear a new incoming message; the first load and our own sends stay quiet.
   const live = useRef<HTMLParagraphElement>(null);
@@ -116,7 +124,17 @@ export function Conversation({ serviceRequestId, thread, meUserId }: Conversatio
             onRetry={outbox.retry}
           />
           <p ref={live} role="status" className="sr-only" />
-          <Composer name={name} onSend={outbox.send} />
+          {/* A post always goes to the live thread, so a named thread gets no composer until the
+              list has shown it is live. */}
+          {isReadOnly(thread) ? (
+            <p className={NOTE_CLASS}>{CLOSED_LINE}</p>
+          ) : threadId !== undefined && thread === undefined ? (
+            <p role="status" className={NOTE_CLASS}>
+              {CHECKING_LINE}
+            </p>
+          ) : (
+            <Composer name={name} onSend={outbox.send} />
+          )}
         </>
       )}
     </>

@@ -442,3 +442,112 @@ describe('live frame', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('threads closed by a release', () => {
+  const LIVE_ID = '55555555-5555-4555-8555-555555555555';
+  const OLD_ID = '66666666-6666-4666-8666-666666666666';
+  const base = {
+    service_request_id: REQ,
+    category: 'TRANSPORTATION',
+    summary: 'Ride to a clinic appointment',
+    last_message_at: '2026-11-04T20:02:00.000Z',
+    closed: false,
+    role: 'REQUESTER',
+    last_message_from_me: false,
+  };
+  const liveThread = {
+    ...base,
+    chat_thread_id: LIVE_ID,
+    counterpart_display_name: 'Dee R.',
+    last_message_body: 'Hello from Dee',
+    released_at: null,
+  };
+  const oldThread = {
+    ...base,
+    chat_thread_id: OLD_ID,
+    counterpart_display_name: 'Marcus T.',
+    last_message_body: 'Sorry, I have to step back',
+    last_message_at: '2026-11-04T19:00:00.000Z',
+    released_at: '2026-11-04T19:30:00.000Z',
+  };
+
+  function mockThreads(threadList: unknown[]) {
+    client.GET.mockImplementation(
+      (path: string, init?: { params?: { query?: { thread?: string } } }) => {
+        if (path === '/api/v0/veterans/me') return Promise.resolve({ data: { user_id: ME } });
+        if (path === '/api/v0/chat/threads') {
+          return Promise.resolve({ data: { threads: threadList } });
+        }
+        if (path === '/api/v0/service-requests/{id}/chat/messages') {
+          const named = init?.params?.query?.thread === OLD_ID;
+          const body = named ? 'Sorry, I have to step back' : 'Hello from Dee';
+          return Promise.resolve({
+            data: { messages: [message(1, THEM, body)], next_cursor: null },
+          });
+        }
+        return Promise.reject(new Error(`unexpected GET ${path}`));
+      },
+    );
+    client.POST.mockRejectedValue(new ApiError(503, 'CHAT_REALTIME_UNAVAILABLE', 'No push.'));
+  }
+
+  const messageQueries = () =>
+    client.GET.mock.calls
+      .filter(([path]) => path === '/api/v0/service-requests/{id}/chat/messages')
+      .map(([, init]) => (init as { params: { query: { thread?: string } } }).params.query);
+
+  it('opens the live thread by default, with the composer and no thread in the request', async () => {
+    mockThreads([liveThread, oldThread]);
+    renderChat(`/chat/${REQ}`);
+    expect(await screen.findByText('Hello from Dee', { selector: 'p' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Message Dee R.')).toBeInTheDocument();
+    expect(screen.queryByText(/This chat is closed/)).not.toBeInTheDocument();
+    expect(messageQueries()[0]).toEqual({ limit: 50 });
+  });
+
+  it('lets the requester open a closed thread read-only, fetching it by thread id', async () => {
+    mockThreads([liveThread, oldThread]);
+    const user = userEvent.setup();
+    renderChat(`/chat/${REQ}`);
+    const nav = await screen.findByRole('navigation', { name: 'Conversations' });
+    const closed = await within(nav).findByRole('link', { name: /Marcus T\./ });
+    expect(closed).toHaveTextContent('closed');
+    expect(closed).toHaveAttribute('href', `/chat/${REQ}?thread=${OLD_ID}`);
+
+    await user.click(closed);
+    expect(
+      await screen.findByText('Sorry, I have to step back', { selector: 'p' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('This helper released the request. This chat is closed.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+    expect(closed).toHaveAttribute('aria-current', 'page');
+    expect(messageQueries().some((query) => query.thread === OLD_ID)).toBe(true);
+  });
+
+  it('shows no composer on a named thread while the thread list is still loading', async () => {
+    mockThreads([liveThread, oldThread]);
+    const original = client.GET.getMockImplementation();
+    client.GET.mockImplementation((path: string, init?: unknown) =>
+      path === '/api/v0/chat/threads'
+        ? new Promise(() => undefined)
+        : (original as (path: string, init?: unknown) => unknown)(path, init),
+    );
+    renderChat(`/chat/${REQ}?thread=${OLD_ID}`);
+    expect(await screen.findByText('Sorry, I have to step back', { selector: 'p' })).toBeVisible();
+    expect(screen.getByText('Checking this chat…')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+  });
+
+  it('shows a request whose only thread is closed read-only without a thread in the address', async () => {
+    mockThreads([oldThread]);
+    renderChat(`/chat/${REQ}`);
+    expect(
+      await screen.findByText('This helper released the request. This chat is closed.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+});

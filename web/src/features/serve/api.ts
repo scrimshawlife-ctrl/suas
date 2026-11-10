@@ -185,3 +185,28 @@ export function useRunStep(serviceRequestId: string) {
     },
   });
 }
+
+/**
+ * POST the RELEASE command with the helper's reason. The key follows the reason, so a retry
+ * of the same text reuses it and an edited reason (a different body) gets a fresh one.
+ */
+export function useReleaseRequest(serviceRequestId: string) {
+  const queryClient = useQueryClient();
+  const keys = useKeyedIdempotency();
+  return useMutation({
+    mutationFn: async (reason: string) => {
+      await api.POST('/api/v0/service-requests/{id}/commands/{command}', {
+        params: { path: { id: serviceRequestId, command: 'RELEASE' } },
+        body: { reason },
+        headers: keys.headers(reason),
+      });
+    },
+    // Not awaited: the caller navigates away before the request's own re-read (now a 404) lands.
+    onSuccess: (_data, reason) => {
+      keys.renew(reason);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.serviceRequests.all });
+      void queryClient.invalidateQueries({ queryKey: caseKeys.serviceRequests.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chatThreads });
+    },
+  });
+}

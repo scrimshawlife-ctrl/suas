@@ -25,7 +25,11 @@ export const queryKeys = {
   /** The signed-in person: GET /veterans/me. */
   me: ['me'] as const,
   serviceRequests: resourceKeys('service-requests'),
-  chatMessages: (serviceRequestId: string) => ['chat', serviceRequestId, 'messages'] as const,
+  /** The live thread's messages; a named (closed) thread adds its id. */
+  chatMessages: (serviceRequestId: string, threadId?: string) =>
+    threadId === undefined
+      ? (['chat', serviceRequestId, 'messages'] as const)
+      : (['chat', serviceRequestId, 'messages', threadId] as const),
   chatThreads: ['chat', 'threads'] as const,
   intake: resourceKeys('intake'),
   notifications: resourceKeys('notifications'),

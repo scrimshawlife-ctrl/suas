@@ -1,20 +1,21 @@
 import { Link } from 'react-router';
 import type { ChatThread } from '../../api/types';
-import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { cn } from '../../lib/cn';
 import { counterpartName, EMPTY_THREADS, threadTitle } from './copy';
+import { isReadOnly, threadHref, threadKey } from './threads';
 
 export interface ThreadListProps {
   threads: ChatThread[] | undefined;
-  selectedId: string | undefined;
+  /** `threadKey` of the open thread. */
+  selectedKey: string | undefined;
   isError: boolean;
   onRetry: () => void;
   className?: string;
 }
 
 /** The 340 px conversation list: name, request title (", closed" when over), last message. */
-export function ThreadList({ threads, selectedId, isError, onRetry, className }: ThreadListProps) {
+export function ThreadList({ threads, selectedKey, isError, onRetry, className }: ThreadListProps) {
   return (
     <nav
       aria-label="Conversations"
@@ -38,11 +39,11 @@ export function ThreadList({ threads, selectedId, isError, onRetry, className }:
       ) : (
         threads.map((thread) => {
           const name = counterpartName(thread);
-          const selected = thread.service_request_id === selectedId;
+          const selected = threadKey(thread) === selectedKey;
           return (
             <Link
-              key={thread.service_request_id}
-              to={paths.chatThread(thread.service_request_id)}
+              key={threadKey(thread)}
+              to={threadHref(thread)}
               aria-current={selected ? 'page' : undefined}
               className={cn(
                 'flex gap-3 border-b border-line px-5 py-4.5 text-ink no-underline hover:bg-mist hover:text-ink',
@@ -53,7 +54,7 @@ export function ThreadList({ threads, selectedId, isError, onRetry, className }:
                 aria-hidden="true"
                 className={cn(
                   'grid size-11 shrink-0 place-items-center rounded-full text-17 font-bold text-white',
-                  thread.closed ? 'bg-slate' : 'bg-harbor',
+                  thread.closed || isReadOnly(thread) ? 'bg-slate' : 'bg-harbor',
                 )}
               >
                 {name.charAt(0).toUpperCase()}
@@ -62,7 +63,7 @@ export function ThreadList({ threads, selectedId, isError, onRetry, className }:
                 <span className="font-bold">{name}</span>
                 <span className="text-16 text-slate">
                   {threadTitle(thread)}
-                  {thread.closed ? ', closed' : ''}
+                  {thread.closed || isReadOnly(thread) ? ', closed' : ''}
                 </span>
                 {thread.last_message_body !== null ? (
                   <span className="truncate text-16 text-slate">{thread.last_message_body}</span>

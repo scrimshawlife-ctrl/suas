@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Navigate, useParams } from 'react-router';
+import { useState, type ReactNode } from 'react';
+import { Navigate, useNavigate, useParams } from 'react-router';
 import { hasApiCode } from '../../api/errors';
 import { useServiceRequest } from '../../api/service-requests';
 import type { ServiceRequestDetail } from '../../api/types';
@@ -17,6 +17,7 @@ import {
   NOT_FOUND_MESSAGE,
   attemptLabel,
   attemptsOldestFirst,
+  canRelease,
   commandErrorMessage,
   formatWhen,
   isNotHelperError,
@@ -25,6 +26,7 @@ import {
   statusLabel,
 } from './case-logic';
 import { ContactLog } from './ContactLog';
+import { ReleaseDialog } from './ReleaseDialog';
 
 export default function CasePage() {
   const { id } = useParams();
@@ -169,6 +171,8 @@ function WhatsNeeded({ request }: { request: ServiceRequestDetail }) {
 function Progress({ request }: { request: ServiceRequestDetail }) {
   const step = nextStep(request.status);
   const run = useRunStep(request.service_request_id);
+  const navigate = useNavigate();
+  const [releasing, setReleasing] = useState(false);
   return (
     <Card aria-labelledby="progress" padding="lg" className="flex flex-col gap-3 max-sm:p-5">
       <h2 id="progress" className="text-20 font-bold">
@@ -181,6 +185,26 @@ function Progress({ request }: { request: ServiceRequestDetail }) {
         <Button className="self-start" disabled={run.isPending} onClick={() => run.mutate(step)}>
           {run.isPending ? 'Saving…' : step.label}
         </Button>
+      ) : null}
+      {canRelease(request.status) ? (
+        <Button
+          variant="secondary"
+          className="self-start"
+          onClick={() => {
+            setReleasing(true);
+          }}
+        >
+          Release this request
+        </Button>
+      ) : null}
+      {releasing ? (
+        <ReleaseDialog
+          serviceRequestId={request.service_request_id}
+          onClose={() => {
+            setReleasing(false);
+          }}
+          onReleased={() => void navigate(paths.serve)}
+        />
       ) : null}
       {request.status === 'FULFILLED' ? (
         <p className="text-slate">

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { ServiceRequestStatus } from '../../api/types';
-import { attemptLabel, contactSave, nextStep, statusLabel } from './case-logic';
+import { attemptLabel, canRelease, contactSave, nextStep, statusLabel } from './case-logic';
+
+describe('canRelease', () => {
+  it('is true only for ACCEPTED, the one status with a RELEASE edge', () => {
+    expect(canRelease('ACCEPTED')).toBe(true);
+    for (const status of ['SUBMITTED', 'ASSIGNED', 'IN_PROGRESS', 'FULFILLED'] as const) {
+      expect(canRelease(status), status).toBe(false);
+    }
+  });
+});
 
 describe('next progress step for the accepter', () => {
   it('offers only the legal forward command', () => {
