@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { tokenStore } from '../../api/token-store';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { AlertCircleIcon } from '../../components/icons';
 import { TextField } from '../../components/TextField';
+import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { useStartMfaChallenge, useVerifyMfaChallenge } from './api';
 import { mfaErrorMessage, mfaIsUnavailable, mfaReturnPath, testFactorHint } from './mfa';
 
@@ -26,6 +27,9 @@ export default function AdminMfaPage() {
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [response, setResponse] = useState('');
   const [fieldError, setFieldError] = useState<string>();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [attempt, setAttempt] = useState(0);
+  useFocusFirstInvalid(formRef, `${attempt}|${fieldError ?? ''}`);
 
   const error = start.error ?? verify.error;
   const unavailable = error !== null && mfaIsUnavailable(error);
@@ -41,6 +45,7 @@ export default function AdminMfaPage() {
   function onConfirm(event: FormEvent) {
     event.preventDefault();
     if (challenge === null || busy) return;
+    setAttempt((count) => count + 1);
     if (response.trim() === '') {
       setFieldError('Enter your response.');
       return;
@@ -95,7 +100,7 @@ export default function AdminMfaPage() {
             </div>
           </>
         ) : (
-          <form onSubmit={onConfirm} noValidate className="flex flex-col gap-4">
+          <form ref={formRef} onSubmit={onConfirm} noValidate className="flex flex-col gap-4">
             {challenge.factor_type === 'TEST_FACTOR' ? (
               <p className="rounded-8 border border-line bg-mist px-4 py-3">
                 This environment uses a test check. It is not a real second factor.

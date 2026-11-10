@@ -99,6 +99,8 @@ describe('MFA step-up', () => {
     await user.click(screen.getByRole('button', { name: 'Start check' }));
     await user.click(await screen.findByRole('button', { name: 'Confirm' }));
     expect(screen.getByText('Enter your response.')).toBeInTheDocument();
+    // Like the other forms, focus moves to the field so the error is announced (ADMIN-2).
+    await waitFor(() => expect(screen.getByLabelText('Your response')).toHaveFocus());
     expect(client.POST).toHaveBeenCalledTimes(1);
   });
 });
