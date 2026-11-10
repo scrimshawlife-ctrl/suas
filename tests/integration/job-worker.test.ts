@@ -13,6 +13,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
 import { createUser } from '../../src/identity/index.js';
 import { PostgresOutboxJobQueue } from '../../src/jobs/index.js';
+import { ensurePublishedQv001, startCheckIn } from '../../src/signals/index.js';
 import { enqueueNotification } from '../../src/notifications/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { createTestPool, resetKernelTables, syntheticTenantId } from '../helpers/db.js';
@@ -132,5 +133,30 @@ describe('job-worker --once and notification.send', () => {
       auditEvents: 0,
       jobStatus: 'DEAD_LETTER',
     });
+  });
+});
+
+describe('job-worker --once and the Check-In idle sweep', () => {
+  it('abandons a Check-In older than 24 hours and keeps the row', async () => {
+    const tenantId = syntheticTenantId();
+    const veteran = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail(`veteran-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    await ensurePublishedQv001(pool, veteran.userId);
+    const checkIn = await startCheckIn(pool, { tenantId, veteranUserId: veteran.userId });
+    await pool.query(
+      `UPDATE check_ins SET started_at = now() - interval '25 hours' WHERE check_in_id = $1`,
+      [checkIn.checkInId],
+    );
+
+    await drainOnce();
+
+    const row = await pool.query<{ status: string }>(
+      'SELECT status FROM check_ins WHERE check_in_id = $1',
+      [checkIn.checkInId],
+    );
+    expect(row.rows[0]?.status).toBe('ABANDONED');
   });
 });

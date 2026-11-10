@@ -3,8 +3,8 @@
  * the AWS Lambda handler so there is one implementation.
  *
  * Each pass also runs the time-driven sweeps that no request enqueues work for. Today
- * that is request widening (V1_PROJECT_PLAN.md F6) and request expiry (R8.4), so a scheduler running one pass
- * (`once`) is the only schedule that has to exist.
+ * that is request widening (V1_PROJECT_PLAN.md F6), request expiry (R8.4) and the Check-In
+ * idle sweep (R8.10), so a scheduler running one pass (`once`) is the only schedule needed.
  */
 
 import type { Pool } from 'pg';
@@ -12,6 +12,7 @@ import type { SuasConfig } from '../config/index.js';
 import { expireDueRequests } from '../coordination/expiry.js';
 import { widenDueRequests } from '../coordination/widening.js';
 import { createChannelRegistry } from '../notifications/index.js';
+import { abandonStaleCheckIns } from '../signals/index.js';
 import {
   claimDueJobs,
   markJobFailed,
@@ -54,7 +55,7 @@ async function handleJob(
 
 /**
  * A failed sweep is logged and does not stop the outbox drain: the next pass
- * repeats it, and widening and expiry are idempotent.
+ * repeats it, and each sweep is idempotent.
  */
 async function runSweeps(pool: Pool): Promise<void> {
   try {
@@ -94,6 +95,16 @@ async function runSweeps(pool: Pool): Promise<void> {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(JSON.stringify({ msg: 'sweep_failed', sweep: 'expiry', error: message }));
+  }
+
+  try {
+    const { abandoned } = await abandonStaleCheckIns(pool);
+    if (abandoned > 0) {
+      console.log(JSON.stringify({ msg: 'check_ins_abandoned', count: abandoned }));
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(JSON.stringify({ msg: 'sweep_failed', sweep: 'check_in_idle', error: message }));
   }
 }
 

@@ -353,6 +353,19 @@ describe('CHECKINS.md §4, §6, §7 — Check-In lifecycle', () => {
     const { tenantId, checkIn } = await started();
     const abandoned = await abandonCheckIn(pool, { tenantId, checkInId: checkIn.checkInId });
     expect(abandoned.status).toBe('ABANDONED');
+    // CHECKINS.md §7: the abandon is audited, by the Veteran, with ids only.
+    const audits = await pool.query<{ actor_type: string; actor_id: string; payload: unknown }>(
+      `SELECT actor_type, actor_id, payload FROM audit_events
+        WHERE event_type = 'CHECKIN_ABANDONED' AND target_id = $1`,
+      [checkIn.checkInId],
+    );
+    expect(audits.rows).toEqual([
+      {
+        actor_type: 'VETERAN',
+        actor_id: checkIn.veteranUserId,
+        payload: { questionnaire_version: checkIn.questionnaireVersion, cause: 'VETERAN' },
+      },
+    ]);
 
     const events = await listAggregateEvents(pool, {
       tenantId,
