@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { expireDueRequests } from '../../src/coordination/expiry.js';
+import { widenDueRequests } from '../../src/coordination/widening.js';
 import {
   executeServiceRequestCommand,
   NotRequestHolderError,
@@ -328,5 +329,79 @@ describe('the expiry clock after a release', () => {
       [id],
     );
     expect(after.rows[0]?.status).toBe('EXPIRED');
+  });
+});
+
+describe('retrying a release', () => {
+  it('gives the released helper the stored result for the same key, and 404 for a new one', async () => {
+    const { helper, id } = await acceptedRequest();
+    const headers = keyed(helper);
+    const release = () =>
+      app.server.inject({
+        method: 'POST',
+        url: `/api/v0/service-requests/${id}/commands/RELEASE`,
+        headers,
+        payload: { reason: 'cannot make it' },
+      });
+    const first = await release();
+    expect(first.statusCode).toBe(200);
+    expect(first.json().replayed).toBe(false);
+
+    // The helper has lost access, yet the same key and body replay the stored result.
+    const retry = await release();
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toEqual({ ...first.json(), replayed: true });
+    const notices = await pool().query(`SELECT 1 FROM notifications WHERE dedupe_key LIKE $1`, [
+      `request-released:${id}:%`,
+    ]);
+    expect(notices.rowCount).toBe(1);
+
+    // A new key, or the same key with a different body, is a new command: the uniform 404.
+    expect((await command(helper, id, 'RELEASE', { reason: 'cannot make it' })).statusCode).toBe(
+      404,
+    );
+    const changed = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${id}/commands/RELEASE`,
+      headers,
+      payload: { reason: 'another reason' },
+    });
+    expect(changed.statusCode).toBe(404);
+  });
+});
+
+describe('widening after a release', () => {
+  it('clears widened_at and widens again only once the delay has passed since the release', async () => {
+    const { helper, id } = await acceptedRequest();
+    // Stand in for a request submitted two hours ago that widened before it was accepted.
+    await pool().query(
+      `UPDATE service_requests
+          SET submitted_at = now() - interval '2 hours', widened_at = now() - interval '90 minutes'
+        WHERE service_request_id = $1`,
+      [id],
+    );
+    const widenedAt = async () =>
+      (
+        await pool().query<{ widened_at: Date | null }>(
+          `SELECT widened_at FROM service_requests WHERE service_request_id = $1`,
+          [id],
+        )
+      ).rows[0]?.widened_at ?? null;
+
+    expect((await command(helper, id, 'RELEASE', { reason: 'cannot make it' })).statusCode).toBe(
+      200,
+    );
+    // R8.5: back to SUBMITTED, widening applies as for a new submit.
+    expect(await widenedAt()).toBeNull();
+
+    // The first submit is two hours old, but the delay counts from the release.
+    const soon = await widenDueRequests(pool(), { now: new Date() });
+    expect(soon.widened.map((item) => item.serviceRequestId)).not.toContain(id);
+    expect(await widenedAt()).toBeNull();
+
+    const later = new Date(Date.now() + (soon.delayMinutes + 1) * 60_000);
+    const due = await widenDueRequests(pool(), { now: later });
+    expect(due.widened.map((item) => item.serviceRequestId)).toContain(id);
+    expect(await widenedAt()).not.toBeNull();
   });
 });

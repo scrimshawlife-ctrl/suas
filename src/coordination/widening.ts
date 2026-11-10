@@ -4,8 +4,8 @@
  * Spec citations:
  * - V1_PROJECT_PLAN.md §2.1 "Widening": an unaccepted request widens to bordering
  *   counties (real borders, within the launch list) after the stored delay
- *   (default 30 minutes). §4.3 F6. Whether widening repeats is undecided (§8 #8),
- *   so a request widens once: `widened_at` is set once and never cleared.
+ *   (default 30 minutes). §4.3 F6. A request widens once per time it is open: a
+ *   release (suas-specs R8.5) clears `widened_at` and the delay restarts from the release.
  * - AGENTS.md rules 8-9: state is shared and persistent, and the job is replay-safe.
  *
  * Who can see a widened request is recorded durably by `service_requests.widened_at`
@@ -54,12 +54,16 @@ export async function readWideningDelayMinutes(db: Queryable): Promise<number> {
  * A request is due when it is still open to be accepted, has not widened, and has
  * waited at least the delay. The status sets mirror `openToViewerConditions`; a
  * request outside them (accepted, cancelled, closed, expired) never widens.
- * `$1` is the cutoff: the clock minus the delay.
+ * `$1` is the cutoff: the clock minus the delay. The wait starts at the submit or at the
+ * latest release (R8.5: widening applies as for a new submit), whichever is later.
  */
 const DUE_CONDITIONS = `
   r.widened_at IS NULL
   AND r.status = ANY(ARRAY['SUBMITTED','TRIAGED','MATCHING']::suas_service_request_status[])
-  AND r.submitted_at <= $1::timestamptz
+  AND GREATEST(r.submitted_at, (
+        SELECT max(t.released_at) FROM chat_threads t
+         WHERE t.tenant_id = r.tenant_id AND t.service_request_id = r.service_request_id
+      )) <= $1::timestamptz
   AND ${OPEN_CASE_STATE_CONDITION}
   AND r.accepted_by_user_id IS NULL
   AND u.status = 'ACTIVE' AND u.deleted_at IS NULL
