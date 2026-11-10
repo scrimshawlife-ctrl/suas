@@ -12,6 +12,7 @@ import { RequestFieldsForm } from './RequestFieldsForm';
 import {
   SUMMARY_MAX,
   isCategory,
+  mergeFields,
   toFormBody,
   validateRequestFields,
   type FieldErrors,
@@ -33,6 +34,7 @@ export function PlainForm({ initialSummary = '' }: { initialSummary?: string }) 
     summary: initialSummary.trim().slice(0, SUMMARY_MAX),
     timing: '',
     meetingPlace: '',
+    destination: '',
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const create = useCreateRequest();
@@ -90,7 +92,7 @@ export function PlainForm({ initialSummary = '' }: { initialSummary?: string }) 
         fields={fields}
         errors={errors}
         disabled={create.isPending}
-        onChange={(patch) => setFields((current) => ({ ...current, ...patch }))}
+        onChange={(patch) => setFields((current) => mergeFields(current, patch))}
       />
       {create.isError && gateRedirect(create.error) === undefined ? (
         <InlineError>{requestErrorMessage(create.error)}</InlineError>

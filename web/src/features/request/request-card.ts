@@ -41,6 +41,9 @@ const CANCELLABLE: readonly ServiceRequestStatus[] = [
   'IN_PROGRESS',
 ];
 
+/** Statuses where the requester can still edit: nobody has accepted (src/coordination/request-edit.ts). */
+const EDITABLE: readonly ServiceRequestStatus[] = ['SUBMITTED', 'TRIAGED', 'MATCHING'];
+
 /** Polling stops once nothing more can happen on the requester's side. */
 const SETTLED: readonly ServiceRequestStatus[] = [
   'CONFIRMED',
@@ -105,6 +108,10 @@ export function canCancel(input: {
   if (!isCancellableStatus(input.status)) return false;
   const active = input.activeQrf;
   return active?.service_request_id === input.requestId ? active.cancellable : true;
+}
+
+export function isEditableStatus(status: ServiceRequestStatus): boolean {
+  return EDITABLE.includes(status);
 }
 
 export function isSettled(status: ServiceRequestStatus | undefined): boolean {

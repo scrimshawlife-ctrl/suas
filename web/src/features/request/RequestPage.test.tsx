@@ -102,6 +102,30 @@ describe('RequestPage with the assistant', () => {
     expect(patchOrder).toBeLessThan(submitOrder);
   });
 
+  it('shows the destination on a ride draft only and saves an edit with PATCH', async () => {
+    const rideDraft = { ...draft, category: 'TRANSPORTATION' as const };
+    mocks.post.mockImplementation((path: string) =>
+      path === '/api/v0/intake/drafts'
+        ? Promise.resolve({ data: turn({ draft: rideDraft }) })
+        : Promise.resolve({ data: submitted }),
+    );
+    renderScreen(<RequestPage />);
+    await talkToAssistant();
+    await userEvent.click(await screen.findByLabelText(/Where are you going/));
+    await userEvent.paste('Clinic');
+    await userEvent.click(screen.getByLabelText('Short summary'));
+    await waitFor(() =>
+      expect(mocks.patch.mock.calls.at(-1)?.[1]).toMatchObject({ body: { destination: 'Clinic' } }),
+    );
+  });
+
+  it('has no destination field on a food draft', async () => {
+    renderScreen(<RequestPage />);
+    await talkToAssistant();
+    await screen.findByLabelText('Where should the helper meet you?');
+    expect(screen.queryByLabelText(/Where are you going/)).not.toBeInTheDocument();
+  });
+
   it('does not submit when the draft cannot be saved, and says so', async () => {
     mocks.patch.mockRejectedValue(new ApiError(500, 'INTERNAL', 'boom'));
     renderScreen(<RequestPage />);
@@ -212,6 +236,46 @@ describe('RequestPage with the assistant', () => {
 
 describe('RequestPage without the assistant, and the plain form', () => {
   beforeEach(() => available(false));
+
+  it('asks "Where are you going?" for a ride only and sends the destination', async () => {
+    mocks.post.mockResolvedValue({ data: { service_request_id: REQUEST_ID, status: 'SUBMITTED' } });
+    renderScreen(<RequestPage />, '/request?category=FOOD');
+    await screen.findByLabelText('Short summary');
+    expect(screen.queryByLabelText(/Where are you going/)).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText('What kind of help do you need?'),
+      'TRANSPORTATION',
+    );
+    await userEvent.click(screen.getByLabelText('Short summary'));
+    await userEvent.paste('A ride to the clinic');
+    await userEvent.click(screen.getByLabelText('Where should the helper meet you?'));
+    await userEvent.paste('Library');
+    await userEvent.click(screen.getByLabelText(/Where are you going/));
+    await userEvent.paste('Clinic');
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1));
+    expect(mocks.post.mock.calls[0]?.[1]).toMatchObject({
+      body: { category: 'TRANSPORTATION', destination: 'Clinic' },
+    });
+  });
+
+  it('drops the destination when the category changes away from a ride', async () => {
+    mocks.post.mockResolvedValue({ data: { service_request_id: REQUEST_ID, status: 'SUBMITTED' } });
+    renderScreen(<RequestPage />, '/request?category=TRANSPORTATION');
+    await userEvent.click(await screen.findByLabelText(/Where are you going/));
+    await userEvent.paste('Clinic');
+    await userEvent.selectOptions(screen.getByLabelText('What kind of help do you need?'), 'FOOD');
+    expect(screen.queryByLabelText(/Where are you going/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('Short summary'));
+    await userEvent.paste('Groceries');
+    await userEvent.click(screen.getByLabelText('Where should the helper meet you?'));
+    await userEvent.paste('Library');
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1));
+    expect(mocks.post.mock.calls[0]?.[1]).toMatchObject({ body: { category: 'FOOD' } });
+    expect(mocks.post.mock.calls[0]?.[1]).not.toMatchObject({ body: { destination: 'Clinic' } });
+  });
 
   it('shows only the form when the assistant is unavailable', async () => {
     renderScreen(<RequestPage />);

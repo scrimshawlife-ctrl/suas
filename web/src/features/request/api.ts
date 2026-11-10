@@ -54,6 +54,7 @@ export interface DraftEdit {
   summary?: string;
   timing?: string | null;
   meeting_place?: string | null;
+  destination?: string | null;
 }
 
 /** PATCH /intake/drafts/{id}: only the fields that changed. */
@@ -100,6 +101,7 @@ export interface FormBody {
   summary: string;
   timing?: string;
   meeting_place?: string;
+  destination?: string;
 }
 
 /** POST /service-requests: the plain form. */
@@ -170,5 +172,23 @@ export function useRequestCommand(requestId: string, command: OwnerCommand) {
         queryClient.invalidateQueries({ queryKey: queryKeys.me }),
       ]);
     },
+  });
+}
+
+export type RequestEdit = Schemas['ServiceRequestEditRequest'];
+
+/** POST /service-requests/{id}/commands/edit: the requester changes an unaccepted request. */
+export function useEditRequest(requestId: string) {
+  const created = useRequestCreated();
+  return useMutation({
+    mutationFn: async (input: { edit: RequestEdit; idempotencyKey: string }) => {
+      const { data } = await api.POST('/api/v0/service-requests/{id}/commands/edit', {
+        params: { path: { id: requestId } },
+        body: input.edit,
+        headers: { 'Idempotency-Key': input.idempotencyKey },
+      });
+      return requireData(data, 'request');
+    },
+    onSuccess: created,
   });
 }

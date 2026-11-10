@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUpdateDraft, type DraftEdit, type IntakeDraft } from './api';
-import { isCategory, type RequestFields } from './request-fields';
+import { destinationAllowed, isCategory, mergeFields, type RequestFields } from './request-fields';
 
 export function fieldsFromDraft(draft: IntakeDraft | null): RequestFields {
   return {
@@ -8,6 +8,7 @@ export function fieldsFromDraft(draft: IntakeDraft | null): RequestFields {
     summary: draft?.summary ?? '',
     timing: draft?.timing ?? '',
     meetingPlace: draft?.meeting_place ?? '',
+    destination: draft?.destination ?? '',
   };
 }
 
@@ -21,6 +22,8 @@ export function draftEdit(fields: RequestFields, saved: IntakeDraft): DraftEdit 
   if (timing !== saved.timing) edit.timing = timing;
   const place = fields.meetingPlace.trim() || null;
   if (place !== saved.meeting_place) edit.meeting_place = place;
+  const destination = (destinationAllowed(fields.category) && fields.destination.trim()) || null;
+  if (destination !== (saved.destination ?? null)) edit.destination = destination;
   return edit;
 }
 
@@ -75,7 +78,7 @@ export function useDraftEditor(draft: IntakeDraft | null): DraftEditor {
 
   return {
     fields,
-    change: (patch) => setFields((current) => ({ ...current, ...patch })),
+    change: (patch) => setFields((current) => mergeFields(current, patch)),
     save,
     saveError: update.error,
   };

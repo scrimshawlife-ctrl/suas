@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { useMe } from '../../api/me';
 import { isApiError } from '../../api/errors';
@@ -9,7 +10,8 @@ import { Card } from '../../components/Card';
 import { NEEDS } from '../../components/needs';
 import { Page } from '../../components/Page';
 import { useRequestDetail } from './api';
-import { canCancel, resolveRequestCard } from './request-card';
+import { canCancel, isEditableStatus, resolveRequestCard } from './request-card';
+import { EditRequestForm } from './EditRequestForm';
 import { RequestStatusCard } from './RequestStatusCard';
 
 function Fact({ label, children }: { label: string; children: string | null }) {
@@ -27,6 +29,7 @@ export default function RequestDetailPage() {
   const { id } = useParams();
   const me = useMe();
   const request = useRequestDetail(id);
+  const [editing, setEditing] = useState(false);
 
   if (request.isPending || me.isPending) return <LoadingScreen />;
 
@@ -62,6 +65,7 @@ export default function RequestDetailPage() {
   const input = { requestId: detail.service_request_id, status: detail.status, activeQrf };
   const need = NEEDS[detail.category];
   const NeedIcon = need.Icon;
+  const editable = isEditableStatus(detail.status);
 
   return (
     <Page>
@@ -85,15 +89,31 @@ export default function RequestDetailPage() {
             </span>
             What you sent
           </h2>
-          <dl className="flex flex-col gap-3">
-            <Fact label="Kind of help">{need.label}</Fact>
-            <Fact label="Summary">{detail.summary}</Fact>
-            <Fact label="Timing">{detail.timing}</Fact>
-            <Fact label="Where should the helper meet you?">{detail.meeting_place}</Fact>
-          </dl>
-          <p className="text-16 text-slate">
-            Only you and the person who accepts this request see the meeting place.
-          </p>
+          {editable && editing ? (
+            <EditRequestForm request={detail} onDone={() => setEditing(false)} />
+          ) : (
+            <>
+              <dl className="flex flex-col gap-3">
+                <Fact label="Kind of help">{need.label}</Fact>
+                <Fact label="Summary">{detail.summary}</Fact>
+                <Fact label="Timing">{detail.timing}</Fact>
+                <Fact label="Where should the helper meet you?">{detail.meeting_place}</Fact>
+                <Fact label="Going to">{detail.destination ?? null}</Fact>
+              </dl>
+              <p className="text-16 text-slate">
+                {detail.destination
+                  ? 'Only you and the person who accepts this request see the meeting place and where you are going.'
+                  : 'Only you and the person who accepts this request see the meeting place.'}
+              </p>
+              {editable ? (
+                <div className="flex">
+                  <Button variant="secondary" onClick={() => setEditing(true)}>
+                    Edit request
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
         </Card>
       </div>
     </Page>
