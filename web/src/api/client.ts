@@ -73,8 +73,12 @@ export function createApiMiddleware(options: ApiClientOptions = {}): Middleware 
     async onResponse({ request, response, schemaPath }) {
       if (response.ok) return response;
       const error = await apiErrorFromResponse(response);
-      const hadSession = request.headers.has('Authorization');
-      if (response.status === 401 && hadSession && !isAuthPath(schemaPath)) {
+      // Only a 401 for the token still in use is an expiry. A late answer to a request sent
+      // before sign-out, or before an earlier 401 already handled this expiry, is not.
+      const current = store.getToken();
+      const sentCurrentToken =
+        current !== null && request.headers.get('Authorization') === `Bearer ${current}`;
+      if (response.status === 401 && sentCurrentToken && !isAuthPath(schemaPath)) {
         store.clear();
         onUnauthorized();
       } else if (error.code === GATE_CODES.mfaRequired) {

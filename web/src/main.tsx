@@ -19,10 +19,11 @@ const router = createAppRouter();
 
 // A 401 on a signed-in request has already cleared the token; drop cached data and sign in
 // again, remembering where the person was so sign-in can bring them back (genuine expiry only:
-// sign-out never goes through here).
+// sign-out never goes through here). Already on sign-in: keep the first return path.
 setUnauthorizedHandler(() => {
   queryClient.clear();
   const { pathname, search } = router.state.location;
+  if (pathname === paths.signIn) return;
   void router.navigate(paths.signIn, { replace: true, state: { from: `${pathname}${search}` } });
 });
 

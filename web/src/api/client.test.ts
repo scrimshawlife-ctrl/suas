@@ -3,7 +3,7 @@ import { createApiClient } from './client';
 import { ApiError } from './errors';
 import { createTokenStore } from './token-store';
 
-function setup(respond: (request: Request) => Response) {
+function setup(respond: (request: Request) => Response | Promise<Response>) {
   const requests: Request[] = [];
   const store = createTokenStore();
   const onUnauthorized = vi.fn();
@@ -124,6 +124,37 @@ describe('api client middleware', () => {
     store.setToken('expired');
     await expect(client.GET('/api/v0/veterans/me')).rejects.toMatchObject({ status: 401 });
     expect(store.getToken()).toBeNull();
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not redirect on a late 401 for a request sent before sign-out (AUTH-1)', async () => {
+    const answers: ((response: Response) => void)[] = [];
+    const { client, store, onUnauthorized } = setup(
+      () => new Promise<Response>((resolve) => answers.push(resolve)),
+    );
+    store.setToken('tok');
+    const read = client.GET('/api/v0/veterans/me');
+    await vi.waitFor(() => expect(answers).toHaveLength(1));
+    store.signOut();
+    answers[0]?.(json(401, { error: { code: 'UNAUTHENTICATED', message: 'Sign in again.' } }));
+    await expect(read).rejects.toMatchObject({ status: 401 });
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(store.isSignedOut()).toBe(true);
+  });
+
+  it('handles an expiry once when two requests answer 401 (ADMIN-8)', async () => {
+    const answers: ((response: Response) => void)[] = [];
+    const { client, store, onUnauthorized } = setup(
+      () => new Promise<Response>((resolve) => answers.push(resolve)),
+    );
+    store.setToken('expired');
+    const reads = [client.GET('/api/v0/veterans/me'), client.GET('/api/v0/veterans/me')];
+    await vi.waitFor(() => expect(answers).toHaveLength(2));
+    const expired = () => json(401, { error: { code: 'UNAUTHENTICATED', message: 'Gone.' } });
+    answers[0]?.(expired());
+    await expect(reads[0]).rejects.toMatchObject({ status: 401 });
+    answers[1]?.(expired());
+    await expect(reads[1]).rejects.toMatchObject({ status: 401 });
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
