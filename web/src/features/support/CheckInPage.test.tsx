@@ -197,11 +197,25 @@ describe('CheckInPage', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Save answer' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(EXPIRED_TEXT);
+    const heading = await screen.findByRole('heading', { name: EXPIRED_TEXT });
+    await waitFor(() => expect(heading).toHaveFocus());
+    expect(screen.getByRole('alert')).toHaveTextContent(EXPIRED_TEXT);
     expect(screen.queryByText(/Check your connection/)).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Start again' }));
     await waitFor(() => expect(startCalls()).toHaveLength(2));
     expect(await screen.findByText('Question 1 of 2')).toBeInTheDocument();
+  });
+
+  it('starts once when "Try again" after a failed start is double-clicked', async () => {
+    route(completed());
+    // The first start fails; later calls fall through to the routed implementation.
+    client.POST.mockRejectedValueOnce(new ApiError(503, 'UNAVAILABLE', 'down'));
+    renderPage();
+    const retry = await screen.findByRole('button', { name: /try again/i });
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+    expect(await screen.findByText('Question 1 of 2')).toBeInTheDocument();
+    expect(startCalls()).toHaveLength(2);
   });
 
   it('starts a new Check-In exactly once when none is unfinished', async () => {

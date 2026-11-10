@@ -91,6 +91,33 @@ function Result({ result }: { result: CheckInCompleted }) {
   );
 }
 
+/** A Check-In that cannot go on. Focus moves to the message, as on the result screen. */
+function Ended({ text, onStartAgain }: { text: string; onStartAgain: () => void }) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+  return (
+    <Page width="narrow" className="max-w-[760px] gap-5 pt-12">
+      {/* The alert announces the change; the heading keeps the page structure and takes focus. */}
+      <div role="alert">
+        <h1 ref={headingRef} tabIndex={-1} className="text-20 font-bold">
+          {text}
+        </h1>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <Button size="form" onClick={onStartAgain}>
+          Start again
+        </Button>
+        <Button size="form" variant="secondary" href={paths.home}>
+          Back to home
+        </Button>
+      </div>
+      <Disclaimer />
+    </Page>
+  );
+}
+
 /** The steps and the result for one Check-In, opened at `initial`. Remount it to change either. */
 function CheckInFlow({
   checkIn,
@@ -153,22 +180,7 @@ function CheckInFlow({
   const expired = hasApiCode(failure, 'ILLEGAL_TRANSITION');
 
   if (incomplete || expired) {
-    return (
-      <Page width="narrow" className="max-w-[760px] gap-5 pt-12">
-        <p role="alert" className="text-20 font-bold">
-          {expired ? EXPIRED_TEXT : INCOMPLETE_TEXT}
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <Button size="form" onClick={onStartAgain}>
-            Start again
-          </Button>
-          <Button size="form" variant="secondary" href={paths.home}>
-            Back to home
-          </Button>
-        </div>
-        <Disclaimer />
-      </Page>
-    );
+    return <Ended text={expired ? EXPIRED_TEXT : INCOMPLETE_TEXT} onStartAgain={onStartAgain} />;
   }
 
   if (!question) {
@@ -265,6 +277,7 @@ function CheckInFlow({
 export default function CheckInPage() {
   const resumable = useResumableCheckIn();
   const start = useStartCheckIn();
+  const startFlight = useSingleFlight();
   // undefined: not decided yet. null: start a new one. Set once from the first list read,
   // so a later refetch (after complete) can neither swap the Check-In nor start another.
   const [resumeId, setResumeId] = useState<string | null | undefined>(undefined);
@@ -303,7 +316,13 @@ export default function CheckInPage() {
   }
 
   const failed = start.isError
-    ? { error: start.error, doing: 'start your Check-In', retry: () => start.mutate() }
+    ? {
+        error: start.error,
+        doing: 'start your Check-In',
+        retry: () => {
+          startFlight(() => start.mutateAsync());
+        },
+      }
     : resumable.isError
       ? {
           error: resumable.error,
