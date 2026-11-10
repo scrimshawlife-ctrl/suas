@@ -82,6 +82,8 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     object_storage_mode: config.objectStorage.mode,
     chat_push_mode: config.chatPush.mode,
     id_verification_mode: config.idVerification.mode,
+    va_confirmation_mode: config.vaConfirmation.mode,
+    va_confirmation_api_key_configured: config.vaConfirmation.apiKey !== undefined,
     public_sign_up: config.publicSignUp,
     staging_auth_email_count: config.stagingAuthEmails.length,
     staging_fixture_principal_count: config.stagingFixturePrincipals.length,

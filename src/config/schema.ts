@@ -18,6 +18,10 @@ import { z } from 'zod';
 import { isSyntheticEmail } from '../testing/fixture-boundary.js';
 import { corsPinIssue, parseAllowedOrigins } from './cors-origins.js';
 import {
+  VA_CONFIRMATION_PROJECTION_ID,
+  VA_CONFIRMATION_SANDBOX_BASE_URL,
+} from '../identity/va-confirmation.js';
+import {
   CORS_GUARD_SPEC_VERSION,
   RELEASE_MANIFEST,
   SPEC_018_PRODUCTION_AUTHORIZED,
@@ -69,6 +73,12 @@ export const ID_VERIFICATION_MODES = ['disabled', 'fake'] as const;
 export const CHAT_PUSH_MODES = ['disabled', 'local', 'apigw'] as const;
 export type ChatPushMode = (typeof CHAT_PUSH_MODES)[number];
 export type IdVerificationMode = (typeof ID_VERIFICATION_MODES)[number];
+/**
+ * VA Veteran Confirmation (suas-specs #72 R9.1, proposal): `fixture` is LOCAL and TEST
+ * only; `sandbox` is the VA sandbox, refused in PRODUCTION until D-035 settles.
+ */
+export const VA_CONFIRMATION_MODES = ['disabled', 'fixture', 'sandbox'] as const;
+export type VaConfirmationMode = (typeof VA_CONFIRMATION_MODES)[number];
 
 /** One provisioned synthetic fixture. Identity is the pair, not the email address. */
 export interface StagingFixturePrincipal {
@@ -326,6 +336,15 @@ const rawConfigSchema = z.object({
     ID_VERIFICATION_MODES,
     'disabled',
   ),
+  SUAS_VA_CONFIRMATION_MODE: optionalEnum(
+    'SUAS_VA_CONFIRMATION_MODE',
+    VA_CONFIRMATION_MODES,
+    'disabled',
+  ),
+  SUAS_VA_CONFIRMATION_BASE_URL: optionalRaw,
+  // Server-side secret (D035 §6): shown only as a configured flag, never its value.
+  SUAS_VA_CONFIRMATION_API_KEY: optionalRaw,
+  SUAS_VA_CONFIRMATION_PROJECTION_ID: optionalRaw,
   // D-052. Public self sign-up stays off unless LOCAL or TEST sets "enabled".
   SUAS_PUBLIC_SIGN_UP: optionalRaw,
   // Addresses the STAGING provision command may create. Not an admission list.
@@ -469,6 +488,11 @@ export interface SuasConfig {
   };
   readonly idVerification: {
     readonly mode: IdVerificationMode;
+  };
+  readonly vaConfirmation: {
+    readonly mode: VaConfirmationMode;
+    readonly baseUrl: string | undefined;
+    readonly apiKey: string | undefined;
   };
   /** Public self sign-up. Startup refuses `enabled` outside LOCAL and TEST. */
   readonly publicSignUp: boolean;
@@ -724,6 +748,56 @@ function validateAwsCapabilities(
         issue(`${varName}=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).`);
       }
     }
+  }
+}
+
+/**
+ * VA Veteran Confirmation modes (suas-specs #72 R9.1, proposal; D035 §5, §6, §14 items
+ * 2-4, 9-10). Every mismatch fails closed; issue text never includes the key.
+ */
+function validateVaConfirmation(
+  raw: z.output<typeof rawConfigSchema>,
+  environment: EnvironmentClass,
+  ctx: z.RefinementCtx,
+): void {
+  const issue = (message: string): void => {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  };
+  const mode = raw.SUAS_VA_CONFIRMATION_MODE;
+
+  if (
+    raw.SUAS_VA_CONFIRMATION_PROJECTION_ID !== undefined &&
+    raw.SUAS_VA_CONFIRMATION_PROJECTION_ID !== VA_CONFIRMATION_PROJECTION_ID
+  ) {
+    issue(`SUAS_VA_CONFIRMATION_PROJECTION_ID must be ${VA_CONFIRMATION_PROJECTION_ID} when set.`);
+  }
+  if (mode === 'fixture' && environment !== 'LOCAL' && environment !== 'TEST') {
+    issue(
+      `SUAS_VA_CONFIRMATION_MODE=fixture is allowed only in LOCAL and TEST, not ${environment}.`,
+    );
+  }
+  if (mode !== 'sandbox') return;
+
+  if (environment === 'PRODUCTION') {
+    issue(
+      'SUAS_VA_CONFIRMATION_MODE=sandbox is forbidden in PRODUCTION; PRODUCTION allows disabled only.',
+    );
+  }
+  if (environment === 'TEST') {
+    issue(
+      'SUAS_VA_CONFIRMATION_MODE=sandbox is allowed only in STAGING and LOCAL, not TEST; TEST uses fixture or disabled.',
+    );
+  }
+  if (raw.SUAS_VA_CONFIRMATION_BASE_URL !== VA_CONFIRMATION_SANDBOX_BASE_URL) {
+    issue(
+      `SUAS_VA_CONFIRMATION_BASE_URL must be exactly ${VA_CONFIRMATION_SANDBOX_BASE_URL} when SUAS_VA_CONFIRMATION_MODE=sandbox.`,
+    );
+  }
+  const key = raw.SUAS_VA_CONFIRMATION_API_KEY;
+  if (key === undefined) {
+    issue('SUAS_VA_CONFIRMATION_API_KEY is required when SUAS_VA_CONFIRMATION_MODE=sandbox.');
+  } else if (!/^[\x21-\x7E]+$/.test(key)) {
+    issue('SUAS_VA_CONFIRMATION_API_KEY is malformed: printable characters only, no spaces.');
   }
 }
 
@@ -1058,6 +1132,7 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   }
 
   validateAwsCapabilities(raw, environment, ctx);
+  validateVaConfirmation(raw, environment, ctx);
 
   // The sender is required in Resend and SES modes. Both accept either a bare
   // address or the standard display-name form: "Name <address>".
@@ -1175,6 +1250,11 @@ export function shapeConfig(
     },
     objectStorage: { mode: raw.SUAS_OBJECT_STORAGE_MODE, bucket: raw.SUAS_S3_BUCKET },
     idVerification: { mode: raw.SUAS_ID_VERIFICATION_MODE },
+    vaConfirmation: {
+      mode: raw.SUAS_VA_CONFIRMATION_MODE,
+      baseUrl: raw.SUAS_VA_CONFIRMATION_BASE_URL,
+      apiKey: raw.SUAS_VA_CONFIRMATION_API_KEY,
+    },
     publicSignUp: raw.SUAS_PUBLIC_SIGN_UP === 'enabled',
     stagingAuthEmails: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) => email.toLowerCase()),
     stagingFixturePrincipals: parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY)
