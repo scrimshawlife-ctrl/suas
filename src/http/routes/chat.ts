@@ -10,6 +10,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import { ResourceNotVisibleError } from '../../authz/index.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import {
@@ -48,7 +49,12 @@ const idParams = z.object({ id: z.string().uuid() });
 const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().min(1).max(512).optional(),
+  /** A chat_thread_id of this request; absent means the live thread. */
+  thread: z.string().uuid().optional(),
 });
+
+/** POST may name the live thread; naming any other thread is refused like an unknown id. */
+const sendQuery = z.object({ thread: z.string().uuid().optional() });
 
 const sendBody = z.object({
   body: z
@@ -75,6 +81,7 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
     const threads = await listChatThreads(deps.pool, context.tenantId, context.userId);
     return {
       threads: threads.map((thread) => ({
+        chat_thread_id: thread.chatThreadId,
         service_request_id: thread.serviceRequestId,
         category: thread.category,
         summary: thread.summary,
@@ -94,7 +101,7 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
     const query = listQuery.parse(request.query);
-    const access = await resolveChatAccess(deps.pool, context, id);
+    const access = await resolveChatAccess(deps.pool, context, id, query.thread);
     const page = await listChatMessages(deps.pool, {
       tenantId: context.tenantId,
       chatThreadId: access.chatThreadId,
@@ -112,8 +119,12 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
     const { body } = sendBody.parse(request.body);
+    const { thread } = sendQuery.parse(request.query);
     const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
-    const access = await resolveChatAccess(deps.pool, context, id);
+    const access = await resolveChatAccess(deps.pool, context, id, thread);
+    // An earlier (released) thread is read-only, and a message never lands on a thread the
+    // caller did not name: the same 404 as an unknown or foreign thread id (D-061, Q11).
+    if (thread !== undefined && access.released === true) throw new ResourceNotVisibleError();
 
     const sent = await sendChatMessage(deps.pool, {
       tenantId: context.tenantId,

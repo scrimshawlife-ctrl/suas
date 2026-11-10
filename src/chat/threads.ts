@@ -17,6 +17,7 @@ export const LAST_MESSAGE_PREVIEW_MAX = 140;
 export const CHAT_THREAD_LIST_MAX = 100;
 
 export interface ChatThreadSummary {
+  readonly chatThreadId: string;
   readonly serviceRequestId: string;
   readonly category: string;
   readonly summary: string | null;
@@ -36,6 +37,7 @@ export interface ChatThreadSummary {
 }
 
 interface ThreadRow {
+  chat_thread_id: string;
   service_request_id: string;
   category: string;
   status: string;
@@ -55,7 +57,7 @@ export async function listChatThreads(
   userId: string,
 ): Promise<ChatThreadSummary[]> {
   const result = await db.query<ThreadRow>(
-    `SELECT t.service_request_id, r.category, r.status, CASE WHEN jsonb_typeof(r.details->'summary') = 'string'
+    `SELECT t.chat_thread_id, t.service_request_id, r.category, r.status, CASE WHEN jsonb_typeof(r.details->'summary') = 'string'
                  THEN left(r.details->>'summary', 280) END AS summary,
             cp.display_name AS counterpart_display_name,
             m.preview AS last_message_body, m.created_at AS last_message_at, t.created_at AS accepted_at, t.released_at,
@@ -92,6 +94,7 @@ export async function listChatThreads(
     [tenantId, userId, LAST_MESSAGE_PREVIEW_MAX, CHAT_THREAD_LIST_MAX],
   );
   return result.rows.map((row) => ({
+    chatThreadId: row.chat_thread_id,
     serviceRequestId: row.service_request_id,
     category: row.category,
     summary: row.summary,

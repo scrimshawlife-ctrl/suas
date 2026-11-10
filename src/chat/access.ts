@@ -10,6 +10,8 @@
  * else gets the same 404 as a request that does not exist. A release closes the thread
  * (migration 0020): the requester can still read it, the released helper loses it, and
  * the next accept opens a new live thread, which is the one a request resolves to.
+ * A caller may name one thread of the request to read (R8.11): a closed thread opens only
+ * for the requester, and any thread that is not this request's, or not theirs, is a 404.
  */
 
 import { ResourceNotVisibleError } from '../authz/index.js';
@@ -43,6 +45,8 @@ export interface ChatAccess {
   readonly serviceRequestId: string;
   /** The other participant: the one who should receive a push of the caller's message. */
   readonly counterpartUserId: string;
+  /** A release ended this thread (R8.5): it is read-only. */
+  readonly released?: boolean;
 }
 
 interface ThreadRow {
@@ -56,16 +60,19 @@ export async function resolveChatAccess(
   db: Queryable,
   caller: { readonly tenantId: string; readonly userId: string },
   serviceRequestId: string,
+  chatThreadId?: string,
 ): Promise<ChatAccess> {
   const thread = await db.query<ThreadRow>(
     `SELECT chat_thread_id, requester_user_id, accepted_by_user_id, released_at
        FROM chat_threads
       WHERE tenant_id = $1 AND service_request_id = $2
+        AND ($3::uuid IS NULL OR chat_thread_id = $3::uuid)
       ORDER BY (released_at IS NULL) DESC, created_at DESC
       LIMIT 1`,
-    [caller.tenantId, serviceRequestId],
+    [caller.tenantId, serviceRequestId, chatThreadId ?? null],
   );
   const row = thread.rows[0];
+  if (row === undefined && chatThreadId !== undefined) throw new ResourceNotVisibleError();
   if (row !== undefined) {
     if (row.requester_user_id === caller.userId) {
       return access(row, serviceRequestId, row.accepted_by_user_id);
@@ -95,5 +102,10 @@ export async function resolveChatAccess(
 }
 
 function access(row: ThreadRow, serviceRequestId: string, counterpartUserId: string): ChatAccess {
-  return { chatThreadId: row.chat_thread_id, serviceRequestId, counterpartUserId };
+  return {
+    chatThreadId: row.chat_thread_id,
+    serviceRequestId,
+    counterpartUserId,
+    released: row.released_at !== null,
+  };
 }

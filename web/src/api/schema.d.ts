@@ -2004,6 +2004,11 @@ export interface components {
     ChatThread: {
       /** Format: uuid */
       service_request_id: string;
+      /**
+       * Format: uuid
+       * @description suas-specs D-061 (owner-approved by ID 2026-11-09 3:19 PM PT), proposal text, not released: R8.11. Pass as `thread` to read this thread's messages. Always present in responses; optional in the contract so clients written before it still type-check.
+       */
+      chat_thread_id?: string;
       category: components['schemas']['ServiceCategory'];
       summary: string | null;
       counterpart_display_name: string | null;
@@ -4379,6 +4384,8 @@ export interface operations {
         limit?: number;
         /** @description Opaque next_cursor from the previous page; returns older messages */
         cursor?: string;
+        /** @description suas-specs D-061 (owner-approved by ID 2026-11-09 3:19 PM PT), proposal text, not released: R8.11. A chat_thread_id of this request. Without it the live thread is returned. An earlier (released) thread is readable only by the requester; for anyone else, for a thread of another request, or for an unknown id, the response is the same 404. */
+        thread?: string;
       };
       header?: never;
       path: {
@@ -4413,7 +4420,10 @@ export interface operations {
   };
   sendChatMessage: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description suas-specs D-061 (owner-approved by ID 2026-11-09 3:19 PM PT), proposal text, not released: R8.11. Optional. If given, it must be the live thread's chat_thread_id. An earlier (released) thread is read-only: naming it, a thread of another request, or an unknown id gets the same 404, and nothing is stored. */
+        thread?: string;
+      };
       header: {
         /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
         'Idempotency-Key': components['parameters']['IdempotencyKey'];
