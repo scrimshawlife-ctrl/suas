@@ -12,6 +12,7 @@ import {
   RequireProfile,
   RequireSignedIn,
   RequireVerified,
+  RequireVerifiedOrAccepter,
 } from './guards';
 
 const client = vi.hoisted(() => ({ GET: vi.fn() }));
@@ -52,6 +53,11 @@ const routes: RouteObject[] = [
         element: <RequireProfile />,
         children: [
           { path: '/serve', element: <p>serve page</p> },
+          { path: '/serve/requests/:id', element: <p>case page</p> },
+          {
+            element: <RequireVerifiedOrAccepter />,
+            children: [{ path: '/requests/:id', element: <p>request detail page</p> }],
+          },
           {
             element: <RequireVerified />,
             children: [{ path: '/request', element: <p>request page</p> }],
@@ -89,7 +95,10 @@ function visit(
   return router;
 }
 
-beforeEach(() => tokenStore.clear());
+beforeEach(() => {
+  tokenStore.clear();
+  client.GET.mockReset();
+});
 
 describe('route guards', () => {
   it('sends a signed-out visitor to /sign-in', () => {
@@ -144,6 +153,29 @@ describe('route guards', () => {
   it('lets an MFA-elevated admin in', () => {
     visit('/admin', me({ is_admin: true }), 'tok', true);
     expect(screen.getByText('admin page')).toBeInTheDocument();
+  });
+});
+
+describe('RequireVerifiedOrAccepter (/requests/:id)', () => {
+  const ID = '22222222-2222-4222-8222-222222222222';
+
+  it('sends the unverified helper who accepted to their case page', async () => {
+    client.GET.mockResolvedValue({ data: { service_request_id: ID, viewer_role: 'ACCEPTER' } });
+    visit(`/requests/${ID}`, me({}, 'NOT_STARTED'));
+    expect(await screen.findByText('case page')).toBeInTheDocument();
+  });
+
+  it('still sends any other unverified person to /verify', async () => {
+    client.GET.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'Resource not found.'));
+    const router = visit(`/requests/${ID}`, me({}, 'NOT_STARTED'));
+    expect(await screen.findByText('verify page')).toBeInTheDocument();
+    expect(router.state.location.state).toEqual({ from: `/requests/${ID}` });
+  });
+
+  it('lets a verified person in without asking who they are', () => {
+    visit(`/requests/${ID}`, me());
+    expect(screen.getByText('request detail page')).toBeInTheDocument();
+    expect(client.GET).not.toHaveBeenCalled();
   });
 });
 
