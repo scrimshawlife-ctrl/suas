@@ -12,7 +12,10 @@ export interface PendingMessage {
   status: 'sending' | 'failed';
 }
 
-type SendFn = (id: string, body: string, key: string) => Promise<ChatMessage>;
+type SendFn = (id: string, body: string, key: string, signal: AbortSignal) => Promise<ChatMessage>;
+
+/** A send with no answer by then is given up ("Not sent."), so later messages still go. */
+export const SEND_TIMEOUT_MS = 30_000;
 
 const NONE: readonly PendingMessage[] = [];
 
@@ -54,8 +57,12 @@ export function createOutbox(send: SendFn = postChatMessage): Outbox {
 
   const attempt = async (queryClient: QueryClient, id: string, item: PendingMessage) => {
     const startedIn = epoch;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, SEND_TIMEOUT_MS);
     try {
-      const sent = await send(id, item.body, item.key);
+      const sent = await send(id, item.body, item.key, controller.signal);
       if (startedIn !== epoch) return;
       applyMessageToCaches(queryClient, sent, true);
       update(id, (list) => list.filter((p) => p.clientId !== item.clientId));
@@ -64,6 +71,8 @@ export function createOutbox(send: SendFn = postChatMessage): Outbox {
       update(id, (list) =>
         list.map((p) => (p.clientId === item.clientId ? { ...p, status: 'failed' } : p)),
       );
+    } finally {
+      clearTimeout(timer);
     }
   };
   const enqueue = (queryClient: QueryClient, id: string, item: PendingMessage) => {

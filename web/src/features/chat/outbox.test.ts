@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
-import { createOutbox } from './outbox';
+import { SEND_TIMEOUT_MS, createOutbox } from './outbox';
 import type { ChatMessage } from './messages';
 
 const sent = (body: string): ChatMessage => ({
@@ -79,5 +79,35 @@ describe('outbox', () => {
     });
     expect(send.mock.calls[2]?.[1]).toBe('second');
     expect(outbox.get('r1').map((p) => p.body)).toEqual(['second']);
+  });
+
+  it('gives up on a send with no answer, so the next message in that chat still goes', async () => {
+    vi.useFakeTimers();
+    try {
+      // The first send answers only when aborted, like a fetch on a dead connection.
+      const send = vi.fn(
+        (_id: string, body: string, _key: string, signal: AbortSignal) =>
+          new Promise<ChatMessage>((resolve, reject) => {
+            if (body === 'first') {
+              signal.addEventListener('abort', () => {
+                reject(new Error('aborted'));
+              });
+            } else resolve(sent(body));
+          }),
+      );
+      const outbox = createOutbox(send);
+      const queryClient = new QueryClient();
+
+      outbox.send(queryClient, 'r1', 'first');
+      outbox.send(queryClient, 'r1', 'second');
+      await vi.advanceTimersByTimeAsync(SEND_TIMEOUT_MS - 1);
+      expect(send).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(outbox.get('r1').map((p) => [p.body, p.status])).toEqual([['first', 'failed']]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
