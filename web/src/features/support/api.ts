@@ -7,6 +7,7 @@ import type { Schemas } from '../../api/types';
 
 export type CatalogResource = Schemas['CatalogResource'];
 export type CheckInWithQuestions = Schemas['CheckInWithQuestions'];
+export type CheckInDetail = Schemas['CheckInDetail'];
 export type CheckInCompleted = Schemas['CheckInCompleted'];
 export type ConsentGrant = Schemas['ConsentGrant'];
 export type TrustedContact = Schemas['TrustedContact'];
@@ -15,6 +16,7 @@ export type GrantConsentBody = Schemas['GrantConsentRequest'];
 
 /** Keys for resources the shared factory list does not cover yet. */
 export const supportKeys = {
+  checkIns: resourceKeys('check-ins'),
   consents: resourceKeys('consents'),
   trustedContacts: resourceKeys('trusted-contacts'),
 };
@@ -45,18 +47,56 @@ export function useResources(category: Schemas['ServiceCategory'] | null, county
   });
 }
 
-/** POST /check-ins: starts one Check-In and returns its questions. */
-export function useStartCheckIn() {
-  return useMutation({
-    mutationFn: async () => {
-      const { data } = await api.POST('/api/v0/check-ins');
+const RESUMABLE_FILTER = { status: 'IN_PROGRESS' } as const;
+
+/** GET /check-ins?status=IN_PROGRESS: the caller's unfinished Check-In (24 h), or null. */
+export function useResumableCheckIn(enabled = true) {
+  const token = useSessionToken();
+  return useQuery({
+    queryKey: supportKeys.checkIns.list(RESUMABLE_FILTER),
+    enabled: token !== null && enabled,
+    queryFn: async () => {
+      const { data } = await api.GET('/api/v0/check-ins', {
+        params: { query: RESUMABLE_FILTER },
+      });
+      return requireData(data, 'Check-Ins').check_ins[0] ?? null;
+    },
+  });
+}
+
+/** GET /check-ins/{id}: the questions and which of them already have an answer. */
+export function useCheckIn(checkInId: string | undefined) {
+  const token = useSessionToken();
+  return useQuery({
+    queryKey: supportKeys.checkIns.detail(checkInId ?? ''),
+    enabled: token !== null && checkInId !== undefined,
+    queryFn: async () => {
+      const { data } = await api.GET('/api/v0/check-ins/{id}', {
+        params: { path: { id: checkInId ?? '' } },
+      });
       return requireData(data, 'Check-In');
     },
   });
 }
 
-/** POST /check-ins/{id}/responses: one closed-choice answer. */
+/** POST /check-ins: starts one Check-In and returns its questions. */
+export function useStartCheckIn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.POST('/api/v0/check-ins');
+      return requireData(data, 'Check-In');
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: supportKeys.checkIns.lists() }),
+  });
+}
+
+/**
+ * POST /check-ins/{id}/responses: one closed-choice answer, saved on the server at once.
+ * The cached detail learns the answered id, so a later resume opens past it.
+ */
 export function useSaveCheckInAnswer(checkInId: string | undefined) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: { questionId: string; answerOptionId: string }) => {
       const { data } = await api.POST('/api/v0/check-ins/{id}/responses', {
@@ -65,11 +105,23 @@ export function useSaveCheckInAnswer(checkInId: string | undefined) {
       });
       return requireData(data, 'answer');
     },
+    onSuccess: (_saved, input) =>
+      queryClient.setQueryData<CheckInDetail>(
+        supportKeys.checkIns.detail(checkInId ?? ''),
+        (detail) =>
+          detail && {
+            ...detail,
+            answered_question_ids: [
+              ...new Set([...detail.answered_question_ids, input.questionId]),
+            ],
+          },
+      ),
   });
 }
 
 /** POST /check-ins/{id}/commands/complete. Safe to repeat: the server replays. */
 export function useCompleteCheckIn(checkInId: string | undefined) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       const { data } = await api.POST('/api/v0/check-ins/{id}/commands/complete', {
@@ -77,6 +129,7 @@ export function useCompleteCheckIn(checkInId: string | undefined) {
       });
       return requireData(data, 'result');
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: supportKeys.checkIns.lists() }),
   });
 }
 

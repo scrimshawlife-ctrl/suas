@@ -1,8 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderScreen } from '../request/test-utils';
 import CheckInPage from './CheckInPage';
 import { INCOMPLETE_TEXT, NOT_A_DIAGNOSIS } from './check-in-result';
 
@@ -51,9 +51,23 @@ function completed(over: Record<string, unknown> = {}) {
   };
 }
 
-function route(complete: unknown) {
+/** `resumable` is the unfinished Check-In the list returns, or null for none. */
+function route(complete: unknown, resumable: unknown = null, answered: string[] = []) {
+  let starts = 0;
+  client.GET.mockImplementation((path: string) => {
+    if (path === '/api/v0/check-ins') {
+      return Promise.resolve({ data: { check_ins: resumable ? [resumable] : [] } });
+    }
+    if (path === '/api/v0/check-ins/{id}') {
+      return Promise.resolve({ data: { ...checkIn, answered_question_ids: answered } });
+    }
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
   client.POST.mockImplementation((path: string) => {
-    if (path === '/api/v0/check-ins') return Promise.resolve({ data: checkIn });
+    if (path === '/api/v0/check-ins') {
+      starts += 1;
+      return Promise.resolve({ data: { ...checkIn, check_in_id: `c${starts}` } });
+    }
     if (path === '/api/v0/check-ins/{id}/responses') return Promise.resolve({ data: {} });
     if (path === '/api/v0/check-ins/{id}/commands/complete')
       return Promise.resolve({ data: complete });
@@ -61,18 +75,15 @@ function route(complete: unknown) {
   });
 }
 
-function renderPage() {
+function renderPage(strict = false) {
   const user = userEvent.setup();
-  render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}
-    >
-      <MemoryRouter>
-        <CheckInPage />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
+  const page = <CheckInPage />;
+  renderScreen(strict ? <StrictMode>{page}</StrictMode> : page, '/check-in');
   return user;
+}
+
+function startCalls() {
+  return client.POST.mock.calls.filter(([p]) => p === '/api/v0/check-ins');
 }
 
 async function answerBoth(user: ReturnType<typeof userEvent.setup>) {
@@ -83,6 +94,7 @@ async function answerBoth(user: ReturnType<typeof userEvent.setup>) {
 }
 
 beforeEach(() => {
+  client.GET.mockReset();
   client.POST.mockReset();
   window.scrollTo = vi.fn();
 });
@@ -93,10 +105,12 @@ describe('CheckInPage', () => {
     const user = renderPage();
 
     expect(await screen.findByText('Question 1 of 2')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Leave Check-In' })).toHaveAttribute('href', '/home');
-    expect(
-      screen.getByText('If you leave, you will start a new Check-In next time.'),
-    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Save and finish later' })).toHaveAttribute(
+      'href',
+      '/home',
+    );
+    expect(screen.queryByText(/start a new Check-In next time/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Leave Check-In' })).toBeNull();
     expect(screen.getByText(NOT_A_DIAGNOSIS)).toBeVisible();
 
     await user.click(screen.getByLabelText('Option one B'));
@@ -153,13 +167,52 @@ describe('CheckInPage', () => {
     await answerBoth(user);
 
     expect(await screen.findByText(INCOMPLETE_TEXT)).toBeInTheDocument();
-    expect(client.POST.mock.calls.filter(([p]) => p === '/api/v0/check-ins')).toHaveLength(1);
+    expect(startCalls()).toHaveLength(1);
 
     await user.click(screen.getByRole('button', { name: 'Start again' }));
-    await waitFor(() =>
-      expect(client.POST.mock.calls.filter(([p]) => p === '/api/v0/check-ins')).toHaveLength(2),
-    );
+    await waitFor(() => expect(startCalls()).toHaveLength(2));
     expect(await screen.findByText('Question 1 of 2')).toBeInTheDocument();
     expect(screen.queryByText(INCOMPLETE_TEXT)).toBeNull();
+  });
+
+  it('starts a new Check-In exactly once when none is unfinished', async () => {
+    route(completed());
+    renderPage(true);
+    expect(await screen.findByText('Question 1 of 2')).toBeInTheDocument();
+    expect(startCalls()).toHaveLength(1);
+    expect(client.GET).toHaveBeenCalledWith('/api/v0/check-ins', {
+      params: { query: { status: 'IN_PROGRESS' } },
+    });
+    expect(client.GET).not.toHaveBeenCalledWith('/api/v0/check-ins/{id}', expect.anything());
+  });
+
+  it('resumes at the first unanswered question without starting another', async () => {
+    route(completed(), checkIn, ['q1']);
+    const user = renderPage();
+
+    expect(await screen.findByText('Question 2 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Second question?' })).toBeVisible();
+    expect(client.GET).toHaveBeenCalledWith('/api/v0/check-ins/{id}', {
+      params: { path: { id: 'c1' } },
+    });
+    expect(startCalls()).toHaveLength(0);
+
+    await user.click(screen.getByLabelText('Option two A'));
+    await user.click(screen.getByRole('button', { name: 'Save answer' }));
+    expect(await screen.findByText('Thank you for checking in.')).toBeInTheDocument();
+    expect(startCalls()).toHaveLength(0);
+  });
+
+  it('Save and finish later leaves for Home with the saved answers kept', async () => {
+    route(completed());
+    const user = renderPage();
+    await user.click(await screen.findByLabelText('Option one B'));
+    await user.click(screen.getByRole('button', { name: 'Save answer' }));
+    await user.click(await screen.findByRole('link', { name: 'Save and finish later' }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/home');
+    expect(client.POST).not.toHaveBeenCalledWith(
+      '/api/v0/check-ins/{id}/commands/complete',
+      expect.anything(),
+    );
   });
 });

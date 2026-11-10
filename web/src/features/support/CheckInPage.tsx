@@ -7,14 +7,18 @@ import { Page } from '../../components/Page';
 import { RadioCardGroup } from '../../components/RadioCardGroup';
 import { cn } from '../../lib/cn';
 import {
+  useCheckIn,
   useCompleteCheckIn,
+  useResumableCheckIn,
   useSaveCheckInAnswer,
   useStartCheckIn,
   type CheckInCompleted,
+  type CheckInWithQuestions,
 } from './api';
 import {
   previousQuestion,
   recordAnswer,
+  resumePosition,
   skipQuestion,
   START,
   type Position,
@@ -85,26 +89,25 @@ function Result({ result }: { result: CheckInCompleted }) {
   );
 }
 
-/** Check-In board: one question per step, then a neutral result. */
-export default function CheckInPage() {
-  const start = useStartCheckIn();
-  const checkIn = start.data;
-  const save = useSaveCheckInAnswer(checkIn?.check_in_id);
-  const complete = useCompleteCheckIn(checkIn?.check_in_id);
-  const [position, setPosition] = useState<Position>(START);
+/** The steps and the result for one Check-In, opened at `initial`. Remount it to change either. */
+function CheckInFlow({
+  checkIn,
+  initial,
+  onStartAgain,
+}: {
+  checkIn: CheckInWithQuestions;
+  initial: Position;
+  onStartAgain: () => void;
+}) {
+  const save = useSaveCheckInAnswer(checkIn.check_in_id);
+  const complete = useCompleteCheckIn(checkIn.check_in_id);
+  const [position, setPosition] = useState<Position>(initial);
   const [choice, setChoice] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<CheckInCompleted | null>(null);
   const [incomplete, setIncomplete] = useState(false);
-  const started = useRef(false);
   const questionRef = useRef<HTMLHeadingElement>(null);
 
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    start.mutate();
-  }, [start]);
-
-  const questions: readonly Question[] = checkIn?.questions ?? [];
+  const questions: readonly Question[] = checkIn.questions;
   const question = questions[position.index];
   const busy = save.isPending || complete.isPending;
   const selected = choice ?? (question ? position.answers[question.question_id] : undefined);
@@ -115,18 +118,6 @@ export default function CheckInPage() {
     save.reset();
     complete.reset();
     queueMicrotask(() => questionRef.current?.focus());
-  }
-
-  /** A fresh Check-In: the server does not resume or edit one that has ended. */
-  function startAgain() {
-    setPosition(START);
-    setChoice(undefined);
-    setResult(null);
-    setIncomplete(false);
-    save.reset();
-    complete.reset();
-    start.reset();
-    start.mutate();
   }
 
   async function finish() {
@@ -162,7 +153,7 @@ export default function CheckInPage() {
           {INCOMPLETE_TEXT}
         </p>
         <div className="flex flex-wrap gap-3">
-          <Button size="form" onClick={startAgain}>
+          <Button size="form" onClick={onStartAgain}>
             Start again
           </Button>
           <Button size="form" variant="secondary" href={paths.home}>
@@ -174,22 +165,11 @@ export default function CheckInPage() {
     );
   }
 
-  if (start.isError) {
-    return (
-      <Page width="narrow">
-        <ErrorNotice
-          error={start.error}
-          doing="start your Check-In"
-          onRetry={() => start.mutate()}
-        />
-      </Page>
-    );
-  }
-  if (!checkIn || !question) {
+  if (!question) {
     return (
       <Page width="narrow">
         <p role="status" className="text-slate">
-          {checkIn ? 'No questions are available right now.' : 'Starting your Check-In…'}
+          No questions are available right now.
         </p>
       </Page>
     );
@@ -204,10 +184,9 @@ export default function CheckInPage() {
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <h1 className="text-20 font-bold">Check-In</h1>
           <Link to={paths.home} className="inline-flex min-h-11 items-center font-bold">
-            Leave Check-In
+            Save and finish later
           </Link>
         </div>
-        <p className="text-16 text-slate">If you leave, you will start a new Check-In next time.</p>
         <p role="status" className="font-bold text-slate">
           Question {position.index + 1} of {questions.length}
         </p>
@@ -270,6 +249,74 @@ export default function CheckInPage() {
       </form>
 
       <Disclaimer />
+    </Page>
+  );
+}
+
+/**
+ * Check-In board. Opens the caller's unfinished Check-In when there is one (answers are saved
+ * per answer, so it resumes at the first unanswered question), otherwise starts a new one.
+ */
+export default function CheckInPage() {
+  const resumable = useResumableCheckIn();
+  const start = useStartCheckIn();
+  // undefined: not decided yet. null: start a new one. Set once from the first list read,
+  // so a later refetch (after complete) can neither swap the Check-In nor start another.
+  const [resumeId, setResumeId] = useState<string | null | undefined>(undefined);
+  if (resumeId === undefined && resumable.isSuccess) {
+    setResumeId(resumable.data?.check_in_id ?? null);
+  }
+  const resumed = useCheckIn(resumeId ?? undefined);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (resumeId !== null || started.current) return;
+    started.current = true;
+    start.mutate();
+  }, [resumeId, start]);
+
+  function startAgain() {
+    started.current = false;
+    setResumeId(null);
+    start.reset();
+  }
+
+  const checkIn = start.data ?? resumed.data;
+  if (checkIn) {
+    const initial =
+      start.data === undefined && resumed.data
+        ? resumePosition(resumed.data.questions, resumed.data.answered_question_ids)
+        : START;
+    return (
+      <CheckInFlow
+        key={checkIn.check_in_id}
+        checkIn={checkIn}
+        initial={initial}
+        onStartAgain={startAgain}
+      />
+    );
+  }
+
+  const failed = start.isError
+    ? { error: start.error, doing: 'start your Check-In', retry: () => start.mutate() }
+    : resumable.isError
+      ? {
+          error: resumable.error,
+          doing: 'open your Check-In',
+          retry: () => void resumable.refetch(),
+        }
+      : resumed.isError
+        ? { error: resumed.error, doing: 'open your Check-In', retry: () => void resumed.refetch() }
+        : null;
+  return (
+    <Page width="narrow">
+      {failed ? (
+        <ErrorNotice error={failed.error} doing={failed.doing} onRetry={failed.retry} />
+      ) : (
+        <p role="status" className="text-slate">
+          Opening your Check-In…
+        </p>
+      )}
     </Page>
   );
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   previousQuestion,
   recordAnswer,
+  resumePosition,
   skipQuestion,
   START,
   type Question,
@@ -46,5 +47,24 @@ describe('Check-In step flow', () => {
     const skipped = skipQuestion(questions, { index: 1, answers: { q1: 'q1-a' } });
     expect(skipped.position).toEqual({ index: 2, answers: { q1: 'q1-a' } });
     expect(skipped.done).toBe(false);
+  });
+
+  describe('resumePosition', () => {
+    it('opens on the first question when none is answered', () => {
+      expect(resumePosition(questions, [])).toEqual({ index: 0, answers: {} });
+    });
+
+    it('opens on the first unanswered question, skipping answered ones', () => {
+      expect(resumePosition(questions, ['q1']).index).toBe(1);
+      expect(resumePosition(questions, ['q1', 'q3']).index).toBe(1);
+    });
+
+    it('opens on the last question when every one is answered', () => {
+      expect(resumePosition(questions, ['q1', 'q2', 'q3']).index).toBe(2);
+    });
+
+    it('stays at 0 for no questions', () => {
+      expect(resumePosition([], []).index).toBe(0);
+    });
   });
 });
