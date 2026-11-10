@@ -81,11 +81,19 @@ const resolveBody = z.object({
   expected_status: z.enum(['ACTIVE', 'FOLLOWUP']).optional(),
 });
 
-function publicCase(supportCase: SupportCase) {
+/**
+ * Only the case owner and a SUAS admin get the real level; an accepter always sees null.
+ * Released basis (0.7.0): CASES.md §3 (priority_signal_level is a queue-filter fact only) and
+ * §8 (Org-queue readers get bounded limited fields) and SAFETY.md §3.3 (RED reaches Trusted
+ * Contacts only under an ACTIVE grant). An admin keeps the level so a human can review RED
+ * (SAFETY.md §3.2). V1_PROJECT_PLAN.md §2.1 ("RED never goes to peers") is a proposal, not
+ * authority.
+ */
+function publicCase(supportCase: SupportCase, revealPriority: boolean) {
   return {
     case_id: supportCase.caseId,
     status: supportCase.status,
-    priority_signal_level: supportCase.prioritySignalLevel ?? null,
+    priority_signal_level: revealPriority ? (supportCase.prioritySignalLevel ?? null) : null,
   };
 }
 
@@ -152,7 +160,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
           correlationId: String(request.id),
         });
         return {
-          result: { ...publicCase(opened.supportCase), created: opened.created },
+          result: { ...publicCase(opened.supportCase, true), created: opened.created },
           aggregateType: 'SupportCase',
           aggregateId: opened.supportCase.caseId,
         };
@@ -168,8 +176,8 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
   app.get(`${API_PREFIX}/cases/:id`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = idParams.parse(request.params);
-    const { supportCase } = await resolveCaseAccess(deps.pool, context, id);
-    return publicCase(supportCase);
+    const { supportCase, owner } = await resolveCaseAccess(deps.pool, context, id);
+    return publicCase(supportCase, owner);
   });
 
   for (const entry of EXECUTE_CASE_HTTP) {
@@ -230,7 +238,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
             ...(body.expected_status !== undefined ? { expectedStatus: body.expected_status } : {}),
           });
           return {
-            result: publicCase(supportCase),
+            result: publicCase(supportCase, actorType === 'SUAS_ADMIN'),
             aggregateType: 'SupportCase',
             aggregateId: id,
           };
@@ -277,7 +285,7 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     });
 
     return {
-      ...publicCase(result.supportCase),
+      ...publicCase(result.supportCase, false),
       settlement_id: result.settlement.settlementId,
       resolution_cycle: result.settlement.resolutionCycle,
       settlement: publicSettlement(result.settlement),
