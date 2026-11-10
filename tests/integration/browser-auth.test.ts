@@ -1,4 +1,4 @@
-/** Browser EMAIL OTP evidence for AUTH.md §9.1 and D-004 (spec 0.6.0). */
+/** Browser EMAIL OTP evidence for AUTH.md §9.1, its §9.3 request policy, and D-004 (spec 0.9.0). */
 
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -45,6 +45,24 @@ async function enrolledEmail(): Promise<string> {
 
 function form(values: Record<string, string>): string {
   return new URLSearchParams(values).toString();
+}
+
+/** Signs an enrolled address in through the /app form flow; returns the `name=value` cookie. */
+async function browserSessionCookie(email: string): Promise<string> {
+  await app.server.inject({
+    method: 'POST',
+    url: '/app/auth/challenges',
+    headers: { 'content-type': FORM },
+    payload: form({ destination: email, role: 'veteran' }),
+  });
+  const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
+  const verified = await app.server.inject({
+    method: 'POST',
+    url: '/app/auth/verify',
+    headers: { 'content-type': FORM },
+    payload: form({ destination: email, role: 'veteran', code }),
+  });
+  return String(verified.headers['set-cookie']).split(';')[0] ?? '';
 }
 
 describe('HTML passwordless sign-in', () => {
@@ -163,6 +181,26 @@ describe('HTML passwordless sign-in', () => {
     });
     expect(response.statusCode).toBe(403);
     expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
+  });
+
+  it.each([
+    [
+      'Sec-Fetch-Site: none (user-initiated) with a foreign Origin',
+      'none',
+      'https://attacker.example',
+    ],
+    ['Sec-Fetch-Site: Same-Origin in mixed case', 'Same-Origin', 'null'],
+  ])('accepts %s', async (_label, fetchSite, origin) => {
+    // The §9.3 table allows same-origin and none whatever the Origin; the value is case-insensitive.
+    const email = await enrolledEmail();
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/challenges',
+      headers: { 'content-type': FORM, host: 'suas.example', origin, 'sec-fetch-site': fetchSite },
+      payload: form({ destination: email, role: 'veteran' }),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(delivery().lastFor(email.toLowerCase())?.secret).toMatch(/^\d{6}$/);
   });
 
   it('accepts a same-scheme, same-host Origin with no Sec-Fetch-Site (older browsers)', async () => {
@@ -540,6 +578,22 @@ describe('HTML passwordless sign-in', () => {
     });
     expect(logout.statusCode).toBe(303);
     expect(logout.headers.location).toBe('/app');
+  });
+
+  it('rejects a cross-site sign out that carries Origin: null and keeps the session', async () => {
+    const cookie = await browserSessionCookie(await enrolledEmail());
+
+    const logout = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/logout',
+      headers: { cookie, host: 'suas.example', origin: 'null', 'sec-fetch-site': 'cross-site' },
+    });
+    expect(logout.statusCode).toBe(403);
+    expect(logout.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+    expect(logout.headers['set-cookie']).toBeUndefined();
+
+    const home = await app.server.inject({ method: 'GET', url: '/app/home', headers: { cookie } });
+    expect(home.statusCode).toBe(200);
   });
 
   it('revokes the authoritative session and clears the browser cookie on sign out', async () => {

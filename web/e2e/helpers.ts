@@ -100,6 +100,20 @@ export async function newVerifiedVeteran(
   return { page, email };
 }
 
+/** The crisis screen: its heading, and 911 and 988 as red-flagged call buttons. */
+export async function expectCrisisScreen(page: Page): Promise<void> {
+  await expect(page).toHaveURL(/\/crisis$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Immediate resources' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Call 911' }).first()).toHaveAttribute(
+    'href',
+    'tel:911',
+  );
+  await expect(page.getByRole('link', { name: 'Call or text 988' }).first()).toHaveAttribute(
+    'href',
+    'tel:988',
+  );
+}
+
 /** A scripted Intake Assistant turn pair: the draft tool call, then a closing line. */
 export function draftTurns(draft: {
   category: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
