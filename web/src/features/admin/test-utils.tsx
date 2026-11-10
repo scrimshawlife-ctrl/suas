@@ -34,6 +34,8 @@ export function makeDraft(overrides: Partial<ResourceDraft> = {}): ResourceDraft
     hours: 'Weekdays 9-5',
     contact_method: '408-555-0100',
     contact_method_kind: 'PHONE',
+    contacts: [{ kind: 'PHONE', value: '408-555-0100' }],
+    area: null,
     referral_method: null,
     cost: null,
     published_resource_id: null,

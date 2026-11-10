@@ -349,3 +349,258 @@ describe('edit, discard and publish', () => {
     expect(response.statusCode).toBe(404);
   });
 });
+
+describe('contacts and area (R8.8, R8.9)', () => {
+  const threeContacts = [
+    { kind: 'PHONE', value: '408-555-0100' },
+    { kind: 'URL', value: 'https://pantry.example.invalid' },
+    { kind: 'EMAIL', value: 'help@pantry.example.invalid' },
+  ];
+
+  async function draftWith(headers: Record<string, string>, extra: Record<string, unknown>) {
+    scriptResources([{ ...validResource, ...extra }]);
+    const response = await extract(headers);
+    expect(response.statusCode).toBe(200);
+    return response.json().drafts[0] as { resource_draft_id: string; contacts: unknown[] };
+  }
+
+  const edit = (headers: Record<string, string>, id: string, payload: unknown) =>
+    app.server.inject({
+      method: 'POST',
+      url: `/api/v0/admin/resource-drafts/${id}/commands/edit`,
+      headers,
+      payload: payload as Record<string, unknown>,
+    });
+
+  it('publishes three contacts in order with the first mirrored, plus area and verified_at', async () => {
+    const tenantId = randomUUID();
+    const admin = await credential(app, tenantId, { admin: true, elevate: true });
+    const veteran = await credential(app, tenantId, { admin: false, elevate: false });
+    const draft = await draftWith(admin.headers, {
+      contacts: threeContacts,
+      area: 'San Jose, east side',
+    });
+    expect(draft).toMatchObject({
+      contacts: threeContacts,
+      area: 'San Jose, east side',
+      contact_method: '408-555-0100',
+      contact_method_kind: 'PHONE',
+    });
+
+    const published = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/admin/resource-drafts/${draft.resource_draft_id}/commands/publish`,
+      headers: admin.headers,
+    });
+    expect(published.statusCode).toBe(200);
+    const resourceId = published.json().resource_id as string;
+
+    const read = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/resources/${resourceId}`,
+      headers: veteran.headers,
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.json()).toMatchObject({
+      contacts: threeContacts,
+      contact_method: '408-555-0100',
+      contact_method_kind: 'PHONE',
+      area: 'San Jose, east side',
+      freshness: 'FRESH',
+      stale_warning: false,
+    });
+
+    const stored = await pool().query<{ last_verified_at: Date }>(
+      `SELECT last_verified_at FROM resources WHERE resource_id = $1`,
+      [resourceId],
+    );
+    expect(read.json().verified_at).toBe(stored.rows[0]?.last_verified_at.toISOString());
+
+    const listed = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/resources',
+      headers: veteran.headers,
+    });
+    expect(listed.json().resources[0].contacts).toEqual(threeContacts);
+  });
+
+  it('keeps the stale warning and reports the same stored date as verified_at', async () => {
+    const tenantId = randomUUID();
+    const admin = await credential(app, tenantId, { admin: true, elevate: true });
+    const veteran = await credential(app, tenantId, { admin: false, elevate: false });
+    const draft = await draftWith(admin.headers, {});
+    const published = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/admin/resource-drafts/${draft.resource_draft_id}/commands/publish`,
+      headers: admin.headers,
+    });
+    const resourceId = published.json().resource_id as string;
+    await pool().query(
+      `UPDATE resources SET last_verified_at = now() - interval '100 days' WHERE resource_id = $1`,
+      [resourceId],
+    );
+
+    const read = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/resources/${resourceId}`,
+      headers: veteran.headers,
+    });
+    const stored = await pool().query<{ last_verified_at: Date }>(
+      `SELECT last_verified_at FROM resources WHERE resource_id = $1`,
+      [resourceId],
+    );
+    expect(read.json()).toMatchObject({ freshness: 'STALE', stale_warning: true, area: null });
+    expect(read.json().verified_at).toBe(stored.rows[0]?.last_verified_at.toISOString());
+  });
+
+  it('refuses a fourth contact, an over-long area and a mismatched alias on edit', async () => {
+    const admin = await credential(app, randomUUID(), { admin: true, elevate: true });
+    const draft = await draftWith(admin.headers, { contacts: threeContacts });
+    const id = draft.resource_draft_id;
+
+    const four = [...threeContacts, { kind: 'FREEFORM', value: 'Ask at the front desk' }];
+    expect((await edit(admin.headers, id, { contacts: four })).statusCode).toBe(400);
+    expect((await edit(admin.headers, id, { area: 'x'.repeat(81) })).statusCode).toBe(400);
+    expect(
+      (
+        await edit(admin.headers, id, {
+          contacts: threeContacts,
+          contact_method: '408-555-0199',
+        })
+      ).statusCode,
+    ).toBe(400);
+
+    const unchanged = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/admin/resource-drafts/${id}`,
+      headers: admin.headers,
+    });
+    expect(unchanged.json().contacts).toEqual(threeContacts);
+  });
+
+  it('edits the list, clears it, and lets the old single field replace only the first contact', async () => {
+    const admin = await credential(app, randomUUID(), { admin: true, elevate: true });
+    const draft = await draftWith(admin.headers, { contacts: threeContacts });
+    const id = draft.resource_draft_id;
+
+    const legacy = await edit(admin.headers, id, {
+      contact_method: '408-555-0123',
+      contact_method_kind: 'PHONE',
+    });
+    expect(legacy.statusCode).toBe(200);
+    expect(legacy.json().contacts).toEqual([
+      { kind: 'PHONE', value: '408-555-0123' },
+      threeContacts[1],
+      threeContacts[2],
+    ]);
+    expect(legacy.json().contact_method).toBe('408-555-0123');
+
+    const reordered = await edit(admin.headers, id, { contacts: [threeContacts[2]] });
+    expect(reordered.json()).toMatchObject({
+      contacts: [threeContacts[2]],
+      contact_method: 'help@pantry.example.invalid',
+      contact_method_kind: 'EMAIL',
+    });
+
+    const cleared = await edit(admin.headers, id, { contacts: null });
+    expect(cleared.json()).toMatchObject({
+      contacts: [],
+      contact_method: null,
+      contact_method_kind: null,
+    });
+  });
+
+  it.each([
+    ['988 in the list', { contacts: [{ kind: 'PHONE', value: '988' }] }],
+    ['911 as a phone', { contacts: [{ kind: 'PHONE', value: 'tel:911' }] }],
+    ['838255 as text', { contacts: [{ kind: 'FREEFORM', value: 'sms:838255' }] }],
+    ['988 as the single contact', { contact_method: '988', contact_method_kind: 'PHONE' }],
+  ])('refuses %s on edit and leaves the draft unchanged', async (_label, change) => {
+    const admin = await credential(app, randomUUID(), { admin: true, elevate: true });
+    const draft = await draftWith(admin.headers, { contacts: threeContacts });
+
+    const response = await edit(admin.headers, draft.resource_draft_id, change);
+    expect(response.statusCode).toBe(400);
+    expect(JSON.stringify(response.json())).toContain('crisis number');
+
+    const read = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/admin/resource-drafts/${draft.resource_draft_id}`,
+      headers: admin.headers,
+    });
+    expect(read.json().contacts).toEqual(threeContacts);
+  });
+
+  it.each([
+    ['a script URL', { contacts: [{ kind: 'URL', value: `java${'script'}:alert(1)` }] }],
+    ['a data URL', { contacts: [{ kind: 'URL', value: 'data:text/html,<b>hi</b>' }] }],
+    ['a mailto as EMAIL', { contacts: [{ kind: 'EMAIL', value: 'mailto:a@example.invalid' }] }],
+    [
+      'a script URL as the single contact',
+      { contact_method: `Java${'Script'}:alert(1)`, contact_method_kind: 'URL' },
+    ],
+    ['+1 988 as a phone', { contacts: [{ kind: 'PHONE', value: '+1 988' }] }],
+  ])('refuses %s on edit and leaves the draft unchanged', async (_label, change) => {
+    const admin = await credential(app, randomUUID(), { admin: true, elevate: true });
+    const draft = await draftWith(admin.headers, { contacts: threeContacts });
+
+    const response = await edit(admin.headers, draft.resource_draft_id, change);
+    expect(response.statusCode).toBe(400);
+
+    const read = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/admin/resource-drafts/${draft.resource_draft_id}`,
+      headers: admin.headers,
+    });
+    expect(read.json().contacts).toEqual(threeContacts);
+  });
+
+  it('refuses a model-extracted data: URL contact and keeps no draft', async () => {
+    const tenantId = randomUUID();
+    const admin = await credential(app, tenantId, { admin: true, elevate: true });
+    scriptResources([
+      validResource,
+      { ...validResource, contacts: [{ kind: 'URL', value: 'data:text/html,<b>hi</b>' }] },
+    ]);
+
+    const response = await extract(admin.headers);
+    expect(response.statusCode).toBe(502);
+    expect(await draftCount(tenantId)).toBe(0);
+  });
+
+  it('refuses a model-extracted crisis contact and keeps no draft', async () => {
+    const tenantId = randomUUID();
+    const admin = await credential(app, tenantId, { admin: true, elevate: true });
+    scriptResources([
+      validResource,
+      { ...validResource, contacts: [{ kind: 'PHONE', value: '838255' }] },
+    ]);
+
+    const response = await extract(admin.headers);
+    expect(response.statusCode).toBe(502);
+    expect(await draftCount(tenantId)).toBe(0);
+  });
+
+  it('refuses to publish a legacy draft whose only contact is a crisis number', async () => {
+    const tenantId = randomUUID();
+    const admin = await credential(app, tenantId, { admin: true, elevate: true });
+    const draft = await draftWith(admin.headers, {});
+    await pool().query(
+      `UPDATE resource_drafts
+          SET contact_method = '988', contact_method_kind = 'PHONE', contacts = '[]'::jsonb
+        WHERE resource_draft_id = $1`,
+      [draft.resource_draft_id],
+    );
+
+    const response = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/admin/resource-drafts/${draft.resource_draft_id}/commands/publish`,
+      headers: admin.headers,
+    });
+    expect(response.statusCode).toBe(400);
+    const resources = await pool().query(`SELECT 1 FROM resources WHERE tenant_id = $1`, [
+      tenantId,
+    ]);
+    expect(resources.rowCount).toBe(0);
+  });
+});

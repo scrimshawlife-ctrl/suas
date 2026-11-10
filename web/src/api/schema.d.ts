@@ -1265,6 +1265,18 @@ export interface components {
       contact_method: string | null;
       /** @enum {string|null} */
       contact_method_kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
+      /** @description Up to three contact methods, in order. The first is mirrored in contact_method. */
+      contacts: {
+        /** @enum {string} */
+        kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+        value: string;
+      }[];
+      area: string | null;
+      /**
+       * Format: date-time
+       * @description The stored last_verified_at under a client-facing name; the publish date until a re-verify command exists.
+       */
+      verified_at: string | null;
       /** @enum {string} */
       freshness: 'FRESH' | 'AGING' | 'STALE' | 'UNVERIFIED';
       stale_warning: boolean;
@@ -1293,6 +1305,13 @@ export interface components {
       contact_method: string | null;
       /** @enum {string|null} */
       contact_method_kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
+      /** @description Up to three contact methods, in order (R8.8, accepted as proposal text in suas-specs D-059, not released). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
+      contacts: {
+        /** @enum {string} */
+        kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+        value: string;
+      }[];
+      area: string | null;
       referral_method: string | null;
       cost: string | null;
       /** Format: uuid */
@@ -1341,6 +1360,15 @@ export interface components {
       contact_method?: string | null;
       /** @enum {string|null} */
       contact_method_kind?: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
+      /** @description Up to three contact methods, in order (R8.8, accepted as proposal text in suas-specs D-059, not released). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
+      contacts?:
+        | {
+            /** @enum {string} */
+            kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+            value: string;
+          }[]
+        | null;
+      area?: string | null;
       referral_method?: string | null;
       cost?: string | null;
     };
@@ -1943,6 +1971,18 @@ export interface components {
       cost: string | null;
       contact_method: string | null;
       contact_method_kind: string | null;
+      /** @description Up to three contact methods, in order. The first is mirrored in contact_method. */
+      contacts: {
+        /** @enum {string} */
+        kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+        value: string;
+      }[];
+      area: string | null;
+      /**
+       * Format: date-time
+       * @description The stored last_verified_at under a client-facing name; the publish date until a re-verify command exists.
+       */
+      verified_at: string | null;
       freshness: string;
       stale_warning: boolean;
     };

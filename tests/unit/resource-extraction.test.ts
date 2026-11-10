@@ -37,6 +37,28 @@ describe('extractResourceDrafts', () => {
     expect(result).toEqual({ ok: true, resources: [validResource] });
   });
 
+  it('keeps up to three contacts and an area, and offers the model the list', async () => {
+    const withContacts = {
+      service_name: 'Valley Pantry',
+      category: 'FOOD',
+      counties: ['SANTA_CLARA'],
+      contacts: [
+        { kind: 'PHONE', value: '408-555-0100' },
+        { kind: 'URL', value: 'https://valley.example.invalid' },
+        { kind: 'EMAIL', value: 'help@valley.example.invalid' },
+      ],
+      area: 'San Jose, east side',
+    };
+    const port = new ScriptedModelInference().enqueue(toolCall({ resources: [withContacts] }));
+    expect(await extractResourceDrafts(port, input)).toEqual({
+      ok: true,
+      resources: [withContacts],
+    });
+    const schema = JSON.stringify(port.requests()[0]?.tools[0]?.inputSchema);
+    expect(schema).toContain('"contacts"');
+    expect(schema).toContain('"area"');
+  });
+
   it('accepts an empty list: a source with no usable resource yields zero drafts', async () => {
     const port = new ScriptedModelInference().enqueue(toolCall({ resources: [] }));
     expect(await extractResourceDrafts(port, input)).toEqual({ ok: true, resources: [] });
@@ -70,6 +92,31 @@ describe('extractResourceDrafts', () => {
         ],
       },
     ],
+    [
+      'a 988 contact',
+      { resources: [{ ...validResource, contacts: [{ kind: 'PHONE', value: '988' }] }] },
+    ],
+    [
+      'an sms:838255 contact',
+      {
+        resources: [{ ...validResource, contacts: [{ kind: 'FREEFORM', value: 'sms:838255' }] }],
+      },
+    ],
+    [
+      'a fourth contact',
+      {
+        resources: [
+          {
+            ...validResource,
+            contacts: ['1', '2', '3', '4'].map((n) => ({
+              kind: 'PHONE',
+              value: `408-555-010${n}`,
+            })),
+          },
+        ],
+      },
+    ],
+    ['an area over 80 characters', { resources: [{ ...validResource, area: 'x'.repeat(81) }] }],
     ['a missing service name', { resources: [{ category: 'FOOD', counties: [] }] }],
     ['a payload that is not an object', 'resources'],
   ])('rejects %s as invalid_output', async (_label, payload) => {

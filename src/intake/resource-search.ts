@@ -8,7 +8,7 @@
  */
 
 import type { Queryable } from '../db/index.js';
-import { searchResources, RESOURCE_MAX_PAGE_SIZE } from '../fulfillment/index.js';
+import { searchResources, verifiedAtIso, RESOURCE_MAX_PAGE_SIZE } from '../fulfillment/index.js';
 import type { IntakeHost, IntakeResource } from './assistant.js';
 
 export function createDatabaseIntakeHost(db: Queryable, tenantId: string): IntakeHost {
@@ -39,6 +39,9 @@ export function createDatabaseIntakeHost(db: Queryable, tenantId: string): Intak
           cost: resource.cost ?? null,
           contactMethod: resource.contactMethod ?? null,
           contactMethodKind: resource.contactMethodKind ?? null,
+          contacts: resource.contacts,
+          area: resource.area ?? null,
+          verifiedAt: verifiedAtIso(resource.lastVerifiedAt),
           freshness,
           staleWarning,
         }));

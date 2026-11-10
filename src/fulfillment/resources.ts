@@ -74,9 +74,15 @@ export function directoryServiceNameForDisplay(serviceName: string): string {
 
 const CRISIS_DIRECTORY_NUMBERS = new Set(['911', '988', '838255']);
 
+/**
+ * The digits only, so separators and a leading `+1` / `1` country code do not hide a crisis
+ * number: "+1 988" and "1-911" are caught like "988" and "911".
+ */
 function isCrisisDirectoryNumber(contactMethod: string | undefined): boolean {
   if (contactMethod === undefined) return false;
-  return CRISIS_DIRECTORY_NUMBERS.has(contactMethod.replace(/\D/g, ''));
+  const digits = contactMethod.replace(/\D/g, '');
+  if (CRISIS_DIRECTORY_NUMBERS.has(digits)) return true;
+  return digits.startsWith('1') && CRISIS_DIRECTORY_NUMBERS.has(digits.slice(1));
 }
 
 /**
@@ -102,6 +108,153 @@ export function assertContactMethodKind(value: string): asserts value is Contact
   }
 }
 
+/** R8.8: at most this many contact methods on a Resource or Resource Draft. */
+export const MAX_RESOURCE_CONTACTS = 3;
+
+/** One entry of the contact list. `FREEFORM` is recorded text with no direct action. */
+export interface ResourceContact {
+  readonly kind: ContactMethodKind;
+  readonly value: string;
+}
+
+export interface ContactInput {
+  readonly contacts?: readonly ResourceContact[] | undefined;
+  readonly contactMethod?: string | undefined;
+  readonly contactMethodKind?: string | undefined;
+}
+
+/**
+ * A value that is only a 911, 988 or 838255 number, with an optional `tel:`/`sms:`
+ * scheme and separators. Prose that merely mentions a number is not matched.
+ */
+export function contactCrisisIssue(value: string): string | undefined {
+  const bare = value
+    .trim()
+    .replace(/^(?:tel|sms):/i, '')
+    .split('?')[0];
+  if (bare === undefined || !/^\+?[\d\s().-]+$/.test(bare)) return undefined;
+  if (!isCrisisDirectoryNumber(bare)) return undefined;
+  return (
+    `"${value}" is a crisis number. 911, 988 and 838255 are never a resource contact method; ` +
+    'crisis destinations come only from SUAS-specs SAFETY_COPY.md (R8.8).'
+  );
+}
+
+/** One plain email address: no scheme, no spaces, no list, no query. */
+const PLAIN_EMAIL = /^[^\s@<>()[\]\\,;:"?&/]+@[^\s@<>()[\]\\,;:"?&/]+\.[^\s@<>()[\]\\,;:"?&/.]+$/;
+
+/**
+ * A URL contact must be an http or https URL and an EMAIL contact one plain address, so no
+ * `javascript:`, `data:` or other scheme is ever served as an actionable contact (R8.8).
+ */
+export function contactValueIssue(kind: string | undefined, value: string): string | undefined {
+  const trimmed = value.trim();
+  if (kind === 'URL') {
+    let protocol: string | undefined;
+    try {
+      protocol = new URL(trimmed).protocol;
+    } catch {
+      protocol = undefined;
+    }
+    if (protocol !== 'http:' && protocol !== 'https:') {
+      return 'A URL contact must be an http or https web address (R8.8).';
+    }
+  }
+  if (kind === 'EMAIL' && !PLAIN_EMAIL.test(trimmed)) {
+    return 'An EMAIL contact must be one plain email address, like name@example.org (R8.8).';
+  }
+  return undefined;
+}
+
+/**
+ * The one validator for contacts on every write path (draft edit, model extraction,
+ * publish, createResource). Returns the first problem, or undefined.
+ */
+export function contactInputIssue(input: ContactInput): string | undefined {
+  const contacts = input.contacts ?? [];
+  if (contacts.length > MAX_RESOURCE_CONTACTS) {
+    return `A resource may list at most ${MAX_RESOURCE_CONTACTS} contact methods (R8.8).`;
+  }
+  for (const contact of contacts) {
+    if (!(CONTACT_METHOD_KINDS as readonly string[]).includes(contact.kind)) {
+      return `"${contact.kind}" is not a known contact-method kind.`;
+    }
+    if (contact.value.trim() === '') return 'A contact method needs a value.';
+    const crisis = contactCrisisIssue(contact.value);
+    if (crisis !== undefined) return crisis;
+    const bad = contactValueIssue(contact.kind, contact.value);
+    if (bad !== undefined) return bad;
+  }
+  if (input.contactMethod !== undefined) {
+    const crisis = contactCrisisIssue(input.contactMethod);
+    if (crisis !== undefined) return crisis;
+    const bad = contactValueIssue(input.contactMethodKind, input.contactMethod);
+    if (bad !== undefined) return bad;
+    const first = contacts[0];
+    if (
+      first !== undefined &&
+      (first.value !== input.contactMethod ||
+        first.kind !== (input.contactMethodKind ?? 'FREEFORM'))
+    ) {
+      return 'contact_method and contact_method_kind must match the first entry of contacts.';
+    }
+  }
+  return undefined;
+}
+
+export interface ResolvedContacts {
+  readonly contacts: readonly ResourceContact[];
+  /** First-contact mirror stored in the single-contact columns. */
+  readonly contactMethod: string | null;
+  readonly contactMethodKind: ContactMethodKind | null;
+}
+
+/**
+ * The list to store and the single-contact mirror of its first entry. A lone
+ * `contactMethod` becomes a one-entry list; its absent kind stays absent in the mirror.
+ */
+export function resolveContacts(input: ContactInput): ResolvedContacts {
+  const listed = input.contacts ?? [];
+  const single: ResourceContact[] =
+    listed.length === 0 && input.contactMethod !== undefined
+      ? [
+          {
+            kind: (input.contactMethodKind ?? 'FREEFORM') as ContactMethodKind,
+            value: input.contactMethod,
+          },
+        ]
+      : [];
+  const contacts = listed.length > 0 ? listed : single;
+  const first = contacts[0];
+  if (first === undefined) return { contacts, contactMethod: null, contactMethodKind: null };
+  const kind =
+    listed.length > 0
+      ? ((input.contactMethodKind ?? first.kind) as ContactMethodKind)
+      : ((input.contactMethodKind as ContactMethodKind | undefined) ?? null);
+  return { contacts, contactMethod: first.value, contactMethodKind: kind };
+}
+
+/**
+ * Contact list of a stored row. Rows written without a list fall back to their single
+ * contact. Each entry gets the same crisis downgrade as the single contact.
+ */
+export function contactsFromRow(
+  stored: readonly ResourceContact[] | null,
+  contactMethod: string | null,
+  contactMethodKind: string | null,
+): readonly ResourceContact[] {
+  const list: readonly ResourceContact[] =
+    stored !== null && stored.length > 0
+      ? stored
+      : contactMethod === null
+        ? []
+        : [{ kind: (contactMethodKind ?? 'FREEFORM') as ContactMethodKind, value: contactMethod }];
+  return list.map((contact) => {
+    const read = directoryContactForRead(contact.value, contact.kind);
+    return { kind: read.contactMethodKind ?? contact.kind, value: contact.value };
+  });
+}
+
 export interface Resource {
   readonly resourceId: string;
   readonly tenantId: string;
@@ -115,6 +268,10 @@ export interface Resource {
   readonly contactMethod: string | undefined;
   /** Scheme of `contactMethod` (P-13); `undefined` means unstructured text. */
   readonly contactMethodKind: ContactMethodKind | undefined;
+  /** R8.8: up to three contacts; the first is mirrored in `contactMethod`. */
+  readonly contacts: readonly ResourceContact[];
+  /** R8.9: optional short area line. */
+  readonly area: string | undefined;
   readonly referralMethod: string | undefined;
   readonly hours: string | undefined;
   readonly cost: string | undefined;
@@ -133,6 +290,8 @@ interface ResourceRow {
   verification_source: string | null;
   contact_method: string | null;
   contact_method_kind: ContactMethodKind | null;
+  contacts: ResourceContact[] | null;
+  area: string | null;
   referral_method: string | null;
   hours: string | null;
   cost: string | null;
@@ -142,7 +301,7 @@ interface ResourceRow {
 const RESOURCE_COLUMNS = `
   resource_id, tenant_id, service_name, category, counties, integration_modes,
   active, last_verified_at, verification_source, contact_method, contact_method_kind,
-  referral_method, hours, cost, eligibility
+  contacts, area, referral_method, hours, cost, eligibility
 `;
 
 function toResource(row: ResourceRow): Resource {
@@ -162,6 +321,8 @@ function toResource(row: ResourceRow): Resource {
     verificationSource: row.verification_source ?? undefined,
     contactMethod: contact.contactMethod,
     contactMethodKind: contact.contactMethodKind,
+    contacts: contactsFromRow(row.contacts, row.contact_method, row.contact_method_kind),
+    area: row.area ?? undefined,
     referralMethod: row.referral_method ?? undefined,
     hours: row.hours ?? undefined,
     cost: row.cost ?? undefined,
@@ -213,6 +374,16 @@ export function freshnessBand(
   return 'STALE';
 }
 
+/**
+ * R8.9: `verified_at` is `last_verified_at` under a client-facing name. One stored value;
+ * a driver may hand back a Date or an ISO string.
+ */
+export function verifiedAtIso(lastVerifiedAt: Date | undefined): string | null {
+  if (lastVerifiedAt === undefined) return null;
+  const date = lastVerifiedAt instanceof Date ? lastVerifiedAt : new Date(lastVerifiedAt);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 /** RESOURCES.md §3: a stale Resource is warned about, never silently hidden. */
 export function requiresStaleWarning(band: FreshnessBand): boolean {
   return band === 'STALE' || band === 'AGING' || band === 'UNVERIFIED';
@@ -228,6 +399,10 @@ export interface CreateResourceInput {
   readonly contactMethod?: string;
   /** Scheme of `contactMethod` (P-13). Omit for unstructured text. */
   readonly contactMethodKind?: string;
+  /** R8.8: up to three contacts. Do not send together with a differing `contactMethod`. */
+  readonly contacts?: readonly ResourceContact[];
+  /** R8.9: optional short area line. */
+  readonly area?: string;
   readonly referralMethod?: string;
   readonly hours?: string;
   readonly cost?: string;
@@ -259,12 +434,20 @@ export async function createResource(db: Queryable, input: CreateResourceInput):
     }
   }
 
+  const contactIssue = contactInputIssue(input);
+  if (contactIssue !== undefined) throw new ResourceValidationError(contactIssue);
+  if (input.area !== undefined && (input.area.trim() === '' || input.area.length > 80)) {
+    throw new ResourceValidationError('area must be 1 to 80 characters (R8.9).');
+  }
+  const resolved = resolveContacts(input);
+
   const result = await db.query<ResourceRow>(
     `INSERT INTO resources
        (resource_id, tenant_id, service_provider_id, service_name, category, counties,
-        integration_modes, contact_method, contact_method_kind, referral_method, hours,
-        cost, eligibility)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::suas_integration_mode[], $8, $9, $10, $11, $12, $13)
+        integration_modes, contact_method, contact_method_kind, contacts, area, referral_method,
+        hours, cost, eligibility)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::suas_integration_mode[], $8, $9, $10::jsonb, $11, $12,
+             $13, $14, $15)
      RETURNING ${RESOURCE_COLUMNS}`,
     [
       randomUUID(),
@@ -274,8 +457,10 @@ export async function createResource(db: Queryable, input: CreateResourceInput):
       input.category,
       input.counties ?? [],
       modes,
-      input.contactMethod ?? null,
-      input.contactMethodKind ?? null,
+      resolved.contactMethod,
+      resolved.contactMethodKind,
+      JSON.stringify(resolved.contacts),
+      input.area ?? null,
       input.referralMethod ?? null,
       input.hours ?? null,
       input.cost ?? null,

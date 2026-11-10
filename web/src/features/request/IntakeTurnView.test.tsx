@@ -27,6 +27,9 @@ const resource = {
   cost: null,
   contact_method: null,
   contact_method_kind: null,
+  contacts: [],
+  area: null,
+  verified_at: null,
   freshness: 'CURRENT',
   stale_warning: false,
 };

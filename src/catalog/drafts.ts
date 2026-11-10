@@ -16,10 +16,13 @@
 import type { Queryable } from '../db/transaction.js';
 import { appendAuditEvent } from '../events/index.js';
 import {
+  contactsFromRow,
   createResource,
+  resolveContacts,
   setResourceActive,
   verifyResource,
   type Resource,
+  type ResourceContact,
 } from '../fulfillment/index.js';
 import type { ServiceCategory } from '../coordination/index.js';
 import { draftFieldsSchema, type DraftChanges, type DraftFields } from './fields.js';
@@ -39,6 +42,8 @@ export interface ResourceDraft {
   readonly hours: string | undefined;
   readonly contactMethod: string | undefined;
   readonly contactMethodKind: string | undefined;
+  readonly contacts: readonly ResourceContact[];
+  readonly area: string | undefined;
   readonly referralMethod: string | undefined;
   readonly cost: string | undefined;
   readonly publishedResourceId: string | undefined;
@@ -60,6 +65,8 @@ interface DraftRow {
   hours: string | null;
   contact_method: string | null;
   contact_method_kind: string | null;
+  contacts: ResourceContact[] | null;
+  area: string | null;
   referral_method: string | null;
   cost: string | null;
   published_resource_id: string | null;
@@ -71,8 +78,8 @@ interface DraftRow {
 
 const COLUMNS = `
   resource_draft_id, tenant_id, status, source_url, service_name, category, counties,
-  eligibility, hours, contact_method, contact_method_kind, referral_method, cost,
-  published_resource_id, reviewed_by, reviewed_at, created_at, updated_at
+  eligibility, hours, contact_method, contact_method_kind, contacts, area, referral_method,
+  cost, published_resource_id, reviewed_by, reviewed_at, created_at, updated_at
 `;
 
 function toDraft(row: DraftRow): ResourceDraft {
@@ -88,6 +95,8 @@ function toDraft(row: DraftRow): ResourceDraft {
     hours: row.hours ?? undefined,
     contactMethod: row.contact_method ?? undefined,
     contactMethodKind: row.contact_method_kind ?? undefined,
+    contacts: contactsFromRow(row.contacts, row.contact_method, row.contact_method_kind),
+    area: row.area ?? undefined,
     referralMethod: row.referral_method ?? undefined,
     cost: row.cost ?? undefined,
     publishedResourceId: row.published_resource_id ?? undefined,
@@ -128,9 +137,45 @@ function toDraftFields(draft: ResourceDraft): DraftFields {
     hours: draft.hours ?? null,
     contact_method: draft.contactMethod ?? null,
     contact_method_kind: (draft.contactMethodKind ?? null) as DraftFields['contact_method_kind'],
+    contacts: draft.contacts.map((contact) => ({ ...contact })),
+    area: draft.area ?? null,
     referral_method: draft.referralMethod ?? null,
     cost: draft.cost ?? null,
   };
+}
+
+/** The contact list to store, with the single-contact mirror of its first entry. */
+function contactsOf(fields: DraftFields) {
+  return resolveContacts({
+    contacts: fields.contacts ?? undefined,
+    contactMethod: fields.contact_method ?? undefined,
+    contactMethodKind: fields.contact_method_kind ?? undefined,
+  });
+}
+
+/**
+ * Merge an admin edit into the current draft. `contacts` replaces the list. A change to
+ * `contact_method` or `contact_method_kind` alone replaces the first contact and keeps
+ * the rest, so an older client cannot drop contacts two and three.
+ */
+function mergeChanges(current: ResourceDraft, changes: DraftChanges): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...toDraftFields(current), ...changes };
+  const touchesSingle = 'contact_method' in changes || 'contact_method_kind' in changes;
+  if (changes.contacts !== undefined) {
+    if (!touchesSingle) {
+      merged.contact_method = null;
+      merged.contact_method_kind = null;
+    }
+    merged.contacts = changes.contacts ?? [];
+  } else if (touchesSingle) {
+    const method = merged.contact_method;
+    const first =
+      typeof method === 'string'
+        ? [{ kind: merged.contact_method_kind ?? 'FREEFORM', value: method }]
+        : [];
+    merged.contacts = [...first, ...current.contacts.slice(1)];
+  }
+  return merged;
 }
 
 async function auditDraft(
@@ -168,11 +213,13 @@ export async function createResourceDrafts(
 ): Promise<ResourceDraft[]> {
   const drafts: ResourceDraft[] = [];
   for (const fields of input.resources) {
+    const contacts = contactsOf(fields);
     const result = await tx.query<DraftRow>(
       `INSERT INTO resource_drafts
          (resource_draft_id, tenant_id, source_url, service_name, category, counties,
-          eligibility, hours, contact_method, contact_method_kind, referral_method, cost)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          eligibility, hours, contact_method, contact_method_kind, contacts, area,
+          referral_method, cost)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13)
        RETURNING ${COLUMNS}`,
       [
         input.tenantId,
@@ -182,8 +229,10 @@ export async function createResourceDrafts(
         fields.counties,
         fields.eligibility ?? null,
         fields.hours ?? null,
-        fields.contact_method ?? null,
-        fields.contact_method_kind ?? null,
+        contacts.contactMethod,
+        contacts.contactMethodKind,
+        JSON.stringify(contacts.contacts),
+        fields.area ?? null,
         fields.referral_method ?? null,
         fields.cost ?? null,
       ],
@@ -316,12 +365,13 @@ export async function editResourceDraft(
   input: EditResourceDraftInput,
 ): Promise<ResourceDraft> {
   const current = await lockPendingDraft(tx, input.tenantId, input.resourceDraftId);
-  const merged = draftFieldsSchema.parse({ ...toDraftFields(current), ...input.changes });
+  const merged = draftFieldsSchema.parse(mergeChanges(current, input.changes));
+  const contacts = contactsOf(merged);
   const result = await tx.query<DraftRow>(
     `UPDATE resource_drafts
         SET service_name = $3, category = $4, counties = $5, eligibility = $6, hours = $7,
-            contact_method = $8, contact_method_kind = $9, referral_method = $10, cost = $11,
-            updated_at = now()
+            contact_method = $8, contact_method_kind = $9, contacts = $10::jsonb, area = $11,
+            referral_method = $12, cost = $13, updated_at = now()
       WHERE tenant_id = $1 AND resource_draft_id = $2
       RETURNING ${COLUMNS}`,
     [
@@ -332,8 +382,10 @@ export async function editResourceDraft(
       merged.counties,
       merged.eligibility ?? null,
       merged.hours ?? null,
-      merged.contact_method ?? null,
-      merged.contact_method_kind ?? null,
+      contacts.contactMethod,
+      contacts.contactMethodKind,
+      JSON.stringify(contacts.contacts),
+      merged.area ?? null,
       merged.referral_method ?? null,
       merged.cost ?? null,
     ],
@@ -393,6 +445,8 @@ export async function publishResourceDraft(
     ...(draft.contactMethodKind !== undefined
       ? { contactMethodKind: draft.contactMethodKind }
       : {}),
+    contacts: draft.contacts,
+    ...(draft.area !== undefined ? { area: draft.area } : {}),
     ...(draft.referralMethod !== undefined ? { referralMethod: draft.referralMethod } : {}),
     ...(draft.hours !== undefined ? { hours: draft.hours } : {}),
     ...(draft.cost !== undefined ? { cost: draft.cost } : {}),

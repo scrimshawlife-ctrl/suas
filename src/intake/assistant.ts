@@ -53,6 +53,9 @@ export interface IntakeResource {
   readonly cost: string | null;
   readonly contactMethod: string | null;
   readonly contactMethodKind: string | null;
+  readonly contacts: readonly { readonly kind: string; readonly value: string }[];
+  readonly area: string | null;
+  readonly verifiedAt: string | null;
   readonly freshness: string;
   readonly staleWarning: boolean;
 }

@@ -970,7 +970,7 @@ describe('0017 request holder backfill', () => {
       const closedNoChat = await insertRequest(tenantId, caseB, veteranB, 'CLOSED');
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([17, 18, 19, 20]);
+      expect(result.appliedNow).toEqual([17, 18, 19, 20, 21]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const holders = await pool.query<{ id: string; holder: string | null }>(
@@ -1102,7 +1102,7 @@ describe('0020 request expiry and release', () => {
       );
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([20]);
+      expect(result.appliedNow).toEqual([20, 21]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const setting = await pool.query<{ value: unknown }>(
@@ -1130,6 +1130,112 @@ describe('0020 request expiry and release', () => {
         threadId,
       ]);
       await insertThread();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('0021 resource contacts and area', () => {
+  /** A migrations directory holding only versions 1 to 20, to build the old shape first. */
+  async function migrationsUpTo20(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'suas-migrations-'));
+    const source = resolveMigrationsDir();
+    for (const name of await readdir(source)) {
+      if (/^\d{4}_/.test(name) && Number.parseInt(name.slice(0, 4), 10) <= 20) {
+        await cp(join(source, name), join(dir, name));
+      }
+    }
+    return dir;
+  }
+
+  it('backfills the list from the single contact and bounds the list and the area', async () => {
+    const dir = await migrationsUpTo20();
+    try {
+      await runMigrations(pool, {
+        mode: 'apply',
+        provenance,
+        migrationsDir: dir,
+        expectedSchemaVersion: 20,
+      });
+
+      const tenantId = randomUUID();
+      const resource = async (contact: string | null, kind: string | null) => {
+        const id = randomUUID();
+        await pool.query(
+          `INSERT INTO resources
+             (resource_id, tenant_id, service_name, category, contact_method, contact_method_kind)
+           VALUES ($1, $2, 'Pantry', 'FOOD', $3, $4)`,
+          [id, tenantId, contact, kind],
+        );
+        return id;
+      };
+      const draft = async (contact: string | null, kind: string | null) => {
+        const id = randomUUID();
+        await pool.query(
+          `INSERT INTO resource_drafts
+             (resource_draft_id, tenant_id, source_url, service_name, category,
+              contact_method, contact_method_kind)
+           VALUES ($1, $2, 'https://source.example.invalid', 'Pantry', 'FOOD', $3, $4)`,
+          [id, tenantId, contact, kind],
+        );
+        return id;
+      };
+      const withKind = await resource('408-555-0100', 'PHONE');
+      const noKind = await resource('front desk', null);
+      const noContact = await resource(null, null);
+      const draftWithKind = await draft('help@pantry.example.invalid', 'EMAIL');
+      const draftNoContact = await draft(null, null);
+
+      const result = await runMigrations(pool, { mode: 'apply', provenance });
+      expect(result.appliedNow).toEqual([21]);
+      expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
+
+      const read = async (table: string, key: string, id: string) => {
+        const row = await pool.query<{ contacts: unknown; area: string | null }>(
+          `SELECT contacts, area FROM ${table} WHERE ${key} = $1`,
+          [id],
+        );
+        return row.rows[0];
+      };
+      expect(await read('resources', 'resource_id', withKind)).toEqual({
+        contacts: [{ kind: 'PHONE', value: '408-555-0100' }],
+        area: null,
+      });
+      expect((await read('resources', 'resource_id', noKind))?.contacts).toEqual([
+        { kind: 'FREEFORM', value: 'front desk' },
+      ]);
+      expect((await read('resources', 'resource_id', noContact))?.contacts).toEqual([]);
+      expect((await read('resource_drafts', 'resource_draft_id', draftWithKind))?.contacts).toEqual(
+        [{ kind: 'EMAIL', value: 'help@pantry.example.invalid' }],
+      );
+      expect(
+        (await read('resource_drafts', 'resource_draft_id', draftNoContact))?.contacts,
+      ).toEqual([]);
+
+      const entry = (n: number) => ({ kind: 'PHONE', value: `408-555-010${n}` });
+      const setContacts = (table: string, key: string, id: string, value: unknown) =>
+        pool.query(`UPDATE ${table} SET contacts = $2::jsonb WHERE ${key} = $1`, [
+          id,
+          JSON.stringify(value),
+        ]);
+      const setArea = (table: string, key: string, id: string, area: string) =>
+        pool.query(`UPDATE ${table} SET area = $2 WHERE ${key} = $1`, [id, area]);
+
+      for (const [table, key, id] of [
+        ['resources', 'resource_id', withKind],
+        ['resource_drafts', 'resource_draft_id', draftWithKind],
+      ] as const) {
+        await setContacts(table, key, id, [entry(1), entry(2), entry(3)]);
+        await expect(setContacts(table, key, id, [1, 2, 3, 4].map(entry))).rejects.toThrow(
+          /_contacts_check/,
+        );
+        await expect(setContacts(table, key, id, { kind: 'PHONE' })).rejects.toThrow(
+          /_contacts_check/,
+        );
+        await setArea(table, key, id, 'x'.repeat(80));
+        await expect(setArea(table, key, id, 'x'.repeat(81))).rejects.toThrow(/_area_check/);
+      }
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
