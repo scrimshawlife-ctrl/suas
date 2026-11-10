@@ -382,6 +382,35 @@ const PAST_WINDOW_MESSAGE =
   'This Check-In was started more than 24 hours ago and can no longer be answered or ' +
   'completed. Start a new Check-In (suas-specs V1_MVP_PROPOSAL.md R8.10).';
 
+/** The System actor recorded when the 24-hour window ends a Check-In (R8.10). */
+const IDLE_TIMEOUT_ACTOR_ID = 'check-in-idle-timeout';
+
+/**
+ * CHECKINS.md §7 audits an abandon. Ids only: answers never enter the Audit Event. The
+ * cause tells a Veteran's own abandon from the 24-hour timeout.
+ */
+async function auditAbandonedCheckIns(
+  tx: Queryable,
+  rows: readonly CheckInRow[],
+  cause: 'VETERAN' | 'IDLE_TIMEOUT',
+): Promise<void> {
+  for (const row of rows) {
+    const byVeteran = cause === 'VETERAN';
+    await appendAuditEvent(tx, {
+      eventType: 'CHECKIN_ABANDONED',
+      action: 'ABANDON_CHECK_IN',
+      targetType: 'CheckIn',
+      targetId: row.check_in_id,
+      aggregateType: 'CheckIn',
+      aggregateId: row.check_in_id,
+      tenantId: row.tenant_id,
+      actorType: byVeteran ? 'VETERAN' : 'SYSTEM',
+      actorId: byVeteran ? row.veteran_user_id : IDLE_TIMEOUT_ACTOR_ID,
+      payload: { questionnaire_version: row.questionnaire_version, cause },
+    });
+  }
+}
+
 /**
  * Under the caller's row lock: if the in-flight Check-In started before the resume window
  * (server clock), mark it ABANDONED (kept, CHECKINS.md §4.2) and report true, so the
@@ -392,14 +421,16 @@ async function abandonIfPastWindowInTx(
   tenantId: string,
   checkInId: string,
 ): Promise<boolean> {
-  const result = await tx.query(
+  const result = await tx.query<CheckInRow>(
     `UPDATE check_ins SET status = 'ABANDONED', abandoned_at = now(), updated_at = now()
      WHERE tenant_id = $1 AND check_in_id = $2
        AND status IN ('STARTED', 'IN_PROGRESS')
-       AND started_at < now() - make_interval(secs => $3)`,
+       AND started_at < now() - make_interval(secs => $3)
+     RETURNING ${CHECK_IN_COLUMNS}`,
     [tenantId, checkInId, CHECK_IN_RESUME_WINDOW_MS / 1000],
   );
-  return (result.rowCount ?? 0) > 0;
+  await auditAbandonedCheckIns(tx, result.rows, 'IDLE_TIMEOUT');
+  return result.rows.length > 0;
 }
 
 /** The most unfinished Check-Ins the resume list returns; one is expected. */
@@ -619,24 +650,28 @@ export async function abandonCheckIn(
   pool: Pool,
   input: { tenantId: string; checkInId: string },
 ): Promise<CheckIn> {
-  const result = await pool.query<CheckInRow>(
-    `UPDATE check_ins SET status = 'ABANDONED', abandoned_at = now(), updated_at = now()
-     WHERE tenant_id = $1 AND check_in_id = $2 AND status IN ('STARTED', 'IN_PROGRESS')
-     RETURNING ${CHECK_IN_COLUMNS}`,
-    [input.tenantId, input.checkInId],
-  );
-  const row = result.rows[0];
-  if (row === undefined) {
-    throw new CheckInStateError('Only an in-flight Check-In can be abandoned.');
-  }
-  return toCheckIn(row);
+  return withTransaction(pool, async (tx) => {
+    const result = await tx.query<CheckInRow>(
+      `UPDATE check_ins SET status = 'ABANDONED', abandoned_at = now(), updated_at = now()
+       WHERE tenant_id = $1 AND check_in_id = $2 AND status IN ('STARTED', 'IN_PROGRESS')
+       RETURNING ${CHECK_IN_COLUMNS}`,
+      [input.tenantId, input.checkInId],
+    );
+    const row = result.rows[0];
+    if (row === undefined) {
+      throw new CheckInStateError('Only an in-flight Check-In can be abandoned.');
+    }
+    await auditAbandonedCheckIns(tx, [row], 'VETERAN');
+    return toCheckIn(row);
+  });
 }
 
 /**
  * Mark in-flight Check-Ins started before the resume window as ABANDONED.
  *
  * One guarded UPDATE: a row completed or abandoned meanwhile no longer matches,
- * so a replay or a concurrent worker changes nothing. Rows stay stored (§4.2).
+ * so a replay or a concurrent worker changes nothing. Rows stay stored (§4.2), and
+ * each abandon writes its Audit Event in the same transaction (§7).
  */
 export async function abandonStaleCheckIns(
   pool: Pool,
@@ -644,12 +679,16 @@ export async function abandonStaleCheckIns(
 ): Promise<{ abandoned: number }> {
   const now = options.now ?? new Date();
   const cutoff = new Date(now.getTime() - CHECK_IN_RESUME_WINDOW_MS);
-  const result = await pool.query(
-    `UPDATE check_ins SET status = 'ABANDONED', abandoned_at = $2, updated_at = $2
-     WHERE status IN ('STARTED', 'IN_PROGRESS') AND started_at < $1`,
-    [cutoff.toISOString(), now.toISOString()],
-  );
-  return { abandoned: result.rowCount ?? 0 };
+  return withTransaction(pool, async (tx) => {
+    const result = await tx.query<CheckInRow>(
+      `UPDATE check_ins SET status = 'ABANDONED', abandoned_at = $2, updated_at = $2
+       WHERE status IN ('STARTED', 'IN_PROGRESS') AND started_at < $1
+       RETURNING ${CHECK_IN_COLUMNS}`,
+      [cutoff.toISOString(), now.toISOString()],
+    );
+    await auditAbandonedCheckIns(tx, result.rows, 'IDLE_TIMEOUT');
+    return { abandoned: result.rows.length };
+  });
 }
 
 export async function findCheckIn(

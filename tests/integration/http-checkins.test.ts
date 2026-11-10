@@ -35,6 +35,16 @@ const A0: Readonly<Record<string, string>> = {
   safe_now: 'YES',
 };
 
+/** The abandon Audit Events of one Check-In (CHECKINS.md §7). */
+async function abandonAudits(checkInId: string) {
+  const result = await app.pool?.query<{ actor_type: string; actor_id: string; payload: unknown }>(
+    `SELECT actor_type, actor_id, payload FROM audit_events
+      WHERE event_type = 'CHECKIN_ABANDONED' AND target_id = $1`,
+    [checkInId],
+  );
+  return result?.rows ?? [];
+}
+
 async function veteranSession() {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
@@ -238,6 +248,13 @@ describe('Check-In answer and complete', () => {
     const stored = await checkInStatus(body.check_in_id);
     expect(stored?.status).toBe('ABANDONED');
     expect(stored?.abandoned_at).not.toBeNull();
+    expect(await abandonAudits(body.check_in_id)).toEqual([
+      {
+        actor_type: 'SYSTEM',
+        actor_id: 'check-in-idle-timeout',
+        payload: { questionnaire_version: expect.any(String), cause: 'IDLE_TIMEOUT' },
+      },
+    ]);
     const responses = await app.pool?.query(
       `SELECT 1 FROM check_in_responses WHERE check_in_id = $1`,
       [body.check_in_id],
@@ -370,9 +387,13 @@ describe('abandonStaleCheckIns', () => {
     expect(firstPass?.status).toBe('ABANDONED');
     expect(firstPass?.abandoned_at).not.toBeNull();
     expect((await statusOf(fresh))?.status).toBe('STARTED');
+    expect(await abandonAudits(stale)).toHaveLength(1);
+    expect(await abandonAudits(fresh)).toEqual([]);
 
     const replay = await abandonStaleCheckIns(pool);
     expect(replay.abandoned).toBe(0);
     expect((await statusOf(stale))?.abandoned_at).toEqual(firstPass?.abandoned_at);
+    // A replay finds nothing to abandon, so it writes no second Audit Event.
+    expect(await abandonAudits(stale)).toHaveLength(1);
   });
 });
