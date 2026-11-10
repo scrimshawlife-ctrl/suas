@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
@@ -72,6 +72,9 @@ async function talkToAssistant(text = 'I need groceries for the week.') {
   await userEvent.click(screen.getByRole('button', { name: 'Send' }));
 }
 
+/** The assistant's part of the page: the plain form below it has the same field labels. */
+const assistant = () => within(screen.getByRole('region', { name: 'Intake Assistant' }));
+
 describe('RequestPage with the assistant', () => {
   beforeEach(() => {
     available(true);
@@ -87,9 +90,9 @@ describe('RequestPage with the assistant', () => {
   it('shows the draft card and saves edits with PATCH before the submit', async () => {
     renderScreen(<RequestPage />);
     await talkToAssistant();
-    await userEvent.click(await screen.findByLabelText('Where should the helper meet you?'));
+    await userEvent.click(await assistant().findByLabelText('Where should the helper meet you?'));
     await userEvent.paste('Library steps');
-    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await userEvent.click(assistant().getByRole('button', { name: 'Send request' }));
 
     await waitFor(() =>
       expect(screen.getByTestId('where')).toHaveTextContent(`/requests/${REQUEST_ID}`),
@@ -111,9 +114,9 @@ describe('RequestPage with the assistant', () => {
     );
     renderScreen(<RequestPage />);
     await talkToAssistant();
-    await userEvent.click(await screen.findByLabelText(/Where are you going/));
+    await userEvent.click(await assistant().findByLabelText(/Where are you going/));
     await userEvent.paste('Clinic');
-    await userEvent.click(screen.getByLabelText('Short summary'));
+    await userEvent.click(assistant().getByLabelText('Short summary'));
     await waitFor(() =>
       expect(mocks.patch.mock.calls.at(-1)?.[1]).toMatchObject({ body: { destination: 'Clinic' } }),
     );
@@ -122,17 +125,17 @@ describe('RequestPage with the assistant', () => {
   it('has no destination field on a food draft', async () => {
     renderScreen(<RequestPage />);
     await talkToAssistant();
-    await screen.findByLabelText('Where should the helper meet you?');
-    expect(screen.queryByLabelText(/Where are you going/)).not.toBeInTheDocument();
+    await assistant().findByLabelText('Where should the helper meet you?');
+    expect(assistant().queryByLabelText(/Where are you going/)).not.toBeInTheDocument();
   });
 
   it('does not submit when the draft cannot be saved, and says so', async () => {
     mocks.patch.mockRejectedValue(new ApiError(500, 'INTERNAL', 'boom'));
     renderScreen(<RequestPage />);
     await talkToAssistant();
-    await userEvent.click(await screen.findByLabelText('Where should the helper meet you?'));
+    await userEvent.click(await assistant().findByLabelText('Where should the helper meet you?'));
     await userEvent.paste('Library steps');
-    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await userEvent.click(assistant().getByRole('button', { name: 'Send request' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('That did not go through');
     expect(postCalls('/api/v0/intake/drafts/{id}/submit')).toHaveLength(0);
@@ -142,7 +145,7 @@ describe('RequestPage with the assistant', () => {
     mocks.patch.mockRejectedValue(new ApiError(500, 'INTERNAL', 'boom'));
     renderScreen(<RequestPage />);
     await talkToAssistant();
-    await userEvent.click(await screen.findByLabelText('Where should the helper meet you?'));
+    await userEvent.click(await assistant().findByLabelText('Where should the helper meet you?'));
     await userEvent.paste('Library steps');
     await userEvent.click(screen.getByLabelText('Tell us what you need'));
     await userEvent.paste('Also no dairy.');
@@ -164,11 +167,11 @@ describe('RequestPage with the assistant', () => {
     });
     renderScreen(<RequestPage />);
     await talkToAssistant();
-    await userEvent.click(await screen.findByLabelText('Where should the helper meet you?'));
+    await userEvent.click(await assistant().findByLabelText('Where should the helper meet you?'));
     await userEvent.paste('Library steps');
-    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await userEvent.click(assistant().getByRole('button', { name: 'Send request' }));
     await screen.findByRole('alert');
-    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await userEvent.click(assistant().getByRole('button', { name: 'Send request' }));
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/requests/'));
 
     const keys = postCalls('/api/v0/intake/drafts/{id}/submit').map(
@@ -187,10 +190,10 @@ describe('RequestPage with the assistant', () => {
     );
     renderScreen(<RequestPage />);
     await talkToAssistant();
-    await userEvent.click(await screen.findByLabelText('Where should the helper meet you?'));
+    await userEvent.click(await assistant().findByLabelText('Where should the helper meet you?'));
     await userEvent.paste('Library steps');
-    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
-    const pending = await screen.findByRole('button', { name: 'Sending…' });
+    await userEvent.click(assistant().getByRole('button', { name: 'Send request' }));
+    const pending = await assistant().findByRole('button', { name: 'Sending…' });
     expect(pending).toHaveAttribute('aria-disabled', 'true');
     await userEvent.click(pending);
     expect(postCalls('/api/v0/intake/drafts/{id}/submit')).toHaveLength(1);
@@ -206,7 +209,7 @@ describe('RequestPage with the assistant', () => {
     );
     renderScreen(<RequestPage />);
     await talkToAssistant();
-    await userEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+    await userEvent.click(await assistant().findByRole('button', { name: 'Send request' }));
     expect(
       await screen.findByText('Tell us where the helper should meet you.'),
     ).toBeInTheDocument();
@@ -225,12 +228,30 @@ describe('RequestPage with the assistant', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps "Use the simple form instead" in view', async () => {
+  it('shows the plain form under the assistant, with no toggle (R5.15)', async () => {
     renderScreen(<RequestPage />);
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Use the simple form instead' }),
+    expect(await screen.findByLabelText('Tell us what you need')).toBeInTheDocument();
+    const form = screen.getByRole('region', { name: 'Simple form' });
+    expect(within(form).getByRole('heading', { name: 'Or fill in the form' })).toBeInTheDocument();
+    expect(within(form).getByLabelText('Short summary')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /instead/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('The assistant is not available right now. The form works the same.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('sends the plain form while the assistant is available', async () => {
+    mocks.post.mockResolvedValue({ data: { service_request_id: REQUEST_ID, status: 'SUBMITTED' } });
+    renderScreen(<RequestPage />, '/request?category=PEER_SUPPORT');
+    const form = within(await screen.findByRole('region', { name: 'Simple form' }));
+    await userEvent.click(form.getByLabelText('Short summary'));
+    await userEvent.paste('Someone to talk to');
+    await userEvent.click(form.getByRole('button', { name: 'Send request' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('where')).toHaveTextContent(`/requests/${REQUEST_ID}`),
     );
-    expect(screen.getByLabelText('Short summary')).toBeInTheDocument();
+    expect(postCalls('/api/v0/service-requests')).toHaveLength(1);
+    expect(postCalls('/api/v0/intake/drafts')).toHaveLength(0);
   });
 });
 
