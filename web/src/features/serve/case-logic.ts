@@ -69,14 +69,14 @@ export function attemptsOldestFirst(attempts: readonly ContactAttempt[]): Contac
 }
 
 export interface NextStep {
-  command: 'ACCEPT' | 'START' | 'FULFILL';
+  command: 'ACCEPT' | 'START' | 'FULFILL' | 'CLOSE';
   label: string;
 }
 
 /**
  * The one legal forward step the accepter may run (src/coordination/request-transitions.ts,
- * DISPATCH.md §4). CONFIRM and CANCEL belong to the requester; the earlier system steps
- * (TRIAGE, START_MATCHING, ASSIGN) are not offered to a helper.
+ * DISPATCH.md §4, §14.2: the accepter closes a CONFIRMED request). CONFIRM and CANCEL belong
+ * to the requester; the earlier system steps (TRIAGE, START_MATCHING, ASSIGN) are not offered.
  */
 export function nextStep(status: ServiceRequestStatus): NextStep | null {
   switch (status) {
@@ -86,6 +86,8 @@ export function nextStep(status: ServiceRequestStatus): NextStep | null {
       return { command: 'START', label: "I've started helping" };
     case 'IN_PROGRESS':
       return { command: 'FULFILL', label: 'Mark as done' };
+    case 'CONFIRMED':
+      return { command: 'CLOSE', label: 'Close this request' };
     default:
       return null;
   }

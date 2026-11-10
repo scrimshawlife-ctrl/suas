@@ -16,6 +16,8 @@ describe('next progress step for the accepter', () => {
     expect(nextStep('ACCEPTED')).toEqual({ command: 'START', label: "I've started helping" });
     expect(nextStep('IN_PROGRESS')).toEqual({ command: 'FULFILL', label: 'Mark as done' });
     expect(nextStep('ASSIGNED')?.command).toBe('ACCEPT');
+    // DISPATCH.md §14.2: the accepter closes a request the requester confirmed.
+    expect(nextStep('CONFIRMED')).toEqual({ command: 'CLOSE', label: 'Close this request' });
   });
 
   it('offers nothing before or after the helper steps, or for requester-only steps', () => {
@@ -25,7 +27,6 @@ describe('next progress step for the accepter', () => {
       'TRIAGED',
       'MATCHING',
       'FULFILLED', // CONFIRM belongs to the requester
-      'CONFIRMED',
       'CLOSED',
       'CANCELLED',
       'DECLINED',
