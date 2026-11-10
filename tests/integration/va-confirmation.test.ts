@@ -5,12 +5,13 @@
  * only. Requires PostgreSQL.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { withTransaction } from '../../src/db/index.js';
+import { VA_CONFIRMATION_FINGERPRINT_KEY_LABEL } from '../../src/http/routes/veterans.js';
 import { createServer } from '../../src/http/server.js';
 import {
   confirmVeteranStatus,
@@ -26,6 +27,7 @@ import {
   type VaConfirmationLogRecord,
 } from '../../src/identity/va-confirmation-http.js';
 import { VA_CONFIRMATION_SANDBOX_BASE_URL } from '../../src/identity/va-confirmation.js';
+import { canonicalize, fingerprintRequest } from '../../src/idempotency/fingerprint.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 
@@ -140,7 +142,7 @@ describe('confirm and the gate', () => {
   });
 
   it('replays the same Idempotency-Key with the same answer and one attempt', async () => {
-    const { headers, attempts } = await person();
+    const { headers, attempts, pool, tenantId, user } = await person();
     const key = randomUUID();
     const first = await confirm(headers, body(VA_CONFIRMATION_FIXTURE_ZIPS.NOT_TITLE_38), key);
     const second = await confirm(headers, body(VA_CONFIRMATION_FIXTURE_ZIPS.NOT_TITLE_38), key);
@@ -150,6 +152,26 @@ describe('confirm and the gate', () => {
 
     const changed = await confirm(headers, body(VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED), key);
     expect(changed.statusCode).toBe(409);
+
+    // The stored fingerprint is keyed, so the plain SHA-256 of a guessed projection misses.
+    const canonical = {
+      ...body(VA_CONFIRMATION_FIXTURE_ZIPS.NOT_TITLE_38),
+      country: 'USA',
+      actor_id: user.userId,
+    };
+    const stored = await pool.query<{ request_fingerprint: string }>(
+      `SELECT request_fingerprint FROM command_idempotency_records WHERE tenant_id = $1`,
+      [tenantId],
+    );
+    expect(stored.rows).toHaveLength(1);
+    const fingerprint = stored.rows[0]?.request_fingerprint;
+    expect(fingerprint).not.toBe(fingerprintRequest(canonical));
+    const derivedKey = createHmac('sha256', TEST_SESSION_SECRET)
+      .update(VA_CONFIRMATION_FINGERPRINT_KEY_LABEL)
+      .digest('hex');
+    expect(fingerprint).toBe(
+      createHmac('sha256', derivedKey).update(canonicalize(canonical)).digest('hex'),
+    );
   });
 
   it('refuses the sixth attempt in 24 hours with 429', async () => {

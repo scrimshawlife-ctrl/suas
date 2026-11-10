@@ -17,11 +17,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import { hashCredential } from '../../auth/index.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { findCurrentCase } from '../../coordination/index.js';
-import { commandScope, fingerprintRequest } from '../../idempotency/fingerprint.js';
+import { commandScope, keyedFingerprintRequest } from '../../idempotency/fingerprint.js';
 import { runIdempotentCommand } from '../../idempotency/run.js';
 import {
   confirmVeteranStatus,
@@ -51,6 +52,9 @@ const countyBody = z.object({ county: z.enum(SERVICE_COUNTIES) });
 // Only length and emptiness are validated. The format hint ("First name and last
 // initial, like Marcus T.") is guidance shown by the client.
 const profileBody = z.object({ display_name: z.string().trim().min(1).max(40) });
+
+/** Context label for the confirm fingerprint key: HMAC(session secret, label), never stored. */
+export const VA_CONFIRMATION_FINGERPRINT_KEY_LABEL = 'suas:va-confirmation-fingerprint:v1';
 
 /** The confirm result; never any projection value. */
 function confirmationResult(standing: VeteranConfirmationStanding | undefined) {
@@ -161,7 +165,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
   /**
    * One VA Veteran Confirmation attempt (R9.1). Already VERIFIED returns the standing with
    * no provider call and no attempt; REVOKED is refused (403) the same way. The
-   * idempotency record keeps a hash of the projection and the bounded result only.
+   * idempotency record keeps a keyed hash of the projection and the bounded result only.
    */
   app.post(`${API_PREFIX}/veterans/me/verification/va/confirm`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
@@ -185,7 +189,10 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
           actorId: context.userId,
         }),
         idempotencyKey,
-        requestFingerprint: fingerprintRequest({ ...projection, actor_id: context.userId }),
+        requestFingerprint: keyedFingerprintRequest(
+          hashCredential(deps.sessionSecret, VA_CONFIRMATION_FINGERPRINT_KEY_LABEL),
+          { ...projection, actor_id: context.userId },
+        ),
       },
       async (tx) => {
         const { verificationId, standing } = await confirmVeteranStatus(tx, port, {
