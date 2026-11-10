@@ -73,8 +73,8 @@ jobs:
           printf '%s' "$SUAS_SESSION_SECRET" | npx --yes "wrangler@${WRANGLER_VERSION}" secret put SUAS_SESSION_SECRET \
             --config .wrangler.suas-synthetic-ci.jsonc
           SUAS_ENV=STAGING \
-          SUAS_SPEC_VERSION=0.7.0 \
-          SUAS_RELEASE_MANIFEST=RELEASE_MANIFEST-0.7.0.md \
+          SUAS_SPEC_VERSION=0.9.0 \
+          SUAS_RELEASE_MANIFEST=RELEASE_MANIFEST-0.9.0.md \
           SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false \
           SUAS_MIGRATIONS_MODE=validate \
           DATABASE_URL="$STAGING_DATABASE_URL" \

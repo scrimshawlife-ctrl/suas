@@ -62,8 +62,8 @@ export function stackEnv(sessionSecret: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
     SUAS_ENV: 'LOCAL',
-    SUAS_SPEC_VERSION: '0.7.0',
-    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.7.0.md',
+    SUAS_SPEC_VERSION: '0.9.0',
+    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.9.0.md',
     SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
     DATABASE_URL,
     DATABASE_SSL_MODE: 'disable',

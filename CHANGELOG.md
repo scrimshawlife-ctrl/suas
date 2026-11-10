@@ -13,6 +13,10 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **Spec pin 0.9.0.** `src/release/pins.ts` now pins SUAS-specs `0.9.0` (`RELEASE_MANIFEST-0.9.0.md`, tag `v0.9.0`, specs commit `208705c`), up from `0.7.0`. CI, deploy and staging workflows, `wrangler.jsonc`, `.env.example` and the test environment carry the same two values. The `/api/v0` selector and event schema `0.1.0` are unchanged. Readiness stays `NOT_READY`; SPEC-018 stays blocked.
+
 ### Added
 
 - **AWS infrastructure and Lambda entries** (local v1 plan, `V1_PROJECT_PLAN.md` §6; not a released spec). New `infra/` CDK app for synthetic STAGING in `us-west-2` (synthesized and tested offline only; nothing is deployed). New Lambda handlers `src/aws/job-worker-lambda.ts` (one job-worker pass, equal to `job-worker --once`) and `src/aws/migrate-lambda.ts` (`migrate apply`), both of which throw on failure. The job-worker loop moved to `src/jobs/worker.ts` and the CLI calls it; CLI behaviour is unchanged. New optional `SUAS_CHAT_WS_PUBLIC_URL` (a `wss://` URL, `apigw` mode only): when set, `connectUrl()` returns it so browsers can use a custom WebSocket domain, while `PostToConnection` keeps using `SUAS_CHAT_WS_ENDPOINT`. Unset behaves as before. The `verify` workflow also runs `cd infra && npm ci && npm run check`.

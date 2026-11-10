@@ -50,9 +50,9 @@ Every SUAS repository has a `CONTEXT.md`: [suas-ios](https://github.com/scrimsha
 
 ## Released implementation contract
 
-- spec version: `0.7.0`
-- release manifest: `RELEASE_MANIFEST-0.7.0.md`
-- specs merge pin: `2572520fa98ca62e038ae127096a5a9123479127` (`src/release/pins.ts`)
+- spec version: `0.9.0`
+- release manifest: `RELEASE_MANIFEST-0.9.0.md`
+- specs merge pin: `208705cfd2b6aa1ce913ac9e70a2d42a1c9487ad` (`src/release/pins.ts`)
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - current implementation stage: `SPEC-018` (blocked); SPEC-017 evidence recorded against pin `0.6.0`
 - production/pilot readiness: `NOT_READY`
@@ -62,7 +62,7 @@ Use `FABLE_HANDOFF.md`, `AGENTS.md`, `SPEC017_PLAN.md`, and `SPEC017_NEXT.md` in
 
 ## Current state: 2026-10-08
 
-- Application version: `0.2.0` (`package.json`, reported as `app_version` by build-info). Tag `v0.2.0` implements SUAS-specs `0.6.0`; `main` pins `0.7.0` (unreleased, see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`). Tags `v0.1.0` (baseline, `e3a9a16`) and `v0.2.0` (`a68eb12`) have GitHub Releases. Versions stay below 1.0.0 while SPEC-018 is blocked (SUAS-specs `VERSIONING.md` section 8).
+- Application version: `0.2.0` (`package.json`, reported as `app_version` by build-info). Tag `v0.2.0` implements SUAS-specs `0.6.0`; `main` pins `0.9.0` (unreleased, see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`). Tags `v0.1.0` (baseline, `e3a9a16`) and `v0.2.0` (`a68eb12`) have GitHub Releases. Versions stay below 1.0.0 while SPEC-018 is blocked (SUAS-specs `VERSIONING.md` section 8).
 - Release flow: record changes in [CHANGELOG.md](CHANGELOG.md), follow [RELEASING.md](RELEASING.md), tag `vX.Y.Z` on `main` only after an approved merge. `.github/workflows/release.yml` creates the GitHub Release from the CHANGELOG section. A tag never deploys.
 - LOCAL demo: `npm run dev:demo` applies migrations, loads the synthetic demo seed, and starts `wrangler dev` on `http://127.0.0.1:3000`. `npm run smoke:demo` checks the main `/api/v0` endpoints. Sign in as `demo@example.invalid` with code `123456`; `newvet@example.invalid` is enrolled with no case. The fixed code needs `SUAS_ENV=LOCAL`, `SUAS_DEMO_FIXED_CODE=enabled`, and a local database (`src/auth/demo-fixed-code.ts`). The same opt-in is allowed on the synthetic STAGING Worker, which shows the code on the sign-in page. TEST and PRODUCTION reject the flag. Every other account gets a random code.
 - Demo fixtures: this repo owns `contract/demo-fixtures.json` and regenerates it with `npm run demo:fixtures`. `suas-android` and `suas-ios` hold copies that are not hand-edited.

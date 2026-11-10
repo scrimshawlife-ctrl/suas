@@ -17,8 +17,8 @@ function workerBindings(overrides: Partial<WorkerBindings> = {}): WorkerBindings
   return {
     HYPERDRIVE: { connectionString: testDatabaseUrl() },
     SUAS_ENV: 'TEST',
-    SUAS_SPEC_VERSION: '0.7.0',
-    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.7.0.md',
+    SUAS_SPEC_VERSION: '0.9.0',
+    SUAS_RELEASE_MANIFEST: 'RELEASE_MANIFEST-0.9.0.md',
     SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
     SUAS_MIGRATIONS_MODE: 'validate',
     SUAS_SESSION_SECRET: TEST_SESSION_SECRET,
