@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../api/errors';
 import { queryKeys } from '../api/keys';
 import type { Me as MeResponse } from '../api/types';
 import { tokenStore } from '../api/token-store';
@@ -12,6 +13,9 @@ import {
   RequireSignedIn,
   RequireVerified,
 } from './guards';
+
+const client = vi.hoisted(() => ({ GET: vi.fn() }));
+vi.mock('../api/client', () => ({ api: client }));
 
 type VerificationStatus = MeResponse['id_verification']['status'];
 
@@ -140,5 +144,45 @@ describe('route guards', () => {
   it('lets an MFA-elevated admin in', () => {
     visit('/admin', me({ is_admin: true }), 'tok', true);
     expect(screen.getByText('admin page')).toBeInTheDocument();
+  });
+});
+
+describe('RequireAdmin loading and failed screens', () => {
+  /** RequireAdmin alone, so its own screens show rather than RequireProfile's. */
+  function visitAdmin() {
+    tokenStore.setToken('tok');
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = createMemoryRouter(
+      [{ element: <RequireAdmin />, children: [{ path: '/admin', element: <p>admin page</p> }] }],
+      { initialEntries: ['/admin'] },
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+  }
+
+  const expectCrisisStrip = () => {
+    expect(screen.getByRole('complementary', { name: 'Crisis support' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Call 911' })).toHaveAttribute('href', 'tel:911');
+    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+  };
+
+  it('shows the crisis strip while the account loads', () => {
+    client.GET.mockReturnValue(new Promise(() => undefined));
+    visitAdmin();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading…');
+    expectCrisisStrip();
+  });
+
+  it('shows the crisis strip when the account fails to load', async () => {
+    // A 4xx is not retried (meQueryOptions), so the failed screen shows at once.
+    client.GET.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'Not found.'));
+    visitAdmin();
+    expect(
+      await screen.findByRole('heading', { name: 'We could not load your account.' }),
+    ).toBeInTheDocument();
+    expectCrisisStrip();
   });
 });

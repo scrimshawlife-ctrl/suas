@@ -119,4 +119,14 @@ test('a second account accepts the request, sees the meeting place and chats liv
   await expect(requester.page.getByText('Dee R. marked this request as done.')).toBeVisible();
   await requester.page.getByRole('button', { name: "Confirm it's done" }).click();
   await expect(requester.page.getByText('You confirmed this request is done.')).toBeVisible();
+
+  // The helper closes the confirmed request (DISPATCH.md §14.2); it leaves "You're helping".
+  await helper.goto(`/serve/requests/${requestId}`);
+  await helper.getByRole('button', { name: 'Close this request' }).click();
+  await expect(helper.getByRole('region', { name: 'Progress' })).toContainText('Closed');
+  await helper.goto('/serve');
+  await expect(helper.getByRole('region', { name: 'Your summary' })).toContainText(
+    /Closed in the last 30 days\s*1/,
+  );
+  await expect(helper.getByRole('region', { name: "You're helping" })).not.toContainText(summary);
 });

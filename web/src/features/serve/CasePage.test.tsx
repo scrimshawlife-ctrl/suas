@@ -195,6 +195,7 @@ describe('Progress step', () => {
   it.each([
     ['ACCEPTED', "I've started helping", 'START'],
     ['IN_PROGRESS', 'Mark as done', 'FULFILL'],
+    ['CONFIRMED', 'Close this request', 'CLOSE'],
   ])('%s: "%s" is disabled while it is saving and runs once', async (status, label, command) => {
     replies.detail = { data: detail(status) };
     client.POST.mockReturnValue(new Promise(() => undefined));
@@ -214,6 +215,19 @@ describe('Progress step', () => {
     renderCase();
     await screen.findByText('Taken, not started', { selector: 'span' });
     expect(screen.queryByRole('button', { name: /started helping|Mark as done/ })).toBeNull();
+  });
+
+  it('closes a confirmed request and then shows it as Closed, with no further step', async () => {
+    replies.detail = { data: detail('CONFIRMED') };
+    client.POST.mockImplementation(() => {
+      replies.detail = { data: detail('CLOSED') };
+      return Promise.resolve({ data: {} });
+    });
+    renderCase();
+    await userEvent.click(await screen.findByRole('button', { name: 'Close this request' }));
+    const progress = screen.getByRole('region', { name: 'Progress' });
+    await waitFor(() => expect(within(progress).getByRole('status')).toHaveTextContent('Closed'));
+    expect(within(progress).queryByRole('button')).toBeNull();
   });
 
   it('says it is waiting for the requester once it is marked as done', async () => {

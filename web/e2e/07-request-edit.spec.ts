@@ -17,11 +17,11 @@ test('a Veteran edits a ride request before anyone accepts and the helper sees t
 
   // The plain form: the destination field appears once the kind of help is a ride.
   await page.goto('/request?category=TRANSPORTATION');
-  await page.getByRole('button', { name: 'Use the simple form instead' }).click();
-  await page.getByLabel('Short summary').fill(original);
-  await page.getByLabel('Where should the helper meet you?').fill('Front entrance of the library');
-  await page.getByLabel(/Where are you going/).fill('Clinic on Main Street');
-  await page.getByRole('button', { name: 'Send request' }).click();
+  const form = page.getByRole('form', { name: 'Request form' });
+  await form.getByLabel('Short summary').fill(original);
+  await form.getByLabel('Where should the helper meet you?').fill('Front entrance of the library');
+  await form.getByLabel(/Where are you going/).fill('Clinic on Main Street');
+  await form.getByRole('button', { name: 'Send request' }).click();
   await expect(page).toHaveURL(/\/requests\/[0-9a-f-]{36}$/);
   const requestId = page.url().split('/').pop() ?? '';
 

@@ -63,11 +63,26 @@ export function RequireVerified() {
   return <Outlet />;
 }
 
-/** 4a. `me.is_admin`. Anyone else goes home. */
+/**
+ * 4a. `me.is_admin`. Anyone else goes home. The admin routes sit outside every layout, so
+ * its loading and failed screens carry the crisis strip themselves.
+ */
 export function RequireAdmin() {
   const me = useMe();
-  if (me.isPending) return <LoadingScreen />;
-  if (me.isError) return <LoadFailedScreen onRetry={() => void me.refetch()} />;
+  if (me.isPending) {
+    return (
+      <WithCrisisStrip>
+        <LoadingScreen />
+      </WithCrisisStrip>
+    );
+  }
+  if (me.isError) {
+    return (
+      <WithCrisisStrip>
+        <LoadFailedScreen onRetry={() => void me.refetch()} />
+      </WithCrisisStrip>
+    );
+  }
   if (!me.data.is_admin) return <Navigate to={paths.home} replace />;
   return <Outlet />;
 }

@@ -23,19 +23,29 @@ const MEETING_PLACE_REJECTED = /meeting[_ ]place/i;
 
 /**
  * The plain request form: the same fields as the draft card, no assistant. After the
- * assistant fails, `initialSummary` carries what the person typed (cut to 280 characters).
+ * assistant fails, `fallbackSummary` carries what the person typed (cut to 280 characters).
  */
-export function PlainForm({ initialSummary = '' }: { initialSummary?: string }) {
+export function PlainForm({ fallbackSummary = '' }: { fallbackSummary?: string }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const initialCategory = params.get('category');
   const [fields, setFields] = useState<RequestFields>({
     category: isCategory(initialCategory) ? initialCategory : '',
-    summary: initialSummary.trim().slice(0, SUMMARY_MAX),
+    summary: '',
     timing: '',
     meetingPlace: '',
     destination: '',
   });
+  // The form is filled in beside the assistant, so the fallback text fills an empty summary
+  // only and never resets what the person already entered.
+  const [usedFallback, setUsedFallback] = useState('');
+  if (fallbackSummary !== usedFallback) {
+    setUsedFallback(fallbackSummary);
+    const typed = fallbackSummary.trim().slice(0, SUMMARY_MAX);
+    setFields((current) =>
+      typed !== '' && current.summary.trim() === '' ? { ...current, summary: typed } : current,
+    );
+  }
   const [errors, setErrors] = useState<FieldErrors>({});
   const create = useCreateRequest();
   const key = useIdempotencyKey();
