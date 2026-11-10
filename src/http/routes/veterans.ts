@@ -27,6 +27,7 @@ import {
   confirmVeteranStatus,
   readVeteranConfirmation,
   vaConfirmationRequestSchema,
+  VeteranConfirmationRevokedError,
   VeteranConfirmationUnavailableError,
   type VaConfirmationProjection,
   type VeteranConfirmationPort,
@@ -143,7 +144,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
     return { county: user.county ?? null };
   });
 
-  /** Signed-in only: a person can set a name before passing the ID scan. */
+  /** Signed-in only: a person can set a name before confirming Veteran status. */
   app.put(`${API_PREFIX}/veterans/me/profile`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const body = profileBody.parse(request.body);
@@ -159,8 +160,8 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
 
   /**
    * One VA Veteran Confirmation attempt (R9.1). Already VERIFIED returns the standing with
-   * no provider call and no attempt. The idempotency record keeps a hash of the
-   * projection and the bounded result only.
+   * no provider call and no attempt; REVOKED is refused (403) the same way. The
+   * idempotency record keeps a hash of the projection and the bounded result only.
    */
   app.post(`${API_PREFIX}/veterans/me/verification/va/confirm`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
@@ -171,6 +172,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
 
     const current = await readVeteranConfirmation(deps.pool, context.tenantId, context.userId);
     if (current?.status === 'VERIFIED') return confirmationResult(current);
+    if (current?.status === 'REVOKED') throw new VeteranConfirmationRevokedError();
 
     const run = await runIdempotentCommand(
       deps.pool,
@@ -194,8 +196,9 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
         });
         return {
           result: confirmationResult(standing),
-          aggregateType: 'VeteranVerification',
-          aggregateId: verificationId,
+          ...(verificationId !== undefined
+            ? { aggregateType: 'VeteranVerification', aggregateId: verificationId }
+            : {}),
         };
       },
     );

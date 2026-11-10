@@ -3,8 +3,9 @@
  * (suas-specs #72 R9.1, proposal; D035_VA_CONFIRMATION_ADAPTER.md §9, §12).
  *
  * Each attempt is one settled `VA_VETERAN_STATUS` row with only bounded result fields;
- * earlier results are kept. The newest settled row is the person's standing. Rows from
- * the older OAuth sandbox track have no `settled_at`, so they never open the gate.
+ * earlier results are kept. The newest settled row is the person's standing, except that
+ * a REVOKED row (a SUAS act) wins over every attempt. Rows from the older OAuth sandbox
+ * track have no `settled_at`, so they never open the gate.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -41,7 +42,10 @@ const toStanding = (row: StandingRow): VeteranConfirmationStanding => ({
   verifiedAt: row.verified_at ?? undefined,
 });
 
-/** The person's newest settled confirmation result, if they ever made an attempt. */
+/**
+ * The person's standing: any REVOKED row, else the newest settled attempt. A revocation
+ * therefore cannot be outrun by an attempt that settles after it.
+ */
 export async function readVeteranConfirmation(
   db: Queryable,
   tenantId: string,
@@ -50,8 +54,9 @@ export async function readVeteranConfirmation(
   const result = await db.query<StandingRow>(
     `SELECT status, not_confirmed_reason, verified_at FROM veteran_verifications
      WHERE tenant_id = $1 AND user_id = $2 AND method = 'VA_VETERAN_STATUS'
-       AND settled_at IS NOT NULL
-     ORDER BY settled_at DESC, created_at DESC, verification_id DESC
+       AND (settled_at IS NOT NULL OR status = 'REVOKED')
+     ORDER BY (status = 'REVOKED') DESC, settled_at DESC NULLS LAST, created_at DESC,
+              verification_id DESC
      LIMIT 1`,
     [tenantId, userId],
   );
@@ -77,6 +82,17 @@ export class VeteranConfirmationAttemptLimitError extends Error {
       `At most ${VA_CONFIRMATION_MAX_ATTEMPTS} confirmation attempts are allowed in 24 hours. Try again later.`,
     );
     this.name = 'VeteranConfirmationAttemptLimitError';
+  }
+}
+
+/** A revoked standing takes no new attempt. Who may lift a revocation is not decided. */
+export class VeteranConfirmationRevokedError extends Error {
+  readonly code = 'VERIFICATION_REVOKED';
+  readonly httpStatus = 403;
+
+  constructor() {
+    super('This Veteran confirmation was revoked. A new attempt is not possible.');
+    this.name = 'VeteranConfirmationRevokedError';
   }
 }
 
@@ -106,19 +122,24 @@ export interface ConfirmVeteranInput {
 }
 
 /**
- * One attempt: check the limit, ask the port once, record the settled row and its two
- * Audit Events. Call inside a transaction; a per-person lock keeps concurrent attempts
- * from passing the limit together. Audit payloads carry status, reason and class only.
+ * One attempt: re-read the standing, check the limit, ask the port once, record the
+ * settled row and its two Audit Events. Call inside a transaction; a per-person lock
+ * serializes attempts, so a REVOKED or VERIFIED standing found under it takes no new
+ * attempt (`verificationId` is then undefined). Audit payloads carry status, reason and
+ * class only.
  */
 export async function confirmVeteranStatus(
   tx: Queryable,
   port: VeteranConfirmationPort,
   input: ConfirmVeteranInput,
-): Promise<{ verificationId: string; standing: VeteranConfirmationStanding }> {
+): Promise<{ verificationId: string | undefined; standing: VeteranConfirmationStanding }> {
   const { tenantId, userId } = input;
   await tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
     `va-confirmation:${tenantId}:${userId}`,
   ]);
+  const current = await readVeteranConfirmation(tx, tenantId, userId);
+  if (current?.status === 'REVOKED') throw new VeteranConfirmationRevokedError();
+  if (current?.status === 'VERIFIED') return { verificationId: undefined, standing: current };
   await assertAttemptAllowed(tx, tenantId, userId);
 
   const verificationId = randomUUID();

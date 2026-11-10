@@ -921,7 +921,7 @@ export interface paths {
     put?: never;
     /**
      * Confirm Veteran status with VA (one attempt; suas-specs #72 R9.1, proposal)
-     * @description Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values. Any signed-in person may call it. A person whose standing is already VERIFIED gets it back with no VA call and no attempt counted. At most 5 attempts per person per rolling 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After). NOT_CONFIRMED is not a finding that the person never served; UNAVAILABLE means VA could not answer and the person may retry.
+     * @description Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values. Any signed-in person may call it. A person whose standing is already VERIFIED gets it back with no VA call and no attempt counted; a REVOKED standing is refused (403) the same way and stays the standing whatever later attempts say. At most 5 attempts per person per rolling 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After). NOT_CONFIRMED is not a finding that the person never served; UNAVAILABLE means VA could not answer and the person may retry.
      */
     post: operations['postVeteransMeVerificationVaConfirm'];
     delete?: never;
@@ -1446,7 +1446,7 @@ export interface components {
     MfaVerified: {
       mfa_elevated: boolean;
     };
-    /** @description The person's VA Veteran Confirmation standing: the newest settled attempt, or NOT_STARTED. VERIFIED opens the request gate (suas-specs #72 R9.1, proposal). */
+    /** @description The person's VA Veteran Confirmation standing: REVOKED when SUAS revoked it, else the newest settled attempt, or NOT_STARTED. VERIFIED opens the request gate (suas-specs #72 R9.1, proposal). */
     IdVerification: {
       /** @enum {string} */
       method: 'VA_VETERAN_STATUS';
@@ -4109,6 +4109,15 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
+      /** @description VERIFICATION_REVOKED: SUAS revoked this person's confirmation; no new attempt is taken */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
       409: components['responses']['Error'];
       /** @description VERIFICATION_ATTEMPT_LIMIT: 5 attempts in the last 24 hours */
       429: {

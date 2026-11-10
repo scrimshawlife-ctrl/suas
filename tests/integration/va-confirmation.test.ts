@@ -6,11 +6,21 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
+import { withTransaction } from '../../src/db/index.js';
 import { createServer } from '../../src/http/server.js';
-import { createUser, VA_CONFIRMATION_FIXTURE_ZIPS } from '../../src/identity/index.js';
+import {
+  confirmVeteranStatus,
+  createUser,
+  FixtureVeteranConfirmation,
+  VA_CONFIRMATION_FIXTURE_ZIPS,
+  VeteranConfirmationRevokedError,
+  type VeteranConfirmationPort,
+  type VeteranConfirmationResult,
+} from '../../src/identity/index.js';
 import {
   createVaConfirmationHttpAdapter,
   type VaConfirmationLogRecord,
@@ -174,6 +184,77 @@ describe('confirm and the gate', () => {
   });
 });
 
+// Who may lift a revocation is an open owner question; until then nothing reopens the gate.
+describe('a REVOKED standing', () => {
+  const revoke = (pool: Pool, tenantId: string, userId: string) =>
+    pool.query(
+      `INSERT INTO veteran_verifications
+         (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
+          provider_environment, projection_id, settled_at)
+       VALUES ($1, $2, $3, 'VA_VETERAN_STATUS', 'REVOKED', 'SUAS', 'test', 'NONE',
+               'VA_CONFIRMATION_V1_REQUIRED_ONLY', now())`,
+      [randomUUID(), tenantId, userId],
+    );
+
+  it('is refused with 403 and takes no attempt', async () => {
+    const { headers, pool, tenantId, user, attempts } = await person();
+    await confirm(headers, body(VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED));
+    await revoke(pool, tenantId, user.userId);
+    expect((await resources(headers)).statusCode).toBe(403);
+
+    const again = await confirm(headers, body(VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED));
+    expect(again.statusCode).toBe(403);
+    expect(again.json<{ error: { code: string } }>().error.code).toBe('VERIFICATION_REVOKED');
+    expect(await attempts()).toBe(2);
+    expect(await me(headers)).toMatchObject({ status: 'REVOKED' });
+  });
+
+  it('refuses an attempt that passed the route check before the revocation', async () => {
+    const { pool, tenantId, user, attempts } = await person();
+    await revoke(pool, tenantId, user.userId);
+    // The route's pre-check already ran; the attempt re-reads the standing under its lock.
+    await expect(
+      withTransaction(pool, (tx) =>
+        confirmVeteranStatus(tx, new FixtureVeteranConfirmation(), {
+          tenantId,
+          userId: user.userId,
+          projection: { ...body(VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED), country: 'USA' },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(VeteranConfirmationRevokedError);
+    expect(await attempts()).toBe(1);
+  });
+
+  it('wins over an attempt that settles VERIFIED after it', async () => {
+    const { headers, pool, tenantId, user } = await person();
+    let answer: (result: VeteranConfirmationResult) => void = () => undefined;
+    let asked: () => void = () => undefined;
+    const providerAsked = new Promise<void>((resolve) => (asked = resolve));
+    const slow: VeteranConfirmationPort = {
+      implementation: 'slow-test-port',
+      providerEnvironment: 'NONE',
+      confirm: () => {
+        asked();
+        return new Promise((resolve) => (answer = resolve));
+      },
+    };
+    const inFlight = withTransaction(pool, (tx) =>
+      confirmVeteranStatus(tx, slow, {
+        tenantId,
+        userId: user.userId,
+        projection: { ...body(VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED), country: 'USA' },
+      }),
+    );
+    await providerAsked;
+    await revoke(pool, tenantId, user.userId);
+    answer({ status: 'VERIFIED' });
+    await inFlight;
+
+    expect(await me(headers)).toMatchObject({ status: 'REVOKED' });
+    expect((await resources(headers)).statusCode).toBe(403);
+  });
+});
+
 describe('confirm request checks', () => {
   it('needs a session, an Idempotency-Key and a valid projection', async () => {
     const { headers, attempts } = await person();
@@ -259,6 +340,8 @@ describe('projection values are never kept (R9.1 storage rule, D035 §13)', () =
       config: { ...app.config, logLevel: 'trace' },
       buildInfo: () => app.buildInfo,
       pool: app.pool!,
+      challengeDelivery: app.challengeDelivery,
+      mfa: app.mfa,
       veteranConfirmation: port,
       logStream: { write: (line) => void lines.push(line) },
     });

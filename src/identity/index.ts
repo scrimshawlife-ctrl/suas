@@ -21,6 +21,7 @@ export {
   readVeteranConfirmation,
   VA_CONFIRMATION_MAX_ATTEMPTS,
   VeteranConfirmationAttemptLimitError,
+  VeteranConfirmationRevokedError,
   type ConfirmVeteranInput,
   type VeteranConfirmationStanding,
 } from './va-confirmation-store.js';
