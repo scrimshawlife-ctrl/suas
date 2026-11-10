@@ -12,6 +12,7 @@ import { Card } from '../../components/Card';
 import { AlertCircleIcon, ChatIcon } from '../../components/icons';
 import { NEEDS } from '../../components/needs';
 import { Page } from '../../components/Page';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useAcceptRequest, useAlerts, useOpenRequests } from './api';
 import { alertSubjectPath, alertText, type Notification } from './alerts';
 import {
@@ -34,6 +35,7 @@ export default function ServePage() {
   const now = useNow();
   const open = useOpenRequests();
   const accept = useAcceptRequest();
+  const flight = useSingleFlight();
   const [notice, setNotice] = useState<string | null>(null);
   // Cards taken or gone before the next refetch lands are hidden at once.
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
@@ -47,24 +49,23 @@ export default function ServePage() {
 
   if (hasApiCode(open.error, 'COUNTY_REQUIRED')) return <Navigate to={paths.welcome} replace />;
 
-  const take = (id: string) => {
-    // A double click can land before the pending state re-renders the button.
-    if (accept.isPending) return;
-    setNotice(null);
-    accept.mutate(id, {
-      onSuccess: () => void navigate(paths.case(id)),
-      onError: (error) => {
-        const failure = classifyAcceptError(error);
-        if (failure.kind === 'county') {
-          void navigate(paths.welcome, { replace: true });
-          return;
-        }
-        setNotice(failure.message);
-        if (failure.kind !== 'other') setHidden((current) => new Set(current).add(id));
-        void queryClient.invalidateQueries({ queryKey: queryKeys.serviceRequests.all });
-      },
+  const take = (id: string) =>
+    flight(() => {
+      setNotice(null);
+      return accept.mutateAsync(id, {
+        onSuccess: () => void navigate(paths.case(id)),
+        onError: (error) => {
+          const failure = classifyAcceptError(error);
+          if (failure.kind === 'county') {
+            void navigate(paths.welcome, { replace: true });
+            return;
+          }
+          setNotice(failure.message);
+          if (failure.kind !== 'other') setHidden((current) => new Set(current).add(id));
+          void queryClient.invalidateQueries({ queryKey: queryKeys.serviceRequests.all });
+        },
+      });
     });
-  };
 
   const name = firstName(me.data?.display_name);
   const anyWidened = cards.some((card) => card.widened);

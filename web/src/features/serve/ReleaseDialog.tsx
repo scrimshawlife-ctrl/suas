@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { TextArea } from '../../components/TextArea';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useReleaseRequest } from './api';
 import { RELEASE_REASON_MAX, commandErrorMessage } from './case-logic';
 
@@ -15,6 +16,7 @@ export interface ReleaseDialogProps {
 export function ReleaseDialog({ serviceRequestId, onClose, onReleased }: ReleaseDialogProps) {
   const [reason, setReason] = useState('');
   const release = useReleaseRequest(serviceRequestId);
+  const flight = useSingleFlight();
   const trimmed = reason.trim();
 
   return (
@@ -23,8 +25,8 @@ export function ReleaseDialog({ serviceRequestId, onClose, onReleased }: Release
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (trimmed === '' || release.isPending) return;
-          release.mutate(trimmed, { onSuccess: onReleased });
+          if (trimmed === '') return;
+          flight(() => release.mutateAsync(trimmed, { onSuccess: onReleased }));
         }}
       >
         <p>

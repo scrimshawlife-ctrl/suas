@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { CheckIcon } from '../../components/icons';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useSaveContact } from './api';
 import {
   CHANNEL_OPTIONS,
@@ -17,6 +18,7 @@ export function ContactLog({ caseId }: { caseId: string }) {
   const [channel, setChannel] = useState<ContactChannel>('PHONE');
   const [outcome, setOutcome] = useState<ContactOutcome>('REACHED');
   const save = useSaveContact(caseId);
+  const flight = useSingleFlight();
 
   return (
     <Card aria-labelledby="log" padding="lg" className="flex flex-col gap-5 max-sm:p-5">
@@ -41,7 +43,7 @@ export function ContactLog({ caseId }: { caseId: string }) {
         <Button
           variant="secondary"
           disabled={save.isPending}
-          onClick={() => save.mutate(contactSave(channel, outcome))}
+          onClick={() => flight(() => save.mutateAsync(contactSave(channel, outcome)))}
         >
           {save.isPending ? 'Saving…' : 'Save contact attempt'}
         </Button>
