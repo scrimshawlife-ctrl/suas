@@ -325,7 +325,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -361,7 +361,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -404,7 +404,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -453,7 +453,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -509,7 +509,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -568,7 +568,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -696,7 +696,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -739,7 +739,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1078,7 +1078,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1132,7 +1132,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1246,7 +1246,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has not passed the ID scan + selfie check",
+            "description": "FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1354,7 +1354,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1393,7 +1393,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1446,7 +1446,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1593,7 +1593,7 @@
       "post": {
         "tags": ["cases"],
         "summary": "Execute a released service-request command",
-        "description": "RELEASE (proposal: suas-specs V1_MVP_PROPOSAL.md R8.5, not released) is the accepter's command: it needs a reason (400 VALIDATION_FAILED without one) and moves an ACCEPTED request back to SUBMITTED. The holder and accept time are cleared, the chat thread is closed, the request returns to the open list, and the requester gets an in-app notice. The same helper may accept it again; the next accept opens a new chat thread.",
+        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED.",
         "operationId": "executeServiceRequestCommand",
         "security": [
           {
@@ -1653,7 +1653,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits before passing the ID scan + selfie check",
+            "description": "FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits without a VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1682,8 +1682,7 @@
               }
             }
           }
-        },
-        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED."
+        }
       }
     },
     "/api/v0/cases/{caseId}/follow-ups": {
@@ -2783,7 +2782,7 @@
       "post": {
         "tags": ["intake"],
         "summary": "Plain request form: create a Service Request",
-        "description": "Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
+        "description": "Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
         "operationId": "createServiceRequestForm",
         "security": [
           {
@@ -2953,60 +2952,49 @@
         }
       }
     },
-    "/api/v0/veterans/me/id-verification": {
-      "get": {
-        "tags": ["veterans"],
-        "summary": "ID scan + selfie status; a pending check is resolved with the verification port",
-        "operationId": "getVeteransMeIdVerification",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ID scan and selfie status",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdVerification"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/api/v0/veterans/me/id-verification/commands/start": {
+    "/api/v0/veterans/me/verification/va/confirm": {
       "post": {
         "tags": ["veterans"],
-        "summary": "Start an ID scan + selfie check (idempotent: reuses a pending check, leaves a verified standing alone)",
-        "operationId": "postVeteransMeIdVerificationStart",
+        "summary": "Confirm Veteran status with VA (one attempt; suas-specs #72 R9.1, proposal)",
+        "operationId": "postVeteransMeVerificationVaConfirm",
+        "description": "Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values. Any signed-in person may call it. A person whose standing is already VERIFIED gets it back with no VA call and no attempt counted. At most 5 attempts per person per rolling 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After). NOT_CONFIRMED is not a finding that the person never served; UNAVAILABLE means VA could not answer and the person may retry.",
         "security": [
           {
             "bearerAuth": []
           }
         ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaConfirmationRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "A check is already pending",
+            "description": "The settled result of this attempt, an identical replay, or the existing VERIFIED standing",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdVerification"
+                  "$ref": "#/components/schemas/VaConfirmationResult"
                 }
               }
             }
           },
-          "201": {
-            "description": "Check started",
+          "400": {
+            "description": "VALIDATION_FAILED: a field does not match the VA pattern, an unknown field was sent, or the Idempotency-Key header is missing. The message names fields only, never values.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdVerification"
+                  "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             }
@@ -3014,8 +3002,21 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "description": "VERIFICATION_ATTEMPT_LIMIT: 5 attempts in the last 24 hours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "503": {
-            "description": "ID_VERIFICATION_UNAVAILABLE: no verification provider is configured or it is down",
+            "description": "ID_VERIFICATION_UNAVAILABLE: VA confirmation is not configured (SUAS_VA_CONFIRMATION_MODE=disabled)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3031,7 +3032,7 @@
       "get": {
         "tags": ["intake"],
         "summary": "Whether the Intake Assistant is available",
-        "description": "Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "getIntakeStatus",
         "security": [
           {
@@ -3062,7 +3063,7 @@
       "post": {
         "tags": ["intake"],
         "summary": "Send the first intake message",
-        "description": "Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "createIntakeDraft",
         "security": [
           {
@@ -3116,7 +3117,7 @@
       "get": {
         "tags": ["intake"],
         "summary": "Read one of your drafts",
-        "description": "Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "getIntakeDraft",
         "security": [
           {
@@ -3153,7 +3154,7 @@
       "patch": {
         "tags": ["intake"],
         "summary": "Edit a draft",
-        "description": "The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "updateIntakeDraft",
         "security": [
           {
@@ -3208,7 +3209,7 @@
       "post": {
         "tags": ["intake"],
         "summary": "Send a follow-up intake message",
-        "description": "Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "addIntakeMessage",
         "security": [
           {
@@ -3266,7 +3267,7 @@
       "post": {
         "tags": ["intake"],
         "summary": "Submit a draft as a Service Request",
-        "description": "The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
+        "description": "The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
         "operationId": "submitIntakeDraft",
         "security": [
           {
@@ -3856,7 +3857,7 @@
       "put": {
         "tags": ["veterans"],
         "summary": "Set the display name other people see",
-        "description": "Signed-in only; no ID scan needed. Guidance for the form: \"First name and last initial, like Marcus T.\" Only length and emptiness are validated.",
+        "description": "Signed-in only; no Veteran Confirmation needed. Guidance for the form: \"First name and last initial, like Marcus T.\" Only length and emptiness are validated.",
         "operationId": "putVeteransMeProfile",
         "security": [
           {
@@ -3919,7 +3920,7 @@
         "name": "Idempotency-Key",
         "in": "header",
         "required": true,
-        "description": "Client-chosen key that makes a retried command safe (API.md \u00a77). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT.",
+        "description": "Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT.",
         "schema": {
           "type": "string",
           "minLength": 1
@@ -4506,15 +4507,108 @@
         }
       },
       "IdVerification": {
+        "description": "The person's VA Veteran Confirmation standing: the newest settled attempt, or NOT_STARTED. VERIFIED opens the request gate (suas-specs #72 R9.1, proposal).",
         "type": "object",
-        "required": ["method", "status", "verified_at"],
+        "required": ["method", "status", "not_confirmed_reason", "verified_at"],
         "properties": {
           "method": {
             "type": "string",
-            "enum": ["ID_SCAN_SELFIE"]
+            "enum": ["VA_VETERAN_STATUS"]
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "VERIFIED",
+              "NOT_CONFIRMED",
+              "PENDING",
+              "UNAVAILABLE",
+              "REVOKED"
+            ]
+          },
+          "not_confirmed_reason": {
+            "type": ["string", "null"],
+            "enum": ["PERSON_NOT_FOUND", "NOT_TITLE_38", "MORE_RESEARCH_REQUIRED", "ERROR", null],
+            "description": "VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise."
+          },
+          "verified_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "VaConfirmationRequest": {
+        "description": "The VA_CONFIRMATION_V1_REQUIRED_ONLY projection: the eight required VA fields, with country fixed to USA. No SSN. Unknown fields are refused. Patterns are VA's; each field is at most 256 characters.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "firstName",
+          "lastName",
+          "birthDate",
+          "streetAddressLine1",
+          "city",
+          "state",
+          "zipCode"
+        ],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z]+([-'/\\\\\\s][A-Za-z]+){0,9}$"
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z]+([-'/\\\\\\s][A-Za-z]+){0,9}$"
+          },
+          "birthDate": {
+            "type": "string",
+            "format": "date",
+            "description": "YYYY-MM-DD, a real date before today"
+          },
+          "streetAddressLine1": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[a-zA-Z0-9\\s,'#.\\-/\\\\]*$"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[a-zA-Z0-9\\s,'.\\-/\\\\]+$"
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[a-zA-Z]+(?:[\\s-][a-zA-Z]+){0,9}$"
+          },
+          "country": {
+            "type": "string",
+            "enum": ["USA"],
+            "description": "Optional; always USA"
+          },
+          "zipCode": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9 -]{1,16}$"
+          }
+        }
+      },
+      "VaConfirmationResult": {
+        "type": "object",
+        "required": ["status", "not_confirmed_reason", "verified_at"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["VERIFIED", "NOT_CONFIRMED", "UNAVAILABLE"]
+          },
+          "not_confirmed_reason": {
+            "type": ["string", "null"],
+            "enum": ["PERSON_NOT_FOUND", "NOT_TITLE_38", "MORE_RESEARCH_REQUIRED", "ERROR", null],
+            "description": "VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise."
           },
           "verified_at": {
             "type": ["string", "null"],
@@ -6670,7 +6764,7 @@
     },
     "responses": {
       "Error": {
-        "description": "Canonical API.md \u00a76 error body",
+        "description": "Canonical API.md §6 error body",
         "content": {
           "application/json": {
             "schema": {

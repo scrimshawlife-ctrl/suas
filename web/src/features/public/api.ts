@@ -1,50 +1,37 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
-import { api } from '../../api/client';
-import { queryKeys, resourceKeys } from '../../api/keys';
-import { requireData } from '../../api/require-data';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { meQueryOptions } from '../../api/me';
+import { ApiError } from '../../api/errors';
 import { useSessionToken } from '../../api/token-store';
-import { useIdempotencyKey } from '../../api/idempotency';
 
-const idVerificationKeys = resourceKeys('id-verification');
 const POLL_MS = 4000;
 
-/** GET /veterans/me/id-verification. Polls gently while the check is PENDING. */
+/**
+ * The person's verification standing, read from GET /veterans/me (the old status route is
+ * retired by suas-specs #72 R9.1, proposal). Polls gently while a check is PENDING.
+ */
 export function useIdVerification() {
   const token = useSessionToken();
-  const queryClient = useQueryClient();
-  const query = useQuery({
-    queryKey: idVerificationKeys.all,
-    queryFn: async () => {
-      const { data } = await api.GET('/api/v0/veterans/me/id-verification');
-      return requireData(data, 'verification status');
-    },
+  return useQuery({
+    ...meQueryOptions(),
     enabled: token !== null,
-    refetchInterval: (q) => (q.state.data?.status === 'PENDING' ? POLL_MS : false),
+    select: (me) => me.id_verification,
+    refetchInterval: (q) => (q.state.data?.id_verification.status === 'PENDING' ? POLL_MS : false),
   });
-  const verified = query.data?.status === 'VERIFIED';
-  // The route guards read `me`, so refresh it once the check passes.
-  useEffect(() => {
-    if (verified) void queryClient.invalidateQueries({ queryKey: queryKeys.me });
-  }, [verified, queryClient]);
-  return query;
 }
 
-/** POST /veterans/me/id-verification/commands/start. One key per user action. */
+/**
+ * Placeholder until the Verify page collects the VA confirmation fields: the old start
+ * route is retired, so starting reports verification as unavailable.
+ */
 export function useStartIdVerification() {
-  const queryClient = useQueryClient();
-  const key = useIdempotencyKey();
   return useMutation({
-    mutationFn: async () => {
-      const { data } = await api.POST('/api/v0/veterans/me/id-verification/commands/start', {
-        headers: key.headers(),
-      });
-      return requireData(data, 'verification status');
-    },
-    onSuccess: (data) => {
-      key.renew();
-      queryClient.setQueryData(idVerificationKeys.all, data);
-      return queryClient.invalidateQueries({ queryKey: queryKeys.me });
-    },
+    mutationFn: () =>
+      Promise.reject(
+        new ApiError(
+          503,
+          'ID_VERIFICATION_UNAVAILABLE',
+          'Veteran confirmation is not ready here yet.',
+        ),
+      ),
   });
 }

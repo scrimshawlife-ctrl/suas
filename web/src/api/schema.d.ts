@@ -517,7 +517,7 @@ export interface paths {
     put?: never;
     /**
      * Execute a released service-request command
-     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED.
+     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED.
      */
     post: operations['executeServiceRequestCommand'];
     delete?: never;
@@ -864,7 +864,7 @@ export interface paths {
     put?: never;
     /**
      * Plain request form: create a Service Request
-     * @description Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
+     * @description Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
      */
     post: operations['createServiceRequestForm'];
     delete?: never;
@@ -910,24 +910,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v0/veterans/me/id-verification': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** ID scan + selfie status; a pending check is resolved with the verification port */
-    get: operations['getVeteransMeIdVerification'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v0/veterans/me/id-verification/commands/start': {
+  '/api/v0/veterans/me/verification/va/confirm': {
     parameters: {
       query?: never;
       header?: never;
@@ -936,8 +919,11 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Start an ID scan + selfie check (idempotent: reuses a pending check, leaves a verified standing alone) */
-    post: operations['postVeteransMeIdVerificationStart'];
+    /**
+     * Confirm Veteran status with VA (one attempt; suas-specs #72 R9.1, proposal)
+     * @description Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values. Any signed-in person may call it. A person whose standing is already VERIFIED gets it back with no VA call and no attempt counted. At most 5 attempts per person per rolling 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After). NOT_CONFIRMED is not a finding that the person never served; UNAVAILABLE means VA could not answer and the person may retry.
+     */
+    post: operations['postVeteransMeVerificationVaConfirm'];
     delete?: never;
     options?: never;
     head?: never;
@@ -953,7 +939,7 @@ export interface paths {
     };
     /**
      * Whether the Intake Assistant is available
-     * @description Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     get: operations['getIntakeStatus'];
     put?: never;
@@ -975,7 +961,7 @@ export interface paths {
     put?: never;
     /**
      * Send the first intake message
-     * @description Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     post: operations['createIntakeDraft'];
     delete?: never;
@@ -993,7 +979,7 @@ export interface paths {
     };
     /**
      * Read one of your drafts
-     * @description Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     get: operations['getIntakeDraft'];
     put?: never;
@@ -1003,7 +989,7 @@ export interface paths {
     head?: never;
     /**
      * Edit a draft
-     * @description The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     patch: operations['updateIntakeDraft'];
     trace?: never;
@@ -1019,7 +1005,7 @@ export interface paths {
     put?: never;
     /**
      * Send a follow-up intake message
-     * @description Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     post: operations['addIntakeMessage'];
     delete?: never;
@@ -1039,7 +1025,7 @@ export interface paths {
     put?: never;
     /**
      * Submit a draft as a Service Request
-     * @description The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
+     * @description The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
      */
     post: operations['submitIntakeDraft'];
     delete?: never;
@@ -1233,7 +1219,7 @@ export interface paths {
     get?: never;
     /**
      * Set the display name other people see
-     * @description Signed-in only; no ID scan needed. Guidance for the form: "First name and last initial, like Marcus T." Only length and emptiness are validated.
+     * @description Signed-in only; no Veteran Confirmation needed. Guidance for the form: "First name and last initial, like Marcus T." Only length and emptiness are validated.
      */
     put: operations['putVeteransMeProfile'];
     post?: never;
@@ -1460,10 +1446,49 @@ export interface components {
     MfaVerified: {
       mfa_elevated: boolean;
     };
+    /** @description The person's VA Veteran Confirmation standing: the newest settled attempt, or NOT_STARTED. VERIFIED opens the request gate (suas-specs #72 R9.1, proposal). */
     IdVerification: {
       /** @enum {string} */
-      method: 'ID_SCAN_SELFIE';
-      status: string;
+      method: 'VA_VETERAN_STATUS';
+      /** @enum {string} */
+      status: 'NOT_STARTED' | 'VERIFIED' | 'NOT_CONFIRMED' | 'PENDING' | 'UNAVAILABLE' | 'REVOKED';
+      /**
+       * @description VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise.
+       * @enum {string|null}
+       */
+      not_confirmed_reason:
+        'PERSON_NOT_FOUND' | 'NOT_TITLE_38' | 'MORE_RESEARCH_REQUIRED' | 'ERROR' | null;
+      /** Format: date-time */
+      verified_at: string | null;
+    };
+    /** @description The VA_CONFIRMATION_V1_REQUIRED_ONLY projection: the eight required VA fields, with country fixed to USA. No SSN. Unknown fields are refused. Patterns are VA's; each field is at most 256 characters. */
+    VaConfirmationRequest: {
+      firstName: string;
+      lastName: string;
+      /**
+       * Format: date
+       * @description YYYY-MM-DD, a real date before today
+       */
+      birthDate: string;
+      streetAddressLine1: string;
+      city: string;
+      state: string;
+      /**
+       * @description Optional; always USA
+       * @enum {string}
+       */
+      country?: 'USA';
+      zipCode: string;
+    };
+    VaConfirmationResult: {
+      /** @enum {string} */
+      status: 'VERIFIED' | 'NOT_CONFIRMED' | 'UNAVAILABLE';
+      /**
+       * @description VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise.
+       * @enum {string|null}
+       */
+      not_confirmed_reason:
+        'PERSON_NOT_FOUND' | 'NOT_TITLE_38' | 'MORE_RESEARCH_REQUIRED' | 'ERROR' | null;
       /** Format: date-time */
       verified_at: string | null;
     };
@@ -2365,7 +2390,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2395,7 +2420,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2427,7 +2452,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2465,7 +2490,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2498,7 +2523,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2542,7 +2567,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2613,7 +2638,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2645,7 +2670,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2870,7 +2895,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2917,7 +2942,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2990,7 +3015,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has not passed the ID scan + selfie check */
+      /** @description FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -3057,7 +3082,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -3092,7 +3117,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -3124,7 +3149,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -3271,7 +3296,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits before passing the ID scan + selfie check */
+      /** @description FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits without a VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -4049,56 +4074,52 @@ export interface operations {
       404: components['responses']['Error'];
     };
   };
-  getVeteransMeIdVerification: {
+  postVeteransMeVerificationVaConfirm: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VaConfirmationRequest'];
+      };
+    };
     responses: {
-      /** @description ID scan and selfie status */
+      /** @description The settled result of this attempt, an identical replay, or the existing VERIFIED standing */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['IdVerification'];
+          'application/json': components['schemas']['VaConfirmationResult'];
         };
       };
-      401: components['responses']['Error'];
-    };
-  };
-  postVeteransMeIdVerificationStart: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description A check is already pending */
-      200: {
+      /** @description VALIDATION_FAILED: a field does not match the VA pattern, an unknown field was sent, or the Idempotency-Key header is missing. The message names fields only, never values. */
+      400: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['IdVerification'];
+          'application/json': components['schemas']['ErrorBody'];
         };
       };
-      /** @description Check started */
-      201: {
+      401: components['responses']['Error'];
+      409: components['responses']['Error'];
+      /** @description VERIFICATION_ATTEMPT_LIMIT: 5 attempts in the last 24 hours */
+      429: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['IdVerification'];
+          'application/json': components['schemas']['ErrorBody'];
         };
       };
-      401: components['responses']['Error'];
-      /** @description ID_VERIFICATION_UNAVAILABLE: no verification provider is configured or it is down */
+      /** @description ID_VERIFICATION_UNAVAILABLE: VA confirmation is not configured (SUAS_VA_CONFIRMATION_MODE=disabled) */
       503: {
         headers: {
           [name: string]: unknown;

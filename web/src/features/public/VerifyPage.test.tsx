@@ -23,8 +23,16 @@ function renderVerify(): { unmount: () => void } {
   );
 }
 
+// The standing is read from GET /veterans/me (R9.1 retired the status route).
 const check = (status: string) => ({
-  data: { method: 'ID_SCAN_SELFIE', status, verified_at: null },
+  data: {
+    id_verification: {
+      method: 'VA_VETERAN_STATUS',
+      status,
+      not_confirmed_reason: null,
+      verified_at: null,
+    },
+  },
 });
 
 beforeEach(() => {

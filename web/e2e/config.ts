@@ -81,6 +81,7 @@ export function stackEnv(sessionSecret: string): NodeJS.ProcessEnv {
     SUAS_DEMO_FIXED_CODE: 'disabled',
     SUAS_EMAIL_MODE: 'fake',
     SUAS_ID_VERIFICATION_MODE: 'fake',
+    SUAS_VA_CONFIRMATION_MODE: 'fixture',
     SUAS_MODEL_INFERENCE_MODE: 'fake',
     SUAS_CHAT_PUSH_MODE: 'local',
     SUAS_CHAT_LOCAL_WS_PORT: String(WS_PORT),
