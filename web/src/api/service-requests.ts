@@ -1,5 +1,6 @@
 import { queryOptions, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from './client';
+import { isApiError } from './errors';
 import { queryKeys } from './keys';
 import { requireData } from './require-data';
 import { useSessionToken } from './token-store';
@@ -50,6 +51,8 @@ export function serviceRequestQueryOptions(id: string) {
       });
       return requireData(data, 'request');
     },
+    // A 404 (not yours, or gone) or 400 will not change on retry; a 5xx gets two more tries.
+    retry: (failureCount, error) => !(isApiError(error) && error.status < 500) && failureCount < 2,
   });
 }
 

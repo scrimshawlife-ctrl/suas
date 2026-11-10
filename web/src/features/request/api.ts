@@ -131,7 +131,6 @@ export function useRequestDetail(id: string | undefined) {
     ...serviceRequestQueryOptions(id ?? ''),
     enabled: token !== null && id !== undefined && id !== '',
     refetchInterval: (q) => (isSettled(q.state.data?.status) ? false : REQUEST_POLL_MS),
-    retry: (count, error) => !(isApiError(error) && error.status < 500) && count < 2,
   });
 
   const seen = useRef(0);
