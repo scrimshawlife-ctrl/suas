@@ -132,6 +132,7 @@ export default function ResourcesPage() {
   const NeedIcon = need.Icon;
   const band = REQUEST_BAND[category];
   const resources = listings.data?.pages.flatMap((page) => page.resources) ?? [];
+  const total = listings.data?.pages.at(-1)?.total ?? 0;
 
   return (
     <Page>
@@ -179,9 +180,16 @@ export default function ResourcesPage() {
       </section>
 
       <section aria-labelledby="listings" className="flex flex-col gap-4">
-        <h2 id="listings" className="heading text-28">
-          Local listings
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <h2 id="listings" className="heading text-28">
+            Local listings
+          </h2>
+          {total > 0 ? (
+            <p className="text-16 text-slate">
+              Showing {resources.length} of {total}
+            </p>
+          ) : null}
+        </div>
         {listings.isPending ? (
           <p role="status" className="text-slate">
             Loading listings…

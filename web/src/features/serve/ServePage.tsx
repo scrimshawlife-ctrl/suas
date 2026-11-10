@@ -197,18 +197,30 @@ function HelpingCard() {
   );
 }
 
-/** "Your summary": how many requests this person is helping with now. */
+/** "Your summary": server counts when present, else the client's own held-request count. */
 function SummaryCard() {
   const mine = useServiceRequests('mine');
-  const count = mine.isSuccess ? helpingNowCount(mine.data) : undefined;
+  const counts = mine.isSuccess ? mine.data.counts : undefined;
+  // Without server counts, fall back to the client count, which is a dash when the list has
+  // more pages, so the board never shows a short number.
+  const helping = mine.isSuccess ? (counts?.helping_now ?? helpingNowCount(mine.data)) : undefined;
+  const closed = counts?.closed_last_30_days;
   return (
     <Card aria-labelledby="summary" padding="none" className="flex flex-col">
       <h2 id="summary" className="px-6 pt-5.5 text-18 font-bold">
         Your summary
       </h2>
-      <dl className="flex flex-col-reverse px-6 pt-2 pb-5">
-        <dt className="text-16 text-slate">You're helping now</dt>
-        <dd className="heading text-44">{count ?? '–'}</dd>
+      <dl className="grid grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
+        <div className="flex flex-col-reverse px-6 pt-2 pb-5">
+          <dt className="text-16 text-slate">You're helping now</dt>
+          <dd className="heading text-44">{helping ?? '–'}</dd>
+        </div>
+        {closed !== undefined || !mine.isSuccess ? (
+          <div className="flex flex-col-reverse border-l border-line px-6 pt-2 pb-5">
+            <dt className="text-16 text-slate">Closed in the last 30 days</dt>
+            <dd className="heading text-44">{closed ?? '–'}</dd>
+          </div>
+        ) : null}
       </dl>
     </Card>
   );

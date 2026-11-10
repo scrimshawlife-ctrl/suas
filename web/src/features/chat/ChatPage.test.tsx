@@ -59,9 +59,11 @@ interface Routes_ {
   role?: 'REQUESTER' | 'ACCEPTER';
   /** Issue connect tickets (the test supplies a WebSocket) instead of answering 503. */
   realtime?: boolean;
+  /** Sent as the open thread's accepted_at; the real API always sends it. */
+  acceptedAt?: string;
 }
 
-function mockApi({ messages, role = 'REQUESTER', realtime = false }: Routes_ = {}) {
+function mockApi({ messages, role = 'REQUESTER', realtime = false, acceptedAt }: Routes_ = {}) {
   client.GET.mockImplementation(
     (path: string, init?: { params?: { query?: { cursor?: string } } }) => {
       switch (path) {
@@ -71,7 +73,9 @@ function mockApi({ messages, role = 'REQUESTER', realtime = false }: Routes_ = {
           return Promise.resolve({
             data: {
               threads: threads.threads.map((t) =>
-                t.service_request_id === REQ ? { ...t, role } : t,
+                t.service_request_id === REQ
+                  ? { ...t, role, ...(acceptedAt ? { accepted_at: acceptedAt } : {}) }
+                  : t,
               ),
             },
           });
@@ -193,6 +197,24 @@ describe('conversation', () => {
     expect(
       await screen.findByRole('link', { name: 'Ride to a clinic appointment' }),
     ).toHaveAttribute('href', `/serve/requests/${REQ}`);
+  });
+
+  it('opens with when the request was accepted, from either side', async () => {
+    const acceptedAt = new Date(Date.now() - 3_600_000).toISOString();
+    mockApi({ messages: () => page2, role: 'ACCEPTER', acceptedAt });
+    const first = renderChat(`/chat/${REQ}`);
+    expect(
+      await screen.findByText(
+        /^You accepted this request on .+ at .+\. Chat is open for this request\.$/,
+      ),
+    ).toBeInTheDocument();
+    first.unmount();
+
+    mockApi({ messages: () => page2, acceptedAt });
+    renderChat(`/chat/${REQ}`);
+    expect(
+      await screen.findByText(/^Marcus T\. accepted your request on .+ at .+\.$/),
+    ).toBeInTheDocument();
   });
 
   it('explains a request that has not been accepted', async () => {

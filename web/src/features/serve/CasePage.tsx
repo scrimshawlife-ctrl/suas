@@ -108,6 +108,8 @@ function CaseView({ request, attempts }: { request: ServiceRequestDetail; attemp
             >
               {need.label}
             </span>
+            {/* Role-based: this is the accepter's view. History below is the timed fact and is
+                omitted when no accept time is recorded (accepted_at null). */}
             <StatusChip kind="ok">You accepted</StatusChip>
           </div>
           <h1 className="heading text-48 [overflow-wrap:anywhere] max-sm:text-32">{title}</h1>
@@ -201,12 +203,15 @@ function History({
 }) {
   const events = [
     { key: 'opened', label: 'Request opened', when: request.created_at },
+    ...(request.accepted_at
+      ? [{ key: 'accepted', label: 'You accepted', when: request.accepted_at }]
+      : []),
     ...attemptsOldestFirst(attempts).map((attempt) => ({
       key: attempt.contact_attempt_id,
       label: attemptLabel(attempt, requester),
       when: attempt.attempted_at,
     })),
-  ];
+  ].sort((a, b) => Date.parse(a.when) - Date.parse(b.when));
   return (
     <Card aria-labelledby="history" padding="lg" className="max-sm:p-5">
       <h2 id="history" className="mb-4 text-20 font-bold">

@@ -2,7 +2,6 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { AlertCircleIcon } from '../../components/icons';
 import { cn } from '../../lib/cn';
-import { SYSTEM_LINE } from './copy';
 import { formatMessageTime, isMine, runEnds, type ChatMessage } from './messages';
 import type { PendingMessage } from './outbox';
 
@@ -12,6 +11,8 @@ export interface MessageListProps {
   pending: readonly PendingMessage[];
   meUserId: string | undefined;
   counterpart: string;
+  /** The pill above the oldest message. */
+  openingLine: string;
   hasEarlier: boolean;
   loadingEarlier: boolean;
   /** The last attempt to load older messages failed; what is shown stays. */
@@ -33,6 +34,7 @@ export function MessageList({
   pending,
   meUserId,
   counterpart,
+  openingLine,
   hasEarlier,
   loadingEarlier,
   earlierFailed,
@@ -100,7 +102,7 @@ export function MessageList({
       <ol aria-label="Messages" className="flex flex-col gap-3.5">
         {hasEarlier ? null : (
           <li className="self-center rounded-pill bg-white px-4 py-1.5 text-center text-16 text-slate">
-            {SYSTEM_LINE}
+            {openingLine}
           </li>
         )}
         {messages.map((message) => {

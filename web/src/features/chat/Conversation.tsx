@@ -10,6 +10,7 @@ import {
   conversationErrorText,
   counterpartName,
   isPermanentConversationError,
+  systemLine,
   threadTitle,
 } from './copy';
 import { isMine, toOldestFirst } from './messages';
@@ -107,6 +108,7 @@ export function Conversation({ serviceRequestId, thread, meUserId }: Conversatio
             pending={outbox.pending}
             meUserId={meUserId}
             counterpart={name}
+            openingLine={systemLine(thread)}
             hasEarlier={messagesQuery.hasNextPage}
             loadingEarlier={messagesQuery.isFetchingNextPage}
             earlierFailed={messagesQuery.isFetchNextPageError}
