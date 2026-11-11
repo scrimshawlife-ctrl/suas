@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useRef } from 'react';
 import { api } from '../../api/client';
 import { retryServerErrors } from '../../api/errors';
+import { serviceRequestsQueryOptions } from '../../api/service-requests';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { useSessionToken } from '../../api/token-store';
@@ -181,6 +182,22 @@ export function useRunStep(serviceRequestId: string) {
   });
 }
 
+interface HeldList {
+  service_requests: { service_request_id: string }[];
+  counts?: { helping_now: number };
+}
+
+/** A helper's list without one request they no longer hold, its "helping now" count to match. */
+function withoutHeld<T extends HeldList>(list: T, serviceRequestId: string): T {
+  const kept = list.service_requests.filter((item) => item.service_request_id !== serviceRequestId);
+  if (kept.length === list.service_requests.length) return list;
+  const counts = list.counts && {
+    ...list.counts,
+    helping_now: Math.max(0, list.counts.helping_now - 1),
+  };
+  return { ...list, service_requests: kept, ...(counts ? { counts } : {}) };
+}
+
 /**
  * POST the RELEASE command with the helper's reason. The key follows the reason, so a retry
  * of the same text reuses it and an edited reason (a different body) gets a fresh one.
@@ -196,12 +213,19 @@ export function useReleaseRequest(serviceRequestId: string) {
         headers: keys.headers(reason),
       });
     },
-    // Not awaited: the caller navigates away before the request's own re-read (now a 404) lands.
+    // Mark stale without re-reading now: this helper just lost the request, so the mounted case
+    // would re-read into a 404. The Serve board the caller navigates to re-reads on mount.
     onSuccess: (_data, reason) => {
       keys.renew(reason);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.serviceRequests.all });
-      void queryClient.invalidateQueries({ queryKey: caseKeys.serviceRequests.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.chatThreads });
+      // Drop it from the cached "mine" list at once, or the board renders its row and re-reads it.
+      queryClient.setQueryData(
+        serviceRequestsQueryOptions({ ownership: 'mine' }).queryKey,
+        (list) => (list === undefined ? list : withoutHeld(list, serviceRequestId)),
+      );
+      const stale = { refetchType: 'none' } as const;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.serviceRequests.all, ...stale });
+      void queryClient.invalidateQueries({ queryKey: caseKeys.serviceRequests.all, ...stale });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chatThreads, ...stale });
     },
   });
 }

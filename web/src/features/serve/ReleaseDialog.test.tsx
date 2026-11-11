@@ -3,17 +3,17 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
+import { serviceRequestsQueryOptions } from '../../api/service-requests';
+import type { ServiceRequestListItem } from '../../api/types';
 import { ReleaseDialog } from './ReleaseDialog';
 
 const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));
 vi.mock('../../api/client', () => ({ api: client }));
 
-function open() {
+function open(queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })) {
   const handlers = { onClose: vi.fn(), onReleased: vi.fn() };
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}
-    >
+    <QueryClientProvider client={queryClient}>
       <ReleaseDialog serviceRequestId="r1" {...handlers} />
     </QueryClientProvider>,
   );
@@ -32,6 +32,24 @@ beforeEach(() => {
 });
 
 describe('ReleaseDialog', () => {
+  it('drops the released request from the cached "mine" list, so the board does not re-read it', async () => {
+    const queryClient = new QueryClient();
+    const key = serviceRequestsQueryOptions({ ownership: 'mine' }).queryKey;
+    const held = (id: string) => ({ service_request_id: id }) as ServiceRequestListItem;
+    queryClient.setQueryData(key, {
+      service_requests: [held('r1'), held('r2')],
+      next_cursor: null,
+      counts: { helping_now: 2, closed_last_30_days: 0 },
+    });
+    const { onReleased } = open(queryClient);
+    await userEvent.type(screen.getByRole('textbox'), 'My car broke down.');
+    await userEvent.click(confirm());
+    await waitFor(() => expect(onReleased).toHaveBeenCalledTimes(1));
+    const list = queryClient.getQueryData(key);
+    expect(list?.service_requests.map((item) => item.service_request_id)).toEqual(['r2']);
+    expect(list?.counts?.helping_now).toBe(1);
+  });
+
   it('needs a reason before it can confirm, and bounds its length', async () => {
     open();
     const reason = screen.getByRole('textbox', { name: /Why are you releasing it/ });
