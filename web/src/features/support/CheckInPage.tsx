@@ -6,6 +6,7 @@ import { CrisisPanel } from '../../components/CrisisPanel';
 import { Page } from '../../components/Page';
 import { RadioCardGroup } from '../../components/RadioCardGroup';
 import { cn } from '../../lib/cn';
+import { useSingleFlight } from '../../lib/single-flight';
 import {
   useCheckIn,
   useCompleteCheckIn,
@@ -101,6 +102,7 @@ function CheckInFlow({
 }) {
   const save = useSaveCheckInAnswer(checkIn.check_in_id);
   const complete = useCompleteCheckIn(checkIn.check_in_id);
+  const flight = useSingleFlight();
   const [position, setPosition] = useState<Position>(initial);
   const [choice, setChoice] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<CheckInCompleted | null>(null);
@@ -197,7 +199,7 @@ function CheckInFlow({
         className="flex flex-col gap-7"
         onSubmit={(event) => {
           event.preventDefault();
-          void onSave().catch(() => undefined);
+          flight(onSave);
         }}
       >
         <h2
@@ -240,7 +242,7 @@ function CheckInFlow({
               size="form"
               className="underline underline-offset-4"
               disabled={busy}
-              onClick={() => void onSkip().catch(() => undefined)}
+              onClick={() => flight(onSkip)}
             >
               Skip this question
             </Button>

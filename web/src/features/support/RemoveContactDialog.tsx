@@ -1,6 +1,7 @@
 import { useIdempotencyKey } from '../../api/idempotency';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useRemoveTrustedContact, type ConsentGrant, type TrustedContact } from './api';
 import { ErrorNotice } from './errors';
 import { findRedAlertGrant } from './red-alert-consent';
@@ -18,6 +19,7 @@ export function RemoveContactDialog({
   onRemoved: () => void;
 }) {
   const remove = useRemoveTrustedContact();
+  const flight = useSingleFlight();
   const revokeKey = useIdempotencyKey();
   const removeKey = useIdempotencyKey();
   return (
@@ -28,22 +30,24 @@ export function RemoveContactDialog({
         <Button
           disabled={remove.isPending}
           onClick={() =>
-            remove.mutate(
-              {
-                trustedContactId: contact.trusted_contact_id,
-                redGrantId: grants
-                  ? findRedAlertGrant(grants, contact.trusted_contact_id)?.consent_grant_id
-                  : undefined,
-                revokeHeaders: revokeKey.headers(),
-                removeHeaders: removeKey.headers(),
-              },
-              {
-                onSuccess: () => {
-                  revokeKey.renew();
-                  removeKey.renew();
-                  onRemoved();
+            flight(() =>
+              remove.mutateAsync(
+                {
+                  trustedContactId: contact.trusted_contact_id,
+                  redGrantId: grants
+                    ? findRedAlertGrant(grants, contact.trusted_contact_id)?.consent_grant_id
+                    : undefined,
+                  revokeHeaders: revokeKey.headers(),
+                  removeHeaders: removeKey.headers(),
                 },
-              },
+                {
+                  onSuccess: () => {
+                    revokeKey.renew();
+                    removeKey.renew();
+                    onRemoved();
+                  },
+                },
+              ),
             )
           }
         >

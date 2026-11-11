@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -80,6 +80,28 @@ describe('StopSharingDialog', () => {
       params: { path: { id: 'g1' } },
       headers: { 'Idempotency-Key': expect.any(String) as string },
     });
+  });
+});
+
+describe('double click in a dialog', () => {
+  it('Stop sharing sends one revoke and reports it stopped', async () => {
+    const handlers = { onClose: vi.fn(), onStopped: vi.fn() };
+    render(withClient(<StopSharingDialog grant={grant} who="Sister" {...handlers} />));
+    const button = screen.getByRole('button', { name: 'Stop sharing' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(handlers.onStopped).toHaveBeenCalledTimes(1));
+    expect(client.POST).toHaveBeenCalledTimes(1);
+  });
+
+  it('Remove sends one revoke and one remove and reports it removed', async () => {
+    const handlers = { onClose: vi.fn(), onRemoved: vi.fn() };
+    render(withClient(<RemoveContactDialog contact={contact} grants={[grant]} {...handlers} />));
+    const button = screen.getByRole('button', { name: 'Remove' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(handlers.onRemoved).toHaveBeenCalledTimes(1));
+    expect(client.POST).toHaveBeenCalledTimes(2);
   });
 });
 

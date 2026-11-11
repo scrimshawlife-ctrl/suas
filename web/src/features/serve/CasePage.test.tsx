@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -224,6 +224,21 @@ describe('Progress step', () => {
     );
     const saving = screen.getByRole('button', { name: 'Saving…' });
     expect(saving).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('sends a step and a contact attempt once each on a same-tick double click', async () => {
+    client.POST.mockResolvedValue({ data: {} });
+    renderCase();
+    const step = await screen.findByRole('button', { name: "I've started helping" });
+    fireEvent.click(step);
+    fireEvent.click(step);
+    const save = screen.getByRole('button', { name: 'Save contact attempt' });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    await screen.findByText('Saved.');
+    await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('That did not go through. Try again.')).toBeNull();
+    expect(screen.queryByText("That didn't save. Try again.")).toBeNull();
   });
 
   it('shows no step before the request is accepted', async () => {

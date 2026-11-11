@@ -1,6 +1,7 @@
 import { useIdempotencyKey } from '../../api/idempotency';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useRevokeConsent, type ConsentGrant } from './api';
 import { describeWhat } from './consent-model';
 import { ErrorNotice } from './errors';
@@ -19,6 +20,7 @@ export function StopSharingDialog({
 }) {
   const key = useIdempotencyKey();
   const revoke = useRevokeConsent();
+  const flight = useSingleFlight();
   return (
     <Dialog open onClose={onClose} title="Stop sharing?">
       <div className="flex flex-col gap-1">
@@ -31,14 +33,16 @@ export function StopSharingDialog({
         <Button
           disabled={revoke.isPending}
           onClick={() =>
-            revoke.mutate(
-              { consentGrantId: grant.consent_grant_id, headers: key.headers() },
-              {
-                onSuccess: () => {
-                  key.renew();
-                  onStopped();
+            flight(() =>
+              revoke.mutateAsync(
+                { consentGrantId: grant.consent_grant_id, headers: key.headers() },
+                {
+                  onSuccess: () => {
+                    key.renew();
+                    onStopped();
+                  },
                 },
-              },
+              ),
             )
           }
         >

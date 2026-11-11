@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderScreen } from '../request/test-utils';
@@ -133,6 +133,18 @@ describe('CheckInPage', () => {
     expect(client.POST).toHaveBeenCalledWith('/api/v0/check-ins/{id}/commands/complete', {
       params: { path: { id: 'c1' } },
     });
+  });
+
+  it('saves an answer once on a same-tick double click on Save answer', async () => {
+    route(completed());
+    const user = renderPage();
+    await user.click(await screen.findByLabelText('Option one B'));
+    const save = screen.getByRole('button', { name: 'Save answer' });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(await screen.findByText('Question 2 of 2')).toBeInTheDocument();
+    const saves = client.POST.mock.calls.filter(([p]) => p === '/api/v0/check-ins/{id}/responses');
+    expect(saves).toHaveLength(1);
   });
 
   it('goes back with Previous question and keeps the earlier answer selected', async () => {

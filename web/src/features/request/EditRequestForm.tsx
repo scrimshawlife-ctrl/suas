@@ -4,6 +4,7 @@ import { useIdempotencyKey } from '../../api/idempotency';
 import type { ServiceRequestDetail } from '../../api/types';
 import { Button } from '../../components/Button';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useEditRequest } from './api';
 import { requestErrorMessage } from './errors';
 import { InlineError } from './InlineError';
@@ -31,6 +32,7 @@ export function EditRequestForm({ request, onDone }: EditRequestFormProps) {
   const [fields, setFields] = useState(() => fieldsFromDetail(request));
   const [errors, setErrors] = useState<FieldErrors>({});
   const edit = useEditRequest(request.service_request_id);
+  const flight = useSingleFlight();
   const key = useIdempotencyKey();
   const lastPayload = useRef('');
   const formRef = useRef<HTMLFormElement>(null);
@@ -54,23 +56,25 @@ export function EditRequestForm({ request, onDone }: EditRequestFormProps) {
     if (payload !== lastPayload.current) key.renew();
     lastPayload.current = payload;
 
-    edit.mutate(
-      { edit: changes, idempotencyKey: key.current() },
-      {
-        onSuccess: () => {
-          key.renew();
-          onDone();
+    flight(() =>
+      edit.mutateAsync(
+        { edit: changes, idempotencyKey: key.current() },
+        {
+          onSuccess: () => {
+            key.renew();
+            onDone();
+          },
+          onError: (error) => {
+            if (
+              isApiError(error) &&
+              error.status === 422 &&
+              MEETING_PLACE_REJECTED.test(error.message)
+            ) {
+              setErrors({ meetingPlace: 'Tell us where the helper should meet you.' });
+            }
+          },
         },
-        onError: (error) => {
-          if (
-            isApiError(error) &&
-            error.status === 422 &&
-            MEETING_PLACE_REJECTED.test(error.message)
-          ) {
-            setErrors({ meetingPlace: 'Tell us where the helper should meet you.' });
-          }
-        },
-      },
+      ),
     );
   };
 

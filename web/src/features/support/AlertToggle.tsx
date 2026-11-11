@@ -1,5 +1,6 @@
 import { hasApiCode } from '../../api/errors';
 import { useIdempotencyKey } from '../../api/idempotency';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useGrantConsent, useRevokeConsent, type ConsentGrant, type TrustedContact } from './api';
 import { ErrorNotice } from './errors';
 import { findRedAlertGrant, redAlertGrantBody } from './red-alert-consent';
@@ -25,6 +26,7 @@ export function AlertToggle({
   const grant = useGrantConsent();
   const revoke = useRevokeConsent();
   const key = useIdempotencyKey();
+  const flight = useSingleFlight();
   const active = grants ? findRedAlertGrant(grants, contact.trusted_contact_id) : undefined;
   const pending = grant.isPending || revoke.isPending;
   const unavailable = hasApiCode(grant.error, 'CONSENT_TEMPLATE_UNAVAILABLE');
@@ -32,17 +34,22 @@ export function AlertToggle({
 
   function onChange(next: boolean) {
     if (pending || grants === undefined) return;
-    grant.reset();
-    revoke.reset();
-    const done = { onSuccess: () => key.renew() };
-    if (next) {
-      grant.mutate(
-        { body: redAlertGrantBody(contact.trusted_contact_id), headers: key.headers() },
-        done,
-      );
-    } else if (active) {
-      revoke.mutate({ consentGrantId: active.consent_grant_id, headers: key.headers() }, done);
-    }
+    flight(async () => {
+      grant.reset();
+      revoke.reset();
+      const done = { onSuccess: () => key.renew() };
+      if (next) {
+        await grant.mutateAsync(
+          { body: redAlertGrantBody(contact.trusted_contact_id), headers: key.headers() },
+          done,
+        );
+      } else if (active) {
+        await revoke.mutateAsync(
+          { consentGrantId: active.consent_grant_id, headers: key.headers() },
+          done,
+        );
+      }
+    });
   }
 
   return (

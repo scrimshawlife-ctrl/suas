@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../../components/Button';
 import { SendIcon } from '../../components/icons';
 import { TextArea } from '../../components/TextArea';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useSendIntakeMessage, type IntakeDraft, type IntakeTurn } from './api';
 import { DraftCard } from './DraftCard';
 import { useDraftEditor } from './draft-editor';
@@ -34,12 +35,12 @@ export function AssistantPanel({ onFallback }: AssistantPanelProps) {
   const [ready, setReady] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const send = useSendIntakeMessage();
+  const flight = useSingleFlight();
   const editor = useDraftEditor(draft);
 
-  const onSend = async (event: FormEvent) => {
-    event.preventDefault();
+  const onSend = async () => {
     const typed = text.trim();
-    if (typed === '' || send.isPending) return;
+    if (typed === '') return;
     setFailure(null);
     try {
       // Keep the person's edits: a reply rebuilds the draft from what the server holds.
@@ -79,7 +80,13 @@ export function AssistantPanel({ onFallback }: AssistantPanelProps) {
 
       {ready && draft ? <DraftCard draft={draft} editor={editor} /> : null}
 
-      <form onSubmit={(event) => void onSend(event)} className="flex flex-col gap-4">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          flight(onSend);
+        }}
+        className="flex flex-col gap-4"
+      >
         <TextArea
           label="Tell us what you need"
           helper="Typed text in English, up to 2,000 characters."

@@ -5,6 +5,7 @@ import { isApiError } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useCreateRequest } from './api';
 import { gateRedirect, requestErrorMessage } from './errors';
 import { InlineError } from './InlineError';
@@ -48,6 +49,7 @@ export function PlainForm({ fallbackSummary = '' }: { fallbackSummary?: string }
   }
   const [errors, setErrors] = useState<FieldErrors>({});
   const create = useCreateRequest();
+  const flight = useSingleFlight();
   const key = useIdempotencyKey();
   const lastPayload = useRef('');
   const formRef = useRef<HTMLFormElement>(null);
@@ -68,25 +70,27 @@ export function PlainForm({ fallbackSummary = '' }: { fallbackSummary?: string }
     if (payload !== lastPayload.current) key.renew();
     lastPayload.current = payload;
 
-    create.mutate(
-      { body, idempotencyKey: key.current() },
-      {
-        onSuccess: (created) => {
-          key.renew();
-          void navigate(paths.requestDetail(created.service_request_id));
+    flight(() =>
+      create.mutateAsync(
+        { body, idempotencyKey: key.current() },
+        {
+          onSuccess: (created) => {
+            key.renew();
+            void navigate(paths.requestDetail(created.service_request_id));
+          },
+          onError: (error) => {
+            const gate = gateRedirect(error);
+            if (gate) void navigate(gate, { replace: true });
+            else if (
+              isApiError(error) &&
+              error.status === 422 &&
+              MEETING_PLACE_REJECTED.test(error.message)
+            ) {
+              setErrors({ meetingPlace: 'Tell us where the helper should meet you.' });
+            }
+          },
         },
-        onError: (error) => {
-          const gate = gateRedirect(error);
-          if (gate) void navigate(gate, { replace: true });
-          else if (
-            isApiError(error) &&
-            error.status === 422 &&
-            MEETING_PLACE_REJECTED.test(error.message)
-          ) {
-            setErrors({ meetingPlace: 'Tell us where the helper should meet you.' });
-          }
-        },
-      },
+      ),
     );
   };
 

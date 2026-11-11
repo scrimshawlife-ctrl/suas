@@ -11,6 +11,7 @@ import { ChatIcon, MapPinIcon } from '../../components/icons';
 import { NEEDS } from '../../components/needs';
 import { Page } from '../../components/Page';
 import { StatusChip } from '../../components/StatusChip';
+import { useSingleFlight } from '../../lib/single-flight';
 import { useCaseServiceRequests, useContactAttempts, useRunStep } from './api';
 import { firstName, summaryOrCategory } from './board';
 import {
@@ -171,6 +172,7 @@ function WhatsNeeded({ request }: { request: ServiceRequestDetail }) {
 function Progress({ request }: { request: ServiceRequestDetail }) {
   const step = nextStep(request.status);
   const run = useRunStep(request.service_request_id);
+  const flight = useSingleFlight();
   const navigate = useNavigate();
   const [releasing, setReleasing] = useState(false);
   return (
@@ -182,7 +184,11 @@ function Progress({ request }: { request: ServiceRequestDetail }) {
         <StatusChip kind={statusKind(request.status)}>{statusLabel(request.status)}</StatusChip>
       </p>
       {step ? (
-        <Button className="self-start" disabled={run.isPending} onClick={() => run.mutate(step)}>
+        <Button
+          className="self-start"
+          disabled={run.isPending}
+          onClick={() => flight(() => run.mutateAsync(step))}
+        >
           {run.isPending ? 'Saving…' : step.label}
         </Button>
       ) : null}

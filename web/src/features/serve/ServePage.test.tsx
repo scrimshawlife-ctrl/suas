@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -137,9 +137,12 @@ describe('Serve board', () => {
     client.POST.mockReturnValue(new Promise(() => undefined));
     renderServe();
     await screen.findByText('Groceries for two days');
-    await userEvent.dblClick(screen.getByRole('button', { name: /Take this request: Groceries/ }));
+    // Two clicks in the same tick, before React re-renders with the pending state (SERVE-3).
+    const take = screen.getByRole('button', { name: /Take this request: Groceries/ });
+    fireEvent.click(take);
+    fireEvent.click(take);
+    const taking = await screen.findByRole('button', { name: /Taking this request: Groceries/ });
     expect(client.POST).toHaveBeenCalledTimes(1);
-    const taking = screen.getByRole('button', { name: /Taking this request: Groceries/ });
     expect(taking).toHaveAttribute('aria-busy', 'true');
     expect(taking).toHaveAttribute('aria-disabled', 'true');
     expect(taking).toHaveTextContent('Taking it…');

@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CancelRequest } from './RequestActions';
+import { CancelRequest, ConfirmDone } from './RequestActions';
 import { renderScreen } from './test-utils';
 
 const { post } = vi.hoisted(() => ({ post: vi.fn() }));
@@ -52,11 +52,41 @@ describe('CancelRequest', () => {
     );
   });
 
+  it('sends one cancel on a same-tick double click and shows no error', async () => {
+    post.mockResolvedValue({
+      data: { service_request_id: ID, status: 'CANCELLED', replayed: false },
+    });
+    renderScreen(<CancelRequest requestId={ID} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
+    const dialog = await screen.findByRole('dialog');
+    const send = within(dialog).getByRole('button', { name: 'Cancel request' });
+    fireEvent.click(send);
+    fireEvent.click(send);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
   it('closes on Keep request active without sending anything', async () => {
     renderScreen(<CancelRequest requestId={ID} />);
     await userEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Keep request active' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConfirmDone', () => {
+  it('sends one CONFIRM on a same-tick double click and shows no error', async () => {
+    post.mockResolvedValue({
+      data: { service_request_id: ID, status: 'CONFIRMED', replayed: false },
+    });
+    renderScreen(<ConfirmDone requestId={ID} />);
+    const button = screen.getByRole('button', { name: "Confirm it's done" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    await screen.findByRole('button', { name: "Confirm it's done" });
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
