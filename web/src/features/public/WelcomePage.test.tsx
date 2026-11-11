@@ -24,6 +24,7 @@ const base: Me = {
     status: 'NOT_STARTED',
     not_confirmed_reason: null,
     verified_at: null,
+    failure_class: null,
   },
   open_case: null,
   active_qrf: null,
