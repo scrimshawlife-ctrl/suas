@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { hasApiCode } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { CrisisPanel } from '../../components/CrisisPanel';
@@ -25,7 +26,7 @@ import {
   type Position,
   type Question,
 } from './check-in-flow';
-import { INCOMPLETE_TEXT, NOT_A_DIAGNOSIS, resultCopy } from './check-in-result';
+import { EXPIRED_TEXT, INCOMPLETE_TEXT, NOT_A_DIAGNOSIS, resultCopy } from './check-in-result';
 import { ErrorNotice } from './errors';
 
 function Segments({ total, index }: { total: number; index: number }) {
@@ -80,6 +81,33 @@ function Result({ result }: { result: CheckInCompleted }) {
       <div className="flex flex-wrap gap-3">
         <Button size="form" href={paths.request}>
           Ask for help
+        </Button>
+        <Button size="form" variant="secondary" href={paths.home}>
+          Back to home
+        </Button>
+      </div>
+      <Disclaimer />
+    </Page>
+  );
+}
+
+/** A Check-In that cannot go on. Focus moves to the message, as on the result screen. */
+function Ended({ text, onStartAgain }: { text: string; onStartAgain: () => void }) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+  return (
+    <Page width="narrow" className="max-w-[760px] gap-5 pt-12">
+      {/* The alert announces the change; the heading keeps the page structure and takes focus. */}
+      <div role="alert">
+        <h1 ref={headingRef} tabIndex={-1} className="text-20 font-bold">
+          {text}
+        </h1>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <Button size="form" onClick={onStartAgain}>
+          Start again
         </Button>
         <Button size="form" variant="secondary" href={paths.home}>
           Back to home
@@ -148,23 +176,11 @@ function CheckInFlow({
 
   if (result) return <Result result={result} />;
 
-  if (incomplete) {
-    return (
-      <Page width="narrow" className="max-w-[760px] gap-5 pt-12">
-        <p role="alert" className="text-20 font-bold">
-          {INCOMPLETE_TEXT}
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <Button size="form" onClick={onStartAgain}>
-            Start again
-          </Button>
-          <Button size="form" variant="secondary" href={paths.home}>
-            Back to home
-          </Button>
-        </div>
-        <Disclaimer />
-      </Page>
-    );
+  const failure = save.error ?? complete.error;
+  const expired = hasApiCode(failure, 'ILLEGAL_TRANSITION');
+
+  if (incomplete || expired) {
+    return <Ended text={expired ? EXPIRED_TEXT : INCOMPLETE_TEXT} onStartAgain={onStartAgain} />;
   }
 
   if (!question) {
@@ -177,7 +193,6 @@ function CheckInFlow({
     );
   }
 
-  const failure = save.error ?? complete.error;
   const isFirst = position.index === 0;
 
   return (
@@ -262,6 +277,7 @@ function CheckInFlow({
 export default function CheckInPage() {
   const resumable = useResumableCheckIn();
   const start = useStartCheckIn();
+  const startFlight = useSingleFlight();
   // undefined: not decided yet. null: start a new one. Set once from the first list read,
   // so a later refetch (after complete) can neither swap the Check-In nor start another.
   const [resumeId, setResumeId] = useState<string | null | undefined>(undefined);
@@ -300,7 +316,13 @@ export default function CheckInPage() {
   }
 
   const failed = start.isError
-    ? { error: start.error, doing: 'start your Check-In', retry: () => start.mutate() }
+    ? {
+        error: start.error,
+        doing: 'start your Check-In',
+        retry: () => {
+          startFlight(() => start.mutateAsync());
+        },
+      }
     : resumable.isError
       ? {
           error: resumable.error,

@@ -5,6 +5,12 @@ export const NOT_A_DIAGNOSIS = 'This is not a diagnosis and does not contact eme
 /** Shown when a Check-In ended INCOMPLETE: the server refuses more answers, so start again. */
 export const INCOMPLETE_TEXT = 'We could not finish this Check-In. You can start a new one.';
 
+/**
+ * Shown when the server refuses an answer or completion with ILLEGAL_TRANSITION: the Check-In
+ * is past its 24-hour window or already settled elsewhere (R8.10), so retrying can never work.
+ */
+export const EXPIRED_TEXT = 'This Check-In can no longer be finished. You can start a new one.';
+
 export interface ResultCopy {
   heading: string;
   body: string;

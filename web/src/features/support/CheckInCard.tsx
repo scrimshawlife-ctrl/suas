@@ -18,7 +18,7 @@ export function CheckInCard({ verified }: { verified: boolean }) {
         Check-In
       </h2>
       <p className="text-slate">
-        Four short questions about how things are going. This is not a diagnosis.
+        A few short questions about how things are going. This is not a diagnosis.
       </p>
       <div className="flex">
         {settled ? (
