@@ -4,12 +4,12 @@ import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
 import { Card } from '../../components/Card';
 import { useResourceDraft } from './api';
-import { DraftEditor, draftErrorMessage } from './DraftEditor';
+import { DRAFT_NOT_FOUND, DraftEditor } from './DraftEditor';
 import { DraftStatusChip } from './AdminDraftsPage';
 import { isHttpUrl, type ResourceDraft } from './draft-form';
 import { CATEGORY_LABELS, CONTACT_KIND_LABELS, countiesLabel, type DraftStatus } from './labels';
 import { QueryNotice } from './QueryNotice';
-import { isApiError } from '../../api/errors';
+import { isMissingRecord } from '../../api/errors';
 
 const formatDateTime = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium',
@@ -95,8 +95,8 @@ export default function AdminDraftPage() {
           Loading…
         </p>
       ) : draft === undefined ? (
-        isApiError(query.error) && query.error.status === 404 ? (
-          <p className="font-bold">{draftErrorMessage(query.error)}</p>
+        isMissingRecord(query.error) ? (
+          <p className="font-bold">{DRAFT_NOT_FOUND}</p>
         ) : (
           <QueryNotice error={query.error} what="this draft" onRetry={() => void query.refetch()} />
         )

@@ -42,6 +42,7 @@ function renderCase() {
       <MemoryRouter initialEntries={['/serve/requests/r1']}>
         <Routes>
           <Route path="/serve/requests/:id" element={<CasePage />} />
+          <Route path="/serve" element={<p>serve board</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -182,6 +183,21 @@ describe('Release', () => {
       expect(screen.queryByRole('button', { name: 'Release this request' })).toBeNull();
     },
   );
+
+  it('goes to Serve after a release without re-reading the request it no longer holds', async () => {
+    const detailReads = () =>
+      client.GET.mock.calls.filter(([path]) => path === '/api/v0/service-requests/{id}').length;
+    renderCase();
+    await userEvent.click(await screen.findByRole('button', { name: 'Release this request' }));
+    const dialog = screen.getByRole('dialog', { name: 'Release this request?' });
+    await userEvent.type(within(dialog).getByLabelText(/Why are you releasing it/), 'Car broke.');
+    const before = detailReads();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm release' }));
+    expect(await screen.findByText('serve board')).toBeInTheDocument();
+    // The helper no longer holds it, so a re-read would be a 404 in the console.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(detailReads()).toBe(before);
+  });
 
   it('is not offered to a non-accepter, who gets the not-found page', async () => {
     replies.detail = new ApiError(404, 'NOT_FOUND', 'Resource not found.');

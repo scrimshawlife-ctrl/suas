@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { useMe } from '../../api/me';
-import { isApiError } from '../../api/errors';
+import { isMissingRecord } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { LoadingScreen } from '../../app/status-screens';
 import { BackLink } from '../../components/BackLink';
@@ -34,7 +34,7 @@ export default function RequestDetailPage() {
   if (request.isPending || me.isPending) return <LoadingScreen />;
 
   if (request.isError || !request.data) {
-    const missing = isApiError(request.error) && request.error.status === 404;
+    const missing = isMissingRecord(request.error);
     return (
       <Page width="narrow">
         <title>Request · SUAS</title>

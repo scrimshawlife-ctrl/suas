@@ -381,6 +381,15 @@ describe('draft detail edge cases', () => {
   });
 });
 
+describe('draft detail address', () => {
+  it('reads a malformed draft id (400) as not found, with no Try again', async () => {
+    client.GET.mockRejectedValue(new ApiError(400, 'VALIDATION_FAILED', 'Invalid id.'));
+    renderAt([{ path: '/admin/drafts/:id', element: <AdminDraftPage /> }], ['/admin/drafts/abc']);
+    expect(await screen.findByText('We could not find this draft.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+});
+
 describe('draft list edge cases', () => {
   it('passes the cursor on "Show more" and hides the button on the last page', async () => {
     const user = userEvent.setup();

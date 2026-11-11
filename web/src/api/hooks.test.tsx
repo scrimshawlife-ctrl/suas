@@ -3,6 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatThreads } from './chat';
+import { ApiError } from './errors';
 import { queryKeys } from './keys';
 import { useUpdateProfile } from './profile';
 import { useServiceRequest, useServiceRequests } from './service-requests';
@@ -56,6 +57,19 @@ describe('shared read hooks', () => {
     expect(
       queryClient.getQueryData(queryKeys.serviceRequests.list({ ownership: 'mine', limit: 5 })),
     ).toBeDefined();
+  });
+});
+
+describe('useServiceRequest', () => {
+  it('reports a 404 at once instead of retrying it (not yours, or gone)', async () => {
+    tokenStore.setToken('tok');
+    client.GET.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'Resource not found.'));
+    // The app's real default, so the 3 retries with back-off would apply without the fix.
+    const detail = renderHook(() => useServiceRequest('abc'), {
+      wrapper: wrapper(new QueryClient()),
+    });
+    await waitFor(() => expect(detail.result.current.isError).toBe(true));
+    expect(client.GET).toHaveBeenCalledTimes(1);
   });
 });
 

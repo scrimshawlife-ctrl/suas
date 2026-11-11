@@ -1,6 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import { api } from './client';
-import { isApiError } from './errors';
+import { retryServerErrors } from './errors';
 import { requireData } from './require-data';
 import { queryKeys } from './keys';
 import { useSessionToken } from './token-store';
@@ -14,8 +14,7 @@ export function meQueryOptions() {
       return requireData(data, 'profile');
     },
     staleTime: 30_000,
-    // A 4xx will not change on retry; a 5xx or a dropped connection gets two more tries.
-    retry: (failureCount, error) => !(isApiError(error) && error.status < 500) && failureCount < 2,
+    retry: retryServerErrors,
   });
 }
 
