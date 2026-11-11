@@ -6,6 +6,7 @@ import {
   RequireProfile,
   RequireSignedIn,
   RequireVerified,
+  RequireVerifiedOrAccepter,
 } from './guards';
 import {
   AdminShell,
@@ -159,6 +160,19 @@ export const routes: RouteObject[] = [
                     ...page('Home', () => import('../features/support/HomePage')),
                   },
                   {
+                    // The helper who accepted reaches their case page without the scan.
+                    element: <RequireVerifiedOrAccepter />,
+                    children: [
+                      {
+                        path: '/requests/:id',
+                        ...page(
+                          'Your request',
+                          () => import('../features/request/RequestDetailPage'),
+                        ),
+                      },
+                    ],
+                  },
+                  {
                     element: <RequireVerified />,
                     children: [
                       {
@@ -168,13 +182,6 @@ export const routes: RouteObject[] = [
                       {
                         path: paths.requests,
                         ...page('Your requests', () => import('../features/request/RequestsPage')),
-                      },
-                      {
-                        path: '/requests/:id',
-                        ...page(
-                          'Your request',
-                          () => import('../features/request/RequestDetailPage'),
-                        ),
                       },
                       {
                         path: '/resources/:category',

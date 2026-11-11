@@ -1,3 +1,4 @@
+import { useMode } from '../../app/mode-store';
 import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
 import { Card } from '../../components/Card';
@@ -11,10 +12,12 @@ import { describeReason, describeWhen, newestFirst } from './notification-reason
 export default function NotificationsPage() {
   const notifications = useNotifications();
   const items = newestFirst(notifications.data ?? []);
+  // Shared by both modes: a helper who came from Serve goes back to the Serve board.
+  const home = useMode() === 'serve' ? paths.serve : paths.home;
 
   return (
     <Page width="narrow">
-      <BackLink to={paths.home}>Back to home</BackLink>
+      <BackLink to={home}>Back to home</BackLink>
       <h1 className="heading text-40 max-sm:text-30">Notifications</h1>
 
       {notifications.isPending ? (

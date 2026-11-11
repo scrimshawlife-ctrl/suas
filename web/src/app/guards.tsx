@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router';
+import { Navigate, Outlet, useLocation, useParams } from 'react-router';
 import { useMe } from '../api/me';
+import { useServiceRequest } from '../api/service-requests';
 import { tokenStore, useMfaElevated, useSessionToken } from '../api/token-store';
 import { paths } from './paths';
 import { LoadFailedScreen, LoadingScreen, WithCrisisStrip } from './status-screens';
@@ -61,6 +62,23 @@ export function RequireVerified() {
     return <Navigate to={paths.verify} replace state={{ from: returnPath(location) }} />;
   }
   return <Outlet />;
+}
+
+/**
+ * 3b. /requests/:id: RequireVerified, except that the helper who accepted the request (helping
+ * never needs the scan) goes to their case page. Only the requester or accepter can read it.
+ */
+export function RequireVerifiedOrAccepter() {
+  const me = useMe();
+  const { id } = useParams();
+  const unverified = me.data !== undefined && me.data.id_verification.status !== 'VERIFIED';
+  const request = useServiceRequest(unverified ? id : undefined);
+  if (!unverified) return <RequireVerified />;
+  if (request.isPending) return <LoadingScreen />;
+  if (request.data?.viewer_role === 'ACCEPTER') {
+    return <Navigate to={paths.case(request.data.service_request_id)} replace />;
+  }
+  return <RequireVerified />;
 }
 
 /**
