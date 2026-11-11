@@ -14,7 +14,7 @@ import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 import { loadConfig } from '../config/index.js';
 import { createVeteranConfirmationPort } from '../identity/va-confirmation-factory.js';
-import { vaConfirmationRequestSchema } from '../identity/va-confirmation.js';
+import { vaConfirmationProjectionSchema } from '../identity/va-confirmation.js';
 
 const FIELDS = [
   ['first-name', 'firstName', 'First name'],
@@ -54,7 +54,10 @@ async function main(): Promise<void> {
   const port = createVeteranConfirmationPort(config);
   if (port === undefined) throw new Error('The VA confirmation sandbox adapter is not configured.');
 
-  const parsed = vaConfirmationRequestSchema.safeParse(await readFields());
+  const parsed = vaConfirmationProjectionSchema.safeParse({
+    ...(await readFields()),
+    country: 'USA',
+  });
   if (!parsed.success) {
     const fields = [...new Set(parsed.error.issues.map((issue) => issue.path.join('.')))];
     throw new Error(`These fields do not match the VA patterns: ${fields.join(', ')}.`);
