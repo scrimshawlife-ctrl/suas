@@ -1270,7 +1270,9 @@ describe('0022 VA veteran confirmation', () => {
         [randomUUID(), tenantId, userId, status, reason, environment, failureClass],
       );
 
-    await insert('VERIFIED', null, 'SANDBOX', null);
+    await expect(insert('VERIFIED', null, 'SANDBOX', null)).rejects.toThrow(
+      /veteran_verifications_verified_identity_check/,
+    );
     await insert('NOT_CONFIRMED', 'NOT_TITLE_38', 'NONE', null);
     await insert('NOT_CONFIRMED', 'PERSON_NOT_FOUND', 'SANDBOX', 'REQUEST_INVALID');
     await insert('UNAVAILABLE', 'ERROR', 'SANDBOX', 'PROVIDER_UNAVAILABLE');
@@ -1286,6 +1288,85 @@ describe('0022 VA veteran confirmation', () => {
     await expect(insert('NOT_CONFIRMED', null, 'SANDBOX', null)).rejects.toThrow(
       /veteran_verifications_not_confirmed_reason_check/,
     );
+  });
+
+  it('pairs each hash with its key id, allows one pending attempt and one verified identity', async () => {
+    await runMigrations(pool, { mode: 'apply', provenance });
+    const tenantId = randomUUID();
+    const person = async () => {
+      const userId = randomUUID();
+      await pool.query(`INSERT INTO users (user_id, tenant_id, status) VALUES ($1, $2, 'ACTIVE')`, [
+        userId,
+        tenantId,
+      ]);
+      return userId;
+    };
+    const insert = (
+      userId: string,
+      status: string,
+      hash: { identity?: [string | null, string | null]; fingerprint?: [string, string | null] },
+    ) =>
+      pool.query(
+        `INSERT INTO veteran_verifications
+           (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
+            verified_at, not_confirmed_reason, settled_at, identity_hash, identity_key_id,
+            request_fingerprint, fingerprint_key_id)
+         VALUES ($1, $2, $3, 'VA_VETERAN_STATUS', $4::suas_veteran_verification_status, 'VA',
+                 'test', CASE WHEN $4 = 'VERIFIED' THEN now() END,
+                 CASE WHEN $4 = 'NOT_CONFIRMED' THEN 'PERSON_NOT_FOUND'::suas_va_not_confirmed_reason END,
+                 CASE WHEN $4 <> 'PENDING' THEN now() END, $5, $6, $7, $8)`,
+        [
+          randomUUID(),
+          tenantId,
+          userId,
+          status,
+          hash.identity?.[0] ?? null,
+          hash.identity?.[1] ?? null,
+          hash.fingerprint?.[0] ?? null,
+          hash.fingerprint?.[1] ?? null,
+        ],
+      );
+
+    const first = await person();
+    await expect(insert(first, 'NOT_CONFIRMED', { identity: ['h1', null] })).rejects.toThrow(
+      /veteran_verifications_identity_key_check/,
+    );
+    await expect(insert(first, 'PENDING', { fingerprint: ['f1', null] })).rejects.toThrow(
+      /veteran_verifications_fingerprint_key_check/,
+    );
+
+    await insert(first, 'PENDING', { fingerprint: ['f1', 'k1'] });
+    await expect(insert(first, 'PENDING', { fingerprint: ['f2', 'k1'] })).rejects.toThrow(
+      /veteran_verifications_one_pending_va_key/,
+    );
+
+    await insert(first, 'VERIFIED', { identity: ['h1', 'k1'] });
+    const second = await person();
+    // The same identity may be NOT_CONFIRMED on another account, never VERIFIED twice.
+    await insert(second, 'NOT_CONFIRMED', { identity: ['h1', 'k1'] });
+    await expect(insert(second, 'VERIFIED', { identity: ['h1', 'k1'] })).rejects.toThrow(
+      /veteran_verifications_verified_identity_key/,
+    );
+
+    // A revocation frees the identity: the hash is cleared and another account may verify it.
+    await pool.query(
+      `INSERT INTO veteran_verifications
+         (verification_id, tenant_id, user_id, method, status, source, source_contract_version)
+       VALUES ($1, $2, $3, 'VA_VETERAN_STATUS', 'REVOKED', 'SUAS', 'test')`,
+      [randomUUID(), tenantId, first],
+    );
+    const released = await pool.query<{ identity_hash: string | null; released: boolean }>(
+      `SELECT identity_hash, identity_released_at IS NOT NULL AS released
+         FROM veteran_verifications
+        WHERE user_id = $1 AND status = 'VERIFIED'`,
+      [first],
+    );
+    expect(released.rows).toEqual([{ identity_hash: null, released: true }]);
+    await insert(second, 'VERIFIED', { identity: ['h1', 'k1'] });
+
+    // So does deleting the account.
+    await pool.query(`UPDATE users SET deleted_at = now() WHERE user_id = $1`, [second]);
+    await insert(await person(), 'VERIFIED', { identity: ['h1', 'k1'] });
   });
 });
 
