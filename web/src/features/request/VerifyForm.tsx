@@ -1,4 +1,4 @@
-import { useRef, type FormEvent } from 'react';
+import { useRef, type FormEvent, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { fieldClass } from '../../components/FieldShell';
 import { Select } from '../../components/Select';
@@ -23,6 +23,8 @@ export interface VerifyFormProps {
   sendError: string | null;
   onChange: (field: keyof VerifyFormValues, value: string) => void;
   onSubmit: () => void;
+  /** The other way to confirm (self-attestation), shown beside "Send to VA" at the same size. */
+  alternative?: ReactNode;
 }
 
 /** Links each error to its field; focus moves to the field itself, not the summary. */
@@ -120,6 +122,7 @@ export function VerifyForm({
   sendError,
   onChange,
   onSubmit,
+  alternative,
 }: VerifyFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   useFocusFirstInvalid(formRef, String(attempt));
@@ -164,7 +167,7 @@ export function VerifyForm({
       <TextField
         id="va-street"
         label="Street address"
-        helper="Your home address, like 123 Main St Apt 4."
+        helper="Your current address or where you get mail."
         name="address-line1"
         autoComplete="address-line1"
         error={errors.street}
@@ -206,10 +209,11 @@ export function VerifyForm({
           </p>
         ) : null}
       </div>
-      <div>
+      <div className="flex flex-wrap gap-4">
         <Button type="submit" size="form" disabled={sending}>
           {sending ? 'Sending to VA' : 'Send to VA'}
         </Button>
+        {alternative}
       </div>
     </form>
   );

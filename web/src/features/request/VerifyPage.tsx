@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { isApiError } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
-import { AlertCircleIcon, CheckIcon, LockIcon } from '../../components/icons';
+import { AlertCircleIcon, LockIcon } from '../../components/icons';
 import { useSingleFlight } from '../../lib/single-flight';
-import { useConfirmVeteranStatus, useIdVerification } from '../public/api';
+import { useConfirmVeteranStatus, useIdVerification, useSelfAttest } from '../public/api';
 import { safeFrom } from '../public/signin-flow';
 import {
   EMPTY_VERIFY_FORM,
@@ -17,176 +17,42 @@ import {
   type VerifyFormValues,
 } from '../public/verify-form';
 import {
+  FORM_VIEWS,
   isGateError,
   retryAfterText,
   verifyView,
+  type VerifyChoice,
   type VerifyOutcome,
-  type VerifyView,
 } from '../public/verify-status';
 import { VerifyForm } from './VerifyForm';
+import { HelpOthers, SelfAttestButton, VaNotice, ViewMessage } from './VerifyViews';
 
-function Heading({ children }: { children: ReactNode }) {
-  return (
-    <h2 id="check" tabIndex={-1} className="heading text-30">
-      {children}
-    </h2>
-  );
-}
-
-const NOT_A_FINDING = "If VA can't confirm your status, it doesn't mean you didn't serve.";
-
-function HelpOthers({ crisis = false }: { crisis?: boolean }) {
-  return (
-    <div className="flex flex-col gap-2 border-t border-line pt-5">
-      <h3 className="text-20 font-bold">You can still help others</h3>
-      <p className="text-slate">Helping other veterans needs no check.</p>
-      {crisis ? <p className="text-slate">Crisis support is here for you any time.</p> : null}
-      <div className="flex flex-wrap items-center gap-4">
-        <Button variant="secondary" href={paths.serve}>
-          Go to Serve
-        </Button>
-        {crisis ? (
-          <Link to={paths.crisis} className="inline-flex min-h-11 items-center font-bold">
-            More crisis options
-          </Link>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-/** The heading and words for one view. The form, when shown, sits below this block. */
-function ViewMessage({
-  view,
-  retryAfter,
-  continueTo,
-  onReopen,
-}: {
-  view: VerifyView;
-  retryAfter: string;
-  continueTo: string;
-  onReopen: () => void;
-}) {
-  switch (view) {
-    case 'start':
-      return (
-        <div className="flex flex-col gap-3">
-          <Heading>Confirm your Veteran status</Heading>
-          <p>
-            To ask for help, we confirm your Veteran status with the U.S. Department of Veterans
-            Affairs (VA).
-          </p>
-          <p>
-            We send VA your name, date of birth and home address once, only to check your status.
-            SUAS keeps the result, not these details.
-          </p>
-          <p>Helping other veterans needs no check.</p>
-          <p className="text-slate">{NOT_A_FINDING}</p>
-        </div>
-      );
-    case 'not_found':
-      return (
-        <div className="flex flex-col gap-3">
-          <Heading>VA couldn't match your details</Heading>
-          <p>
-            VA did not find a record that matches what you entered. You can correct it and send it
-            again.
-          </p>
-          <ul className="flex list-disc flex-col gap-1 pl-6">
-            <li>Check the spelling of your name, street and city.</li>
-            <li>Try your name as it appears on your VA records.</li>
-            <li>Try an address where you lived before.</li>
-            <li>For a name like O'Leary, try it without the apostrophe: OLeary.</li>
-          </ul>
-          <p className="text-slate">SUAS keeps the result, not these details. {NOT_A_FINDING}</p>
-        </div>
-      );
-    case 'not_confirmed':
-      return (
-        <>
-          <div className="flex flex-col gap-3">
-            <Heading>VA did not confirm your Veteran status</Heading>
-            <p>
-              VA could not confirm your Veteran status from its records. This is not a finding that
-              you never served.
-            </p>
-            <p>You can ask VA to review your records.</p>
-          </div>
-          <div>
-            <Button size="form" onClick={onReopen}>
-              Try different details
-            </Button>
-          </div>
-          <HelpOthers crisis />
-        </>
-      );
-    case 'unavailable':
-      return (
-        <>
-          <div className="flex flex-col gap-3">
-            <Heading>VA can't be reached right now</Heading>
-            <p>
-              We could not get an answer from VA. Try again later. Nothing you entered was kept.
-            </p>
-          </div>
-          <div>
-            <Button size="form" onClick={onReopen}>
-              Try again
-            </Button>
-          </div>
-          <HelpOthers />
-        </>
-      );
-    case 'limit':
-      return (
-        <>
-          <div className="flex flex-col gap-3">
-            <Heading>You've reached today's limit of tries</Heading>
-            <p>{retryAfter}</p>
-          </div>
-          <HelpOthers />
-        </>
-      );
-    case 'revoked':
-      return (
-        <>
-          <div className="flex flex-col gap-3">
-            <Heading>Your confirmation was withdrawn</Heading>
-            <p>Your Veteran confirmation is no longer in place, so you can't ask for help here.</p>
-          </div>
-          <HelpOthers crisis />
-        </>
-      );
-    case 'verified':
-      return (
-        <>
-          <div className="flex flex-col gap-3">
-            <Heading>
-              <span className="flex items-center gap-2.5">
-                <CheckIcon size={28} />
-                You're confirmed
-              </span>
-            </Heading>
-            <p className="text-slate">
-              VA confirmed your Veteran status. You can ask for help now.
-            </p>
-          </div>
-          <div>
-            <Button size="form" href={continueTo}>
-              Continue
-            </Button>
-          </div>
-        </>
-      );
+/** The send failures that are not about one field. Codes are never shown. */
+function sendErrorText(error: unknown): string {
+  if (isApiError(error)) {
+    if (error.code === 'VALIDATION_FAILED') {
+      return 'Some details are not in a form VA accepts. Check each one and send again.';
+    }
+    if (error.code === 'IDEMPOTENCY_CONFLICT') {
+      return "We couldn't send your details just now. Wait a moment, then send them again.";
+    }
+    if (error.code === 'VA_NOTICE_VERSION_REQUIRED') {
+      return 'This page is out of date. Reload it, read the notice again, then send.';
+    }
   }
+  return 'We could not send your details. Check your connection and try again.';
 }
 
-/** Verify: the person sends their details to VA once; the page shows VA's answer. */
+/**
+ * Verify: the person either sends their details to VA once and sees VA's answer, or tells us
+ * they served (D-016 self-attestation). Either one opens the request gate.
+ */
 export default function VerifyPage() {
   const location = useLocation();
   const continueTo = safeFrom((location.state as { from?: unknown } | null)?.from) ?? paths.request;
   const standing = useIdVerification();
   const confirm = useConfirmVeteranStatus();
+  const selfAttest = useSelfAttest();
   const flight = useSingleFlight();
 
   const [values, setValues] = useState<VerifyFormValues>(EMPTY_VERIFY_FORM);
@@ -194,15 +60,15 @@ export default function VerifyPage() {
   const [attempt, setAttempt] = useState(0);
   const [sendError, setSendError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<VerifyOutcome | null>(null);
-  const [reopened, setReopened] = useState(false);
+  const [choice, setChoice] = useState<VerifyChoice>(null);
+  const [attestError, setAttestError] = useState<string | null>(null);
   // Changes with every answer, so the same view shown twice is still announced and focused.
   const [answered, setAnswered] = useState(0);
 
-  const view = verifyView(standing.data, outcome, reopened);
-  const retryAfter =
-    outcome !== null && 'error' in outcome
-      ? retryAfterText(outcome.error.retryAfterSeconds)
-      : 'Try again later.';
+  const view = verifyView(standing.data, outcome, choice);
+  const retryAfter = retryAfterText(
+    outcome !== null && 'error' in outcome ? outcome.error.retryAfterSeconds : null,
+  );
 
   // The pressed button often leaves with the old view; keep focus in the card, on its heading.
   const card = useRef<HTMLDivElement>(null);
@@ -232,27 +98,41 @@ export default function VerifyPage() {
     try {
       const result = await confirm.mutateAsync(toConfirmBody(values));
       if (result.status === 'VERIFIED') setValues(EMPTY_VERIFY_FORM);
-      setOutcome({ result });
-      setAnswered((count) => count + 1);
+      answer({ result });
     } catch (error) {
-      if (isGateError(error)) {
-        setOutcome({ error });
-        setAnswered((count) => count + 1);
-      } else if (isApiError(error) && error.code === 'VALIDATION_FAILED') {
-        setSendError('Some details are not in a form VA accepts. Check each one and send again.');
-      } else {
-        setSendError('We could not send your details. Check your connection and try again.');
-      }
+      if (isGateError(error)) answer({ error });
+      else setSendError(sendErrorText(error));
     } finally {
       // Drops the request body from the mutation cache.
       confirm.reset();
     }
   };
 
-  const reopen = () => {
-    setOutcome(null);
-    setReopened(true);
+  const answer = (next: VerifyOutcome | null, nextChoice: VerifyChoice = null) => {
+    setOutcome(next);
+    setChoice(nextChoice);
     setAnswered((count) => count + 1);
+  };
+  const reopen = () => answer(null, 'form');
+  const chooseSelfAttest = () => {
+    setAttestError(null);
+    setChoice('self_attest');
+    setAnswered((count) => count + 1);
+  };
+
+  const attest = async () => {
+    setAttestError(null);
+    try {
+      const result = await selfAttest.mutateAsync();
+      // The standing is now VERIFIED; drop what was typed for VA.
+      setValues(EMPTY_VERIFY_FORM);
+      answer({ result });
+    } catch (error) {
+      if (isApiError(error) && error.code === 'VERIFICATION_REVOKED') answer({ error });
+      else if (isApiError(error) && error.code === 'IDEMPOTENCY_CONFLICT') {
+        setAttestError("We couldn't save that just now. Wait a moment, then try again.");
+      } else setAttestError('We could not save that. Check your connection and try again.');
+    }
   };
 
   return (
@@ -261,7 +141,7 @@ export default function VerifyPage() {
       <div className="flex max-w-[760px] flex-col gap-2.5">
         <h1 className="heading text-56 max-sm:text-40">Confirm you served</h1>
         <p className="text-20 text-slate">
-          Anyone signed in can help. Asking for help needs a quick check with VA.
+          Anyone signed in can help. To ask for help, confirm with VA or tell us you served.
         </p>
       </div>
 
@@ -294,21 +174,31 @@ export default function VerifyPage() {
                     view={view}
                     retryAfter={retryAfter}
                     continueTo={continueTo}
+                    attesting={selfAttest.isPending}
+                    attestError={attestError}
                     onReopen={reopen}
+                    onChooseSelfAttest={chooseSelfAttest}
+                    onAttest={() => flight(attest)}
+                    onBack={reopen}
                   />
                 </div>
               </div>
-              {view === 'start' || view === 'not_found' ? (
-                <VerifyForm
-                  values={values}
-                  errors={errors}
-                  attempt={attempt}
-                  sending={confirm.isPending}
-                  sendError={sendError}
-                  onChange={change}
-                  onSubmit={() => flight(submit)}
-                />
+              {FORM_VIEWS.has(view) ? (
+                <>
+                  <VaNotice />
+                  <VerifyForm
+                    values={values}
+                    errors={errors}
+                    attempt={attempt}
+                    sending={confirm.isPending}
+                    sendError={sendError}
+                    onChange={change}
+                    onSubmit={() => flight(submit)}
+                    alternative={<SelfAttestButton onChoose={chooseSelfAttest} />}
+                  />
+                </>
               ) : null}
+              {view === 'verified' || view === 'attested' ? null : <HelpOthers />}
             </div>
           </Card>
         )}
@@ -317,10 +207,13 @@ export default function VerifyPage() {
           <Card aria-labelledby="keep" className="flex flex-col gap-3">
             <h2 id="keep" className="flex items-center gap-2.5 text-20 font-bold">
               <LockIcon />
-              What we keep
+              What SUAS keeps
             </h2>
-            <p>Only the result: confirmed or not, when, and that VA checked it.</p>
-            <p>Your name, date of birth and address go to VA for the check and are not kept.</p>
+            <p>
+              The result, the reason VA gave, when you checked, which version of the notice you saw,
+              and a keyed fingerprint of your details. The fingerprint can't be turned back into
+              your details. We don't keep the name, birth date or address you type here.
+            </p>
           </Card>
           <Card
             aria-labelledby="now"

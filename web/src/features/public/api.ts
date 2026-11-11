@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { hasApiCode } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
 import { meQueryOptions } from '../../api/me';
 import { requireData } from '../../api/require-data';
@@ -18,13 +19,24 @@ export function useIdVerification() {
   });
 }
 
+/** Writes a settled answer into the cached `me`, so the request guard reads it on Continue. */
+function useSetStanding() {
+  const queryClient = useQueryClient();
+  return (standing: Me['id_verification']) =>
+    queryClient.setQueryData<Me>(queryKeys.me, (me) =>
+      me === undefined ? me : { ...me, id_verification: standing },
+    );
+}
+
 /**
  * POST /veterans/me/verification/va/confirm. One Idempotency-Key per distinct body: a double
  * submit replays the same attempt, a corrected body is a new one. After UNAVAILABLE or
- * VERIFIED the key is dropped, so "try again" really asks VA again.
+ * VERIFIED the key is dropped, so "try again" really asks VA again. A 409 IDEMPOTENCY_CONFLICT
+ * (the server's key changed since the first send) also drops it, so the next send is new.
  */
 export function useConfirmVeteranStatus() {
   const queryClient = useQueryClient();
+  const setStanding = useSetStanding();
   const last = useRef<{ body: string; key: string } | null>(null);
   return useMutation({
     // Gone from the mutation cache as soon as the page resets it, so the body is not kept.
@@ -42,12 +54,35 @@ export function useConfirmVeteranStatus() {
     },
     onSuccess: (result) => {
       if (result.status !== 'NOT_CONFIRMED') last.current = null;
-      // The answer is the new standing; the request guard reads it on Continue.
-      queryClient.setQueryData<Me>(queryKeys.me, (me) =>
-        me === undefined
-          ? me
-          : { ...me, id_verification: { method: 'VA_VETERAN_STATUS', ...result } },
-      );
+      setStanding({ method: 'VA_VETERAN_STATUS', ...result });
+    },
+    onError: (error) => {
+      if (hasApiCode(error, 'IDEMPOTENCY_CONFLICT')) last.current = null;
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+  });
+}
+
+/**
+ * POST /veterans/me/verification/commands/self-attest: the D-016 fallback, a SELF_ATTESTATION
+ * VERIFIED standing. One key per page visit, so a double click records it once; a 409
+ * IDEMPOTENCY_CONFLICT drops the key so pressing again sends a new command.
+ */
+export function useSelfAttest() {
+  const queryClient = useQueryClient();
+  const setStanding = useSetStanding();
+  const key = useRef<string | null>(null);
+  return useMutation({
+    mutationFn: async () => {
+      key.current ??= crypto.randomUUID();
+      const { data } = await api.POST('/api/v0/veterans/me/verification/commands/self-attest', {
+        params: { header: { 'Idempotency-Key': key.current } },
+      });
+      return requireData(data, 'self-attestation result');
+    },
+    onSuccess: (standing) => setStanding(standing),
+    onError: (error) => {
+      if (hasApiCode(error, 'IDEMPOTENCY_CONFLICT')) key.current = null;
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.me }),
   });
