@@ -10,7 +10,12 @@ import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { createUser, VA_CONFIRMATION_FIXTURE_ZIPS } from '../../src/identity/index.js';
+import {
+  createUser,
+  setUserDisplayName,
+  VA_CONFIRMATION_FIXTURE_ZIPS,
+  VA_NOTICE_V1,
+} from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
@@ -40,6 +45,8 @@ async function person(started: StartedApp = app) {
     email: syntheticEmail(`onb-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
   });
+  // The confirm route needs the typed name to match the account name.
+  await setUserDisplayName(pool, tenantId, user.userId, 'Synthetic V.');
   const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId: user.userId });
   return { pool, tenantId, user, headers: { authorization: `Bearer ${session.credential}` } };
 }
@@ -104,6 +111,7 @@ const confirm = (headers: Record<string, string>, zipCode: string, started: Star
       city: 'Exampleton',
       state: 'CA',
       zipCode,
+      noticeVersion: VA_NOTICE_V1,
     },
   });
 

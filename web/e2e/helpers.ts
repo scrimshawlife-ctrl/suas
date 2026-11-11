@@ -76,26 +76,19 @@ export async function signUp(
 }
 
 /**
- * The fixture VA confirmation, through the API: the Verify page has no confirmation form yet
- * (suas-specs #72 R9.1, proposal). ZIP 00001 is the fixture's VERIFIED vector
- * (src/identity/va-confirmation-fixture.ts). Then the page shows the confirmed state.
+ * Opens the request gate through the API with D-016 self-attestation (suas-specs #72
+ * R9.1 D1). VA confirmation binds one identity per account and needs a matching name, so a
+ * shared synthetic person cannot confirm every e2e user. Then the page shows the
+ * confirmed state.
  */
 export async function passIdCheck(page: Page): Promise<void> {
   const token = await page.evaluate(() => window.sessionStorage.getItem('suas.session'));
   expect(token, 'a signed-in session').not.toBeNull();
   const response = await page.request.post(
-    `${API_URL}/api/v0/veterans/me/verification/va/confirm`,
+    `${API_URL}/api/v0/veterans/me/verification/commands/self-attest`,
     {
       headers: { authorization: `Bearer ${token}`, 'idempotency-key': randomUUID() },
-      data: {
-        firstName: 'Synthetic',
-        lastName: 'Veteran',
-        birthDate: '1970-01-01',
-        streetAddressLine1: '1 Example Way',
-        city: 'Exampleton',
-        state: 'CA',
-        zipCode: '00001',
-      },
+      data: {},
     },
   );
   expect(response.status()).toBe(200);
