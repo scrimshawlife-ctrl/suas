@@ -84,6 +84,8 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     id_verification_mode: config.idVerification.mode,
     va_confirmation_mode: config.vaConfirmation.mode,
     va_confirmation_api_key_configured: config.vaConfirmation.apiKey !== undefined,
+    fingerprint_key_id: config.fingerprintKeys?.current.id ?? 'none',
+    fingerprint_previous_key_id: config.fingerprintKeys?.previous?.id ?? 'none',
     public_sign_up: config.publicSignUp,
     staging_auth_email_count: config.stagingAuthEmails.length,
     staging_fixture_principal_count: config.stagingFixturePrincipals.length,

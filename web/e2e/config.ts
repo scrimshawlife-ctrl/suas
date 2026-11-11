@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 /**
  * Fixed ports, database and URLs for the local end-to-end stack. Everything can be
  * overridden with SUAS_E2E_* variables so another checkout can run beside this one.
@@ -57,8 +59,13 @@ assertDisposableDatabase();
 /**
  * The LOCAL fake environment for the API, the migrator, the seed and the job worker.
  * The session secret is generated per run by the stack script and never written to disk.
+ * The VA fixture needs SUAS_FINGERPRINT_KEY at startup; it is derived from that secret, so
+ * every process of one run shares it, and it is never the secret itself.
  */
 export function stackEnv(sessionSecret: string): NodeJS.ProcessEnv {
+  const fingerprintKey = createHmac('sha256', sessionSecret)
+    .update('suas-e2e-fingerprint-key')
+    .digest('base64');
   return {
     ...process.env,
     SUAS_ENV: 'LOCAL',
@@ -82,6 +89,8 @@ export function stackEnv(sessionSecret: string): NodeJS.ProcessEnv {
     SUAS_EMAIL_MODE: 'fake',
     SUAS_ID_VERIFICATION_MODE: 'fake',
     SUAS_VA_CONFIRMATION_MODE: 'fixture',
+    SUAS_FINGERPRINT_KEY: fingerprintKey,
+    SUAS_FINGERPRINT_KEY_ID: 'e2e-k1',
     SUAS_MODEL_INFERENCE_MODE: 'fake',
     SUAS_CHAT_PUSH_MODE: 'local',
     SUAS_CHAT_LOCAL_WS_PORT: String(WS_PORT),
