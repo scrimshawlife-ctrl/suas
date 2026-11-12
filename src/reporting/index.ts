@@ -1,10 +1,10 @@
 export {
-  projectApprovedReporting,
+  projectAggregateReporting,
   REPORTING_AUDIENCES,
-  REPORTING_MINIMUM_K,
+  PLACEHOLDER_REPORTING_MINIMUM_K,
   REPORTING_RELEASE_STATE,
-  type ApprovedReportingCell,
-  type ApprovedReportingEvent,
-  type ApprovedReportingProjection,
+  type AggregateReportingCell,
+  type AggregateReportingEvent,
+  type AggregateReportingProjection,
   type ReportingAudience,
 } from './projection.js';
