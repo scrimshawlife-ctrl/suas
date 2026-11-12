@@ -21,7 +21,7 @@ import {
   pageSize,
   takePage,
   timestampText,
-} from '../http/cursor.js';
+} from '../db/cursor.js';
 import type { ServiceCounty } from '../identity/counties.js';
 import {
   TERMINAL_REQUEST_STATUSES,
@@ -30,7 +30,7 @@ import {
 } from './request-transitions.js';
 
 // Re-exported: the request routes read the API.md §5 bounds and cursor error from here.
-export { DEFAULT_PAGE_SIZE, InvalidCursorError, MAX_PAGE_SIZE } from '../http/cursor.js';
+export { DEFAULT_PAGE_SIZE, InvalidCursorError, MAX_PAGE_SIZE } from '../db/cursor.js';
 
 export interface OpenRequestSummary {
   readonly serviceRequestId: string;

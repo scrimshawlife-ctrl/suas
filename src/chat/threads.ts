@@ -17,7 +17,7 @@ import {
   takePage,
   type PageRequest,
   timestampText,
-} from '../http/cursor.js';
+} from '../db/cursor.js';
 
 /** A list row shows a preview, not the whole message. */
 export const LAST_MESSAGE_PREVIEW_MAX = 140;
