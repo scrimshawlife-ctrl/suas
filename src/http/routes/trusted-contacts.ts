@@ -108,7 +108,8 @@ async function deliverInvite(
  * Each new invite sends an email, so invites are rate limited in the shared counter the
  * sign-in challenges use (AUTH.md §3; SECURITY.md §2). Implementation-owned values: no
  * released limit exists. Only committed invites count, since the counter is bumped in
- * the invite's transaction.
+ * the invite's transaction. Both counters depend on the caller's own invites only, so a
+ * 429 never tells one Veteran that someone else invited the same address.
  */
 export const INVITE_LIMIT_PER_VETERAN = {
   bucket: 'trusted_contact.invite.veteran',
@@ -116,7 +117,7 @@ export const INVITE_LIMIT_PER_VETERAN = {
   windowSeconds: 86_400,
 };
 export const INVITE_LIMIT_PER_ADDRESS = {
-  bucket: 'trusted_contact.invite.address',
+  bucket: 'trusted_contact.invite.veteran_address',
   limit: 3,
   windowSeconds: 86_400,
 };
@@ -209,7 +210,11 @@ export function registerTrustedContactRoutes(
         );
         for (const destination of [body.invite_email, body.invite_phone]) {
           if (destination !== undefined) {
-            await enforceRateLimit(tx, INVITE_LIMIT_PER_ADDRESS, normalizeDestination(destination));
+            await enforceRateLimit(
+              tx,
+              INVITE_LIMIT_PER_ADDRESS,
+              `${context.tenantId}:${context.userId}:${normalizeDestination(destination)}`,
+            );
           }
         }
         const contact = await inviteTrustedContact(tx, {

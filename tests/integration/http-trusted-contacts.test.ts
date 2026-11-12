@@ -318,21 +318,37 @@ describe('invite abuse controls', () => {
     expect(await inviteSends(tenantId)).toBe(1);
   });
 
-  it('limits invites to one address across Veterans, with a 429 and Retry-After', async () => {
+  it('limits one Veteran re-inviting an address, with a 429 and Retry-After, and nobody else', async () => {
     const email = syntheticEmail(`target-${randomUUID().slice(0, 8)}`);
+    const a = await veteranSession();
+    // Invite, remove, invite again: each new invite to the address counts for this Veteran.
     for (let n = 0; n < INVITE_LIMIT_PER_ADDRESS.limit; n += 1) {
-      const { headers } = await veteranSession();
-      expect(
-        (await invite(headers, { relationship_label: 'Friend', invite_email: email })).statusCode,
-      ).toBe(201);
+      const sent = await invite(a.headers, { relationship_label: 'Friend', invite_email: email });
+      expect(sent.statusCode).toBe(201);
+      await app.server.inject({
+        method: 'POST',
+        url: `/api/v0/trusted-contacts/${String(sent.json().trusted_contact_id)}/commands/remove`,
+        headers: a.headers,
+      });
     }
-    const { headers, tenantId } = await veteranSession();
-    const refused = await invite(headers, { relationship_label: 'Friend', invite_email: email });
+    const refused = await invite(a.headers, { relationship_label: 'Friend', invite_email: email });
     expect(refused.statusCode).toBe(429);
     expect(refused.json().error.code).toBe('RATE_LIMITED');
     expect(Number(refused.headers['retry-after'])).toBeGreaterThan(0);
     expect(refused.body).not.toContain(email);
-    expect(await inviteSends(tenantId)).toBe(0);
+
+    // Veteran B sees exactly what a first invite to a fresh address gets: no oracle.
+    const b = await veteranSession();
+    const toTaken = await invite(b.headers, { relationship_label: 'Friend', invite_email: email });
+    const toFresh = await invite(b.headers, {
+      relationship_label: 'Friend',
+      invite_email: syntheticEmail(`fresh-${randomUUID().slice(0, 8)}`),
+    });
+    expect(toTaken.statusCode).toBe(201);
+    expect(toFresh.statusCode).toBe(201);
+    const shape = (body: Record<string, unknown>) => ({ ...body, trusted_contact_id: 'id' });
+    expect(shape(toTaken.json())).toEqual(shape(toFresh.json()));
+    expect(await inviteSends(b.tenantId)).toBe(2);
   });
 
   it('limits how many invites one Veteran sends', async () => {
