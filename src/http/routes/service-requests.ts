@@ -29,7 +29,7 @@ import {
   findCase,
   findDisplayName,
   findServiceRequest,
-  listCaseServiceRequests,
+  listCaseServiceRequestPage,
   MAX_PAGE_SIZE,
   MEETING_PLACE_MAX,
   notifyRequester,
@@ -45,6 +45,7 @@ import {
   type ServiceRequestCommand,
 } from '../../coordination/index.js';
 import type { JsonObject } from '../../jobs/index.js';
+import { pageQuery } from '../../db/cursor.js';
 import type { Queryable } from '../../db/index.js';
 import {
   commandScope,
@@ -244,14 +245,15 @@ export function registerServiceRequestRoutes(
     const { caseId } = caseIdParams.parse(request.params);
     const access = await resolveCaseAccess(deps.pool, context, caseId);
     // A helper sees only the requests they accepted, never the Veteran's other requests.
-    const page = await listCaseServiceRequests(
-      deps.pool,
-      context.tenantId,
-      caseId,
-      50,
-      access.owner ? undefined : context.userId,
-    );
-    return { service_requests: page.map(publicServiceRequest) };
+    const query = pageQuery.parse(request.query);
+    const page = await listCaseServiceRequestPage(deps.pool, context.tenantId, caseId, {
+      ...query,
+      heldBy: access.owner ? undefined : context.userId,
+    });
+    return {
+      service_requests: page.requests.map(publicServiceRequest),
+      next_cursor: page.nextCursor ?? null,
+    };
   });
 
   app.post(`${API_PREFIX}/cases/:caseId/service-requests`, async (request, reply) => {

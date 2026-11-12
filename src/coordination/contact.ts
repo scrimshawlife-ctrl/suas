@@ -12,6 +12,14 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
+import {
+  decodeTimeIdCursor,
+  encodeTimeIdCursor,
+  pageSize,
+  takePage,
+  timestampText,
+  type PageRequest,
+} from '../db/cursor.js';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendDomainEvent } from '../events/index.js';
 import { caseHasAcceptedRequest, NoActiveAssignmentError } from './cases.js';
@@ -209,20 +217,34 @@ export async function recordContactInTx(
   return { contactAttempt: toContactAttempt(row), deduplicated: false };
 }
 
+/** A case's contact log as an API.md §5 keyset page, newest attempt first. */
 export async function listContactAttempts(
   db: Queryable,
   tenantId: string,
   caseId: string,
-  limit = 50,
-): Promise<ContactAttempt[]> {
-  const result = await db.query<ContactRow>(
-    `SELECT ${CONTACT_COLUMNS} FROM contact_attempts
-     WHERE tenant_id = $1 AND case_id = $2
-     ORDER BY attempted_at DESC
-     LIMIT $3`,
-    [tenantId, caseId, Math.min(limit, 100)],
+  page: PageRequest = {},
+): Promise<{ attempts: ContactAttempt[]; nextCursor: string | undefined }> {
+  const limit = pageSize(page.limit);
+  const values: unknown[] = [tenantId, caseId];
+  let cursorCondition = '';
+  if (page.cursor !== undefined) {
+    const { at, id } = decodeTimeIdCursor(page.cursor);
+    values.push(at, id);
+    cursorCondition = 'AND (attempted_at, contact_attempt_id) < ($3::timestamptz, $4::uuid)';
+  }
+  values.push(limit + 1);
+  const result = await db.query<ContactRow & { attempted_at_key: string }>(
+    `SELECT ${CONTACT_COLUMNS}, ${timestampText('attempted_at')} AS attempted_at_key
+     FROM contact_attempts
+     WHERE tenant_id = $1 AND case_id = $2 ${cursorCondition}
+     ORDER BY attempted_at DESC, contact_attempt_id DESC
+     LIMIT $${values.length}`,
+    values,
   );
-  return result.rows.map(toContactAttempt);
+  const { rows, nextCursor } = takePage(result.rows, limit, (row) =>
+    encodeTimeIdCursor({ at: row.attempted_at_key, id: row.contact_attempt_id }),
+  );
+  return { attempts: rows.map(toContactAttempt), nextCursor };
 }
 
 export interface CaseNote {

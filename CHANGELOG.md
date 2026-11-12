@@ -94,6 +94,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 - **Alerts text.** The responder dashboard said "No alerts." while no alert source exists (D-043 is not released). It now says "Alerts are not available yet." SUAS-specs `MVP_REFERENCE.md` section 4.8.
 - Browser sign-in no longer fails with `401 "Cross-origin browser requests are not accepted."` on a same-origin form post. `/app` pages send `referrer-policy: no-referrer`, so browsers send `Origin: null` on those posts; `assertSameOriginBrowserWrite` now accepts `Sec-Fetch-Site: same-origin` before comparing `Origin` to `Host`. Cross-site posts, and `Origin: null` without a same-origin signal, are still rejected. SUAS-specs `AUTH.md` section 9.1 (spec 0.6.0) is unchanged.
 - Restored `aria-label="Product preview"` on the homepage product UI preview link and allow-listed the live web app and iOS operator demo links in the public-pages unit test.
+- **A case's request list and contact log page by cursor (A2-24; API.md §5).** `GET /cases/{caseId}/service-requests` and `GET /cases/{caseId}/contact-attempts` stopped at 50 rows with no way to read further. Both now take `cursor` + `limit` (default 20, maximum 100) and return `next_cursor`, keyset-paged on (`created_at`, id) and (`attempted_at`, id) through `src/db/cursor.ts`. A helper still sees only the requests they hold. The web Case page asks for 50 of each, as many as it showed before. OpenAPI and `web/src/api/schema.d.ts` updated.
 
 ### Changed
 

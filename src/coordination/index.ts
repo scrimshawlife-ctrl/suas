@@ -87,6 +87,7 @@ export {
   executeServiceRequestCommandInTx,
   findServiceRequest,
   findRequesterConfirmation,
+  listCaseServiceRequestPage,
   listCaseServiceRequests,
   MEETING_PLACE_MAX,
   MeetingPlaceRequiredError,

@@ -13,6 +13,14 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import {
+  decodeTimeIdCursor,
+  encodeTimeIdCursor,
+  pageSize,
+  takePage,
+  timestampText,
+  type PageRequest,
+} from '../db/cursor.js';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendAuditEvent, appendDomainEvent, type DomainEventType } from '../events/index.js';
 import type { JsonObject } from '../jobs/index.js';
@@ -533,25 +541,48 @@ export async function executeServiceRequestCommand(
 }
 
 /**
- * A case's requests, newest first. `heldBy` narrows the list to the requests that one
- * helper accepted, so a helper never learns about the Veteran's other requests.
+ * A case's requests as an API.md §5 keyset page, newest first. `heldBy` narrows the list to
+ * the requests that one helper accepted, so a helper never learns about the Veteran's other
+ * requests.
  */
+export async function listCaseServiceRequestPage(
+  db: Queryable,
+  tenantId: string,
+  caseId: string,
+  page: PageRequest & { readonly heldBy?: string | undefined } = {},
+): Promise<{ requests: ServiceRequest[]; nextCursor: string | undefined }> {
+  const limit = pageSize(page.limit);
+  const values: unknown[] = [tenantId, caseId, page.heldBy ?? null];
+  let cursorCondition = '';
+  if (page.cursor !== undefined) {
+    const { at, id } = decodeTimeIdCursor(page.cursor);
+    values.push(at, id);
+    cursorCondition = 'AND (created_at, service_request_id) < ($4::timestamptz, $5::uuid)';
+  }
+  values.push(limit + 1);
+  const result = await db.query<RequestRow & { created_at_key: string }>(
+    `SELECT ${REQUEST_COLUMNS}, ${timestampText('created_at')} AS created_at_key
+     FROM service_requests
+     WHERE tenant_id = $1 AND case_id = $2
+       AND ($3::uuid IS NULL OR accepted_by_user_id = $3::uuid) ${cursorCondition}
+     ORDER BY created_at DESC, service_request_id DESC
+     LIMIT $${values.length}`,
+    values,
+  );
+  const { rows, nextCursor } = takePage(result.rows, limit, (row) =>
+    encodeTimeIdCursor({ at: row.created_at_key, id: row.service_request_id }),
+  );
+  return { requests: rows.map(toRequest), nextCursor };
+}
+
+/** The newest `limit` requests of a case, for the seed CLIs. */
 export async function listCaseServiceRequests(
   db: Queryable,
   tenantId: string,
   caseId: string,
   limit = 50,
-  heldBy?: string,
 ): Promise<ServiceRequest[]> {
-  const result = await db.query<RequestRow>(
-    `SELECT ${REQUEST_COLUMNS} FROM service_requests
-     WHERE tenant_id = $1 AND case_id = $2
-       AND ($4::uuid IS NULL OR accepted_by_user_id = $4::uuid)
-     ORDER BY created_at DESC
-     LIMIT $3`,
-    [tenantId, caseId, Math.min(limit, 100), heldBy ?? null],
-  );
-  return result.rows.map(toRequest);
+  return (await listCaseServiceRequestPage(db, tenantId, caseId, { limit })).requests;
 }
 
 /**
