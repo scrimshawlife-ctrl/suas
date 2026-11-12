@@ -269,6 +269,14 @@ export const routes: RouteObject[] = [
                             ),
                           },
                           {
+                            path: paths.adminConsentTemplates,
+                            ...page(
+                              'Consent templates',
+                              () => import('../features/admin/AdminConsentTemplatesPage'),
+                              'SUAS Admin',
+                            ),
+                          },
+                          {
                             path: '/admin/drafts/:id',
                             ...page(
                               'Resource draft',

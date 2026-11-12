@@ -49,6 +49,7 @@ const screens: { path: string; title: string }[] = [
   { path: '/admin', title: 'Overview · SUAS Admin' },
   { path: '/admin/drafts', title: 'Resource drafts · SUAS Admin' },
   { path: '/admin/drafts/abc', title: 'Resource draft · SUAS Admin' },
+  { path: '/admin/consent-templates', title: 'Consent templates · SUAS Admin' },
   { path: '/admin/mfa', title: 'Confirm it is you · SUAS' },
 ];
 

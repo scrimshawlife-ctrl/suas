@@ -26,6 +26,7 @@ export const paths = {
   admin: '/admin',
   adminDrafts: '/admin/drafts',
   adminDraft: (id: string) => `/admin/drafts/${id}`,
+  adminConsentTemplates: '/admin/consent-templates',
   adminMfa: '/admin/mfa',
   devComponents: '/dev/components',
 } as const;
