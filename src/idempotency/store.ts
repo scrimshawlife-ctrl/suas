@@ -16,8 +16,15 @@ import type { Queryable } from '../db/transaction.js';
 import { withTransaction } from '../db/transaction.js';
 import type { JsonObject } from '../jobs/index.js';
 
-export type CommandIdempotencyState =
-  'RESERVED' | 'COMPLETED' | 'FAILED_RETRYABLE' | 'FAILED_FINAL';
+// The schema also allows FAILED_FINAL; nothing writes it, so it is not a state here (A2-20).
+export type CommandIdempotencyState = 'RESERVED' | 'COMPLETED' | 'FAILED_RETRYABLE';
+
+/**
+ * How long a RESERVED record blocks a retry. A request that crashed or timed out between
+ * reserve and complete leaves one behind; after this lease an identical retry may run again
+ * (API.md §7 rule 5). Well above the 30 s API Lambda timeout, so a live request is never doubled.
+ */
+export const RESERVATION_LEASE_SECONDS = 120;
 
 /**
  * API.md §6/§7.4: the same key with a conflicting request is a 409 with the
@@ -111,8 +118,6 @@ export type ReserveOutcome =
   | { readonly status: 'reserved'; readonly record: CommandIdempotencyRecord }
   /** A previous identical request already completed; replay its outcome. */
   | { readonly status: 'replay'; readonly record: CommandIdempotencyRecord }
-  /** A previous identical request failed terminally; replay that failure. */
-  | { readonly status: 'failed_final'; readonly record: CommandIdempotencyRecord }
   /** Another instance holds the reservation and has not finished. */
   | { readonly status: 'in_progress'; readonly record: CommandIdempotencyRecord };
 
@@ -175,30 +180,25 @@ export async function reserveCommand(
       );
     }
 
-    switch (existing.state) {
-      case 'COMPLETED':
-        return { status: 'replay' as const, record: toRecord(existing) };
-      case 'FAILED_FINAL':
-        return { status: 'failed_final' as const, record: toRecord(existing) };
-      case 'RESERVED':
-        return { status: 'in_progress' as const, record: toRecord(existing) };
-      case 'FAILED_RETRYABLE': {
-        // API.md §7.5: a request that lost its response may safely retry.
-        const retried = await tx.query<RecordRow>(
-          `UPDATE command_idempotency_records
-             SET state = 'RESERVED', attempts = attempts + 1, last_error = NULL,
-                 updated_at = now()
-           WHERE command_idempotency_id = $1
-           RETURNING ${RECORD_COLUMNS}`,
-          [existing.command_idempotency_id],
-        );
-        const row = retried.rows[0];
-        if (row === undefined) {
-          throw new Error('Failed to re-reserve a retryable idempotency record.');
-        }
-        return { status: 'reserved' as const, record: toRecord(row) };
-      }
+    if (existing.state === 'COMPLETED') {
+      return { status: 'replay' as const, record: toRecord(existing) };
     }
+    // API.md §7.5: a request that lost its response may safely retry. That covers a
+    // retryable failure and a reservation whose lease ran out (its request died mid-way).
+    const retried = await tx.query<RecordRow>(
+      `UPDATE command_idempotency_records
+         SET state = 'RESERVED', attempts = attempts + 1, last_error = NULL,
+             updated_at = now()
+       WHERE command_idempotency_id = $1
+         AND (state = 'FAILED_RETRYABLE'
+              OR updated_at < now() - make_interval(secs => $2))
+       RETURNING ${RECORD_COLUMNS}`,
+      [existing.command_idempotency_id, RESERVATION_LEASE_SECONDS],
+    );
+    const row = retried.rows[0];
+    return row === undefined
+      ? { status: 'in_progress' as const, record: toRecord(existing) }
+      : { status: 'reserved' as const, record: toRecord(row) };
   });
 }
 
@@ -247,26 +247,20 @@ export async function completeCommand(
 }
 
 /**
- * Record a failure.
- *
- * `retryable: true` allows a later identical request to re-run the command;
- * `false` makes the failure the authoritative replayed outcome.
+ * Record a failure. A failure is never cached as the outcome: a later identical request
+ * re-runs the command (API.md §7 rule 5).
  */
 export async function failCommand(
   db: Queryable,
   commandIdempotencyId: string,
-  options: { retryable: boolean; error: string },
+  options: { error: string },
 ): Promise<CommandIdempotencyRecord> {
   const result = await db.query<RecordRow>(
     `UPDATE command_idempotency_records
-       SET state = $2, last_error = $3, updated_at = now()
+       SET state = 'FAILED_RETRYABLE', last_error = $2, updated_at = now()
      WHERE command_idempotency_id = $1
      RETURNING ${RECORD_COLUMNS}`,
-    [
-      commandIdempotencyId,
-      options.retryable ? 'FAILED_RETRYABLE' : 'FAILED_FINAL',
-      options.error.slice(0, 1000),
-    ],
+    [commandIdempotencyId, options.error.slice(0, 1000)],
   );
   const row = result.rows[0];
   if (row === undefined) {

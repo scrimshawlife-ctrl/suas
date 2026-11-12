@@ -10,7 +10,6 @@ import type { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { appendDomainEvent, readDomainEvent } from '../../src/events/index.js';
 import {
-  CommandFailedFinalError,
   CommandInProgressError,
   commandScope,
   fingerprintRequest,
@@ -18,6 +17,7 @@ import {
   IdempotencyResultTooLargeError,
   MAX_IDEMPOTENCY_RESULT_BYTES,
   readCommandRecord,
+  RESERVATION_LEASE_SECONDS,
   reserveCommand,
   runIdempotentCommand,
   type FingerprintableValue,
@@ -294,32 +294,24 @@ describe('API.md §7.5 — a request that lost its response may retry', () => {
     expect(record?.attempts).toBe(2);
   });
 
-  it('replays a terminal failure instead of re-running it', async () => {
+  it('re-runs once a crashed request leaves its reservation past the lease', async () => {
     const tenantId = syntheticTenantId();
-    let executions = 0;
+    // The original request reserved the key and died before completing or failing it.
+    const crashed = await reserveCommand(pool, input(tenantId, 'crash-key'));
+    expect(crashed.status).toBe('reserved');
+    await pool.query(
+      `UPDATE command_idempotency_records
+          SET updated_at = now() - make_interval(secs => $2 + 1)
+        WHERE command_idempotency_id = $1`,
+      [crashed.record.commandIdempotencyId, RESERVATION_LEASE_SECONDS],
+    );
 
-    const failing = () => {
-      executions += 1;
-      return Promise.reject(new Error('category is not offered'));
-    };
-
-    await expect(
-      runIdempotentCommand(
-        pool,
-        { ...input(tenantId, 'final-key'), isFinalFailure: () => true },
-        failing,
-      ),
-    ).rejects.toThrow('category is not offered');
-
-    await expect(
-      runIdempotentCommand(
-        pool,
-        { ...input(tenantId, 'final-key'), isFinalFailure: () => true },
-        failing,
-      ),
-    ).rejects.toThrow(CommandFailedFinalError);
-
-    expect(executions).toBe(1);
+    const retried = await runIdempotentCommand(pool, input(tenantId, 'crash-key'), () =>
+      Promise.resolve({ result: { ok: true } }),
+    );
+    expect(retried.replayed).toBe(false);
+    expect(retried.record.state).toBe('COMPLETED');
+    expect(retried.record.attempts).toBe(2);
   });
 });
 
