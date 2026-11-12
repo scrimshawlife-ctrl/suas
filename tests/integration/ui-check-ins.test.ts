@@ -216,6 +216,26 @@ describe('Check-In HTML — start, answer, complete', () => {
     expect(home.body).toContain(`/app/check-ins/${first}`);
   });
 
+  it('offers no Continue link to a Check-In past the 24-hour window', async () => {
+    const { credential } = await veteranSession();
+    const stale = await startHtmlCheckIn(credential);
+    await pool().query(
+      `UPDATE check_ins SET started_at = now() - interval '25 hours' WHERE check_in_id = $1`,
+      [stale],
+    );
+    for (const url of ['/app/home', '/app/check-ins']) {
+      const page = await app.server.inject({ method: 'GET', url, headers: authorized(credential) });
+      expect(page.statusCode, url).toBe(200);
+      expect(page.body, url).not.toContain(`/app/check-ins/${stale}`);
+    }
+    const home = await app.server.inject({
+      method: 'GET',
+      url: '/app/home',
+      headers: authorized(credential),
+    });
+    expect(home.body).toContain('Start a Check-In');
+  });
+
   it('abandons an in-flight Check-In past the 24-hour window and starts a new one (A2-25)', async () => {
     const { credential, tenantId, userId } = await veteranSession();
     const stale = await startHtmlCheckIn(credential);

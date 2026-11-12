@@ -73,9 +73,9 @@ import {
   completeCheckIn,
   effectiveSignal,
   findCheckIn,
-  findInProgressCheckIn,
   listAnsweredQuestionIds,
   listQuestionsWithOptions,
+  listResumableCheckIns,
   saveResponse,
   startOrResumeCheckIn,
   type CheckIn,
@@ -551,7 +551,8 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     const active = await readActiveQrf(pool, context.tenantId, context.userId, {
       category: 'PEER_SUPPORT',
     });
-    const inProgress = await findInProgressCheckIn(pool, context.tenantId, context.userId);
+    // Only a Check-In inside the 24-hour window can still be answered (CHECKINS.md §4.2).
+    const [inProgress] = await listResumableCheckIns(pool, context.tenantId, context.userId);
 
     await reply.type(HTML).send(
       renderVeteranHome({
@@ -709,7 +710,8 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   app.get('/app/check-ins', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     await requireVerifiedVeteran(pool, context);
-    const inProgress = await findInProgressCheckIn(pool, context.tenantId, context.userId);
+    // Only a Check-In inside the 24-hour window can still be answered (CHECKINS.md §4.2).
+    const [inProgress] = await listResumableCheckIns(pool, context.tenantId, context.userId);
     await reply.type(HTML).send(
       renderCheckInStart({
         shell: shell('Check-In'),
