@@ -37,18 +37,18 @@ Synth needs no Docker. esbuild bundles the Lambda code locally (see "Lambda pack
 
 Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user confirmed on 2026-11-05.
 
-| Context                  | Default                                | Meaning                                                                                                                          |
-| ------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                        |
-| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                             |
-| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                         |
-| `bedrockModelId`         | refused                                | R2.15 is not approved. Passing this context fails synth. Inference stays `disabled`.                                             |
-| `allowPlaceholderModel`  | refused                                | Same refusal. It does not select a model and it does not mark a deployable template.                                             |
-| `emailFrom`              | `no-reply@` + root domain              | SES sender (`SUAS_EMAIL_FROM`); must be in the verified domain                                                                   |
-| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches today's `wrangler.jsonc` staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
-| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value as `wrangler.jsonc`)                                          |
-| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of `us-west-2` zones, if an endpoint service is missing in one                                                        |
-| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                            |
+| Context                  | Default                                | Meaning                                                                                                                    |
+| ------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                  |
+| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                       |
+| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                   |
+| `bedrockModelId`         | refused                                | R2.15 is not approved. Passing this context fails synth. Inference stays `disabled`.                                       |
+| `allowPlaceholderModel`  | refused                                | Same refusal. It does not select a model and it does not mark a deployable template.                                       |
+| `emailFrom`              | `no-reply@` + root domain              | SES sender (`SUAS_EMAIL_FROM`); must be in the verified domain                                                             |
+| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches the retired Worker staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
+| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value the retired Worker used)                                |
+| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of `us-west-2` zones, if an endpoint service is missing in one                                                  |
+| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                      |
 
 Hostnames must be inside `rootDomain`, because certificates are validated in the zone this app owns.
 

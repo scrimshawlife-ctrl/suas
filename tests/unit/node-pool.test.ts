@@ -13,7 +13,7 @@ import { validEnv } from '../helpers/env.js';
 
 describe('createPool (node)', () => {
   it('logs an idle client error instead of throwing', async () => {
-    const pool = createPool(loadConfig(validEnv({ SUAS_MIGRATIONS_MODE: 'off' })), 'node');
+    const pool = createPool(loadConfig(validEnv({ SUAS_MIGRATIONS_MODE: 'off' })));
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       const error = Object.assign(
@@ -37,8 +37,8 @@ describe('createPool (node)', () => {
 describe('query timeouts (A4-06)', () => {
   it('bounds every query by default and takes an override', async () => {
     const config = loadConfig(validEnv({ SUAS_MIGRATIONS_MODE: 'off' }));
-    const bounded = createPool(config, 'node');
-    const custom = createPool(config, 'node', { queryTimeoutMillis: 5_000 });
+    const bounded = createPool(config);
+    const custom = createPool(config, { queryTimeoutMillis: 5_000 });
     try {
       expect(bounded.options.query_timeout).toBe(DEFAULT_QUERY_TIMEOUT_MS);
       expect(custom.options.query_timeout).toBe(5_000);
@@ -51,7 +51,6 @@ describe('query timeouts (A4-06)', () => {
   it('reads DATABASE_QUERY_TIMEOUT_MS and refuses a value that is not a positive integer', async () => {
     const pool = createPool(
       loadConfig(validEnv({ SUAS_MIGRATIONS_MODE: 'off', DATABASE_QUERY_TIMEOUT_MS: '7000' })),
-      'node',
     );
     try {
       expect(pool.options.query_timeout).toBe(7_000);

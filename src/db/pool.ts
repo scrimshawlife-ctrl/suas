@@ -22,9 +22,6 @@ export class DatabaseNotConfiguredError extends Error {
   }
 }
 
-/** The Node pool is the only mode left; the parameter stays until its callers drop it. */
-export type PoolMode = 'node';
-
 export { DEFAULT_QUERY_TIMEOUT_MS } from '../config/index.js';
 
 /** pg's message when `query_timeout` fires; the connection may still be busy server-side. */
@@ -66,11 +63,7 @@ export function databaseSslOptions(
   };
 }
 
-export function createPool(
-  config: SuasConfig,
-  _mode: PoolMode = 'node',
-  options: PoolOptions = {},
-): Pool {
+export function createPool(config: SuasConfig, options: PoolOptions = {}): Pool {
   const settings = databaseClientSettings(config);
   const pool = new Pool({
     ...settings,

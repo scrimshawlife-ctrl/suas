@@ -30,7 +30,7 @@ export async function handler(
       ? event.limit
       : DEFAULT_LIMIT;
   const config = loadConfig(process.env);
-  const pool = createPool(config, 'node');
+  const pool = createPool(config);
   try {
     await runJobWorker({
       pool,
