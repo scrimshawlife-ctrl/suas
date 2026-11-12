@@ -18,13 +18,22 @@ export {
 } from './vocabulary.js';
 export {
   assertTemplatePublished,
+  CONSENT_TEMPLATE_KEY_PATTERN,
+  CONSENT_TEMPLATE_VERSION_KEY_PATTERN,
+  ConsentTemplateNotDraftError,
   ConsentTemplateNotPublishedError,
+  ConsentTemplateVersionConflictError,
   consentTemplateVersionKey,
   createConsentTemplateVersion,
+  createNextConsentTemplateVersion,
   findConsentTemplateVersion,
+  findPublishedConsentTemplate,
+  listConsentTemplateVersions,
   publishConsentTemplateVersion,
+  RED_ALERT_CONSENT_TEMPLATE_KEY,
   type ConsentTemplateStatus,
   type ConsentTemplateVersion,
+  type PublishedConsentTemplate,
 } from './templates.js';
 export {
   acceptTrustedContact,

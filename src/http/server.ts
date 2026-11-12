@@ -34,6 +34,7 @@ import { stagingAccessFromConfig } from '../auth/staging-access.js';
 import { authenticate } from './authenticate.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
+import { registerAdminConsentTemplateRoutes } from './routes/admin-consent-templates.js';
 import { registerCaseRoutes } from './routes/cases.js';
 import { registerChatRoutes } from './routes/chat.js';
 import { registerCheckInRoutes } from './routes/check-ins.js';
@@ -333,6 +334,11 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerAdminAdapterRoutes(app, {
       pool,
       config: deps.config,
+      sessionSecret: deps.config.sessionSecret,
+    });
+
+    registerAdminConsentTemplateRoutes(app, {
+      pool,
       sessionSecret: deps.config.sessionSecret,
     });
 
