@@ -52,6 +52,11 @@ const LOG_RETENTION = logs.RetentionDays.ONE_MONTH;
 const WEB_ADAPTER_LAYER_PUBLISHER = '753240598075';
 /** Licence review images (suas-specs SCRY_LICENCE_FALLBACK.md §2.3, R10.1 proposal). */
 const LICENCE_REVIEWS_PREFIX = 'licence-reviews/';
+/**
+ * Stored beside every keyed hash (VA_CONFIRMATION_FLOW.md §2.1). Change it whenever the key
+ * changes, and move the old pair to the `_PREVIOUS` variables.
+ */
+const FINGERPRINT_KEY_ID = 'staging-1';
 
 type Env = Record<string, string>;
 
@@ -216,6 +221,21 @@ export class BackendStack extends Stack {
       description: 'SUAS_SESSION_SECRET: keys challenge and session credential hashing',
       generateSecretString: { passwordLength: 64, excludePunctuation: true },
     });
+    // Keys the VA and licence hashes. 64 letters and digits are valid base64 of 48 bytes,
+    // which the config validator requires (at least 32).
+    const fingerprintKeySecret = new secretsmanager.Secret(this, 'FingerprintKeySecret', {
+      description: 'SUAS_FINGERPRINT_KEY: keys the VA identity and licence fingerprints',
+      generateSecretString: { passwordLength: 64, excludePunctuation: true },
+    });
+    const fingerprintEnv: Env = {
+      SUAS_FINGERPRINT_KEY: fingerprintKeySecret.secretValue.unsafeUnwrap(),
+      SUAS_FINGERPRINT_KEY_ID: FINGERPRINT_KEY_ID,
+    };
+    // Bearer token for the reader's read endpoint; the same value is set on the reader.
+    const scryApiTokenSecret = new secretsmanager.Secret(this, 'ScryApiTokenSecret', {
+      description: 'SUAS_SCRY_API_TOKEN: bearer token for the licence reader (job worker only)',
+      generateSecretString: { passwordLength: 64, excludePunctuation: true },
+    });
 
     // -------------------------------------------------------------------- api
     const code = suasLambdaCode();
@@ -238,6 +258,8 @@ export class BackendStack extends Stack {
       SUAS_SUPPORT_SIGNAL_MODE: 'fixture',
       SUAS_SAFETY_COPY_MODE: config.safetyCopyMode,
       SUAS_SENSITIVE_AGGREGATE_REPORTING: 'disabled',
+      // R10.1 is a proposal and the reader's egress (R9.2, owner question 8) is not decided.
+      SUAS_LICENCE_READER_MODE: 'disabled',
       SUAS_LOG_LEVEL: 'info',
       SUAS_BUILD_COMMIT: config.buildCommit,
       SUAS_BUILD_TIMESTAMP: config.buildTimestamp,
@@ -337,6 +359,7 @@ export class BackendStack extends Stack {
         SUAS_ID_VERIFICATION_MODE: 'disabled',
         // R6.12 is not accepted. Chat still works over REST. The push adapter is not selected.
         SUAS_CHAT_PUSH_MODE: 'disabled',
+        ...fingerprintEnv,
         AWS_LAMBDA_EXEC_WRAPPER: '/opt/bootstrap',
         AWS_LWA_PORT: API_PORT,
         AWS_LWA_READINESS_CHECK_PATH: '/api/v0/health',
@@ -357,6 +380,10 @@ export class BackendStack extends Stack {
         // The licence read job reads the images and deletes them when it settles a review.
         SUAS_OBJECT_STORAGE_MODE: 's3',
         SUAS_S3_BUCKET: assetsBucket.bucketName,
+        ...fingerprintEnv,
+        SUAS_SCRY_API_TOKEN: scryApiTokenSecret.secretValue.unsafeUnwrap(),
+        // SUAS_SCRY_BASE_URL stays unset: no route to the reader's host is built until the
+        // owner decides its egress (R9.2). The worker reaches only the VPC endpoints.
       },
     });
 

@@ -349,8 +349,9 @@ describe('IAM', () => {
   });
 });
 
-// suas-specs SCRY_LICENCE_FALLBACK.md (R10.1 proposal) §2.3 and L4.7: licence images leave no
-// copies, and the job worker sees only their prefix.
+// suas-specs SCRY_LICENCE_FALLBACK.md (R10.1 proposal) §2.3, L4.7, L9 and
+// VA_CONFIRMATION_FLOW.md §2.1: licence images leave no copies, the worker sees only their
+// prefix, the new secrets reach only their holders, and the reader stays off with no egress.
 describe('licence review', () => {
   type Statement = { Action: string | string[]; Resource: unknown; Condition?: unknown };
   const assetsBucket = (): Resource | undefined =>
@@ -373,6 +374,27 @@ describe('licence review', () => {
       .filter(([, p]) => JSON.stringify(p.Properties?.Roles).includes(`"${String(roleId)}"`))
       .flatMap(([, p]) => p.Properties?.PolicyDocument.Statement as Statement[])
       .filter((st) => [st.Action].flat().some((a) => a.startsWith('s3:')));
+  };
+  // The secret reaches exactly `holders`, only as a dynamic reference under `variable`, and
+  // no role can read it at run time (CloudFormation resolves it at deploy).
+  const expectSecretOnlyIn = (variable: string, holders: string[]): void => {
+    const ids = ofType(s.backend, 'AWS::SecretsManager::Secret')
+      .filter(([, r]) => String(r.Properties?.Description).startsWith(`${variable}:`))
+      .map(([id]) => id);
+    expect(ids).toHaveLength(1);
+    const id = ids[0] ?? '';
+    const envs = envByHandler();
+    expect(Object.keys(envs).sort()).toEqual(['job-worker.handler', 'migrate.handler', 'run.sh']);
+    for (const [handler, variables] of Object.entries(envs)) {
+      expect(JSON.stringify(variables).includes(id), handler).toBe(holders.includes(handler));
+      if (!holders.includes(handler)) continue;
+      const value = JSON.stringify(variables[variable]);
+      expect(value, handler).toContain('{{resolve:secretsmanager:');
+      expect(value, handler).toContain(id);
+    }
+    for (const [, policy] of ofType(s.backend, 'AWS::IAM::Policy')) {
+      expect(JSON.stringify(policy.Properties?.PolicyDocument)).not.toContain(id);
+    }
   };
 
   it('keeps no copies: the image bucket has no versioning or replication, and no AWS Backup', () => {
@@ -424,6 +446,25 @@ describe('licence review', () => {
       's3:PutObject',
     ]);
     expect(JSON.stringify(objects?.Resource)).toMatch(/AssetsBucket.*\/\*"/);
+  });
+
+  it('gives the reader token to the job worker only', () => {
+    expectSecretOnlyIn('SUAS_SCRY_API_TOKEN', ['job-worker.handler']);
+  });
+
+  it('gives the fingerprint key and its id to the API and job worker only', () => {
+    expectSecretOnlyIn('SUAS_FINGERPRINT_KEY', ['job-worker.handler', 'run.sh']);
+    for (const [handler, variables] of Object.entries(envByHandler())) {
+      const expected = handler === 'migrate.handler' ? undefined : 'staging-1';
+      expect(variables.SUAS_FINGERPRINT_KEY_ID, handler).toBe(expected);
+    }
+  });
+
+  it('keeps the reader disabled with no reader URL on every function', () => {
+    for (const [handler, variables] of Object.entries(envByHandler())) {
+      expect(variables.SUAS_LICENCE_READER_MODE, handler).toBe('disabled');
+      expect(variables.SUAS_SCRY_BASE_URL, handler).toBeUndefined();
+    }
   });
 });
 

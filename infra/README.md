@@ -69,6 +69,11 @@ The SES identity is in `Suas-Dns` because an SES identity belongs to a domain, n
 - S3 gateway endpoint, plus one interface endpoint (private DNS on) for each AWS service the code calls.
 - Security groups: Lambda to RDS Proxy on 5432, RDS Proxy to RDS on 5432, migrate function to RDS on 5432.
   Lambda egress is HTTPS only, and only the endpoint security group accepts it. The database is not public.
+- The licence reader (suas-specs R10.1, proposal) would need the job worker to reach the reader's host, which is
+  outside AWS. That egress waits on the owner's R9.2 decision (question 8) and is not built here: no NAT, no
+  `SUAS_SCRY_BASE_URL`, and `SUAS_LICENCE_READER_MODE=disabled` on every function. Before staging turns the reader
+  on, the largest payload the tunnel accepts must be measured (SCRY_LICENCE_FALLBACK.md L9.5), and
+  `SUAS_LICENCE_SYNTHETIC_IIN` must be set on both the API and the job worker (they share one config schema).
 
 ### AWS services the staging template calls, and the endpoints they need
 
@@ -138,12 +143,18 @@ The application reads configuration from environment variables only (`src/config
 dynamic references (`{{resolve:secretsmanager:...}}`), resolved at deploy time. **The template never contains the
 values, but the resolved values are visible to anyone who can read the Lambda configuration** (for example
 `lambda:GetFunctionConfiguration`). The owner accepted this for synthetic staging data. See "Before production".
+Two more secrets follow the same pattern. `SUAS_FINGERPRINT_KEY` (64 generated letters and digits, valid base64 of
+48 bytes) keys the VA identity and licence hashes (VA_CONFIRMATION_FLOW.md §2.1). It goes to the API and job
+worker, with its id `SUAS_FINGERPRINT_KEY_ID=staging-1` as a plain value. To rotate it, move the pair to
+`SUAS_FINGERPRINT_KEY_PREVIOUS` / `_PREVIOUS_ID`, set a new key and id, and deploy. `SUAS_SCRY_API_TOKEN` (64
+generated characters) is the licence reader's bearer token and goes to the job worker only; the same value is set
+on the reader. No role has `secretsmanager:GetSecretValue`.
 Rotating a secret needs a redeploy. The API and job worker functions connect as the generated master
 user (`suas_admin`, an `rds_superuser`), the same user the Proxy and the migrate function use.
 
 ### Environment variables (API function)
 
-All values are plain except the two marked secret. Other functions get the subset they need (see `lib/backend-stack.ts`);
+All values are plain except the three marked secret. Other functions get the subset they need (see `lib/backend-stack.ts`);
 each function's environment is checked against the application's own config validator in the tests.
 
 | Variable                                                                                        | Value                                                                                                                             |
@@ -152,6 +163,7 @@ each function's environment is checked against the application's own config vali
 | `SUAS_SPEC_VERSION`, `SUAS_RELEASE_MANIFEST`                                                    | from `src/release/pins.ts` (so a re-pin follows automatically)                                                                    |
 | `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS`                                                              | `false`                                                                                                                           |
 | `SUAS_SESSION_SECRET`                                                                           | secret (Secrets Manager)                                                                                                          |
+| `SUAS_FINGERPRINT_KEY`, `SUAS_FINGERPRINT_KEY_ID`                                               | secret (Secrets Manager), `staging-1`; API and job worker only                                                                    |
 | `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<proxy endpoint>:5432/suas` (migrate uses the instance address, not the proxy)                |
 | `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3` on the API and job worker; the migrate function sets `DATABASE_POOL_MAX` to `1`                                     |
 | `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; the job worker uses `off`)                                                         |
@@ -162,6 +174,7 @@ each function's environment is checked against the application's own config vali
 | `SUAS_MODEL_INFERENCE_MODE`                                                                     | `disabled`. R2.15 is not approved, so no model id is set.                                                                         |
 | `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket (API and job worker)                                                                                      |
 | `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052).                                                            |
+| `SUAS_LICENCE_READER_MODE`                                                                      | `disabled` on every function (R10.1 proposal; reader egress undecided, R9.2). `SUAS_SCRY_BASE_URL` is not set.                    |
 | `SUAS_CHAT_PUSH_MODE`                                                                           | `disabled`. R6.12 is not accepted. `SUAS_CHAT_WS_ENDPOINT` and `SUAS_CHAT_WS_PUBLIC_URL` are not set.                             |
 | `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | not set on the API Lambda, so the allowlist is empty. `staging.suasqrf.com` is a different origin from the API and is not listed. |
 | `SUAS_TRANSPORTATION_ADAPTER_MODE`, `SUAS_SHELTER_ADAPTER_MODE`, `SUAS_FOOD_ADAPTER_MODE`       | `fake`                                                                                                                            |
