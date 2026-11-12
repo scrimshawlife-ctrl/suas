@@ -278,6 +278,22 @@ export const routes: RouteObject[] = [
                               'SUAS Admin',
                             ),
                           },
+                          {
+                            path: paths.adminLicenceReviews,
+                            ...page(
+                              'Licence reviews',
+                              () => import('../features/admin/AdminLicenceReviewsPage'),
+                              'SUAS Admin',
+                            ),
+                          },
+                          {
+                            path: '/admin/licence-reviews/:id',
+                            ...page(
+                              'Licence review',
+                              () => import('../features/admin/AdminLicenceReviewPage'),
+                              'SUAS Admin',
+                            ),
+                          },
                         ],
                       },
                     ],

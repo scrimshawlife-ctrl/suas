@@ -145,6 +145,7 @@ export function AutoLayout() {
 const adminNav: readonly AdminNavItem[] = [
   { label: 'Overview', to: paths.admin },
   { label: 'Resource drafts', to: paths.adminDrafts },
+  { label: 'Licence reviews', to: paths.adminLicenceReviews },
   { label: 'Access', to: paths.admin, soon: true },
   { label: 'Published artifacts', to: paths.admin, soon: true },
   { label: 'Platform operations', to: paths.admin, soon: true },
