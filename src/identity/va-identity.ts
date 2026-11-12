@@ -5,7 +5,13 @@
  * so one identity can verify only one account per tenant. R10.1 reuses the same hash.
  */
 
-import { fingerprint, fingerprintCandidates, type FingerprintKeyring } from './fingerprint-keys.js';
+import {
+  fingerprint,
+  fingerprintCandidates,
+  matchesStored,
+  type FingerprintKeyring,
+  type KeyedHash,
+} from './fingerprint-keys.js';
 
 /** HMAC label for the identity hash; a new normalization needs a new label. */
 export const IDENTITY_HASH_LABEL = 'suas/identity/v1';
@@ -38,6 +44,18 @@ const identityValue = (fields: IdentityFields): string =>
 /** The hash to store, under the current key. */
 export const identityHash = (keyring: FingerprintKeyring, fields: IdentityFields) =>
   fingerprint(keyring, IDENTITY_HASH_LABEL, identityValue(fields));
+
+/**
+ * Whether these details hash to a stored identity hash, under the key id stored with it
+ * (R10.1 compares a licence with the VA attempt it follows). Undefined when that key is
+ * no longer held, so the caller cannot tell.
+ */
+export const identityMatches = (
+  keyring: FingerprintKeyring,
+  fields: IdentityFields,
+  stored: KeyedHash,
+): boolean | undefined =>
+  matchesStored(keyring, IDENTITY_HASH_LABEL, identityValue(fields), stored);
 
 /** The hashes a stored row may carry for this identity, current key and previous. */
 export const identityHashCandidates = (keyring: FingerprintKeyring, fields: IdentityFields) =>

@@ -3,7 +3,9 @@
  *
  * Standing: a REVOKED row (a SUAS act) outranks everything; else a VERIFIED row of
  * VA_VETERAN_STATUS, MANUAL_REVIEW or SELF_ATTESTATION (in that order) opens the gate; else
- * the newest settled VA attempt is shown. Rows from the older OAuth sandbox track have no
+ * the newest settled VA attempt is shown. A MANUAL_REVIEW VERIFIED row counts only while it
+ * is that method's newest settled row, so an R10.1 REVIEW_ERROR revoke closes it without
+ * rewriting history (VA_CONFIRMATION_FLOW §1.1 rule 1). Rows from the older OAuth sandbox track have no
  * `settled_at` and never count.
  *
  * A VA attempt is two short transactions with the VA call between them, so no database
@@ -95,10 +97,17 @@ export async function readVeteranConfirmation(
   userId: string,
 ): Promise<VeteranConfirmationStanding | undefined> {
   const result = await db.query<StandingRow>(
-    `SELECT ${STANDING_COLUMNS} FROM veteran_verifications
+    `SELECT ${STANDING_COLUMNS} FROM veteran_verifications v
      WHERE tenant_id = $1 AND user_id = $2
        AND (status = 'REVOKED'
-            OR (status = 'VERIFIED' AND method IN ('SELF_ATTESTATION', 'MANUAL_REVIEW'))
+            OR (status = 'VERIFIED' AND method = 'SELF_ATTESTATION')
+            OR (status = 'VERIFIED' AND method = 'MANUAL_REVIEW' AND settled_at IS NOT NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM veteran_verifications newer
+                   WHERE newer.tenant_id = v.tenant_id AND newer.user_id = v.user_id
+                     AND newer.method = 'MANUAL_REVIEW' AND newer.settled_at IS NOT NULL
+                     AND (newer.settled_at, newer.created_at, newer.verification_id)
+                         > (v.settled_at, v.created_at, v.verification_id)))
             OR (method = 'VA_VETERAN_STATUS' AND settled_at IS NOT NULL
                 AND failure_class IS DISTINCT FROM '${IDENTITY_CONFLICT_CLASS}'))
      ORDER BY (status = 'REVOKED') DESC, (status = 'VERIFIED') DESC,
@@ -153,18 +162,66 @@ const lockPerson = (tx: Queryable, tenantId: string, userId: string) =>
   tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`va-confirmation:${tenantId}:${userId}`]);
 
 /**
- * Throws the attempt-limit error when a window is full. The 5 tries count only results VA
- * answered (VERIFIED, NOT_CONFIRMED), plus an attempt in flight and identity conflicts;
- * outages and refused requests (UNAVAILABLE) never do (R9.1 D3). Every VA call, whatever
- * its result, counts toward the outbound cap. Both answer 429 with the same code.
+ * The newest settled VA attempt behind the VA standing (identity conflicts left out), or
+ * undefined before any. R10.1 offers the licence path only after a real NOT_CONFIRMED here.
  */
-async function assertAttemptAllowed(db: Queryable, tenantId: string, userId: string) {
+export async function readNewestVaAttempt(
+  db: Queryable,
+  tenantId: string,
+  userId: string,
+): Promise<
+  | {
+      verificationId: string;
+      status: VeteranVerificationStatus;
+      reason: VaNotConfirmedReason | undefined;
+    }
+  | undefined
+> {
   const result = await db.query<{
-    answered: number;
-    answered_retry: number | null;
-    calls: number;
-    calls_retry: number | null;
+    verification_id: string;
+    status: VeteranVerificationStatus;
+    not_confirmed_reason: VaNotConfirmedReason | null;
   }>(
+    `SELECT verification_id, status, not_confirmed_reason FROM veteran_verifications
+      WHERE tenant_id = $1 AND user_id = $2 AND method = 'VA_VETERAN_STATUS'
+        AND settled_at IS NOT NULL
+        AND failure_class IS DISTINCT FROM '${IDENTITY_CONFLICT_CLASS}'
+      ORDER BY settled_at DESC, created_at DESC, verification_id DESC
+      LIMIT 1`,
+    [tenantId, userId],
+  );
+  const row = result.rows[0];
+  return row === undefined
+    ? undefined
+    : {
+        verificationId: row.verification_id,
+        status: row.status,
+        reason: row.not_confirmed_reason ?? undefined,
+      };
+}
+
+/** True when the person has used all VA tries in the window (R10.1 L1.3 names this limit). */
+export async function isAtVaAttemptLimit(
+  db: Queryable,
+  tenantId: string,
+  userId: string,
+): Promise<boolean> {
+  return (await readAttemptCounts(db, tenantId, userId)).answered >= VA_CONFIRMATION_MAX_ATTEMPTS;
+}
+
+interface AttemptCounts {
+  answered: number;
+  answered_retry: number | null;
+  calls: number;
+  calls_retry: number | null;
+}
+
+async function readAttemptCounts(
+  db: Queryable,
+  tenantId: string,
+  userId: string,
+): Promise<AttemptCounts> {
+  const result = await db.query<AttemptCounts>(
     `WITH recent AS (
        SELECT created_at,
               (status IN ('VERIFIED', 'NOT_CONFIRMED', 'PENDING')
@@ -182,8 +239,17 @@ async function assertAttemptAllowed(db: Queryable, tenantId: string, userId: str
        FROM recent`,
     [tenantId, userId, ATTEMPT_WINDOW_HOURS],
   );
-  const row = result.rows[0];
-  if (row === undefined) return;
+  return result.rows[0] ?? { answered: 0, answered_retry: null, calls: 0, calls_retry: null };
+}
+
+/**
+ * Throws the attempt-limit error when a window is full. The 5 tries count only results VA
+ * answered (VERIFIED, NOT_CONFIRMED), plus an attempt in flight and identity conflicts;
+ * outages and refused requests (UNAVAILABLE) never do (R9.1 D3). Every VA call, whatever
+ * its result, counts toward the outbound cap. Both answer 429 with the same code.
+ */
+async function assertAttemptAllowed(db: Queryable, tenantId: string, userId: string) {
+  const row = await readAttemptCounts(db, tenantId, userId);
   if (row.answered >= VA_CONFIRMATION_MAX_ATTEMPTS) {
     throw new VeteranConfirmationAttemptLimitError(Math.max(1, row.answered_retry ?? 1));
   }
