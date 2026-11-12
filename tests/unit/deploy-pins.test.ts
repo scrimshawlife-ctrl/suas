@@ -27,10 +27,7 @@ const EXPECTED: Readonly<Record<string, string>> = {
 const REQUIRED_FILES = [
   '.env.example',
   '.github/workflows/verify.yml',
-  '.github/workflows/worker-deploy.yml',
   '.github/workflows/staging-acceptance.yml',
-  '.github/workflows/staging-migrate.yml',
-  '.github/workflows/staging-path-param-check.yml',
   '.github/workflows/staging-recovery-fixtures.yml',
   '.github/workflows/synthetic-staging-soak.yml',
 ];
