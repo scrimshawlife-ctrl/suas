@@ -27,6 +27,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 - **Lowercase request command paths (A7-04, A2-16, A5-12; API.md §8, §18).** `POST /service-requests/{id}/commands/{command}` takes the lowercase segment the spec names (`release`, `submit`, `start`, `fulfill`, `confirm`, `cancel`, kebab case for multi-word commands such as `start-matching`). Matching is case-insensitive, so the UPPERCASE segment (`RELEASE`) keeps working as an alias and shares one idempotency scope. OpenAPI lists the lowercase values first. Contributor decision (2026-11-12) pending a suas-specs Round 11 proposal.
 - **Chat messages and Resource Drafts use the shared keyset cursor (C-21; API.md §5).** `src/chat/messages.ts` and `src/catalog/drafts.ts` now page with `src/db/cursor.ts`; their copied cursor codecs, `InvalidChatCursorError`, `InvalidDraftCursorError` and the `DRAFT_*_PAGE_SIZE` constants are gone. Cursors keep the same bytes, so a cursor issued before the change still pages; a bad cursor is still `400 VALIDATION_FAILED`.
+- **Unused CORS pin constant removed.** `CORS_GUARD_SPEC_VERSION` in `src/release/pins.ts` had no caller after the CORS pin guard was removed; it and the `scripts/dev-demo.ts` comment that pointed to the guard are gone.
 
 ### Added
 
