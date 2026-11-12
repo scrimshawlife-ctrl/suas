@@ -1249,6 +1249,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/veterans/me/verification/licence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether the licence review path is offered, and the newest review (suas-specs R10.1, proposal)
+         * @description Any signed-in person. The path is offered only after VA answered NOT_CONFIRMED (never after UNAVAILABLE, so never after a VA 400), beside self-attestation, never instead of it.
+         */
+        get: operations["getVeteransMeVerificationLicence"];
+        put?: never;
+        /**
+         * Send licence photos and a selfie for review (suas-specs R10.1, proposal)
+         * @description The server checks, in order: signed in (before the body is read), the reader is open (503), L1.4 eligibility (403), notice_version (400), no open review (409), the limit (429), then the image rules (400). It stores the three re-encoded images, records a READING review bound to the person's newest NOT_CONFIRMED VA attempt and queues the read. No Idempotency-Key: a second send while one is open gets 409 LICENCE_REVIEW_OPEN. Only reader-answered submissions count toward the limit.
+         */
+        post: operations["postVeteransMeVerificationLicence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/veterans/me/verification/licence/{review_id}/commands/dispute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dispute an ALREADY_USED decline with new photos (suas-specs R10.1 L7.3, proposal)
+         * @description Opens a new review marked as a dispute of this one, bound to the same VA attempt; the earlier images were deleted at the decision. It skips the L1.4 offer but follows the notice, limits and read. The queue routes it away from the admins who approved or confirmed the conflicting review.
+         */
+        post: operations["postVeteransMeVerificationLicenceDispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2165,6 +2209,56 @@ export interface components {
         };
         ServiceRequestEditResult: components["schemas"]["ServiceRequestDetail"] & {
             replayed: boolean;
+        };
+        /**
+         * @description suas-specs R10.1 (proposal). Open states are READING, AWAITING_REVIEW and AWAITING_CONFIRMATION; a person has at most one open review.
+         * @enum {string}
+         */
+        LicenceReviewStatus: "READING" | "UNREADABLE" | "AWAITING_REVIEW" | "AWAITING_CONFIRMATION" | "APPROVED" | "DECLINED" | "REVOKED";
+        /** @enum {string} */
+        LicenceDeclineReason: "NO_VETERAN_DESIGNATION" | "UNREADABLE" | "EXPIRED" | "IDENTITY_MISMATCH" | "SELFIE_MISMATCH" | "ALREADY_USED" | "OTHER";
+        /**
+         * @description Why a review settled UNREADABLE. The reader was down (try later, not counted): CONFIGURATION_INVALID, AUTHENTICATION_REJECTED, REQUEST_INVALID, PROVIDER_UNAVAILABLE, PROVIDER_RESPONSE_INVALID, TIMEOUT, NETWORK_ERROR. Send again (not counted): PHOTOS_GONE, PHOTOS_EXPIRED. NOT_SYNTHETIC (STAGING: no synthetic marker, nothing was sent; not counted). NOT_A_LICENCE (the reader answered; counted).
+         * @enum {string}
+         */
+        LicenceFailureClass: "CONFIGURATION_INVALID" | "AUTHENTICATION_REJECTED" | "REQUEST_INVALID" | "PROVIDER_UNAVAILABLE" | "PROVIDER_RESPONSE_INVALID" | "TIMEOUT" | "NETWORK_ERROR" | "NOT_A_LICENCE" | "NOT_SYNTHETIC" | "PHOTOS_GONE" | "PHOTOS_EXPIRED";
+        /** @description A licence review as the Veteran sees it: states, codes and times only, never a licence field. */
+        LicenceReviewView: {
+            /** Format: uuid */
+            review_id: string;
+            status: components["schemas"]["LicenceReviewStatus"];
+            decline_reason: components["schemas"]["LicenceDeclineReason"] | null;
+            failure_class: components["schemas"]["LicenceFailureClass"] | null;
+            /** @description True for an ALREADY_USED decline while the licence path is open and the person is not revoked (L7.3). */
+            disputable: boolean;
+            /** Format: uuid */
+            dispute_of_review_id: string | null;
+            /** Format: date-time */
+            submitted_at: string;
+            /** Format: date-time */
+            decided_at: string | null;
+        };
+        LicenceVerification: {
+            /** @description False when the reader is disabled or its breaker is open, the newest VA-answered attempt is not NOT_CONFIRMED (PERSON_NOT_FOUND, NOT_TITLE_38, MORE_RESEARCH_REQUIRED), the person is at the VA try limit, the standing is REVOKED, or the request gate is already open. An open review does not change it. */
+            offered: boolean;
+            /** @enum {string} */
+            notice_version: "licence-notice-v1";
+            /** @description The person's newest review, or null. */
+            review: components["schemas"]["LicenceReviewView"] | null;
+        };
+        LicenceImage: {
+            /** @enum {string} */
+            content_type: "image/jpeg";
+            /** @description A JPEG of at most 2000 px on the long side and 1,000,000 bytes, base64. The server re-encodes it, dropping EXIF, XMP, ICC and comments. */
+            data_base64: string;
+        };
+        /** @description Front and back of the licence and one live selfie (camera only). The selfie is never sent to the reader. */
+        LicenceSubmission: {
+            /** @enum {string} */
+            notice_version: "licence-notice-v1";
+            front: components["schemas"]["LicenceImage"];
+            back: components["schemas"]["LicenceImage"];
+            selfie: components["schemas"]["LicenceImage"];
         };
     };
     responses: {
@@ -4681,6 +4775,196 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    getVeteransMeVerificationLicence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Offer and newest review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LicenceVerification"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    postVeteransMeVerificationLicence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LicenceSubmission"];
+            };
+        };
+        responses: {
+            /** @description Stored and queued: the review in its current state (READING, or already read in LOCAL and TEST) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LicenceReviewView"];
+                };
+            };
+            /** @description LICENCE_NOTICE_VERSION_REQUIRED: notice_version is missing or not licence-notice-v1. VALIDATION_FAILED: an image is not a JPEG, is over 2000 px on the long side or 1,000,000 bytes, or a field is missing or unknown; the message names the fields only. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: components["responses"]["Error"];
+            /** @description LICENCE_REVIEW_NOT_OFFERED: the newest VA-answered attempt is not NOT_CONFIRMED with PERSON_NOT_FOUND, NOT_TITLE_38 or MORE_RESEARCH_REQUIRED, the person is at the VA try limit, revoked, or already confirmed. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description LICENCE_REVIEW_OPEN: a review is already open. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The whole body is over 4,500,000 bytes. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description LICENCE_SUBMISSION_LIMIT: 3 reader-answered submissions in the last 24 hours (or the absolute cap of 10); Retry-After says when. Separate from the VA VERIFICATION_ATTEMPT_LIMIT. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    postVeteransMeVerificationLicenceDispute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LicenceSubmission"];
+            };
+        };
+        responses: {
+            /** @description Stored and queued: the review in its current state (READING, or already read in LOCAL and TEST) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LicenceReviewView"];
+                };
+            };
+            /** @description LICENCE_NOTICE_VERSION_REQUIRED: notice_version is missing or not licence-notice-v1. VALIDATION_FAILED: an image is not a JPEG, is over 2000 px on the long side or 1,000,000 bytes, or a field is missing or unknown; the message names the fields only. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: components["responses"]["Error"];
+            /** @description VERIFICATION_REVOKED: the person's standing is REVOKED. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description NOT_FOUND: no such review of this person. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description LICENCE_REVIEW_NOT_DISPUTABLE: the review is not an ALREADY_USED decline. LICENCE_REVIEW_OPEN: a review is already open. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The whole body is over 4,500,000 bytes. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description LICENCE_SUBMISSION_LIMIT: 3 reader-answered submissions in the last 24 hours (or the absolute cap of 10); Retry-After says when. Separate from the VA VERIFICATION_ATTEMPT_LIMIT. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
 }
