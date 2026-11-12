@@ -7,19 +7,40 @@
 
 import { fingerprint, fingerprintCandidates, type FingerprintKeyring } from './fingerprint-keys.js';
 
-/** HMAC label for the identity hash; a new normalization needs a new label. */
+/**
+ * HMAC label for the identity hash; a new normalization needs a new label. The joined-name
+ * form and the letter folds below changed the value under this same label: nothing using it
+ * is deployed or released, so no stored hash needs the old form.
+ */
 export const IDENTITY_HASH_LABEL = 'suas/identity/v1';
 
+/** Letters NFKD keeps whole, folded to their usual a-z spelling (after lower-casing). */
+const LETTER_FOLDS: Readonly<Record<string, string>> = {
+  ß: 'ss',
+  æ: 'ae',
+  œ: 'oe',
+  ø: 'o',
+  ł: 'l',
+  đ: 'd',
+  ð: 'd',
+  þ: 'th',
+  ı: 'i',
+  ŋ: 'n',
+};
+const FOLDABLE = new RegExp(`[${Object.keys(LETTER_FOLDS).join('')}]`, 'gu');
+
 /**
- * NFKD, no combining marks, lower case, then only a-z: every separator VA's name pattern
- * allows (hyphen, apostrophe, slash, backslash, space) is dropped, so "Mary-Jane",
- * "Mary Jane" and "MaryJane" are one identity and cannot verify two accounts.
+ * Canonical name form (VA_CONFIRMATION_FLOW §2.2 item 1): lower case, NFKD, no combining
+ * marks, the letter folds, then only a-z. Every separator VA's name pattern allows is
+ * dropped, so "Mary-Jane", "Mary Jane" and "MaryJane" are one identity; "Straße" is
+ * "strasse" and "Østby" is "ostby". Lower-casing first also folds ẞ, Ø, Ł and the like.
  */
 export function normalizeNamePart(value: string): string {
   return value
+    .toLowerCase()
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
-    .toLowerCase()
+    .replace(FOLDABLE, (letter) => LETTER_FOLDS[letter] ?? '')
     .replace(/[^a-z]/g, '');
 }
 
@@ -30,18 +51,20 @@ export interface IdentityFields {
   readonly birthDate: string;
 }
 
-const identityValue = (fields: IdentityFields): string =>
-  [normalizeNamePart(fields.firstName), normalizeNamePart(fields.lastName), fields.birthDate].join(
-    '|',
-  );
+/**
+ * The value under the hash: the first and last name as one string, then `|` and the birth
+ * date. One string, so "Mary Jane" + "Smith" and "Mary" + "Jane Smith" are one identity.
+ */
+export const identityCanonicalForm = (fields: IdentityFields): string =>
+  `${normalizeNamePart(fields.firstName)}${normalizeNamePart(fields.lastName)}|${fields.birthDate}`;
 
 /** The hash to store, under the current key. */
 export const identityHash = (keyring: FingerprintKeyring, fields: IdentityFields) =>
-  fingerprint(keyring, IDENTITY_HASH_LABEL, identityValue(fields));
+  fingerprint(keyring, IDENTITY_HASH_LABEL, identityCanonicalForm(fields));
 
 /** The hashes a stored row may carry for this identity, current key and previous. */
 export const identityHashCandidates = (keyring: FingerprintKeyring, fields: IdentityFields) =>
-  fingerprintCandidates(keyring, IDENTITY_HASH_LABEL, identityValue(fields));
+  fingerprintCandidates(keyring, IDENTITY_HASH_LABEL, identityCanonicalForm(fields));
 
 /**
  * The display name is the typed first name followed by the last name or its initial
