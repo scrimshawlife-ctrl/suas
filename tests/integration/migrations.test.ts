@@ -970,7 +970,7 @@ describe('0017 request holder backfill', () => {
       const closedNoChat = await insertRequest(tenantId, caseB, veteranB, 'CLOSED');
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([17, 18, 19, 20, 21, 22]);
+      expect(result.appliedNow).toEqual([17, 18, 19, 20, 21, 22, 23]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const holders = await pool.query<{ id: string; holder: string | null }>(
@@ -1102,7 +1102,7 @@ describe('0020 request expiry and release', () => {
       );
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([20, 21, 22]);
+      expect(result.appliedNow).toEqual([20, 21, 22, 23]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const setting = await pool.query<{ value: unknown }>(
@@ -1188,7 +1188,7 @@ describe('0021 resource contacts and area', () => {
       const draftNoContact = await draft(null, null);
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([21, 22]);
+      expect(result.appliedNow).toEqual([21, 22, 23]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const read = async (table: string, key: string, id: string) => {
@@ -1242,8 +1242,9 @@ describe('0021 resource contacts and area', () => {
   });
 });
 
-// suas-specs #72 R9.1 (proposal): a VA confirmation row keeps only bounded result fields.
-describe('0022 VA veteran confirmation', () => {
+// suas-specs #72 R9.1 (proposal): a VA confirmation row keeps only bounded result fields;
+// 0023 adds the review fixes (identity binding, idempotency, one pending attempt).
+describe('0022 and 0023 VA veteran confirmation', () => {
   it('admits each confirmation result and bounds the environment and failure class', async () => {
     await runMigrations(pool, { mode: 'apply', provenance });
     const tenantId = randomUUID();
@@ -1364,8 +1365,20 @@ describe('0022 VA veteran confirmation', () => {
     expect(released.rows).toEqual([{ identity_hash: null, released: true }]);
     await insert(second, 'VERIFIED', { identity: ['h1', 'k1'] });
 
-    // So does deleting the account.
+    // So does deleting the account, which also clears the hash from its other VA rows.
+    await insert(second, 'NOT_CONFIRMED', { identity: ['h2', 'k1'] });
     await pool.query(`UPDATE users SET deleted_at = now() WHERE user_id = $1`, [second]);
+    const deleted = await pool.query<{ status: string; hashed: boolean; released: boolean }>(
+      `SELECT status, identity_hash IS NOT NULL OR identity_key_id IS NOT NULL AS hashed,
+              identity_released_at IS NOT NULL AS released
+         FROM veteran_verifications WHERE user_id = $1 ORDER BY status`,
+      [second],
+    );
+    expect(deleted.rows).toEqual([
+      { status: 'VERIFIED', hashed: false, released: true },
+      { status: 'NOT_CONFIRMED', hashed: false, released: true },
+      { status: 'NOT_CONFIRMED', hashed: false, released: true },
+    ]);
     await insert(await person(), 'VERIFIED', { identity: ['h1', 'k1'] });
   });
 });

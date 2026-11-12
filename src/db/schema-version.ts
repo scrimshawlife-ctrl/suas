@@ -12,7 +12,7 @@
  */
 
 /** Highest migration version this build requires to be applied. */
-export const EXPECTED_SCHEMA_VERSION = 22;
+export const EXPECTED_SCHEMA_VERSION = 23;
 
 /** Table owned by the migration runner itself, outside the numbered migration set. */
 export const MIGRATIONS_TABLE = 'suas_schema_migrations';
