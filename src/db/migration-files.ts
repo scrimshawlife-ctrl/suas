@@ -27,10 +27,8 @@ export interface MigrationFile {
  * candidate. If none of the build-relative directories exist, resolution throws
  * rather than loading some other tree.
  *
- * Lazily evaluated: Cloudflare Workers may import this module through the db
- * barrel during isolate startup, and a top-level `new URL(..., import.meta.url)`
- * fails with "Invalid URL string" under the Workers bundler. Node CLI callers
- * still resolve the on-disk tree the first time they load migrations.
+ * Lazily evaluated, so importing the db barrel touches no file system; callers
+ * resolve the on-disk tree the first time they load migrations.
  */
 let migrationsDirCache: string | undefined;
 

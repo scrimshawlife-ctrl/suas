@@ -13,14 +13,8 @@
 
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
-import {
-  ConfigurationError,
-  describeConfig,
-  loadConfig,
-  type ConfigSource,
-  type SuasConfig,
-} from './config/index.js';
-import { assertExpectedSchemaVersion, createPool, EXPECTED_SCHEMA_VERSION } from './db/index.js';
+import { describeConfig, loadConfig, type ConfigSource, type SuasConfig } from './config/index.js';
+import { createPool, EXPECTED_SCHEMA_VERSION, runMigrations } from './db/index.js';
 import {
   createJobQueue,
   DispatchingJobQueue,
@@ -67,38 +61,15 @@ export interface StartedApp {
   close(): Promise<void>;
 }
 
-export type AppRuntime = 'node' | 'worker';
-
 export interface StartAppOptions {
   readonly env: ConfigSource;
   /** Skip listening; used by tests that drive the server through inject(). */
   readonly listen?: boolean;
-  /**
-   * Port for `listen: true`. On Cloudflare's `cloudflare:node` HTTP server
-   * path this is a routing key, not a real network port.
-   */
-  readonly listenPort?: number;
-  /**
-   * `worker` refuses migration apply and checks only the recorded schema
-   * version. Prefer `listen: false` + inject for Node tests; use
-   * `listen: true` with `cloudflare:node` `handleAsNodeRequest` on CF.
-   * Default `node` keeps the CLI and test path.
-   */
-  readonly runtime?: AppRuntime;
 }
 
 export async function startApp(options: StartAppOptions): Promise<StartedApp> {
-  const runtime = options.runtime ?? 'node';
-  if (runtime === 'worker' && options.env.SUAS_MIGRATIONS_MODE === 'apply') {
-    throw new ConfigurationError([
-      'Worker runtime rejects SUAS_MIGRATIONS_MODE=apply. Apply migrations with the Node CLI against the unpooled URL.',
-    ]);
-  }
-
   // 1. Configuration validation. Nothing else may run before this succeeds.
-  const config = loadConfig(
-    runtime === 'worker' ? { ...options.env, SUAS_MIGRATIONS_MODE: 'validate' } : options.env,
-  );
+  const config = loadConfig(options.env);
 
   // Pin scoring availability before any job or HTTP handler can run. `disabled`
   // fails closed at computeSignal as well as the job entry (ENVIRONMENT.md §3).
@@ -109,30 +80,20 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   let schemaVersion: number | null = null;
 
   if (config.database.migrationsMode !== 'off') {
-    // Worker + Hyperdrive: Client-per-query/request (no cross-request Pool).
-    pool = createPool(config, runtime === 'worker' ? 'worker' : 'node');
-    if (runtime === 'worker') {
-      // Workers have no on-disk migrations/ tree. SELECT the recorded version
-      // only; never apply, never CREATE TABLE (ENVIRONMENT.md §9).
-      schemaVersion = await assertExpectedSchemaVersion(pool);
-    } else {
-      // Dynamic import keeps the Workers bundle from eagerly evaluating the
-      // Node-only migration file loader at isolate startup.
-      const { runMigrations } = await import('./db/migrator.js');
-      const migrationResult = await runMigrations(pool, {
-        mode: config.database.migrationsMode,
-        provenance: { specVersion: SPEC_VERSION, releaseManifest: RELEASE_MANIFEST },
-      });
-      schemaVersion = migrationResult.schemaVersion;
+    pool = createPool(config);
+    const migrationResult = await runMigrations(pool, {
+      mode: config.database.migrationsMode,
+      provenance: { specVersion: SPEC_VERSION, releaseManifest: RELEASE_MANIFEST },
+    });
+    schemaVersion = migrationResult.schemaVersion;
 
-      if (migrationResult.specStackDrift) {
-        // Reported, not fatal: VERSIONING.md §3 keeps spec stack and schema versions
-        // as separate identities.
-        console.warn(
-          `[suas] schema was created under spec stack ` +
-            `${migrationResult.schemaProvenance?.specVersion ?? 'unknown'} but this build pins ${SPEC_VERSION}`,
-        );
-      }
+    if (migrationResult.specStackDrift) {
+      // Reported, not fatal: VERSIONING.md §3 keeps spec stack and schema versions
+      // as separate identities.
+      console.warn(
+        `[suas] schema was created under spec stack ` +
+          `${migrationResult.schemaProvenance?.specVersion ?? 'unknown'} but this build pins ${SPEC_VERSION}`,
+      );
     }
   }
 
@@ -219,21 +180,15 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     modelInference,
     ...(idVerification !== undefined ? { idVerification } : {}),
     ...(chatPush !== undefined ? { chatPush } : {}),
-    // Pino's default transport uses worker_threads, which Workers do not run.
-    ...(runtime === 'worker' ? { logger: false, workerRuntime: true } : {}),
   });
 
   if (options.listen !== false) {
-    const port = options.listenPort ?? (runtime === 'worker' ? 8787 : config.http.port);
-    const host = runtime === 'worker' ? '127.0.0.1' : config.http.host;
-    await server.listen({ host, port });
+    await server.listen({ host: config.http.host, port: config.http.port });
     if (chatPush instanceof LocalWebSocketPush) await chatPush.listen(config.chatPush.localPort);
-    if (runtime !== 'worker') {
-      server.log.info(
-        { build_info: resolveBuildInfo(), configuration: describeConfig(config) },
-        'SUAS started',
-      );
-    }
+    server.log.info(
+      { build_info: resolveBuildInfo(), configuration: describeConfig(config) },
+      'SUAS started',
+    );
   }
 
   return {
