@@ -67,7 +67,7 @@ export const LICENCE_MAX_SUBMISSIONS = 3;
 export const LICENCE_MAX_TOTAL_SUBMISSIONS = 10;
 const SUBMISSION_WINDOW_HOURS = 24;
 export const LICENCE_READ_JOB_TYPE = 'licence.read';
-/** Queued by migration 0023's triggers when a revocation or deletion closes a review. */
+/** Queued by migration 0024's triggers when a revocation or deletion closes a review. */
 export const LICENCE_CLOSE_JOB_TYPE = 'licence.close';
 /** L4.5: one call and at most 3 retries, each retry on a later worker pass. */
 export const LICENCE_READ_MAX_ATTEMPTS = 4;
@@ -472,7 +472,7 @@ export async function recordLicenceRead(
 }
 
 /**
- * Finishes a review that migration 0023 closed as DECLINED / OTHER because the person's
+ * Finishes a review that migration 0024 closed as DECLINED / OTHER because the person's
  * standing became REVOKED or the account was deleted (L7.5, L8.6): deletes the images
  * and writes the Audit Event the database trigger cannot.
  */
