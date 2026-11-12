@@ -1,7 +1,7 @@
 /**
  * Helper release over /api/v0 (requires PostgreSQL).
  *
- * suas-specs V1_MVP_PROPOSAL.md R8.5: the accepter hands a request back with a reason.
+ * DISPATCH.md §4, §14.7 (v0.9.0, R8.5): the accepter hands a request back with a reason.
  * It returns to SUBMITTED and the open list, the accepter's access and chat go, the chat
  * thread closes (read-only for the requester), the requester is told, and the same helper
  * may accept again, which opens a new thread.

@@ -114,7 +114,7 @@ export interface paths {
     };
     /**
      * List the caller's unfinished Check-In that can still be resumed
-     * @description Round 8 R8.10 (accepted as proposal text in suas-specs D-059, not released): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.
+     * @description CHECKINS.md §4.2 (v0.9.0, R8.10, D-059): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.
      */
     get: operations['listCheckIns'];
     put?: never;
@@ -1743,7 +1743,7 @@ export interface components {
     ServiceRequestList: {
       service_requests: components['schemas']['ServiceRequestListItem'][];
       next_cursor: string | null;
-      /** @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. ownership=mine only: summary counts for the caller as a helper, over the same requests as the mine list (all pages, not just this one). Never returned for another user or aggregated across users. */
+      /** @description DISPATCH.md §14.2 (v0.9.0, R7.3, R7.4, D-057). ownership=mine only: summary counts for the caller as a helper, over the same requests as the mine list (all pages, not just this one). Never returned for another user or aggregated across users. */
       counts?: {
         /** @description Requests the caller accepted that are not in a terminal status (CLOSED, CANCELLED, EXPIRED, UNFULFILLABLE). Includes CONFIRMED, which waits for the helper's CLOSE, and ESCALATED. */
         helping_now: number;
@@ -1768,7 +1768,7 @@ export interface components {
       created_at: string;
       /**
        * Format: date-time
-       * @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. When the request was accepted (the chat thread's creation time). null when no accept time is recorded: before accept, or legacy accepted requests. null does not mean not accepted. Not consent evidence (D-051). Shown only to the requester and the user recorded as having accepted, like meeting_place.
+       * @description DISPATCH.md §14.1 (v0.9.0, R7.2). When the request was accepted (the chat thread's creation time). null when no accept time is recorded: before accept, or legacy accepted requests. null does not mean not accepted. Not consent evidence (D-051). Shown only to the requester and the user recorded as having accepted, like meeting_place.
        */
       accepted_at: string | null;
       widened: boolean;
