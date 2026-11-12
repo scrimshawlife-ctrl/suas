@@ -6,7 +6,7 @@
  * faked); SECURITY.md §2; ENVIRONMENT.md §3.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
 import {
   APPROVED_FOR_PILOT_IMPLEMENTATION,
@@ -165,18 +165,52 @@ describe('AUTH.md §4 — MFA factor boundary', () => {
     expect(() => createMfaPort(config)).toThrow(MfaUnavailableError);
   });
 
+  const session = { userId: 'user-1', sessionId: 'session-1' };
+
   it('consumes a factor challenge once', async () => {
     const factor = new TestMfaFactor();
-    const challenge = await factor.begin('user-1');
+    const challenge = await factor.begin(session);
     const response = factor.expectedResponse(challenge.challengeId);
 
-    expect(await factor.verify(challenge.challengeId, response)).toBe(true);
-    expect(await factor.verify(challenge.challengeId, response)).toBe(false);
+    expect(await factor.verify(challenge.challengeId, response, session)).toBe(true);
+    expect(await factor.verify(challenge.challengeId, response, session)).toBe(false);
   });
 
   it('rejects a wrong factor response', async () => {
     const factor = new TestMfaFactor();
-    const challenge = await factor.begin('user-1');
-    expect(await factor.verify(challenge.challengeId, 'wrong')).toBe(false);
+    const challenge = await factor.begin(session);
+    expect(await factor.verify(challenge.challengeId, 'wrong', session)).toBe(false);
+  });
+
+  it('answers only the session that began the challenge (A5-08)', async () => {
+    const factor = new TestMfaFactor();
+    const challenge = await factor.begin(session);
+    const response = factor.expectedResponse(challenge.challengeId);
+
+    expect(await factor.verify(challenge.challengeId, response, { ...session, userId: 'u2' })).toBe(
+      false,
+    );
+    expect(
+      await factor.verify(challenge.challengeId, response, { ...session, sessionId: 's2' }),
+    ).toBe(false);
+    // A refused caller does not burn the owner's challenge.
+    expect(await factor.verify(challenge.challengeId, response, session)).toBe(true);
+  });
+
+  it('issues unguessable challenge ids and refuses an expired one', async () => {
+    vi.useFakeTimers();
+    try {
+      const factor = new TestMfaFactor();
+      const first = await factor.begin(session);
+      const second = await factor.begin(session);
+      expect(first.challengeId).not.toBe(second.challengeId);
+      expect(first.challengeId).toMatch(/^mfa-test-[0-9a-f-]{36}$/);
+
+      vi.advanceTimersByTime(CHALLENGE_TTL_SECONDS.value * 1000 + 1);
+      const response = factor.expectedResponse(first.challengeId);
+      expect(await factor.verify(first.challengeId, response, session)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -84,6 +84,7 @@ export {
   MfaRequiredError,
   MfaUnavailableError,
   TestMfaFactor,
+  type MfaBinding,
   type MfaChallenge,
   type MfaFactorType,
   type MfaPort,

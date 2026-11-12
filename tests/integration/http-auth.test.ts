@@ -92,6 +92,23 @@ describe('POST /api/v0/auth/challenges', () => {
     expect(delivery().lastFor(stranger.toLowerCase())).toBeUndefined();
   });
 
+  it('sends nothing to an INVITED user and answers the same 202 (AUTH.md §6, §9.1)', async () => {
+    const pool = app.pool;
+    if (pool === undefined) throw new Error('The test app has no database pool.');
+    const tenantId = randomUUID();
+    const email = syntheticEmail(`invited-${randomUUID().slice(0, 8)}`);
+    await createUser(pool, { tenantId, email, status: 'INVITED' });
+
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/challenges',
+      payload: { tenant_id: tenantId, destination: email, method: 'EMAIL_OTP' },
+    });
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ status: 'accepted' });
+    expect(delivery().lastFor(email.toLowerCase())).toBeUndefined();
+  });
+
   it('rejects a malformed request with the released error shape', async () => {
     const response = await app.server.inject({
       method: 'POST',
@@ -212,6 +229,37 @@ describe('MFA elevation over HTTP', () => {
 
     expect(verified.statusCode).toBe(200);
     expect(verified.json().mfa_elevated).toBe(true);
+  });
+
+  it("refuses another session's challenge without burning it (A5-08)", async () => {
+    const owner = await signIn();
+    const other = await signIn();
+    const begun = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/mfa/challenges',
+      headers: { authorization: `Bearer ${owner}` },
+    });
+    const challengeId = begun.json().challenge_id as string;
+    const payload = {
+      challenge_id: challengeId,
+      response: (app.mfa as TestMfaFactor).expectedResponse(challengeId),
+    };
+
+    const stolen = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/mfa/challenges/commands/verify',
+      headers: { authorization: `Bearer ${other}` },
+      payload,
+    });
+    expect(stolen.statusCode).toBe(401);
+
+    const own = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/mfa/challenges/commands/verify',
+      headers: { authorization: `Bearer ${owner}` },
+      payload,
+    });
+    expect(own.statusCode).toBe(200);
   });
 
   it('refuses to elevate on a wrong factor response', async () => {
