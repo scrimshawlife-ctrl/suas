@@ -62,6 +62,7 @@ describe('PRIVACY.md §10 — deletion drill refuses non-synthetic targets', () 
           database: {
             url: 'postgresql://suas:suas@prod-db.example.invalid:5432/suas_production',
             poolMax: 5,
+            queryTimeoutMillis: 20_000,
             migrationsMode: 'validate',
             resetAllowlist: [],
             resetSyntheticMarker: undefined,
@@ -79,6 +80,7 @@ describe('PRIVACY.md §10 — deletion drill refuses non-synthetic targets', () 
           database: {
             url: undefined,
             poolMax: 5,
+            queryTimeoutMillis: 20_000,
             migrationsMode: 'off',
             resetAllowlist: [],
             resetSyntheticMarker: undefined,

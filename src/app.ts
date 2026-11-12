@@ -86,25 +86,6 @@ export interface StartAppOptions {
   readonly runtime?: AppRuntime;
 }
 
-const LOCAL_JOB_QUEUES = ['in-memory-fake', 'postgres-outbox'] as const;
-
-/**
- * `SUAS_JOB_QUEUE` picks the LOCAL/TEST queue. Unset means the in-memory fake; any value
- * other than the two known ones fails closed instead of silently picking the fake
- * (ENVIRONMENT.md §5).
- */
-function readLocalJobQueue(env: ConfigSource): (typeof LOCAL_JOB_QUEUES)[number] {
-  const value = env.SUAS_JOB_QUEUE;
-  if (value === undefined || value === '') return 'in-memory-fake';
-  const known = LOCAL_JOB_QUEUES.find((queue) => queue === value);
-  if (known === undefined) {
-    throw new ConfigurationError([
-      `SUAS_JOB_QUEUE must be one of ${LOCAL_JOB_QUEUES.join(', ')} (got "${value}").`,
-    ]);
-  }
-  return known;
-}
-
 export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   const runtime = options.runtime ?? 'node';
   if (runtime === 'worker' && options.env.SUAS_MIGRATIONS_MODE === 'apply') {
@@ -117,8 +98,6 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   const config = loadConfig(
     runtime === 'worker' ? { ...options.env, SUAS_MIGRATIONS_MODE: 'validate' } : options.env,
   );
-
-  const localImpl = readLocalJobQueue(options.env);
 
   // Pin scoring availability before any job or HTTP handler can run. `disabled`
   // fails closed at computeSignal as well as the job entry (ENVIRONMENT.md §3).
@@ -163,7 +142,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   const innerQueue = createJobQueue(config, {
     ...(pool !== undefined ? { pool } : {}),
     ...(config.environment === 'LOCAL' || config.environment === 'TEST'
-      ? { localImplementation: localImpl }
+      ? { localImplementation: config.localJobQueue }
       : {}),
   });
   // Channel ports are shared by notification.send and authentication delivery.

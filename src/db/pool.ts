@@ -29,18 +29,13 @@ export class DatabaseNotConfiguredError extends Error {
 
 export type PoolMode = 'node' | 'worker';
 
-/**
- * Client-side bound on one query (ARCHITECTURE.md §13 finite timeouts). Below the 29 s
- * API Gateway and 30 s Lambda limits so the caller still answers. Client-side, so RDS
- * Proxy sees no session setting. A mechanism value, not an SLO.
- */
-export const DEFAULT_QUERY_TIMEOUT_MS = 20_000;
+export { DEFAULT_QUERY_TIMEOUT_MS } from '../config/index.js';
 
 /** pg's message when `query_timeout` fires; the connection may still be busy server-side. */
 export const QUERY_TIMEOUT_MESSAGE = 'Query read timeout';
 
 export interface PoolOptions {
-  /** Overrides {@link DEFAULT_QUERY_TIMEOUT_MS}. */
+  /** Overrides `config.database.queryTimeoutMillis` (`DATABASE_QUERY_TIMEOUT_MS`). */
   readonly queryTimeoutMillis?: number;
 }
 
@@ -72,7 +67,7 @@ export function createWorkerPool(config: SuasConfig, options: PoolOptions = {}):
     const client = new Client({
       ...settings,
       connectionTimeoutMillis: 10_000,
-      query_timeout: options.queryTimeoutMillis ?? DEFAULT_QUERY_TIMEOUT_MS,
+      query_timeout: options.queryTimeoutMillis ?? config.database.queryTimeoutMillis,
     });
     await client.connect();
     return client;
@@ -146,7 +141,7 @@ export function createPool(
     // mechanism values; no production SLO is implied (RELEASE_MANIFEST-0.1.1.md).
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
-    query_timeout: options.queryTimeoutMillis ?? DEFAULT_QUERY_TIMEOUT_MS,
+    query_timeout: options.queryTimeoutMillis ?? config.database.queryTimeoutMillis,
   });
   // An idle client can fail (database restart, dropped connection). pg-pool has already
   // removed it, and an unhandled 'error' event would crash the process, so log and carry on.
