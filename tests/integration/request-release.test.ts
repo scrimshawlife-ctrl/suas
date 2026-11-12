@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { expireDueRequests } from '../../src/coordination/expiry.js';
+import { repairMissedRequestNotices } from '../../src/coordination/request-notices.js';
 import { widenDueRequests } from '../../src/coordination/widening.js';
 import {
   executeServiceRequestCommand,
@@ -214,11 +215,20 @@ describe('after a release', () => {
     expect(row.rows[0]).toEqual({ accepted_by_user_id: null, accepted_at: null });
 
     const notices = await pool().query(
-      `SELECT recipient_user_id, channel FROM notifications
+      `SELECT recipient_user_id, channel, delivery_status, sent_at IS NOT NULL AS sent
+         FROM notifications
         WHERE subject_id = $1 AND reason = 'service_request_released'`,
       [id],
     );
-    expect(notices.rows).toEqual([{ recipient_user_id: requester.userId, channel: 'IN_APP' }]);
+    // C-01: delivered, not left waiting to send (DISPATCH.md §14.7).
+    expect(notices.rows).toEqual([
+      {
+        recipient_user_id: requester.userId,
+        channel: 'IN_APP',
+        delivery_status: 'SENT',
+        sent: true,
+      },
+    ]);
 
     // The audit event carries ids, never the reason text.
     const audit = await pool().query<{ payload: object }>(
@@ -399,6 +409,43 @@ describe('retrying a release', () => {
       payload: { reason: 'another reason' },
     });
     expect(changed.statusCode).toBe(404);
+  });
+});
+
+describe('a lost release notice (A2-11)', () => {
+  const releaseNotices = async (id: string) =>
+    (
+      await pool().query<{ delivery_status: string }>(
+        `SELECT delivery_status FROM notifications
+          WHERE subject_id = $1 AND reason = 'service_request_released'`,
+        [id],
+      )
+    ).rows;
+
+  it('is written once by the repair sweep after the grace window, not before', async () => {
+    const { helper, id } = await acceptedRequest();
+    expect((await command(helper, id, 'RELEASE', { reason: 'cannot make it' })).statusCode).toBe(
+      200,
+    );
+    // The post-commit notice write failed.
+    await pool().query('DELETE FROM notifications WHERE subject_id = $1', [id]);
+
+    // Inside the grace window the route's own notice may still be in flight.
+    await repairMissedRequestNotices(pool());
+    expect(await releaseNotices(id)).toEqual([]);
+
+    const later = new Date(Date.now() + 10 * 60_000);
+    await repairMissedRequestNotices(pool(), { now: later });
+    await repairMissedRequestNotices(pool(), { now: later });
+    expect(await releaseNotices(id)).toEqual([{ delivery_status: 'SENT' }]);
+  });
+
+  it('leaves a release whose notice was written alone', async () => {
+    const { helper, id } = await acceptedRequest();
+    await command(helper, id, 'RELEASE', { reason: 'cannot make it' });
+
+    await repairMissedRequestNotices(pool(), { now: new Date(Date.now() + 10 * 60_000) });
+    expect(await releaseNotices(id)).toHaveLength(1);
   });
 });
 

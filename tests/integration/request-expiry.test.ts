@@ -18,6 +18,7 @@ import {
   InvalidRequestExpiryError,
   readRequestExpiryHours,
 } from '../../src/coordination/expiry.js';
+import { repairMissedRequestNotices } from '../../src/coordination/request-notices.js';
 import type { Queryable } from '../../src/db/transaction.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -110,9 +111,13 @@ async function noticesFor(serviceRequestId: string) {
     recipient_user_id: string;
     channel: string;
     reason: string;
-  }>(`SELECT recipient_user_id, channel, reason FROM notifications WHERE subject_id = $1`, [
-    serviceRequestId,
-  ]);
+    delivery_status: string;
+    sent: boolean;
+  }>(
+    `SELECT recipient_user_id, channel, reason, delivery_status, sent_at IS NOT NULL AS sent
+       FROM notifications WHERE subject_id = $1`,
+    [serviceRequestId],
+  );
   return result.rows;
 }
 
@@ -135,6 +140,9 @@ describe('the 72-hour boundary', () => {
         recipient_user_id: requester.userId,
         channel: 'IN_APP',
         reason: 'service_request_expired',
+        // C-01: delivered, not left waiting to send (DISPATCH.md §14.6).
+        delivery_status: 'SENT',
+        sent: true,
       },
     ]);
     const audit = await pool().query(
@@ -224,6 +232,30 @@ describe('the 72-hour boundary', () => {
       [due],
     );
     expect(audit.rowCount).toBe(1);
+  });
+});
+
+describe('a lost expiry notice (A2-11)', () => {
+  it('is written by the repair sweep, delivered, and only once', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester');
+    const due = await submittedRequest(requester, 74);
+    await expireDueRequests(pool());
+    // The post-commit notice write failed.
+    await pool().query('DELETE FROM notifications WHERE subject_id = $1', [due]);
+
+    await repairMissedRequestNotices(pool());
+    await repairMissedRequestNotices(pool());
+
+    expect(await noticesFor(due)).toEqual([
+      {
+        recipient_user_id: requester.userId,
+        channel: 'IN_APP',
+        reason: 'service_request_expired',
+        delivery_status: 'SENT',
+        sent: true,
+      },
+    ]);
   });
 });
 
