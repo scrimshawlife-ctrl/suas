@@ -15,6 +15,13 @@
  */
 
 import type { Queryable } from '../db/transaction.js';
+import {
+  decodeTimeIdCursor,
+  encodeTimeIdCursor,
+  pageSize,
+  takePage,
+  timestampText,
+} from '../http/cursor.js';
 import type { ServiceCounty } from '../identity/counties.js';
 import {
   TERMINAL_REQUEST_STATUSES,
@@ -22,9 +29,8 @@ import {
   type ServiceRequestStatus,
 } from './request-transitions.js';
 
-/** API.md §5. */
-export const DEFAULT_PAGE_SIZE = 20;
-export const MAX_PAGE_SIZE = 100;
+// Re-exported: the request routes read the API.md §5 bounds and cursor error from here.
+export { DEFAULT_PAGE_SIZE, InvalidCursorError, MAX_PAGE_SIZE } from '../http/cursor.js';
 
 export interface OpenRequestSummary {
   readonly serviceRequestId: string;
@@ -63,41 +69,6 @@ export class CountyRequiredError extends Error {
   constructor() {
     super('Choose a county before listing or accepting requests.');
     this.name = 'CountyRequiredError';
-  }
-}
-
-export class InvalidCursorError extends Error {
-  readonly code = 'VALIDATION_FAILED';
-  readonly httpStatus = 400;
-
-  constructor() {
-    super('The pagination cursor is not valid.');
-    this.name = 'InvalidCursorError';
-  }
-}
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Keyset cursor over (created_at, service_request_id), stable under new inserts. */
-function encodeCursor(createdAt: Date, serviceRequestId: string): string {
-  return Buffer.from(`${createdAt.toISOString()}|${serviceRequestId}`, 'utf8').toString(
-    'base64url',
-  );
-}
-
-function decodeCursor(cursor: string): { createdAt: string; id: string } | undefined {
-  try {
-    const parts = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-    if (parts.length !== 2) return undefined;
-    const [createdAt, id] = parts;
-    if (createdAt === undefined || id === undefined) return undefined;
-    // Validated here so a crafted-but-decodable cursor is a 400, not a 500 from the
-    // casts in the keyset predicate.
-    if (Number.isNaN(Date.parse(createdAt))) return undefined;
-    if (!UUID_PATTERN.test(id)) return undefined;
-    return { createdAt, id };
-  } catch {
-    return undefined;
   }
 }
 
@@ -180,6 +151,8 @@ interface ListRow {
   summary: string | null;
   requester_display_name: string | null;
   created_at: Date;
+  /** `created_at` at full precision, for the keyset cursor. */
+  created_at_key: string;
   updated_at: Date;
   terminal_at: Date | null;
 }
@@ -205,7 +178,7 @@ export async function readRequestList(
   filters: ListRequestsFilters,
   page: { cursor?: string; limit?: number } = {},
 ): Promise<RequestListPage> {
-  const limit = Math.min(Math.max(page.limit ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
+  const limit = pageSize(page.limit);
   const values: unknown[] = [tenantId];
   const conditions: string[] = ['r.tenant_id = $1'];
 
@@ -223,9 +196,8 @@ export async function readRequestList(
   }
 
   if (page.cursor !== undefined) {
-    const decoded = decodeCursor(page.cursor);
-    if (decoded === undefined) throw new InvalidCursorError();
-    values.push(decoded.createdAt, decoded.id);
+    const decoded = decodeTimeIdCursor(page.cursor);
+    values.push(decoded.at, decoded.id);
     conditions.push(
       `(r.created_at, r.service_request_id) < ($${values.length - 1}::timestamptz, $${values.length}::uuid)`,
     );
@@ -239,7 +211,8 @@ export async function readRequestList(
             r.widened_at, CASE WHEN jsonb_typeof(r.details->'summary') = 'string'
                  THEN left(r.details->>'summary', 280) END AS summary,
             u.display_name AS requester_display_name,
-            r.created_at, r.updated_at, r.terminal_at
+            r.created_at, ${timestampText('r.created_at')} AS created_at_key,
+            r.updated_at, r.terminal_at
        FROM ${REQUEST_REQUESTER_FROM}
       WHERE ${conditions.join(' AND ')}
       ORDER BY r.created_at DESC, r.service_request_id DESC
@@ -247,9 +220,9 @@ export async function readRequestList(
     values,
   );
 
-  const rows = result.rows.slice(0, limit);
-  const last = rows[rows.length - 1];
-  const hasMore = result.rows.length > limit;
+  const { rows, nextCursor } = takePage(result.rows, limit, (row) =>
+    encodeTimeIdCursor({ at: row.created_at_key, id: row.service_request_id }),
+  );
 
   return {
     requests: rows.map((row) => ({
@@ -265,10 +238,7 @@ export async function readRequestList(
       updatedAt: row.updated_at,
       closedAt: row.terminal_at,
     })),
-    nextCursor:
-      hasMore && last !== undefined
-        ? encodeCursor(last.created_at, last.service_request_id)
-        : undefined,
+    nextCursor,
   };
 }
 
@@ -279,8 +249,9 @@ export async function readRequestList(
  * - `helping_now`: not in a terminal status of DISPATCH.md §4 (0.7.0). That includes
  *   CONFIRMED, which waits for the helper's CLOSE, and ESCALATED, which can return.
  * - `closed_last_30_days`: reached CLOSED in a rolling 30 x 24 hours on the database clock,
- *   by `terminal_at`, inclusive. CANCELLED is not counted as closed, and EXPIRED and
- *   UNFULFILLABLE cannot follow an accept.
+ *   by `terminal_at`, inclusive. Counted in hours, not days, so no session time zone or DST
+ *   change moves the window (DISPATCH.md §14.2). CANCELLED is not counted as closed, and
+ *   EXPIRED and UNFULFILLABLE cannot follow an accept.
  */
 export async function readHelperRequestCounts(
   db: Queryable,
@@ -297,7 +268,7 @@ export async function readHelperRequestCounts(
      )
      SELECT count(*) FILTER (WHERE NOT terminal) AS helping_now,
             count(*) FILTER (
-              WHERE closed AND terminal_at >= now() - interval '30 days'
+              WHERE closed AND terminal_at >= now() - interval '720 hours'
             ) AS closed_last_30_days
        FROM held`,
     [tenantId, helperUserId, [...TERMINAL_REQUEST_STATUSES]],
