@@ -25,7 +25,6 @@
     "local:start": "bash scripts/start-local.sh",
     "demo:local:veteran": "node --env-file=.env --import tsx/esm scripts/local-demo-browser.ts veteran",
     "demo:local:admin": "node --env-file=.env --import tsx/esm scripts/local-demo-browser.ts admin",
-    "worker:dev": "npx wrangler dev",
     "start": "node dist/main.js",
     "migrate": "node --env-file=.env --import tsx/esm src/cli/migrate.ts",
     "provenance": "node --env-file=.env --import tsx/esm src/cli/provenance.ts",
@@ -46,9 +45,7 @@
     "soak:staging": "tsx scripts/synthetic-staging-soak.ts",
     "migrate:rehearse": "tsx scripts/migration-restore-rehearsal.ts",
     "settle:check": "tsx scripts/check-spec-018-settlement.ts",
-    "privacy:deletion-drill": "tsx scripts/deletion-drill.ts",
-    "postinstall": "patch-package",
-    "check:staging:path-params": "tsx scripts/staging-path-param-check.ts"
+    "privacy:deletion-drill": "tsx scripts/deletion-drill.ts"
   },
   "dependencies": {
     "@aws-sdk/client-apigatewaymanagementapi": "^3.1162.0",
@@ -65,7 +62,6 @@
     "@types/node": "^22.10.6",
     "@types/pg": "^8.11.10",
     "eslint": "^9.18.0",
-    "patch-package": "^8.0.1",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
