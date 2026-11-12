@@ -7,7 +7,9 @@
  * MVP_REFERENCE.md §5/§10: public, veteran, and admin surfaces remain
  * truthful and structurally usable in a browser.
  *
- * Public checks need no secrets. Authenticated checks run only when an operator
+ * Runs against any synthetic-STAGING origin named by SUAS_E2E_BASE_URL (for
+ * example the AWS API host that serves `/app` and `/api/v0`), by hand: no workflow
+ * schedules it. Public checks need no secrets. Authenticated checks run only when an operator
  * supplies fresh gitignored synthetic seed credentials through environment
  * variables or GitHub Actions secrets. Credentials are never printed.
  */
@@ -194,7 +196,7 @@ test.describe('deployed public boundary', () => {
 });
 
 test.describe('deployed authenticated synthetic surfaces', () => {
-  test('Veteran JSON case-open is idempotent on the deployed Worker', async ({ request }) => {
+  test('Veteran JSON case-open is idempotent on deployed STAGING', async ({ request }) => {
     test.skip(veteranBearer === undefined, 'SUAS_E2E_VETERAN_BEARER is not configured.');
     const authorization = `Bearer ${veteranBearer ?? ''}`;
     const idempotencyKey = `staging-case-open-${Date.now()}`;
