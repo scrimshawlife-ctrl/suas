@@ -17,3 +17,7 @@ web/src/api/schema.d.ts
 
 # CDK synth output (infra/)
 infra/cdk.out/
+
+# Local agent tooling output (also git-ignored)
+.playwright-mcp/
+.claude/worktrees/

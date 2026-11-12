@@ -14,6 +14,7 @@ export default tseslint.config(
     // `docs/` is the GitHub Pages poster (HTML/CSS plus a browser click-through
     // script). It is not in the TypeScript project. Type-checked lint must not
     // discover those files.
+    // `.playwright-mcp/` and `.claude/worktrees/` are git-ignored local agent output.
     ignores: [
       'dist/**',
       'coverage/**',
@@ -23,6 +24,8 @@ export default tseslint.config(
       '.wrangler/**',
       'web/**',
       'infra/**',
+      '.playwright-mcp/**',
+      '.claude/worktrees/**',
     ],
   },
   js.configs.recommended,
