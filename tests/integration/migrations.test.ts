@@ -970,7 +970,7 @@ describe('0017 request holder backfill', () => {
       const closedNoChat = await insertRequest(tenantId, caseB, veteranB, 'CLOSED');
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([17, 18, 19, 20, 21, 22, 23]);
+      expect(result.appliedNow).toEqual([17, 18, 19, 20, 21, 22, 23, 24]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const holders = await pool.query<{ id: string; holder: string | null }>(
@@ -1102,7 +1102,7 @@ describe('0020 request expiry and release', () => {
       );
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([20, 21, 22, 23]);
+      expect(result.appliedNow).toEqual([20, 21, 22, 23, 24]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const setting = await pool.query<{ value: unknown }>(
@@ -1188,7 +1188,7 @@ describe('0021 resource contacts and area', () => {
       const draftNoContact = await draft(null, null);
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([21, 22, 23]);
+      expect(result.appliedNow).toEqual([21, 22, 23, 24]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const read = async (table: string, key: string, id: string) => {
@@ -1383,7 +1383,7 @@ describe('0022 and 0023 VA veteran confirmation', () => {
   });
 });
 
-describe('0023 licence reviews', () => {
+describe('0024 licence reviews', () => {
   const setUpPerson = async (tenantId: string) => {
     const userId = randomUUID();
     await pool.query(`INSERT INTO users (user_id, tenant_id, status) VALUES ($1, $2, 'ACTIVE')`, [
