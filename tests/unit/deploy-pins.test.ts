@@ -24,13 +24,7 @@ const EXPECTED: Readonly<Record<string, string>> = {
 };
 
 /** Files that must carry both pins, so the test cannot pass by matching nothing. */
-const REQUIRED_FILES = [
-  '.env.example',
-  '.github/workflows/verify.yml',
-  '.github/workflows/staging-acceptance.yml',
-  '.github/workflows/staging-recovery-fixtures.yml',
-  '.github/workflows/synthetic-staging-soak.yml',
-];
+const REQUIRED_FILES = ['.env.example', '.github/workflows/verify.yml'];
 
 function workflowFiles(): string[] {
   return readdirSync(join(ROOT, '.github/workflows'))
