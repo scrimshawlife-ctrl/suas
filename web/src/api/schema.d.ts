@@ -1527,6 +1527,11 @@ export interface components {
       questionnaire_version: string;
       /** @enum {string} */
       status: 'STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED' | 'INCOMPLETE';
+      /**
+       * Format: date-time
+       * @description Server clock. The Check-In can be resumed for 24 hours from this time (CHECKINS.md §4.2, §4.4).
+       */
+      started_at: string;
       /** Format: date-time */
       completed_at: string | null;
     };
@@ -2385,6 +2390,15 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
+      /** @description An in-flight Check-In (started in the last 24 hours) already exists, so it is returned instead of a second one */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CheckInWithQuestions'];
+        };
+      };
       /** @description Check-in started with its questions */
       201: {
         headers: {
@@ -2463,7 +2477,15 @@ export interface operations {
           'application/json': components['schemas']['CheckIn'];
         };
       };
-      400: components['responses']['Error'];
+      /** @description VALIDATION_FAILED: malformed body, or the question is not part of this Check-In's questionnaire version, or the option is not one of that question's options */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
       403: {

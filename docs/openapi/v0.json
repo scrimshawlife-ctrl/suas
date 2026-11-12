@@ -347,6 +347,16 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "An in-flight Check-In (started in the last 24 hours) already exists, so it is returned instead of a second one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckInWithQuestions"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Check-in started with its questions",
             "content": {
@@ -447,7 +457,14 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/Error"
+            "description": "VALIDATION_FAILED: malformed body, or the question is not part of this Check-In's questionnaire version, or the option is not one of that question's options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -1593,7 +1610,7 @@
       "post": {
         "tags": ["cases"],
         "summary": "Execute a released service-request command",
-        "description": "RELEASE (proposal: suas-specs V1_MVP_PROPOSAL.md R8.5, not released) is the accepter's command: it needs a reason (400 VALIDATION_FAILED without one) and moves an ACCEPTED request back to SUBMITTED. The holder and accept time are cleared, the chat thread is closed, the request returns to the open list, and the requester gets an in-app notice. The same helper may accept it again; the next accept opens a new chat thread.",
+        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED.",
         "operationId": "executeServiceRequestCommand",
         "security": [
           {
@@ -1682,8 +1699,7 @@
               }
             }
           }
-        },
-        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED."
+        }
       }
     },
     "/api/v0/cases/{caseId}/follow-ups": {
@@ -3919,7 +3935,7 @@
         "name": "Idempotency-Key",
         "in": "header",
         "required": true,
-        "description": "Client-chosen key that makes a retried command safe (API.md \u00a77). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT.",
+        "description": "Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT.",
         "schema": {
           "type": "string",
           "minLength": 1
@@ -4731,7 +4747,13 @@
       },
       "CheckIn": {
         "type": "object",
-        "required": ["check_in_id", "questionnaire_version", "status", "completed_at"],
+        "required": [
+          "check_in_id",
+          "questionnaire_version",
+          "status",
+          "started_at",
+          "completed_at"
+        ],
         "properties": {
           "check_in_id": {
             "type": "string",
@@ -4743,6 +4765,11 @@
           "status": {
             "type": "string",
             "enum": ["STARTED", "IN_PROGRESS", "COMPLETED", "ABANDONED", "INCOMPLETE"]
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Server clock. The Check-In can be resumed for 24 hours from this time (CHECKINS.md §4.2, §4.4)."
           },
           "completed_at": {
             "type": ["string", "null"],
@@ -6670,7 +6697,7 @@
     },
     "responses": {
       "Error": {
-        "description": "Canonical API.md \u00a76 error body",
+        "description": "Canonical API.md §6 error body",
         "content": {
           "application/json": {
             "schema": {
