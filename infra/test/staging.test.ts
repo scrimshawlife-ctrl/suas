@@ -420,7 +420,7 @@ describe('licence review', () => {
     ]);
   });
 
-  it('lets the job worker get and delete licence images only, and list only that prefix', () => {
+  it('lets the job worker get and delete licence images only, and list the bucket unconditioned', () => {
     const worker = envByHandler()['job-worker.handler'];
     expect(worker?.SUAS_OBJECT_STORAGE_MODE).toBe('s3');
     expect(JSON.stringify(worker?.SUAS_S3_BUCKET)).toContain('AssetsBucket');
@@ -433,7 +433,9 @@ describe('licence review', () => {
     expect(JSON.stringify(objects?.Resource)).toMatch(/AssetsBucket.*\/licence-reviews\/\*"/);
     const list = statements.find((st) => [st.Action].flat().includes('s3:ListBucket'));
     expect([list?.Action].flat()).toEqual(['s3:ListBucket']);
-    expect(list?.Condition).toEqual({ StringLike: { 's3:prefix': ['licence-reviews/*'] } });
+    // Unconditioned, so a missing key is NoSuchKey (404) as AWS documents, not AccessDenied.
+    expect(list?.Condition).toBeUndefined();
+    expect(JSON.stringify(list?.Resource)).not.toContain('*');
   });
 
   it('lets the API put, get and delete licence images through its bucket-wide object grant', () => {

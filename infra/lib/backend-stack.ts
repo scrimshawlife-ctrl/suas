@@ -430,13 +430,13 @@ export class BackendStack extends Stack {
         resources: [assetsBucket.arnForObjects(`${LICENCE_REVIEWS_PREFIX}*`)],
       }),
     );
-    // A missing image must read as 404 (PHOTOS_GONE), not 403, so the worker may list, but
-    // only the licence prefix (SCRY_LICENCE_FALLBACK.md L4.7).
+    // A missing image must read as 404 (PHOTOS_GONE), not 403 (SCRY_LICENCE_FALLBACK.md L4.7).
+    // AWS documents that only for an unconditioned ListBucket, so the grant has no s3:prefix
+    // condition. Listing shows key names only, which are opaque ids with no personal data.
     jobWorkerFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['s3:ListBucket'],
         resources: [assetsBucket.bucketArn],
-        conditions: { StringLike: { 's3:prefix': [`${LICENCE_REVIEWS_PREFIX}*`] } },
       }),
     );
     // ---------------------------------------------------- certificate and domains

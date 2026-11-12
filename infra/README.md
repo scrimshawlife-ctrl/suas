@@ -193,9 +193,9 @@ Each function has its own role with no managed policies: write to its own log gr
 needs in a VPC (not scopable). Added grants: SES `ses:SendEmail` on the one domain identity (API and job worker);
 S3 get/put/delete on the assets bucket objects plus `s3:ListBucket` on the bucket itself (API; without it a
 missing key returns AccessDenied instead of NoSuchKey). This covers the licence images too: submit, the admin image
-route and deletion. The job worker gets S3 get/delete on `licence-reviews/*` only, plus `s3:ListBucket` limited
-by an `s3:prefix` condition to `licence-reviews/*`, so a missing image reads as 404 (`PHOTOS_GONE`), not 403
-(SCRY_LICENCE_FALLBACK.md L4.7). There is no `bedrock:InvokeModel` grant and no
+route and deletion. The job worker gets S3 get/delete on `licence-reviews/*` only, plus `s3:ListBucket` on the
+bucket with no condition, so a missing image reads as 404 (`PHOTOS_GONE`), not 403 (SCRY_LICENCE_FALLBACK.md
+L4.7). AWS documents the 404 only for an unconditioned grant; listing shows key names, which are opaque ids. There is no `bedrock:InvokeModel` grant and no
 `execute-api:ManageConnections` grant. The ENI actions are the six in `AWSLambdaVPCAccessExecutionRole`,
 including `ec2:DescribeSubnets`.
 
