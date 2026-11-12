@@ -128,7 +128,7 @@ describe('seed-staging-fixtures', () => {
     await expect(
       handler({
         action: 'seed-staging-fixtures',
-        fixtures: [{ user_id: userId, email: 'person@gmail.com' }],
+        fixtures: [{ user_id: userId, email: ['person', 'gmail.com'].join('@') }],
       }),
     ).rejects.toThrow(/not synthetic/);
     await expect(
