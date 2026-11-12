@@ -140,6 +140,41 @@ describe('FOLLOWUP.md §3, §11 — creation requires the released fields', () =
     ).rejects.toThrow(FollowUpValidationError);
   });
 
+  it("refuses another case's request and a responsible party that is not that actor", async () => {
+    const { tenantId, caseId, veteran, responder } = await activeCase();
+    const other = await activeCase();
+    const otherRequest = await pool.query<{ service_request_id: string }>(
+      `SELECT service_request_id FROM service_requests WHERE case_id = $1 LIMIT 1`,
+      [other.caseId],
+    );
+    const base = {
+      tenantId,
+      caseId,
+      dueAt: new Date(Date.now() + 60_000),
+      actorId: responder.userId,
+      actorType: 'USER' as const,
+    };
+    const refused = [
+      {
+        ...base,
+        responsibleType: 'USER' as const,
+        responsibleId: responder.userId,
+        serviceRequestId: otherRequest.rows[0]?.service_request_id ?? randomUUID(),
+      },
+      { ...base, responsibleType: 'VETERAN' as const, responsibleId: other.veteran.userId },
+      { ...base, responsibleType: 'USER' as const, responsibleId: randomUUID() },
+    ];
+    for (const input of refused) {
+      await expect(createFollowUp(pool, input)).rejects.toThrow(FollowUpValidationError);
+    }
+    const ok = await createFollowUp(pool, {
+      ...base,
+      responsibleType: 'VETERAN',
+      responsibleId: veteran.userId,
+    });
+    expect(ok.responsibleId).toBe(veteran.userId);
+  });
+
   it('refuses a Follow-Up with no responsible party', async () => {
     const { tenantId, caseId, responder } = await activeCase();
     await expect(

@@ -15,6 +15,12 @@ import { createResource, setResourceActive, verifyResource } from '../../src/ful
 import type { ScriptedModelInference } from '../../src/inference/index.js';
 import { type ModelToolCall } from '../../src/inference/index.js';
 import { createUser } from '../../src/identity/index.js';
+import {
+  createDraft,
+  DraftChangedError,
+  findOwnedDraft,
+  saveDraftContent,
+} from '../../src/intake/drafts.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
@@ -166,6 +172,17 @@ describe('draft, edit and submit', () => {
     );
     expect(replay.statusCode).toBe(200);
     expect(replay.json().replayed).toBe(true);
+    expect(replay.json().draft).toMatchObject({ status: 'SUBMITTED' });
+
+    // DISPATCH.md §13.4, §14.9: the stored command result holds ids and status only.
+    const record = await pool().query<{ result: unknown }>(
+      `SELECT result FROM command_idempotency_records
+        WHERE tenant_id = $1 AND idempotency_key = 'submit-1'`,
+      [tenantId],
+    );
+    const storedResult = JSON.stringify(record.rows[0]?.result);
+    expect(storedResult).not.toContain('Corner of Elm');
+    expect(storedResult).not.toContain('Ride to the food bank');
 
     const again = await post(
       `/api/v0/intake/drafts/${draftId}/submit`,
@@ -217,6 +234,37 @@ describe('draft, edit and submit', () => {
       headers: other.headers,
     });
     expect(stranger.statusCode).toBe(404);
+  });
+
+  it('refuses the slower of two concurrent message saves instead of losing a message', async () => {
+    const { tenantId, user } = await veteran();
+    const fields = {
+      category: null,
+      summary: null,
+      timing: null,
+      meetingPlace: null,
+      destination: null,
+    };
+    const draft = await createDraft(pool(), {
+      draftId: randomUUID(),
+      tenantId,
+      userId: user.userId,
+      intakeText: 'first',
+      fields,
+    });
+    const readA = await findOwnedDraft(pool(), tenantId, user.userId, draft.draftId);
+    const readB = await findOwnedDraft(pool(), tenantId, user.userId, draft.draftId);
+    await saveDraftContent(
+      pool(),
+      readA,
+      { fields, intakeText: 'first\n\nA' },
+      { ifUnchanged: true },
+    );
+    await expect(
+      saveDraftContent(pool(), readB, { fields, intakeText: 'first\n\nB' }, { ifUnchanged: true }),
+    ).rejects.toThrow(DraftChangedError);
+    const current = await findOwnedDraft(pool(), tenantId, user.userId, draft.draftId);
+    expect(current.intakeText).toBe('first\n\nA');
   });
 
   it('refuses to submit a draft with no category', async () => {
