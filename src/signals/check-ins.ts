@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendAuditEvent, appendDomainEvent } from '../events/index.js';
-import type { DurableJobQueuePort } from '../jobs/index.js';
+import type { DurableJobQueuePort, JobEnqueueRequest } from '../jobs/index.js';
 
 export const CHECK_IN_STATUSES = [
   'STARTED',
@@ -60,6 +60,8 @@ export interface CheckIn {
   readonly veteranUserId: string;
   readonly questionnaireVersion: string;
   readonly status: CheckInStatus;
+  /** Server clock; the 24-hour resume window counts from here (CHECKINS.md §4.4). */
+  readonly startedAt: Date;
   readonly completedAt: Date | undefined;
 }
 
@@ -69,11 +71,12 @@ interface CheckInRow {
   veteran_user_id: string;
   questionnaire_version: string;
   status: CheckInStatus;
+  started_at: Date;
   completed_at: Date | null;
 }
 
 const CHECK_IN_COLUMNS =
-  'check_in_id, tenant_id, veteran_user_id, questionnaire_version, status, completed_at';
+  'check_in_id, tenant_id, veteran_user_id, questionnaire_version, status, started_at, completed_at';
 
 function toCheckIn(row: CheckInRow): CheckIn {
   return {
@@ -82,6 +85,7 @@ function toCheckIn(row: CheckInRow): CheckIn {
     veteranUserId: row.veteran_user_id,
     questionnaireVersion: row.questionnaire_version,
     status: row.status,
+    startedAt: row.started_at,
     completedAt: row.completed_at ?? undefined,
   };
 }
@@ -93,6 +97,17 @@ export class QuestionnaireError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'QuestionnaireError';
+  }
+}
+
+/** An answer that names a question or option outside this Check-In's questionnaire version. */
+export class CheckInAnswerError extends Error {
+  readonly code = 'VALIDATION_FAILED';
+  readonly httpStatus = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'CheckInAnswerError';
   }
 }
 
@@ -374,13 +389,13 @@ export async function findInProgressCheckIn(
   return row === undefined ? undefined : toCheckIn(row);
 }
 
-// Round 8 R8.10 (suas-specs D-059, proposal text, not released): an unfinished Check-In is resumable for
-// 24 h after it started; after that the idle sweep marks it ABANDONED (kept).
+// CHECKINS.md §4.2 (v0.9.0, R8.10, D-059): an unfinished Check-In is resumable for 24 h after
+// it started; after that the idle sweep marks it ABANDONED (kept).
 export const CHECK_IN_RESUME_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const PAST_WINDOW_MESSAGE =
   'This Check-In was started more than 24 hours ago and can no longer be answered or ' +
-  'completed. Start a new Check-In (suas-specs V1_MVP_PROPOSAL.md R8.10).';
+  'completed. Start a new Check-In (SUAS-specs CHECKINS.md §4.2).';
 
 /** The System actor recorded when the 24-hour window ends a Check-In (R8.10). */
 const IDLE_TIMEOUT_ACTOR_ID = 'check-in-idle-timeout';
@@ -433,6 +448,31 @@ async function abandonIfPastWindowInTx(
   return result.rows.length > 0;
 }
 
+/**
+ * Resume the Veteran's in-flight Check-In inside the 24-hour window, or start a new one, so a
+ * double submit never leaves two in flight. Starts serialize on the same tenant+Veteran
+ * advisory lock as the HTML start; one past the window is abandoned first (§4.2).
+ */
+export async function startOrResumeCheckIn(
+  pool: Pool,
+  input: { tenantId: string; veteranUserId: string },
+): Promise<{ readonly checkIn: CheckIn; readonly created: boolean }> {
+  return withTransaction(pool, async (tx) => {
+    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [
+      `check-in:${input.tenantId}`,
+      input.veteranUserId,
+    ]);
+    const existing = await findInProgressCheckIn(tx, input.tenantId, input.veteranUserId);
+    if (
+      existing !== undefined &&
+      !(await abandonIfPastWindowInTx(tx, input.tenantId, existing.checkInId))
+    ) {
+      return { checkIn: existing, created: false };
+    }
+    return { checkIn: await startCheckIn(tx, input), created: true };
+  });
+}
+
 /** The most unfinished Check-Ins the resume list returns; one is expected. */
 const RESUMABLE_LIST_LIMIT = 5;
 
@@ -468,6 +508,33 @@ export async function listAnsweredQuestionIds(
   return result.rows.map((row) => row.question_id);
 }
 
+/**
+ * The FKs on a response are global, so check that the question is part of this Check-In's
+ * questionnaire version and the option is one of that question's released options
+ * (SIGNAL_SCORING.md B1). Otherwise a wrong option passes completion and scoring later fails.
+ */
+async function assertAnswerBelongsToCheckIn(
+  tx: Queryable,
+  questionnaireVersion: string,
+  input: { questionId: string; answerOptionId?: string },
+): Promise<void> {
+  const question = await tx.query(
+    `SELECT 1 FROM questions WHERE question_id = $1 AND questionnaire_version = $2`,
+    [input.questionId, questionnaireVersion],
+  );
+  if ((question.rowCount ?? 0) === 0) {
+    throw new CheckInAnswerError('question_id is not a question of this Check-In.');
+  }
+  if (input.answerOptionId === undefined) return;
+  const option = await tx.query(
+    `SELECT 1 FROM answer_options WHERE answer_option_id = $1 AND question_id = $2`,
+    [input.answerOptionId, input.questionId],
+  );
+  if ((option.rowCount ?? 0) === 0) {
+    throw new CheckInAnswerError('answer_option_id is not an option of this question.');
+  }
+}
+
 export async function saveResponse(
   pool: Pool,
   input: {
@@ -497,6 +564,7 @@ export async function saveResponse(
     }
     // R8.10: 24 hours after it started, it is ABANDONED; the abandon commits, the write does not.
     if (await abandonIfPastWindowInTx(tx, input.tenantId, input.checkInId)) return true;
+    await assertAnswerBelongsToCheckIn(tx, current.questionnaireVersion, input);
 
     await tx.query(
       `INSERT INTO check_in_responses
@@ -630,19 +698,27 @@ export async function completeCheckIn(
 
   if ('pastWindow' in outcome) throw new CheckInStateError(PAST_WINDOW_MESSAGE);
 
-  // §6.3: the completion fact requests signal computation through durable async
-  // work. The Slice 1 job seam still fails closed outside LOCAL and TEST while
-  // D-022 is open.
-  if (!outcome.alreadyCompleted && !outcome.incomplete && deps.jobQueue !== undefined) {
-    await deps.jobQueue.enqueue({
-      jobType: 'support-signal.compute',
-      payload: { check_in_id: input.checkInId },
-      idempotencyKey: `support-signal:${input.checkInId}`,
-      tenantId: input.tenantId,
-    });
+  // §6.3: the completion fact requests signal computation through durable async work. A replay
+  // enqueues again under the same identity (§6.7), so a request whose enqueue was lost after the
+  // commit gets its job on retry; the key dedupes when the job already exists.
+  if (!outcome.incomplete && deps.jobQueue !== undefined) {
+    await deps.jobQueue.enqueue(supportSignalComputeRequest(input.tenantId, input.checkInId));
   }
 
   return outcome;
+}
+
+/** The one `support-signal.compute` request for a Check-In (CHECKINS.md §6.7: same identity). */
+export function supportSignalComputeRequest(
+  tenantId: string,
+  checkInId: string,
+): JobEnqueueRequest {
+  return {
+    jobType: 'support-signal.compute',
+    payload: { check_in_id: checkInId },
+    idempotencyKey: `support-signal:${checkInId}`,
+    tenantId,
+  };
 }
 
 /** CHECKINS.md §4.2: abandoned Check-Ins remain stored and emit no completion. */
