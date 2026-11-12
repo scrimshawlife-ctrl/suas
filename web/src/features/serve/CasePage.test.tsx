@@ -92,6 +92,23 @@ describe('Case page access', () => {
   });
 });
 
+describe('Case lists after server paging (A2-24)', () => {
+  it('asks for 50 contact attempts and 50 case requests, as many as it showed before', async () => {
+    renderCase();
+    await screen.findByRole('heading', { name: 'Service requests' });
+    for (const path of [
+      '/api/v0/cases/{caseId}/contact-attempts',
+      '/api/v0/cases/{caseId}/service-requests',
+    ]) {
+      await waitFor(() =>
+        expect(client.GET).toHaveBeenCalledWith(path, {
+          params: { path: { caseId: 'c1' }, query: { limit: 50 } },
+        }),
+      );
+    }
+  });
+});
+
 describe('Contact attempt saving', () => {
   it('posts "Waiting to hear" to log-contact-attempt and a settled outcome to complete-contact', async () => {
     client.POST.mockResolvedValue({ data: {} });

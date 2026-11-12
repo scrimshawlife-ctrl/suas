@@ -101,6 +101,9 @@ export function useAlerts() {
   });
 }
 
+/** The case page shows one page of each case list: 50, as many as before the server paged them. */
+const CASE_LIST_LIMIT = 50;
+
 /** GET /cases/{caseId}/contact-attempts: the accepter only (403 for anyone else). */
 export function useContactAttempts(caseId: string | undefined) {
   const token = useSessionToken();
@@ -108,7 +111,7 @@ export function useContactAttempts(caseId: string | undefined) {
     queryKey: caseKeys.contactAttempts.list({ caseId }),
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/cases/{caseId}/contact-attempts', {
-        params: { path: { caseId: caseId ?? '' } },
+        params: { path: { caseId: caseId ?? '' }, query: { limit: CASE_LIST_LIMIT } },
       });
       return requireData(data, 'contact attempts').contact_attempts;
     },
@@ -124,7 +127,7 @@ export function useCaseServiceRequests(caseId: string | undefined) {
     queryKey: caseKeys.serviceRequests.list({ caseId }),
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/cases/{caseId}/service-requests', {
-        params: { path: { caseId: caseId ?? '' } },
+        params: { path: { caseId: caseId ?? '' }, query: { limit: CASE_LIST_LIMIT } },
       });
       return requireData(data, 'case requests').service_requests;
     },
