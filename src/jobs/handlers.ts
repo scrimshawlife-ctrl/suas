@@ -95,7 +95,7 @@ export function licenceReadHandler(
   };
 }
 
-/** Deletes the images of a review migration 0023 closed, and audits it (L7.5, L8.6). */
+/** Deletes the images of a review migration 0024 closed, and audits it (L7.5, L8.6). */
 export function licenceCloseHandler(pool: Pool, config: SuasConfig): JobWork {
   const storage = createObjectStoragePort(config);
   return async (job) => {

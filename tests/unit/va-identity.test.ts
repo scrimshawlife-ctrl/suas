@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   displayNameMatches,
+  identityCanonicalForm,
   identityHash,
   type FingerprintKeyring,
 } from '../../src/identity/index.js';
@@ -43,10 +44,61 @@ describe('identity hash (suas/identity/v1)', () => {
         ['Jose', 'Garcia'],
       ],
     ],
+    [
+      'Mary Jane Smith split either way',
+      [
+        ['Mary Jane', 'Smith'],
+        ['Mary', 'Jane Smith'],
+        ['MaryJane', 'Smith'],
+      ],
+    ],
+    [
+      'Straße',
+      [
+        ['Anna', 'Straße'],
+        ['Anna', 'Strasse'],
+        ['ANNA', 'STRAẞE'],
+      ],
+    ],
+    [
+      'Østby',
+      [
+        ['Ola', 'Østby'],
+        ['Ola', 'Ostby'],
+        ['Ola', 'østby'],
+      ],
+    ],
+    [
+      'Łukasz',
+      [
+        ['Łukasz', 'Nowak'],
+        ['Lukasz', 'Nowak'],
+      ],
+    ],
+    [
+      'Æsa',
+      [
+        ['Æsa', 'Berg'],
+        ['AEsa', 'Berg'],
+        ['aesa', 'Berg'],
+      ],
+    ],
   ];
 
   it.each(spellings)('gives one hash for every spelling of %s', (_name, names) => {
     expect(new Set(names.map(([first, last]) => hashOf(first, last))).size).toBe(1);
+  });
+
+  // The examples in the projection file's identity_canonical_form (VA_CONFIRMATION_FLOW §2.2).
+  it.each([
+    ['Mary-Jane', "O'Brien", '1950-02-03', 'maryjaneobrien|1950-02-03'],
+    ['Mary Jane', 'Smith', '1950-02-03', 'maryjanesmith|1950-02-03'],
+    ['Mary', 'Jane Smith', '1950-02-03', 'maryjanesmith|1950-02-03'],
+    ['José', 'Straße', '1960-01-02', 'josestrasse|1960-01-02'],
+    ['Østby', 'Ðaþ', '1960-01-02', 'ostbydath|1960-01-02'],
+    ['Œda', 'Đıŋ', '1960-01-02', 'oedadin|1960-01-02'],
+  ])('canonical form of %s %s is the spec value', (firstName, lastName, birthDate, expected) => {
+    expect(identityCanonicalForm({ firstName, lastName, birthDate })).toBe(expected);
   });
 
   it('separates different people and birth dates, and keeps no value in the hash', () => {
