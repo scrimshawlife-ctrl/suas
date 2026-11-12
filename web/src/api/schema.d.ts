@@ -444,7 +444,10 @@ export interface paths {
         /** List the veteran trusted circle */
         get: operations["listTrustedContacts"];
         put?: never;
-        /** Invite a trusted contact */
+        /**
+         * Invite a trusted contact
+         * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). No invite message is sent yet.
+         */
         post: operations["inviteTrustedContact"];
         delete?: never;
         options?: never;
@@ -620,7 +623,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Accept a trusted-contact invite (invitee) */
+        /**
+         * Accept a trusted-contact invite (invitee)
+         * @description Only a signed-in person whose enrolled email or phone is the invited address can accept; anyone else gets 404 (TRUSTED_CIRCLE.md §3.3; SECURITY.md §5). Acceptance is audited and grants no consent (§3.4).
+         */
         post: operations["acceptTrustedContact"];
         delete?: never;
         options?: never;
@@ -1251,6 +1257,10 @@ export interface components {
             error: {
                 code: string;
                 message: string;
+                /** @description Optional machine-readable detail. A 400 VALIDATION_FAILED from schema validation carries issues: [{ path, code, message }]. */
+                details?: {
+                    [key: string]: unknown;
+                };
             };
         };
         CatalogResource: {
@@ -2207,6 +2217,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             429: components["responses"]["Error"];
             503: components["responses"]["Error"];
         };
@@ -2235,6 +2246,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             429: components["responses"]["Error"];
         };
     };
@@ -2283,6 +2295,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     logoutSession: {
@@ -2305,7 +2318,9 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     listCheckIns: {
@@ -2402,6 +2417,7 @@ export interface operations {
                     "application/json": components["schemas"]["CheckInDetail"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
             403: {
@@ -2459,6 +2475,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     completeCheckIn: {
@@ -2481,6 +2498,7 @@ export interface operations {
                     "application/json": components["schemas"]["CheckInCompleted"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
             403: {
@@ -2567,6 +2585,7 @@ export interface operations {
                     "application/json": components["schemas"]["SupportCase"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
@@ -2628,6 +2647,7 @@ export interface operations {
                     "application/json": components["schemas"]["CatalogResource"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
             403: {
@@ -2755,8 +2775,10 @@ export interface operations {
                     "application/json": components["schemas"]["AdapterConfiguration"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     disableAdminAdapterConfiguration: {
@@ -2781,8 +2803,10 @@ export interface operations {
                     "application/json": components["schemas"]["AdapterConfiguration"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     setAdminAdapterRouting: {
@@ -2807,8 +2831,10 @@ export interface operations {
                     "application/json": components["schemas"]["AdapterConfiguration"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     getVeteransMe: {
@@ -2911,6 +2937,7 @@ export interface operations {
                 };
             };
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     listCaseServiceRequests: {
@@ -2933,6 +2960,7 @@ export interface operations {
                     "application/json": components["schemas"]["CaseServiceRequestList"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
@@ -2973,6 +3001,7 @@ export interface operations {
                     "application/json": components["schemas"]["ServiceRequestFormResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             /** @description FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has not passed the ID scan + selfie check */
             403: {
@@ -2985,6 +3014,7 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             /** @description COUNTY_REQUIRED: the person has not chosen a county; UNPROCESSABLE: destination given for a category other than TRANSPORTATION */
             422: {
                 headers: {
@@ -3016,6 +3046,7 @@ export interface operations {
                     "application/json": components["schemas"]["ServiceRequestDetail"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
@@ -3055,7 +3086,10 @@ export interface operations {
     inviteTrustedContact: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -3065,13 +3099,22 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Replay of an invite already created with this Idempotency-Key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrustedContactResult"];
+                };
+            };
             /** @description Invitation created */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TrustedContact"];
+                    "application/json": components["schemas"]["TrustedContactResult"];
                 };
             };
             400: components["responses"]["Error"];
@@ -3085,6 +3128,8 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     removeTrustedContact: {
@@ -3107,6 +3152,7 @@ export interface operations {
                     "application/json": components["schemas"]["TrustedContact"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
             403: {
@@ -3197,6 +3243,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            413: components["responses"]["Error"];
             /** @description UNPROCESSABLE: meeting_place cleared on FOOD, TRANSPORTATION or SHELTER, or destination given for another category */
             422: {
                 headers: {
@@ -3250,6 +3297,7 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3275,6 +3323,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
@@ -3325,6 +3374,7 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     completeFollowUp: {
@@ -3350,6 +3400,7 @@ export interface operations {
                     "application/json": components["schemas"]["FollowUpCompleted"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
@@ -3408,7 +3459,9 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationPreferenceRequest"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     acceptTrustedContact: {
@@ -3434,6 +3487,7 @@ export interface operations {
                     "application/json": components["schemas"]["TrustedContactResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
@@ -3461,6 +3515,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
@@ -3502,9 +3557,11 @@ export interface operations {
                     "application/json": components["schemas"]["ContactAttemptResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3544,9 +3601,11 @@ export interface operations {
                     "application/json": components["schemas"]["ContactAttemptResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3577,10 +3636,12 @@ export interface operations {
                     "application/json": components["schemas"]["ResolveCaseResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3606,6 +3667,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
@@ -3632,6 +3694,7 @@ export interface operations {
                     "application/json": components["schemas"]["Settlement"] | components["schemas"]["VeteranSettlement"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
@@ -3664,10 +3727,12 @@ export interface operations {
                     "application/json": components["schemas"]["CaseCommandResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3698,10 +3763,12 @@ export interface operations {
                     "application/json": components["schemas"]["CaseCommandResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3732,10 +3799,12 @@ export interface operations {
                     "application/json": components["schemas"]["CaseCommandResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3766,10 +3835,12 @@ export interface operations {
                     "application/json": components["schemas"]["CaseCommandResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3800,10 +3871,12 @@ export interface operations {
                     "application/json": components["schemas"]["CaseCommandResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3834,10 +3907,12 @@ export interface operations {
                     "application/json": components["schemas"]["CaseCommandResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3868,10 +3943,12 @@ export interface operations {
                     "application/json": components["schemas"]["CaseCommandResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3949,6 +4026,7 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -3972,6 +4050,7 @@ export interface operations {
                     "application/json": components["schemas"]["AcceptServiceRequestResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             /** @description The caller is the requester */
             403: {
@@ -4028,6 +4107,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     getVeteransMeIdVerification: {
@@ -4146,6 +4226,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     getIntakeDraft: {
@@ -4168,6 +4249,7 @@ export interface operations {
                     "application/json": components["schemas"]["IntakeDraftWithText"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
@@ -4202,6 +4284,7 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     addIntakeMessage: {
@@ -4241,6 +4324,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
@@ -4276,6 +4360,7 @@ export interface operations {
                     "application/json": components["schemas"]["IntakeSubmitResult"];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
@@ -4312,6 +4397,7 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
     extractAdminResourceDrafts: {
@@ -4343,6 +4429,7 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             502: components["responses"]["Error"];
             503: components["responses"]["Error"];
         };
@@ -4547,6 +4634,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            413: components["responses"]["Error"];
         };
     };
     issueChatConnectTicket: {
@@ -4630,6 +4718,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
         };
     };
 }
