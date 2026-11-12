@@ -2095,6 +2095,8 @@ export interface components {
     };
     ChatThreadList: {
       threads: components['schemas']['ChatThread'][];
+      /** @description Pass back as cursor for older threads; null on the last page. */
+      next_cursor: string | null;
     };
     ChatConnectTicket: {
       ticket: string;
@@ -2183,6 +2185,9 @@ export interface components {
     /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
     IdempotencyKey: string;
     CaseIdPath: string;
+    /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+    PageCursor: string;
+    PageLimit: number;
   };
   requestBodies: never;
   headers: never;
@@ -3433,14 +3438,18 @@ export interface operations {
   };
   listNotifications: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
       header?: never;
       path?: never;
       cookie?: never;
     };
     requestBody?: never;
     responses: {
-      /** @description Bounded inbox without destinations */
+      /** @description Bounded inbox without destinations, newest first (by creation time) */
       200: {
         headers: {
           [name: string]: unknown;
@@ -3449,9 +3458,12 @@ export interface operations {
           'application/json': {
             notifications: components['schemas']['Notification'][];
             limit: number;
+            /** @description Pass back as cursor for older notifications; null on the last page. */
+            next_cursor: string | null;
           };
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
     };
   };
@@ -4649,14 +4661,18 @@ export interface operations {
   };
   listChatThreads: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
       header?: never;
       path?: never;
       cookie?: never;
     };
     requestBody?: never;
     responses: {
-      /** @description The caller threads (as requester or accepter), newest activity first, at most 100 */
+      /** @description The caller threads (as requester or accepter), newest activity first. A thread that gets a new message moves to the first page. */
       200: {
         headers: {
           [name: string]: unknown;
@@ -4665,6 +4681,7 @@ export interface operations {
           'application/json': components['schemas']['ChatThreadList'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
     };
   };
