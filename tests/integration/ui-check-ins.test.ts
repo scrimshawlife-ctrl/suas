@@ -216,6 +216,25 @@ describe('Check-In HTML — start, answer, complete', () => {
     expect(home.body).toContain(`/app/check-ins/${first}`);
   });
 
+  it('abandons an in-flight Check-In past the 24-hour window and starts a new one (A2-25)', async () => {
+    const { credential, tenantId, userId } = await veteranSession();
+    const stale = await startHtmlCheckIn(credential);
+    await pool().query(
+      `UPDATE check_ins SET started_at = now() - interval '25 hours' WHERE check_in_id = $1`,
+      [stale],
+    );
+    const fresh = await startHtmlCheckIn(credential);
+    expect(fresh).not.toBe(stale);
+    const statuses = await pool().query<{ check_in_id: string; status: string }>(
+      `SELECT check_in_id, status FROM check_ins WHERE tenant_id = $1 AND veteran_user_id = $2`,
+      [tenantId, userId],
+    );
+    expect(Object.fromEntries(statuses.rows.map((r) => [r.check_in_id, r.status]))).toEqual({
+      [stale]: 'ABANDONED',
+      [fresh]: 'STARTED',
+    });
+  });
+
   it("hides another veteran's Check-In", async () => {
     const owner = await veteranSession();
     const checkInId = await startHtmlCheckIn(owner.credential);

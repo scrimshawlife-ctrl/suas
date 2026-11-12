@@ -1,9 +1,9 @@
 /**
  * HTML Check-In composition and truthful result copy.
  *
- * These are not new domain verbs. Start/resume calls `findInProgressCheckIn`
- * then `startCheckIn`. Answers and complete use `saveResponse` and
- * `completeCheckIn` from the route, the same functions the JSON API uses.
+ * These are not new domain verbs. The route starts or resumes with the signals
+ * `startOrResumeCheckIn`, and answers and completes with `saveResponse` and
+ * `completeCheckIn`, the same functions the JSON API uses.
  *
  * Spec citations:
  * - SUAS-specs CHECKINS.md §1 (input artifact), §4 (states), §4.1 (incomplete),
@@ -16,52 +16,9 @@
  * - SUAS-specs EVENT_MODEL.md §3.1 (CHECKIN_COMPLETED is not a settled signal)
  */
 
-import type { Pool } from 'pg';
 import type { SupportSignalMode } from '../config/index.js';
-import { withTransaction } from '../db/index.js';
-import {
-  findInProgressCheckIn,
-  startCheckIn,
-  type CheckIn,
-  type CheckInStatus,
-  type SignalLevel,
-} from '../signals/index.js';
+import type { CheckInStatus, SignalLevel } from '../signals/index.js';
 import type { CheckInResultViewModel } from './view-models.js';
-
-export interface StartOrResumeCheckInInput {
-  readonly tenantId: string;
-  readonly veteranUserId: string;
-}
-
-export interface StartOrResumeCheckInResult {
-  readonly checkIn: CheckIn;
-  /** False when an in-flight Check-In already existed and was resumed. */
-  readonly created: boolean;
-}
-
-/**
- * Resume the veteran's in-flight Check-In, or start one on the published version.
- *
- * CHECKINS.md does not require a second in-flight Check-In. Concurrent POSTs
- * serialize on a tenant+veteran advisory lock so HTML start is not a silent
- * duplicate of `startCheckIn`.
- */
-export async function startOrResumeCheckIn(
-  pool: Pool,
-  input: StartOrResumeCheckInInput,
-): Promise<StartOrResumeCheckInResult> {
-  return withTransaction(pool, async (tx) => {
-    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [
-      `check-in:${input.tenantId}`,
-      input.veteranUserId,
-    ]);
-    const existing = await findInProgressCheckIn(tx, input.tenantId, input.veteranUserId);
-    if (existing !== undefined) {
-      return { checkIn: existing, created: false };
-    }
-    return { checkIn: await startCheckIn(tx, input), created: true };
-  });
-}
 
 export interface PresentCheckInResultInput {
   readonly status: CheckInStatus;

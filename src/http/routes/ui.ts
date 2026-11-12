@@ -77,9 +77,10 @@ import {
   listAnsweredQuestionIds,
   listQuestionsWithOptions,
   saveResponse,
+  startOrResumeCheckIn,
   type CheckIn,
 } from '../../signals/index.js';
-import { presentCheckInResult, startOrResumeCheckIn } from '../../ui/check-in.js';
+import { presentCheckInResult } from '../../ui/check-in.js';
 import { cancelQrf, deployQrf } from '../../ui/commands.js';
 import { D_012_APPROVED_SAFETY_COPY } from '../../ui/safety.js';
 import {
