@@ -118,6 +118,13 @@ export const routes: RouteObject[] = [
                     path: paths.verify,
                     ...page('Confirm you served', () => import('../features/request/VerifyPage')),
                   },
+                  {
+                    path: paths.verifyLicence,
+                    ...page(
+                      'Confirm with your licence',
+                      () => import('../features/licence/LicencePage'),
+                    ),
+                  },
                 ],
               },
             ],
