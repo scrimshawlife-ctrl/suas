@@ -14,7 +14,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
-import { assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
+import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
 import {
   executeCaseCommand,
   findCase,
@@ -188,10 +188,13 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
         ? requiredReasonBody.parse(request.body ?? {})
         : optionalReasonBody.parse(request.body ?? {});
       let actorType: 'USER' | 'SUAS_ADMIN';
-      if (entry.auth === 'suas_admin') {
+      if (
+        entry.auth === 'suas_admin' ||
+        (entry.auth === 'accepter_or_suas_admin' && context.isSuasAdmin)
+      ) {
+        // ADMIN.md §2, SECURITY.md §2: every SUAS-admin case action needs an MFA-elevated session.
         assertSuasAdmin(context);
-        actorType = 'SUAS_ADMIN';
-      } else if (entry.auth === 'accepter_or_suas_admin' && context.isSuasAdmin) {
+        assertMfaElevated(context, `Case ${entry.kebab}`);
         actorType = 'SUAS_ADMIN';
       } else {
         assertAccepter(await resolveCaseAccess(deps.pool, context, id), entry.command);
