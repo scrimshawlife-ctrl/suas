@@ -34,6 +34,7 @@ import {
   type ChallengeDeliveryPort,
 } from '../../auth/index.js';
 import { authenticate } from '../authenticate.js';
+import { resolveRequestAccess } from '../case-access.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import {
   executeServiceRequestCommand,
@@ -167,13 +168,14 @@ export function registerDevRoutes(app: FastifyInstance, deps: DevRouteDeps): voi
   });
 
   app.post(`${API_PREFIX}/dev/service-requests/:id/simulate`, async (request) => {
-    // A valid session is still required so the sim only touches requests the
-    // caller can see. This keeps the route from being a blind tenant-wide poke.
+    // Only the requester or the current holder may advance a request, as on the real
+    // routes; anyone else gets the same 404 as a request that does not exist.
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { id } = simulateParams.parse(request.params);
 
     const current = await findServiceRequest(deps.pool, context.tenantId, id);
     if (current === undefined) throw new ResourceNotVisibleError();
+    await resolveRequestAccess(deps.pool, context, current);
 
     const step = FORWARD_STEP[current.status];
     if (step === undefined) {

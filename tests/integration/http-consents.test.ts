@@ -310,6 +310,22 @@ describe('POST /api/v0/consents/:id/commands/revoke', () => {
       replayed: false,
     });
 
+    // A1-13 (CONSENT.md §4): revoking it again with a new key changes nothing and
+    // appends no second CONSENT_REVOKED.
+    const again = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/consents/${grantId}/commands/revoke`,
+      headers: { ...headers, 'idempotency-key': `revoke-again-${randomUUID()}` },
+    });
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toMatchObject({ status: 'REVOKED', replayed: false });
+    const events = await pool.query(
+      `SELECT 1 FROM domain_events
+        WHERE tenant_id = $1 AND aggregate_id = $2 AND event_type = 'CONSENT_REVOKED'`,
+      [tenantId, grantId],
+    );
+    expect(events.rowCount).toBe(1);
+
     const otherTenant = randomUUID();
     const other = await createUser(pool, {
       tenantId: otherTenant,
