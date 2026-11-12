@@ -45,7 +45,7 @@ const hasElement = (payload: string, element: string) =>
 
 /**
  * `decodeMultiple` turns a found-but-undecodable code into "not found". The static decoder
- * it wraps (private in the 0.23 typings, public at run time) detects every region first and
+ * it wraps (private in the 0.21 typings, public at run time) detects every region first and
  * then decodes each, letting a decode error through, so one result per detected region
  * comes back or the scan fails. Missing, the check fails closed.
  */
