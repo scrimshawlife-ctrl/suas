@@ -3,14 +3,21 @@
  * the AWS Lambda handler so there is one implementation.
  *
  * Each pass also runs the time-driven sweeps that no request enqueues work for. Today
- * that is request widening (V1_PROJECT_PLAN.md F6), request expiry (R8.4) and the Check-In
- * idle sweep (R8.10), so a scheduler running one pass (`once`) is the only schedule needed.
+ * that is request widening (V1_PROJECT_PLAN.md F6), request expiry (R8.4), the Check-In
+ * idle sweep (R8.10) and the licence PHOTOS_EXPIRED sweep (R10.1 §2.3), so a scheduler
+ * running one pass (`once`) is the only schedule needed.
  */
 
 import type { Pool } from 'pg';
 import type { SuasConfig } from '../config/index.js';
 import { expireDueRequests } from '../coordination/expiry.js';
 import { widenDueRequests } from '../coordination/widening.js';
+import {
+  expireOldReviews,
+  LICENCE_CLOSE_JOB_TYPE,
+  LICENCE_READ_JOB_TYPE,
+} from '../identity/licence-review.js';
+import { createObjectStoragePort } from '../storage/index.js';
 import { createChannelRegistry } from '../notifications/index.js';
 import { abandonStaleCheckIns } from '../signals/index.js';
 import {
@@ -20,7 +27,13 @@ import {
   PostgresOutboxJobQueue,
   type JobOutboxRow,
 } from './postgres-outbox-queue.js';
-import { notificationSendHandler, supportSignalComputeHandler, type JobWork } from './handlers.js';
+import {
+  licenceCloseHandler,
+  licenceReadHandler,
+  notificationSendHandler,
+  supportSignalComputeHandler,
+  type JobWork,
+} from './handlers.js';
 
 export interface JobWorkerOptions {
   readonly pool: Pool;
@@ -38,7 +51,30 @@ function createHandlers(pool: Pool, config: SuasConfig): Readonly<Record<string,
     // RED alerts enqueue notification.send rows that a later poll delivers.
     'support-signal.compute': supportSignalComputeHandler(pool, config, () => outbox),
     'notification.send': notificationSendHandler(pool, createChannelRegistry(config)),
+    [LICENCE_READ_JOB_TYPE]: licenceReadHandler(pool, config),
+    [LICENCE_CLOSE_JOB_TYPE]: licenceCloseHandler(pool, config),
   };
+}
+
+/**
+ * Job types capped per pass, with their lease. One licence read (a reader call of up to
+ * 75 s) per pass keeps a pass inside the 2-minute worker; its lease outlasts the worker,
+ * so an overlapping pass cannot claim the same read again.
+ */
+export const PER_PASS_JOB_LIMITS: Readonly<Record<string, { limit: number; leaseMs: number }>> = {
+  [LICENCE_READ_JOB_TYPE]: { limit: 1, leaseMs: 150_000 },
+};
+
+/** One pass's batch: up to `limit` uncapped jobs, plus each capped type up to its cap. */
+async function claimPass(pool: Pool, owner: string, limit: number): Promise<JobOutboxRow[]> {
+  const capped = Object.entries(PER_PASS_JOB_LIMITS);
+  const claimed = [
+    ...(await claimDueJobs(pool, { owner, limit, exceptJobTypes: capped.map(([type]) => type) })),
+  ];
+  for (const [jobType, cap] of capped) {
+    claimed.push(...(await claimDueJobs(pool, { owner, jobType, ...cap })));
+  }
+  return claimed;
 }
 
 async function handleJob(
@@ -57,7 +93,7 @@ async function handleJob(
  * A failed sweep is logged and does not stop the outbox drain: the next pass
  * repeats it, and each sweep is idempotent.
  */
-async function runSweeps(pool: Pool): Promise<void> {
+async function runSweeps(pool: Pool, config: SuasConfig): Promise<void> {
   try {
     const { widened, delayMinutes } = await widenDueRequests(pool);
     for (const request of widened) {
@@ -106,6 +142,15 @@ async function runSweeps(pool: Pool): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     console.error(JSON.stringify({ msg: 'sweep_failed', sweep: 'check_in_idle', error: message }));
   }
+
+  try {
+    const expired = await expireOldReviews({ pool, storage: createObjectStoragePort(config) });
+    if (expired > 0)
+      console.log(JSON.stringify({ msg: 'licence_reviews_expired', count: expired }));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(JSON.stringify({ msg: 'sweep_failed', sweep: 'licence_expiry', error: message }));
+  }
 }
 
 export async function runJobWorker(options: JobWorkerOptions): Promise<void> {
@@ -113,8 +158,8 @@ export async function runJobWorker(options: JobWorkerOptions): Promise<void> {
   const handlers = createHandlers(pool, config);
 
   for (;;) {
-    await runSweeps(pool);
-    const claimed = await claimDueJobs(pool, { owner, limit });
+    await runSweeps(pool, config);
+    const claimed = await claimPass(pool, owner, limit);
     if (claimed.length === 0) {
       if (once) break;
       await new Promise((resolve) => setTimeout(resolve, 2000));
