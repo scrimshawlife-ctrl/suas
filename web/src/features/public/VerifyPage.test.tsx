@@ -616,3 +616,108 @@ describe('Verify self-attestation (D-016 fallback)', () => {
     expect(sentKey(1)).not.toBe(sentKey(0));
   });
 });
+
+describe('Verify licence choice (suas-specs #73 R10.1 proposal, L1)', () => {
+  const LICENCE = '/api/v0/veterans/me/verification/licence';
+  function serve(standing: ReturnType<typeof me>, offered: boolean, review: unknown = null) {
+    client.GET.mockImplementation((path: string) =>
+      Promise.resolve(path === LICENCE ? { data: { offered, review } } : standing),
+    );
+  }
+  const licenceChoice = () =>
+    screen.queryByRole('link', { name: 'Confirm with your Veteran licence' });
+
+  it('a not-confirmed standing offers the licence beside "Tell us you served"', async () => {
+    serve(me('NOT_CONFIRMED', 'NOT_TITLE_38'), true);
+    renderVerify();
+    const link = await screen.findByRole('link', { name: 'Confirm with your Veteran licence' });
+    expect(link).toHaveAttribute('href', '/verify/licence');
+    // Side by side with self-attestation, which it never replaces (D-016).
+    expect(link.parentElement).toContainElement(
+      screen.getByRole('button', { name: 'Tell us you served' }),
+    );
+    expect(
+      screen.getByText(/Some states print "Veteran" on the driver licence/),
+    ).toBeInTheDocument();
+  });
+
+  it('a PERSON_NOT_FOUND answer this visit offers it under the form, after a fresh read', async () => {
+    const user = userEvent.setup();
+    serve(me('NOT_STARTED'), false);
+    client.POST.mockResolvedValue(answer('NOT_CONFIRMED', 'PERSON_NOT_FOUND'));
+    renderVerify();
+    await screen.findByLabelText('First name');
+    serve(me('NOT_CONFIRMED', 'PERSON_NOT_FOUND'), true);
+    await sendWith(user);
+    await screen.findByRole('heading', { name: "VA couldn't match your details" });
+    expect(
+      await screen.findByRole('link', { name: 'Confirm with your Veteran licence' }),
+    ).toBeInTheDocument();
+  });
+
+  it('licence path is never offered after a VA 400', async () => {
+    const user = userEvent.setup();
+    serve(me('NOT_STARTED'), false);
+    client.POST.mockResolvedValue(answer('UNAVAILABLE', null, 'REQUEST_INVALID'));
+    renderVerify();
+    await sendWith(user);
+    await screen.findByRole('heading', { name: "We couldn't send your details to VA" });
+    await waitFor(() =>
+      expect(client.GET.mock.calls.filter(([path]) => path === LICENCE).length).toBeGreaterThan(1),
+    );
+    expect(licenceChoice()).not.toBeInTheDocument();
+  });
+
+  it('is not shown when the API does not offer it (reader closed, VA limit)', async () => {
+    serve(me('NOT_CONFIRMED', 'NOT_TITLE_38'), false);
+    renderVerify();
+    await screen.findByRole('heading', { name: 'VA did not confirm your Veteran status' });
+    expect(licenceChoice()).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tell us you served' })).toBeInTheDocument();
+  });
+
+  it('with a review open, leads back to it and says where it stands', async () => {
+    serve(me('NOT_CONFIRMED', 'MORE_RESEARCH_REQUIRED'), false, {
+      review_id: 'r1',
+      status: 'AWAITING_CONFIRMATION',
+    });
+    renderVerify();
+    expect(await screen.findByRole('link', { name: 'See your licence review' })).toHaveAttribute(
+      'href',
+      '/verify/licence',
+    );
+    expect(
+      screen.getByText('Your licence review: A SUAS admin will check your licence.'),
+    ).toBeInTheDocument();
+  });
+
+  it('a MANUAL_REVIEW standing is confirmed without saying VA confirmed it', async () => {
+    serve(
+      {
+        data: {
+          id_verification: { ...me('VERIFIED').data.id_verification, method: 'MANUAL_REVIEW' },
+        },
+      },
+      false,
+    );
+    renderVerify();
+    expect(await screen.findByRole('heading', { name: "You're confirmed" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/A SUAS admin confirmed your Veteran status from your licence/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/VA confirmed/)).not.toBeInTheDocument();
+  });
+
+  it('opens on the self-attestation step when the licence page sends the person here', async () => {
+    tokenStore.setToken('tok');
+    const router = createMemoryRouter([{ path: '/verify', element: <VerifyPage /> }], {
+      initialEntries: [{ pathname: '/verify', state: { choice: 'self_attest', from: '/request' } }],
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole('button', { name: 'Yes, I served' })).toBeInTheDocument();
+  });
+});
