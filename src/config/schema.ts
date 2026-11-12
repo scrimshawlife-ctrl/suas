@@ -80,6 +80,12 @@ export type IdVerificationMode = (typeof ID_VERIFICATION_MODES)[number];
  */
 export const VA_CONFIRMATION_MODES = ['disabled', 'fixture', 'sandbox'] as const;
 export type VaConfirmationMode = (typeof VA_CONFIRMATION_MODES)[number];
+/**
+ * Licence reader (suas-specs R10.1, proposal; L9.1): `fixture` is LOCAL and TEST only,
+ * `scry` LOCAL and STAGING only, and PRODUCTION allows `disabled` alone.
+ */
+export const LICENCE_READER_MODES = ['disabled', 'fixture', 'scry'] as const;
+export type LicenceReaderMode = (typeof LICENCE_READER_MODES)[number];
 
 /** One provisioned synthetic fixture. Identity is the pair, not the email address. */
 export interface StagingFixturePrincipal {
@@ -353,6 +359,16 @@ const rawConfigSchema = z.object({
   // Verify-only during a rotation: lookups and uniqueness checks also try it.
   SUAS_FINGERPRINT_KEY_PREVIOUS: optionalRaw,
   SUAS_FINGERPRINT_KEY_PREVIOUS_ID: optionalRaw,
+  SUAS_LICENCE_READER_MODE: optionalEnum(
+    'SUAS_LICENCE_READER_MODE',
+    LICENCE_READER_MODES,
+    'disabled',
+  ),
+  SUAS_SCRY_BASE_URL: optionalRaw,
+  // Server-side secret, needed only where the read runs (the job worker); never echoed.
+  SUAS_SCRY_API_TOKEN: optionalRaw,
+  // AAMVA issuer id of the synthetic sample maker (L4.2); required by STAGING `scry`.
+  SUAS_LICENCE_SYNTHETIC_IIN: optionalRaw,
   // D-052. Public self sign-up stays off unless LOCAL or TEST sets "enabled".
   SUAS_PUBLIC_SIGN_UP: optionalRaw,
   // Addresses the STAGING provision command may create. Not an admission list.
@@ -503,6 +519,13 @@ export interface SuasConfig {
     readonly mode: VaConfirmationMode;
     readonly baseUrl: string | undefined;
     readonly apiKey: string | undefined;
+  };
+  readonly licenceReader: {
+    readonly mode: LicenceReaderMode;
+    readonly scryBaseUrl: string | undefined;
+    readonly scryApiToken: string | undefined;
+    /** Six-digit AAMVA IIN every synthetic sample carries; checked outside LOCAL and TEST. */
+    readonly syntheticIin: string | undefined;
   };
   /** Public self sign-up. Startup refuses `enabled` outside LOCAL and TEST. */
   readonly publicSignUp: boolean;
@@ -811,6 +834,82 @@ function validateVaConfirmation(
   }
 }
 
+/**
+ * Licence reader modes (suas-specs R10.1, proposal; L9.1). The Scry URL and token are not
+ * required at startup, because only the job worker calls Scry; without them a read settles
+ * as a configuration failure. The synthetic IIN is required wherever L4.2 applies.
+ */
+function validateLicenceReader(
+  raw: z.output<typeof rawConfigSchema>,
+  environment: EnvironmentClass,
+  ctx: z.RefinementCtx,
+): void {
+  const issue = (message: string): void => {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  };
+  const mode = raw.SUAS_LICENCE_READER_MODE;
+  const iin = raw.SUAS_LICENCE_SYNTHETIC_IIN;
+  if (iin !== undefined && !/^\d{6}$/.test(iin)) {
+    issue('SUAS_LICENCE_SYNTHETIC_IIN must be exactly 6 digits.');
+  } else if (iin !== undefined && /^(636|604)/.test(iin)) {
+    // The AAMVA blocks real jurisdictions use; a marker there could pass a real licence.
+    issue('SUAS_LICENCE_SYNTHETIC_IIN must not be in the 636xxx or 604xxx jurisdiction blocks.');
+  }
+  const token = raw.SUAS_SCRY_API_TOKEN;
+  if (token !== undefined && !/^[\x21-\x7E]+$/.test(token)) {
+    issue('SUAS_SCRY_API_TOKEN is malformed: printable characters only, no spaces.');
+  }
+  if (raw.SUAS_SCRY_BASE_URL !== undefined) {
+    validateScryBaseUrl(raw.SUAS_SCRY_BASE_URL, environment, issue);
+  }
+  if (mode === 'disabled') return;
+
+  if (environment === 'PRODUCTION') {
+    issue(
+      `SUAS_LICENCE_READER_MODE=${mode} is forbidden in PRODUCTION; PRODUCTION allows disabled only.`,
+    );
+  }
+  if (mode === 'fixture' && environment !== 'LOCAL' && environment !== 'TEST') {
+    issue(
+      `SUAS_LICENCE_READER_MODE=fixture is allowed only in LOCAL and TEST, not ${environment}.`,
+    );
+  }
+  if (mode === 'scry' && environment !== 'LOCAL' && environment !== 'STAGING') {
+    issue(
+      `SUAS_LICENCE_READER_MODE=scry is allowed only in LOCAL and STAGING, not ${environment}.`,
+    );
+  }
+  if (mode === 'scry' && environment === 'STAGING' && iin === undefined) {
+    issue('SUAS_LICENCE_SYNTHETIC_IIN is required when SUAS_LICENCE_READER_MODE=scry in STAGING.');
+  }
+  if (raw.SUAS_OBJECT_STORAGE_MODE === 'disabled') {
+    issue('SUAS_LICENCE_READER_MODE needs object storage: set SUAS_OBJECT_STORAGE_MODE.');
+  }
+}
+
+/** HTTPS, or http://localhost in LOCAL (L9.1). */
+function validateScryBaseUrl(
+  value: string,
+  environment: EnvironmentClass,
+  issue: (message: string) => void,
+): void {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    issue('SUAS_SCRY_BASE_URL must be an absolute URL.');
+    return;
+  }
+  const localHttp =
+    environment === 'LOCAL' && url.protocol === 'http:' && url.hostname === 'localhost';
+  if (url.protocol !== 'https:' && !localHttp) {
+    issue('SUAS_SCRY_BASE_URL must use HTTPS; http://localhost is allowed only in LOCAL.');
+  }
+  if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') {
+    issue('SUAS_SCRY_BASE_URL must not carry credentials, a query or a fragment.');
+  }
+}
+
 /** At least 32 bytes of key material, base64 encoded. */
 const FINGERPRINT_KEY_MIN_BYTES = 32;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -842,6 +941,11 @@ function validateFingerprintKey(raw: z.output<typeof rawConfigSchema>, ctx: z.Re
     if (raw.SUAS_VA_CONFIRMATION_MODE !== 'disabled') {
       issue(
         'SUAS_FINGERPRINT_KEY is required when SUAS_VA_CONFIRMATION_MODE is not disabled. Deploy the key before turning VA confirmation on.',
+      );
+    }
+    if (raw.SUAS_LICENCE_READER_MODE !== 'disabled') {
+      issue(
+        'SUAS_FINGERPRINT_KEY is required when SUAS_LICENCE_READER_MODE is not disabled. Deploy the key before turning the licence reader on.',
       );
     }
     if (raw.SUAS_FINGERPRINT_KEY_PREVIOUS !== undefined) {
@@ -1215,6 +1319,7 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
 
   validateAwsCapabilities(raw, environment, ctx);
   validateVaConfirmation(raw, environment, ctx);
+  validateLicenceReader(raw, environment, ctx);
   validateFingerprintKey(raw, ctx);
 
   // The sender is required in Resend and SES modes. Both accept either a bare
@@ -1338,6 +1443,12 @@ export function shapeConfig(
       mode: raw.SUAS_VA_CONFIRMATION_MODE,
       baseUrl: raw.SUAS_VA_CONFIRMATION_BASE_URL,
       apiKey: raw.SUAS_VA_CONFIRMATION_API_KEY,
+    },
+    licenceReader: {
+      mode: raw.SUAS_LICENCE_READER_MODE,
+      scryBaseUrl: raw.SUAS_SCRY_BASE_URL,
+      scryApiToken: raw.SUAS_SCRY_API_TOKEN,
+      syntheticIin: raw.SUAS_LICENCE_SYNTHETIC_IIN,
     },
     publicSignUp: raw.SUAS_PUBLIC_SIGN_UP === 'enabled',
     stagingAuthEmails: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) => email.toLowerCase()),
