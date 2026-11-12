@@ -390,6 +390,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerTrustedContactRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
+      ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
     });
 
     registerFollowUpRoutes(app, {

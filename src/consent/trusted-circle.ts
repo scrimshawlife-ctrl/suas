@@ -322,6 +322,60 @@ export async function listAcceptedContactsWithEmail(
   }));
 }
 
+/** The address an invite goes to. Kept out of `TrustedContact` like the alert reads above. */
+export async function findInviteEmail(
+  db: Queryable,
+  tenantId: string,
+  trustedContactId: string,
+): Promise<string | undefined> {
+  const result = await db.query<{ invite_email: string | null }>(
+    `SELECT invite_email FROM trusted_contacts
+     WHERE tenant_id = $1 AND trusted_contact_id = $2 AND status = 'INVITED'`,
+    [tenantId, trustedContactId],
+  );
+  return result.rows[0]?.invite_email ?? undefined;
+}
+
+export interface PendingInvitation {
+  readonly trustedContactId: string;
+  readonly veteranDisplayName: string | undefined;
+  readonly relationshipLabel: string;
+}
+
+/**
+ * Invites still INVITED to the caller's enrolled email, which sign-in by email code has
+ * proved (R9.4, contributor proposal, specs #72). Only the inviting Veteran's display
+ * name and the relationship label leave this read; invites do not expire.
+ */
+export async function listPendingInvitations(
+  db: Queryable,
+  tenantId: string,
+  userId: string,
+): Promise<PendingInvitation[]> {
+  const result = await db.query<{
+    trusted_contact_id: string;
+    display_name: string | null;
+    relationship_label: string;
+  }>(
+    `SELECT t.trusted_contact_id, v.display_name, t.relationship_label
+       FROM users me
+       JOIN trusted_contacts t
+         ON t.tenant_id = me.tenant_id AND t.status = 'INVITED'
+        AND t.invite_email IS NOT NULL AND t.invite_email = lower(me.email)
+        AND t.veteran_user_id <> me.user_id
+       JOIN users v ON v.tenant_id = t.tenant_id AND v.user_id = t.veteran_user_id
+      WHERE me.tenant_id = $1 AND me.user_id = $2 AND me.deleted_at IS NULL
+        AND me.status = 'ACTIVE' AND v.deleted_at IS NULL
+      ORDER BY t.invited_at, t.trusted_contact_id`,
+    [tenantId, userId],
+  );
+  return result.rows.map((row) => ({
+    trustedContactId: row.trusted_contact_id,
+    veteranDisplayName: row.display_name ?? undefined,
+    relationshipLabel: row.relationship_label,
+  }));
+}
+
 /**
  * Whether a contact's membership permits any use at all, before grants are even
  * considered. TRUSTED_CIRCLE.md §6: "evaluate membership first".

@@ -30,6 +30,7 @@ describe('email-templates/v1 catalog', () => {
       'auth.magic_link',
       'auth.email_otp',
       'trusted_contact_alert',
+      'trusted_contact_invited',
     ]);
   });
 

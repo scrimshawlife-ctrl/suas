@@ -23,6 +23,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   { reason: 'auth.magic_link', templateVersion: 'auth.magic_link' },
   { reason: 'auth.email_otp', templateVersion: 'auth.email_otp' },
   { reason: 'trusted_contact_alert', templateVersion: 'alert@1' },
+  { reason: 'trusted_contact_invited', templateVersion: 'invite@1' },
 ] as const;
 
 export type EmailTemplateReason = (typeof EMAIL_TEMPLATE_KEYS)[number]['reason'];
@@ -185,6 +186,28 @@ function renderTrustedContactAlert(): RenderedEmail {
 }
 
 /**
+ * TRUSTED_CIRCLE.md §3.2 invite (R9.4, contributor proposal, specs #72). It names nobody:
+ * who invited them is shown only after the invitee signs in with this address.
+ */
+const INVITE_LINES = [
+  'A veteran named you as a trusted contact on SUAS.',
+  'To see who invited you and to accept, sign in to SUAS with this email address and open Invitations.',
+  'Accepting shares nothing about them with you. They decide that separately.',
+  'If you were not expecting this, you can ignore this message.',
+] as const;
+
+function renderTrustedContactInvite(): RenderedEmail {
+  return {
+    catalogVersion: EMAIL_TEMPLATE_CATALOG_VERSION,
+    reason: 'trusted_contact_invited',
+    templateVersion: 'invite@1',
+    subject: 'SUAS trusted-contact invitation',
+    text: INVITE_LINES.join('\n\n'),
+    html: htmlDocument(INVITE_LINES.map(escapeEmailHtml), undefined),
+  };
+}
+
+/**
  * Render subject, text, and HTML for an OBSERVED reason + templateVersion.
  * EMAIL templates always return both text and HTML.
  */
@@ -204,6 +227,8 @@ export function renderEmailTemplate(
       return renderAuthEmailOtp(context);
     case 'trusted_contact_alert':
       return renderTrustedContactAlert();
+    case 'trusted_contact_invited':
+      return renderTrustedContactInvite();
     default:
       throw new UnknownEmailTemplateError(reason, templateVersion);
   }

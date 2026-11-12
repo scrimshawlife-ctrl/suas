@@ -38,9 +38,11 @@ export {
 export {
   acceptTrustedContact,
   auditTrustedContactTransition,
+  findInviteEmail,
   findTrustedContact,
   inviteTrustedContact,
   listAcceptedContactsWithEmail,
+  listPendingInvitations,
   listTrustedCircle,
   membershipPermitsUse,
   setTrustedContactStatus,
@@ -49,6 +51,7 @@ export {
   TrustedContactTerminalError,
   type EmailableContact,
   type InviteTrustedContactInput,
+  type PendingInvitation,
   type TrustedContact,
   type TrustedContactStatus,
 } from './trusted-circle.js';
