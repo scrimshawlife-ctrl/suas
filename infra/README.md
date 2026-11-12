@@ -44,7 +44,6 @@ Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user c
 | `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                   |
 | `bedrockModelId`         | refused                                | R2.15 is not approved. Passing this context fails synth. Inference stays `disabled`.                                       |
 | `allowPlaceholderModel`  | refused                                | Same refusal. It does not select a model and it does not mark a deployable template.                                       |
-| `emailFrom`              | `no-reply@` + root domain              | SES sender (`SUAS_EMAIL_FROM`); must be in the verified domain                                                             |
 | `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches the retired Worker staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
 | `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value the retired Worker used)                                |
 | `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of `us-west-2` zones, if an endpoint service is missing in one                                                  |
@@ -54,14 +53,36 @@ Hostnames must be inside `rootDomain`, because certificates are validated in the
 
 ## Stacks
 
-| Stack                  | Region    | Contents                                                                                                                                                                                                   |
-| ---------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), SES domain identity with Easy DKIM CNAMEs, the Resend mail records carried over from Cloudflare, `NameServers` output. No apex or `www` record. |
-| `Suas-Staging-WebCert` | us-east-1 | DNS-validated ACM certificate for the web hostname (CloudFront needs us-east-1). Passed to the web stack with `crossRegionReferences`.                                                                     |
-| `Suas-Staging-Backend` | us-west-2 | VPC (isolated subnets), VPC endpoints, RDS PostgreSQL 17 + RDS Proxy, secrets, assets bucket, API / job worker / migrate Lambdas, HTTP API with a custom domain, EventBridge Scheduler. No WebSocket API.  |
-| `Suas-Staging-Web`     | us-west-2 | Private S3 bucket, CloudFront distribution with OAC, `staging.suasqrf.com` A and AAAA alias, `web/dist` upload (only if `web/dist` exists at synth time).                                                  |
+| Stack                  | Region    | Contents                                                                                                                                                                                                                                           |
+| ---------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), the Resend mail records carried over from Cloudflare, `NameServers` output. No apex or `www` record. No SES identity (R11.2).                                                           |
+| `Suas-Staging-WebCert` | us-east-1 | DNS-validated ACM certificate for the web hostname (CloudFront needs us-east-1). Passed to the web stack with `crossRegionReferences`.                                                                                                             |
+| `Suas-Staging-Backend` | us-west-2 | VPC (isolated subnets), VPC endpoints, RDS PostgreSQL 17 + RDS Proxy, secrets, assets bucket, API / job worker / migrate Lambdas, the SMTP relay Lambda (outside the VPC), HTTP API with a custom domain, EventBridge Scheduler. No WebSocket API. |
+| `Suas-Staging-Web`     | us-west-2 | Private S3 bucket, CloudFront distribution with OAC, `staging.suasqrf.com` A and AAAA alias, `web/dist` upload (only if `web/dist` exists at synth time).                                                                                          |
 
-The SES identity is in `Suas-Dns` because an SES identity belongs to a domain, not to an environment.
+### Email: Gmail SMTP through a relay (suas-specs #75 R11.2, proposal, not released)
+
+Staging email (sign-in codes and notifications) goes out through one Gmail account over
+`smtp.gmail.com:465` (implicit TLS), authenticated with a Google app password. The VPC has no internet
+egress, so the API and job worker never open the SMTP connection themselves. They invoke the **SMTP relay**
+function (`src/aws/smtp-relay-lambda.ts`, construct `lib/smtp-relay.ts`) through the Lambda interface
+endpoint and hand it one rendered message; it answers with the SMTP result class.
+
+- The relay runs **outside the VPC** with **no database setting** and its own role: it can write its log
+  group and read its one secret, nothing else. The API and job worker roles may invoke the relay and no
+  other function.
+- The relay reads the Gmail address and app password at run time from the secret named by the
+  `SmtpCredentialsSecretName` output, cached per container. Neither value is in the template, the Lambda
+  environment or any log.
+- Status: an SMTP `250` is `SENT`; a permanent `5xx` is `UNDELIVERABLE` at once; a `4xx` or a failure before
+  the message data is retried by the job outbox; a timeout after the data started is an ambiguous
+  acknowledgement and is `UNDELIVERABLE` at once with reason `smtp_ambiguous_ack` (no blind retry). Gmail gives
+  no delivery callback, so `DELIVERED` and `BOUNCED` are not reached.
+- Limits: a consumer Gmail account sends to about 500 recipients a day, and From is the Gmail address.
+- Until the secret holds real values, every send is retried and then settles `UNDELIVERABLE`.
+
+The Resend adapter (`src/notifications/resend-email.ts`, D-004) stays in the code; this template does not select
+it.
 
 ### Network
 
@@ -77,13 +98,13 @@ The Bedrock adapter (`src/inference/bedrock-inference.ts`) and the API Gateway p
 them and does not create `bedrock-runtime` or `execute-api` endpoints. R2.15 is not approved.
 R6.12 is not accepted.
 
-| Service                | SDK client              | Code that uses it                                     | Endpoint          |
-| ---------------------- | ----------------------- | ----------------------------------------------------- | ----------------- |
-| Amazon SES (SESv2 API) | `@aws-sdk/client-sesv2` | `src/notifications/ses-email.ts` (`SendEmailCommand`) | interface `email` |
-| Amazon S3              | `@aws-sdk/client-s3`    | `src/storage/s3-object-storage.ts` (put, get, delete) | gateway `s3`      |
+| Service             | SDK client               | Code that uses it                                                            | Endpoint           |
+| ------------------- | ------------------------ | ---------------------------------------------------------------------------- | ------------------ |
+| AWS Lambda (Invoke) | `@aws-sdk/client-lambda` | `src/notifications/lambda-relay-sender.ts` (`InvokeCommand`, the SMTP relay) | interface `lambda` |
+| Amazon S3           | `@aws-sdk/client-s3`     | `src/storage/s3-object-storage.ts` (put, get, delete)                        | gateway `s3`       |
 
-Not needed: **Secrets Manager** (the code never calls it: configuration is read from environment
-variables), **CloudWatch Logs** (the code never calls it; Lambda logging does not use the VPC), **STS/KMS**
+Not needed: **Secrets Manager** inside the VPC (the in-VPC code reads configuration from environment variables;
+only the relay, outside the VPC, reads its secret), **CloudWatch Logs** (the code never calls it; Lambda logging does not use the VPC), **STS/KMS**
 (credentials come from the Lambda role).
 
 ### Database
@@ -102,7 +123,7 @@ as `assets/rds-global-bundle.crt` (public certificates, from `truststore.pki.rds
 
 ### Lambda package
 
-`lib/lambda-code.ts` builds one directory used by the three functions. esbuild still bundles
+`lib/lambda-code.ts` builds one directory used by the four functions (API, job worker, migrate, SMTP relay). esbuild still bundles
 `src/aws/websocket-lambda.ts` with the other entries so the push handler keeps compiling, and the
 directory also carries `package.json`,
 `migrations/`, `run.sh` and the RDS CA bundle. These are the on-disk files the code resolves beside the
@@ -146,7 +167,7 @@ each function's environment is checked against the application's own config vali
 | `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3` on the API and job worker; the migrate function sets `DATABASE_POOL_MAX` to `1`                                                         |
 | `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; the job worker uses `off`)                                                                             |
 | `SUAS_BROWSER_AUTH_MODE`, `SUAS_BROWSER_TENANT_ID`                                              | `email_otp`, the `browserTenantId` context                                                                                                            |
-| `SUAS_EMAIL_MODE`, `SUAS_EMAIL_FROM`                                                            | `ses`, the `emailFrom` context                                                                                                                        |
+| `SUAS_EMAIL_MODE`, `SUAS_SMTP_RELAY_FUNCTION`                                                   | `gmail_smtp`, the relay function name (API and job worker). `SUAS_EMAIL_FROM` and `SUAS_SMTP_APP_PASSWORD` are not set.                               |
 | `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                                           |
 | `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                                                                           |
 | `SUAS_MODEL_INFERENCE_MODE`                                                                     | `disabled`. R2.15 is not approved, so no model id is set.                                                                                             |
@@ -194,11 +215,12 @@ template. Steps:
 ### IAM
 
 Each function has its own role with no managed policies: write to its own log group, plus the ENI actions Lambda
-needs in a VPC (not scopable). Added grants: SES `ses:SendEmail` on the one domain identity (API and job worker);
+needs in a VPC (not scopable). Added grants: `lambda:InvokeFunction` on the SMTP relay only (API and job worker);
 S3 get/put/delete on the assets bucket objects plus `s3:ListBucket` on the bucket itself (API; without it a
 missing key returns AccessDenied instead of NoSuchKey). There is no `bedrock:InvokeModel` grant and no
 `execute-api:ManageConnections` grant. The ENI actions are the six in `AWSLambdaVPCAccessExecutionRole`,
-including `ec2:DescribeSubnets`.
+including `ec2:DescribeSubnets`. The SMTP relay is not in the VPC: its role has no ENI actions, only its log
+group and `secretsmanager:GetSecretValue`/`DescribeSecret` on its own secret.
 
 ### Logs
 
@@ -262,11 +284,20 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pas
       recorded, the domain keeps resolving from Cloudflare, and `staging.suasqrf.com` and the apex `suasqrf.com`
       stay on the Worker. A cutover would stop those names until they are recreated: `Suas-Staging-Web` would make
       `staging.suasqrf.com` an alias to CloudFront, and the apex gets no record from this app. The CloudFront
-      certificate, API certificate and DKIM records stay pending until that decision. That wait is expected.
-2. **Leave the sandbox in SES** (a new account is in the SES sandbox: it can send only to verified addresses).
-   Verify test recipient addresses for staging, or open an AWS support request for production access (plan §7).
-   Check that the domain identity shows "Verified" and DKIM "Successful" only after a cutover that has passed the
-   suas-specs #61 R6.8 gate and an owner decision. Do not change name servers in order to check this.
+      certificate and API certificate stay pending until that decision. That wait is expected.
+2. **Put the Gmail credentials into the relay secret** (you do this yourself; no tool or agent reads or writes it).
+   1. On the Google account that will send, turn on 2-Step Verification, then create an app password
+      (Google Account, Security, App passwords). Google shows 16 characters once.
+   2. After the first deploy, store both values in the secret named by the `SmtpCredentialsSecretName` output.
+      Type the command yourself so the password stays out of files; a leading space keeps it out of shell history
+      in most shells:
+      ` aws secretsmanager put-secret-value --secret-id <SmtpCredentialsSecretName> --secret-string '{"SUAS_SMTP_USER":"<gmail address>","SUAS_SMTP_APP_PASSWORD":"<app password>"}'`
+   3. No redeploy is needed: the relay reads the secret on its next cold start, and again after a refused login.
+   4. To try the account before deploying, run the smoke test from the repository root with the two values in your
+      own environment (never in a committed file):
+      `SUAS_SMTP_USER=... SUAS_SMTP_APP_PASSWORD=... node --import tsx/esm src/cli/gmail-smtp-smoke.ts --to <address>`.
+      It refuses `SUAS_ENV=PRODUCTION` and prints only the result class and SMTP reply code.
+   5. To rotate, create a new app password, `put-secret-value` again, then revoke the old one.
 3. **Do not enable Bedrock for this template.** R2.15 is not approved, and the API sets
    `SUAS_MODEL_INFERENCE_MODE=disabled`. Model access in the Bedrock console is not a step for this synth.
 4. **Run the migrate function** after every deploy that adds migrations. From a shell with credentials:
