@@ -178,10 +178,10 @@ export async function issueChallenge(
   // time is not yet uniform, because a deliverable address waits for the send below (AUTH.md
   // §9.4 timing parity is a known follow-up, not claimed here). A person who
   // may not receive a code gets a row that is already REVOKED, which verify never selects.
-  // A STAGING account that is not an admitted fixture pair is not deliverable.
+  // A STAGING account that is not an admitted fixture pair is not deliverable. AUTH.md §6:
+  // only an ACTIVE user may act, so INVITED is answered the same way as SUSPENDED.
   const deliverable =
-    !fixtureRefused &&
-    (signUp || (user !== undefined && user.status !== 'REVOKED' && user.status !== 'SUSPENDED'));
+    !fixtureRefused && (signUp || (user !== undefined && user.status === 'ACTIVE'));
   const secret =
     input.method === 'MAGIC_LINK' ? generateOpaqueToken() : (fixedCode ?? generateOtpCode());
   const challengeId = randomUUID();
@@ -321,6 +321,17 @@ export async function verifyChallenge(
     destination,
   );
 
+  // STAGING refuses a non-fixture account only after the budget is spent, so fixture and
+  // non-fixture addresses both reach 429 alike (ENVIRONMENT.md §3; AUTH.md §9.5).
+  if (deps.stagingAccess !== undefined) {
+    const enrolled = await findUserByDestination(deps.pool, input.tenantId, destination);
+    const principal =
+      enrolled === undefined ? undefined : { tenantId: enrolled.tenantId, userId: enrolled.userId };
+    if (stagingFixturePrincipalRefused(deps.stagingAccess, principal)) {
+      throw new ChallengeVerificationFailedError();
+    }
+  }
+
   const userId = await withTransaction(deps.pool, async (tx) => {
     const result = await tx.query<ChallengeRow>(
       `SELECT auth_challenge_id, user_id, secret_hash, status, attempts, max_attempts, expires_at
@@ -438,13 +449,8 @@ export async function verifyChallenge(
 
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
   // AUTH.md §6: User.status = ACTIVE is required to act. A challenge verified by
-  // a user who is no longer active does not produce a session.
-  if (
-    user === undefined ||
-    user.userId !== userId ||
-    user.status === 'SUSPENDED' ||
-    user.status === 'REVOKED'
-  ) {
+  // a user who is not active does not produce a session.
+  if (user === undefined || user.userId !== userId || user.status !== 'ACTIVE') {
     throw new ChallengeVerificationFailedError();
   }
   return user;

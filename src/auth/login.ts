@@ -1,16 +1,11 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../db/index.js';
 import { appendAuditEvent } from '../events/index.js';
-import { findUserByDestination } from '../identity/users.js';
-import {
-  ChallengeVerificationFailedError,
-  revokeLiveChallenges,
-  verifyChallenge,
-} from './challenge.js';
+import { revokeLiveChallenges, verifyChallenge } from './challenge.js';
 import type { ChallengeDeliveryPort } from './delivery.js';
 import type { FixedOtpCodeFor } from './demo-fixed-code.js';
 import { createSession, type IssuedSession } from './session.js';
-import { stagingFixturePrincipalRefused, type StagingAccess } from './staging-access.js';
+import type { StagingAccess } from './staging-access.js';
 
 export interface VerifyAndCreateSessionInput {
   readonly tenantId: string;
@@ -30,20 +25,7 @@ export async function verifyAndCreateSession(
   },
   input: VerifyAndCreateSessionInput,
 ): Promise<IssuedSession> {
-  if (deps.stagingAccess !== undefined) {
-    const enrolled = await findUserByDestination(deps.pool, input.tenantId, input.destination);
-    if (
-      stagingFixturePrincipalRefused(
-        deps.stagingAccess,
-        enrolled === undefined
-          ? undefined
-          : { tenantId: enrolled.tenantId, userId: enrolled.userId },
-      )
-    ) {
-      throw new ChallengeVerificationFailedError();
-    }
-  }
-
+  // verifyChallenge also refuses a STAGING non-fixture account, after the verify budget.
   const user = await verifyChallenge(deps, {
     tenantId: input.tenantId,
     destination: input.destination,
