@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the SUAS Worker (web `/app` and `/api/v0`) are recorded
+All notable changes to the SUAS application (web `/app` and `/api/v0`) are recorded
 here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project uses [Semantic Versioning](https://semver.org/) while it stays
 pre-1.0. The application version lives in `package.json` and is reported as
@@ -15,6 +15,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Changed
 
+- **Cloudflare Worker and Neon staging retired (R11.6; contributor proposal, specs #75, not released).** Removed the Worker entry (`src/worker.ts`, `src/worker/**`), `wrangler.jsonc`, `.dev.vars.example`, the Fetch bridge `src/http/dispatch.ts`, the Hyperdrive pool (`createWorkerPool`), the `runtime`/`listenPort` options of `startApp` and the `logger`/`workerRuntime` options of `createServer`, the `find-my-way` patch and `patch-package`, the `worker:dev`, `staging:contract`, `evidence:preflight` and `check:staging:path-params` scripts, and the `worker-deploy`, `staging-migrate`, `cloudflare-token-preflight`, `recovery-runtime-acceptance`, `staging-path-param-check`, `staging-acceptance`, `staging-recovery-fixtures` and `synthetic-staging-soak` workflows. An unhandled 5xx is now logged once, through pino with its route (A4-23). The fixed demo code is LOCAL only (STAGING issued it only on the Worker). `npm run dev:demo` always starts the Node server. `SUAS_WORKER_BASE_URL` is gone; the local seed hint reads `SUAS_E2E_BASE_URL`. STAGING deploys and rollbacks run by hand with CDK (`docs/runbooks/deployment-rollback.md`); the Worker runbooks are deleted. Historical evidence that cites the Worker is unchanged.
 - **Spec pin 0.9.0.** `src/release/pins.ts` now pins SUAS-specs `0.9.0` (`RELEASE_MANIFEST-0.9.0.md`, tag `v0.9.0`, specs commit `208705c`), up from `0.7.0`. CI, deploy and staging workflows, `wrangler.jsonc`, `.env.example` and the test environment carry the same two values. The `/api/v0` selector and event schema `0.1.0` are unchanged. Readiness stays `NOT_READY`; SPEC-018 stays blocked.
 - **OpenAPI descriptions cite the released 0.9.0 rules (A5-11, A7-23).** Twelve `docs/openapi/v0.json` descriptions that still called D-057, D-059 and D-061 rows "proposal, not released" now cite DISPATCH.md §14.1, §14.2, §14.7, §14.10, RESOURCES.md §12.1, §12.2 and CHECKINS.md §4.2 (released in 0.9.0). Text only; `web/src/api/schema.d.ts` regenerated. The R6.11 bullet below now says it was released in 0.8.0.
 - **Repository hygiene (A4-14, A4-25, A5-20).** Removed `src/identity/signin-tenant.test.ts`, an unrun copy of `tests/unit/signin-tenant.test.ts` that the build compiled into `dist/`. `.playwright-mcp/` and `.claude/worktrees/` are git-, Prettier- and ESLint-ignored, so `npm run verify` passes in a checkout that has them.

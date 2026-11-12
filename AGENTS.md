@@ -8,16 +8,16 @@ Build against the released `SUAS-specs` stack named in [`src/release/pins.ts`](s
 
 ## Project
 
-SUAS v1 targets a proof of concept for the Mozilla Human-Scale AI Incubator. The v1 helper model is prepared 0.8.0 text (D-054, untagged) and `V1_PROJECT_PLAN.md` (proposal): a Veteran asks for help (food, rides, shelter, peer support) after an ID check, and any signed-in person can accept the request. Crisis destinations and labels come only from `SAFETY_COPY.md` at the pinned release (see Safety and environment).
+SUAS v1 targets a proof of concept for the Mozilla Human-Scale AI Incubator. The v1 helper model is released in 0.8.0 (D-054) and described in `V1_PROJECT_PLAN.md` (proposal): a Veteran asks for help (food, rides, shelter, peer support) after an ID check, and any signed-in person can accept the request. Crisis destinations and labels come only from `SAFETY_COPY.md` at the pinned release (see Safety and environment).
 
-- This repo: Fastify JSON API `/api/v0` (`src/`), React web app (`web/`, its own package), AWS CDK infrastructure (`infra/`). `src/worker*` and `wrangler.jsonc` are the Cloudflare Worker; the AWS move is a v1 target, not yet released (`V1_PROJECT_PLAN.md`, proposal).
+- This repo: Fastify JSON API `/api/v0` (`src/`), React web app (`web/`, its own package), AWS CDK infrastructure (`infra/`). STAGING runs on AWS (`infra/`), deployed by hand with CDK until a deploy workflow exists ([`docs/runbooks/deployment-rollback.md`](docs/runbooks/deployment-rollback.md)). The Cloudflare Worker and the Neon staging are retired (R11.6, proposal).
 - [`SUAS-specs`](https://github.com/scrimshawlife-ctrl/SUAS-specs) at the pinned release is the product authority, including `SAFETY.md` and `ENVIRONMENT.md`. Native clients `suas-ios` and `suas-android` consume `/api/v0`. Do not add `/api/mobile` or a second version selector; HTML `/app/*` commands are the browser surface, not the mobile contract.
 
 ## Safety and environment (non-negotiable)
 
 - No automated emergency dispatch, diagnosis, suicide prediction, or safety-critical generative behavior (`SAFETY.md` §2, §6, §8 at the pin).
 - Do not add vendor, capacity, SLO, recovery, legal/compliance, partner, staffing, scoring, crisis-copy, or reporting-threshold assumptions that remain unavailable.
-- Crisis destinations and labels come only from `SAFETY_COPY.md` at the pinned release. Agents do not add, remove, or relabel them. The `Text 838255` (`sms:838255`) link is D-050: decided, but its spec text waits for tag `v0.8.0`.
+- Crisis destinations and labels come only from `SAFETY_COPY.md` at the pinned release. Agents do not add, remove, or relabel them. The `Text 838255` (`sms:838255`) link is D-050, released in `v0.8.0`.
 - LOCAL, TEST and STAGING: no real Veteran data and no real external support effects, except allow-listed sandboxes in STAGING (`ENVIRONMENT.md` §2 at the pin). Synthetic data does not make a real provider call allowed.
 - TEST and CI keep `SUAS_SAFETY_COPY_MODE=placeholder_test_only` and the fixture and fake adapter modes. Do not switch them.
 - No code or config change may silently upgrade an `UNAVAILABLE`, `MANUAL_ONLY`, `INFORMATION_ONLY`, or `FUTURE` feature to production-operational behavior.
