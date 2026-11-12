@@ -14,6 +14,7 @@ import {
   ChannelPreferenceDisabledError,
   ChannelUnavailableError,
   createChannelRegistry,
+  deliverQueuedInApp,
   enqueueNotification,
   FailingChannel,
   findNotification,
@@ -128,9 +129,9 @@ describe('DATA_MODEL.md §9 / P-12 — subject reference', () => {
     const { notification } = await enqueueNotification(pool, {
       tenantId,
       recipientUserId: veteran.userId,
-      reason: 'qrf.responder_notified',
+      reason: 'service_request_expired',
       channel: 'IN_APP',
-      templateVersion: 'test@1',
+      templateVersion: 'request-lifecycle@1',
       subjectType: 'ServiceRequest',
       subjectId: requestId,
       disclosure: systemDisclosure(tenantId, veteran.userId),
@@ -326,26 +327,61 @@ describe('NOTIFICATIONS.md §4 — consent at creation and before each attempt',
     expect(email.sent()).toEqual([]);
   });
 
-  it('allows an internal-processing notification with no third-party grant', async () => {
+  it('delivers an IN_APP notice as it is created, with no template and no send job (C-01)', async () => {
     const tenantId = syntheticTenantId();
     const veteran = await user(tenantId, 'veteran');
-    const registry = channelRegistry();
+    const jobQueue = new InMemoryJobQueue();
 
-    const enqueued = await enqueueNotification(pool, {
-      tenantId,
-      recipientUserId: veteran.userId,
-      reason: 'service_request_update',
-      channel: 'IN_APP',
-      templateVersion: 'update@1',
-      disclosure: systemDisclosure(tenantId, veteran.userId),
-    });
+    const enqueued = await enqueueNotification(
+      pool,
+      {
+        tenantId,
+        recipientUserId: veteran.userId,
+        reason: 'service_request_released',
+        channel: 'IN_APP',
+        templateVersion: 'request-lifecycle@1',
+        disclosure: systemDisclosure(tenantId, veteran.userId),
+      },
+      { jobQueue },
+    );
 
-    const result = await attemptSend(pool, registry, {
+    expect(enqueued.notification).toMatchObject({ deliveryStatus: 'SENT', attemptCount: 1 });
+    expect(enqueued.notification.sentAt).toBeInstanceOf(Date);
+    expect(jobQueue.enqueued()).toEqual([]);
+    const audits = await pool.query<{ payload: { outcome: string } }>(
+      `SELECT payload FROM audit_events
+       WHERE event_type = 'NOTIFICATION_SEND_ATTEMPTED' AND target_id = $1`,
+      [enqueued.notification.notificationId],
+    );
+    expect(audits.rows.map((row) => row.payload.outcome)).toEqual(['SENT']);
+
+    // A replayed send job finds it settled and sends nothing again.
+    const replay = await attemptSend(pool, channelRegistry(), {
       tenantId,
       notificationId: enqueued.notification.notificationId,
       disclosure: systemDisclosure(tenantId, veteran.userId),
     });
-    expect(result.outcome).toBe('SENT');
+    expect(replay.outcome).toBe('SKIPPED');
+  });
+
+  it('delivers an IN_APP row left QUEUED by an earlier build exactly once', async () => {
+    const tenantId = syntheticTenantId();
+    const veteran = await user(tenantId, 'veteran');
+    const legacy = randomUUID();
+    await pool.query(
+      `INSERT INTO notifications (notification_id, tenant_id, recipient_user_id, reason, channel,
+         consent_basis, template_version)
+       VALUES ($1, $2, $3, 'service_request_expired', 'IN_APP', 'SYSTEM_INTERNAL_PROCESSING',
+         'request-lifecycle@1')`,
+      [legacy, tenantId, veteran.userId],
+    );
+
+    expect(await deliverQueuedInApp(pool)).toBeGreaterThanOrEqual(1);
+    await deliverQueuedInApp(pool);
+    expect(await findNotification(pool, tenantId, legacy)).toMatchObject({
+      deliveryStatus: 'SENT',
+      attemptCount: 1,
+    });
   });
 
   it('sends SMS with a caller body when the EMAIL catalog has no matching key', async () => {
@@ -623,9 +659,9 @@ describe('NOTIFICATIONS.md §9 — attempt counts are not coordination counts', 
       tenantId,
       recipientUserId: veteran.userId,
       destination: syntheticEmail('recipient'),
-      reason: 'followup_due',
+      reason: 'trusted_contact_alert',
       channel: 'EMAIL',
-      templateVersion: 'followup@1',
+      templateVersion: 'alert@1',
       maxAttempts: 3,
       disclosure,
     });
