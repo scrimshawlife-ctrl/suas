@@ -2,6 +2,7 @@
   "name": "suas-web",
   "version": "0.1.0",
   "private": true,
+  "license": "MPL-2.0",
   "description": "SUAS v1 web app (React SPA). Talks to the /api/v0 JSON API; never served by the Fastify server.",
   "type": "module",
   "engines": {
