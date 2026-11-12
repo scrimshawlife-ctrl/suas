@@ -8,6 +8,7 @@
  */
 
 import type { Pool } from 'pg';
+import { requestHeldInCurrentCycle } from '../coordination/cases.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../idempotency/index.js';
 import type { ConnectionPushPort } from '../realtime/connection-push.js';
 import type { ChatAccess } from './access.js';
@@ -117,6 +118,20 @@ export async function pushToCounterpart(
   if (deps.push === undefined) return;
   const push = deps.push;
   try {
+    // DISPATCH.md §14.10: the message goes only to someone who could read it over REST.
+    // A helper whose case closed or whose cycle ended keeps the thread id but not access.
+    if (
+      access.counterpartRole === 'HOLDER' &&
+      (access.released === true ||
+        !(await requestHeldInCurrentCycle(
+          deps.pool,
+          tenantId,
+          access.serviceRequestId,
+          access.counterpartUserId,
+        )))
+    ) {
+      return;
+    }
     const connectionIds = await listConnectionIds(deps.pool, tenantId, access.counterpartUserId);
     const payload = pushPayload(message);
     const outcomes = await Promise.allSettled(

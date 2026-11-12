@@ -421,6 +421,7 @@ describe('push failure and gone connections', () => {
       chatThreadId: randomUUID(),
       serviceRequestId: s.serviceRequestId,
       counterpartUserId: s.requester.userId,
+      counterpartRole: 'REQUESTER',
     };
     await pushToCounterpart(
       { pool: pool(), push, log: { warn: () => undefined } },
@@ -487,6 +488,7 @@ describe('push failure and gone connections', () => {
       chatThreadId: randomUUID(),
       serviceRequestId: s.serviceRequestId,
       counterpartUserId: s.requester.userId,
+      counterpartRole: 'REQUESTER',
     };
     await pushToCounterpart(
       { pool: pool(), push: recording, log: { warn: () => undefined } },
@@ -505,6 +507,44 @@ describe('push failure and gone connections', () => {
     });
     await revokeSession(pool(), liveSession.session.sessionId, 'LOGOUT');
     expect(await redeemConnectTicket(pool(), late.ticket)).toBeUndefined();
+  });
+
+  it('pushes to the helper only while they still hold the request (C-05)', async () => {
+    const s = await scenario({ accepted: true });
+    await registerConnection(pool(), {
+      connectionId: 'helper-conn',
+      tenantId: s.tenantId,
+      userId: s.accepter.userId,
+      sessionId: s.accepter.sessionId,
+    });
+    const sentTo: string[] = [];
+    const recording: ConnectionPushPort = {
+      implementation: 'recording',
+      connectUrl: () => 'wss://invalid.example',
+      send: (connectionId) => {
+        sentTo.push(connectionId);
+        return Promise.resolve('delivered');
+      },
+    };
+    const access: ChatAccess = {
+      chatThreadId: randomUUID(),
+      serviceRequestId: s.serviceRequestId,
+      counterpartUserId: s.accepter.userId,
+      counterpartRole: 'HOLDER',
+    };
+    const deps = { pool: pool(), push: recording, log: { warn: () => undefined } };
+    await pushToCounterpart(deps, s.tenantId, access, message(access, s.requester.userId));
+    expect(sentTo).toEqual(['helper-conn']);
+
+    // Once the case closes, the helper's REST read is 404, so the push stops too.
+    await pool().query(
+      `UPDATE support_cases SET status = 'CLOSED', closed_at = now()
+        WHERE tenant_id = $1 AND case_id = (
+          SELECT case_id FROM service_requests WHERE service_request_id = $2)`,
+      [s.tenantId, s.serviceRequestId],
+    );
+    await pushToCounterpart(deps, s.tenantId, access, message(access, s.requester.userId));
+    expect(sentTo).toEqual(['helper-conn']);
   });
 
   it('still stores and returns the message when the push provider fails', async () => {

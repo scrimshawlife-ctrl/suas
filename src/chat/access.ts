@@ -45,6 +45,11 @@ export interface ChatAccess {
   readonly serviceRequestId: string;
   /** The other participant: the one who should receive a push of the caller's message. */
   readonly counterpartUserId: string;
+  /**
+   * Whether the counterpart is the requester (who can always read the thread) or the
+   * person who accepted it (who reads only while holding the current cycle, DISPATCH §14.10).
+   */
+  readonly counterpartRole: 'REQUESTER' | 'HOLDER';
   /** A release ended this thread (R8.5): it is read-only. */
   readonly released?: boolean;
 }
@@ -75,7 +80,7 @@ export async function resolveChatAccess(
   if (row === undefined && chatThreadId !== undefined) throw new ResourceNotVisibleError();
   if (row !== undefined) {
     if (row.requester_user_id === caller.userId) {
-      return access(row, serviceRequestId, row.accepted_by_user_id);
+      return access(row, serviceRequestId, row.accepted_by_user_id, 'HOLDER');
     }
     if (row.accepted_by_user_id === caller.userId && row.released_at === null) {
       const stands = await requestHeldInCurrentCycle(
@@ -85,7 +90,7 @@ export async function resolveChatAccess(
         caller.userId,
       );
       if (!stands) throw new ResourceNotVisibleError();
-      return access(row, serviceRequestId, row.requester_user_id);
+      return access(row, serviceRequestId, row.requester_user_id, 'REQUESTER');
     }
     throw new ResourceNotVisibleError();
   }
@@ -101,11 +106,17 @@ export async function resolveChatAccess(
   throw new ResourceNotVisibleError();
 }
 
-function access(row: ThreadRow, serviceRequestId: string, counterpartUserId: string): ChatAccess {
+function access(
+  row: ThreadRow,
+  serviceRequestId: string,
+  counterpartUserId: string,
+  counterpartRole: ChatAccess['counterpartRole'],
+): ChatAccess {
   return {
     chatThreadId: row.chat_thread_id,
     serviceRequestId,
     counterpartUserId,
+    counterpartRole,
     released: row.released_at !== null,
   };
 }
