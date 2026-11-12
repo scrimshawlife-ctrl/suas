@@ -1,4 +1,4 @@
-/** D-007 approved pilot data operations. No provider or delivery adapter is activated. */
+/** Pilot data operations (export, deletion, retention plan); D-007 durations are DECISION_PENDING. No provider or delivery adapter is activated. */
 import { createCipheriv, randomBytes, randomUUID, createHash } from 'node:crypto';
 import type { Pool } from 'pg';
 import { z } from 'zod';
@@ -261,7 +261,7 @@ export async function buildPilotExport(
     authTag,
   };
 }
-/** Finds event records eligible after D-007's 365-day retention window. It deliberately does not purge immutable event stores. */
+/** Counts event records older than `before` (a placeholder window; D-007 is not released). It deliberately does not purge immutable event stores. */
 export async function planRetentionPurge(
   pool: Pool,
   before: Date,
@@ -278,6 +278,6 @@ export async function planRetentionPurge(
     eligibleEventCount: r.rows[0]?.n ?? 0,
     action: 'MANUAL_REVIEW_REQUIRED',
     reason:
-      'Event stores are append-only. D-007 requires retained history and no destructive purge is performed automatically.',
+      'Event stores are append-only. PRIVACY.md §2 keeps event history and D-007 durations are DECISION_PENDING, so no destructive purge is performed automatically.',
   };
 }

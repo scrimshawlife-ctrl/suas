@@ -1,5 +1,7 @@
 # Decision packet — D-007 retention / deletion
 
+> **Authority:** suas-local packet, not a SUAS-specs decision. The SUAS-specs register (`DECISIONS.md` at 0.9.0) lists D-007 as `DECISION_PENDING`. Code may use this packet only as an implementation choice or a placeholder, never as a released rule.
+
 **Status:** DECIDED for STAGING (2026-08-27), with pilot dry-run controls authorized in `OPERATIONAL_AUTHORIZATION-2026-08-29.md`
 **Affects gates:** `PRIVACY`  
 **Blocks:** Formal PRIVACY READY (purge/export package + human sign-off may still remain)
