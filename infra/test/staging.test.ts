@@ -243,6 +243,7 @@ describe('functions', () => {
         expect(result.config.idVerification.mode).toBe('disabled');
         expect(result.config.publicSignUp).toBe(false);
         expect(result.config.stagingFixturePrincipals).toHaveLength(1);
+        expect(result.config.stagingFixtureMailbox).toBe('fixture-mailbox@example.com');
         expect(result.config.corsAllowedOrigins).toEqual(['https://staging.suasqrf.com']);
         expect(result.config.chatPush.mode).toBe('disabled');
         expect(result.config.chatPush.publicUrl).toBeUndefined();
