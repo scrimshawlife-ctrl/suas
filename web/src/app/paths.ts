@@ -18,6 +18,7 @@ export const paths = {
   consents: '/consents',
   trustedContacts: '/trusted-contacts',
   notifications: '/notifications',
+  invitations: '/invitations',
   serve: '/serve',
   case: (id: string) => `/serve/requests/${id}`,
   chat: '/chat',

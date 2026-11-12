@@ -41,6 +41,7 @@ const screens: { path: string; title: string }[] = [
   { path: '/consents', title: 'What you share · SUAS' },
   { path: '/trusted-contacts', title: 'Trusted contacts · SUAS' },
   { path: '/notifications', title: 'Notifications · SUAS' },
+  { path: '/invitations', title: 'Invitations · SUAS' },
   { path: '/serve', title: 'Serve · SUAS' },
   { path: '/serve/requests/abc', title: 'Case · SUAS' },
   { path: '/chat', title: 'Chat · SUAS' },

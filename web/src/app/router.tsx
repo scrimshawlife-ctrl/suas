@@ -146,6 +146,11 @@ export const routes: RouteObject[] = [
                 path: paths.notifications,
                 ...page('Notifications', () => import('../features/support/NotificationsPage')),
               },
+              {
+                // An invitee may not have a profile yet: signed in is enough.
+                path: paths.invitations,
+                ...page('Invitations', () => import('../features/support/InvitationsPage')),
+              },
             ],
           },
           {

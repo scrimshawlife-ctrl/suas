@@ -84,8 +84,8 @@ function InviteForm() {
           onChange={(event) => setEmail(event.target.value)}
         />
         <p className="text-16 text-slate">
-          Adding someone does not share anything with them. SUAS does not message them yet, so tell
-          them yourself.
+          Adding someone does not share anything with them. SUAS emails them an invitation, and they
+          accept it by signing in with that email address.
         </p>
         {invite.isError ? <ErrorNotice error={invite.error} doing="add this person" /> : null}
         <div role="status">
