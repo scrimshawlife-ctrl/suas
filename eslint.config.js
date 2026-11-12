@@ -69,6 +69,7 @@ export default tseslint.config(
       'src/aws/websocket-lambda.ts',
       'src/aws/job-worker-lambda.ts',
       'src/aws/migrate-lambda.ts',
+      'src/aws/smtp-relay-lambda.ts',
       'tests/**/*.ts',
       '*.config.ts',
     ],
