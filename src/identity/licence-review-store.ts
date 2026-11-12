@@ -1,5 +1,5 @@
 /**
- * `veteran_licence_reviews` rows (suas-specs R10.1, proposal; migration 0023). Queries
+ * `veteran_licence_reviews` rows (suas-specs R10.1, proposal; migration 0024). Queries
  * only: the rules for when a row may change live in licence-review.ts. No query here
  * reads or writes a licence field value other than the shown reading.
  */

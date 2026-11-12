@@ -44,9 +44,10 @@ import type {
 /** R9.1 attempt limit: at most this many VA-answered attempts per person per rolling 24 hours. */
 export const VA_CONFIRMATION_MAX_ATTEMPTS = 5;
 /**
- * Outbound cap: at most this many VA calls of any result per person per rolling 24 hours.
- * Outages and refused requests do not use up the 5 tries, so this bounds what one person
- * can send to VA (a REQUEST_INVALID body is the caller's own doing and counts here).
+ * Outbound cap per person per rolling 24 hours (owner, suas #238, 2026-11-12). Like the 5
+ * tries it never counts outages or VA 400s: the only UNAVAILABLE row it counts is an
+ * identity conflict, which VA answered. So it counts the same rows as the 5-try limit, an
+ * attempt in flight and conflicts included; that limit trips first and this is a backstop.
  */
 export const VA_CONFIRMATION_MAX_CALLS = 20;
 const ATTEMPT_WINDOW_HOURS = 24;
@@ -206,58 +207,56 @@ export async function isAtVaAttemptLimit(
   tenantId: string,
   userId: string,
 ): Promise<boolean> {
-  return (await readAttemptCounts(db, tenantId, userId)).answered >= VA_CONFIRMATION_MAX_ATTEMPTS;
+  return (await readAttemptCounts(db, tenantId, userId)).counted >= VA_CONFIRMATION_MAX_ATTEMPTS;
 }
 
 interface AttemptCounts {
-  answered: number;
-  answered_retry: number | null;
-  calls: number;
-  calls_retry: number | null;
+  counted: number;
+  retry_after: number | null;
 }
 
+/**
+ * Only results VA answered (VERIFIED, NOT_CONFIRMED), an attempt in flight and identity
+ * conflicts count; outages and refused requests (UNAVAILABLE) never do (R9.1 D3), for the
+ * 5 tries and the 20-call cap alike. `retry_after` is when enough rows leave the window to
+ * fall under the 5 tries again.
+ */
 async function readAttemptCounts(
   db: Queryable,
   tenantId: string,
   userId: string,
 ): Promise<AttemptCounts> {
   const result = await db.query<AttemptCounts>(
-    `WITH recent AS (
-       SELECT created_at,
-              (status IN ('VERIFIED', 'NOT_CONFIRMED', 'PENDING')
-               OR failure_class = '${IDENTITY_CONFLICT_CLASS}') AS counted
+    `WITH counted AS (
+       SELECT created_at
          FROM veteran_verifications
         WHERE tenant_id = $1 AND user_id = $2 AND method = 'VA_VETERAN_STATUS'
           AND idempotency_key IS NOT NULL
+          AND (status IN ('VERIFIED', 'NOT_CONFIRMED', 'PENDING')
+               OR failure_class = '${IDENTITY_CONFLICT_CLASS}')
           AND created_at > now() - make_interval(hours => $3))
-     SELECT count(*) FILTER (WHERE counted)::int AS answered,
-            ceil(extract(epoch FROM min(created_at) FILTER (WHERE counted)
-                 + make_interval(hours => $3) - now()))::int AS answered_retry,
-            count(*)::int AS calls,
-            ceil(extract(epoch FROM min(created_at) + make_interval(hours => $3) - now()))::int
-              AS calls_retry
-       FROM recent`,
-    [tenantId, userId, ATTEMPT_WINDOW_HOURS],
+     SELECT count(*)::int AS counted,
+            ceil(extract(epoch FROM
+              (array_agg(created_at ORDER BY created_at))[greatest(count(*)::int - $4::int + 1, 1)]
+              + make_interval(hours => $3) - now()))::int AS retry_after
+       FROM counted`,
+    [tenantId, userId, ATTEMPT_WINDOW_HOURS, VA_CONFIRMATION_MAX_ATTEMPTS],
   );
-  return result.rows[0] ?? { answered: 0, answered_retry: null, calls: 0, calls_retry: null };
+  return result.rows[0] ?? { counted: 0, retry_after: null };
 }
 
-/**
- * Throws the attempt-limit error when a window is full. The 5 tries count only results VA
- * answered (VERIFIED, NOT_CONFIRMED), plus an attempt in flight and identity conflicts;
- * outages and refused requests (UNAVAILABLE) never do (R9.1 D3). Every VA call, whatever
- * its result, counts toward the outbound cap. Both answer 429 with the same code.
- */
+/** Throws the attempt-limit error when the window is full; both limits answer 429. */
 async function assertAttemptAllowed(db: Queryable, tenantId: string, userId: string) {
   const row = await readAttemptCounts(db, tenantId, userId);
-  if (row.answered >= VA_CONFIRMATION_MAX_ATTEMPTS) {
-    throw new VeteranConfirmationAttemptLimitError(Math.max(1, row.answered_retry ?? 1));
-  }
-  if (row.calls >= VA_CONFIRMATION_MAX_CALLS) {
+  const retryAfter = Math.max(1, row.retry_after ?? 1);
+  if (row.counted >= VA_CONFIRMATION_MAX_CALLS) {
     throw new VeteranConfirmationAttemptLimitError(
-      Math.max(1, row.calls_retry ?? 1),
+      retryAfter,
       `At most ${VA_CONFIRMATION_MAX_CALLS} VA checks are allowed in the last 24 hours. Try again later.`,
     );
+  }
+  if (row.counted >= VA_CONFIRMATION_MAX_ATTEMPTS) {
+    throw new VeteranConfirmationAttemptLimitError(retryAfter);
   }
 }
 

@@ -3,6 +3,7 @@
  * Undefined when disabled, so the confirm route answers 503. The fixture is LOCAL and TEST
  * only and the sandbox STAGING and LOCAL only, even if a caller builds a config the
  * startup schema would already have refused (D035 §5 "environment mismatch fails closed").
+ * The sandbox also needs the approved projection (A27), so it refuses to start until then.
  */
 
 import type { SuasConfig } from '../config/index.js';
@@ -13,10 +14,17 @@ import {
   type VaConfirmationLogger,
 } from './va-confirmation-http.js';
 import type { VeteranConfirmationPort } from './va-confirmation.js';
+import {
+  assertVaProjectionApproved,
+  VENDORED_VA_PROJECTION,
+  type VaProjectionArtifact,
+} from './va-projection-approval.js';
 
 export interface VeteranConfirmationPortOptions {
   readonly transport?: FetchTransport;
   readonly logger?: VaConfirmationLogger;
+  /** The projection and approval to check; the vendored copies unless a test passes others. */
+  readonly projection?: VaProjectionArtifact;
 }
 
 export function createVeteranConfirmationPort(
@@ -36,11 +44,13 @@ export function createVeteranConfirmationPort(
         `The VA confirmation sandbox is allowed only in STAGING and LOCAL, not ${config.environment}.`,
       );
     }
+    const { projection = VENDORED_VA_PROJECTION, ...adapterOptions } = options;
+    assertVaProjectionApproved(projection);
     return createVaConfirmationHttpAdapter({
       baseUrl,
       apiKey,
       environment: 'SANDBOX',
-      ...options,
+      ...adapterOptions,
     });
   }
   return undefined;
