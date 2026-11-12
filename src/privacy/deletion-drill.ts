@@ -5,9 +5,9 @@
  * - SUAS-specs PRIVACY.md §2 (deletion is a documented process; events/audit
  *   are not silently destroyed; consent history is preserved)
  * - SUAS-specs PRIVACY.md §9 (deletion requests emit Audit Events)
- * - SUAS-specs PRIVACY.md §10 / D-007 DECIDED (STAGING): soft-delete operational
- *   rows; retain Audit Events, Domain Events, and consent history for 365 days;
- *   provider-side copies remain `NOT_COMPUTABLE`
+ * - SUAS-specs PRIVACY.md §10 / D-007 `DECISION_PENDING`: this drill soft-deletes
+ *   operational rows and keeps Audit Events, Domain Events, and consent history
+ *   (365 days is a placeholder, not released); provider-side copies are `NOT_COMPUTABLE`
  * - SUAS-specs SECURITY.md §2 (soft-delete plus process; events not casually
  *   purged; no sensitive data in logs)
  * - SUAS-specs AUTH.md §5 (REVOKED invalidates sessions)
@@ -63,8 +63,8 @@ export const DELETION_REQUEST_AUDIT_EVENT_TYPE = 'DELETION_REQUEST';
 export const PRIVACY_GATE_VERDICT = 'NOT_READY' as const;
 
 /**
- * STAGING policy from D-007 (2026-08-27): soft-delete ops rows; retain events
- * 365 days. PRODUCTION purge/export remains a separate package.
+ * Drill policy label: soft-delete ops rows; keep events (365 days is a placeholder,
+ * D-007 is DECISION_PENDING). PRODUCTION purge/export remains a separate package.
  */
 export const D_007_RETENTION = 'SOFT_DELETE_RETAIN_EVENTS_365D' as const;
 
@@ -182,7 +182,7 @@ export function assertDeletionDrillEnvironment(config: SuasConfig): void {
 const DRILL_NOTE =
   'Synthetic deletion path only: records a deletion request as an Audit Event, ' +
   'soft-deletes the operational user row, and revokes sessions. Audit Events, ' +
-  'Domain Events, and consent history are retained for 365 days (D-007 STAGING). ' +
+  'Domain Events, and consent history are kept (D-007 durations are DECISION_PENDING). ' +
   'No automatic purge job is started here. Provider-side copies are NOT_COMPUTABLE. ' +
   'PRIVACY stays NOT_READY until purge/export package + broader sign-off. This is ' +
   'one logical PostgreSQL system of record and does not prove sharded or ' +
