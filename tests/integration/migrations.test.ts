@@ -970,7 +970,7 @@ describe('0017 request holder backfill', () => {
       const closedNoChat = await insertRequest(tenantId, caseB, veteranB, 'CLOSED');
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([17, 18, 19, 20, 21, 22]);
+      expect(result.appliedNow).toEqual([17, 18, 19, 20, 21, 22, 23]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const holders = await pool.query<{ id: string; holder: string | null }>(
@@ -1102,7 +1102,7 @@ describe('0020 request expiry and release', () => {
       );
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([20, 21, 22]);
+      expect(result.appliedNow).toEqual([20, 21, 22, 23]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const setting = await pool.query<{ value: unknown }>(
@@ -1188,7 +1188,7 @@ describe('0021 resource contacts and area', () => {
       const draftNoContact = await draft(null, null);
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([21, 22]);
+      expect(result.appliedNow).toEqual([21, 22, 23]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const read = async (table: string, key: string, id: string) => {
@@ -1367,6 +1367,159 @@ describe('0022 VA veteran confirmation', () => {
     // So does deleting the account.
     await pool.query(`UPDATE users SET deleted_at = now() WHERE user_id = $1`, [second]);
     await insert(await person(), 'VERIFIED', { identity: ['h1', 'k1'] });
+  });
+});
+
+describe('0023 licence reviews', () => {
+  const setUpPerson = async (tenantId: string) => {
+    const userId = randomUUID();
+    await pool.query(`INSERT INTO users (user_id, tenant_id, status) VALUES ($1, $2, 'ACTIVE')`, [
+      userId,
+      tenantId,
+    ]);
+    const attemptId = randomUUID();
+    await pool.query(
+      `INSERT INTO veteran_verifications
+         (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
+          not_confirmed_reason, settled_at)
+       VALUES ($1, $2, $3, 'VA_VETERAN_STATUS', 'NOT_CONFIRMED', 'SUAS', 'test',
+               'PERSON_NOT_FOUND', now())`,
+      [attemptId, tenantId, userId],
+    );
+    return { userId, attemptId };
+  };
+
+  it('keeps fingerprints and images only where §2.3 allows, and two different admins', async () => {
+    await runMigrations(pool, { mode: 'apply', provenance });
+    const tenantId = randomUUID();
+    const person = () => setUpPerson(tenantId);
+    const admin = randomUUID();
+    const other = randomUUID();
+    const insert = (
+      who: { userId: string; attemptId: string },
+      columns: Record<string, unknown>,
+    ) => {
+      const names = Object.keys(columns);
+      const params = names.map((_, index) => `$${index + 5}`).join(', ');
+      return pool.query(
+        `INSERT INTO veteran_licence_reviews
+           (review_id, tenant_id, user_id, va_attempt_id, notice_version, ${names.join(', ')})
+         VALUES ($1, $2, $3, $4, 'licence-notice-v1', ${params})`,
+        [randomUUID(), tenantId, who.userId, who.attemptId, ...Object.values(columns)],
+      );
+    };
+    const approved = (fingerprint: string | null, confirmer = other) => ({
+      status: 'APPROVED',
+      licence_fingerprint: fingerprint,
+      licence_fingerprint_key_id: fingerprint === null ? null : 'k1',
+      approved_by: admin,
+      approved_at: new Date(),
+      selfie_matches: true,
+      security_features_present: true,
+      whole_card: true,
+      confirmed_by: confirmer,
+      confirmed_at: new Date(),
+      confirm_selfie_matches: true,
+      confirm_security_features_present: true,
+      confirm_whole_card: true,
+      decided_at: new Date(),
+    });
+    const declined = { status: 'DECLINED', decline_reason: 'OTHER', decided_at: new Date() };
+
+    await insert(await person(), approved('fp-1'));
+    // One approved licence per tenant, confirmed by a different admin.
+    await expect(insert(await person(), approved('fp-1'))).rejects.toThrow(
+      /veteran_licence_reviews_fingerprint_approved_key/,
+    );
+    await expect(insert(await person(), approved('fp-2', admin))).rejects.toThrow(
+      /veteran_licence_reviews_two_admins_check/,
+    );
+    // An approval keeps its fingerprint; a decline does not.
+    await expect(insert(await person(), approved(null))).rejects.toThrow(
+      /veteran_licence_reviews_approved_fingerprint_check/,
+    );
+    await expect(
+      insert(await person(), {
+        ...declined,
+        licence_fingerprint: 'fp-3',
+        licence_fingerprint_key_id: 'k1',
+      }),
+    ).rejects.toThrow(/veteran_licence_reviews_closed_fingerprint_check/);
+    // A decided row holds no image key; only an UNREADABLE row has a failure class.
+    await expect(
+      insert(await person(), { ...declined, selfie_key: 'licence-reviews/x/selfie.jpg' }),
+    ).rejects.toThrow(/veteran_licence_reviews_decided_cleared_check/);
+    await expect(
+      insert(await person(), { status: 'READING', failure_class: 'PHOTOS_GONE' }),
+    ).rejects.toThrow(/veteran_licence_reviews_failure_class_status_check/);
+    // One open review per person.
+    const open = await person();
+    await insert(open, { status: 'READING' });
+    await expect(insert(open, { status: 'AWAITING_REVIEW' })).rejects.toThrow(
+      /veteran_licence_reviews_one_open_key/,
+    );
+  });
+
+  it('closes an open review when the person is revoked or deleted', async () => {
+    await runMigrations(pool, { mode: 'apply', provenance });
+    const tenantId = randomUUID();
+    const withOpenReview = async () => {
+      const who = await setUpPerson(tenantId);
+      const reviewId = randomUUID();
+      await pool.query(
+        `INSERT INTO veteran_licence_reviews
+           (review_id, tenant_id, user_id, va_attempt_id, notice_version, status, front_key,
+            back_key, selfie_key, licence_fingerprint, licence_fingerprint_key_id)
+         VALUES ($1, $2, $3, $4, 'licence-notice-v1', 'READING', 'f', 'b', 's', 'fp', 'k1')`,
+        [reviewId, tenantId, who.userId, who.attemptId],
+      );
+      return { userId: who.userId, reviewId };
+    };
+    const read = async (reviewId: string) => {
+      const result = await pool.query(
+        `SELECT status, decline_reason, selfie_key, licence_fingerprint
+           FROM veteran_licence_reviews WHERE review_id = $1`,
+        [reviewId],
+      );
+      return result.rows[0] as Record<string, unknown>;
+    };
+    const closeJobs = async (reviewId: string) =>
+      (
+        await pool.query(
+          `SELECT 1 FROM job_outbox
+            WHERE job_type = 'licence.close' AND payload->>'review_id' = $1`,
+          [reviewId],
+        )
+      ).rowCount;
+
+    const revoked = await withOpenReview();
+    await pool.query(
+      `INSERT INTO veteran_verifications
+         (verification_id, tenant_id, user_id, method, status, source, source_contract_version)
+       VALUES ($1, $2, $3, 'MANUAL_REVIEW', 'REVOKED', 'SUAS', 'test')`,
+      [randomUUID(), tenantId, revoked.userId],
+    );
+    expect(await read(revoked.reviewId)).toEqual({
+      status: 'DECLINED',
+      decline_reason: 'OTHER',
+      selfie_key: null,
+      licence_fingerprint: null,
+    });
+    expect(await closeJobs(revoked.reviewId)).toBe(1);
+
+    const deleted = await withOpenReview();
+    await pool.query(`UPDATE users SET deleted_at = now() WHERE user_id = $1`, [deleted.userId]);
+    expect((await read(deleted.reviewId)).status).toBe('DECLINED');
+    expect(await closeJobs(deleted.reviewId)).toBe(1);
+
+    // A REVIEW_ERROR revoke's MANUAL_REVIEW NOT_CONFIRMED row needs no VA reason.
+    await pool.query(
+      `INSERT INTO veteran_verifications
+         (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
+          settled_at)
+       VALUES ($1, $2, $3, 'MANUAL_REVIEW', 'NOT_CONFIRMED', 'SUAS', 'test', now())`,
+      [randomUUID(), tenantId, revoked.userId],
+    );
   });
 });
 
