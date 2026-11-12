@@ -13,6 +13,14 @@
  * path in one transaction. The model never sets `last_verified_at`.
  */
 
+import {
+  decodeTimeIdCursor,
+  encodeTimeIdCursor,
+  pageSize,
+  takePage,
+  timestampText,
+  type PageRequest,
+} from '../db/cursor.js';
 import type { Queryable } from '../db/transaction.js';
 import { appendAuditEvent } from '../events/index.js';
 import {
@@ -261,34 +269,6 @@ export async function findResourceDraft(
   return row === undefined ? undefined : toDraft(row);
 }
 
-export const DRAFT_DEFAULT_PAGE_SIZE = 20;
-export const DRAFT_MAX_PAGE_SIZE = 100;
-
-export class InvalidDraftCursorError extends Error {
-  readonly code = 'VALIDATION_FAILED';
-  readonly httpStatus = 400;
-
-  constructor() {
-    super('The pagination cursor is not valid.');
-    this.name = 'InvalidDraftCursorError';
-  }
-}
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Keyset cursor over (created_at DESC, resource_draft_id DESC). */
-function decodeCursor(cursor: string): { createdAt: string; id: string } {
-  try {
-    const [createdAt, id, ...rest] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-    if (createdAt !== undefined && id !== undefined && rest.length === 0 && UUID.test(id)) {
-      if (!Number.isNaN(Date.parse(createdAt))) return { createdAt, id };
-    }
-  } catch {
-    // fall through to the typed error
-  }
-  throw new InvalidDraftCursorError();
-}
-
 export interface ListResourceDraftsPage {
   readonly drafts: readonly ResourceDraft[];
   readonly nextCursor: string | undefined;
@@ -298,12 +278,9 @@ export interface ListResourceDraftsPage {
 export async function listResourceDrafts(
   db: Queryable,
   tenantId: string,
-  filters: { status?: ResourceDraftStatus; limit?: number; cursor?: string } = {},
+  filters: PageRequest & { status?: ResourceDraftStatus } = {},
 ): Promise<ListResourceDraftsPage> {
-  const limit = Math.min(
-    Math.max(filters.limit ?? DRAFT_DEFAULT_PAGE_SIZE, 1),
-    DRAFT_MAX_PAGE_SIZE,
-  );
+  const limit = pageSize(filters.limit);
   const conditions = ['tenant_id = $1'];
   const values: unknown[] = [tenantId];
   if (filters.status !== undefined) {
@@ -311,33 +288,25 @@ export async function listResourceDrafts(
     conditions.push(`status = $${values.length}`);
   }
   if (filters.cursor !== undefined) {
-    const { createdAt, id } = decodeCursor(filters.cursor);
-    values.push(createdAt, id);
+    const { at, id } = decodeTimeIdCursor(filters.cursor);
+    values.push(at, id);
     conditions.push(
       `(created_at, resource_draft_id) < ($${values.length - 1}::timestamptz, $${values.length}::uuid)`,
     );
   }
   values.push(limit + 1);
   const result = await db.query<DraftRow & { created_at_text: string }>(
-    `SELECT ${COLUMNS}, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
-              AS created_at_text
+    `SELECT ${COLUMNS}, ${timestampText('created_at')} AS created_at_text
      FROM resource_drafts
      WHERE ${conditions.join(' AND ')}
      ORDER BY created_at DESC, resource_draft_id DESC
      LIMIT $${values.length}`,
     values,
   );
-  const rows = result.rows.slice(0, limit);
-  const last = rows[rows.length - 1];
-  return {
-    drafts: rows.map(toDraft),
-    nextCursor:
-      result.rows.length > limit && last !== undefined
-        ? Buffer.from(`${last.created_at_text}|${last.resource_draft_id}`, 'utf8').toString(
-            'base64url',
-          )
-        : undefined,
-  };
+  const { rows, nextCursor } = takePage(result.rows, limit, (row) =>
+    encodeTimeIdCursor({ at: row.created_at_text, id: row.resource_draft_id }),
+  );
+  return { drafts: rows.map(toDraft), nextCursor };
 }
 
 async function lockPendingDraft(

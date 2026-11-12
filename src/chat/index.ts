@@ -18,7 +18,6 @@ export {
   removeConnection,
 } from './connections.js';
 export {
-  InvalidChatCursorError,
   listChatMessages,
   MAX_MESSAGE_LENGTH,
   type ChatMessage,

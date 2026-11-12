@@ -17,11 +17,8 @@ export {
 export {
   createResourceDrafts,
   discardResourceDraft,
-  DRAFT_DEFAULT_PAGE_SIZE,
-  DRAFT_MAX_PAGE_SIZE,
   editResourceDraft,
   findResourceDraft,
-  InvalidDraftCursorError,
   listResourceDrafts,
   publishResourceDraft,
   RESOURCE_DRAFT_STATUSES,
