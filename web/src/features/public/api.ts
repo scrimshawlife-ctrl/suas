@@ -59,7 +59,11 @@ export function useConfirmVeteranStatus() {
     onError: (error) => {
       if (hasApiCode(error, 'IDEMPOTENCY_CONFLICT')) last.current = null;
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+    onSettled: () => {
+      // A VA answer decides whether the R10.1 licence path is offered.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.licence });
+      return queryClient.invalidateQueries({ queryKey: queryKeys.me });
+    },
   });
 }
 
