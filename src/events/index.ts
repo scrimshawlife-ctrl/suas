@@ -19,6 +19,7 @@ export {
   DEFAULT_OUTBOX_MAX_ATTEMPTS,
   appendAuditEvent,
   appendDomainEvent,
+  EventIdentityConflictError,
   listAggregateEvents,
   readDomainEvent,
   type AppendDomainEventOptions,

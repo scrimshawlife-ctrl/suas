@@ -25,6 +25,20 @@ import {
   type EventEnvelope,
 } from './envelope.js';
 
+/**
+ * The event idempotency key is already taken by a fact of another aggregate (EVENT_MODEL.md
+ * §2.1: a key identifies one logical work item). Refused as an idempotency conflict (API.md §6).
+ */
+export class EventIdentityConflictError extends Error {
+  readonly code = 'IDEMPOTENCY_CONFLICT';
+  readonly httpStatus = 409;
+
+  constructor() {
+    super('This idempotency key already identifies different work.');
+    this.name = 'EventIdentityConflictError';
+  }
+}
+
 /** Bounded publication attempts before an outbox row is dead-lettered. */
 export const DEFAULT_OUTBOX_MAX_ATTEMPTS = 5;
 
@@ -155,6 +169,13 @@ export async function appendDomainEvent(
         'Domain event insert conflicted but no existing event was found; ' +
           'this indicates a corrupted logical-identity index.',
       );
+    }
+    // One logical work item belongs to one aggregate: never hand back another one's fact.
+    if (
+      existingRow.aggregate_type !== parsed.aggregateType ||
+      existingRow.aggregate_id !== parsed.aggregateId
+    ) {
+      throw new EventIdentityConflictError();
     }
     return { event: toEnvelope(existingRow), deduplicated: true };
   }
