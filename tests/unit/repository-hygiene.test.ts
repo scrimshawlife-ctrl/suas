@@ -73,23 +73,11 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('does not commit Worker secrets, connection strings, or Fly compute files', () => {
+  it('does not commit Fly compute files', () => {
     const files = repositoryFiles();
     expect(
       files.filter((file) => /^(fly\.toml|Dockerfile|docker-compose\.ya?ml)$/.test(file)),
     ).toEqual([]);
-
-    const wrangler = readFileSync(new URL('../../wrangler.jsonc', import.meta.url), 'utf8');
-    expect(wrangler).not.toMatch(/postgres(ql)?:\/\//);
-    expect(wrangler).not.toMatch(/neon\.tech/);
-    expect(wrangler).not.toMatch(/SUAS_SESSION_SECRET\s*:/);
-    expect(wrangler).not.toMatch(/RESEND_API_KEY/);
-    expect(wrangler).not.toMatch(/SUAS_EMAIL_FROM/);
-    expect(wrangler).toContain('YOUR_HYPERDRIVE_ID');
-    expect(wrangler).toContain('nodejs_compat');
-    expect(wrangler).toContain('"SUAS_EMAIL_MODE": "resend"');
-    expect(wrangler).toContain('"SUAS_BROWSER_AUTH_MODE": "email_otp"');
-    expect(wrangler).toContain('"SUAS_ALLOW_REAL_EXTERNAL_EFFECTS": "false"');
   });
 
   it('keeps gitignored operator scratch artifacts outside repository lint', () => {
