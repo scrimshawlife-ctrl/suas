@@ -11,8 +11,9 @@ import type { Pool } from 'pg';
 import type { SuasConfig } from '../config/index.js';
 import { appendDomainEvent } from '../events/index.js';
 import { createLicenceReaderPort } from '../identity/licence-reader-factory.js';
+import type { LicenceReaderPort } from '../identity/licence-reader.js';
 import { finishClosedReview, recordLicenceRead } from '../identity/licence-review.js';
-import { createObjectStoragePort } from '../storage/index.js';
+import { createObjectStoragePort, type ObjectStoragePort } from '../storage/index.js';
 import {
   attemptSend,
   parseNotificationSendPayload,
@@ -61,13 +62,18 @@ export function supportSignalComputeHandler(
 /**
  * Reads one licence review (suas-specs R10.1, proposal; L4). Outside LOCAL and TEST the
  * back must carry the synthetic IIN before anything is sent. A reader-unavailable answer
- * before the last try throws, so the outbox retries on a later pass.
+ * before the last try throws, so the outbox retries on a later pass. An inline run passes
+ * the API's own ports, so it reads the images that process stored.
  */
-export function licenceReadHandler(pool: Pool, config: SuasConfig): JobWork {
+export function licenceReadHandler(
+  pool: Pool,
+  config: SuasConfig,
+  ports: { readonly storage?: ObjectStoragePort; readonly reader?: LicenceReaderPort } = {},
+): JobWork {
   const deps = {
     pool,
-    storage: createObjectStoragePort(config),
-    reader: createLicenceReaderPort(config),
+    storage: ports.storage ?? createObjectStoragePort(config),
+    reader: ports.reader ?? createLicenceReaderPort(config),
     keyring: config.fingerprintKeys,
     synthetic: {
       required: config.environment !== 'LOCAL' && config.environment !== 'TEST',
