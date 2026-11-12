@@ -51,6 +51,12 @@ describe('SUAS_JOB_QUEUE', () => {
     ).rejects.toThrow(ConfigurationError);
   });
 
+  it('names the variable and its allowed values in the config error', () => {
+    expect(() => loadConfig(validEnv({ SUAS_JOB_QUEUE: 'postgres' }))).toThrow(
+      /SUAS_JOB_QUEUE.*in-memory-fake \| postgres-outbox/,
+    );
+  });
+
   it('keeps the in-memory fake when unset', async () => {
     const app = await startApp({ env: validEnv({ SUAS_MIGRATIONS_MODE: 'off' }), listen: false });
     try {
