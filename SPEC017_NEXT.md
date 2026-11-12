@@ -11,14 +11,14 @@ The list of open work lives in SUAS-specs, not here: [`REMAINING.md`](https://gi
 
 ## Surfaces in this repository
 
-| Surface              | Where                                                                                                     |
-| -------------------- | --------------------------------------------------------------------------------------------------------- |
-| JSON API `/api/v0`   | `src/http/routes/`; contract in `docs/openapi/v0.json`                                                    |
-| v1 web app           | `web/` (React), on `/api/v0` only                                                                         |
-| Legacy browser pages | HTML `/app/*` (`src/http/routes/ui.ts`); `/app/chat` still shows its unavailable state                    |
-| AWS infrastructure   | `infra/` (CDK), synthesized and tested offline; nothing deployed                                          |
-| Legacy STAGING host  | Cloudflare Worker (`src/worker*`, `wrangler.jsonc`), kept until the AWS cutover                           |
-| LOCAL demo           | `npm run dev:demo`: LOCAL Worker, synthetic seed, `demo@example.invalid` / `123456` ([README](README.md)) |
+| Surface              | Where                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| JSON API `/api/v0`   | `src/http/routes/`; contract in `docs/openapi/v0.json`                                                         |
+| v1 web app           | `web/` (React), on `/api/v0` only                                                                              |
+| Legacy browser pages | HTML `/app/*` (`src/http/routes/ui.ts`); `/app/chat` still shows its unavailable state                         |
+| AWS infrastructure   | `infra/` (CDK), synthesized and tested offline; nothing deployed                                               |
+| STAGING host         | AWS CDK app (`infra/`), deployed by hand; the Cloudflare Worker is retired (R11.6)                             |
+| LOCAL demo           | `npm run dev:demo`: LOCAL Node server, synthetic seed, `demo@example.invalid` / `123456` ([README](README.md)) |
 
 Native clients live in [`suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios) and [`suas-android`](https://github.com/scrimshawlife-ctrl/suas-android); their phone rules are the D-033 parity files in SUAS-specs. Do not wrap the web pages in a WebView and call that iOS or Android.
 

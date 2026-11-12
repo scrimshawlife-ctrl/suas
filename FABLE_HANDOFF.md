@@ -26,7 +26,7 @@ Build against `scrimshawlife-ctrl/SUAS-specs` release **v0.9.0**.
 
 ## This repository
 
-Fastify JSON API `/api/v0` (`src/`), React web app (`web/`) and AWS CDK infrastructure (`infra/`, synthesized offline, nothing deployed). The Cloudflare Worker (`src/worker*`, `wrangler.jsonc`) is the legacy synthetic STAGING host, kept until the AWS cutover. Layout and local setup: [README.md](README.md).
+Fastify JSON API `/api/v0` (`src/`), React web app (`web/`) and AWS CDK infrastructure (`infra/`, synthesized offline, nothing deployed). The Cloudflare Worker and its Neon staging database are retired (R11.6); STAGING deploys are run by hand with CDK. Layout and local setup: [README.md](README.md).
 
 ## First task
 
