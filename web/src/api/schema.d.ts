@@ -3389,6 +3389,15 @@ export interface operations {
           'application/json': components['schemas']['FollowUpResult'];
         };
       };
+      /** @description VALIDATION_FAILED: malformed body, a service_request_id that is not a request of this case, or a responsible_id that is not the actor responsible_type names (the case's Veteran for VETERAN, a user of the tenant for USER) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       409: components['responses']['Error'];
@@ -4295,7 +4304,15 @@ export interface operations {
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
-      409: components['responses']['Error'];
+      /** @description ILLEGAL_TRANSITION when the draft was submitted or discarded; STALE_STATE when another message or edit changed the draft while this one was being answered (send it again) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
       422: components['responses']['Error'];
     };
   };
