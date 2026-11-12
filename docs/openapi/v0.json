@@ -3446,10 +3446,15 @@
         "tags": ["admin"],
         "summary": "Extract Resource Drafts from pasted source text",
         "operationId": "extractAdminResourceDrafts",
-        "description": "SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans.",
+        "description": "SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans. Requires Idempotency-Key: a retry with the same key returns the drafts the first request created (re-read, so their current state) with replayed true, and creates no second set or model call (API.md \u00a77).",
         "security": [
           {
             "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -3480,6 +3485,9 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
             "$ref": "#/components/responses/Error"
           },
           "502": {
@@ -4298,13 +4306,17 @@
       },
       "ResourceDraftExtraction": {
         "type": "object",
-        "required": ["drafts"],
+        "required": ["drafts", "replayed"],
         "properties": {
           "drafts": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ResourceDraft"
             }
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True when an earlier request with the same Idempotency-Key created these drafts."
           }
         }
       },

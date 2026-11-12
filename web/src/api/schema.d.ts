@@ -1079,7 +1079,7 @@ export interface paths {
         put?: never;
         /**
          * Extract Resource Drafts from pasted source text
-         * @description SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans.
+         * @description SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans. Requires Idempotency-Key: a retry with the same key returns the drafts the first request created (re-read, so their current state) with replayed true, and creates no second set or model call (API.md §7).
          */
         post: operations["extractAdminResourceDrafts"];
         delete?: never;
@@ -1328,6 +1328,8 @@ export interface components {
         };
         ResourceDraftExtraction: {
             drafts: components["schemas"]["ResourceDraft"][];
+            /** @description True when an earlier request with the same Idempotency-Key created these drafts. */
+            replayed: boolean;
         };
         ResourceDraftExtractRequest: {
             source_text: string;
@@ -4315,7 +4317,10 @@ export interface operations {
     extractAdminResourceDrafts: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -4337,6 +4342,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             502: components["responses"]["Error"];
             503: components["responses"]["Error"];
         };

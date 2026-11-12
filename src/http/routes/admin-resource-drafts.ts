@@ -35,9 +35,18 @@ import {
   type ResourceDraft,
 } from '../../catalog/index.js';
 import { withTransaction } from '../../db/index.js';
+import {
+  commandScope,
+  fingerprintRequest,
+  readCommandRecord,
+  runIdempotentCommand,
+  type RunIdempotentCommandInput,
+} from '../../idempotency/index.js';
+import type { JsonObject } from '../../jobs/index.js';
 import type { ModelInferencePort } from '../../inference/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { authenticate } from '../authenticate.js';
+import { readIdempotencyKey } from '../idempotency-header.js';
 
 export interface AdminResourceDraftRouteDeps {
   readonly pool: Pool;
@@ -107,6 +116,42 @@ function replyExtractionFailure(reply: FastifyReply, failure: ExtractionFailure)
     .send({ error: { code: 'CATALOG_EXTRACTION_FAILED', message: FAILURE_MESSAGES[failure] } });
 }
 
+/** The drafts an extract created, in creation order, read fresh by id. */
+async function loadDrafts(
+  pool: Pool,
+  tenantId: string,
+  result: JsonObject,
+): Promise<ResourceDraft[]> {
+  const ids = Array.isArray(result.resource_draft_ids) ? result.resource_draft_ids : [];
+  const drafts: ResourceDraft[] = [];
+  for (const id of ids) {
+    if (typeof id !== 'string') continue;
+    const draft = await findResourceDraft(pool, tenantId, id);
+    if (draft !== undefined) drafts.push(draft);
+  }
+  return drafts;
+}
+
+/**
+ * A completed identical extract, read before the model is called so a retry neither
+ * calls it again nor duplicates drafts. Conflicts and in-flight keys are left to
+ * `runIdempotentCommand`.
+ */
+async function findCompletedExtract(
+  pool: Pool,
+  input: RunIdempotentCommandInput,
+): Promise<ResourceDraft[] | undefined> {
+  const record = await readCommandRecord(pool, input);
+  if (
+    record?.state !== 'COMPLETED' ||
+    record.requestFingerprint !== input.requestFingerprint ||
+    record.result === undefined
+  ) {
+    return undefined;
+  }
+  return loadDrafts(pool, input.tenantId, record.result);
+}
+
 export function registerAdminResourceDraftRoutes(
   app: FastifyInstance,
   deps: AdminResourceDraftRouteDeps,
@@ -143,24 +188,46 @@ export function registerAdminResourceDraftRoutes(
     return publicDraft(draft);
   });
 
+  // API.md §7: a retried extract with the same Idempotency-Key replays the drafts it made
+  // instead of creating a second set. The record keeps draft ids only (bounded result), and
+  // the replay re-reads them, so it shows their current state.
   app.post(`${API_PREFIX}/admin/resource-drafts/commands/extract`, async (request, reply) => {
     const context = await gate(request, 'Extract Resource Drafts');
+    const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
     const body = extractBody.parse(request.body);
+    const idempotency = {
+      tenantId: context.tenantId,
+      commandScope: commandScope({
+        command: 'POST /admin/resource-drafts/commands/extract',
+        actorId: context.userId,
+      }),
+      idempotencyKey,
+      requestFingerprint: fingerprintRequest({
+        source_text: body.source_text,
+        source_link: body.source_link,
+      }),
+    };
+
+    const previous = await findCompletedExtract(deps.pool, idempotency);
+    if (previous !== undefined) return { drafts: previous.map(publicDraft), replayed: true };
+
     const extraction = await extractResourceDrafts(deps.modelInference, {
       sourceText: body.source_text,
       sourceLink: body.source_link,
     });
     if (!extraction.ok) return replyExtractionFailure(reply, extraction.failure);
 
-    const drafts = await withTransaction(deps.pool, (tx) =>
-      createResourceDrafts(tx, {
+    const run = await runIdempotentCommand(deps.pool, idempotency, async (tx) => {
+      const drafts = await createResourceDrafts(tx, {
         tenantId: context.tenantId,
         actorId: context.userId,
         sourceLink: body.source_link,
         resources: extraction.resources,
-      }),
-    );
-    return { drafts: drafts.map(publicDraft) };
+      });
+      return { result: { resource_draft_ids: drafts.map((draft) => draft.resourceDraftId) } };
+    });
+    const drafts = await loadDrafts(deps.pool, context.tenantId, run.result);
+    return { drafts: drafts.map(publicDraft), replayed: run.replayed };
   });
 
   app.post(`${API_PREFIX}/admin/resource-drafts/:id/commands/edit`, async (request) => {
