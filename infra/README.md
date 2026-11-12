@@ -136,33 +136,52 @@ user (`suas_admin`, an `rds_superuser`), the same user the Proxy and the migrate
 All values are plain except the two marked secret. Other functions get the subset they need (see `lib/backend-stack.ts`);
 each function's environment is checked against the application's own config validator in the tests.
 
-| Variable                                                                                        | Value                                                                                                                             |
-| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `SUAS_ENV`                                                                                      | `STAGING`                                                                                                                         |
-| `SUAS_SPEC_VERSION`, `SUAS_RELEASE_MANIFEST`                                                    | from `src/release/pins.ts` (so a re-pin follows automatically)                                                                    |
-| `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS`                                                              | `false`                                                                                                                           |
-| `SUAS_SESSION_SECRET`                                                                           | secret (Secrets Manager)                                                                                                          |
-| `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<proxy endpoint>:5432/suas` (migrate uses the instance address, not the proxy)                |
-| `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3` on the API and job worker; the migrate function sets `DATABASE_POOL_MAX` to `1`                                     |
-| `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; the job worker uses `off`)                                                         |
-| `SUAS_BROWSER_AUTH_MODE`, `SUAS_BROWSER_TENANT_ID`                                              | `email_otp`, the `browserTenantId` context                                                                                        |
-| `SUAS_EMAIL_MODE`, `SUAS_EMAIL_FROM`                                                            | `ses`, the `emailFrom` context                                                                                                    |
-| `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                       |
-| `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                                                       |
-| `SUAS_MODEL_INFERENCE_MODE`                                                                     | `disabled`. R2.15 is not approved, so no model id is set.                                                                         |
-| `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket                                                                                                           |
-| `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052).                                                            |
-| `SUAS_CHAT_PUSH_MODE`                                                                           | `disabled`. R6.12 is not accepted. `SUAS_CHAT_WS_ENDPOINT` and `SUAS_CHAT_WS_PUBLIC_URL` are not set.                             |
-| `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | not set on the API Lambda, so the allowlist is empty. `staging.suasqrf.com` is a different origin from the API and is not listed. |
-| `SUAS_TRANSPORTATION_ADAPTER_MODE`, `SUAS_SHELTER_ADAPTER_MODE`, `SUAS_FOOD_ADAPTER_MODE`       | `fake`                                                                                                                            |
-| `SUAS_PEER_SUPPORT_ADAPTER_MODE`                                                                | `manual`                                                                                                                          |
-| `SUAS_SUPPORT_SIGNAL_MODE`, `SUAS_SAFETY_COPY_MODE`, `SUAS_SENSITIVE_AGGREGATE_REPORTING`       | `fixture`, the `safetyCopyMode` context, `disabled`                                                                               |
-| `SUAS_HTTP_HOST`, `SUAS_HTTP_PORT`                                                              | `0.0.0.0`, `8080`                                                                                                                 |
-| `SUAS_LOG_LEVEL`                                                                                | `info`                                                                                                                            |
-| `SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`                                                     | stamped at synth                                                                                                                  |
-| `AWS_LAMBDA_EXEC_WRAPPER`, `AWS_LWA_PORT`, `AWS_LWA_READINESS_CHECK_PATH`, `AWS_LWA_ASYNC_INIT` | `/opt/bootstrap`, `8080`, `/api/v0/health`, `true` (Lambda Web Adapter)                                                           |
+| Variable                                                                                        | Value                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUAS_ENV`                                                                                      | `STAGING`                                                                                                                                             |
+| `SUAS_SPEC_VERSION`, `SUAS_RELEASE_MANIFEST`                                                    | from `src/release/pins.ts` (so a re-pin follows automatically)                                                                                        |
+| `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS`                                                              | `false`                                                                                                                                               |
+| `SUAS_SESSION_SECRET`                                                                           | secret (Secrets Manager)                                                                                                                              |
+| `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<proxy endpoint>:5432/suas` (migrate uses the instance address, not the proxy)                                    |
+| `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3` on the API and job worker; the migrate function sets `DATABASE_POOL_MAX` to `1`                                                         |
+| `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; the job worker uses `off`)                                                                             |
+| `SUAS_BROWSER_AUTH_MODE`, `SUAS_BROWSER_TENANT_ID`                                              | `email_otp`, the `browserTenantId` context                                                                                                            |
+| `SUAS_EMAIL_MODE`, `SUAS_EMAIL_FROM`                                                            | `ses`, the `emailFrom` context                                                                                                                        |
+| `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                                           |
+| `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                                                                           |
+| `SUAS_MODEL_INFERENCE_MODE`                                                                     | `disabled`. R2.15 is not approved, so no model id is set.                                                                                             |
+| `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket                                                                                                                               |
+| `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052). The fixture seed marks nobody verified, so nobody passes the request gate yet. |
+| `SUAS_CHAT_PUSH_MODE`                                                                           | `disabled`. R6.12 is not accepted. `SUAS_CHAT_WS_ENDPOINT` and `SUAS_CHAT_WS_PUBLIC_URL` are not set.                                                 |
+| `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | `https://<webHostname>` (`https://staging.suasqrf.com`), API function only (R11.3, D-038). See "Cross-origin web client".                             |
+| `SUAS_STAGING_FIXTURE_REGISTRY`                                                                 | the SSM parameter `/suas/staging/fixture-registry`, resolved at deploy; also on the job worker and migrate functions (R11.5, D-052).                  |
+| `SUAS_TRANSPORTATION_ADAPTER_MODE`, `SUAS_SHELTER_ADAPTER_MODE`, `SUAS_FOOD_ADAPTER_MODE`       | `fake`                                                                                                                                                |
+| `SUAS_PEER_SUPPORT_ADAPTER_MODE`                                                                | `manual`                                                                                                                                              |
+| `SUAS_SUPPORT_SIGNAL_MODE`, `SUAS_SAFETY_COPY_MODE`, `SUAS_SENSITIVE_AGGREGATE_REPORTING`       | `fixture`, the `safetyCopyMode` context, `disabled`                                                                                                   |
+| `SUAS_HTTP_HOST`, `SUAS_HTTP_PORT`                                                              | `0.0.0.0`, `8080`                                                                                                                                     |
+| `SUAS_LOG_LEVEL`                                                                                | `info`                                                                                                                                                |
+| `SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`                                                     | stamped at synth                                                                                                                                      |
+| `AWS_LAMBDA_EXEC_WRAPPER`, `AWS_LWA_PORT`, `AWS_LWA_READINESS_CHECK_PATH`, `AWS_LWA_ASYNC_INIT` | `/opt/bootstrap`, `8080`, `/api/v0/health`, `true` (Lambda Web Adapter)                                                                               |
 
 `SUAS_DEMO_FIXED_CODE` is not set. `RESEND_API_KEY` is not used.
+
+### Cross-origin web client (R11.3)
+
+The web app on `staging.suasqrf.com` calls `api.staging.suasqrf.com` with Bearer, a different origin, so the API
+lists the web origin in `SUAS_CORS_ALLOWED_ORIGINS` (contributor proposal R11.3, specs #75, not released; D-038
+parsing rules are released in 0.7.0). Consequence (AUTH.md §9.3): with a non-empty allowlist the legacy `/app`
+session cookie is `SameSite=None; Secure` instead of `Strict`, and the allowlisted origin has credentialed access to
+the `/app` session. The web client does not use that cookie (it sends Bearer, and `/api/v0` never reads cookies), so
+the trust boundary is the staging web origin only. Changing `webHostname` changes the listed origin with it.
+
+### Fixture registry and seed (R11.5)
+
+STAGING admits only the `tenant-id:user-id` pairs in `SUAS_STAGING_FIXTURE_REGISTRY` (D-052); an empty registry
+admits nobody. The stack reads the registry from the SSM String parameter `/suas/staging/fixture-registry`.
+CloudFormation resolves it at each deploy, so no function reads SSM at run time and none has an `ssm:` grant;
+change the value, then redeploy `Suas-Staging-Backend`. The parameter must exist before the first deploy. The
+registry holds identifiers only; addresses never go in code, the template or SSM. Steps:
+[docs/runbooks/aws-staging-fixtures.md](../docs/runbooks/aws-staging-fixtures.md).
 
 ### IAM
 
@@ -221,7 +240,7 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pas
    These stacks wait for DNS validation and will not finish before then. Do not change name servers to unblock them.
 5. **Run the migrate function (manual step 4).**
 6. Build the web app (above), then `cdk deploy Suas-Staging-Web`.
-7. Seed or create synthetic users as the staging runbooks describe, then smoke-test.
+7. Run the fixture seed (manual step 6), then smoke-test.
 
 ## Manual steps
 
@@ -247,6 +266,15 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pas
    and read `out.json` (`schema_version`, `applied_now`). Until it has run, the API fails closed at startup
    because `SUAS_MIGRATIONS_MODE=validate` finds pending migrations.
 5. Accept the AWS BAA in AWS Artifact before any real Veteran data (plan §7). Staging stays synthetic.
+6. **Create the fixture registry before the first backend deploy, and seed it after migrating.** Pick up to ten
+   new user ids (`uuidgen | tr A-Z a-z`) and write them under the browser tenant:
+   `aws ssm put-parameter --name /suas/staging/fixture-registry --type String --value "00000000-0000-4000-8000-000000000001:<user id>,..."`.
+   After the migrate function has run, create those users and the fixture Resources:
+   `aws lambda invoke --function-name <MigrateFunctionName output> --cli-binary-format raw-in-base64-out --payload '{"action":"seed-staging-fixtures","fixtures":[{"user_id":"<user id>","email":"<name>@example.invalid"}]}' out.json`.
+   Every address must be synthetic (`example.com|net|org`, `.invalid`, `.test`, `.example`, `.localhost`). The
+   action refuses outside STAGING, refuses any other address or any user id not in the registry, checks the
+   schema version first, and a re-run creates nothing new. Details:
+   [docs/runbooks/aws-staging-fixtures.md](../docs/runbooks/aws-staging-fixtures.md).
 
 ## Records on Cloudflare today
 
