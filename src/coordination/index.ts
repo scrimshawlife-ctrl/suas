@@ -91,6 +91,7 @@ export {
   MEETING_PLACE_MAX,
   MeetingPlaceRequiredError,
   NotRequestHolderError,
+  SystemOnlyCommandError,
   peerAcceptRequestInTx,
   readDetailText,
   ServiceRequestNotFoundError,

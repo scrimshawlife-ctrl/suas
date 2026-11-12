@@ -5,8 +5,8 @@
  * - SUAS-specs DISPATCH.md §1 (a Service Request is not a Case), §3 (command
  *   concurrency invariant), §4 (transitions), §5 (provider relationship),
  *   §6 (assignment concurrency), §7 (categories), §8 (consent/privacy)
- * - SUAS-specs EVENT_MODEL.md §3 (`SERVICE_REQUEST_CREATED`,
- *   `SERVICE_REQUEST_ASSIGNED`)
+ * - SUAS-specs EVENT_MODEL.md §3 (`SERVICE_REQUEST_CREATED`, `SERVICE_REQUEST_ASSIGNED`,
+ *   `SERVICE_ACCEPTED`, `SERVICE_FULFILLED`, `SERVICE_REQUEST_RELEASED`)
  * - SUAS-specs CONSENT.md §3.8, §3.10-§3.11 (consent is evaluated before each
  *   external mutation that newly discloses data; reroute re-evaluates)
  */
@@ -14,7 +14,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
-import { appendAuditEvent, appendDomainEvent } from '../events/index.js';
+import { appendAuditEvent, appendDomainEvent, type DomainEventType } from '../events/index.js';
 import type { JsonObject } from '../jobs/index.js';
 import { findCase, CaseNotFoundError } from './cases.js';
 import { closeChatThreadInTx } from './chat-threads.js';
@@ -243,8 +243,35 @@ export interface ServiceRequestCommandInput {
   readonly expectedStatus?: ServiceRequestStatus;
   /** Grantee receiving the disclosure, for an externally disclosing edge. */
   readonly granteeId?: string;
+  /** The actor must be the request's current holder, checked under the row lock (§3 rule 1). */
+  readonly requireHolder?: boolean;
   readonly correlationId?: string;
 }
+
+/** DISPATCH.md §4: commands whose only actor is the System (EXPIRE, §14.6). */
+const SYSTEM_ONLY_COMMANDS: readonly ServiceRequestCommand[] = ['EXPIRE'];
+
+/** A user sent a command that only the System runs. */
+export class SystemOnlyCommandError extends Error {
+  readonly code = 'FORBIDDEN';
+  readonly httpStatus = 403;
+
+  constructor(command: ServiceRequestCommand) {
+    super(`"${command}" is run only by the System (SUAS-specs DISPATCH.md §4, §14.6).`);
+    this.name = 'SystemOnlyCommandError';
+  }
+}
+
+/**
+ * The Domain Event each command emits, per the DISPATCH.md §4 table (EVENT_MODEL.md §3). Edges
+ * not listed emit none. Payloads are ids only: request text never enters an event.
+ */
+const COMMAND_DOMAIN_EVENTS: Partial<Record<ServiceRequestCommand, DomainEventType>> = {
+  ASSIGN: 'SERVICE_REQUEST_ASSIGNED',
+  ACCEPT: 'SERVICE_ACCEPTED',
+  FULFILL: 'SERVICE_FULFILLED',
+  RELEASE: 'SERVICE_REQUEST_RELEASED',
+};
 
 /** The actor does not hold this request (checked under the request row lock). */
 export class NotRequestHolderError extends Error {
@@ -292,13 +319,20 @@ export async function executeServiceRequestCommandInTx(
   if (row === undefined) throw new ServiceRequestNotFoundError();
   const request = toRequest(row);
 
+  if (SYSTEM_ONLY_COMMANDS.includes(input.command) && input.actorType !== 'SYSTEM') {
+    throw new SystemOnlyCommandError(input.command);
+  }
+
   if (input.expectedStatus !== undefined && request.status !== input.expectedStatus) {
     throw new StaleRequestStateError(input.expectedStatus, request.status);
   }
 
-  // Under the row lock: only the current holder releases, even if the route's earlier
-  // check went stale (a release and re-accept by someone else in between).
-  if (input.command === 'RELEASE' && request.acceptedByUserId !== input.actorId) {
+  // Under the row lock: only the current holder runs a holder command, even if the route's
+  // earlier check went stale (a release and re-accept by someone else in between).
+  if (
+    (input.command === 'RELEASE' || input.requireHolder === true) &&
+    request.acceptedByUserId !== input.actorId
+  ) {
     throw new NotRequestHolderError();
   }
 
@@ -359,24 +393,33 @@ export async function executeServiceRequestCommandInTx(
   const updatedRow = updated.rows[0];
   if (updatedRow === undefined) throw new ServiceRequestNotFoundError();
 
-  if (released) {
-    await closeChatThreadInTx(tx, {
-      tenantId: input.tenantId,
-      serviceRequestId: input.serviceRequestId,
-    });
-    // Ids only: the reason is free text and stays on the request (status_reason). The
-    // release is both a cataloged Domain Event (suas-specs DISPATCH.md §4, §14.7, R8.5) and
-    // an Audit Event (EVENT_MODEL.md §4), written in the same transaction.
+  const eventType = COMMAND_DOMAIN_EVENTS[input.command];
+  if (eventType !== undefined) {
     await appendDomainEvent(tx, {
-      eventType: 'SERVICE_REQUEST_RELEASED',
+      eventType,
       aggregateType: 'ServiceRequest',
       aggregateId: input.serviceRequestId,
       tenantId: input.tenantId,
       actorType: input.actorType,
       actorId: input.actorId,
-      payload: { case_id: request.caseId, category: request.category },
+      payload: {
+        case_id: request.caseId,
+        category: request.category,
+        ...(input.command === 'ASSIGN' && input.granteeId !== undefined
+          ? { grantee_id: input.granteeId }
+          : {}),
+      },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
+  }
+
+  if (released) {
+    await closeChatThreadInTx(tx, {
+      tenantId: input.tenantId,
+      serviceRequestId: input.serviceRequestId,
+    });
+    // The release is also an Audit Event (DISPATCH.md §14.7; EVENT_MODEL.md §4). Ids only:
+    // the reason is free text and stays on the request (status_reason).
     await appendAuditEvent(tx, {
       eventType: 'SERVICE_REQUEST_RELEASED',
       action: 'RELEASE_SERVICE_REQUEST',
@@ -391,23 +434,6 @@ export async function executeServiceRequestCommandInTx(
         case_id: request.caseId,
         category: request.category,
         released_by_user_id: input.actorId,
-      },
-      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
-    });
-  }
-
-  if (input.command === 'ASSIGN') {
-    await appendDomainEvent(tx, {
-      eventType: 'SERVICE_REQUEST_ASSIGNED',
-      aggregateType: 'ServiceRequest',
-      aggregateId: input.serviceRequestId,
-      tenantId: input.tenantId,
-      actorType: input.actorType,
-      actorId: input.actorId,
-      payload: {
-        case_id: request.caseId,
-        category: request.category,
-        ...(input.granteeId !== undefined ? { grantee_id: input.granteeId } : {}),
       },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
