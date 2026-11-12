@@ -86,6 +86,16 @@ Not needed: **Secrets Manager** (the code never calls it: configuration is read 
 variables), **CloudWatch Logs** (the code never calls it; Lambda logging does not use the VPC), **STS/KMS**
 (credentials come from the Lambda role).
 
+### Assets bucket
+
+Licence review images live under `licence-reviews/<review_id>/` in this bucket (SCRY_LICENCE_FALLBACK.md §2.3).
+The prefix may keep no copies, and a prefix cannot opt out of bucket-wide versioning or a backup plan. So the
+bucket has no versioning and no replication, and no AWS Backup plan exists in these stacks. Tests fail if
+any of these appear; adding one would need a dedicated licence bucket first. A lifecycle rule
+(`LicenceReviewsBackstop`) expires objects under the prefix after 30 days (the owner-set D-007 exception) and
+aborts unfinished multipart uploads after 1 day. It is a backstop: the application deletes the images at the
+decision.
+
 ### Database
 
 PostgreSQL 17, `db.t4g.micro`, single-AZ, 20 GB gp3, encrypted, 7-day backups, deletion protection, final
@@ -150,7 +160,7 @@ each function's environment is checked against the application's own config vali
 | `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                       |
 | `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                                                       |
 | `SUAS_MODEL_INFERENCE_MODE`                                                                     | `disabled`. R2.15 is not approved, so no model id is set.                                                                         |
-| `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket                                                                                                           |
+| `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket (API and job worker)                                                                                      |
 | `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052).                                                            |
 | `SUAS_CHAT_PUSH_MODE`                                                                           | `disabled`. R6.12 is not accepted. `SUAS_CHAT_WS_ENDPOINT` and `SUAS_CHAT_WS_PUBLIC_URL` are not set.                             |
 | `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | not set on the API Lambda, so the allowlist is empty. `staging.suasqrf.com` is a different origin from the API and is not listed. |
@@ -169,7 +179,10 @@ each function's environment is checked against the application's own config vali
 Each function has its own role with no managed policies: write to its own log group, plus the ENI actions Lambda
 needs in a VPC (not scopable). Added grants: SES `ses:SendEmail` on the one domain identity (API and job worker);
 S3 get/put/delete on the assets bucket objects plus `s3:ListBucket` on the bucket itself (API; without it a
-missing key returns AccessDenied instead of NoSuchKey). There is no `bedrock:InvokeModel` grant and no
+missing key returns AccessDenied instead of NoSuchKey). This covers the licence images too: submit, the admin image
+route and deletion. The job worker gets S3 get/delete on `licence-reviews/*` only, plus `s3:ListBucket` limited
+by an `s3:prefix` condition to `licence-reviews/*`, so a missing image reads as 404 (`PHOTOS_GONE`), not 403
+(SCRY_LICENCE_FALLBACK.md L4.7). There is no `bedrock:InvokeModel` grant and no
 `execute-api:ManageConnections` grant. The ENI actions are the six in `AWSLambdaVPCAccessExecutionRole`,
 including `ec2:DescribeSubnets`.
 

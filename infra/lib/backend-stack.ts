@@ -50,6 +50,8 @@ const API_PORT = '8080';
 const LOG_RETENTION = logs.RetentionDays.ONE_MONTH;
 /** The AWS-published Lambda Web Adapter layer lives in an AWS-owned account. */
 const WEB_ADAPTER_LAYER_PUBLISHER = '753240598075';
+/** Licence review images (suas-specs SCRY_LICENCE_FALLBACK.md §2.3, R10.1 proposal). */
+const LICENCE_REVIEWS_PREFIX = 'licence-reviews/';
 
 type Env = Record<string, string>;
 
@@ -195,6 +197,19 @@ export class BackendStack extends Stack {
       enforceSSL: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       removalPolicy: RemovalPolicy.RETAIN,
+      // Licence images must leave no copies (§2.3): no versioning, no replication, and no
+      // AWS Backup plan covers this bucket. Tests fail if any of these appear.
+      versioned: false,
+      lifecycleRules: [
+        {
+          // Backstop only: the app deletes the images at the decision, and settles an open
+          // review as PHOTOS_EXPIRED before this age.
+          id: 'LicenceReviewsBackstop',
+          prefix: LICENCE_REVIEWS_PREFIX,
+          expiration: Duration.days(30),
+          abortIncompleteMultipartUploadAfter: Duration.days(1),
+        },
+      ],
     });
 
     const sessionSecret = new secretsmanager.Secret(this, 'SessionSecret', {
@@ -339,6 +354,9 @@ export class BackendStack extends Stack {
         ...viaProxy,
         SUAS_EMAIL_MODE: 'ses',
         SUAS_EMAIL_FROM: config.emailFrom,
+        // The licence read job reads the images and deletes them when it settles a review.
+        SUAS_OBJECT_STORAGE_MODE: 's3',
+        SUAS_S3_BUCKET: assetsBucket.bucketName,
       },
     });
 
@@ -376,6 +394,22 @@ export class BackendStack extends Stack {
       new iam.PolicyStatement({
         actions: ['s3:ListBucket'],
         resources: [assetsBucket.bucketArn],
+      }),
+    );
+    // The job worker touches licence images only: read and delete under the one prefix.
+    jobWorkerFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetObject', 's3:DeleteObject'],
+        resources: [assetsBucket.arnForObjects(`${LICENCE_REVIEWS_PREFIX}*`)],
+      }),
+    );
+    // A missing image must read as 404 (PHOTOS_GONE), not 403, so the worker may list, but
+    // only the licence prefix (SCRY_LICENCE_FALLBACK.md L4.7).
+    jobWorkerFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:ListBucket'],
+        resources: [assetsBucket.bucketArn],
+        conditions: { StringLike: { 's3:prefix': [`${LICENCE_REVIEWS_PREFIX}*`] } },
       }),
     );
     // ---------------------------------------------------- certificate and domains

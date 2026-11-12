@@ -349,6 +349,84 @@ describe('IAM', () => {
   });
 });
 
+// suas-specs SCRY_LICENCE_FALLBACK.md (R10.1 proposal) §2.3 and L4.7: licence images leave no
+// copies, and the job worker sees only their prefix.
+describe('licence review', () => {
+  type Statement = { Action: string | string[]; Resource: unknown; Condition?: unknown };
+  const assetsBucket = (): Resource | undefined =>
+    ofType(s.backend, 'AWS::S3::Bucket').find(([id]) => id.startsWith('AssetsBucket'))?.[1];
+  const envByHandler = (): Record<string, Record<string, unknown>> =>
+    Object.fromEntries(
+      ofType(s.backend, 'AWS::Lambda::Function')
+        .filter(([, r]) => r.Properties?.VpcConfig !== undefined)
+        .map(([, r]) => [
+          String(r.Properties?.Handler),
+          r.Properties?.Environment.Variables as Record<string, unknown>,
+        ]),
+    );
+  const s3StatementsOf = (roleIdPrefix: string): Statement[] => {
+    const roleId = ofType(s.backend, 'AWS::IAM::Role').find(([id]) =>
+      id.startsWith(roleIdPrefix),
+    )?.[0];
+    expect(roleId, roleIdPrefix).toBeDefined();
+    return ofType(s.backend, 'AWS::IAM::Policy')
+      .filter(([, p]) => JSON.stringify(p.Properties?.Roles).includes(`"${String(roleId)}"`))
+      .flatMap(([, p]) => p.Properties?.PolicyDocument.Statement as Statement[])
+      .filter((st) => [st.Action].flat().some((a) => a.startsWith('s3:')));
+  };
+
+  it('keeps no copies: the image bucket has no versioning or replication, and no AWS Backup', () => {
+    const bucket = assetsBucket();
+    expect(bucket).toBeDefined();
+    expect(bucket?.Properties?.VersioningConfiguration).toBeUndefined();
+    expect(bucket?.Properties?.ReplicationConfiguration).toBeUndefined();
+    for (const template of [s.dns, s.webCert, s.backend, s.web]) {
+      const types = Object.values(resourcesOf(template)).map((r) => r.Type);
+      expect(types.filter((t) => t.startsWith('AWS::Backup::'))).toEqual([]);
+    }
+  });
+
+  it('expires licence-reviews/ after 30 days and aborts unfinished uploads after 1', () => {
+    expect(assetsBucket()?.Properties?.LifecycleConfiguration.Rules).toEqual([
+      {
+        Id: 'LicenceReviewsBackstop',
+        Prefix: 'licence-reviews/',
+        ExpirationInDays: 30,
+        AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 },
+        Status: 'Enabled',
+      },
+    ]);
+  });
+
+  it('lets the job worker get and delete licence images only, and list only that prefix', () => {
+    const worker = envByHandler()['job-worker.handler'];
+    expect(worker?.SUAS_OBJECT_STORAGE_MODE).toBe('s3');
+    expect(JSON.stringify(worker?.SUAS_S3_BUCKET)).toContain('AssetsBucket');
+    const statements = s3StatementsOf('JobWorkerFunctionRole');
+    expect(statements).toHaveLength(2);
+    const objects = statements.find(
+      (st) => !([st.Action].flat() as string[]).includes('s3:ListBucket'),
+    );
+    expect([objects?.Action].flat().sort()).toEqual(['s3:DeleteObject', 's3:GetObject']);
+    expect(JSON.stringify(objects?.Resource)).toMatch(/AssetsBucket.*\/licence-reviews\/\*"/);
+    const list = statements.find((st) => [st.Action].flat().includes('s3:ListBucket'));
+    expect([list?.Action].flat()).toEqual(['s3:ListBucket']);
+    expect(list?.Condition).toEqual({ StringLike: { 's3:prefix': ['licence-reviews/*'] } });
+  });
+
+  it('lets the API put, get and delete licence images through its bucket-wide object grant', () => {
+    const objects = s3StatementsOf('ApiFunctionRole').find((st) =>
+      [st.Action].flat().includes('s3:PutObject'),
+    );
+    expect([objects?.Action].flat().sort()).toEqual([
+      's3:DeleteObject',
+      's3:GetObject',
+      's3:PutObject',
+    ]);
+    expect(JSON.stringify(objects?.Resource)).toMatch(/AssetsBucket.*\/\*"/);
+  });
+});
+
 describe('DNS and email', () => {
   it('owns a retained public zone and creates no apex or www record', () => {
     s.dns.hasResource('AWS::Route53::HostedZone', {
