@@ -309,19 +309,42 @@ describe('confirm and the gate', () => {
     expect(await attempts()).toBe(9);
   });
 
-  it('caps VA calls of any result at 20 in 24 hours, refused requests included', async () => {
-    const { headers, attempts } = await person();
-    for (let i = 0; i < VA_CONFIRMATION_MAX_CALLS / 2; i += 1) {
-      expect(
-        (await confirm(headers, body(VA_CONFIRMATION_FIXTURE_ZIPS.UNAVAILABLE_ERROR))).statusCode,
-      ).toBe(200);
-      expect(
-        (await confirm(headers, body(VA_CONFIRMATION_FIXTURE_ZIPS.REQUEST_INVALID))).statusCode,
-      ).toBe(200);
-    }
+  it('never counts outages or VA 400s toward the 20-call cap (owner, suas #238)', async () => {
+    const { pool, tenantId, user, headers, attempts } = await person();
+    // Settled UNAVAILABLE rows of every outage class, more than the cap, written directly.
+    const classes = ['PROVIDER_UNAVAILABLE', 'TIMEOUT', 'REQUEST_INVALID', 'NETWORK_ERROR'];
+    await pool.query(
+      `INSERT INTO veteran_verifications
+         (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
+          failure_class, idempotency_key, settled_at)
+       SELECT gen_random_uuid(), $1, $2, 'VA_VETERAN_STATUS', 'UNAVAILABLE', 'VA', 'test',
+              ($3::text[])[1 + i % 4], gen_random_uuid()::text, now()
+         FROM generate_series(1, $4::int) AS i`,
+      [tenantId, user.userId, classes, VA_CONFIRMATION_MAX_CALLS + 5],
+    );
+    const passes = await confirm(headers, body(VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED));
+    expect(passes.statusCode).toBe(200);
+    expect(passes.json()).toMatchObject({ status: 'VERIFIED' });
+    expect(await attempts()).toBe(VA_CONFIRMATION_MAX_CALLS + 6);
+  });
+
+  it('refuses at 20 counted VA calls in 24 hours with the cap message', async () => {
+    const { pool, tenantId, user, headers, attempts } = await person();
+    await pool.query(
+      `INSERT INTO veteran_verifications
+         (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
+          not_confirmed_reason, idempotency_key, settled_at)
+       SELECT gen_random_uuid(), $1, $2, 'VA_VETERAN_STATUS', 'NOT_CONFIRMED', 'VA', 'test',
+              'PERSON_NOT_FOUND', gen_random_uuid()::text, now()
+         FROM generate_series(1, $3::int)`,
+      [tenantId, user.userId, VA_CONFIRMATION_MAX_CALLS],
+    );
     const capped = await confirm(headers, body(VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED));
     expect(capped.statusCode).toBe(429);
     expect(errorCode(capped)).toBe('VERIFICATION_ATTEMPT_LIMIT');
+    expect(capped.json<{ error: { message: string } }>().error.message).toContain(
+      `${VA_CONFIRMATION_MAX_CALLS} VA checks`,
+    );
     expect(Number(capped.headers['retry-after'])).toBeGreaterThan(0);
     expect(await attempts()).toBe(VA_CONFIRMATION_MAX_CALLS);
     // Self-attestation stays open.

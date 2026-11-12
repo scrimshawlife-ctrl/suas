@@ -9,6 +9,7 @@ import { createVeteranConfirmationPort } from '../../src/identity/va-confirmatio
 import { VA_CONFIRMATION_SANDBOX_BASE_URL } from '../../src/identity/va-confirmation.js';
 import { startApp } from '../../src/app.js';
 import { TEST_FINGERPRINT_KEY, TEST_FINGERPRINT_KEY_ID, validEnv } from '../helpers/env.js';
+import { approvedVaProjection } from '../helpers/va-projection.js';
 
 const KEY = 'synthetic-sandbox-key-1111';
 const sandbox = (overrides: Record<string, string | undefined> = {}) =>
@@ -108,7 +109,9 @@ describe('VA confirmation config', () => {
 
   it('allows the sandbox in STAGING and LOCAL only', () => {
     for (const env of ['STAGING', 'LOCAL']) {
-      const port = createVeteranConfirmationPort(loadConfig(sandbox({ SUAS_ENV: env })));
+      const port = createVeteranConfirmationPort(loadConfig(sandbox({ SUAS_ENV: env })), {
+        projection: approvedVaProjection(),
+      });
       expect(port?.providerEnvironment).toBe('SANDBOX');
     }
     expect(issuesFor(sandbox({ SUAS_ENV: 'PRODUCTION' }))).toContain(
