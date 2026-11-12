@@ -11,6 +11,7 @@ import { startApp, type StartedApp } from '../../src/app.js';
 import { ConfigurationError } from '../../src/config/index.js';
 import { EXPECTED_SCHEMA_VERSION } from '../../src/db/index.js';
 import { createSession, elevateSession } from '../../src/auth/index.js';
+import { seedManualAdapterConfigurations } from '../../src/fulfillment/index.js';
 import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
@@ -193,7 +194,7 @@ describe('GET /api/v0/admin/adapter-catalog', () => {
 });
 
 describe('admin adapter configurations', () => {
-  it('seeds manuals on list and enables a catalog API adapter only with secrets', async () => {
+  it('lists without writing and enables a catalog API adapter only with secrets', async () => {
     const pool = app.pool;
     if (pool === undefined) throw new Error('The test app has no database pool.');
     const tenantId = randomUUID();
@@ -209,7 +210,38 @@ describe('admin adapter configurations', () => {
     });
     await elevateSession(pool, session.session.sessionId);
     const headers = { authorization: `Bearer ${session.credential}` };
+    const rowsFor = async (id: string) =>
+      (await pool.query('SELECT 1 FROM provider_adapter_configurations WHERE tenant_id = $1', [id]))
+        .rowCount;
 
+    // C-23: a read writes nothing, so an unprovisioned tenant lists no rows.
+    const empty = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/admin/adapter-configurations?tenant_id=${tenantId}`,
+      headers,
+    });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json().configurations).toEqual([]);
+    expect(await rowsFor(tenantId)).toBe(0);
+
+    // A5-07: another tenant reads as absent and gains no rows.
+    const otherTenant = randomUUID();
+    const foreign = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/admin/adapter-configurations?tenant_id=${otherTenant}`,
+      headers,
+    });
+    expect(foreign.statusCode).toBe(404);
+    expect(await rowsFor(otherTenant)).toBe(0);
+    const foreignWrite = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/admin/adapter-configurations/commands/disable',
+      headers,
+      payload: { tenant_id: otherTenant, adapter_id: 'food-manual', capability: 'FOOD' },
+    });
+    expect(foreignWrite.statusCode).toBe(404);
+
+    await seedManualAdapterConfigurations(pool, tenantId);
     const listed = await app.server.inject({
       method: 'GET',
       url: `/api/v0/admin/adapter-configurations?tenant_id=${tenantId}`,

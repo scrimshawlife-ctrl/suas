@@ -303,7 +303,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List adapter configurations */
+        /**
+         * List adapter configurations
+         * @description Reads only; it writes no rows. tenant_id must be the caller's own tenant, or the answer is 404 (API.md §4).
+         */
         get: operations["getAdminAdapterConfigurations"];
         put?: never;
         post?: never;
@@ -2751,6 +2754,7 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     enableAdminAdapterConfiguration: {
@@ -2778,6 +2782,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             413: components["responses"]["Error"];
         };
     };
@@ -2806,6 +2811,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             413: components["responses"]["Error"];
         };
     };
@@ -2834,6 +2840,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             413: components["responses"]["Error"];
         };
     };
