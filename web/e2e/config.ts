@@ -91,6 +91,10 @@ export function stackEnv(sessionSecret: string): NodeJS.ProcessEnv {
     SUAS_VA_CONFIRMATION_MODE: 'fixture',
     SUAS_FINGERPRINT_KEY: fingerprintKey,
     SUAS_FINGERPRINT_KEY_ID: 'e2e-k1',
+    // Licence fallback (suas-specs #73 R10.1, proposal): the deterministic reader, with images in
+    // the API process's memory, so the read runs inline after the submit (no separate worker).
+    SUAS_LICENCE_READER_MODE: 'fixture',
+    SUAS_OBJECT_STORAGE_MODE: 'fake',
     SUAS_MODEL_INFERENCE_MODE: 'fake',
     SUAS_CHAT_PUSH_MODE: 'local',
     SUAS_CHAT_LOCAL_WS_PORT: String(WS_PORT),
