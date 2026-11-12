@@ -155,6 +155,7 @@ each function's environment is checked against the application's own config vali
 | `SUAS_CHAT_PUSH_MODE`                                                                           | `disabled`. R6.12 is not accepted. `SUAS_CHAT_WS_ENDPOINT` and `SUAS_CHAT_WS_PUBLIC_URL` are not set.                                                 |
 | `SUAS_CORS_ALLOWED_ORIGINS`                                                                     | `https://<webHostname>` (`https://staging.suasqrf.com`), API function only (R11.3, D-038). See "Cross-origin web client".                             |
 | `SUAS_STAGING_FIXTURE_REGISTRY`                                                                 | the SSM parameter `/suas/staging/fixture-registry`, resolved at deploy; also on the job worker and migrate functions (R11.5, D-052).                  |
+| `SUAS_STAGING_FIXTURE_MAILBOX`                                                                  | the SSM parameter `/suas/staging/fixture-mailbox` (one real mailbox), resolved at deploy; same three functions (R11.7).                               |
 | `SUAS_TRANSPORTATION_ADAPTER_MODE`, `SUAS_SHELTER_ADAPTER_MODE`, `SUAS_FOOD_ADAPTER_MODE`       | `fake`                                                                                                                                                |
 | `SUAS_PEER_SUPPORT_ADAPTER_MODE`                                                                | `manual`                                                                                                                                              |
 | `SUAS_SUPPORT_SIGNAL_MODE`, `SUAS_SAFETY_COPY_MODE`, `SUAS_SENSITIVE_AGGREGATE_REPORTING`       | `fixture`, the `safetyCopyMode` context, `disabled`                                                                                                   |
@@ -180,7 +181,14 @@ STAGING admits only the `tenant-id:user-id` pairs in `SUAS_STAGING_FIXTURE_REGIS
 admits nobody. The stack reads the registry from the SSM String parameter `/suas/staging/fixture-registry`.
 CloudFormation resolves it at each deploy, so no function reads SSM at run time and none has an `ssm:` grant;
 change the value, then redeploy `Suas-Staging-Backend`. The parameter must exist before the first deploy. The
-registry holds identifiers only; addresses never go in code, the template or SSM. Steps:
+registry holds identifiers only.
+
+Sign-in on STAGING is an emailed code, which a synthetic address never receives. So a fixture address may also be
+a plus address `local+tag@domain` of the one mailbox in `/suas/staging/fixture-mailbox` (R11.7, contributor
+proposal, specs #75, not released): Gmail delivers `<local>+vet1@<domain>` to `<local>@<domain>`, so every
+fixture's code arrives in that inbox. The bare mailbox is never a fixture address. The mailbox is the one real
+address in this setup: it lives only in SSM and, after deploy, in the Lambda configuration; never in code or the
+template. Steps:
 [docs/runbooks/aws-staging-fixtures.md](../docs/runbooks/aws-staging-fixtures.md).
 
 ### IAM
@@ -269,9 +277,12 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pas
 6. **Create the fixture registry before the first backend deploy, and seed it after migrating.** Pick up to ten
    new user ids (`uuidgen | tr A-Z a-z`) and write them under the browser tenant:
    `aws ssm put-parameter --name /suas/staging/fixture-registry --type String --value "00000000-0000-4000-8000-000000000001:<user id>,..."`.
+   Also store the mailbox that receives fixture codes (it must exist before the first deploy):
+   `aws ssm put-parameter --name /suas/staging/fixture-mailbox --type String --value "<owner mailbox>"`.
    After the migrate function has run, create those users and the fixture Resources:
    `aws lambda invoke --function-name <MigrateFunctionName output> --cli-binary-format raw-in-base64-out --payload '{"action":"seed-staging-fixtures","fixtures":[{"user_id":"<user id>","email":"<name>@example.invalid"}]}' out.json`.
-   Every address must be synthetic (`example.com|net|org`, `.invalid`, `.test`, `.example`, `.localhost`). The
+   Every address must be synthetic (`example.com|net|org`, `.invalid`, `.test`, `.example`, `.localhost`) or a
+   plus address of the mailbox (`<local>+<tag>@<domain>`, tag `[a-z0-9-]{1,32}`), which is the way to receive codes. The
    action refuses outside STAGING, refuses any other address or any user id not in the registry, checks the
    schema version first, and a re-run creates nothing new. Details:
    [docs/runbooks/aws-staging-fixtures.md](../docs/runbooks/aws-staging-fixtures.md).
