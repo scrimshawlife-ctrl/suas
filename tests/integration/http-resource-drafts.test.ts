@@ -232,6 +232,45 @@ describe('extract', () => {
   });
 });
 
+describe('list paging on the shared cursor (C-21)', () => {
+  it('walks every draft once and keeps the cursor bytes the old draft encoder issued', async () => {
+    const tenantId = randomUUID();
+    const admin = await credential(app, tenantId, { admin: true, elevate: true });
+    scriptResources([1, 2, 3].map((n) => ({ ...validResource, service_name: `Pantry ${n}` })));
+    expect((await extract(admin.headers)).statusCode).toBe(200);
+
+    const read = (query: string) =>
+      app.server.inject({
+        method: 'GET',
+        url: `/api/v0/admin/resource-drafts${query}`,
+        headers: admin.headers,
+      });
+    const first = (await read('?limit=2')).json();
+    expect(first.drafts).toHaveLength(2);
+    // Before C-21 the cursor was base64url(`<microsecond UTC created_at>|<id>`).
+    const last = first.drafts[1].resource_draft_id as string;
+    const stored = await pool().query<{ at: string }>(
+      `SELECT to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at
+         FROM resource_drafts WHERE resource_draft_id = $1`,
+      [last],
+    );
+    const legacy = Buffer.from(`${stored.rows[0]!.at}|${last}`, 'utf8').toString('base64url');
+    expect(first.next_cursor).toBe(legacy);
+
+    const second = (await read(`?limit=2&cursor=${legacy}`)).json();
+    expect(second.drafts).toHaveLength(1);
+    expect(second.next_cursor).toBeNull();
+    const ids = [...first.drafts, ...second.drafts].map(
+      (d: { resource_draft_id: string }) => d.resource_draft_id,
+    );
+    expect(new Set(ids).size).toBe(3);
+
+    const bad = await read('?cursor=not-a-cursor');
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error.code).toBe('VALIDATION_FAILED');
+  });
+});
+
 describe('edit, discard and publish', () => {
   async function oneDraft(headers: Record<string, string>) {
     scriptResources([validResource]);
