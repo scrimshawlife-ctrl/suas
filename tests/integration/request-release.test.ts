@@ -503,11 +503,8 @@ describe('request command path and actor rules', () => {
     const helper = await person(tenantId, 'helper');
     const id = await submittedRequest(requester);
     const response = await get(helper, '/service-requests?ownership=open');
-    const item = response
-      .json()
-      .service_requests.find(
-        (entry: { service_request_id: string }) => entry.service_request_id === id,
-      );
+    const body: { service_requests: Record<string, unknown>[] } = response.json();
+    const item = body.service_requests.find((entry) => entry.service_request_id === id);
     expect(item).toBeDefined();
     expect(item).not.toHaveProperty('case_id');
   });
