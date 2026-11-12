@@ -25,12 +25,12 @@ export function createStagingApp(app: App): StagingStacks {
   const env = stackEnv();
   const prefix = `Suas-${config.name === 'staging' ? 'Staging' : config.name}`;
 
-  // Shared by every environment: the hosted zone and the SES domain identity.
+  // Shared by every environment: the hosted zone.
   const dns = new DnsStack(app, 'Suas-Dns', {
     env,
     rootDomain: config.rootDomain,
     crossRegionReferences: true,
-    description: 'SUAS Route 53 hosted zone and SES domain identity',
+    description: 'SUAS Route 53 hosted zone and mail records',
   });
 
   const webCert = new WebCertStack(app, `${prefix}-WebCert`, {
@@ -45,7 +45,6 @@ export function createStagingApp(app: App): StagingStacks {
     env,
     config,
     zone: dns.zone,
-    sesIdentityArn: dns.sesIdentityArn,
     description: `SUAS ${config.name} backend: VPC, RDS, API, jobs. Inference and chat push stay off.`,
   });
 

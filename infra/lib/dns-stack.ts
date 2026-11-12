@@ -1,18 +1,17 @@
 /**
- * DNS and sending identity, shared by every environment.
+ * DNS, shared by every environment.
  *
  * - The public hosted zone for the root domain. It holds no apex or `www` record, so
  *   deploying it does not change what the domain serves today. Nothing resolves from it
  *   while the registrar still points at Cloudflare. Changing those name servers waits
  *   for the suas-specs #61 R6.8 gate and an owner decision (see README).
  * - The mail records that exist on Cloudflare today (Resend DKIM, `send` SPF and MX).
- * - The SES domain identity with Easy DKIM, in the zone. An SES identity belongs to a
- *   domain, not to an environment, so it lives here and not in a per-environment stack.
+ *
+ * There is no SES identity: v1 STAGING sends through Gmail SMTP (suas-specs #75 R11.2).
  */
 
 import { CfnOutput, Fn, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as ses from 'aws-cdk-lib/aws-ses';
 import type { Construct } from 'constructs';
 
 /** Public DKIM key at `resend._domainkey.suasqrf.com` in the Cloudflare zone (read with dig, 2026-11-05). */
@@ -34,10 +33,6 @@ export class DnsStack extends Stack {
     this.zone = new route53.PublicHostedZone(this, 'Zone', { zoneName: props.rootDomain });
     // Deleting the zone would break the registrar delegation and mint new name servers.
     this.zone.applyRemovalPolicy(RemovalPolicy.RETAIN);
-
-    new ses.EmailIdentity(this, 'DomainIdentity', {
-      identity: ses.Identity.publicHostedZone(this.zone),
-    });
 
     // Mail records that exist in the Cloudflare zone today (Resend, D-004). They are public DNS
     // values, not secrets. They are recreated here so outgoing mail can keep working if the
@@ -65,15 +60,6 @@ export class DnsStack extends Stack {
       description:
         'Route 53 name servers for this zone. Do not change the registrar name servers. That cutover waits for the suas-specs #61 R6.8 gate and an owner decision.',
       value: Fn.join(', ', this.zone.hostedZoneNameServers ?? []),
-    });
-  }
-
-  /** ARN of the SES domain identity, for IAM. No wildcard. */
-  get sesIdentityArn(): string {
-    return this.formatArn({
-      service: 'ses',
-      resource: 'identity',
-      resourceName: this.rootDomain,
     });
   }
 }

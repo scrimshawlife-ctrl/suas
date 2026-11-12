@@ -20,7 +20,6 @@ export interface EnvironmentConfig {
   readonly rootDomain: string;
   readonly webHostname: string;
   readonly apiHostname: string;
-  readonly emailFrom: string;
   readonly safetyCopyMode: 'placeholder_test_only' | 'approved';
   /** Tenant that new sign-ups join (SUAS_BROWSER_TENANT_ID); a plain UUID, not a secret. */
   readonly browserTenantId: string;
@@ -114,7 +113,6 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
     rootDomain,
     webHostname,
     apiHostname,
-    emailFrom: text(node, 'emailFrom') ?? `no-reply@${rootDomain}`,
     safetyCopyMode: safety,
     browserTenantId: tenant,
     webAdapterLayerVersion: layerVersion,
