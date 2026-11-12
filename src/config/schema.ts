@@ -47,12 +47,13 @@ export type LocalJobQueue = (typeof LOCAL_JOB_QUEUES)[number];
 export type DatabaseSslMode = (typeof DATABASE_SSL_MODES)[number];
 
 /**
- * ENVIRONMENT.md §3 "Notifications". Resend is the sole released EMAIL
- * provider. SMS remains restricted to the provider-neutral test modes.
+ * ENVIRONMENT.md §3 "Notifications". Resend is the released EMAIL provider (D-004);
+ * `gmail_smtp` replaces it on v1 STAGING (suas-specs #75 R11.2, proposal, not
+ * released). SMS remains restricted to the provider-neutral test modes.
  */
 export const COMMUNICATION_MODES = ['disabled', 'fake', 'sink'] as const;
 export type CommunicationMode = (typeof COMMUNICATION_MODES)[number];
-export const EMAIL_MODES = [...COMMUNICATION_MODES, 'resend', 'ses'] as const;
+export const EMAIL_MODES = [...COMMUNICATION_MODES, 'resend', 'gmail_smtp'] as const;
 export type EmailMode = (typeof EMAIL_MODES)[number];
 
 /**
@@ -123,6 +124,10 @@ const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d$/;
 const CHAT_WS_ENDPOINT_PATTERN =
   /^https:\/\/[a-z0-9]+\.execute-api\.[a-z]{2}(?:-[a-z]+)+-\d\.amazonaws\.com\/[A-Za-z0-9_-]+$/;
 const S3_BUCKET_PATTERN = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+const BARE_EMAIL_PATTERN = /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/;
+/** A function name, or a function ARN with an optional version or alias. */
+const LAMBDA_FUNCTION_PATTERN =
+  /^(?:arn:aws[a-z-]*:lambda:[a-z]{2}(?:-[a-z]+)+-\d:\d{12}:function:)?[A-Za-z0-9_-]{1,64}(?::[A-Za-z0-9_$-]+)?$/;
 
 export const BROWSER_AUTH_MODES = ['disabled', 'email_otp'] as const;
 export type BrowserAuthMode = (typeof BROWSER_AUTH_MODES)[number];
@@ -314,9 +319,13 @@ const rawConfigSchema = z.object({
   // Resend slots are required only when the released mode is selected.
   // Secrets stay empty in committed examples (ENVIRONMENT.md §6–§7).
   RESEND_API_KEY: optionalRaw,
-  // Shared by `resend` and `ses`. SES credentials are never configured here:
-  // the AWS SDK default provider chain supplies them (the Lambda role).
+  // The `resend` sender. `gmail_smtp` sends as SUAS_SMTP_USER instead (R11.2).
   SUAS_EMAIL_FROM: optionalRaw,
+  // `gmail_smtp` (R11.2): the Gmail address and its app password for a direct send, or
+  // the relay function that holds both. The password is never set beside the relay.
+  SUAS_SMTP_USER: optionalRaw,
+  SUAS_SMTP_APP_PASSWORD: optionalRaw,
+  SUAS_SMTP_RELAY_FUNCTION: optionalRaw,
 
   // --- AWS capability ports. V1_PROJECT_PLAN.md §2.2, §4.1. ---
   SUAS_AWS_REGION: optionalRaw,
@@ -472,6 +481,11 @@ export interface SuasConfig {
     readonly sms: CommunicationMode;
     readonly resendApiKey: string | undefined;
     readonly emailFrom: string | undefined;
+    readonly smtp: {
+      readonly user: string | undefined;
+      readonly appPassword: string | undefined;
+      readonly relayFunction: string | undefined;
+    };
   };
   readonly aws: {
     readonly region: string | undefined;
@@ -657,7 +671,7 @@ function chatWsPublicUrlIssue(value: string): string | undefined {
 /**
  * Guards for the AWS-backed capability ports (V1_PROJECT_PLAN.md §4.1, §7).
  *
- * - A real AWS mode (`ses`, `bedrock`, `s3`) is refused in LOCAL/TEST, like
+ * - A real AWS mode (`bedrock`, `s3`, `apigw`) is refused in LOCAL/TEST, like
  *   Resend (ENVIRONMENT.md §3 rule 3, AGENTS.md rule 4), and needs its region.
  * - A fake mode is refused in PRODUCTION. Fake ID verification is also refused
  *   in STAGING: it would pass anyone through the identity gate (D-052).
@@ -672,7 +686,6 @@ function validateAwsCapabilities(
   };
 
   const realModes: ReadonlyArray<readonly [string, string, string]> = [
-    ['SUAS_EMAIL_MODE', raw.SUAS_EMAIL_MODE, 'ses'],
     ['SUAS_MODEL_INFERENCE_MODE', raw.SUAS_MODEL_INFERENCE_MODE, 'bedrock'],
     ['SUAS_OBJECT_STORAGE_MODE', raw.SUAS_OBJECT_STORAGE_MODE, 's3'],
     ['SUAS_CHAT_PUSH_MODE', raw.SUAS_CHAT_PUSH_MODE, 'apigw'],
@@ -683,16 +696,16 @@ function validateAwsCapabilities(
       issue(`${varName}=${value} is forbidden in ${environment}; use fake or sink.`);
     }
   }
-  if (awsEnabled.length > 0 && raw.SUAS_AWS_REGION === undefined) {
+  if (
+    (awsEnabled.length > 0 || raw.SUAS_SMTP_RELAY_FUNCTION !== undefined) &&
+    raw.SUAS_AWS_REGION === undefined
+  ) {
     issue('SUAS_AWS_REGION is required when an AWS-backed capability mode is selected.');
   }
   if (raw.SUAS_AWS_REGION !== undefined && !AWS_REGION_PATTERN.test(raw.SUAS_AWS_REGION)) {
     issue('SUAS_AWS_REGION must be an AWS region name such as us-west-2.');
   }
 
-  if (raw.SUAS_EMAIL_MODE === 'ses' && raw.SUAS_EMAIL_FROM === undefined) {
-    issue('SUAS_EMAIL_FROM is required when SUAS_EMAIL_MODE=ses.');
-  }
   if (raw.SUAS_OBJECT_STORAGE_MODE === 's3') {
     if (raw.SUAS_S3_BUCKET === undefined) {
       issue('SUAS_S3_BUCKET is required when SUAS_OBJECT_STORAGE_MODE=s3.');
@@ -1092,6 +1105,7 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   }
 
   validateAwsCapabilities(raw, environment, ctx);
+  validateGmailSmtp(raw, environment, ctx);
 
   // The sender is required in Resend and SES modes. Both accept either a bare
   // address or the standard display-name form: "Name <address>".
@@ -1108,6 +1122,53 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
     });
   }
 });
+
+/**
+ * `gmail_smtp` (suas-specs #75 R11.2, proposal). Refused in LOCAL and TEST like
+ * `resend`; PRODUCTION is refused as a whole until SPEC-018. A direct send needs the
+ * Gmail address and app password; with the relay set, the relay holds both and the
+ * password must not also sit in this process's environment.
+ */
+function validateGmailSmtp(
+  raw: z.output<typeof rawConfigSchema>,
+  environment: EnvironmentClass,
+  ctx: z.RefinementCtx,
+): void {
+  const issue = (message: string): void => {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  };
+  if (raw.SUAS_SMTP_USER !== undefined && !BARE_EMAIL_PATTERN.test(raw.SUAS_SMTP_USER)) {
+    issue('SUAS_SMTP_USER must be a bare email address (the Gmail account).');
+  }
+  if (
+    raw.SUAS_SMTP_RELAY_FUNCTION !== undefined &&
+    !LAMBDA_FUNCTION_PATTERN.test(raw.SUAS_SMTP_RELAY_FUNCTION)
+  ) {
+    issue('SUAS_SMTP_RELAY_FUNCTION must be a Lambda function name or ARN.');
+  }
+  if (raw.SUAS_EMAIL_MODE !== 'gmail_smtp') return;
+
+  if (environment === 'LOCAL' || environment === 'TEST') {
+    issue(`SUAS_EMAIL_MODE=gmail_smtp is forbidden in ${environment}; use fake or sink.`);
+  }
+  if (raw.SUAS_EMAIL_FROM !== undefined) {
+    issue('SUAS_EMAIL_FROM is not used with SUAS_EMAIL_MODE=gmail_smtp; From is SUAS_SMTP_USER.');
+  }
+  if (raw.SUAS_SMTP_RELAY_FUNCTION !== undefined) {
+    if (raw.SUAS_SMTP_APP_PASSWORD !== undefined) {
+      issue(
+        'SUAS_SMTP_APP_PASSWORD must not be set with SUAS_SMTP_RELAY_FUNCTION; the relay holds it.',
+      );
+    }
+    return;
+  }
+  if (raw.SUAS_SMTP_USER === undefined) {
+    issue('SUAS_SMTP_USER is required when SUAS_EMAIL_MODE=gmail_smtp sends directly.');
+  }
+  if (raw.SUAS_SMTP_APP_PASSWORD === undefined) {
+    issue('SUAS_SMTP_APP_PASSWORD is required when SUAS_EMAIL_MODE=gmail_smtp sends directly.');
+  }
+}
 
 /**
  * TLS is configured in one place. A URL that also carries ssl* parameters would
@@ -1210,6 +1271,11 @@ export function shapeConfig(
       sms: raw.SUAS_SMS_MODE,
       resendApiKey: raw.RESEND_API_KEY,
       emailFrom: raw.SUAS_EMAIL_FROM,
+      smtp: {
+        user: raw.SUAS_SMTP_USER,
+        appPassword: raw.SUAS_SMTP_APP_PASSWORD,
+        relayFunction: raw.SUAS_SMTP_RELAY_FUNCTION,
+      },
     },
     aws: { region: raw.SUAS_AWS_REGION },
     modelInference: {
