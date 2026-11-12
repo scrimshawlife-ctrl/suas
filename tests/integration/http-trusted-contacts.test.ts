@@ -25,6 +25,21 @@ afterAll(async () => {
   await app.close();
 });
 
+function requirePool() {
+  if (app.pool === undefined) throw new Error('no pool');
+  return app.pool;
+}
+
+async function auditActions(tenantId: string, trustedContactId: string): Promise<string[]> {
+  const result = await requirePool().query<{ action: string }>(
+    `SELECT action FROM audit_events
+      WHERE tenant_id = $1 AND target_type = 'TrustedContact' AND target_id = $2
+      ORDER BY occurred_at`,
+    [tenantId, trustedContactId],
+  );
+  return result.rows.map((row) => row.action);
+}
+
 async function veteranSession() {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
@@ -45,6 +60,16 @@ async function veteranSession() {
   };
 }
 
+/** POST an invite; API.md §7 requires an Idempotency-Key on this create. */
+function invite(headers: Record<string, string>, payload: object, key = `invite-${randomUUID()}`) {
+  return app.server.inject({
+    method: 'POST',
+    url: '/api/v0/trusted-contacts',
+    headers: { ...headers, 'idempotency-key': key },
+    payload,
+  });
+}
+
 describe('GET/POST /api/v0/trusted-contacts', () => {
   it('requires authentication', async () => {
     const response = await app.server.inject({
@@ -57,17 +82,13 @@ describe('GET/POST /api/v0/trusted-contacts', () => {
   it('invites and lists contacts without invite channel literals', async () => {
     const { headers } = await veteranSession();
     const inviteEmail = syntheticEmail(`buddy-${randomUUID().slice(0, 8)}`);
-    const created = await app.server.inject({
-      method: 'POST',
-      url: '/api/v0/trusted-contacts',
-      headers,
-      payload: {
-        relationship_label: 'Battle buddy',
-        invite_email: inviteEmail,
-      },
+    const created = await invite(headers, {
+      relationship_label: 'Battle buddy',
+      invite_email: inviteEmail,
     });
     expect(created.statusCode).toBe(201);
-    const contact = created.json();
+    const { replayed, ...contact } = created.json();
+    expect(replayed).toBe(false);
     expect(contact).toMatchObject({
       relationship_label: 'Battle buddy',
       status: 'INVITED',
@@ -88,14 +109,9 @@ describe('GET/POST /api/v0/trusted-contacts', () => {
   it('does not leak another veteran roster', async () => {
     const a = await veteranSession();
     const b = await veteranSession();
-    await app.server.inject({
-      method: 'POST',
-      url: '/api/v0/trusted-contacts',
-      headers: a.headers,
-      payload: {
-        relationship_label: 'Private',
-        invite_email: syntheticEmail(`a-${randomUUID().slice(0, 8)}`),
-      },
+    await invite(a.headers, {
+      relationship_label: 'Private',
+      invite_email: syntheticEmail(`a-${randomUUID().slice(0, 8)}`),
     });
     const listed = await app.server.inject({
       method: 'GET',
@@ -107,15 +123,10 @@ describe('GET/POST /api/v0/trusted-contacts', () => {
   });
 
   it('removes an owned contact', async () => {
-    const { headers } = await veteranSession();
-    const created = await app.server.inject({
-      method: 'POST',
-      url: '/api/v0/trusted-contacts',
-      headers,
-      payload: {
-        relationship_label: 'Remove me',
-        invite_email: syntheticEmail(`rm-${randomUUID().slice(0, 8)}`),
-      },
+    const { headers, tenantId } = await veteranSession();
+    const created = await invite(headers, {
+      relationship_label: 'Remove me',
+      invite_email: syntheticEmail(`rm-${randomUUID().slice(0, 8)}`),
     });
     expect(created.statusCode).toBe(201);
     const id = created.json().trusted_contact_id as string;
@@ -126,5 +137,53 @@ describe('GET/POST /api/v0/trusted-contacts', () => {
     });
     expect(removed.statusCode).toBe(200);
     expect(removed.json().status).toBe('REMOVED');
+    // TRUSTED_CIRCLE.md §7: the removal is audited.
+    expect(await auditActions(tenantId, id)).toEqual([
+      'INVITE_TRUSTED_CONTACT',
+      'REMOVE_TRUSTED_CONTACT',
+    ]);
+  });
+
+  it('requires an Idempotency-Key and replays a retried invite (API.md §7)', async () => {
+    const { headers, tenantId } = await veteranSession();
+    const payload = {
+      relationship_label: 'Retry buddy',
+      invite_email: syntheticEmail(`retry-${randomUUID().slice(0, 8)}`),
+    };
+    const missing = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/trusted-contacts',
+      headers,
+      payload,
+    });
+    expect(missing.statusCode).toBe(400);
+
+    const key = `invite-${randomUUID()}`;
+    const first = await invite(headers, payload, key);
+    const retry = await invite(headers, payload, key);
+    expect(first.statusCode).toBe(201);
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toEqual({ ...first.json(), replayed: true });
+
+    const conflict = await invite(headers, { ...payload, relationship_label: 'Other' }, key);
+    expect(conflict.statusCode).toBe(409);
+
+    const listed = await app.server.inject({
+      method: 'GET',
+      url: '/api/v0/trusted-contacts',
+      headers,
+    });
+    expect(listed.json().trusted_contacts).toHaveLength(1);
+
+    // TRUSTED_CIRCLE.md §3.4: one TRUSTED_CONTACT_INVITED, carrying no invite address.
+    const id = first.json().trusted_contact_id as string;
+    const events = await requirePool().query<{ payload: object }>(
+      `SELECT payload FROM domain_events
+        WHERE tenant_id = $1 AND aggregate_id = $2 AND event_type = 'TRUSTED_CONTACT_INVITED'`,
+      [tenantId, id],
+    );
+    expect(events.rows).toHaveLength(1);
+    expect(events.rows[0]?.payload).toEqual({ status: 'INVITED', channels: ['EMAIL'] });
+    expect(await auditActions(tenantId, id)).toEqual(['INVITE_TRUSTED_CONTACT']);
   });
 });

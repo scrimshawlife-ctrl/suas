@@ -17,6 +17,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Queryable } from '../db/transaction.js';
 import { normalizeDestination } from '../auth/secrets.js';
+import { appendAuditEvent, type ActorType } from '../events/index.js';
 
 export const TRUSTED_CONTACT_STATUSES = [
   'INVITED',
@@ -154,8 +155,9 @@ export async function inviteTrustedContact(
 /**
  * Accept an invite, optionally binding an enrolled User.
  *
- * TRUSTED_CIRCLE.md §3.4: acceptance does not imply consent. The veteran must
- * still issue grants, and this function issues none.
+ * TRUSTED_CIRCLE.md §3.3: a User is bound only when their enrolled email or phone is
+ * the address the veteran invited (SECURITY.md §5), so another signed-in person
+ * holding the id matches nothing. §3.4: acceptance issues no grants.
  */
 export async function acceptTrustedContact(
   db: Queryable,
@@ -164,10 +166,15 @@ export async function acceptTrustedContact(
   contactUserId?: string,
 ): Promise<TrustedContact | undefined> {
   const result = await db.query<ContactRow>(
-    `UPDATE trusted_contacts
+    `UPDATE trusted_contacts t
        SET status = 'ACCEPTED', accepted_at = now(), updated_at = now(),
-           contact_user_id = COALESCE($3, contact_user_id)
-     WHERE tenant_id = $1 AND trusted_contact_id = $2 AND status = 'INVITED'
+           contact_user_id = COALESCE($3, t.contact_user_id)
+     WHERE t.tenant_id = $1 AND t.trusted_contact_id = $2 AND t.status = 'INVITED'
+       AND ($3::uuid IS NULL OR EXISTS (
+         SELECT 1 FROM users u
+          WHERE u.tenant_id = t.tenant_id AND u.user_id = $3 AND u.deleted_at IS NULL
+            AND ((t.invite_email IS NOT NULL AND lower(u.email) = t.invite_email)
+              OR (t.invite_phone IS NOT NULL AND u.phone = t.invite_phone))))
      RETURNING ${CONTACT_COLUMNS}`,
     [tenantId, trustedContactId, contactUserId ?? null],
   );
@@ -215,6 +222,41 @@ export async function setTrustedContactStatus(
     return undefined;
   }
   return toContact(row);
+}
+
+const TRANSITION_EVENT = {
+  INVITE: 'TRUSTED_CONTACT_INVITED',
+  ACCEPT: 'TRUSTED_CONTACT_ACCEPTED',
+  REMOVE: 'TRUSTED_CONTACT_REMOVED',
+} as const;
+
+/**
+ * TRUSTED_CIRCLE.md §3.4, §7: every membership transition writes an Audit Event.
+ * The payload carries the resulting status only, never the invite addresses.
+ */
+export async function auditTrustedContactTransition(
+  db: Queryable,
+  input: {
+    readonly contact: TrustedContact;
+    readonly transition: keyof typeof TRANSITION_EVENT;
+    readonly actorType: ActorType;
+    readonly actorId: string;
+    readonly correlationId?: string;
+  },
+): Promise<void> {
+  await appendAuditEvent(db, {
+    eventType: TRANSITION_EVENT[input.transition],
+    action: `${input.transition}_TRUSTED_CONTACT`,
+    targetType: 'TrustedContact',
+    targetId: input.contact.trustedContactId,
+    aggregateType: 'TrustedContact',
+    aggregateId: input.contact.trustedContactId,
+    tenantId: input.contact.tenantId,
+    actorType: input.actorType,
+    actorId: input.actorId,
+    payload: { status: input.contact.status },
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+  });
 }
 
 export async function findTrustedContact(

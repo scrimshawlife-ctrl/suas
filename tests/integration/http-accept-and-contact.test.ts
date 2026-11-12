@@ -152,7 +152,7 @@ describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
     const invited = await app.server.inject({
       method: 'POST',
       url: '/api/v0/trusted-contacts',
-      headers: veteranHeaders,
+      headers: { ...veteranHeaders, 'idempotency-key': `invite-${randomUUID()}` },
       payload: {
         relationship_label: 'Battle buddy',
         invite_email: invitee.email,
@@ -172,6 +172,23 @@ describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
     });
     expect(selfAccept.statusCode).toBe(404);
 
+    // TRUSTED_CIRCLE.md §3.3; SECURITY.md §5: another signed-in person holding the id
+    // is not the invitee, so they are not bound and see the same 404 as a stranger.
+    const bystander = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail(`other-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    const hijack = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/trusted-contacts/${contactId}/commands/accept`,
+      headers: {
+        ...(await bearer(tenantId, bystander.userId)),
+        'idempotency-key': `accept-other-${randomUUID()}`,
+      },
+    });
+    expect(hijack.statusCode).toBe(404);
+
     const accepted = await app.server.inject({
       method: 'POST',
       url: `/api/v0/trusted-contacts/${contactId}/commands/accept`,
@@ -187,6 +204,12 @@ describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
       contact_user_id: invitee.userId,
       replayed: false,
     });
+    const audited = await pool.query<{ actor_id: string }>(
+      `SELECT actor_id FROM audit_events WHERE tenant_id = $1 AND target_id = $2
+          AND action = 'ACCEPT_TRUSTED_CONTACT'`,
+      [tenantId, contactId],
+    );
+    expect(audited.rows.map((row) => row.actor_id)).toEqual([invitee.userId]);
   });
 
   it('hides accept across tenants', async () => {
@@ -207,7 +230,10 @@ describe('POST /api/v0/trusted-contacts/:id/commands/accept', () => {
     const invited = await app.server.inject({
       method: 'POST',
       url: '/api/v0/trusted-contacts',
-      headers: await bearer(tenantA, veteran.userId),
+      headers: {
+        ...(await bearer(tenantA, veteran.userId)),
+        'idempotency-key': `invite-${randomUUID()}`,
+      },
       payload: {
         relationship_label: 'Private',
         invite_email: syntheticEmail(`x-${randomUUID().slice(0, 8)}`),

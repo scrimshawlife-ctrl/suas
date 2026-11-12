@@ -15,12 +15,15 @@ import { ResourceNotVisibleError } from '../../authz/index.js';
 import { requireVerifiedVeteran } from '../../identity/index.js';
 import {
   acceptTrustedContact,
+  auditTrustedContactTransition,
   findTrustedContact,
   inviteTrustedContact,
   listTrustedCircle,
   setTrustedContactStatus,
   type TrustedContact,
 } from '../../consent/index.js';
+import { withTransaction } from '../../db/index.js';
+import { appendDomainEvent } from '../../events/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
@@ -62,18 +65,82 @@ export function registerTrustedContactRoutes(
     return { trusted_contacts: contacts.map(publicTrustedContact) };
   });
 
+  /**
+   * TRUSTED_CIRCLE.md §3.1, §3.4: create the invite, emit `TRUSTED_CONTACT_INVITED` and
+   * audit it in one transaction. API.md §7: a retry with the same key replays the
+   * first result instead of creating a second INVITED row.
+   */
   app.post(`${API_PREFIX}/trusted-contacts`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     await requireVerifiedVeteran(deps.pool, context);
     const body = inviteBody.parse(request.body);
-    const contact = await inviteTrustedContact(deps.pool, {
-      tenantId: context.tenantId,
-      veteranUserId: context.userId,
-      relationshipLabel: body.relationship_label,
-      ...(body.invite_email !== undefined ? { inviteEmail: body.invite_email } : {}),
-      ...(body.invite_phone !== undefined ? { invitePhone: body.invite_phone } : {}),
+    const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
+    const fingerprint = fingerprintRequest({
+      relationship_label: body.relationship_label,
+      invite_email: body.invite_email ?? null,
+      invite_phone: body.invite_phone ?? null,
+      veteran_user_id: context.userId,
     });
-    return reply.status(201).send(publicTrustedContact(contact));
+    const scope = commandScope({
+      command: 'POST /trusted-contacts',
+      aggregateType: 'TrustedContact',
+      actorId: context.userId,
+    });
+
+    const run = await runIdempotentCommand(
+      deps.pool,
+      {
+        tenantId: context.tenantId,
+        commandScope: scope,
+        idempotencyKey,
+        requestFingerprint: fingerprint,
+      },
+      async (tx) => {
+        const contact = await inviteTrustedContact(tx, {
+          tenantId: context.tenantId,
+          veteranUserId: context.userId,
+          relationshipLabel: body.relationship_label,
+          ...(body.invite_email !== undefined ? { inviteEmail: body.invite_email } : {}),
+          ...(body.invite_phone !== undefined ? { invitePhone: body.invite_phone } : {}),
+        });
+        const appended = await appendDomainEvent(tx, {
+          eventType: 'TRUSTED_CONTACT_INVITED',
+          aggregateType: 'TrustedContact',
+          aggregateId: contact.trustedContactId,
+          tenantId: context.tenantId,
+          actorType: 'VETERAN',
+          actorId: context.userId,
+          // Channels only: the invite addresses stay on the row (PRIVACY.md).
+          payload: {
+            status: contact.status,
+            channels: [
+              ...(body.invite_email !== undefined ? ['EMAIL'] : []),
+              ...(body.invite_phone !== undefined ? ['SMS'] : []),
+            ],
+          },
+          idempotencyKey: `trusted-contact-invited:${contact.trustedContactId}`,
+          correlationId: String(request.id),
+        });
+        await auditTrustedContactTransition(tx, {
+          contact,
+          transition: 'INVITE',
+          actorType: 'VETERAN',
+          actorId: context.userId,
+          correlationId: String(request.id),
+        });
+        return {
+          result: publicTrustedContact(contact),
+          aggregateType: 'TrustedContact',
+          aggregateId: contact.trustedContactId,
+          eventId: appended.event.eventId,
+        };
+      },
+    );
+
+    if (!run.replayed) {
+      return reply.status(201).send({ ...run.result, replayed: false });
+    }
+    return { ...run.result, replayed: true };
   });
 
   app.post(`${API_PREFIX}/trusted-contacts/:id/commands/remove`, async (request) => {
@@ -84,15 +151,26 @@ export function registerTrustedContactRoutes(
     if (existing === undefined || existing.veteranUserId !== context.userId) {
       throw new ResourceNotVisibleError();
     }
-    const updated = await setTrustedContactStatus(deps.pool, context.tenantId, id, 'REMOVED');
-    if (updated === undefined) throw new ResourceNotVisibleError();
+    const updated = await withTransaction(deps.pool, async (tx) => {
+      const removed = await setTrustedContactStatus(tx, context.tenantId, id, 'REMOVED');
+      if (removed === undefined) throw new ResourceNotVisibleError();
+      // TRUSTED_CIRCLE.md §7: the transition is audited with the change itself.
+      await auditTrustedContactTransition(tx, {
+        contact: removed,
+        transition: 'REMOVE',
+        actorType: 'VETERAN',
+        actorId: context.userId,
+        correlationId: String(request.id),
+      });
+      return removed;
+    });
     return publicTrustedContact(updated);
   });
 
   /**
-   * TRUSTED_CIRCLE.md §3.4: the invitee accepts; acceptance does not grant consent.
-   * The authenticated actor becomes `contact_user_id`. Veterans cannot accept
-   * their own invites.
+   * TRUSTED_CIRCLE.md §3.3–§3.4: the invitee accepts; acceptance grants no consent.
+   * The actor becomes `contact_user_id` only when their enrolled address is the invited
+   * one; anyone else gets the same 404 as an unknown id. Veterans cannot accept their own.
    */
   app.post(`${API_PREFIX}/trusted-contacts/:id/commands/accept`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
@@ -148,6 +226,13 @@ export function registerTrustedContactRoutes(
           }
           throw new ResourceNotVisibleError();
         }
+        await auditTrustedContactTransition(tx, {
+          contact: accepted,
+          transition: 'ACCEPT',
+          actorType: 'TRUSTED_CONTACT',
+          actorId: context.userId,
+          correlationId: String(request.id),
+        });
         return {
           result: publicTrustedContact(accepted),
           aggregateType: 'TrustedContact',
