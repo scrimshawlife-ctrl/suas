@@ -136,7 +136,8 @@ test.describe('deployed public boundary', () => {
     await expect(page.locator('body')).toHaveCSS('color', 'rgb(16, 24, 40)');
     await expect.poll(() => page.evaluate<boolean>('globalThis.crossOriginIsolated')).toBe(true);
     expect(externalFontRequests).toEqual([]);
-    await expect(page).toHaveTitle(/Shut Up and Serve/i);
+    await expect(page).toHaveTitle(/SUAS/);
+    await expect(page).not.toHaveTitle(/Shut Up and Serve/i);
     await expect(page.getByText('Veteran peer support', { exact: false })).toBeVisible();
 
     await expectHtmlSurface(page, '/app/join');
