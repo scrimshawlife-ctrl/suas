@@ -87,7 +87,7 @@ describe('API.md §7 rule 3: a command commits only with its transaction', () =>
     ).rejects.toThrow(Rollback);
 
     expect((await findCase(pool, tenantId, held.caseId))?.status).toBe(held.status);
-    expect(await listContactAttempts(pool, tenantId, held.caseId)).toEqual([]);
+    expect((await listContactAttempts(pool, tenantId, held.caseId)).attempts).toEqual([]);
   });
 });
 
