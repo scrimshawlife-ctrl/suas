@@ -7,7 +7,8 @@
  *
  * Boundaries (ENVIRONMENT.md §2, §3, §9 at the pin):
  * - STAGING only, and never while real external effects are enabled.
- * - Every address must be synthetic; the run refuses before any write otherwise.
+ * - Every address must be synthetic, or a plus address of the configured fixture mailbox
+ *   (R11.7); the run refuses before any write otherwise.
  * - The schema version is checked before any write.
  * - Resources go through the Resource Draft publish (RESOURCES.md §5.1), the released path.
  * - No passed ID scan is seeded: a fake check cannot satisfy the gate in STAGING
@@ -19,6 +20,7 @@
 
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import { isStagingFixtureAddress } from '../auth/staging-access.js';
 import type { SuasConfig } from '../config/index.js';
 import type { StagingFixturePrincipal } from '../config/schema.js';
 import { createResourceDrafts, draftFieldsSchema, publishResourceDraft } from '../catalog/index.js';
@@ -34,7 +36,6 @@ import {
 } from '../identity/index.js';
 import {
   assertSyntheticEnvironment,
-  isSyntheticEmail,
   syntheticEmail,
   syntheticPhone,
 } from '../testing/fixture-boundary.js';
@@ -131,6 +132,7 @@ interface Planned extends StagingFixturePrincipal {
 function planFixtures(
   registry: readonly StagingFixturePrincipal[],
   addresses: readonly StagingFixtureAddress[],
+  mailbox: string | undefined,
 ): Planned[] {
   if (registry.length === 0) {
     throw new StagingFixtureSeedRefusedError(
@@ -141,9 +143,9 @@ function planFixtures(
   for (const entry of addresses) {
     const userId = entry.user_id.toLowerCase();
     const email = entry.email.toLowerCase();
-    if (!isSyntheticEmail(email)) {
+    if (!isStagingFixtureAddress(email, mailbox)) {
       throw new StagingFixtureSeedRefusedError(
-        `The address for user ${userId} is not synthetic. STAGING admits synthetic addresses only.`,
+        `The address for user ${userId} is not synthetic and not a plus address of the fixture mailbox.`,
       );
     }
     if (byUser.has(userId) || [...byUser.values()].includes(email)) {
@@ -260,7 +262,11 @@ export async function seedStagingFixtures(
       '`fixtures` must list 1-10 objects of the form {"user_id": "<uuid>", "email": "<address>"}.',
     );
   }
-  const planned = planFixtures(config.stagingFixturePrincipals, parsed.data);
+  const planned = planFixtures(
+    config.stagingFixturePrincipals,
+    parsed.data,
+    config.stagingFixtureMailbox,
+  );
 
   // ENVIRONMENT.md §9: refuse a schema this build cannot operate against.
   await assertExpectedSchemaVersion(pool);

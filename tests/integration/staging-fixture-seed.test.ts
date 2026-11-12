@@ -27,12 +27,17 @@ function useEnv(overrides: Record<string, string>): void {
   }
 }
 
-function stagingFor(tenantId: string, userIds: readonly string[]): void {
+function stagingFor(
+  tenantId: string,
+  userIds: readonly string[],
+  extra: Record<string, string> = {},
+): void {
   useEnv({
     SUAS_ENV: 'STAGING',
     SUAS_PUBLIC_SIGN_UP: 'disabled',
     SUAS_ID_VERIFICATION_MODE: 'disabled',
     SUAS_STAGING_FIXTURE_REGISTRY: userIds.map((id) => `${tenantId}:${id}`).join(','),
+    ...extra,
   });
 }
 
@@ -138,6 +143,27 @@ describe('seed-staging-fixtures', () => {
       }),
     ).rejects.toThrow(/not in SUAS_STAGING_FIXTURE_REGISTRY/);
     expect(await countsFor(tenantId)).toEqual({ users: 0, resources: 0 });
+  });
+
+  it('accepts a plus address of the fixture mailbox and refuses the bare mailbox (R11.7)', async () => {
+    const tenantId = randomUUID();
+    const userId = randomUUID();
+    const mailbox = ['owner', 'gmail.com'].join('@');
+    stagingFor(tenantId, [userId], { SUAS_STAGING_FIXTURE_MAILBOX: mailbox });
+    await expect(
+      handler({ action: 'seed-staging-fixtures', fixtures: [{ user_id: userId, email: mailbox }] }),
+    ).rejects.toThrow(/not synthetic/);
+    expect(await countsFor(tenantId)).toEqual({ users: 0, resources: 0 });
+
+    const tagged = mailbox.replace('@', `+vet-${userId.slice(0, 8)}@`);
+    await expect(
+      handler({ action: 'seed-staging-fixtures', fixtures: [{ user_id: userId, email: tagged }] }),
+    ).resolves.toMatchObject({ users_created: 1 });
+    const stored = await pool.query<{ email: string }>(
+      'SELECT email FROM users WHERE tenant_id = $1 AND user_id = $2',
+      [tenantId, userId],
+    );
+    expect(stored.rows[0]?.email).toBe(tagged);
   });
 
   it('refuses an unknown action', async () => {
