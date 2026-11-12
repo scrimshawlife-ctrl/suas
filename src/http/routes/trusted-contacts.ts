@@ -11,12 +11,15 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
+import { enforceRateLimit } from '../../auth/index.js';
+import { normalizeDestination } from '../../auth/secrets.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { requireVerifiedVeteran } from '../../identity/index.js';
 import {
   acceptTrustedContact,
   auditTrustedContactTransition,
   findInviteEmail,
+  findOpenInviteToAddress,
   findTrustedContact,
   inviteTrustedContact,
   listPendingInvitations,
@@ -101,6 +104,23 @@ async function deliverInvite(
   }
 }
 
+/**
+ * Each new invite sends an email, so invites are rate limited in the shared counter the
+ * sign-in challenges use (AUTH.md §3; SECURITY.md §2). Implementation-owned values: no
+ * released limit exists. Only committed invites count, since the counter is bumped in
+ * the invite's transaction.
+ */
+export const INVITE_LIMIT_PER_VETERAN = {
+  bucket: 'trusted_contact.invite.veteran',
+  limit: 10,
+  windowSeconds: 86_400,
+};
+export const INVITE_LIMIT_PER_ADDRESS = {
+  bucket: 'trusted_contact.invite.address',
+  limit: 3,
+  windowSeconds: 86_400,
+};
+
 const idParams = z.object({ id: z.string().uuid() });
 
 const inviteBody = z
@@ -155,6 +175,7 @@ export function registerTrustedContactRoutes(
       actorId: context.userId,
     });
 
+    let returnedOpenInvite = false;
     const run = await runIdempotentCommand(
       deps.pool,
       {
@@ -164,6 +185,33 @@ export function registerTrustedContactRoutes(
         requestFingerprint: fingerprint,
       },
       async (tx) => {
+        const address = {
+          tenantId: context.tenantId,
+          veteranUserId: context.userId,
+          ...(body.invite_email !== undefined ? { inviteEmail: body.invite_email } : {}),
+          ...(body.invite_phone !== undefined ? { invitePhone: body.invite_phone } : {}),
+        };
+        // A second invite to an address this Veteran already invited returns that invite;
+        // its email was sent once and is not sent again.
+        const open = await findOpenInviteToAddress(tx, address);
+        if (open !== undefined) {
+          returnedOpenInvite = true;
+          return {
+            result: publicTrustedContact(open),
+            aggregateType: 'TrustedContact',
+            aggregateId: open.trustedContactId,
+          };
+        }
+        await enforceRateLimit(
+          tx,
+          INVITE_LIMIT_PER_VETERAN,
+          `${context.tenantId}:${context.userId}`,
+        );
+        for (const destination of [body.invite_email, body.invite_phone]) {
+          if (destination !== undefined) {
+            await enforceRateLimit(tx, INVITE_LIMIT_PER_ADDRESS, normalizeDestination(destination));
+          }
+        }
         const contact = await inviteTrustedContact(tx, {
           tenantId: context.tenantId,
           veteranUserId: context.userId,
@@ -216,7 +264,7 @@ export function registerTrustedContactRoutes(
       });
     }
     if (!run.replayed) {
-      return reply.status(201).send({ ...run.result, replayed: false });
+      return reply.status(returnedOpenInvite ? 200 : 201).send({ ...run.result, replayed: false });
     }
     return { ...run.result, replayed: true };
   });
