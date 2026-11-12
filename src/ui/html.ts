@@ -156,7 +156,6 @@ export const section = tagFn('section');
 export const nav = tagFn('nav');
 export const main = tagFn('main');
 export const header = tagFn('header');
-export const footer = tagFn('footer');
 export const form = tagFn('form');
 export const fieldset = tagFn('fieldset');
 export const legend = tagFn('legend');

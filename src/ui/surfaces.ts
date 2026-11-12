@@ -146,7 +146,7 @@ function document(shell: ShellViewModel, body: Renderable): string {
 }
 
 /** §5 persistent mobile nav: Home + Chat, nothing else. §4.9 forbids density drift. */
-export function mobileNav(shell: ShellViewModel): Renderable {
+function mobileNav(shell: ShellViewModel): Renderable {
   const entry = (href: string, text: string, key: 'HOME' | 'CHAT'): Renderable =>
     a(
       {
@@ -182,7 +182,7 @@ function stateBlock(label_: string, headline: string, detail?: string): Renderab
  * wording from SAFETY_COPY.md §1.1 / §2; any other mode stays a labelled
  * placeholder so an un-opted-in environment never shows a crisis destination.
  */
-export function immediateResources(mode: SafetyCopyMode = 'placeholder_test_only'): Renderable {
+function immediateResources(mode: SafetyCopyMode = 'placeholder_test_only'): Renderable {
   const slot = resolveImmediateResourceSlot(mode);
   return section(
     { 'aria-labelledby': 'immediate-resources' },

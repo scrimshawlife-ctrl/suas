@@ -49,10 +49,7 @@ export async function deployQrf(pool: Pool, input: DeployQrfInput): Promise<Depl
   return withTransaction(pool, (tx) => deployQrfInTx(tx, input));
 }
 
-export async function deployQrfInTx(
-  tx: PoolClient,
-  input: DeployQrfInput,
-): Promise<DeployQrfResult> {
+async function deployQrfInTx(tx: PoolClient, input: DeployQrfInput): Promise<DeployQrfResult> {
   const opened = await openCase(tx, {
     tenantId: input.tenantId,
     veteranUserId: input.veteranUserId,
