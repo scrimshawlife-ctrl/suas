@@ -16,7 +16,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import type { SafetyCopyMode } from '../../config/index.js';
 import { authenticate } from '../authenticate.js';
-import { pageQuery } from '../cursor.js';
+import { pageQuery } from '../../db/cursor.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { requireVerifiedVeteran } from '../../identity/index.js';
 import { SERVICE_CATEGORIES } from '../../coordination/index.js';

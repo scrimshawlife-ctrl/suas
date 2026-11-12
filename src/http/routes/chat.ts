@@ -12,7 +12,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { authenticate } from '../authenticate.js';
-import { pageQuery } from '../cursor.js';
+import { pageQuery } from '../../db/cursor.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import {
   issueConnectTicket,

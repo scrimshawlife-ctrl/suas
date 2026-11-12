@@ -1,5 +1,5 @@
 /**
- * API.md §5 keyset paging on the lists that share src/http/cursor.ts.
+ * API.md §5 keyset paging on the lists that share src/db/cursor.ts.
  *
  * Rows that differ only below the millisecond must all appear across pages (A4-09): a JS
  * `Date` cursor used to skip them. `GET /notifications` and `GET /chat/threads` page with

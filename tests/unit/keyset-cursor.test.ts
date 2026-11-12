@@ -12,7 +12,7 @@ import {
   InvalidCursorError,
   isUuid,
   takePage,
-} from '../../src/http/cursor.js';
+} from '../../src/db/cursor.js';
 
 const ID = '7d0f2b5e-3c1a-4e8b-9f6d-0a1b2c3d4e5f';
 
