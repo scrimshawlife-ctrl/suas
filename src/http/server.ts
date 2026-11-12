@@ -44,6 +44,7 @@ import { registerIntakeRoutes } from './routes/intake.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerLicenceReviewRoutes } from './routes/licence-reviews.js';
 import { registerResourceRoutes } from './routes/resources.js';
+import { registerAdminLicenceReviewRoutes } from './routes/admin-licence-reviews.js';
 import { registerAdminResourceDraftRoutes } from './routes/admin-resource-drafts.js';
 import { registerServiceRequestRoutes } from './routes/service-requests.js';
 import { registerTrustedContactRoutes } from './routes/trusted-contacts.js';
@@ -195,7 +196,9 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     for (const [name, value] of Object.entries(BROWSER_SECURITY_HEADERS)) {
       void reply.header(name, value);
     }
-    if (requiresNoStore(request.url)) {
+    // A route may only tighten this (the licence images add "private"), never relax it.
+    const own = reply.getHeader('cache-control');
+    if (requiresNoStore(request.url) && !(typeof own === 'string' && /\bno-store\b/.test(own))) {
       void reply.header('cache-control', 'no-store');
     }
     done(null, payload);
@@ -386,6 +389,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       readerConfigured: deps.licenceReader !== undefined,
       ...(deps.objectStorage !== undefined ? { storage: deps.objectStorage } : {}),
       ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
+    });
+
+    registerAdminLicenceReviewRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      ...(deps.objectStorage !== undefined ? { storage: deps.objectStorage } : {}),
     });
 
     registerConsentRoutes(app, {
