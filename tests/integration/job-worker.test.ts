@@ -11,8 +11,20 @@ import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
+import {
+  acceptTrustedContact,
+  consentTemplateVersionKey,
+  createConsentTemplateVersion,
+  grantConsent,
+  inviteTrustedContact,
+  publishConsentTemplateVersion,
+  type DisclosureRequest,
+} from '../../src/consent/index.js';
+import { openCase } from '../../src/coordination/index.js';
+import { withTransaction } from '../../src/db/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { PostgresOutboxJobQueue } from '../../src/jobs/index.js';
+import { createFollowUp } from '../../src/settlement/index.js';
 import { ensurePublishedQv001, startCheckIn } from '../../src/signals/index.js';
 import { enqueueNotification } from '../../src/notifications/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -28,42 +40,82 @@ afterAll(async () => {
   await pool.end();
 });
 
-async function drainOnce(): Promise<void> {
+async function drainOnce(env: Record<string, string> = {}): Promise<void> {
   await run(
     process.execPath,
     ['--import', 'tsx/esm', 'src/cli/job-worker.ts', '--once', '--limit', '50'],
     {
       cwd: new URL('../..', import.meta.url).pathname,
-      env: { ...process.env, DATABASE_URL: testDatabaseUrl(), SUAS_MIGRATIONS_MODE: 'validate' },
+      env: {
+        ...process.env,
+        DATABASE_URL: testDatabaseUrl(),
+        SUAS_MIGRATIONS_MODE: 'validate',
+        ...env,
+      },
     },
   );
 }
 
-async function queuedNotification() {
-  const tenantId = syntheticTenantId();
-  const veteran = await createUser(pool, {
+function newUser(tenantId: string, label: string) {
+  return createUser(pool, {
     tenantId,
-    email: syntheticEmail(`veteran-${randomUUID().slice(0, 8)}`),
+    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
   });
+}
+
+/** A Veteran whose accepted Trusted Contact holds an active RED-alert grant. */
+async function alertGrant() {
+  const tenantId = syntheticTenantId();
+  const veteran = await newUser(tenantId, 'veteran');
+  const invited = await inviteTrustedContact(pool, {
+    tenantId,
+    veteranUserId: veteran.userId,
+    relationshipLabel: 'Battle buddy',
+    inviteEmail: syntheticEmail(`contact-${randomUUID().slice(0, 8)}`),
+  });
+  const contact = await acceptTrustedContact(pool, tenantId, invited.trustedContactId);
+  if (contact === undefined) throw new Error('Contact did not accept.');
+  const templateKey = `alerts-${randomUUID().slice(0, 8)}`;
+  const versionKey = consentTemplateVersionKey(templateKey, 1);
+  await createConsentTemplateVersion(pool, { templateKey, version: 1, body: 'Synthetic.' });
+  await publishConsentTemplateVersion(pool, versionKey, undefined);
+  const purpose = 'Alert a trusted contact at red';
+  const grant = await grantConsent(pool, {
+    tenantId,
+    veteranUserId: veteran.userId,
+    permission: 'can_receive',
+    scope: 'RED',
+    purpose,
+    granteeType: 'TRUSTED_CONTACT',
+    granteeId: contact.trustedContactId,
+    consentTemplateVersion: versionKey,
+  });
+  const disclosure: DisclosureRequest = {
+    tenantId,
+    veteranUserId: veteran.userId,
+    permission: 'can_receive',
+    scope: 'RED',
+    granteeType: 'TRUSTED_CONTACT',
+    granteeId: contact.trustedContactId,
+    purpose,
+  };
+  return { tenantId, veteran, disclosure, grantId: grant.consentGrantId };
+}
+
+/** An EMAIL send with its outbox job, as a RED alert enqueues it. */
+async function queuedNotification() {
+  const { tenantId, veteran, disclosure } = await alertGrant();
   const { notification } = await enqueueNotification(
     pool,
     {
       tenantId,
       recipientUserId: veteran.userId,
-      reason: 'qrf.responder_notified',
-      channel: 'IN_APP',
-      templateVersion: 'test@1',
-      disclosure: {
-        tenantId,
-        veteranUserId: veteran.userId,
-        permission: 'can_view',
-        scope: 'current_requests',
-        granteeType: 'SYSTEM',
-        granteeId: 'notifications',
-        purpose: 'Notify the veteran about their own request',
-        systemBasis: 'SYSTEM_INTERNAL_PROCESSING',
-      },
+      destination: syntheticEmail('recipient'),
+      reason: 'trusted_contact_alert',
+      channel: 'EMAIL',
+      templateVersion: 'alert@1',
+      disclosure,
     },
     { jobQueue: new PostgresOutboxJobQueue(pool) },
   );
@@ -119,7 +171,7 @@ describe('job-worker --once and notification.send', () => {
     });
   });
 
-  it('fails closed on a job without the disclosure to re-check', async () => {
+  it('fails closed on a job without the disclosure to re-check, and settles it (C-06)', async () => {
     const { notificationId } = await queuedNotification();
     await pool.query(
       `UPDATE job_outbox SET payload = $1::jsonb, max_attempts = 1
@@ -127,12 +179,112 @@ describe('job-worker --once and notification.send', () => {
       [JSON.stringify({ notification_id: notificationId })],
     );
     await drainOnce();
+    // Nothing was sent; the exhausted send is visible instead of left QUEUED.
     expect(await sendState(notificationId)).toMatchObject({
-      status: 'QUEUED',
+      status: 'UNDELIVERABLE',
       attempts: 0,
       auditEvents: 0,
       jobStatus: 'DEAD_LETTER',
     });
+  });
+
+  it('settles UNDELIVERABLE with an audit when the channel is unavailable on every try (C-06)', async () => {
+    const { notificationId } = await queuedNotification();
+    await pool.query(`UPDATE job_outbox SET max_attempts = 1 WHERE job_type = 'notification.send'`);
+    await drainOnce({ SUAS_EMAIL_MODE: 'disabled' });
+
+    expect(await sendState(notificationId)).toMatchObject({
+      status: 'UNDELIVERABLE',
+      attempts: 0,
+      auditEvents: 0,
+      jobStatus: 'DEAD_LETTER',
+    });
+    const settled = await pool.query<{ payload: { failure_reason: string } }>(
+      `SELECT payload FROM audit_events
+       WHERE event_type = 'NOTIFICATION_UNDELIVERABLE' AND target_id = $1`,
+      [notificationId],
+    );
+    expect(settled.rows).toHaveLength(1);
+    expect(settled.rows[0]?.payload.failure_reason).toContain('no configured delivery path');
+  });
+});
+
+describe('job-worker --once time-driven sweeps', () => {
+  it('marks a due Follow-Up DUE with one FOLLOWUP_DUE event (A2-03, FOLLOWUP.md §5)', async () => {
+    const tenantId = syntheticTenantId();
+    const veteran = await newUser(tenantId, 'veteran');
+    const responder = await newUser(tenantId, 'responder');
+    const opened = await withTransaction(pool, (tx) =>
+      openCase(tx, {
+        tenantId,
+        veteranUserId: veteran.userId,
+        actorType: 'USER',
+        actorId: responder.userId,
+      }),
+    );
+    const followUp = await createFollowUp(pool, {
+      tenantId,
+      caseId: opened.supportCase.caseId,
+      dueAt: new Date(Date.now() - 60_000),
+      responsibleType: 'USER',
+      responsibleId: responder.userId,
+      actorId: responder.userId,
+      actorType: 'USER',
+    });
+
+    await drainOnce();
+    await drainOnce();
+
+    const row = await pool.query<{ status: string }>(
+      'SELECT status FROM follow_ups WHERE follow_up_id = $1',
+      [followUp.followUpId],
+    );
+    expect(row.rows[0]?.status).toBe('DUE');
+    const events = await pool.query(
+      `SELECT 1 FROM domain_events WHERE event_type = 'FOLLOWUP_DUE' AND aggregate_id = $1`,
+      [followUp.followUpId],
+    );
+    expect(events.rowCount).toBe(1);
+  });
+
+  it('expires a lapsed consent grant with an EXPIRED ConsentEvent (A1-09, CONSENT.md §7-§8)', async () => {
+    const { grantId } = await alertGrant();
+    await pool.query(
+      `UPDATE consent_grants SET expires_at = now() - interval '1 minute'
+       WHERE consent_grant_id = $1`,
+      [grantId],
+    );
+
+    await drainOnce();
+
+    const grant = await pool.query<{ status: string }>(
+      'SELECT status FROM consent_grants WHERE consent_grant_id = $1',
+      [grantId],
+    );
+    expect(grant.rows[0]?.status).toBe('EXPIRED');
+    const events = await pool.query(
+      `SELECT 1 FROM consent_events WHERE consent_grant_id = $1 AND event_type = 'EXPIRED'`,
+      [grantId],
+    );
+    expect(events.rowCount).toBe(1);
+  });
+
+  it('prunes elapsed rate-limit windows and keeps the current one (A1-15)', async () => {
+    const subject = `prune-${randomUUID()}`;
+    await pool.query(
+      `INSERT INTO auth_rate_limits (bucket, subject, window_start, count)
+       VALUES ('auth.challenge.issue', $1, now() - interval '2 hours', 3),
+              ('auth.challenge.issue', $1, now(), 1)`,
+      [subject],
+    );
+
+    await drainOnce();
+
+    const left = await pool.query<{ count: number }>(
+      'SELECT count FROM auth_rate_limits WHERE subject = $1',
+      [subject],
+    );
+    expect(left.rows).toEqual([{ count: 1 }]);
   });
 });
 

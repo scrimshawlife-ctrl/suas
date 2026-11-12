@@ -8,11 +8,13 @@
  */
 
 import type { Pool } from 'pg';
+import { z } from 'zod';
 import type { SuasConfig } from '../config/index.js';
 import { appendDomainEvent } from '../events/index.js';
 import {
   attemptSend,
   parseNotificationSendPayload,
+  settleUndeliverable,
   type NotificationChannel,
   type NotificationChannelPort,
 } from '../notifications/index.js';
@@ -25,6 +27,49 @@ export interface JobToHandle {
   readonly tenantId?: string | undefined;
 }
 export type JobWork = (job: JobToHandle) => Promise<void>;
+/** Runs once a job is dead-lettered, to settle the record it was working on. */
+export type DeadLetterWork = (job: JobToHandle, lastError: string) => Promise<void>;
+
+export interface JobHandlerDeps {
+  readonly pool: Pool;
+  readonly config: SuasConfig;
+  readonly channels: Map<NotificationChannel, NotificationChannelPort>;
+  /** See {@link supportSignalComputeHandler}: the queue may wrap these handlers. */
+  readonly getJobQueue: () => DurableJobQueuePort | undefined;
+}
+
+/** The job-type → handler map, built once for both the inline dispatcher and the job worker. */
+export function createJobHandlers(deps: JobHandlerDeps): Readonly<Record<string, JobWork>> {
+  return {
+    // RED alerts enqueue notification.send rows that a later pass delivers.
+    'support-signal.compute': supportSignalComputeHandler(deps.pool, deps.config, deps.getJobQueue),
+    'notification.send': notificationSendHandler(deps.pool, deps.channels),
+  };
+}
+
+/** Dead-letter follow-ups per job type, so an exhausted job never leaves its record pending. */
+export function createDeadLetterHandlers(pool: Pool): Readonly<Record<string, DeadLetterWork>> {
+  return { 'notification.send': notificationDeadLetterHandler(pool) };
+}
+
+const deadLetterNotificationPayload = z.object({ notification_id: z.string().uuid() });
+
+/**
+ * NOTIFICATIONS.md §5: failures thrown before any provider attempt (channel unavailable,
+ * template error) never count as attempts, so the outbox exhausts first. The Notification
+ * then settles UNDELIVERABLE instead of staying QUEUED.
+ */
+function notificationDeadLetterHandler(pool: Pool): DeadLetterWork {
+  return async (job, lastError) => {
+    const parsed = deadLetterNotificationPayload.safeParse(job.payload);
+    if (!parsed.success || job.tenantId === undefined) return;
+    await settleUndeliverable(pool, {
+      tenantId: job.tenantId,
+      notificationId: parsed.data.notification_id,
+      failureReason: lastError,
+    });
+  };
+}
 
 /**
  * `getJobQueue` is a thunk because the inline dispatcher that wraps this handler
