@@ -449,7 +449,7 @@ export interface paths {
         put?: never;
         /**
          * Invite a trusted contact
-         * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). No invite message is sent yet.
+         * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). When the invite has an email, one EMAIL notification (reason trusted_contact_invited, template invite@1) goes to that address after the commit; it names nobody (TRUSTED_CIRCLE.md §3.2; R9.4, contributor proposal, specs #72, not released).
          */
         post: operations["inviteTrustedContact"];
         delete?: never;
@@ -1245,6 +1245,90 @@ export interface paths {
          * @description Signed-in only; no ID scan needed. Guidance for the form: "First name and last initial, like Marcus T." Only length and emptiness are validated.
          */
         put: operations["putVeteransMeProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/admin/consent-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List consent template versions
+         * @description SUAS administrator (MFA-elevated session) only. Every version of every template key, newest version first (CONSENT.md §6; ADMIN.md §2). R9.3 (contributor proposal, specs #72, not released).
+         */
+        get: operations["listAdminConsentTemplates"];
+        put?: never;
+        /**
+         * Create the next DRAFT version of a consent template
+         * @description SUAS administrator (MFA-elevated session) only. The server numbers the version (1 for a new key). Audited (CONSENT_TEMPLATE_VERSION_CREATED, key and version only). A retry with the same Idempotency-Key returns the version it made (200, replayed true); a concurrent create of the same key is 409 STALE_STATE. R9.3 (contributor proposal, specs #72, not released).
+         */
+        post: operations["createAdminConsentTemplateVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/admin/consent-templates/{version}/commands/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a DRAFT consent template version
+         * @description SUAS administrator (MFA-elevated session) only; one admin publishes (R9.3 owner answer). The key's earlier PUBLISHED version becomes SUPERSEDED in the same transaction, so new grants must cite the new version. Audited (CONSENT_TEMPLATE_PUBLISHED). A version that is not a DRAFT is 409 ILLEGAL_TRANSITION. R9.3 (contributor proposal, specs #72, not released).
+         */
+        post: operations["publishAdminConsentTemplateVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/consent-templates/published": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the current published version of a consent template
+         * @description Any signed-in person. `purpose` is the template key, for example `red-alert-trusted-contact`; the answer is the version a new grant must cite. 404 when none is published. R9.3 (contributor proposal, specs #72, not released).
+         */
+        get: operations["getPublishedConsentTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/trusted-contacts/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List invites waiting for the signed-in person
+         * @description Invites still INVITED to the caller's enrolled email, with the inviting Veteran's display name and the relationship label only; invites do not expire. Accept with POST /trusted-contacts/{id}/commands/accept. R9.4 (contributor proposal, specs #72, not released).
+         */
+        get: operations["listTrustedContactInvitations"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2135,6 +2219,44 @@ export interface components {
         };
         ServiceRequestEditResult: components["schemas"]["ServiceRequestDetail"] & {
             replayed: boolean;
+        };
+        ConsentTemplateVersion: {
+            /** @description <template_key>@<version>; what a grant cites as consent_template_version. */
+            version_key: string;
+            template_key: string;
+            version: number;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED" | "SUPERSEDED";
+            /** @description Administrator-written copy (CONSENT.md §6). */
+            body: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ConsentTemplateVersionResult: components["schemas"]["ConsentTemplateVersion"] & {
+            replayed: boolean;
+        };
+        ConsentTemplatePublished: components["schemas"]["ConsentTemplateVersion"] & {
+            superseded_version_keys: string[];
+        };
+        CreateConsentTemplateVersionRequest: {
+            template_key: string;
+            body: string;
+        };
+        PublishedConsentTemplate: {
+            version_key: string;
+            template_key: string;
+            version: number;
+            body: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+        };
+        TrustedContactInvitation: {
+            /** Format: uuid */
+            trusted_contact_id: string;
+            veteran_display_name: string | null;
+            relationship_label: string;
         };
     };
     responses: {
@@ -4738,6 +4860,147 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             413: components["responses"]["Error"];
+        };
+    };
+    listAdminConsentTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Template versions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        templates: components["schemas"]["ConsentTemplateVersion"][];
+                    };
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    createAdminConsentTemplateVersion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConsentTemplateVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Replay of a version already created with this Idempotency-Key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentTemplateVersionResult"];
+                };
+            };
+            /** @description DRAFT version created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentTemplateVersionResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+        };
+    };
+    publishAdminConsentTemplateVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Version key, `<template_key>@<version>`. */
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentTemplatePublished"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    getPublishedConsentTemplate: {
+        parameters: {
+            query: {
+                purpose: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current published version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedConsentTemplate"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listTrustedContactInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending invitations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        invitations: components["schemas"]["TrustedContactInvitation"][];
+                    };
+                };
+            };
+            401: components["responses"]["Error"];
         };
     };
 }

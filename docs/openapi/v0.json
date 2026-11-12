@@ -1468,7 +1468,7 @@
       "post": {
         "tags": ["consent"],
         "summary": "Invite a trusted contact",
-        "description": "Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). No invite message is sent yet.",
+        "description": "Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). When the invite has an email, one EMAIL notification (reason trusted_contact_invited, template invite@1) goes to that address after the commit; it names nobody (TRUSTED_CIRCLE.md §3.2; R9.4, contributor proposal, specs #72, not released).",
         "operationId": "inviteTrustedContact",
         "security": [
           {
@@ -4224,6 +4224,244 @@
                 "$ref": "#/components/schemas/SetProfileRequest"
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/consent-templates": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "List consent template versions",
+        "operationId": "listAdminConsentTemplates",
+        "description": "SUAS administrator (MFA-elevated session) only. Every version of every template key, newest version first (CONSENT.md §6; ADMIN.md §2). R9.3 (contributor proposal, specs #72, not released).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template versions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["templates"],
+                  "properties": {
+                    "templates": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ConsentTemplateVersion"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": ["admin"],
+        "summary": "Create the next DRAFT version of a consent template",
+        "operationId": "createAdminConsentTemplateVersion",
+        "description": "SUAS administrator (MFA-elevated session) only. The server numbers the version (1 for a new key). Audited (CONSENT_TEMPLATE_VERSION_CREATED, key and version only). A retry with the same Idempotency-Key returns the version it made (200, replayed true); a concurrent create of the same key is 409 STALE_STATE. R9.3 (contributor proposal, specs #72, not released).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConsentTemplateVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay of a version already created with this Idempotency-Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentTemplateVersionResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "DRAFT version created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentTemplateVersionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/admin/consent-templates/{version}/commands/publish": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Publish a DRAFT consent template version",
+        "operationId": "publishAdminConsentTemplateVersion",
+        "description": "SUAS administrator (MFA-elevated session) only; one admin publishes (R9.3 owner answer). The key's earlier PUBLISHED version becomes SUPERSEDED in the same transaction, so new grants must cite the new version. Audited (CONSENT_TEMPLATE_PUBLISHED). A version that is not a DRAFT is 409 ILLEGAL_TRANSITION. R9.3 (contributor proposal, specs #72, not released).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "Version key, `<template_key>@<version>`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentTemplatePublished"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/consent-templates/published": {
+      "get": {
+        "tags": ["consent"],
+        "summary": "Read the current published version of a consent template",
+        "operationId": "getPublishedConsentTemplate",
+        "description": "Any signed-in person. `purpose` is the template key, for example `red-alert-trusted-contact`; the answer is the version a new grant must cite. 404 when none is published. R9.3 (contributor proposal, specs #72, not released).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "purpose",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "maxLength": 64
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current published version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedConsentTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v0/trusted-contacts/invitations": {
+      "get": {
+        "tags": ["consent"],
+        "summary": "List invites waiting for the signed-in person",
+        "operationId": "listTrustedContactInvitations",
+        "description": "Invites still INVITED to the caller's enrolled email, with the inviting Veteran's display name and the relationship label only; invites do not expire. Accept with POST /trusted-contacts/{id}/commands/accept. R9.4 (contributor proposal, specs #72, not released).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending invitations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["invitations"],
+                  "properties": {
+                    "invitations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TrustedContactInvitation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
           }
         }
       }
@@ -7039,6 +7277,141 @@
             }
           }
         ]
+      },
+      "ConsentTemplateVersion": {
+        "type": "object",
+        "required": [
+          "version_key",
+          "template_key",
+          "version",
+          "status",
+          "body",
+          "published_at",
+          "created_at"
+        ],
+        "properties": {
+          "version_key": {
+            "type": "string",
+            "description": "<template_key>@<version>; what a grant cites as consent_template_version."
+          },
+          "template_key": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "maxLength": 64
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "PUBLISHED", "SUPERSEDED"]
+          },
+          "body": {
+            "type": ["string", "null"],
+            "description": "Administrator-written copy (CONSENT.md §6)."
+          },
+          "published_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConsentTemplateVersionResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ConsentTemplateVersion"
+          },
+          {
+            "type": "object",
+            "required": ["replayed"],
+            "properties": {
+              "replayed": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "ConsentTemplatePublished": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ConsentTemplateVersion"
+          },
+          {
+            "type": "object",
+            "required": ["superseded_version_keys"],
+            "properties": {
+              "superseded_version_keys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CreateConsentTemplateVersionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["template_key", "body"],
+        "properties": {
+          "template_key": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          }
+        }
+      },
+      "PublishedConsentTemplate": {
+        "type": "object",
+        "required": ["version_key", "template_key", "version", "body", "published_at"],
+        "properties": {
+          "version_key": {
+            "type": "string"
+          },
+          "template_key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "body": {
+            "type": ["string", "null"]
+          },
+          "published_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "TrustedContactInvitation": {
+        "type": "object",
+        "required": ["trusted_contact_id", "veteran_display_name", "relationship_label"],
+        "properties": {
+          "trusted_contact_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "veteran_display_name": {
+            "type": ["string", "null"]
+          },
+          "relationship_label": {
+            "type": "string"
+          }
+        }
       }
     },
     "responses": {
