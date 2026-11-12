@@ -128,10 +128,10 @@ describe('A partial run cannot be reported as a drill run', () => {
 });
 
 describe('pilot objective release boundaries', () => {
-  it('records the released performance and recovery decisions without inventing D-021 magnitude', () => {
+  it('records D-021, D-023 and D-024 as the specs register does (not released)', () => {
     expect(D_021_WORKLOAD_ENVELOPE).toBe('MAGNITUDES_NOT_RELEASED');
-    expect(D_023_PERFORMANCE_SLOS).toBe('APPROVED_FOR_PILOT_IMPLEMENTATION');
-    expect(D_024_RECOVERY_OBJECTIVES).toBe('APPROVED_FOR_PILOT_IMPLEMENTATION');
+    expect(D_023_PERFORMANCE_SLOS).toBe('DECISION_PENDING');
+    expect(D_024_RECOVERY_OBJECTIVES).toBe('DECISION_PENDING');
   });
 
   it('refuses only an unreleased workload magnitude', () => {
@@ -142,7 +142,7 @@ describe('pilot objective release boundaries', () => {
     expect(() => assertRecoveryObjectivesReleased('An RTO')).not.toThrow();
   });
 
-  it('encodes the approved pilot comparison targets', () => {
+  it('keeps the local comparison inputs unchanged', () => {
     expect(PILOT_PERFORMANCE_SLOS).toMatchObject({
       successfulReadP95Ms: 1_000,
       successfulWriteP95Ms: 1_500,
