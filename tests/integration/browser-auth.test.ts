@@ -630,6 +630,15 @@ describe('HTML passwordless sign-in', () => {
       headers: { cookie },
     });
     expect(rejected.statusCode).toBe(401);
+
+    // A1-22 (AUTH.md §9.1): signing out again with the now-revoked cookie still clears it.
+    const again = await app.server.inject({
+      method: 'POST',
+      url: '/app/auth/logout',
+      headers: { cookie, 'sec-fetch-site': 'same-origin', origin: 'null' },
+    });
+    expect(again.statusCode).toBe(303);
+    expect(String(again.headers['set-cookie'])).toContain('Max-Age=0');
   });
 });
 
