@@ -47,17 +47,14 @@ describe('AWS capability config defaults', () => {
 });
 
 describe('real AWS modes', () => {
-  it('accepts SES and S3 in STAGING with their configuration', () => {
+  it('accepts S3 in STAGING with its configuration', () => {
     const config = loadConfig(
       staging({
         SUAS_AWS_REGION: 'us-west-2',
-        SUAS_EMAIL_MODE: 'ses',
-        SUAS_EMAIL_FROM: 'sender@example.invalid',
         SUAS_OBJECT_STORAGE_MODE: 's3',
         SUAS_S3_BUCKET: 'suas-staging-assets',
       }),
     );
-    expect(config.notifications.email).toBe('ses');
     expect(config.aws.region).toBe('us-west-2');
     expect(config.modelInference.mode).toBe('disabled');
     expect(config.objectStorage.bucket).toBe('suas-staging-assets');
@@ -82,29 +79,21 @@ describe('real AWS modes', () => {
   });
 
   it.each([
-    ['SUAS_EMAIL_MODE', 'ses'],
     ['SUAS_MODEL_INFERENCE_MODE', 'bedrock'],
     ['SUAS_OBJECT_STORAGE_MODE', 's3'],
   ])('refuses %s=%s in LOCAL and TEST', (varName, value) => {
     const extra = {
       [varName]: value,
       SUAS_AWS_REGION: 'us-west-2',
-      SUAS_EMAIL_FROM: 'sender@example.invalid',
       SUAS_S3_BUCKET: 'suas-assets',
     };
     expect(issuesFor(validEnv(extra))).toContain(`${varName}=${value} is forbidden in TEST`);
     expect(issuesFor(validEnv({ ...extra, SUAS_ENV: 'LOCAL' }))).toContain('forbidden in LOCAL');
   });
 
-  it('requires the region, sender and bucket their mode needs', () => {
-    const issues = issuesFor(
-      staging({
-        SUAS_EMAIL_MODE: 'ses',
-        SUAS_OBJECT_STORAGE_MODE: 's3',
-      }),
-    );
+  it('requires the region and bucket their mode needs', () => {
+    const issues = issuesFor(staging({ SUAS_OBJECT_STORAGE_MODE: 's3' }));
     expect(issues).toContain('SUAS_AWS_REGION is required');
-    expect(issues).toContain('SUAS_EMAIL_FROM is required when SUAS_EMAIL_MODE=ses');
     expect(issues).toContain('SUAS_S3_BUCKET is required');
   });
 

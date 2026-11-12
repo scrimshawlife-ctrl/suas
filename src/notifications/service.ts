@@ -445,10 +445,13 @@ export async function attemptSend(
   return withTransaction(pool, async (tx) => {
     const attempts = notification.attemptCount + 1;
     const exhausted = attempts >= notification.maxAttempts;
+    // §5: a refusal the adapter marks non-retryable (a permanent rejection, or an
+    // ambiguous acknowledgement that must not be retried blindly) settles now.
+    const settlesNow = exhausted || acknowledgement.retryable === false;
 
     const status: DeliveryStatus = acknowledgement.accepted
       ? 'SENT'
-      : exhausted
+      : settlesNow
         ? 'UNDELIVERABLE'
         : 'FAILED';
 
@@ -470,6 +473,13 @@ export async function attemptSend(
         ? { providerReference: acknowledgement.providerReference }
         : {}),
     });
+    if (status === 'UNDELIVERABLE') {
+      await recordUndeliverableAudit(
+        tx,
+        updated,
+        acknowledgement.failureReason ?? 'attempts exhausted',
+      );
+    }
 
     return {
       notification: updated,
@@ -712,25 +722,34 @@ export async function settleUndeliverable(
     const updated = await setStatus(tx, input.tenantId, input.notificationId, {
       status: 'UNDELIVERABLE',
     });
-    await appendAuditEvent(tx, {
-      eventType: 'NOTIFICATION_UNDELIVERABLE',
-      action: 'SETTLE_NOTIFICATION_UNDELIVERABLE',
-      targetType: 'Notification',
-      targetId: updated.notificationId,
-      aggregateType: 'Notification',
-      aggregateId: updated.notificationId,
-      tenantId: updated.tenantId,
-      actorType: 'SYSTEM',
-      actorId: 'notifications',
-      // §10: no body and no destination.
-      payload: {
-        channel: updated.channel,
-        reason: updated.reason,
-        attempt_count: updated.attemptCount,
-        failure_reason: input.failureReason.slice(0, 300),
-      },
-    });
+    await recordUndeliverableAudit(tx, updated, input.failureReason);
     return updated;
+  });
+}
+
+/** §5: an UNDELIVERABLE settlement is visible to operations, with its reason. */
+async function recordUndeliverableAudit(
+  tx: Queryable,
+  notification: Notification,
+  failureReason: string,
+): Promise<void> {
+  await appendAuditEvent(tx, {
+    eventType: 'NOTIFICATION_UNDELIVERABLE',
+    action: 'SETTLE_NOTIFICATION_UNDELIVERABLE',
+    targetType: 'Notification',
+    targetId: notification.notificationId,
+    aggregateType: 'Notification',
+    aggregateId: notification.notificationId,
+    tenantId: notification.tenantId,
+    actorType: 'SYSTEM',
+    actorId: 'notifications',
+    // §10: no body and no destination.
+    payload: {
+      channel: notification.channel,
+      reason: notification.reason,
+      attempt_count: notification.attemptCount,
+      failure_reason: failureReason.slice(0, 300),
+    },
   });
 }
 
