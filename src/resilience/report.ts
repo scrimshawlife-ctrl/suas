@@ -129,9 +129,9 @@ export function assembleDrillReport(input: {
     ],
     caveats: [
       ...(input.caveats ?? []),
-      'Correctness invariants only. D-023 and D-024 targets are approved pilot ' +
-        'comparison inputs, but this run does not assert compliance. D-021 still ' +
-        'has no released workload magnitude.',
+      'Correctness invariants only. D-021, D-023 and D-024 are DECISION_PENDING: ' +
+        'no workload magnitude, SLO, or recovery objective is released, and this ' +
+        'run does not assert compliance.',
       `Workload dimensions exercised without a released magnitude: ${WORKLOAD_DIMENSIONS.join(', ')}.`,
     ],
     readiness:
