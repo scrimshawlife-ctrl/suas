@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
 import {
   BedrockModelInference,
+  consoleInferenceLogger,
   createModelInferencePort,
   ScriptedModelInference,
   UnavailableModelInference,
@@ -206,8 +207,13 @@ describe('ScriptedModelInference', () => {
 });
 
 describe('createModelInferencePort', () => {
-  const staging = (overrides: Record<string, string>) =>
-    loadConfig(validEnv({ SUAS_ENV: 'STAGING', SUAS_AWS_REGION: 'us-west-2', ...overrides }));
+  // Config validation refuses bedrock in every class today (SAFETY.md §6), so the factory
+  // is exercised on a config built past that guard.
+  const bedrock = (bedrockModelId: string | undefined) => ({
+    ...loadConfig(validEnv()),
+    aws: { region: 'us-west-2' },
+    modelInference: { mode: 'bedrock' as const, bedrockModelId },
+  });
 
   it('reports the capability unavailable when disabled', async () => {
     const port = createModelInferencePort(loadConfig(validEnv()));
@@ -217,16 +223,22 @@ describe('createModelInferencePort', () => {
   });
 
   it('reports bedrock unavailable while the model id is unset', () => {
-    const port = createModelInferencePort(staging({ SUAS_MODEL_INFERENCE_MODE: 'bedrock' }));
+    const port = createModelInferencePort(bedrock(undefined));
     expect(port.isAvailable()).toBe(false);
   });
 
   it('builds the Bedrock adapter once a model id is set', () => {
-    const port = createModelInferencePort(
-      staging({ SUAS_MODEL_INFERENCE_MODE: 'bedrock', SUAS_BEDROCK_MODEL_ID: 'test-model-id' }),
-    );
+    const port = createModelInferencePort(bedrock('test-model-id'));
     expect(port).toBeInstanceOf(BedrockModelInference);
     expect(port.isAvailable()).toBe(true);
+  });
+
+  it('wires the content-free outcome logger into the Bedrock adapter (C-14)', () => {
+    const logger = (): void => undefined;
+    const withLogger = createModelInferencePort(bedrock('test-model-id'), logger);
+    const byDefault = createModelInferencePort(bedrock('test-model-id'));
+    expect((withLogger as unknown as { logger: unknown }).logger).toBe(logger);
+    expect((byDefault as unknown as { logger: unknown }).logger).toBe(consoleInferenceLogger);
   });
 
   it('builds the scripted fake for fake mode', () => {

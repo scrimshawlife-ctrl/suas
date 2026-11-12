@@ -715,15 +715,19 @@ function validateAwsCapabilities(
     );
   }
 
-  if (environment === 'PRODUCTION') {
-    for (const [varName, value] of [
-      ['SUAS_MODEL_INFERENCE_MODE', raw.SUAS_MODEL_INFERENCE_MODE],
-      ['SUAS_OBJECT_STORAGE_MODE', raw.SUAS_OBJECT_STORAGE_MODE],
-    ] as const) {
-      if (value === 'fake') {
-        issue(`${varName}=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).`);
-      }
-    }
+  // SAFETY.md §6, RESOURCES.md §5.1, API.md §17: model extraction and the intake assistant
+  // are not authorized (R2.15 unapproved), so a deployed class runs with inference off.
+  if (
+    (environment === 'STAGING' || environment === 'PRODUCTION') &&
+    raw.SUAS_MODEL_INFERENCE_MODE !== 'disabled'
+  ) {
+    issue(
+      `SUAS_MODEL_INFERENCE_MODE=${raw.SUAS_MODEL_INFERENCE_MODE} is forbidden in ${environment}; ` +
+        'model inference is not authorized by the released spec (SAFETY.md §6).',
+    );
+  }
+  if (environment === 'PRODUCTION' && raw.SUAS_OBJECT_STORAGE_MODE === 'fake') {
+    issue('SUAS_OBJECT_STORAGE_MODE=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).');
   }
 }
 
