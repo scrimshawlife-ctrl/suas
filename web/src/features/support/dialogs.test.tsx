@@ -13,7 +13,7 @@ vi.mock('../../api/client', () => ({ api: client }));
 
 const grant: ConsentGrant = {
   consent_grant_id: 'g1',
-  ...redAlertGrantBody('tc-1'),
+  ...redAlertGrantBody('tc-1', 'red-alert-trusted-contact@1'),
   status: 'ACTIVE',
   granted_at: '2026-11-04T10:00:00Z',
   expires_at: null,

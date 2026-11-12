@@ -5,9 +5,11 @@ import type { ConsentGrant } from './api';
 import {
   findRedAlertGrant,
   RED_ALERT_PURPOSE,
-  RED_ALERT_TEMPLATE_VERSION,
+  RED_ALERT_TEMPLATE_PURPOSE,
   redAlertGrantBody,
 } from './red-alert-consent';
+
+const VERSION = 'red-alert-trusted-contact@2';
 
 function grant(overrides: Partial<ConsentGrant>): ConsentGrant {
   return {
@@ -17,7 +19,7 @@ function grant(overrides: Partial<ConsentGrant>): ConsentGrant {
     purpose: RED_ALERT_PURPOSE,
     grantee_type: 'TRUSTED_CONTACT',
     grantee_id: 'tc-1',
-    consent_template_version: RED_ALERT_TEMPLATE_VERSION,
+    consent_template_version: VERSION,
     status: 'ACTIVE',
     granted_at: '2026-11-04T10:00:00Z',
     expires_at: null,
@@ -28,15 +30,20 @@ function grant(overrides: Partial<ConsentGrant>): ConsentGrant {
 
 describe('RED alert consent grant', () => {
   it('builds the grant red-alert.ts looks for: can_receive, RED, TRUSTED_CONTACT, the contact row id', () => {
-    const body = redAlertGrantBody('tc-1');
+    const body = redAlertGrantBody('tc-1', VERSION);
     expect(body).toEqual({
       permission: 'can_receive',
       scope: 'RED',
       purpose: RED_ALERT_PURPOSE,
       grantee_type: 'TRUSTED_CONTACT',
       grantee_id: 'tc-1',
-      consent_template_version: RED_ALERT_TEMPLATE_VERSION,
+      consent_template_version: VERSION,
     });
+  });
+
+  it('looks up the template key the server publishes for the RED alert', () => {
+    const source = readFileSync(resolve(process.cwd(), '../src/consent/templates.ts'), 'utf8');
+    expect(source).toContain(`RED_ALERT_CONSENT_TEMPLATE_KEY = '${RED_ALERT_TEMPLATE_PURPOSE}'`);
   });
 
   it('uses the same purpose wording as the server-side alert', () => {

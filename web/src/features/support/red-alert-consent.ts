@@ -1,12 +1,11 @@
 import type { ConsentGrant, GrantConsentBody } from './api';
 
 /**
- * The consent template version the RED-alert grant cites. The API requires a PUBLISHED
- * template (POST /consents answers 422 CONSENT_TEMPLATE_UNAVAILABLE otherwise) and offers no
- * way to look one up. This is the key the local seed publishes; other environments need the
- * backend to publish one and expose it. Decision: the user left this as a known gap.
+ * Template key of the RED-alert consent, as src/consent/templates.ts names it. The grant cites
+ * the version GET /consent-templates/published?purpose= returns, which a SUAS admin publishes
+ * (R9.3, contributor proposal, specs #72).
  */
-export const RED_ALERT_TEMPLATE_VERSION = 'local-seed-consent@1';
+export const RED_ALERT_TEMPLATE_PURPOSE = 'red-alert-trusted-contact';
 
 /** Same wording as src/signals/red-alert.ts (RED_ALERT_PURPOSE). */
 export const RED_ALERT_PURPOSE = 'Alert a trusted contact at red';
@@ -16,14 +15,17 @@ export const RED_ALERT_PURPOSE = 'Alert a trusted contact at red';
  * scope `RED`, to a TRUSTED_CONTACT whose id is the trusted contact row id (not the contact's
  * user id).
  */
-export function redAlertGrantBody(trustedContactId: string): GrantConsentBody {
+export function redAlertGrantBody(
+  trustedContactId: string,
+  templateVersion: string,
+): GrantConsentBody {
   return {
     permission: 'can_receive',
     scope: 'RED',
     purpose: RED_ALERT_PURPOSE,
     grantee_type: 'TRUSTED_CONTACT',
     grantee_id: trustedContactId,
-    consent_template_version: RED_ALERT_TEMPLATE_VERSION,
+    consent_template_version: templateVersion,
   };
 }
 

@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { retryServerErrors } from '../../api/errors';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { useSessionToken } from '../../api/token-store';
@@ -13,12 +14,15 @@ export type ConsentGrant = Schemas['ConsentGrant'];
 export type TrustedContact = Schemas['TrustedContact'];
 export type NotificationItem = Schemas['Notification'];
 export type GrantConsentBody = Schemas['GrantConsentRequest'];
+export type TrustedContactInvitation = Schemas['TrustedContactInvitation'];
 
 /** Keys for resources the shared factory list does not cover yet. */
 export const supportKeys = {
   checkIns: resourceKeys('check-ins'),
   consents: resourceKeys('consents'),
   trustedContacts: resourceKeys('trusted-contacts'),
+  invitations: resourceKeys('trusted-contact-invitations'),
+  publishedTemplates: resourceKeys('published-consent-templates'),
 };
 
 const PAGE_SIZE = 10;
@@ -146,6 +150,25 @@ export function useConsents() {
   });
 }
 
+/**
+ * GET /consent-templates/published: the template version a new grant must cite. A 404 means
+ * none is published, which the caller shows as "not available"; it is not retried.
+ */
+export function usePublishedConsentTemplate(purpose: string) {
+  const token = useSessionToken();
+  return useQuery({
+    queryKey: supportKeys.publishedTemplates.detail(purpose),
+    enabled: token !== null,
+    queryFn: async () => {
+      const { data } = await api.GET('/api/v0/consent-templates/published', {
+        params: { query: { purpose } },
+      });
+      return requireData(data, 'consent template');
+    },
+    retry: retryServerErrors,
+  });
+}
+
 /** Headers from the caller's `useIdempotencyKey()`: one key per user action. */
 type KeyHeaders = Record<string, string>;
 
@@ -242,6 +265,34 @@ export function useRemoveTrustedContact() {
         queryClient.invalidateQueries({ queryKey: supportKeys.consents.all }),
         queryClient.invalidateQueries({ queryKey: supportKeys.trustedContacts.all }),
       ]),
+  });
+}
+
+/** GET /trusted-contacts/invitations: invites waiting for the signed-in person. */
+export function useInvitations() {
+  const token = useSessionToken();
+  return useQuery({
+    queryKey: supportKeys.invitations.list(),
+    enabled: token !== null,
+    queryFn: async () => {
+      const { data } = await api.GET('/api/v0/trusted-contacts/invitations');
+      return requireData(data, 'invitations').invitations;
+    },
+  });
+}
+
+/** POST /trusted-contacts/{id}/commands/accept, as the invitee. */
+export function useAcceptInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { trustedContactId: string; headers: KeyHeaders }) => {
+      const { data } = await api.POST('/api/v0/trusted-contacts/{id}/commands/accept', {
+        params: { path: { id: input.trustedContactId } },
+        headers: input.headers,
+      });
+      return requireData(data, 'invitation');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: supportKeys.invitations.all }),
   });
 }
 
