@@ -120,6 +120,9 @@ describe('MVP_REFERENCE.md §5 — public surfaces', () => {
     for (const action of ['TAKE ACTION', 'I NEED SUPPORT']) {
       expect(response.body, action).toContain(action);
     }
+    // R9.5 b (V1_PROJECT_PLAN.md §2.1 "Words"): the pages say SUAS, not the long name.
+    expect(response.body).toContain('<h1>SUAS</h1>');
+    expect(response.body).not.toContain('Shut Up and Serve');
   });
 
   it('serves enrollment with the §7.1 contact requirement, not the reference promise', async () => {

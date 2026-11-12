@@ -88,7 +88,7 @@ function fixture(
 export const VISUAL_FIXTURES: readonly VisualFixture[] = [
   fixture('landing', 'LANDING', '§11.1 landing/action surface', () =>
     renderLanding({
-      shell: shell({ title: 'Shut Up and Serve', showMobileNav: false }),
+      shell: shell({ title: 'Veterans helping veterans', showMobileNav: false }),
       missionLine: 'Veteran peer support, coordinated by people who served.',
     }),
   ),
