@@ -32,6 +32,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as schedulerTargets from 'aws-cdk-lib/aws-scheduler-targets';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
 import { RELEASE_MANIFEST, SPEC_VERSION } from '../../src/release/pins.js';
 import { REGION, type EnvironmentConfig } from './config.js';
@@ -52,6 +53,11 @@ const LOG_RETENTION = logs.RetentionDays.ONE_MONTH;
 const WEB_ADAPTER_LAYER_PUBLISHER = '753240598075';
 
 type Env = Record<string, string>;
+
+/** SSM parameter holding SUAS_STAGING_FIXTURE_REGISTRY for an environment. */
+export function fixtureRegistryParameterName(environment: string): string {
+  return `/suas/${environment}/fixture-registry`;
+}
 
 export class BackendStack extends Stack {
   constructor(scope: Construct, id: string, props: BackendStackProps) {
@@ -205,6 +211,14 @@ export class BackendStack extends Stack {
     // -------------------------------------------------------------------- api
     const code = suasLambdaCode();
 
+    // R11.5 (D-052): the tenant-id:user-id pairs STAGING admits. The operator creates this
+    // String parameter before the first deploy (infra/README.md). CloudFormation resolves it
+    // at each deploy, so no function reads SSM at run time and none gets an SSM grant.
+    const fixtureRegistry = ssm.StringParameter.valueForStringParameter(
+      this,
+      fixtureRegistryParameterName(config.name),
+    );
+
     // Settings every function needs for configuration to validate (src/config/schema.ts).
     const baseEnv: Env = {
       SUAS_ENV: config.suasEnv,
@@ -229,6 +243,7 @@ export class BackendStack extends Stack {
       DATABASE_POOL_MAX: '3',
       DATABASE_SSL_MODE: 'verify',
       SUAS_MIGRATIONS_MODE: 'off',
+      SUAS_STAGING_FIXTURE_REGISTRY: fixtureRegistry,
     };
     const viaProxy: Env = { DATABASE_URL: databaseUrl(proxy.endpoint) };
 
@@ -306,11 +321,9 @@ export class BackendStack extends Stack {
         SUAS_HTTP_PORT: API_PORT,
         SUAS_BROWSER_AUTH_MODE: 'email_otp',
         SUAS_BROWSER_TENANT_ID: config.browserTenantId,
-        // SUAS_CORS_ALLOWED_ORIGINS stays unset, which is an empty allowlist.
-        // Lambda rejects an empty string, and unset parses as no origins. The
-        // Worker origin serves /app same-origin (suasqrf.com). A separate
-        // frontend domain and the cross-site cookie question are unsettled, so
-        // do not list the staging web hostname.
+        // R11.3 (D-038): the v1 web client's origin, which calls this API with Bearer. A
+        // non-empty allowlist makes the /app session cookie SameSite=None (src/http/routes/ui.ts).
+        SUAS_CORS_ALLOWED_ORIGINS: `https://${config.webHostname}`,
         SUAS_EMAIL_MODE: 'ses',
         SUAS_EMAIL_FROM: config.emailFrom,
         // R2.15 is not approved. The Bedrock adapter is not selected.

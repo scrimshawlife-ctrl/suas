@@ -18,6 +18,8 @@ beforeAll(() => {
 type Resource = { Type: string; Properties?: Record<string, any> };
 const resourcesOf = (template: Synthesized['backend']): Record<string, Resource> =>
   template.toJSON().Resources as Record<string, Resource>;
+const parametersOf = (template: Synthesized['backend']): Record<string, Resource> =>
+  (template.toJSON().Parameters ?? {}) as Record<string, Resource>;
 const ofType = (template: Synthesized['backend'], type: string): Array<[string, Resource]> =>
   Object.entries(resourcesOf(template)).filter(([, r]) => r.Type === type);
 
@@ -224,7 +226,7 @@ describe('functions', () => {
   });
 
   it('gives every function a configuration the application accepts', () => {
-    const resources = resourcesOf(s.backend);
+    const resources = { ...resourcesOf(s.backend), ...parametersOf(s.backend) };
     for (const [name, fn] of functions()) {
       const env = Object.fromEntries(
         Object.entries(fn.Properties?.Environment.Variables as Record<string, unknown>).map(
@@ -240,9 +242,8 @@ describe('functions', () => {
         expect(result.config.modelInference.bedrockModelId).toBeUndefined();
         expect(result.config.idVerification.mode).toBe('disabled');
         expect(result.config.publicSignUp).toBe(false);
-        expect(result.config.stagingFixturePrincipals).toEqual([]);
-        expect(env.SUAS_CORS_ALLOWED_ORIGINS).toBeUndefined();
-        expect(result.config.corsAllowedOrigins).toEqual([]);
+        expect(result.config.stagingFixturePrincipals).toHaveLength(1);
+        expect(result.config.corsAllowedOrigins).toEqual(['https://staging.suasqrf.com']);
         expect(result.config.chatPush.mode).toBe('disabled');
         expect(result.config.chatPush.publicUrl).toBeUndefined();
         expect(env.SUAS_CHAT_WS_ENDPOINT).toBeUndefined();
