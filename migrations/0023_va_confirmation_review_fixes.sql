@@ -15,8 +15,9 @@
 -- 5. identity_hash, identity_key_id: HMAC of the canonical name and birth date (label
 --    suas/identity/v1), kept on attempts VA answered. Never the values. A settled VA VERIFIED
 --    row must carry one, so it cannot slip past the one-identity index.
--- 6. identity_released_at: when a REVOKED row or account deletion freed the identity. The
---    hash is cleared at the same time, so another account may verify it.
+-- 6. identity_released_at: when a REVOKED row freed the VA-verified identity, or account
+--    deletion cleared the hash from every VA row. The hash is cleared at the same time, so
+--    another account may verify the identity.
 
 ALTER TABLE veteran_verifications
     DROP CONSTRAINT veteran_verifications_failure_class_check,
@@ -74,6 +75,9 @@ CREATE INDEX veteran_verifications_idempotency_idx
 
 -- A revocation or an account deletion frees the person's VA-verified identity, so a wrong
 -- or abandoned binding does not hold the identity for good (owner review of #73 item 4).
+-- Trade-off kept on purpose: a revoked person can verify the same identity again on a new
+-- account. Without the release, a real Veteran whose identity another account took could
+-- never verify (VA_CONFIRMATION_FLOW §2.2). Keeping a tombstone instead is an owner question.
 CREATE FUNCTION suas_release_verified_identity(p_tenant_id uuid, p_user_id uuid) RETURNS void
 LANGUAGE sql AS $$
     UPDATE veteran_verifications
@@ -96,10 +100,15 @@ CREATE TRIGGER veteran_verifications_release_identity_on_revoke
     FOR EACH ROW WHEN (NEW.status = 'REVOKED')
     EXECUTE FUNCTION suas_release_identity_on_revoke();
 
+-- A deleted account keeps no identity hash on any VA row, NOT_CONFIRMED rows included.
 CREATE FUNCTION suas_release_identity_on_user_delete() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
-    PERFORM suas_release_verified_identity(NEW.tenant_id, NEW.user_id);
+    UPDATE veteran_verifications
+       SET identity_hash = NULL, identity_key_id = NULL, identity_released_at = now()
+     WHERE tenant_id = NEW.tenant_id AND user_id = NEW.user_id
+       AND method = 'VA_VETERAN_STATUS' AND identity_released_at IS NULL
+       AND (identity_hash IS NOT NULL OR status = 'VERIFIED');
     RETURN NULL;
 END;
 $$;
