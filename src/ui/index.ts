@@ -1,71 +1,27 @@
-export { auditAccessibility, type AccessibilityFinding, type MarkupKind } from './a11y.js';
-export {
-  CATEGORY_CARDS,
-  CATEGORY_DISPOSITIONS,
-  categoryForCard,
-  NonOperationalCategoryError,
-  type CategoryCard,
-  type CategoryDisposition,
-} from './categories.js';
+export { auditAccessibility } from './a11y.js';
+export { CATEGORY_CARDS, categoryForCard, NonOperationalCategoryError } from './categories.js';
 export {
   assertRequiredElementsPresent,
-  CONFORMANCE_CLASSES,
   MissingRequiredElementError,
   REQUIRED_SURFACES,
   requireSurface,
-  SURFACE_AUDIENCES,
-  SURFACE_IDS,
   UnknownSurfaceError,
   UnknownSurfaceStateError,
-  type ConformanceClass,
-  type SurfaceAudience,
-  type SurfaceId,
-  type SurfaceRequirement,
 } from './contract.js';
-export {
-  REFERENCE_OBSERVED_AT,
-  REFERENCE_REVISION,
-  REFERENCE_SOURCE,
-  REQUIRED_FIXTURE_COVERAGE,
-  VISUAL_FIXTURES,
-  type VisualFixture,
-} from './fixtures.js';
-export {
-  presentCheckInResult,
-  startOrResumeCheckIn,
-  type PresentCheckInResultInput,
-  type StartOrResumeCheckInInput,
-  type StartOrResumeCheckInResult,
-} from './check-in.js';
-export { cancelQrf, deployQrf, VETERAN_QRF_CANCEL_REASON } from './commands.js';
-export { escapeHtml } from './html.js';
-export {
-  contactAffordances,
-  presentQrfState,
-  QRF_UI_STATES,
-  type ContactAffordances,
-  type QrfFacts,
-  type QrfPresentation,
-  type QrfUiState,
-} from './qrf.js';
+export { REQUIRED_FIXTURE_COVERAGE, VISUAL_FIXTURES } from './fixtures.js';
+export { presentCheckInResult } from './check-in.js';
+export { VETERAN_QRF_CANCEL_REASON } from './commands.js';
+export { contactAffordances, presentQrfState, QRF_UI_STATES, type QrfFacts } from './qrf.js';
 export {
   APPROVED_CRISIS_DESTINATIONS,
   APPROVED_CRISIS_RESOURCES,
   PENDING_RELEASE_CRISIS_DESTINATIONS,
   assertApprovedSafetyCopyAvailable,
-  CRISIS_BANNER_COMPACT,
-  CRISIS_ENTRY_DANGER,
   CRISIS_ENTRY_HEADING,
-  CRISIS_ENTRY_LIFELINE,
   CRISIS_ENTRY_NOT_EMERGENCY,
-  CRISIS_FOOTER,
   D_012_APPROVED_SAFETY_COPY,
-  IMMEDIATE_RESOURCE_SLOT_STATES,
   resolveImmediateResourceSlot,
   UnapprovedSafetyCopyError,
-  type ApprovedCrisisResource,
-  type ImmediateResourceSlot,
-  type ImmediateResourceSlotState,
 } from './safety.js';
 export {
   conditionProven,
@@ -73,9 +29,7 @@ export {
   FORBIDDEN_CRISIS_PHRASES,
   presentTruthfulnessCondition,
   TRUTHFULNESS_CONDITIONS,
-  type TruthfulnessCondition,
   type TruthfulnessFacts,
-  type TruthfulnessPresentation,
 } from './truthfulness.js';
 export {
   renderAdminOverview,
@@ -88,49 +42,11 @@ export {
   renderEmailOtp,
   renderImmediateResources,
   renderLanding,
-  renderMobileNav,
   renderNotificationPreferences,
   renderNotificationsInbox,
   renderTrustedContactsList,
-  renderQrfRequest,
   renderResourceCategories,
   renderResourceList,
   renderVeteranHome,
 } from './surfaces.js';
-export { MIN_TARGET_PX, PRIMARY_TARGET_PX, STYLESHEET } from './theme.js';
-export {
-  VIEWPORT_CLASSES,
-  type AdminCapabilityViewModel,
-  type AdminProviderCatalogViewModel,
-  type AdminProviderConfigurationViewModel,
-  type AdminOverviewViewModel,
-  type AdminPlannedSurfaceViewModel,
-  type ChatAvailability,
-  type ChatThreadViewModel,
-  type ChatViewModel,
-  type CheckInHomeLinkViewModel,
-  type CheckInOptionViewModel,
-  type CheckInQuestionViewModel,
-  type CheckInResultViewModel,
-  type CheckInSessionViewModel,
-  type CheckInStartViewModel,
-  type EnrollmentViewModel,
-  type EmailOtpViewModel,
-  type LandingViewModel,
-  type NotificationRowViewModel,
-  type ConsentsListViewModel,
-  type ConsentGrantRowViewModel,
-  type NotificationPreferenceRowViewModel,
-  type NotificationPreferencesViewModel,
-  type NotificationsInboxViewModel,
-  type TrustedContactRowViewModel,
-  type TrustedContactsListViewModel,
-  type QrfCardViewModel,
-  type QrfRequestViewModel,
-  type ResourceCategoriesViewModel,
-  type ResourceListViewModel,
-  type ResourceRowViewModel,
-  type ShellViewModel,
-  type VeteranHomeViewModel,
-  type ViewportClass,
-} from './view-models.js';
+export { type ResourceRowViewModel, type ShellViewModel } from './view-models.js';

@@ -36,11 +36,6 @@ import {
 import type { MarkupKind } from './a11y.js';
 import type { ShellViewModel, ViewportClass } from './view-models.js';
 
-/** MVP_REFERENCE.md §4 header block. Recorded on every fixture. */
-export const REFERENCE_SOURCE = 'https://suasqrf.org/app/' as const;
-export const REFERENCE_REVISION = 'MVP_REFERENCE.md 0.1.0 (draft)' as const;
-export const REFERENCE_OBSERVED_AT = '2026-08-18 PT' as const;
-
 export interface VisualFixture {
   readonly id: string;
   readonly surfaceId: SurfaceId;
