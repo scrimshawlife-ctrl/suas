@@ -1,4 +1,4 @@
--- 0023_licence_reviews.sql — Veteran licence reviews (suas-specs #73 R10.1, proposal)
+-- 0024_licence_reviews.sql — Veteran licence reviews (suas-specs #73 R10.1, proposal)
 --
 -- After VA answers NOT_CONFIRMED, a Veteran may send photos of a state licence and a live
 -- selfie. The reader reads the licence, a SUAS Admin approves and a second, different admin

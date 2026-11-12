@@ -21,7 +21,7 @@ export const VA_CONFIRMATION_CONTRACT_VERSION = 'va-veteran-confirmation-v1' as 
 export const VA_CONFIRMATION_SANDBOX_BASE_URL =
   'https://sandbox-api.va.gov/services/veteran-confirmation/v1';
 
-/** D035 §11 adapter failure classes; migration 0022 bounds the column to this list. */
+/** D035 §11 adapter failure classes; the column (0022, 0023) also admits IDENTITY_CONFLICT. */
 export const VA_CONFIRMATION_FAILURE_CLASSES = [
   'CONFIGURATION_INVALID',
   'AUTHENTICATION_REJECTED',
