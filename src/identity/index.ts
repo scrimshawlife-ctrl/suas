@@ -35,6 +35,7 @@ export {
 export {
   displayNameMatches,
   IDENTITY_HASH_LABEL,
+  identityCanonicalForm,
   identityHash,
   normalizeNamePart,
   VaIdentityAlreadyVerifiedError,
