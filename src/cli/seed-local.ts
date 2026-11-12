@@ -31,7 +31,7 @@ import {
 } from '../testing/fixture-boundary.js';
 import { loadConfig } from '../config/index.js';
 import { resolveSyntheticStagingOrigin } from '../config/staging-host.js';
-import { createPool, withTransaction } from '../db/index.js';
+import { assertExpectedSchemaVersion, createPool, withTransaction } from '../db/index.js';
 import {
   createUser,
   findUserByDestination,
@@ -674,6 +674,8 @@ async function main(): Promise<void> {
 
   const pool = createPool(config);
   try {
+    // ENVIRONMENT.md §9: refuse a schema this build cannot operate against.
+    await assertExpectedSchemaVersion(pool);
     const {
       admin,
       accepter,
