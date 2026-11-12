@@ -9,7 +9,7 @@
  * - SUAS-specs ARCHITECTURE.md §3 invariant 1 (many stateless instances)
  */
 
-import type { Pool, PoolClient } from 'pg';
+import type { Pool, PoolClient, QueryConfig } from 'pg';
 import type { MigrationsMode } from '../config/index.js';
 import { loadMigrationFiles, type MigrationFile } from './migration-files.js';
 import { EXPECTED_SCHEMA_VERSION, MIGRATION_LOCK_KEY, MIGRATIONS_TABLE } from './schema-version.js';
@@ -87,6 +87,26 @@ function describePlanProblems(plan: MigrationPlan): string[] {
     );
   }
   return issues;
+}
+
+/** Migrations and the lock wait outlast the request-path query bound, but stay finite. */
+export const MIGRATION_QUERY_TIMEOUT_MS = 600_000;
+
+/** pg honours a per-query `query_timeout`; @types/pg's QueryConfig leaves it out. */
+function longQuery(text: string, values?: unknown[]): QueryConfig {
+  return {
+    text,
+    ...(values !== undefined ? { values } : {}),
+    query_timeout: MIGRATION_QUERY_TIMEOUT_MS,
+  } as QueryConfig;
+}
+
+async function migrationsTableExists(db: Pick<Pool, 'query'> | PoolClient): Promise<boolean> {
+  const result = await db.query<{ present: boolean }>(
+    `SELECT to_regclass($1) IS NOT NULL AS present`,
+    [MIGRATIONS_TABLE],
+  );
+  return result.rows[0]?.present === true;
 }
 
 /** Create the runner-owned bookkeeping table. Idempotent, outside the numbered set. */
@@ -225,11 +245,17 @@ export async function runMigrationsOnClient(
   try {
     if (options.mode === 'apply') {
       // Serialize concurrent instances; the lock is released with the session.
-      await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
+      await client.query(longQuery('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]));
+      await ensureMigrationsTable(client);
     }
 
-    await ensureMigrationsTable(client);
-    const plan = planMigrations(files, await readAppliedMigrations(client));
+    // `validate` issues no DDL: a missing bookkeeping table reads as nothing applied, which
+    // then fails as pending below (ENVIRONMENT.md §9).
+    const applied =
+      options.mode === 'apply' || (await migrationsTableExists(client))
+        ? await readAppliedMigrations(client)
+        : [];
+    const plan = planMigrations(files, applied);
 
     // Drift and orphans are unsafe in every mode, including `apply`.
     const problems = describePlanProblems(plan);
@@ -252,7 +278,7 @@ export async function runMigrationsOnClient(
         // cannot record a migration that did not fully apply.
         await client.query('BEGIN');
         try {
-          await client.query(file.sql);
+          await client.query(longQuery(file.sql));
           await client.query(
             `INSERT INTO ${MIGRATIONS_TABLE} (version, name, checksum) VALUES ($1, $2, $3)`,
             [file.version, file.name, file.checksum],

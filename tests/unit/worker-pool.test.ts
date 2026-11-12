@@ -27,7 +27,8 @@ vi.mock('pg', () => {
   return { Client, Pool };
 });
 
-const { createWorkerPool, DatabaseNotConfiguredError } = await import('../../src/db/pool.js');
+const { createWorkerPool, DatabaseNotConfiguredError, DEFAULT_QUERY_TIMEOUT_MS } =
+  await import('../../src/db/pool.js');
 
 beforeEach(() => {
   pg.constructed.length = 0;
@@ -58,6 +59,7 @@ describe('createWorkerPool', () => {
         connectionString: 'postgresql://suas:suas@db.example.invalid:5432/suas',
         ssl: { rejectUnauthorized: true },
         connectionTimeoutMillis: 10_000,
+        query_timeout: DEFAULT_QUERY_TIMEOUT_MS,
       },
     ]);
     expect(pg.connect).toHaveBeenCalledOnce();
@@ -71,6 +73,7 @@ describe('createWorkerPool', () => {
       {
         connectionString: config.database.url,
         connectionTimeoutMillis: 10_000,
+        query_timeout: DEFAULT_QUERY_TIMEOUT_MS,
       },
     ]);
   });
