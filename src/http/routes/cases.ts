@@ -16,7 +16,7 @@ import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
 import {
-  executeCaseCommand,
+  executeCaseCommandInTx,
   findCase,
   openCase,
   type CaseCommand,
@@ -229,8 +229,8 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
           idempotencyKey,
           requestFingerprint: fingerprint,
         },
-        async () => {
-          const supportCase = await executeCaseCommand(deps.pool, {
+        async (tx) => {
+          const supportCase = await executeCaseCommandInTx(tx, {
             tenantId: context.tenantId,
             caseId: id,
             command: entry.command,
