@@ -26,24 +26,36 @@ Canonical released specs:
 - pilot readiness: `NOT_READY`
 - production readiness: `NOT_READY`
 - pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
-- application version: `0.2.0` (`package.json`). Tag `v0.2.0` implements SUAS-specs `0.6.0`; `main` pins `0.9.0` (unreleased, see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`); see [CHANGELOG.md](CHANGELOG.md) and [RELEASING.md](RELEASING.md)
+- application version: `0.2.0` (`package.json`). Tag `v0.2.0` implements SUAS-specs `0.6.0`. `main` pins the released spec `0.9.0` (tag `v0.9.0`); its application changes since `v0.2.0` are not released yet (see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]` and [RELEASING.md](RELEASING.md))
 - work tracking: [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6) (all four repositories)
 
 ## Product surfaces
 
 `SUAS-specs` is canonical. This repository is the web and API implementation. Keep all three implementation repositories in future considerations:
 
-| Repository                                                                              | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | TypeScript Cloudflare Worker. JSON API `/api/v0`. HTML `/app`. OpenAPI document `docs/openapi/v0.json` (not served live). `/api/v0` auth is an opaque Bearer session credential; `/app` also accepts a session cookie (`SameSite=Strict`; `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty). Cross-origin access follows `SUAS_CORS_ALLOWED_ORIGINS` (D-038, released in spec 0.7.0). Observed synthetic STAGING origin: `https://suasqrf.com`. |
-| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                            |
-| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Repository                                                                              | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | Fastify JSON API `/api/v0` (`src/`), React web app (`web/`), AWS CDK infrastructure (`infra/`, not deployed). The Cloudflare Worker (`src/worker*`, `wrangler.jsonc`) is the legacy synthetic STAGING host, kept until the AWS cutover. Legacy HTML `/app`. OpenAPI document `docs/openapi/v0.json` (not served live). `/api/v0` auth is an opaque Bearer session credential; `/app` also accepts a session cookie (`SameSite=Strict`; `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty). Cross-origin access follows `SUAS_CORS_ALLOWED_ORIGINS` (D-038, released in spec 0.7.0). Observed synthetic STAGING origin: `https://suasqrf.com`. |
+| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 Native client contract: [`MOBILE_SURFACE.md`](https://github.com/scrimshawlife-ctrl/SUAS-specs/blob/main/MOBILE_SURFACE.md) (D-033).
 
 Native apps consume this API. Do not add `/api/mobile` or a second version selector. HTML `/app/*` commands are the browser surface; they are not the mobile contract. Do not add a Flutter, React Native, or Kotlin Multiplatform harness in this repository.
 
 If you change `/api/v0`, auth, environment class, or a Veteran journey, consider both `suas-ios` and `suas-android`.
+
+## Repository layout
+
+| Path                            | What it is                                                                                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/`                          | Fastify app (`src/app.ts`), `/api/v0` routes (`src/http/routes/`), domain modules and adapters. `src/main.ts` runs it on Node.                         |
+| `src/aws/`                      | AWS Lambda entries for the job worker, migrations and WebSocket push. The API Lambda runs `src/main.ts` behind the Lambda Web Adapter.                 |
+| `web/`                          | React single-page app for v1 (Vite). A separate package: see [web/README.md](web/README.md).                                                           |
+| `infra/`                        | AWS CDK app for v1 synthetic STAGING in `us-west-2`. Synthesized and tested offline only; nothing is deployed. See [infra/README.md](infra/README.md). |
+| `src/worker*`, `wrangler.jsonc` | Cloudflare Worker: the legacy synthetic STAGING host, kept until the AWS cutover.                                                                      |
+| `migrations/`                   | SQL migrations. The expected schema version is `EXPECTED_SCHEMA_VERSION` in `src/db/schema-version.ts`.                                                |
+| `docs/openapi/v0.json`          | The `/api/v0` contract. `npm run openapi:check` compares it with the registered routes; `web/` generates its client types from it.                     |
 
 ## Local development
 
@@ -60,6 +72,18 @@ npm run dev
 
 `SUAS_SESSION_SECRET` is required in every environment class and startup fails
 closed without it. It ships empty in `.env.example` and must never be committed.
+
+After every pull, run `npm ci` again (and `cd web && npm ci` for the web app): a
+dependency added since your last install, such as a new AWS SDK client, otherwise
+crashes `npm run dev`. Startup also refuses a `.env` whose `SUAS_SPEC_VERSION` or
+`SUAS_RELEASE_MANIFEST` differs from `src/release/pins.ts`; after a re-pin, copy
+both values from `.env.example`.
+
+### Web app
+
+`web/` talks to this API over `/api/v0`. Start the API in LOCAL mode, then run
+`cd web && npm ci && npm run dev`. The LOCAL settings it needs are in
+[web/README.md](web/README.md).
 
 ### One-command demo (`npm run dev:demo`)
 
@@ -144,8 +168,8 @@ Seeded for the demo Veteran: one open case with TRANSPORTATION (MATCHING), FOOD
 (FULFILLED, ready to confirm), SHELTER (CANCELLED) and PEER_SUPPORT (CREATED)
 requests; synthetic resources in all four categories; an ACTIVE consent grant,
 a trusted contact, notifications, a completed Check-In and a Veteran follow-up.
-Chat has no released message store, so `/app/chat` shows its unavailable state
-(SUAS-specs D033_CHAT_PARITY.md); nothing is seeded for it.
+The legacy `/app/chat` page shows its unavailable state and nothing is seeded
+for chat; v1 chat is in `/api/v0` (`src/http/routes/chat.ts`) and `web/`.
 
 `npm run demo:fixtures -- --out contract/demo-fixtures.json` captures the same
 seeded `/api/v0` responses into the deterministic fixture file the iOS and
@@ -170,7 +194,6 @@ To start the runtime and open an authenticated visible Chromium surface:
 
 ```bash
 scripts/start-local.sh veteran
-scripts/start-local.sh responder
 scripts/start-local.sh admin
 ```
 
@@ -179,12 +202,11 @@ the server is already running:
 
 ```bash
 npm run demo:local:veteran
-npm run demo:local:responder
 npm run demo:local:admin
 ```
 
 On Windows PowerShell use `.\scripts\start-local.ps1 -Role veteran` (or
-`responder` / `admin`). The browser helper rejects non-LOCAL environments,
+`admin`). The browser helper rejects non-LOCAL environments,
 non-loopback URLs, and credentials that are not present in the gitignored
 `.local-secrets/seed-output.json` or an explicit session environment variable.
 
@@ -228,10 +250,21 @@ createdb suas_migrations_test
 migration-harness tests rebuild a schema from empty, so they own `suas_migrations_test`
 separately. Override either with `TEST_DATABASE_URL` and `TEST_MIGRATIONS_DATABASE_URL`.
 
-## Cloudflare Workers
+## AWS (v1 target)
 
-Compute for `/app` and `/api/v0` is a Cloudflare Worker (`wrangler.jsonc`,
-`src/worker.ts`). The Worker builds the existing Fastify app once per isolate
+`infra/` is the CDK app for v1 synthetic STAGING in `us-west-2`
+(`V1_PROJECT_PLAN.md` §6 in SUAS-specs, a proposal). It defines a DNS stack, a
+web stack (S3 and CloudFront for `web/dist`) and a backend stack (RDS PostgreSQL
+17 behind RDS Proxy; API, job worker and migrate Lambdas; HTTP API; EventBridge
+Scheduler). Nothing is deployed and there is no deploy workflow.
+`cd infra && npm ci && npm run check` typechecks, tests and synthesizes it
+offline. Details: [infra/README.md](infra/README.md).
+
+## Cloudflare Worker (legacy synthetic STAGING)
+
+The Worker is the pre-v1 host. It stays until the AWS cutover; new v1 work
+targets the Fastify app, `web/` and `infra/`. The Worker (`wrangler.jsonc`,
+`src/worker.ts`) serves `/app` and `/api/v0` on synthetic STAGING. It builds the existing Fastify app once per isolate
 with `listen: false` and answers through `inject()`. Native iOS and Android
 clients consume `/api/v0` from this Worker; HTML `/app` is not the mobile
 contract. GitHub Pages `docs/` stays the static poster and is not the API host.
@@ -239,7 +272,7 @@ contract. GitHub Pages `docs/` stays the static poster and is not the API host.
 Request-path Postgres uses **Cloudflare Hyperdrive** and `node-postgres`
 (`nodejs_compat`). The isolate reads `env.HYPERDRIVE.connectionString` as
 `DATABASE_URL` and forces `SUAS_MIGRATIONS_MODE=validate`. If the recorded
-schema version is not `11`, startup fails closed and the fetch handler
+schema version is not `EXPECTED_SCHEMA_VERSION`, startup fails closed and the fetch handler
 returns `503`. Apply migrations with `npm run migrate` against the
 **unpooled** URL in `.env`. Never put that URL, a Neon password, or a
 Hyperdrive connection string in `wrangler.jsonc`.
@@ -264,8 +297,8 @@ or `npx wrangler deploy` — see
 
 Synthetic STAGING (`https://suasqrf.com`) is deployed only by running the
 `worker-deploy` workflow by hand (`workflow_dispatch`, environment
-`suas-synthetic-staging`). The Worker never deploys on a merge or a tag. As of
-2026-10-08 staging runs `80c27e7` (#196). That deploy sets
+`suas-synthetic-staging`). The Worker never deploys on a merge or a tag. The last
+deploy recorded in this repository is `80c27e7` (#196, 2026-10-08). That deploy sets
 `SUAS_DEMO_FIXED_CODE=enabled` (worker-deploy run
 [37746194370](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37746194370)).
 The sign-in page shows `demo@example.invalid` and code `123456`.
@@ -336,45 +369,8 @@ Cloudflare published limits (not SUAS SLOs): 30 s CPU default on paid plans
 (10 ms on free), 128 MB memory, 50 subrequests per invocation on free / 10,000
 on paid.
 
-HTTP surface so far:
-
-| Endpoint                                                         | Authorization                           |
-| ---------------------------------------------------------------- | --------------------------------------- |
-| `GET /api/v0/health`                                             | none; liveness only                     |
-| `POST /api/v0/auth/challenges`                                   | none; issues a passwordless challenge   |
-| `POST /api/v0/auth/challenges/commands/verify`                   | none; exchanges a code for a session    |
-| `POST /api/v0/auth/mfa/challenges`                               | session                                 |
-| `POST /api/v0/auth/mfa/challenges/commands/verify`               | session; elevates it                    |
-| `POST /api/v0/auth/sessions/commands/logout`                     | session                                 |
-| `GET /api/v0/admin/build-info`                                   | SUAS admin, MFA-elevated                |
-| `GET /api/v0/admin/adapter-catalog`                              | SUAS admin, MFA-elevated                |
-| `GET /api/v0/admin/adapter-configurations`                       | SUAS admin, MFA-elevated; `tenant_id`   |
-| `POST /api/v0/admin/adapter-configurations/commands/enable`      | SUAS admin, MFA-elevated                |
-| `POST /api/v0/admin/adapter-configurations/commands/disable`     | SUAS admin, MFA-elevated                |
-| `POST /api/v0/admin/adapter-configurations/commands/set-routing` | SUAS admin, MFA-elevated                |
-| `POST /api/v0/check-ins`                                         | session; starts a Check-In              |
-| `GET /api/v0/check-ins/:id`                                      | session; owner only                     |
-| `POST /api/v0/check-ins/:id/responses`                           | session; owner only                     |
-| `POST /api/v0/check-ins/:id/commands/complete`                   | session; owner only; scores qv-001      |
-| `GET /api/v0/cases`                                              | responder; `ownership=unassigned\|mine` |
-| `GET /api/v0/cases/:id`                                          | owner or responder                      |
-| `POST /api/v0/cases/:id/commands/claim`                          | responder                               |
-| `POST /api/v0/cases/:id/commands/assign`                         | org admin; Idempotency-Key              |
-| `POST /api/v0/cases/:id/commands/triage`                         | responder or org admin; Idempotency-Key |
-| `POST /api/v0/cases/:id/commands/activate`                       | assigned responder; Idempotency-Key     |
-| `POST /api/v0/cases/:id/commands/move-to-followup`               | assigned responder; reason              |
-| `POST /api/v0/cases/:id/commands/resume-active`                  | assigned responder; Idempotency-Key     |
-| `POST /api/v0/cases/:id/commands/escalate`                       | assigned responder; reason              |
-| `POST /api/v0/cases/:id/commands/resolve`                        | assigned responder; Settlement content  |
-| `POST /api/v0/cases/:id/commands/close`                          | assigned responder or org admin         |
-| `POST /api/v0/cases/:id/commands/reopen`                         | org admin; reason                       |
-| `GET /api/v0/cases/:id/settlements`                              | owner (veteran-visible) or responder    |
-| `GET /api/v0/cases/:id/settlements/:settlement_id`               | owner (veteran-visible) or responder    |
-| `GET /app/check-ins`                                             | session; start or resume Check-In       |
-| `POST /app/check-ins`                                            | session; start or resume, then 303      |
-| `GET /app/check-ins/:id`                                         | session; owner only                     |
-| `POST /app/check-ins/:id/responses`                              | session; owner only; then 303           |
-| `POST /app/check-ins/:id/commands/complete`                      | session; owner only; then 303           |
+The full `/api/v0` surface, with the authorization each operation needs, is in
+[docs/openapi/v0.json](docs/openapi/v0.json).
 
 ## Environment
 

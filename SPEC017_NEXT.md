@@ -1,40 +1,34 @@
 # What to build next
 
-**Date:** `2026-10-07`  
-**Pin:** `0.9.0` / `RELEASE_MANIFEST-0.9.0.md`  
+**Date:** `2026-11-12`  
+**Pin:** `0.9.0` / `RELEASE_MANIFEST-0.9.0.md` (tag `v0.9.0`)  
 **Still not ready:** production, pilot, `UI_CONFORMANCE`  
-**SPEC-017 status:** recorded against `0.6.0`; evidence YES on specs ([SPEC017_EVIDENCE_PACK.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC017_EVIDENCE_PACK.md)). Next is SPEC-018 prep only when owner opens launch decisions — do not start SPEC-018 work inventing product.
+**SPEC-017 status:** recorded against `0.6.0`; evidence YES on specs ([SPEC017_EVIDENCE_PACK.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC017_EVIDENCE_PACK.md)). SPEC-018 stays blocked; do not start it by inventing product.
 
 Slices 1–12 are recorded in [SPEC017_PLAN.md](SPEC017_PLAN.md). That does not mean the product is finished or ready for veterans.
 
-Prefer [SUAS-specs `REMAINING.md`](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/REMAINING.md) and [`GAP_ANALYSIS.md`](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/GAP_ANALYSIS.md) when this file and those disagree.
+The list of open work lives in SUAS-specs, not here: [`REMAINING.md`](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/REMAINING.md), [`GAP_ANALYSIS.md`](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/GAP_ANALYSIS.md) and `V1_PROJECT_PLAN.md` (a proposal, not a released spec). Work is tracked on the [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6).
 
-## Already shipped (OBSERVED)
+## Surfaces in this repository
 
-| Surface                 | What it does                                                                                                                                                                                                                                                                 |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web sign-in             | `/app/join` plus email code when `SUAS_BROWSER_AUTH_MODE=email_otp`                                                                                                                                                                                                          |
-| JSON sign-in tenant     | Worker resolves enrolled email → tenant; `tenant_id` on the wire is optional                                                                                                                                                                                                 |
-| Chat tab                | `/app/chat` says chat is unavailable                                                                                                                                                                                                                                         |
-| Responder summary tiles | `/app/responder` says the numbers have no definition                                                                                                                                                                                                                         |
-| Open a Case from JSON   | `POST /api/v0/cases`: one non-closed Case per Veteran                                                                                                                                                                                                                        |
-| Android `/api/v0`       | Sign-in, `POST /cases`, ride / food / shelter / peer-support submit (see sibling `suas-android`)                                                                                                                                                                             |
-| iOS `/api/v0`           | Staging HTTPS (`suasqrf.com`), typed email code, `POST /cases`, ride / food / shelter / peer-support; `/dev/*` refused off localhost                                                                                                                                         |
-| LOCAL demo              | `npm run dev:demo`: LOCAL Worker, synthetic seed, `demo@example.invalid` / `123456`. The fixed code needs `SUAS_ENV=LOCAL`, an explicit opt-in and a local database (#187, #189). The same opt-in is allowed on the synthetic STAGING Worker. TEST and PRODUCTION reject it. |
-| Native demo modes       | Android debug launchers "SUAS Demo (no server)" and "SUAS Local Worker"; iOS `Demo` and `Local` schemes, DEBUG only. Release builds carry no demo fixture; the iOS `release-bundle` CI job checks the archive (suas-ios #13)                                                 |
+| Surface              | Where                                                                                                     |
+| -------------------- | --------------------------------------------------------------------------------------------------------- |
+| JSON API `/api/v0`   | `src/http/routes/`; contract in `docs/openapi/v0.json`                                                    |
+| v1 web app           | `web/` (React), on `/api/v0` only                                                                         |
+| Legacy browser pages | HTML `/app/*` (`src/http/routes/ui.ts`); `/app/chat` still shows its unavailable state                    |
+| AWS infrastructure   | `infra/` (CDK), synthesized and tested offline; nothing deployed                                          |
+| Legacy STAGING host  | Cloudflare Worker (`src/worker*`, `wrangler.jsonc`), kept until the AWS cutover                           |
+| LOCAL demo           | `npm run dev:demo`: LOCAL Worker, synthetic seed, `demo@example.invalid` / `123456` ([README](README.md)) |
 
-Phone rules for those surfaces: [D033_SIGN_IN_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_SIGN_IN_PARITY.md), [D033_CHAT_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_CHAT_PARITY.md), [D033_METRICS_PARITY.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_METRICS_PARITY.md), [D033_CASE_OPEN.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/D033_CASE_OPEN.md).
-
-Do not wrap the web pages in a WebView and call that iOS or Android.
+Native clients live in [`suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios) and [`suas-android`](https://github.com/scrimshawlife-ctrl/suas-android); their phone rules are the D-033 parity files in SUAS-specs. Do not wrap the web pages in a WebView and call that iOS or Android.
 
 ## Not this work
 
 Funding overlay, Google Cloud evidence project, credit spend, production launch, invented chat, invented dashboard formulas.
 
-## Next
+## Rules for the next work
 
-1. Keep phones and web on `/api/v0` only. Do not re-implement Android/iOS sign-in / case-open / MVP categories; that work is already on sibling mains.
-2. Android leftover: dummy `MainActivity` stays for tests and must not imply live fulfillment. It is a labeled, debug-only, non-exported test harness, checked by `MainActivityHarnessTest` (suas-android #16).
-3. SPEC-017 evidence is YES on specs for the `0.6.0` audit. Do not flip readiness gates.
-4. Follow specs [OPERATOR_CALLS_2026-09-25.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/OPERATOR_CALLS_2026-09-25.md) (Neon preferred for D-005; D-006 still counsel; D-036 Option C; Lyft deferred).
-5. SPEC-018 / production / store distribution stay blocked. Owner settled `KEEP_BLOCKED` on specs [SPEC018_OWNER_LAUNCH_PACKET.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC018_OWNER_LAUNCH_PACKET.md). Do not invent product for `KEEP_PENDING` D-ids. Do not claim HIPAA compliant.
+1. Keep phones and web on `/api/v0` only.
+2. Do not flip readiness gates. SPEC-017 evidence is YES on specs for the `0.6.0` audit.
+3. Follow specs [OPERATOR_CALLS_2026-09-25.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/OPERATOR_CALLS_2026-09-25.md) for the open operator calls.
+4. SPEC-018, production and store distribution stay blocked (owner `KEEP_BLOCKED`, specs [SPEC018_OWNER_LAUNCH_PACKET.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC018_OWNER_LAUNCH_PACKET.md)). Do not invent product for `KEEP_PENDING` D-ids. Do not claim HIPAA compliance.
