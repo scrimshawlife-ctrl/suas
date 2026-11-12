@@ -78,7 +78,7 @@ export const identityMatches = (
   fields: IdentityFields,
   stored: KeyedHash,
 ): boolean | undefined =>
-  matchesStored(keyring, IDENTITY_HASH_LABEL, identityValue(fields), stored);
+  matchesStored(keyring, IDENTITY_HASH_LABEL, identityCanonicalForm(fields), stored);
 
 /** The hashes a stored row may carry for this identity, current key and previous. */
 export const identityHashCandidates = (keyring: FingerprintKeyring, fields: IdentityFields) =>
