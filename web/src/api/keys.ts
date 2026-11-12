@@ -35,4 +35,5 @@ export const queryKeys = {
   notifications: resourceKeys('notifications'),
   resources: resourceKeys('resources'),
   adminDrafts: resourceKeys('admin-resource-drafts'),
+  adminConsentTemplates: resourceKeys('admin-consent-templates'),
 };
