@@ -12,6 +12,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { authenticate } from '../authenticate.js';
+import { pageQuery } from '../cursor.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import {
   issueConnectTicket,
@@ -46,9 +47,7 @@ class ChatRealtimeUnavailableError extends Error {
 
 const idParams = z.object({ id: z.string().uuid() });
 
-const listQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  cursor: z.string().min(1).max(512).optional(),
+const listQuery = pageQuery.extend({
   /** A chat_thread_id of this request; absent means the live thread. */
   thread: z.string().uuid().optional(),
 });
@@ -78,9 +77,10 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
   /** The caller's own threads (as requester or accepter), newest activity first. */
   app.get(`${API_PREFIX}/chat/threads`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    const threads = await listChatThreads(deps.pool, context.tenantId, context.userId);
+    const query = pageQuery.parse(request.query);
+    const page = await listChatThreads(deps.pool, context.tenantId, context.userId, query);
     return {
-      threads: threads.map((thread) => ({
+      threads: page.threads.map((thread) => ({
         chat_thread_id: thread.chatThreadId,
         service_request_id: thread.serviceRequestId,
         category: thread.category,
@@ -94,6 +94,7 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
         role: thread.role,
         last_message_from_me: thread.lastMessageFromMe,
       })),
+      next_cursor: page.nextCursor ?? null,
     };
   });
 

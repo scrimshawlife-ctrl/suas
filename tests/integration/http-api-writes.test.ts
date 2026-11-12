@@ -356,7 +356,7 @@ describe('Notifications', () => {
       headers,
     });
     expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toMatchObject({ notifications: [], limit: 50 });
+    expect(listed.json()).toMatchObject({ notifications: [], limit: 20, next_cursor: null });
     expect(listed.body).not.toContain('destination');
     expect(listed.body).not.toContain('consent_basis');
 

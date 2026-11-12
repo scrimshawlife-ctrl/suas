@@ -60,6 +60,7 @@ export {
   findNotification,
   listChannelPreferences,
   listNotificationsForRecipient,
+  listRecipientNotificationPage,
   listUndeliverable,
   NotificationConsentDeniedError,
   setChannelPreference,

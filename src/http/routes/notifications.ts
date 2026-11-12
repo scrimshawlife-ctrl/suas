@@ -11,9 +11,10 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
+import { pageQuery } from '../cursor.js';
 import { API_PREFIX } from '../../release/pins.js';
 import {
-  listNotificationsForRecipient,
+  listRecipientNotificationPage,
   NOTIFICATION_CHANNELS,
   setChannelPreference,
   type Notification,
@@ -23,10 +24,6 @@ export interface NotificationRouteDeps {
   readonly pool: Pool;
   readonly sessionSecret: string | undefined;
 }
-
-const listQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-});
 
 const preferenceBody = z.object({
   channel: z.enum(NOTIFICATION_CHANNELS),
@@ -53,16 +50,17 @@ export function registerNotificationRoutes(
 ): void {
   app.get(`${API_PREFIX}/notifications`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    const query = listQuery.parse(request.query);
-    const page = await listNotificationsForRecipient(
+    const query = pageQuery.parse(request.query);
+    const page = await listRecipientNotificationPage(
       deps.pool,
       context.tenantId,
       context.userId,
-      query.limit,
+      query,
     );
     return {
-      notifications: page.map(publicNotification),
+      notifications: page.notifications.map(publicNotification),
       limit: query.limit,
+      next_cursor: page.nextCursor ?? null,
     };
   });
 

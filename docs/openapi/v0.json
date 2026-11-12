@@ -1889,14 +1889,22 @@
             "bearerAuth": []
           }
         ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageCursor"
+          },
+          {
+            "$ref": "#/components/parameters/PageLimit"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Bounded inbox without destinations",
+            "description": "Bounded inbox without destinations, newest first (by creation time)",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["notifications", "limit"],
+                  "required": ["notifications", "limit", "next_cursor"],
                   "properties": {
                     "notifications": {
                       "type": "array",
@@ -1906,11 +1914,18 @@
                     },
                     "limit": {
                       "type": "integer"
+                    },
+                    "next_cursor": {
+                      "type": ["string", "null"],
+                      "description": "Pass back as cursor for older notifications; null on the last page."
                     }
                   }
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -3695,7 +3710,7 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100,
-              "default": 50
+              "default": 20
             }
           },
           {
@@ -3886,9 +3901,17 @@
             "bearerAuth": []
           }
         ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageCursor"
+          },
+          {
+            "$ref": "#/components/parameters/PageLimit"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "The caller threads (as requester or accepter), newest activity first, at most 100",
+            "description": "The caller threads (as requester or accepter), newest activity first. A thread that gets a new message moves to the first page.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3896,6 +3919,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -3983,6 +4009,28 @@
         "schema": {
           "type": "string",
           "format": "uuid"
+        }
+      },
+      "PageCursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "PageLimit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
         }
       }
     },
@@ -6462,13 +6510,17 @@
       },
       "ChatThreadList": {
         "type": "object",
-        "required": ["threads"],
+        "required": ["threads", "next_cursor"],
         "properties": {
           "threads": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ChatThread"
             }
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Pass back as cursor for older threads; null on the last page."
           }
         }
       },
