@@ -37,34 +37,13 @@ describe('demoFixedCodeFor', () => {
   it.each([
     'postgresql://suas:suas@127.0.0.1:5432/suas_demo',
     'postgresql://suas:suas@[::1]:5432/suas_demo',
-    'postgres://u:p@0123abcd.hyperdrive.local:5432/db',
   ])('accepts the local database %s in LOCAL with the flag', (databaseUrl) => {
     expect(localProvider(databaseUrl)?.(DEMO_FIXED_CODE_DESTINATION)).toBe(DEMO_FIXED_CODE);
   });
 
-  it.each(['PRODUCTION', 'TEST'])('never returns a fixed code in %s', (environment) => {
+  it.each(['PRODUCTION', 'STAGING', 'TEST'])('never returns a fixed code in %s', (environment) => {
     const resolve = demoFixedCodeFor({
       environment,
-      demoFixedCode: true,
-      databaseUrl: LOCAL_DATABASE_URL,
-      workerRuntime: true,
-    });
-    expect(resolve).toBeUndefined();
-  });
-
-  it('returns the fixed code for the synthetic STAGING worker', () => {
-    const resolve = demoFixedCodeFor({
-      environment: 'STAGING',
-      demoFixedCode: true,
-      databaseUrl: 'postgresql://u:p@db.internal.invalid:5432/x',
-      workerRuntime: true,
-    });
-    expect(resolve?.(DEMO_FIXED_CODE_DESTINATION)).toBe(DEMO_FIXED_CODE);
-  });
-
-  it('returns undefined for STAGING when the process is not the worker', () => {
-    const resolve = demoFixedCodeFor({
-      environment: 'STAGING',
       demoFixedCode: true,
       databaseUrl: LOCAL_DATABASE_URL,
     });
@@ -97,7 +76,6 @@ describe('isLocalDemoDatabaseUrl', () => {
     'postgresql://suas:suas@localhost:5432/suas_demo',
     'postgres://u:p@127.0.0.1:5432/db',
     'postgresql://u:p@[::1]:5432/db',
-    'postgres://u:p@0123abcd.hyperdrive.local:5432/db',
   ])('accepts %s', (databaseUrl) => {
     expect(isLocalDemoDatabaseUrl(databaseUrl)).toBe(true);
   });
@@ -109,6 +87,7 @@ describe('isLocalDemoDatabaseUrl', () => {
     'postgresql://u:p@db.internal.invalid:5432/x',
     'postgresql://u:p@10.0.2.2:5432/x',
     'postgresql://u:p@evil-hyperdrive.local.example.com/x',
+    'postgres://u:p@0123abcd.hyperdrive.local:5432/db',
   ])('rejects %s', (databaseUrl) => {
     expect(isLocalDemoDatabaseUrl(databaseUrl)).toBe(false);
   });

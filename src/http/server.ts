@@ -60,7 +60,7 @@ import {
   VALIDATION_FAILED,
   validationErrorBody,
 } from './error-envelope.js';
-import { failureLogLine, serializeError, serializeRequest } from './request-logging.js';
+import { failureRoute, serializeError, serializeRequest } from './request-logging.js';
 import { registerOriginPolicy } from './origin-policy.js';
 import { demoFixedCodeFor } from '../auth/demo-fixed-code.js';
 
@@ -78,16 +78,6 @@ export interface ServerDependencies {
   readonly idVerification?: IdVerificationPort;
   /** Pushes new chat messages to live connections; absent when disabled. */
   readonly chatPush?: ConnectionPushPort;
-  /**
-   * Fastify logger. `false` disables pino (Worker isolates cannot use
-   * worker_threads). Default keeps the Node structured logger.
-   */
-  readonly logger?: boolean;
-  /**
-   * True only for the Cloudflare Worker isolate. Synthetic STAGING may offer
-   * the fixed demo code on that runtime and nowhere else.
-   */
-  readonly workerRuntime?: boolean;
 }
 
 export interface RegisteredApiRoute {
@@ -151,24 +141,21 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
   registeredApiRoutes.length = 0;
 
   const app = Fastify({
-    logger:
-      deps.logger === false
-        ? false
-        : {
-            level: deps.config.logLevel,
-            // ENVIRONMENT.md §6: secret material is never written to logs.
-            redact: {
-              paths: [
-                'req.headers.authorization',
-                'req.headers.cookie',
-                'req.headers["idempotency-key"]',
-              ],
-              remove: true,
-            },
-            // SECURITY.md §2: no query string (OAuth code, dev destination) and no error
-            // message or driver detail (pg `detail` quotes row values) in logs.
-            serializers: { req: serializeRequest, err: serializeError },
-          },
+    logger: {
+      level: deps.config.logLevel,
+      // ENVIRONMENT.md §6: secret material is never written to logs.
+      redact: {
+        paths: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'req.headers["idempotency-key"]',
+        ],
+        remove: true,
+      },
+      // SECURITY.md §2: no query string (OAuth code, dev destination) and no error
+      // message or driver detail (pg `detail` quotes row values) in logs.
+      serializers: { req: serializeRequest, err: serializeError },
+    },
     // Router refusals skip the onSend hook, so they set the common headers themselves.
     frameworkErrors: (error, request, reply) => {
       applyResponseHeaders(request, reply);
@@ -232,10 +219,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     }
 
     if (status >= 500) {
-      request.log.error({ err: error }, 'unhandled request failure');
-      // Workers run with logger:false; still emit a structured console line for
-      // wrangler tail / observability, with the same content-free fields.
-      console.error(failureLogLine(request, error));
+      request.log.error({ err: error, route: failureRoute(request) }, 'unhandled request failure');
     }
 
     if (error instanceof ZodError) {
@@ -304,7 +288,6 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
         ? { challengeDelivery: deps.challengeDelivery }
         : {}),
       ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
-      ...(deps.workerRuntime === true ? { workerRuntime: true } : {}),
     });
   }
 
@@ -315,13 +298,11 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       delivery: deps.challengeDelivery,
       mfa: deps.mfa,
       signUpTenantId: deps.config.browserAuth.tenantId,
-      // Undefined unless the LOCAL gates pass, or this is the synthetic STAGING
-      // Worker with SUAS_DEMO_FIXED_CODE=enabled. Every other path keeps random codes.
+      // Undefined unless the LOCAL gates pass. Every other path keeps random codes.
       fixedOtpCodeFor: demoFixedCodeFor({
         environment: deps.config.environment,
         demoFixedCode: deps.config.demoFixedCode,
         databaseUrl: deps.config.database.url,
-        workerRuntime: deps.workerRuntime === true,
       }),
       stagingAccess,
     });
