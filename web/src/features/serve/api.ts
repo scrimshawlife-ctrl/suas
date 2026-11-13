@@ -98,20 +98,28 @@ export function useAlerts() {
   });
 }
 
-/** The case page shows one page of each case list: 50, as many as before the server paged them. */
+/** The case page loads each case list 50 at a time, paged by `next_cursor`. */
 const CASE_LIST_LIMIT = 50;
 
 /** GET /cases/{caseId}/contact-attempts: the accepter only (403 for anyone else). */
 export function useContactAttempts(caseId: string | undefined) {
   const token = useSessionToken();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: caseKeys.contactAttempts.list({ caseId }),
-    queryFn: async () => {
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
       const { data } = await api.GET('/api/v0/cases/{caseId}/contact-attempts', {
-        params: { path: { caseId: caseId ?? '' }, query: { limit: CASE_LIST_LIMIT } },
+        params: {
+          path: { caseId: caseId ?? '' },
+          query: {
+            limit: CASE_LIST_LIMIT,
+            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+          },
+        },
       });
-      return requireData(data, 'contact attempts').contact_attempts;
+      return requireData(data, 'contact attempts');
     },
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: token !== null && caseId !== undefined,
   });
 }
@@ -119,14 +127,22 @@ export function useContactAttempts(caseId: string | undefined) {
 /** GET /cases/{caseId}/service-requests. */
 export function useCaseServiceRequests(caseId: string | undefined) {
   const token = useSessionToken();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: caseKeys.serviceRequests.list({ caseId }),
-    queryFn: async () => {
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
       const { data } = await api.GET('/api/v0/cases/{caseId}/service-requests', {
-        params: { path: { caseId: caseId ?? '' }, query: { limit: CASE_LIST_LIMIT } },
+        params: {
+          path: { caseId: caseId ?? '' },
+          query: {
+            limit: CASE_LIST_LIMIT,
+            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+          },
+        },
       });
-      return requireData(data, 'case requests').service_requests;
+      return requireData(data, 'case requests');
     },
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: token !== null && caseId !== undefined,
   });
 }

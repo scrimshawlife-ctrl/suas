@@ -5,6 +5,7 @@ import { BackLink } from '../../components/BackLink';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
+import { ShowMoreButton } from '../../components/ShowMoreButton';
 import { RequestRow } from './home/RequestRow';
 
 /** /requests: every request the caller made, newest first, reached from Home "See all". */
@@ -39,18 +40,7 @@ export default function RequestsPage() {
           </ul>
         </Card>
       )}
-      {requests.hasNextPage ? (
-        <div className="flex">
-          <Button
-            variant="secondary"
-            size="small"
-            disabled={requests.isFetchingNextPage}
-            onClick={() => void requests.fetchNextPage()}
-          >
-            {requests.isFetchingNextPage ? 'Loading…' : 'Show more'}
-          </Button>
-        </div>
-      ) : null}
+      <ShowMoreButton list={requests} />
     </Page>
   );
 }

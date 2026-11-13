@@ -4,7 +4,7 @@ import { Link, Navigate, useNavigate } from 'react-router';
 import { useMe } from '../../api/me';
 import { hasApiCode } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
-import { useServiceRequest, useServiceRequests } from '../../api/service-requests';
+import { useInfiniteServiceRequests, useServiceRequest } from '../../api/service-requests';
 import type { ServiceRequestListItem } from '../../api/types';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
@@ -12,6 +12,7 @@ import { Card } from '../../components/Card';
 import { AlertCircleIcon, ChatIcon } from '../../components/icons';
 import { NEEDS } from '../../components/needs';
 import { Page } from '../../components/Page';
+import { ShowMoreButton } from '../../components/ShowMoreButton';
 import { useSingleFlight } from '../../lib/single-flight';
 import { useAcceptRequest, useAlerts, useOpenRequests } from './api';
 import { alertSubjectPath, alertText, type Notification } from './alerts';
@@ -176,9 +177,23 @@ function OpenList({
   );
 }
 
+/** The `ownership=mine` list, paged; the Summary and Helping cards share one query. */
+function useMine() {
+  const mine = useInfiniteServiceRequests('mine');
+  const pages = mine.data?.pages ?? [];
+  const list = mine.isSuccess
+    ? {
+        service_requests: pages.flatMap((page) => page.service_requests),
+        next_cursor: pages.at(-1)?.next_cursor ?? null,
+        counts: pages[0]?.counts,
+      }
+    : undefined;
+  return { mine, list };
+}
+
 function HelpingCard() {
-  const mine = useServiceRequests('mine');
-  const items = activeHelping(mine.data?.service_requests ?? []);
+  const { mine, list } = useMine();
+  const items = activeHelping(list?.service_requests ?? []);
   return (
     <Card aria-labelledby="helping" emphasis padding="md" className="flex flex-col gap-3.5">
       <h2 id="helping" className="text-20 font-bold">
@@ -194,17 +209,18 @@ function HelpingCard() {
           <HelpingRow key={item.service_request_id} item={item} />
         ))}
       </ul>
+      <ShowMoreButton list={mine} />
     </Card>
   );
 }
 
 /** "Your summary": server counts when present, else the client's own held-request count. */
 function SummaryCard() {
-  const mine = useServiceRequests('mine');
-  const counts = mine.isSuccess ? mine.data.counts : undefined;
-  // Without server counts, fall back to the client count, which is a dash when the list has
+  const { mine, list } = useMine();
+  const counts = list?.counts;
+  // Without server counts, fall back to the client count, which is a dash while the list has
   // more pages, so the board never shows a short number.
-  const helping = mine.isSuccess ? (counts?.helping_now ?? helpingNowCount(mine.data)) : undefined;
+  const helping = list === undefined ? undefined : (counts?.helping_now ?? helpingNowCount(list));
   const closed = counts?.closed_last_30_days;
   return (
     <Card aria-labelledby="summary" padding="none" className="flex flex-col">
