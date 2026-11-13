@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatThread } from '../../api/types';
-import { isReadOnly, pickThread, threadHref, threadKey } from './threads';
+import { allThreads, isReadOnly, pickThread, threadHref, threadKey } from './threads';
 
 const thread = (id: string, releasedAt: string | null, request = 'r1'): ChatThread => ({
   chat_thread_id: id,
@@ -44,5 +44,14 @@ describe('thread helpers', () => {
     expect(pickThread([old], 'r1', null)).toBe(old);
     expect(pickThread(list, 'r1', 'unknown')).toBeUndefined();
     expect(pickThread(undefined, 'r1', null)).toBeUndefined();
+  });
+});
+
+describe('allThreads', () => {
+  it('joins the pages and keeps the first copy of a thread that moved between page reads', () => {
+    const other = thread('t-other', null, 'r2');
+    const pages = { pages: [{ threads: [live, other] }, { threads: [other, old] }] };
+    expect(allThreads(pages)?.map(threadKey)).toEqual(['t-live', 't-other', 't-old']);
+    expect(allThreads(undefined)).toBeUndefined();
   });
 });

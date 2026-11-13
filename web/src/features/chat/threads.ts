@@ -14,6 +14,25 @@ export function threadKey(thread: ChatThread): string {
   return thread.chat_thread_id ?? thread.service_request_id;
 }
 
+/**
+ * Every loaded page of the thread list as one list. The list is ordered by activity, so a
+ * thread that moved between page reads can arrive twice; the first (newest) copy wins.
+ */
+export function allThreads(
+  data: { pages: readonly { threads: readonly ChatThread[] }[] } | undefined,
+): ChatThread[] | undefined {
+  if (data === undefined) return undefined;
+  const seen = new Set<string>();
+  return data.pages
+    .flatMap((page) => page.threads)
+    .filter((thread) => {
+      const key = threadKey(thread);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 /** A live thread opens at the request's own chat path; a closed one names itself. */
 export function threadHref(thread: ChatThread): string {
   const base = paths.chatThread(thread.service_request_id);

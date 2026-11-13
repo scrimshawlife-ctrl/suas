@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, useInfiniteQuery, type QueryClient } from '@tanstack/react-query';
+import type { ChatThreadPages } from '../../api/chat';
 import { api } from '../../api/client';
 import { queryKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
@@ -85,9 +86,11 @@ export function applyMessageToCaches(
     void queryClient.invalidateQueries({ queryKey: messagesKey });
   }
 
-  const threads = queryClient.getQueryData<{ threads: ChatThread[] }>(queryKeys.chatThreads);
+  const threads = queryClient.getQueryData<ChatThreadPages>(queryKeys.chatThreads);
   // A push frame belongs to the request's live thread, never to a closed one.
-  const thread = threads?.threads.find((t) => t.service_request_id === id && !isReadOnly(t));
+  const thread = threads?.pages
+    .flatMap((page) => page.threads)
+    .find((t) => t.service_request_id === id && !isReadOnly(t));
   if (threads === undefined || thread === undefined) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.chatThreads });
     return;
@@ -105,9 +108,13 @@ export function applyMessageToCaches(
     last_message_at: message.created_at,
     last_message_from_me: fromMe,
   };
-  queryClient.setQueryData(queryKeys.chatThreads, {
+  // Most recent activity first: the thread moves to the top of the first page.
+  queryClient.setQueryData<ChatThreadPages>(queryKeys.chatThreads, {
     ...threads,
-    threads: [updated, ...threads.threads.filter((t) => t !== thread)],
+    pages: threads.pages.map((page, index) => ({
+      ...page,
+      threads: [...(index === 0 ? [updated] : []), ...page.threads.filter((t) => t !== thread)],
+    })),
   });
   if (queryClient.isFetching({ queryKey: queryKeys.chatThreads }) > 0) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.chatThreads });

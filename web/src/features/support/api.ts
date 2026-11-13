@@ -297,17 +297,32 @@ export function useAcceptInvitation() {
 /** The inbox's page size from before the server's default dropped to 20 (API.md §5). */
 const NOTIFICATION_LIMIT = 50;
 
-/** GET /notifications, the latest NOTIFICATION_LIMIT. The screen sorts newest first. */
+/** The same 30 s the Serve Alerts card polls this endpoint at, so a new notice shows unprompted. */
+const NOTIFICATION_REFRESH_MS = 30_000;
+
+/**
+ * GET /notifications, NOTIFICATION_LIMIT at a time, paged by `next_cursor`. A poll re-reads
+ * every loaded page from the first, so pages opened by "Show more" stay open and a new notice
+ * pushes the rest down without gaps or repeats.
+ */
 export function useNotifications() {
   const token = useSessionToken();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: queryKeys.notifications.list(),
     enabled: token !== null,
-    queryFn: async () => {
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
       const { data } = await api.GET('/api/v0/notifications', {
-        params: { query: { limit: NOTIFICATION_LIMIT } },
+        params: {
+          query: {
+            limit: NOTIFICATION_LIMIT,
+            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
+          },
+        },
       });
-      return requireData(data, 'notifications').notifications;
+      return requireData(data, 'notifications');
     },
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    refetchInterval: NOTIFICATION_REFRESH_MS,
   });
 }

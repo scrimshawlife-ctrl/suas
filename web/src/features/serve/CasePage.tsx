@@ -10,6 +10,7 @@ import { Card } from '../../components/Card';
 import { ChatIcon, MapPinIcon } from '../../components/icons';
 import { NEEDS } from '../../components/needs';
 import { Page } from '../../components/Page';
+import { ShowMoreButton, type PagedList } from '../../components/ShowMoreButton';
 import { StatusChip } from '../../components/StatusChip';
 import { useSingleFlight } from '../../lib/single-flight';
 import { useCaseServiceRequests, useContactAttempts, useRunStep } from './api';
@@ -18,6 +19,7 @@ import {
   NOT_FOUND_MESSAGE,
   attemptLabel,
   attemptsOldestFirst,
+  type ContactAttempt,
   canRelease,
   commandErrorMessage,
   formatWhen,
@@ -38,7 +40,8 @@ export default function CasePage() {
   if (hasApiCode(request.error, 'COUNTY_REQUIRED')) return <Navigate to={paths.welcome} replace />;
   // Only the accepter may read the contact log, so a 403 there means this is not their case.
   if (isNotHelperError(request.error) || isNotHelperError(attempts.error)) return <NotFound />;
-  if (request.isError || attempts.isError) {
+  // A failed "Show more" keeps the attempts already loaded.
+  if (request.isError || (attempts.isError && !attempts.data)) {
     return (
       <Shell>
         <Card className="flex flex-col items-start gap-3">
@@ -64,7 +67,13 @@ export default function CasePage() {
     );
   }
 
-  return <CaseView request={request.data} attempts={attempts.data} />;
+  return (
+    <CaseView
+      request={request.data}
+      attempts={attempts.data.pages.flatMap((page) => page.contact_attempts)}
+      moreAttempts={attempts}
+    />
+  );
 }
 
 function Shell({ children }: { children: ReactNode }) {
@@ -91,9 +100,15 @@ function NotFound() {
   );
 }
 
-type Attempts = NonNullable<ReturnType<typeof useContactAttempts>['data']>;
-
-function CaseView({ request, attempts }: { request: ServiceRequestDetail; attempts: Attempts }) {
+function CaseView({
+  request,
+  attempts,
+  moreAttempts,
+}: {
+  request: ServiceRequestDetail;
+  attempts: ContactAttempt[];
+  moreAttempts: PagedList;
+}) {
   const need = NEEDS[request.category];
   const requester = firstName(request.counterpart_display_name);
   const title = summaryOrCategory(request.summary, request.category);
@@ -129,7 +144,12 @@ function CaseView({ request, attempts }: { request: ServiceRequestDetail; attemp
         </div>
         <aside className="flex flex-col gap-4">
           <Progress request={request} />
-          <History request={request} attempts={attempts} requester={requester} />
+          <History
+            request={request}
+            attempts={attempts}
+            moreAttempts={moreAttempts}
+            requester={requester}
+          />
           <CaseRequests request={request} />
         </aside>
       </div>
@@ -226,10 +246,12 @@ function Progress({ request }: { request: ServiceRequestDetail }) {
 function History({
   request,
   attempts,
+  moreAttempts,
   requester,
 }: {
   request: ServiceRequestDetail;
-  attempts: Attempts;
+  attempts: ContactAttempt[];
+  moreAttempts: PagedList;
   requester: string;
 }) {
   const events = [
@@ -263,21 +285,25 @@ function History({
           </li>
         ))}
       </ol>
+      <ShowMoreButton list={moreAttempts} className="mt-4" />
     </Card>
   );
 }
 
 function CaseRequests({ request }: { request: ServiceRequestDetail }) {
   const list = useCaseServiceRequests(request.case_id);
+  const items = list.data?.pages.flatMap((page) => page.service_requests) ?? [];
   return (
     <Card aria-labelledby="sr" padding="lg" className="flex flex-col gap-3 max-sm:p-5">
       <h2 id="sr" className="text-20 font-bold">
         Service requests
       </h2>
       {list.isPending ? <p className="text-slate">Loading…</p> : null}
-      {list.isError ? <p className="text-slate">We couldn't load this list.</p> : null}
+      {list.isError && !list.data ? (
+        <p className="text-slate">We couldn't load this list.</p>
+      ) : null}
       <ul className="flex flex-col gap-3">
-        {list.data?.map((item) => (
+        {items.map((item) => (
           <li
             key={item.service_request_id}
             className="flex flex-wrap items-center justify-between gap-2.5"
@@ -287,6 +313,7 @@ function CaseRequests({ request }: { request: ServiceRequestDetail }) {
           </li>
         ))}
       </ul>
+      <ShowMoreButton list={list} />
     </Card>
   );
 }

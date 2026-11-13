@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import type { ChatThread } from '../../api/types';
 import { Button } from '../../components/Button';
+import { ShowMoreButton, type PagedList } from '../../components/ShowMoreButton';
 import { cn } from '../../lib/cn';
 import { counterpartName, EMPTY_THREADS, threadTitle } from './copy';
 import { isReadOnly, threadHref, threadKey } from './threads';
@@ -11,11 +12,20 @@ export interface ThreadListProps {
   selectedKey: string | undefined;
   isError: boolean;
   onRetry: () => void;
+  /** Older threads, when the list has more pages. */
+  more: PagedList;
   className?: string;
 }
 
 /** The 340 px conversation list: name, request title (", closed" when over), last message. */
-export function ThreadList({ threads, selectedKey, isError, onRetry, className }: ThreadListProps) {
+export function ThreadList({
+  threads,
+  selectedKey,
+  isError,
+  onRetry,
+  more,
+  className,
+}: ThreadListProps) {
   return (
     <nav
       aria-label="Conversations"
@@ -73,6 +83,7 @@ export function ThreadList({ threads, selectedKey, isError, onRetry, className }
           );
         })
       )}
+      <ShowMoreButton list={more} className="p-5" />
     </nav>
   );
 }
