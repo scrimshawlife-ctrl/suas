@@ -105,7 +105,8 @@ test('the contact log saves every outcome once, each through its own route, and 
   allow,
 }) => {
   // The errors this test provokes on purpose.
-  allow.push(/:: 500$/, /status of 500/);
+  // Only the routed contact save may 500; a real backend 500 still fails the test.
+  allow.push(/\/commands\/complete-contact :: 500$/, /status of 500/);
   const vet = await newRequester(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });

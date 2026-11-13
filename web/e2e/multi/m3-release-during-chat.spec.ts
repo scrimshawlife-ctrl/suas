@@ -4,6 +4,7 @@
  */
 
 import { expect, test } from '../fixtures';
+import { runClock } from '../helpers';
 import { history, pair, say } from '../chat/chat';
 import { release, tag } from '../serve/serve';
 
@@ -28,10 +29,13 @@ test('a release while the requester is in the chat shows the closed thread witho
   await say(helper, 'Marcus T.', before);
   await expect(history(requester)).toContainText(before);
 
+  // Requester time stands still from here and moves only past the 60 s live-chat poll.
+  await requester.clock.pauseAt((await requester.evaluate(() => Date.now())) + 100);
   await helper.goto(`/serve/requests/${id}`);
   await release(helper);
 
-  await requester.clock.fastForward('01:05');
+  await runClock(requester, 65_000);
+  await requester.clock.resume();
   await expect(requester.getByText(CLOSED_LINE)).toBeVisible();
   await expect(requester.getByRole('textbox')).toHaveCount(0);
   // The earlier messages stay readable.

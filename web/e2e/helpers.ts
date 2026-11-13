@@ -214,3 +214,35 @@ export async function shoot(page: Page, name: string): Promise<void> {
   }
   await page.setViewportSize(original);
 }
+
+/**
+ * Runs this page's paused clock forward a second at a time, letting real network answers land
+ * between steps; one big jump would also fire the API client's 30 s timeout on reads in flight.
+ */
+export async function runClock(page: Page, ms: number): Promise<void> {
+  for (let left = ms; left > 0; left -= 1000) {
+    await page.clock.runFor(Math.min(1000, left));
+    await new Promise((settle) => setTimeout(settle, 50));
+  }
+}
+
+/**
+ * Pauses this page's installed clock within a second after its next poll matching `isPoll`, so
+ * the test knows the poll phase: the following poll is `intervalMs` later, not sooner.
+ */
+export async function pauseAfterPoll(
+  page: Page,
+  isPoll: (url: string) => boolean,
+  intervalMs: number,
+): Promise<void> {
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 100);
+  for (let ran = 0; ran <= intervalMs; ran += 1000) {
+    const polled = page
+      .waitForRequest((r) => r.method() === 'GET' && isPoll(r.url()), { timeout: 300 })
+      .then(() => true)
+      .catch(() => false);
+    await page.clock.runFor(1000);
+    if (await polled) return;
+  }
+  throw new Error(`no poll within ${String(intervalMs)} ms`);
+}

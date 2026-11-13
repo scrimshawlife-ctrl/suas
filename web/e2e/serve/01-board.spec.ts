@@ -202,7 +202,8 @@ test('when the open list or a Take fails on the server, the board says so and re
   allow,
 }) => {
   // The errors this test provokes on purpose.
-  allow.push(/:: 500$/, /status of 500/);
+  // Only the routed open list and accept may 500; a real backend 500 still fails the test.
+  allow.push(/ownership=open.* :: 500$/, /\/accept :: 500$/, /status of 500/);
   const requester = await newRequester(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(requester, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });

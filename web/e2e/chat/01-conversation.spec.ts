@@ -130,12 +130,14 @@ test('two messages sent one right after the other arrive in the order they were 
   await page.goto(`/chat/${id}`);
   const first = `First: I'm outside ${tag()}`;
   const second = `Second: by the blue door ${tag()}`;
-  // A slow network for the first send only (page.route, the slow-network case).
-  let delayed = false;
+  // A slow network for the first send only: it is held (not faked) until the second is queued.
+  let releaseFirst: () => void = () => undefined;
+  const firstHeld = new Promise<void>((resolve) => (releaseFirst = resolve));
+  let held = false;
   await page.route(`**/api/v0/service-requests/${id}/chat/messages`, async (route) => {
-    if (route.request().method() === 'POST' && !delayed) {
-      delayed = true;
-      await new Promise((resolve) => setTimeout(resolve, 1_500));
+    if (route.request().method() === 'POST' && !held) {
+      held = true;
+      await firstHeld;
     }
     await route.continue();
   });
@@ -143,6 +145,8 @@ test('two messages sent one right after the other arrive in the order they were 
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await page.getByLabel('Message Marcus T.').fill(second);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(history(page).getByText(second)).toBeVisible();
+  releaseFirst();
   await expect(history(page).getByText('Sending', { exact: true })).toHaveCount(0);
 
   await requester.goto(`/chat/${id}`);
