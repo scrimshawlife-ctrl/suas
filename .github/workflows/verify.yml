@@ -162,7 +162,8 @@ jobs:
     # web/e2e/stack.ts builds: a throwaway suas_local_* database on this runner,
     # fake and sink adapters, no real external effects (ENVIRONMENT.md §2).
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # One worker on one stack: the per-area suites (UI conformance 13-19) run past 20 min.
+    timeout-minutes: 60
     permissions:
       contents: read
 
