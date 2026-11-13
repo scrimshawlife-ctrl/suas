@@ -206,7 +206,6 @@ export function useLicenceReviews() {
       return requireData(data, 'licence reviews');
     },
     getNextPageParam: (last) => last.next_cursor ?? undefined,
-    retry: retryServerErrors,
   });
 }
 
@@ -219,7 +218,6 @@ export function useAdminLicenceReview(id: string) {
       });
       return requireData(data, 'licence review');
     },
-    retry: retryServerErrors,
   });
 }
 
@@ -240,7 +238,6 @@ export function useLicenceImage(id: string, side: LicenceImageSide, enabled: boo
       });
       return requireData(data, 'licence image');
     },
-    retry: retryServerErrors,
   });
 }
 
