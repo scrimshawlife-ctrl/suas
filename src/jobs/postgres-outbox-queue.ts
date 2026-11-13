@@ -118,6 +118,10 @@ export async function claimDueJobs(
     readonly limit?: number;
     readonly leaseMs?: number;
     readonly now?: Date;
+    /** Claim only this job type. */
+    readonly jobType?: string;
+    /** Claim every type except these. */
+    readonly exceptJobTypes?: readonly string[];
   },
 ): Promise<readonly JobOutboxRow[]> {
   const limit = input.limit ?? 10;
@@ -147,10 +151,12 @@ export async function claimDueJobs(
            status = 'PENDING'
            OR (status = 'LEASED' AND leased_until IS NOT NULL AND leased_until < $1)
          )
+         AND ($3::text IS NULL OR job_type = $3)
+         AND NOT (job_type = ANY($4::text[]))
        ORDER BY run_at ASC, created_at ASC
        FOR UPDATE SKIP LOCKED
        LIMIT $2`,
-      [now.toISOString(), limit],
+      [now.toISOString(), limit, input.jobType ?? null, input.exceptJobTypes ?? []],
     );
 
     const claimed: JobOutboxRow[] = [];

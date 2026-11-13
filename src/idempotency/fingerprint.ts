@@ -12,7 +12,7 @@
  * identical retry conflicts.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 export type FingerprintableValue =
   | string
@@ -53,6 +53,14 @@ export function canonicalize(value: FingerprintableValue): string {
 /** Stable fingerprint of a request body plus its logical scope. */
 export function fingerprintRequest(value: FingerprintableValue): string {
   return createHash('sha256').update(canonicalize(value), 'utf8').digest('hex');
+}
+
+/**
+ * HMAC-SHA256 fingerprint for a request that carries personal data, so a reader of the
+ * idempotency table cannot test guesses offline without the server-side key.
+ */
+export function keyedFingerprintRequest(key: string, value: FingerprintableValue): string {
+  return createHmac('sha256', key).update(canonicalize(value), 'utf8').digest('hex');
 }
 
 /**

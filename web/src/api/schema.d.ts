@@ -517,7 +517,7 @@ export interface paths {
     put?: never;
     /**
      * Execute a released service-request command
-     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4).
+     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4).
      */
     post: operations['executeServiceRequestCommand'];
     delete?: never;
@@ -864,7 +864,7 @@ export interface paths {
     put?: never;
     /**
      * Plain request form: create a Service Request
-     * @description Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
+     * @description Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
      */
     post: operations['createServiceRequestForm'];
     delete?: never;
@@ -910,24 +910,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/v0/veterans/me/id-verification': {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** ID scan + selfie status; a pending check is resolved with the verification port */
-    get: operations['getVeteransMeIdVerification'];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  '/api/v0/veterans/me/id-verification/commands/start': {
+  '/api/v0/veterans/me/verification/va/confirm': {
     parameters: {
       query?: never;
       header?: never;
@@ -936,8 +919,31 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Start an ID scan + selfie check (idempotent: reuses a pending check, leaves a verified standing alone) */
-    post: operations['postVeteransMeIdVerificationStart'];
+    /**
+     * Confirm Veteran status with VA (one attempt; suas-specs #72 R9.1)
+     * @description Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values; the attempt row keeps the result, the notice version, a keyed request fingerprint and, when VA answered, a keyed identity hash (HMAC under SUAS_FINGERPRINT_KEY, with its key id). Any signed-in person may call it. The body must carry noticeVersion va-notice-v1, the pre-call notice the person saw (400 VA_NOTICE_VERSION_REQUIRED otherwise). The typed first and last name must match the account display name ("First Last" or "First L.", ignoring case, accents and punctuation); otherwise 409 VA_NAME_MISMATCH with no VA call and no attempt counted. A VA VERIFIED standing is returned with no VA call; a REVOKED standing is refused (403). At most 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, or an identity conflict) per person in the last 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After); UNAVAILABLE results (outages and VA 400s) never count. A backstop cap of 20 VA calls per person in the last 24 hours counts the same rows (same 429). The same Idempotency-Key within 24 hours replays an answer VA gave; after an UNAVAILABLE result, or after a fingerprint key rotation, it is a new attempt. No database lock is held during the VA call; a second attempt while one is in flight gets 409 IDEMPOTENCY_CONFLICT. NOT_CONFIRMED is not a finding that the person never served. UNAVAILABLE means VA did not answer: failure_class REQUEST_INVALID (VA refused the request, e.g. HTTP 400) means the person may correct the details and retry; other classes mean try again later. Neither UNAVAILABLE nor NOT_CONFIRMED blocks a request: the person may self-attest instead.
+     */
+    post: operations['postVeteransMeVerificationVaConfirm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/verification/commands/self-attest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Self-attest Veteran status (D-016 fallback; suas-specs #72 R9.1)
+     * @description Writes a SELF_ATTESTATION VERIFIED row with source SUAS, which opens the request gate. No VA call, no attempt limit, and available whatever the VA confirmation mode. A VERIFIED standing of any method is returned with no new row; a REVOKED standing is refused (403). The body is empty or {}.
+     */
+    post: operations['postVeteransMeVerificationSelfAttest'];
     delete?: never;
     options?: never;
     head?: never;
@@ -953,7 +959,7 @@ export interface paths {
     };
     /**
      * Whether the Intake Assistant is available
-     * @description Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     get: operations['getIntakeStatus'];
     put?: never;
@@ -975,7 +981,7 @@ export interface paths {
     put?: never;
     /**
      * Send the first intake message
-     * @description Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     post: operations['createIntakeDraft'];
     delete?: never;
@@ -993,7 +999,7 @@ export interface paths {
     };
     /**
      * Read one of your drafts
-     * @description Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     get: operations['getIntakeDraft'];
     put?: never;
@@ -1003,7 +1009,7 @@ export interface paths {
     head?: never;
     /**
      * Edit a draft
-     * @description The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     patch: operations['updateIntakeDraft'];
     trace?: never;
@@ -1019,7 +1025,7 @@ export interface paths {
     put?: never;
     /**
      * Send a follow-up intake message
-     * @description Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
+     * @description Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
      */
     post: operations['addIntakeMessage'];
     delete?: never;
@@ -1039,7 +1045,7 @@ export interface paths {
     put?: never;
     /**
      * Submit a draft as a Service Request
-     * @description The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
+     * @description The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
      */
     post: operations['submitIntakeDraft'];
     delete?: never;
@@ -1233,10 +1239,214 @@ export interface paths {
     get?: never;
     /**
      * Set the display name other people see
-     * @description Signed-in only; no ID scan needed. Guidance for the form: "First name and last initial, like Marcus T." Only length and emptiness are validated.
+     * @description Signed-in only; no Veteran Confirmation needed. Guidance for the form: "First name and last initial, like Marcus T." Only length and emptiness are validated.
      */
     put: operations['putVeteransMeProfile'];
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/verification/licence': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Whether the licence review path is offered, and the newest review (suas-specs R10.1, proposal)
+     * @description Any signed-in person. The path is offered only after VA answered NOT_CONFIRMED (never after UNAVAILABLE, so never after a VA 400), beside self-attestation, never instead of it.
+     */
+    get: operations['getVeteransMeVerificationLicence'];
+    put?: never;
+    /**
+     * Send licence photos and a selfie for review (suas-specs R10.1, proposal)
+     * @description The server checks, in order: signed in (before the body is read), the reader is open (503), L1.4 eligibility (403), notice_version (400), no open review (409), the limit (429), then the image rules (400). It stores the three re-encoded images, records a READING review bound to the person's newest NOT_CONFIRMED VA attempt and queues the read. No Idempotency-Key: a second send while one is open gets 409 LICENCE_REVIEW_OPEN. Only reader-answered submissions count toward the limit.
+     */
+    post: operations['postVeteransMeVerificationLicence'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/verification/licence/{review_id}/commands/dispute': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Dispute an ALREADY_USED decline with new photos (suas-specs R10.1 L7.3, proposal)
+     * @description Opens a new review marked as a dispute of this one, bound to the same VA attempt; the earlier images were deleted at the decision. It skips the L1.4 offer but follows the notice, limits and read. The queue routes it away from the admins who approved or confirmed the conflicting review.
+     */
+    post: operations['postVeteransMeVerificationLicenceDispute'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Licence reviews waiting for a decision, oldest first (suas-specs R10.1, proposal)
+     * @description AWAITING_REVIEW and AWAITING_CONFIRMATION only, without the admin's own submissions, reviews they recused from, or disputes of an approval they made or confirmed. Age, state and a dispute marker only, never names. Requires the SUAS Admin role and MFA elevation.
+     */
+    get: operations['getAdminLicenceReviews'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One licence review's page (suas-specs R10.1, proposal)
+     * @description Requires the SUAS Admin role and MFA elevation.
+     */
+    get: operations['getAdminLicenceReview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/images/{side}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One stored licence image or the selfie, inline (suas-specs R10.1, proposal)
+     * @description Served inline with Cache-Control: no-store, private; there is no download. Requires the SUAS Admin role and MFA elevation.
+     */
+    get: operations['getAdminLicenceReviewImage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * First approval of a licence review (suas-specs R10.1 L5.4, proposal)
+     * @description AWAITING_REVIEW to AWAITING_CONFIRMATION, recording the admin as approved_by. No VERIFIED row yet: a second, different admin must confirm. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewApprove'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Second admin's confirmation (suas-specs R10.1 L5.5, proposal)
+     * @description AWAITING_CONFIRMATION to APPROVED by an admin other than approved_by: writes a MANUAL_REVIEW VERIFIED row (source SUAS) that opens the request gate, and deletes the images and the reading. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewConfirm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/decline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Decline a licence review (suas-specs R10.1 L5.7, proposal)
+     * @description From AWAITING_REVIEW or AWAITING_CONFIRMATION, by one admin. Deletes the images and the reading and clears the fingerprint. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewDecline'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/recuse': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Recuse from a licence review (suas-specs R10.1 L5.6, proposal)
+     * @description Hides the review from this admin and refuses their commands on it. Repeating it changes nothing. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewRecuse'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/revoke': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Revoke a licence approval (suas-specs R10.1 L7.1, proposal)
+     * @description APPROVED to REVOKED, freeing the fingerprint. FRAUD writes a REVOKED row, which outranks every method, blocks self-attestation and releases the VA identity. REVIEW_ERROR writes a newer MANUAL_REVIEW NOT_CONFIRMED row, so the approval stops opening the gate without barring the person. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewRevoke'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1460,12 +1670,86 @@ export interface components {
     MfaVerified: {
       mfa_elevated: boolean;
     };
+    /** @description The person's Veteran confirmation standing (suas-specs #72 R9.1): REVOKED when SUAS revoked it; else a VERIFIED row of VA_VETERAN_STATUS, MANUAL_REVIEW or SELF_ATTESTATION (in that order), which opens the request gate; else the newest settled VA attempt; else NOT_STARTED with method VA_VETERAN_STATUS. */
     IdVerification: {
       /** @enum {string} */
-      method: 'ID_SCAN_SELFIE';
-      status: string;
+      method: 'VA_VETERAN_STATUS' | 'MANUAL_REVIEW' | 'SELF_ATTESTATION';
+      /** @enum {string} */
+      status: 'NOT_STARTED' | 'VERIFIED' | 'NOT_CONFIRMED' | 'PENDING' | 'UNAVAILABLE' | 'REVOKED';
+      /**
+       * @description VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise.
+       * @enum {string|null}
+       */
+      not_confirmed_reason:
+        'PERSON_NOT_FOUND' | 'NOT_TITLE_38' | 'MORE_RESEARCH_REQUIRED' | 'ERROR' | null;
       /** Format: date-time */
       verified_at: string | null;
+      /**
+       * @description Why VA did not answer (D035 §11), with UNAVAILABLE; null when VA answered. REQUEST_INVALID means the person may correct the details and retry.
+       * @enum {string|null}
+       */
+      failure_class:
+        | 'CONFIGURATION_INVALID'
+        | 'AUTHENTICATION_REJECTED'
+        | 'REQUEST_INVALID'
+        | 'PROVIDER_RATE_LIMITED'
+        | 'PROVIDER_UNAVAILABLE'
+        | 'PROVIDER_RESPONSE_INVALID'
+        | 'PROVIDER_REASON_UNKNOWN'
+        | 'TIMEOUT'
+        | 'NETWORK_ERROR'
+        | null;
+    };
+    /** @description The VA_CONFIRMATION_V1_REQUIRED_ONLY projection: the eight required VA fields, with country fixed to USA. No SSN. Plus noticeVersion, the pre-call notice the person saw. Unknown fields are refused. Patterns are VA's; each field is at most 256 characters. */
+    VaConfirmationRequest: {
+      firstName: string;
+      lastName: string;
+      /**
+       * Format: date
+       * @description YYYY-MM-DD, a real date before today
+       */
+      birthDate: string;
+      streetAddressLine1: string;
+      city: string;
+      state: string;
+      /**
+       * @description Optional; always USA
+       * @enum {string}
+       */
+      country?: 'USA';
+      zipCode: string;
+      /**
+       * @description The pre-call notice version (VA_NOTICE_V1). It is stored on the attempt, not sent to VA.
+       * @enum {string}
+       */
+      noticeVersion: 'va-notice-v1';
+    };
+    VaConfirmationResult: {
+      /** @enum {string} */
+      status: 'VERIFIED' | 'NOT_CONFIRMED' | 'UNAVAILABLE';
+      /**
+       * @description VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise.
+       * @enum {string|null}
+       */
+      not_confirmed_reason:
+        'PERSON_NOT_FOUND' | 'NOT_TITLE_38' | 'MORE_RESEARCH_REQUIRED' | 'ERROR' | null;
+      /** Format: date-time */
+      verified_at: string | null;
+      /**
+       * @description Why VA did not answer (D035 §11), with UNAVAILABLE; null when VA answered. REQUEST_INVALID means the person may correct the details and retry.
+       * @enum {string|null}
+       */
+      failure_class:
+        | 'CONFIGURATION_INVALID'
+        | 'AUTHENTICATION_REJECTED'
+        | 'REQUEST_INVALID'
+        | 'PROVIDER_RATE_LIMITED'
+        | 'PROVIDER_UNAVAILABLE'
+        | 'PROVIDER_RESPONSE_INVALID'
+        | 'PROVIDER_REASON_UNKNOWN'
+        | 'TIMEOUT'
+        | 'NETWORK_ERROR'
+        | null;
     };
     /** @description The current case of a Veteran: not RESOLVED or CLOSED. A Veteran whose case is resolved has none until they ask for help again, which opens a new case. */
     OpenCaseSummary: {
@@ -2168,6 +2452,230 @@ export interface components {
     ServiceRequestEditResult: components['schemas']['ServiceRequestDetail'] & {
       replayed: boolean;
     };
+    /**
+     * @description suas-specs R10.1 (proposal). Open states are READING, AWAITING_REVIEW and AWAITING_CONFIRMATION; a person has at most one open review.
+     * @enum {string}
+     */
+    LicenceReviewStatus:
+      | 'READING'
+      | 'UNREADABLE'
+      | 'AWAITING_REVIEW'
+      | 'AWAITING_CONFIRMATION'
+      | 'APPROVED'
+      | 'DECLINED'
+      | 'REVOKED';
+    /** @enum {string} */
+    LicenceDeclineReason:
+      | 'NO_VETERAN_DESIGNATION'
+      | 'UNREADABLE'
+      | 'EXPIRED'
+      | 'IDENTITY_MISMATCH'
+      | 'SELFIE_MISMATCH'
+      | 'ALREADY_USED'
+      | 'OTHER';
+    /**
+     * @description Why a review settled UNREADABLE. The reader was down (try later, not counted): CONFIGURATION_INVALID, AUTHENTICATION_REJECTED, REQUEST_INVALID, PROVIDER_UNAVAILABLE, PROVIDER_RESPONSE_INVALID, TIMEOUT, NETWORK_ERROR. Send again (not counted): PHOTOS_GONE, PHOTOS_EXPIRED. NOT_SYNTHETIC (STAGING: no synthetic marker, nothing was sent; not counted). NOT_A_LICENCE (the reader answered; counted).
+     * @enum {string}
+     */
+    LicenceFailureClass:
+      | 'CONFIGURATION_INVALID'
+      | 'AUTHENTICATION_REJECTED'
+      | 'REQUEST_INVALID'
+      | 'PROVIDER_UNAVAILABLE'
+      | 'PROVIDER_RESPONSE_INVALID'
+      | 'TIMEOUT'
+      | 'NETWORK_ERROR'
+      | 'NOT_A_LICENCE'
+      | 'NOT_SYNTHETIC'
+      | 'PHOTOS_GONE'
+      | 'PHOTOS_EXPIRED';
+    /** @description A licence review as the Veteran sees it: states, codes and times only, never a licence field. */
+    LicenceReviewView: {
+      /** Format: uuid */
+      review_id: string;
+      status: components['schemas']['LicenceReviewStatus'];
+      decline_reason: components['schemas']['LicenceDeclineReason'] | null;
+      failure_class: components['schemas']['LicenceFailureClass'] | null;
+      /** @description True for an ALREADY_USED decline while the licence path is open and the person is not revoked (L7.3). */
+      disputable: boolean;
+      /** Format: uuid */
+      dispute_of_review_id: string | null;
+      /** Format: date-time */
+      submitted_at: string;
+      /** Format: date-time */
+      decided_at: string | null;
+    };
+    LicenceVerification: {
+      /** @description False when the reader is disabled or its breaker is open, the newest VA-answered attempt is not NOT_CONFIRMED (PERSON_NOT_FOUND, NOT_TITLE_38, MORE_RESEARCH_REQUIRED), the person is at the VA try limit, the standing is REVOKED, or the request gate is already open. An open review does not change it. */
+      offered: boolean;
+      /** @enum {string} */
+      notice_version: 'licence-notice-v1';
+      /** @description The person's newest review, or null. */
+      review: components['schemas']['LicenceReviewView'] | null;
+    };
+    LicenceImage: {
+      /** @enum {string} */
+      content_type: 'image/jpeg';
+      /** @description A JPEG of at most 2000 px on the long side and 1,000,000 bytes, base64. The server re-encodes it, dropping EXIF, XMP, ICC and comments. */
+      data_base64: string;
+    };
+    /** @description Front and back of the licence and one live selfie (camera only). The selfie is never sent to the reader. */
+    LicenceSubmission: {
+      /** @enum {string} */
+      notice_version: 'licence-notice-v1';
+      front: components['schemas']['LicenceImage'];
+      back: components['schemas']['LicenceImage'];
+      selfie: components['schemas']['LicenceImage'];
+    };
+    /**
+     * @description Whether the licence's first name, last name and birth date match the details given to VA (same canonical form and key). Never the values.
+     * @enum {string}
+     */
+    LicenceIdentityMatch: 'YES' | 'NO' | 'UNKNOWN';
+    /** @enum {string} */
+    LicenceRevokeReason: 'FRAUD' | 'REVIEW_ERROR';
+    LicenceReadField: {
+      value: string | null;
+      /** @enum {string|null} */
+      source: 'barcode' | 'front' | null;
+      /** @description False marks a field to check by eye. */
+      agreed: boolean;
+    };
+    /** @description The reader's fields without the licence number or birth date (§2.1). The consistency checks do not show the card is genuine. */
+    LicenceReading: {
+      fields: {
+        first_name: components['schemas']['LicenceReadField'];
+        last_name: components['schemas']['LicenceReadField'];
+        issue_date: components['schemas']['LicenceReadField'];
+        expiry_date: components['schemas']['LicenceReadField'];
+        issuing_state: components['schemas']['LicenceReadField'];
+      };
+      veteran: {
+        /** @enum {string|null} */
+        value: 'yes' | 'no' | null;
+        /** @enum {string|null} */
+        source: 'barcode' | 'front' | null;
+        agreed: boolean;
+        /** @enum {string|null} */
+        barcode: 'yes' | 'no' | null;
+        /** @enum {string|null} */
+        front: 'yes' | 'no' | null;
+      };
+      consistency_checks: {
+        /** @enum {string} */
+        not_expired: 'pass' | 'fail' | 'not_run';
+        /** @enum {string} */
+        issued_before_expiry: 'pass' | 'fail' | 'not_run';
+        /** @enum {string} */
+        plausible_age: 'pass' | 'fail' | 'not_run';
+        /** @enum {string} */
+        veteran_designation_agrees: 'pass' | 'fail' | 'not_run';
+      };
+    };
+    /** @description The approved review already holding this licence: its record only; its images are gone. */
+    LicenceConflictingReview: {
+      /** Format: uuid */
+      review_id: string;
+      status: components['schemas']['LicenceReviewStatus'];
+      /** Format: date-time */
+      submitted_at: string;
+      /** Format: date-time */
+      decided_at: string | null;
+      /** Format: uuid */
+      approved_by: string | null;
+      /** Format: uuid */
+      confirmed_by: string | null;
+      identity_match: components['schemas']['LicenceIdentityMatch'] | null;
+      notice_version: string;
+    };
+    /** @description The review page (L5.2, L5.3). The UI shows the three images first and reveals the rest only after the reviewer answers that the Veteran designation is visible. No subject name, user id, licence number or birth date. */
+    AdminLicenceReview: {
+      /** Format: uuid */
+      review_id: string;
+      status: components['schemas']['LicenceReviewStatus'];
+      /** Format: date-time */
+      submitted_at: string;
+      /** Format: date-time */
+      decided_at: string | null;
+      notice_version: string;
+      is_dispute: boolean;
+      /** Format: uuid */
+      dispute_of_review_id: string | null;
+      /** @description Whether each image is still stored; all false once decided. */
+      images: {
+        front: boolean;
+        back: boolean;
+        selfie: boolean;
+      };
+      reading: components['schemas']['LicenceReading'] | null;
+      identity_match: components['schemas']['LicenceIdentityMatch'] | null;
+      /** @description Whether this licence is on an APPROVED review in the tenant; null when the number or state was not read. */
+      fingerprint_in_use: boolean | null;
+      failure_class: components['schemas']['LicenceFailureClass'] | null;
+      decline_reason: components['schemas']['LicenceDeclineReason'] | null;
+      revoke_reason: components['schemas']['LicenceRevokeReason'] | null;
+      /** Format: uuid */
+      approved_by: string | null;
+      /** Format: date-time */
+      approved_at: string | null;
+      /** Format: uuid */
+      confirmed_by: string | null;
+      /** Format: date-time */
+      confirmed_at: string | null;
+      /** Format: uuid */
+      declined_by: string | null;
+      /** Format: uuid */
+      revoked_by: string | null;
+      /** @description What this admin may try given the state; the server still enforces every rule. */
+      viewer: {
+        can_approve: boolean;
+        can_confirm: boolean;
+        can_decline: boolean;
+        can_revoke: boolean;
+      };
+      conflicting_review: components['schemas']['LicenceConflictingReview'] | null;
+    };
+    AdminLicenceReviewQueue: {
+      reviews: {
+        /** Format: uuid */
+        review_id: string;
+        status: components['schemas']['LicenceReviewStatus'];
+        /** Format: date-time */
+        submitted_at: string;
+        is_dispute: boolean;
+      }[];
+      limit: number;
+      next_cursor: string | null;
+    };
+    /** @description The designation question and the by-eye checklist (L5.2, L5.3); every answer must be true. A 'no' means the admin declines instead. */
+    LicenceApproval: {
+      /** @enum {boolean} */
+      designation_visible: true;
+      checklist: {
+        /**
+         * @description The selfie and the licence portrait show the same person.
+         * @enum {boolean}
+         */
+        selfie_matches: true;
+        /**
+         * @description Visible security features look present, without signs of editing.
+         * @enum {boolean}
+         */
+        security_features: true;
+        /**
+         * @description The photo shows a whole physical card, not a screen or printout.
+         * @enum {boolean}
+         */
+        whole_card: true;
+      };
+    };
+    LicenceDecline: {
+      reason: components['schemas']['LicenceDeclineReason'];
+    };
+    LicenceRevoke: {
+      reason: components['schemas']['LicenceRevokeReason'];
+    };
+    LicenceRecuse: Record<string, never>;
   };
   responses: {
     /** @description Canonical API.md §6 error body */
@@ -2379,7 +2887,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2418,7 +2926,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2450,7 +2958,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2496,7 +3004,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2529,7 +3037,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2573,7 +3081,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2644,7 +3152,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2676,7 +3184,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2901,7 +3409,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -2948,7 +3456,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -3021,7 +3529,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has not passed the ID scan + selfie check */
+      /** @description FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -3088,7 +3596,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -3123,7 +3631,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -3155,7 +3663,7 @@ export interface operations {
         };
       };
       401: components['responses']['Error'];
-      /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -3320,7 +3828,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
-      /** @description FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits before passing the ID scan + selfie check */
+      /** @description FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits without a VERIFIED VA Veteran Confirmation */
       403: {
         headers: {
           [name: string]: unknown;
@@ -4114,56 +4622,69 @@ export interface operations {
       404: components['responses']['Error'];
     };
   };
-  getVeteransMeIdVerification: {
+  postVeteransMeVerificationVaConfirm: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VaConfirmationRequest'];
+      };
+    };
     responses: {
-      /** @description ID scan and selfie status */
+      /** @description The settled result of this attempt, an identical replay, or the existing VERIFIED standing */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['IdVerification'];
+          'application/json': components['schemas']['VaConfirmationResult'];
         };
       };
-      401: components['responses']['Error'];
-    };
-  };
-  postVeteransMeIdVerificationStart: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description A check is already pending */
-      200: {
+      /** @description VALIDATION_FAILED: a field does not match the VA pattern, an unknown field was sent, or the Idempotency-Key header is missing; the message names fields only, never values. VA_NOTICE_VERSION_REQUIRED: noticeVersion is missing or not va-notice-v1. */
+      400: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['IdVerification'];
+          'application/json': components['schemas']['ErrorBody'];
         };
       };
-      /** @description Check started */
-      201: {
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REVOKED: SUAS revoked this person's confirmation; no new attempt is taken */
+      403: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['IdVerification'];
+          'application/json': components['schemas']['ErrorBody'];
         };
       };
-      401: components['responses']['Error'];
-      /** @description ID_VERIFICATION_UNAVAILABLE: no verification provider is configured or it is down */
+      /** @description VA_NAME_MISMATCH: the typed name does not match the account display name (no VA call, not counted). VA_IDENTITY_ALREADY_VERIFIED: these details cannot be used to verify this account (counted; the message never names another account). IDEMPOTENCY_CONFLICT: the key was used with a different body, or another attempt is still in flight. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description VERIFICATION_ATTEMPT_LIMIT: 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, an attempt in flight or an identity conflict) in the last 24 hours, or the backstop cap of 20 VA calls, which counts the same rows; outages and VA 400s (UNAVAILABLE) count toward neither. Retry-After gives the seconds until the person is under the 5 tries again. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description ID_VERIFICATION_UNAVAILABLE: VA confirmation is not offered in this environment (SUAS_VA_CONFIRMATION_MODE=disabled). Not an outage; self-attestation stays available. */
       503: {
         headers: {
           [name: string]: unknown;
@@ -4172,6 +4693,53 @@ export interface operations {
           'application/json': components['schemas']['ErrorBody'];
         };
       };
+    };
+  };
+  postVeteransMeVerificationSelfAttest: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': Record<string, never>;
+      };
+    };
+    responses: {
+      /** @description The standing after self-attesting, or the existing VERIFIED standing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdVerification'];
+        };
+      };
+      /** @description VALIDATION_FAILED: a field was sent, or the Idempotency-Key header is missing */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REVOKED: SUAS revoked this person's confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      409: components['responses']['Error'];
     };
   };
   getIntakeStatus: {
@@ -4710,6 +5278,650 @@ export interface operations {
       400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
+    };
+  };
+  getVeteransMeVerificationLicence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Offer and newest review */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LicenceVerification'];
+        };
+      };
+      401: components['responses']['Error'];
+    };
+  };
+  postVeteransMeVerificationLicence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceSubmission'];
+      };
+    };
+    responses: {
+      /** @description Stored and queued: the review in its current state (READING, or already read in LOCAL and TEST) */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LicenceReviewView'];
+        };
+      };
+      /** @description LICENCE_NOTICE_VERSION_REQUIRED: notice_version is missing or not licence-notice-v1. VALIDATION_FAILED: an image is not a JPEG, is over 2000 px on the long side or 1,000,000 bytes, or a field is missing or unknown; the message names the fields only. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description LICENCE_REVIEW_NOT_OFFERED: the newest VA-answered attempt is not NOT_CONFIRMED with PERSON_NOT_FOUND, NOT_TITLE_38 or MORE_RESEARCH_REQUIRED, the person is at the VA try limit, revoked, or already confirmed. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_OPEN: a review is already open. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description The whole body is over 4,500,000 bytes. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_SUBMISSION_LIMIT: 3 reader-answered submissions in the last 24 hours (or the absolute cap of 10); Retry-After says when. Separate from the VA VERIFICATION_ATTEMPT_LIMIT. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postVeteransMeVerificationLicenceDispute: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        review_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceSubmission'];
+      };
+    };
+    responses: {
+      /** @description Stored and queued: the review in its current state (READING, or already read in LOCAL and TEST) */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LicenceReviewView'];
+        };
+      };
+      /** @description LICENCE_NOTICE_VERSION_REQUIRED: notice_version is missing or not licence-notice-v1. VALIDATION_FAILED: an image is not a JPEG, is over 2000 px on the long side or 1,000,000 bytes, or a field is missing or unknown; the message names the fields only. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REVOKED: the person's standing is REVOKED. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND: no such review of this person. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_NOT_DISPUTABLE: the review is not an ALREADY_USED decline. LICENCE_REVIEW_OPEN: a review is already open. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description The whole body is over 4,500,000 bytes. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_SUBMISSION_LIMIT: 3 reader-answered submissions in the last 24 hours (or the absolute cap of 10); Retry-After says when. Separate from the VA VERIFICATION_ATTEMPT_LIMIT. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getAdminLicenceReviews: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of the queue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReviewQueue'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description FORBIDDEN or MFA_REQUIRED. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getAdminLicenceReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The review page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getAdminLicenceReviewImage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        side: 'front' | 'back' | 'selfie';
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The re-encoded JPEG */
+      200: {
+        headers: {
+          'Cache-Control'?: 'no-store, private';
+          [name: string]: unknown;
+        };
+        content: {
+          'image/jpeg': string;
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND: no such review, or its images were deleted (decided) or are gone from storage. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description ID_VERIFICATION_UNAVAILABLE: object storage is disabled. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewApprove: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceApproval'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_REVIEW. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewConfirm: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceApproval'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. SECOND_REVIEWER_REQUIRED: the admin who approved cannot confirm. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_CONFIRMATION. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewDecline: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceDecline'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: still READING. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewRecuse: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceRecuse'];
+      };
+    };
+    responses: {
+      /** @description Recused */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description No state conflict applies. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewRevoke: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceRevoke'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already revoked. LICENCE_REVIEW_NOT_READY: not APPROVED. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
     };
   };
 }
