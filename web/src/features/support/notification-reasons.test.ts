@@ -28,16 +28,14 @@ function item(
 }
 
 describe('notification reasons', () => {
-  it('has a sentence for each reason in templates.ts except the sign-in codes', () => {
+  it('has a sentence for each reason the server sends except the sign-in codes', () => {
     expect(Object.keys(REASON_TEXT).sort()).toEqual([
-      'followup_due',
-      'qrf.responder_notified',
       'service_request_expired',
       'service_request_released',
-      'service_request_update',
       'trusted_contact_alert',
+      'trusted_contact_invited',
     ]);
-    expect(describeReason('followup_due')).toBe('A follow-up is due.');
+    expect(describeReason('trusted_contact_invited')).toMatch(/Open Invitations/);
   });
 
   it('words the expiry and release notices plainly', () => {
@@ -56,10 +54,10 @@ describe('notification reasons', () => {
 
   it('hides sign-in codes and cancelled sends, newest first, unsent first', () => {
     const list = newestFirst([
-      item('old', 'followup_due', '2026-11-01T00:00:00Z'),
+      item('old', 'service_request_expired', '2026-11-01T00:00:00Z'),
       item('code', 'auth.email_otp', '2026-11-04T00:00:00Z'),
-      item('new', 'service_request_update', '2026-11-03T00:00:00Z'),
-      item('gone', 'followup_due', null, '2026-11-02T00:00:00Z'),
+      item('new', 'service_request_released', '2026-11-03T00:00:00Z'),
+      item('gone', 'service_request_expired', null, '2026-11-02T00:00:00Z'),
       item('queued', 'trusted_contact_alert', null),
     ]);
     expect(list.map((n) => n.notification_id)).toEqual(['queued', 'new', 'old']);
