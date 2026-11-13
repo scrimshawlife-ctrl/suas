@@ -47,14 +47,15 @@ export function isPermanentConversationError(error: unknown): boolean {
 }
 
 /**
- * A send the server refused for good: a 4xx other than 408 (timed out) and 429 (too many tries),
- * which sending the same message again cannot fix.
+ * In-flight idempotency conflicts keep manual retry with the unchanged body/key.
+ * Other final refusals cannot be fixed by resending the same message.
  */
 export function isFinalSendError(error: unknown): boolean {
   return (
     isApiError(error) &&
     error.status >= 400 &&
     error.status < 500 &&
+    error.code !== 'IDEMPOTENCY_CONFLICT' &&
     error.status !== 408 &&
     error.status !== 429
   );

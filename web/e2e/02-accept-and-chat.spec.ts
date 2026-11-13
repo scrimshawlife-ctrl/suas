@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import { commandScope, fingerprintRequest } from '../../src/idempotency/fingerprint';
+import { withDb } from './helpers';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { newPerson, newVerifiedVeteran, requestHelp, shoot, signUp, uniqueEmail } from './helpers';
@@ -16,6 +19,7 @@ function recordSocket(page: Page): { opened: () => number; frames: string[] } {
 test('a second account accepts the request, sees the meeting place and chats live both ways', async ({
   browser,
   request,
+  allow,
 }) => {
   const requester = await newVerifiedVeteran(browser, request, {
     name: 'Marcus T.',
@@ -100,6 +104,91 @@ test('a second account accepts the request, sees the meeting place and chats liv
   await expect
     .poll(() => helperSocket.frames.some((f) => f.includes('chat.message') && f.includes(reply)))
     .toBe(true);
+  // Lose a response after reservation, receive a real in-flight 409, then recover its expired lease.
+  const recoveryBody = `Retry keeps one message ${uniqueEmail('retry')}`;
+  let recoveryKey = '';
+  let intercepted = false;
+  allow.push(/net::ERR_TIMED_OUT/, /status of 409/);
+  await requester.page.route(
+    `**/api/v0/service-requests/${requestId}/chat/messages*`,
+    async (route) => {
+      if (route.request().method() !== 'POST' || intercepted) {
+        await route.continue();
+        return;
+      }
+      intercepted = true;
+      recoveryKey = route.request().headers()['idempotency-key'] ?? '';
+      await withDb(async (db) => {
+        const user = (
+          await db.query<{ tenant_id: string; user_id: string }>(
+            'SELECT tenant_id, user_id FROM users WHERE email = $1',
+            [requester.email],
+          )
+        ).rows[0];
+        const thread = (
+          await db.query<{ chat_thread_id: string }>(
+            'SELECT chat_thread_id FROM chat_threads WHERE service_request_id = $1 AND released_at IS NULL',
+            [requestId],
+          )
+        ).rows[0];
+        if (!user || !thread || !recoveryKey) throw new Error('Missing synthetic chat fixture');
+        await db.query(
+          `INSERT INTO command_idempotency_records (command_idempotency_id, tenant_id, command_scope, idempotency_key, request_fingerprint, state)
+        VALUES ($1, $2, $3, $4, $5, 'RESERVED')`,
+          [
+            randomUUID(),
+            user.tenant_id,
+            commandScope({
+              command: 'POST /service-requests/{id}/chat/messages',
+              aggregateType: 'ChatThread',
+              aggregateId: thread.chat_thread_id,
+              actorId: user.user_id,
+            }),
+            recoveryKey,
+            fingerprintRequest({
+              chat_thread_id: thread.chat_thread_id,
+              body: recoveryBody,
+              actor_id: user.user_id,
+            }),
+          ],
+        );
+      });
+      await route.abort('timedout');
+    },
+  );
+  await requester.page.getByLabel('Message Dee R.').fill(recoveryBody);
+  await requester.page.getByRole('button', { name: 'Send', exact: true }).click();
+  const retry = requester.page.getByRole('button', { name: 'Try again', exact: true });
+  await expect(retry).toBeVisible();
+  const conflict = requester.page.waitForResponse(
+    (response) => response.url().includes('/chat/messages') && response.status() === 409,
+  );
+  await retry.click();
+  expect((await conflict).status()).toBe(409);
+  await expect(retry).toBeVisible();
+  await withDb((db) =>
+    db.query(
+      "UPDATE command_idempotency_records SET updated_at = now() - interval '121 seconds' WHERE idempotency_key = $1",
+      [recoveryKey],
+    ),
+  );
+  await retry.click();
+  await expect(retry).not.toBeVisible();
+  await expect(helperHistory).toContainText(recoveryBody);
+  await withDb(async (db) => {
+    expect(
+      (await db.query('SELECT 1 FROM chat_messages WHERE body = $1', [recoveryBody])).rowCount,
+    ).toBe(1);
+    expect(
+      (
+        await db.query<{ state: string }>(
+          'SELECT state FROM command_idempotency_records WHERE idempotency_key = $1',
+          [recoveryKey],
+        )
+      ).rows[0]?.state,
+    ).toBe('COMPLETED');
+  });
+
   await shoot(requester.page, '02-chat-requester');
   await shoot(helper, '02-chat-helper');
 

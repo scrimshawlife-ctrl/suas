@@ -36,6 +36,33 @@ describe('outbox', () => {
     expect(send.mock.calls[1]?.[2]).toBe(send.mock.calls[0]?.[2]);
   });
 
+  it('keeps manual retry after timeout and an in-flight conflict, then reconciles success with the same key', async () => {
+    const send = vi
+      .fn<(id: string, body: string, key: string) => Promise<ChatMessage>>()
+      .mockRejectedValueOnce(new ApiError(408, 'TIMEOUT', 'No answer.'))
+      .mockRejectedValueOnce(new ApiError(409, 'IDEMPOTENCY_CONFLICT', 'Still processing.'))
+      .mockResolvedValue(sent('hi'));
+    const outbox = createOutbox(send);
+    const client = new QueryClient();
+    outbox.send(client, 'r1', 'hi');
+    await vi.waitFor(() => {
+      expect(outbox.get('r1')[0]?.status).toBe('failed');
+    });
+    const id = outbox.get('r1')[0]?.clientId ?? '';
+    outbox.retry(client, 'r1', id);
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(outbox.get('r1')[0]?.status).toBe('failed');
+    });
+    // No automatic loop, including when the conflict might be a payload mismatch.
+    expect(send).toHaveBeenCalledTimes(2);
+    outbox.retry(client, 'r1', id);
+    await vi.waitFor(() => {
+      expect(outbox.get('r1')).toHaveLength(0);
+    });
+    expect(send.mock.calls).toEqual(Array.from({ length: 3 }, () => send.mock.calls[0]));
+  });
+
   it('ignores a send that finishes after clear, so the next person sees nothing of it', async () => {
     let finish: (m: ChatMessage) => void = () => undefined;
     const outbox = createOutbox(
