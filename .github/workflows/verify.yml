@@ -120,10 +120,12 @@ jobs:
 
       - name: Web app checks
         # web/ is a separate package (not an npm workspace): lint, typecheck, unit tests,
-        # and the production build of the React app.
+        # and the production build of the React app. The generated API types must match
+        # docs/openapi/v0.json, so a contract change without `npm run gen:api` fails here.
         working-directory: web
         run: |
           npm ci
+          npm run gen:api && git diff --exit-code src/api/schema.d.ts
           npm run check
 
       - name: Infrastructure checks
@@ -211,6 +213,20 @@ jobs:
       - name: Web end-to-end tests
         working-directory: web
         run: npm run test:e2e
+
+      - name: UI coverage report
+        # Each /api/v0 operation against its web callers and the e2e page hits that
+        # web/e2e/contract.ts logged. Report only until the gate turns on `--check`.
+        if: ${{ !cancelled() }}
+        run: npm run --silent ui:coverage >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the UI coverage log
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-e2e-ui-coverage
+          path: web/e2e-results/coverage/
+          retention-days: 7
 
       - name: Upload the Playwright report and traces
         if: failure()
