@@ -12,7 +12,13 @@ const admin = {
   status: 'ACTIVE',
   enrolled_channels: { email: true, phone: false },
   county: 'SANTA_CLARA',
-  id_verification: { method: 'ID_SCAN_SELFIE', status: 'VERIFIED', verified_at: null },
+  id_verification: {
+    method: 'VA_VETERAN_STATUS',
+    status: 'VERIFIED',
+    not_confirmed_reason: null,
+    verified_at: null,
+    failure_class: null,
+  },
   open_case: null,
   active_qrf: null,
   categories: [],
@@ -31,6 +37,7 @@ const screens: { path: string; title: string }[] = [
   { path: '/', title: 'SUAS · Veterans helping veterans' },
   { path: '/welcome', title: 'Welcome · SUAS' },
   { path: '/verify', title: 'Confirm you served · SUAS' },
+  { path: '/verify/licence', title: 'Confirm with your licence · SUAS' },
   { path: '/crisis', title: 'Immediate resources · SUAS' },
   { path: '/home', title: 'Home · SUAS' },
   { path: '/request', title: 'Request help · SUAS' },
@@ -50,6 +57,8 @@ const screens: { path: string; title: string }[] = [
   { path: '/admin/drafts', title: 'Resource drafts · SUAS Admin' },
   { path: '/admin/drafts/abc', title: 'Resource draft · SUAS Admin' },
   { path: '/admin/consent-templates', title: 'Consent templates · SUAS Admin' },
+  { path: '/admin/licence-reviews', title: 'Licence reviews · SUAS Admin' },
+  { path: '/admin/licence-reviews/abc', title: 'Licence review · SUAS Admin' },
   { path: '/admin/mfa', title: 'Confirm it is you · SUAS' },
 ];
 
@@ -86,6 +95,12 @@ describe('route table', () => {
     await waitFor(() => expect(document.title).toBe(title));
     expect(screen.queryByText('We could not find that page.')).toBeNull();
     expect(screen.queryByText('Something went wrong.')).toBeNull();
+  });
+
+  it('keeps the crisis strip on the licence page, whatever its state (R10.1 L10)', async () => {
+    renderAt('/verify/licence');
+    await waitFor(() => expect(document.title).toBe('Confirm with your licence · SUAS'));
+    expect(screen.getByRole('complementary', { name: 'Crisis support' })).toBeInTheDocument();
   });
 
   it('sets a page title for a screen that is still loading', async () => {

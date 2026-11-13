@@ -77,13 +77,19 @@ export class DisabledVeteranVerificationAdapter implements VeteranVerificationPo
   }
 }
 
+/** True for a VA reason SUAS knows; anything else is an unknown provider value. */
+export function isVaNotConfirmedReason(value: unknown): value is VaNotConfirmedReason {
+  return (VA_NOT_CONFIRMED_REASONS as readonly unknown[]).includes(value);
+}
+
 /**
  * Normalize only the Title 38 status fields needed by SUAS onboarding.
  * Raw VA payloads must remain adapter-local and must not become domain state.
+ * A missing or unknown reason is UNAVAILABLE, never a more definitive state (D035 §10).
  */
 export function normalizeVaVeteranStatus(input: {
   veteranStatus: 'confirmed' | 'not confirmed';
-  notConfirmedReason?: VaNotConfirmedReason;
+  notConfirmedReason?: unknown;
   sourceContractVersion: string;
 }): VeteranVerificationResult {
   if (input.veteranStatus === 'confirmed') {
@@ -93,7 +99,7 @@ export function normalizeVaVeteranStatus(input: {
     };
   }
 
-  if (input.notConfirmedReason) {
+  if (isVaNotConfirmedReason(input.notConfirmedReason)) {
     return {
       status: input.notConfirmedReason === 'ERROR' ? 'UNAVAILABLE' : 'NOT_CONFIRMED',
       notConfirmedReason: input.notConfirmedReason,
@@ -102,7 +108,7 @@ export function normalizeVaVeteranStatus(input: {
   }
 
   return {
-    status: 'NOT_CONFIRMED',
+    status: 'UNAVAILABLE',
     sourceContractVersion: input.sourceContractVersion,
   };
 }

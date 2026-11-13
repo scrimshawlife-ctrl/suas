@@ -13,6 +13,8 @@
  * is provider-specific and is not part of this port yet.
  *
  * The port never throws for provider failures. They come back as `UNAVAILABLE`.
+ * suas-specs #72 R9.1 (proposal) moves the request gate to VA Veteran Confirmation, so
+ * this port no longer feeds the gate; its config is still validated at startup.
  */
 
 import type { SuasConfig } from '../config/index.js';
