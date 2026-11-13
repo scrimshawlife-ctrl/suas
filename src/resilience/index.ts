@@ -1,14 +1,10 @@
 export {
   DRILL_IDS,
-  DRILL_OUTCOMES,
-  DRILLS,
   DrillEvidenceRequiredError,
   recordDrillResult,
   requireDrill,
   UnknownDrillError,
-  type DrillDefinition,
   type DrillId,
-  type DrillOutcome,
   type DrillResult,
 } from './drills.js';
 export {
@@ -23,11 +19,6 @@ export {
   LOAD_PROFILES,
   NumericTargetUnavailableError,
   planProfile,
-  PROFILE_EXECUTABLE_WITHOUT_ENVELOPE,
-  WORKLOAD_DIMENSIONS,
-  type LoadProfile,
-  type ProfilePlan,
-  type WorkloadDimension,
 } from './envelope.js';
 export { fetchWithTimeout, OUTBOUND_FETCH_TIMEOUT_MS } from './outbound-fetch.js';
 export {
@@ -35,6 +26,4 @@ export {
   DuplicateDrillResultError,
   IncompleteDrillRunError,
   ProductionDrillRunError,
-  type DrillReport,
-  type DrillRunEnvironment,
 } from './report.js';

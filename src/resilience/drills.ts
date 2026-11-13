@@ -41,7 +41,7 @@ export interface DrillDefinition {
   readonly invariant: string;
 }
 
-export const DRILLS: readonly DrillDefinition[] = [
+const DRILLS: readonly DrillDefinition[] = [
   {
     id: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
     description: '§17.1 notification provider unavailable',

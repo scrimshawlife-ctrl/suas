@@ -13,9 +13,8 @@
  * domain commands so existing invariants hold rather than being bypassed with raw SQL. The script
  * is idempotent: re-running converges and never duplicates rows.
  *
- * No Support Signal score, crisis copy, or provider effect is fabricated here. Chat has no
- * released message store, so nothing is seeded for it. Raw SQL is used for read-only idempotency
- * lookups only.
+ * No Support Signal score, crisis copy, or provider effect is fabricated here, and nothing is
+ * seeded for chat. Raw SQL is used for read-only idempotency lookups only.
  *
  * Usage: `npm run seed:demo`.
  */

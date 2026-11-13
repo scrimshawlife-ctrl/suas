@@ -2,7 +2,8 @@
  * Durable job queue selection.
  *
  * Spec citations:
- * - SUAS-specs ARCHITECTURE.md §8 (D-022 = Postgres outbox, DECIDED 2026-08-26)
+ * - SUAS-specs ARCHITECTURE.md §8 (Postgres outbox is a local choice pending D-022,
+ *   which is DECISION_PENDING)
  * - SUAS-specs ARCHITECTURE.md §3 invariant 5
  * - SUAS-specs ENVIRONMENT.md §4–§5 (fail closed)
  */
@@ -17,7 +18,7 @@ export class DurableJobQueueUnavailableError extends Error {
   constructor(environment: string, detail: string) {
     super(
       `No durable job queue is available for ${environment}: ${detail}. ` +
-        `D-022 chose Postgres outbox; STAGING/PRODUCTION require a database pool ` +
+        `Postgres outbox is the local choice pending D-022; STAGING/PRODUCTION require a database pool ` +
         `(ARCHITECTURE.md §3 invariant 5, §8).`,
     );
     this.name = 'DurableJobQueueUnavailableError';

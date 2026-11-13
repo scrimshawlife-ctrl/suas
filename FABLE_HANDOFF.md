@@ -24,6 +24,10 @@ Build against `scrimshawlife-ctrl/SUAS-specs` release **v0.9.0**.
 9. `ARCHITECTURE.md`, `DOMAIN_MODEL.md`, `DATA_MODEL.md`, `API.md`, `APIS.md`, `TESTING.md`.
 10. Domain files for the slice you are implementing.
 
+## This repository
+
+Fastify JSON API `/api/v0` (`src/`), React web app (`web/`) and AWS CDK infrastructure (`infra/`, synthesized offline, nothing deployed). The Cloudflare Worker (`src/worker*`, `wrangler.jsonc`) is the legacy synthetic STAGING host, kept until the AWS cutover. Layout and local setup: [README.md](README.md).
+
 ## First task
 
 Slices 1–12 are already recorded. Do not restart at Slice 1. Follow [SPEC017_NEXT.md](SPEC017_NEXT.md).

@@ -262,31 +262,45 @@ export async function enqueueNotification(
   }
 
   const notificationId = randomUUID();
-  const inserted = await pool.query<NotificationRow>(
-    `INSERT INTO notifications
+  const created = await withTransaction(pool, async (tx) => {
+    const inserted = await tx.query<NotificationRow>(
+      `INSERT INTO notifications
        (notification_id, tenant_id, recipient_user_id, destination, reason, channel,
         consent_basis, template_version, dedupe_key, subject_type, subject_id, max_attempts)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (tenant_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
      RETURNING ${NOTIFICATION_COLUMNS}`,
-    [
-      notificationId,
-      input.tenantId,
-      input.recipientUserId ?? null,
-      input.destination ?? null,
-      input.reason,
-      channel,
-      decision.basis,
-      input.templateVersion,
-      input.dedupeKey ?? null,
-      input.subjectType ?? null,
-      input.subjectId ?? null,
-      input.maxAttempts ?? 5,
-    ],
-  );
+      [
+        notificationId,
+        input.tenantId,
+        input.recipientUserId ?? null,
+        input.destination ?? null,
+        input.reason,
+        channel,
+        decision.basis,
+        input.templateVersion,
+        input.dedupeKey ?? null,
+        input.subjectType ?? null,
+        input.subjectId ?? null,
+        input.maxAttempts ?? 5,
+      ],
+    );
+    const row = inserted.rows[0];
+    if (row === undefined) return undefined;
+    // IN_APP is internal: the row is the inbox entry, so it is delivered as it is created,
+    // with the attempt audit, and no send job or template is involved (NOTIFICATIONS.md §2, §6).
+    if (channel !== 'IN_APP') return toNotification(row);
+    const settled = await setStatus(tx, input.tenantId, notificationId, {
+      status: 'SENT',
+      attemptCount: 1,
+      recordAttempt: true,
+      sent: true,
+    });
+    await recordAttemptAudit(tx, settled, { outcome: 'SENT' });
+    return settled;
+  });
 
-  const row = inserted.rows[0];
-  if (row === undefined) {
+  if (created === undefined) {
     // Lost a concurrent race on the dedupe key.
     const existing =
       input.dedupeKey === undefined
@@ -296,11 +310,9 @@ export async function enqueueNotification(
     return { notification: existing, deduplicated: true };
   }
 
-  // NOTIFICATIONS.md §5: the send is durable async work. The queue seam is the
-  // Slice 1 abstraction, which still fails closed outside LOCAL and TEST while
-  // D-022 is open — so this enqueues where a durable queue exists and otherwise
-  // leaves the row for a worker to pick up.
-  if (deps.jobQueue !== undefined) {
+  // NOTIFICATIONS.md §5: an external send is durable async work, enqueued where a
+  // queue exists; otherwise the row waits for a worker to pick it up.
+  if (deps.jobQueue !== undefined && channel !== 'IN_APP') {
     await deps.jobQueue.enqueue({
       jobType: 'notification.send',
       payload: buildNotificationSendPayload(notificationId, input.disclosure),
@@ -309,7 +321,7 @@ export async function enqueueNotification(
     });
   }
 
-  return { notification: toNotification(row), deduplicated: false };
+  return { notification: created, deduplicated: false };
 }
 
 export interface SendAttemptResult {
@@ -319,10 +331,9 @@ export interface SendAttemptResult {
 }
 
 /**
- * EMAIL uses the versioned catalog (subject + text + html). SMS and IN_APP use
- * a text body only — either a caller-supplied renderer, or catalog text when
- * the observed reason/version key exists. Non-EMAIL must not fail closed on an
- * EMAIL-catalog miss when a text renderer is supplied.
+ * EMAIL uses the versioned catalog (subject + text + html). SMS uses a text
+ * body only — a caller-supplied renderer, or catalog text when the observed
+ * reason/version key exists. IN_APP carries no body: the client renders it.
  */
 function buildOutboundMessage(
   notification: Notification,
@@ -351,6 +362,10 @@ function buildOutboundMessage(
   if (renderBody !== undefined) {
     return { ...base, body: renderBody(notification) };
   }
+  // IN_APP text is rendered by the client from the reason, so no catalog entry backs it.
+  if (notification.channel === 'IN_APP') {
+    return { ...base, body: '' };
+  }
 
   // Shared observed keys may reuse catalog text without subject/html.
   const rendered = renderEmailTemplate(notification.reason, notification.templateVersion, {
@@ -374,9 +389,8 @@ export async function attemptSend(
     notificationId: string;
     disclosure: DisclosureRequest;
     /**
-     * Text body for SMS and IN_APP. Ignored for EMAIL (versioned catalog).
-     * Required when the Notification channel is not EMAIL so non-EMAIL sends
-     * do not throw on EMAIL-catalog misses (NOTIFICATIONS.md §7).
+     * Text body for SMS (and optionally IN_APP). Ignored for EMAIL (versioned catalog).
+     * An SMS without one falls back to catalog text and fails closed on a miss (§7).
      */
     renderBody?: (notification: Notification) => string;
   },
@@ -640,6 +654,84 @@ export async function findByDedupeKey(
   );
   const row = result.rows[0];
   return row === undefined ? undefined : toNotification(row);
+}
+
+/**
+ * Deliver IN_APP rows still `QUEUED`, which builds before IN_APP was settled at creation
+ * left behind with no job to send them. Each row settles once, with its attempt audit.
+ */
+export async function deliverQueuedInApp(pool: Pool, limit = 100): Promise<number> {
+  const queued = await pool.query<{ tenant_id: string; notification_id: string }>(
+    `SELECT tenant_id, notification_id FROM notifications
+     WHERE channel = 'IN_APP' AND delivery_status = 'QUEUED' AND cancelled_at IS NULL
+     ORDER BY created_at
+     LIMIT $1`,
+    [limit],
+  );
+  let delivered = 0;
+  for (const row of queued.rows) {
+    const settled = await withTransaction(pool, async (tx) => {
+      const updated = await tx.query<NotificationRow>(
+        `UPDATE notifications
+           SET delivery_status = 'SENT', attempt_count = attempt_count + 1,
+               last_attempt_at = now(), sent_at = now(), updated_at = now()
+         WHERE tenant_id = $1 AND notification_id = $2 AND delivery_status = 'QUEUED'
+         RETURNING ${NOTIFICATION_COLUMNS}`,
+        [row.tenant_id, row.notification_id],
+      );
+      const updatedRow = updated.rows[0];
+      if (updatedRow === undefined) return false;
+      await recordAttemptAudit(tx, toNotification(updatedRow), { outcome: 'SENT' });
+      return true;
+    });
+    if (settled) delivered += 1;
+  }
+  return delivered;
+}
+
+/**
+ * NOTIFICATIONS.md §5: a send whose job ran out of retries before any provider attempt
+ * (channel unavailable, template error, bad payload) still settles `UNDELIVERABLE`, with
+ * an audit, so it is not left `QUEUED`. A row already SENT or terminal is left alone.
+ */
+export async function settleUndeliverable(
+  pool: Pool,
+  input: { tenantId: string; notificationId: string; failureReason: string },
+): Promise<Notification | undefined> {
+  return withTransaction(pool, async (tx) => {
+    const current = await tx.query<NotificationRow>(
+      `SELECT ${NOTIFICATION_COLUMNS} FROM notifications
+       WHERE tenant_id = $1 AND notification_id = $2
+       FOR UPDATE`,
+      [input.tenantId, input.notificationId],
+    );
+    const row = current.rows[0];
+    if (row === undefined) return undefined;
+    if (row.delivery_status !== 'QUEUED' && row.delivery_status !== 'FAILED') return undefined;
+
+    const updated = await setStatus(tx, input.tenantId, input.notificationId, {
+      status: 'UNDELIVERABLE',
+    });
+    await appendAuditEvent(tx, {
+      eventType: 'NOTIFICATION_UNDELIVERABLE',
+      action: 'SETTLE_NOTIFICATION_UNDELIVERABLE',
+      targetType: 'Notification',
+      targetId: updated.notificationId,
+      aggregateType: 'Notification',
+      aggregateId: updated.notificationId,
+      tenantId: updated.tenantId,
+      actorType: 'SYSTEM',
+      actorId: 'notifications',
+      // §10: no body and no destination.
+      payload: {
+        channel: updated.channel,
+        reason: updated.reason,
+        attempt_count: updated.attemptCount,
+        failure_reason: input.failureReason.slice(0, 300),
+      },
+    });
+    return updated;
+  });
 }
 
 /** NOTIFICATIONS.md §5: exhausted delivery must be visible to operations. */

@@ -25,6 +25,14 @@ const AUTH_CONTEXT = {
 const XSS_SECRET = '<script>alert(1)</script>&"\'';
 
 describe('email-templates/v1 catalog', () => {
+  it('ships only templates a producer sends (C-15)', () => {
+    expect(EMAIL_TEMPLATE_KEYS.map((key) => key.reason)).toEqual([
+      'auth.magic_link',
+      'auth.email_otp',
+      'trusted_contact_alert',
+    ]);
+  });
+
   it('renders every shipped EMAIL template with stable subject, text, and html', () => {
     for (const key of EMAIL_TEMPLATE_KEYS) {
       const rendered = renderEmailTemplate(key.reason, key.templateVersion, AUTH_CONTEXT);
@@ -39,13 +47,13 @@ describe('email-templates/v1 catalog', () => {
   });
 
   it('fails closed on an unknown reason', () => {
-    expect(() => renderEmailTemplate('CHECKIN_COMPLETED', 'followup@1')).toThrow(
+    expect(() => renderEmailTemplate('CHECKIN_COMPLETED', 'alert@1')).toThrow(
       UnknownEmailTemplateError,
     );
   });
 
   it('fails closed on an unknown templateVersion', () => {
-    expect(() => renderEmailTemplate('followup_due', 'followup@2')).toThrow(
+    expect(() => renderEmailTemplate('trusted_contact_alert', 'alert@2')).toThrow(
       UnknownEmailTemplateError,
     );
   });
@@ -86,12 +94,7 @@ describe('email-templates/v1 catalog', () => {
 });
 
 describe('SAFETY_COPY.md — crisis-adjacent EMAIL templates', () => {
-  const crisisKeys = EMAIL_TEMPLATE_KEYS.filter(
-    (key) =>
-      key.reason === 'trusted_contact_alert' ||
-      key.reason === 'followup_due' ||
-      key.reason === 'service_request_update',
-  );
+  const crisisKeys = EMAIL_TEMPLATE_KEYS.filter((key) => key.reason === 'trusted_contact_alert');
 
   it('quotes only 911 and 988 as destinations', () => {
     for (const key of crisisKeys) {
@@ -117,7 +120,7 @@ describe('SAFETY_COPY.md — crisis-adjacent EMAIL templates', () => {
   });
 
   it('records rendered subject, text, and html on RecordingChannel', async () => {
-    const rendered = renderEmailTemplate('followup_due', 'followup@1');
+    const rendered = renderEmailTemplate('trusted_contact_alert', 'alert@1');
     const channel = new RecordingChannel('EMAIL', 'fake');
     await channel.send({
       channel: 'EMAIL',

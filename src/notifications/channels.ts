@@ -16,8 +16,8 @@
  */
 
 import type { CommunicationMode, SuasConfig } from '../config/index.js';
-import { createResendEmailChannel } from './resend-email.js';
-import { createSesEmailChannel } from './ses-email.js';
+import { createResendEmailChannel, type ResendEmailLogRecord } from './resend-email.js';
+import { createSesEmailChannel, type SesEmailLogRecord } from './ses-email.js';
 
 export const NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'IN_APP'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
@@ -131,7 +131,7 @@ export class RecordingChannel implements NotificationChannelPort {
     if (this.mode === 'disabled') {
       return Promise.reject(new ChannelUnavailableError(this.channel));
     }
-    if (this.mode === 'fake' || this.mode === 'internal') {
+    if (this.mode === 'fake') {
       this.messages.push({ ...message, sentAt: new Date() });
     }
     return Promise.resolve({
@@ -152,6 +152,25 @@ export class RecordingChannel implements NotificationChannelPort {
   clear(): void {
     this.messages.length = 0;
   }
+}
+
+/**
+ * IN_APP delivery. The Notification row is the inbox entry and the client renders its
+ * text, so acknowledging is the whole send and nothing is retained in memory.
+ */
+export class InternalChannel implements NotificationChannelPort {
+  readonly channel = 'IN_APP' as const;
+  readonly mode = 'internal' as const;
+  readonly implementation = 'internal';
+
+  send(): Promise<SendAcknowledgement> {
+    return Promise.resolve({ accepted: true });
+  }
+}
+
+/** Content-free email outcome log (implementation, accepted, outcome); NOTIFICATIONS.md §5, §10. */
+function logEmailSend(record: ResendEmailLogRecord | SesEmailLogRecord): void {
+  console.log(JSON.stringify({ msg: 'email_send', ...record }));
 }
 
 /** A channel that always fails, for exercising retry and exhaustion paths. */
@@ -192,6 +211,7 @@ export function createChannelRegistry(
       createResendEmailChannel({
         apiKey: config.notifications.resendApiKey,
         fromAddress: config.notifications.emailFrom,
+        logger: logEmailSend,
       }),
     );
   } else if (config.notifications.email === 'ses') {
@@ -200,6 +220,7 @@ export function createChannelRegistry(
       createSesEmailChannel({
         region: config.aws.region,
         fromAddress: config.notifications.emailFrom,
+        logger: logEmailSend,
       }),
     );
   } else if (config.notifications.email !== 'disabled') {
@@ -208,7 +229,7 @@ export function createChannelRegistry(
   if (config.notifications.sms !== 'disabled') {
     registry.set('SMS', new RecordingChannel('SMS', config.notifications.sms));
   }
-  registry.set('IN_APP', new RecordingChannel('IN_APP', 'internal'));
+  registry.set('IN_APP', new InternalChannel());
 
   return registry;
 }

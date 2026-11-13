@@ -449,9 +449,9 @@ describe('RESILIENCE.md §17.1 — notification provider unavailable', () => {
       tenantId,
       recipientUserId: userId,
       destination: syntheticEmail('drill-recipient'),
-      reason: 'followup_due',
+      reason: 'trusted_contact_alert',
       channel: 'EMAIL',
-      templateVersion: 'followup@1',
+      templateVersion: 'alert@1',
       disclosure,
     });
 
@@ -503,9 +503,9 @@ describe('RESILIENCE.md §17.3 — duplicate provider webhook', () => {
       tenantId,
       recipientUserId: userId,
       destination: syntheticEmail('drill-webhook'),
-      reason: 'followup_due',
+      reason: 'trusted_contact_alert',
       channel: 'EMAIL',
-      templateVersion: 'followup@1',
+      templateVersion: 'alert@1',
       disclosure,
     });
 

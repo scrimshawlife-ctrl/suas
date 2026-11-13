@@ -1,9 +1,9 @@
 /**
- * Durable Postgres outbox job queue (D-022).
+ * Durable Postgres outbox job queue: a local choice pending D-022 (DECISION_PENDING).
  *
  * Spec citations:
  * - ARCHITECTURE.md §3 invariant 5, §8, §10, §13, §16
- * - Decision packet D-022 (Postgres outbox / SKIP LOCKED)
+ * - Decision packet D-022 (Postgres outbox / SKIP LOCKED; DECISION_PENDING)
  *
  * Enqueue writes a row that survives process restart. Workers claim due rows
  * with `FOR UPDATE SKIP LOCKED` via {@link claimDueJobs}.

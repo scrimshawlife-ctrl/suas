@@ -7,8 +7,8 @@
  *   emergency dispatch, or provider eligibility), §8 (generating facts),
  *   §10 (minimum necessary; no bodies in ordinary logs)
  * - SUAS-specs AUTH.md §2–§3 (MAGIC_LINK and EMAIL_OTP where email is configured)
- * - SUAS-specs SAFETY_COPY.md §0, §2.3, §4, §5 (verbatim crisis wording;
- *   destinations are only 911 and 988; REQUESTED ≠ ACCEPTED ≠ DISPATCHED ≠
+ * - SUAS-specs SAFETY_COPY.md §0, §2.3, §4, §5 (verbatim crisis wording; crisis
+ *   destinations come only from SAFETY_COPY; REQUESTED ≠ ACCEPTED ≠ DISPATCHED ≠
  *   ARRIVED ≠ RESOLVED)
  *
  * Keys are OBSERVED `reason` + `templateVersion` pairs already passed to
@@ -23,9 +23,6 @@ export const EMAIL_TEMPLATE_KEYS = [
   { reason: 'auth.magic_link', templateVersion: 'auth.magic_link' },
   { reason: 'auth.email_otp', templateVersion: 'auth.email_otp' },
   { reason: 'trusted_contact_alert', templateVersion: 'alert@1' },
-  { reason: 'followup_due', templateVersion: 'followup@1' },
-  { reason: 'qrf.responder_notified', templateVersion: 'test@1' },
-  { reason: 'service_request_update', templateVersion: 'update@1' },
 ] as const;
 
 export type EmailTemplateReason = (typeof EMAIL_TEMPLATE_KEYS)[number]['reason'];
@@ -187,64 +184,6 @@ function renderTrustedContactAlert(): RenderedEmail {
   };
 }
 
-function renderFollowUpDue(): RenderedEmail {
-  const subject = 'SUAS Follow-Up is due';
-  const text =
-    'A Follow-Up on a Support Case is due. This notice does not mean a later ' +
-    `support state has occurred.\n\n${CRISIS_FOOTER}`;
-  return {
-    catalogVersion: EMAIL_TEMPLATE_CATALOG_VERSION,
-    reason: 'followup_due',
-    templateVersion: 'followup@1',
-    subject,
-    text,
-    html: htmlDocument(
-      [
-        'A Follow-Up on a Support Case is due. This notice does not mean a later ' +
-          'support state has occurred.',
-      ],
-      CRISIS_FOOTER,
-    ),
-  };
-}
-
-function renderResponderNotified(): RenderedEmail {
-  const subject = 'SUAS responder notice';
-  const text =
-    'SUAS recorded that a responder was notified about a Service Request. ' +
-    'This notice records that the notification was created. It does not mean ' +
-    'the request was accepted, dispatched, or resolved.';
-  return {
-    catalogVersion: EMAIL_TEMPLATE_CATALOG_VERSION,
-    reason: 'qrf.responder_notified',
-    templateVersion: 'test@1',
-    subject,
-    text,
-    html: htmlDocument([text], undefined),
-  };
-}
-
-function renderServiceRequestUpdate(): RenderedEmail {
-  const subject = 'SUAS Service Request update';
-  const text =
-    'A Service Request you can see was updated. This notice does not mean the ' +
-    `request was accepted, dispatched, or resolved.\n\n${CRISIS_FOOTER}`;
-  return {
-    catalogVersion: EMAIL_TEMPLATE_CATALOG_VERSION,
-    reason: 'service_request_update',
-    templateVersion: 'update@1',
-    subject,
-    text,
-    html: htmlDocument(
-      [
-        'A Service Request you can see was updated. This notice does not mean the ' +
-          'request was accepted, dispatched, or resolved.',
-      ],
-      CRISIS_FOOTER,
-    ),
-  };
-}
-
 /**
  * Render subject, text, and HTML for an OBSERVED reason + templateVersion.
  * EMAIL templates always return both text and HTML.
@@ -265,12 +204,6 @@ export function renderEmailTemplate(
       return renderAuthEmailOtp(context);
     case 'trusted_contact_alert':
       return renderTrustedContactAlert();
-    case 'followup_due':
-      return renderFollowUpDue();
-    case 'qrf.responder_notified':
-      return renderResponderNotified();
-    case 'service_request_update':
-      return renderServiceRequestUpdate();
     default:
       throw new UnknownEmailTemplateError(reason, templateVersion);
   }
