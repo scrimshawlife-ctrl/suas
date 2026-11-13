@@ -80,6 +80,7 @@ test('every routed page: no serious or critical axe violation and no sideways sc
     '/trusted-contacts',
     '/notifications',
     '/invitations',
+    '/settings',
     '/chat',
   ]) {
     await vet.goto(path);
@@ -142,7 +143,7 @@ test('every routed page: no serious or critical axe violation and no sideways sc
   await stepUp.goto('/admin/mfa');
   await check(stepUp, '/admin/mfa');
 
-  expect(checked).toHaveLength(26);
+  expect(checked).toHaveLength(27);
   for (const [where, problems] of Object.entries(found)) {
     expect.soft(problems, where).toEqual([]);
   }
