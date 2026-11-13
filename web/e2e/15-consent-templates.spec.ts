@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { API_URL } from './config';
 import { newPerson, shoot, signInWithCode, uniqueEmail, withDb } from './helpers';
 

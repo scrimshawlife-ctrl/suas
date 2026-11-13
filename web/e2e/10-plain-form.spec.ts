@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { newVerifiedVeteran, shoot, uniqueEmail } from './helpers';
 
 test('a Veteran sends a request through the plain form shown under the Intake Assistant', async ({

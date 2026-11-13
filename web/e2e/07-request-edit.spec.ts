@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { newPerson, newVerifiedVeteran, shoot, signUp, uniqueEmail } from './helpers';
 
 test('a Veteran edits a ride request before anyone accepts and the helper sees the edited text', async ({

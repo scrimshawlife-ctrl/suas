@@ -64,15 +64,37 @@ const pointer = (op: Operation, status: string): string | undefined => {
   return `#/paths/${path}/${op.method.toLowerCase()}/responses/${status}/content/application~1json/schema`;
 };
 
+const BODY_READ_MS = 10_000;
+
 /**
- * Checks one response. Returns undefined for anything outside the contract (assets, dev
- * routes), else the operation, the `{command}` path value if any, and a problem if it breaks.
+ * The response body, or a rejection after BODY_READ_MS: a request the page navigated away from
+ * can leave `response.text()` pending until its context closes, which would hang the teardown.
+ */
+async function readBody(response: Response): Promise<string> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error('body read timed out'));
+    }, BODY_READ_MS);
+  });
+  try {
+    return await Promise.race([response.text(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Checks one response. Returns undefined for anything outside the contract (assets, dev and
+ * mocked routes), else the operation, the `{command}` path value if any, and any problem.
  */
 export async function checkResponse(
   response: Response,
 ): Promise<{ operationId: string; command?: string; problem?: string } | undefined> {
   const { pathname } = new URL(response.url());
   if (!pathname.startsWith('/api/v0/') || pathname.startsWith('/api/v0/dev/')) return undefined;
+  // A `page.route` fulfilment has no server address: it is a mock, not the real backend.
+  if ((await response.serverAddr()) === null) return undefined;
   const method = response.request().method();
   const label = `${method} ${pathname} ${String(response.status())}`;
   const op = operations.find((o) => o.method === method && o.pattern.test(pathname));
@@ -90,7 +112,7 @@ export async function checkResponse(
 
   let text: string;
   try {
-    text = await response.text();
+    text = await readBody(response);
   } catch {
     // The body is gone when the page navigated or closed first; the status was still checked.
     return result;

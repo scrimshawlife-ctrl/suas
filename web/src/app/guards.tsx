@@ -59,6 +59,8 @@ export function RequireVerified() {
   if (me.isPending) return <LoadingScreen />;
   if (me.isError) return <LoadFailedScreen onRetry={() => void me.refetch()} />;
   if (me.data.id_verification.status !== 'VERIFIED') {
+    // Right after the ID check, `me` is being re-read; wait for it instead of bouncing back.
+    if (me.isFetching) return <LoadingScreen />;
     return <Navigate to={paths.verify} replace state={{ from: returnPath(location) }} />;
   }
   return <Outlet />;

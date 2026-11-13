@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { API_URL } from './config';
 import { signInWithCode, signUp, uniqueEmail } from './helpers';
 

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { expectCrisisScreen, passIdCheck, requestHelp, signUp, uniqueEmail } from './helpers';
 
 /** WCAG 1.4.10 Reflow: content fits 320 CSS px without scrolling sideways (R9.7 planned check). */
