@@ -325,7 +325,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -371,7 +371,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -414,7 +414,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -470,7 +470,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -526,7 +526,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -585,7 +585,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -713,7 +713,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -756,7 +756,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1095,7 +1095,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1149,7 +1149,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1263,7 +1263,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has not passed the ID scan + selfie check",
+            "description": "FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1371,7 +1371,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1429,7 +1429,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1482,7 +1482,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check",
+            "description": "VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -1629,7 +1629,7 @@
       "post": {
         "tags": ["cases"],
         "summary": "Execute a released service-request command",
-        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4). RELEASE (DISPATCH.md §14.7; R8.5, D-059, D-061, released in 0.9.0) is the accepter's command: it needs a reason (400 VALIDATION_FAILED without one) and moves an ACCEPTED request back to SUBMITTED. The holder and accept time are cleared, the chat thread is closed, the request returns to the open list, and the requester gets an in-app notice. The same helper may accept it again; the next accept opens a new chat thread.",
+        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4). RELEASE (DISPATCH.md §14.7; R8.5, D-059, D-061, released in 0.9.0) is the accepter's command: it needs a reason (400 VALIDATION_FAILED without one) and moves an ACCEPTED request back to SUBMITTED. The holder and accept time are cleared, the chat thread is closed, the request returns to the open list, and the requester gets an in-app notice. The same helper may accept it again; the next accept opens a new chat thread.",
         "operationId": "executeServiceRequestCommand",
         "security": [
           {
@@ -1707,7 +1707,7 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
-            "description": "FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits before passing the ID scan + selfie check",
+            "description": "FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits without a VERIFIED VA Veteran Confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -2862,7 +2862,7 @@
       "post": {
         "tags": ["intake"],
         "summary": "Plain request form: create a Service Request",
-        "description": "Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
+        "description": "Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
         "operationId": "createServiceRequestForm",
         "security": [
           {
@@ -3032,60 +3032,49 @@
         }
       }
     },
-    "/api/v0/veterans/me/id-verification": {
-      "get": {
-        "tags": ["veterans"],
-        "summary": "ID scan + selfie status; a pending check is resolved with the verification port",
-        "operationId": "getVeteransMeIdVerification",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ID scan and selfie status",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdVerification"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/api/v0/veterans/me/id-verification/commands/start": {
+    "/api/v0/veterans/me/verification/va/confirm": {
       "post": {
         "tags": ["veterans"],
-        "summary": "Start an ID scan + selfie check (idempotent: reuses a pending check, leaves a verified standing alone)",
-        "operationId": "postVeteransMeIdVerificationStart",
+        "summary": "Confirm Veteran status with VA (one attempt; suas-specs #72 R9.1)",
+        "operationId": "postVeteransMeVerificationVaConfirm",
+        "description": "Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values; the attempt row keeps the result, the notice version, a keyed request fingerprint and, when VA answered, a keyed identity hash (HMAC under SUAS_FINGERPRINT_KEY, with its key id). Any signed-in person may call it. The body must carry noticeVersion va-notice-v1, the pre-call notice the person saw (400 VA_NOTICE_VERSION_REQUIRED otherwise). The typed first and last name must match the account display name (\"First Last\" or \"First L.\", ignoring case, accents and punctuation); otherwise 409 VA_NAME_MISMATCH with no VA call and no attempt counted. A VA VERIFIED standing is returned with no VA call; a REVOKED standing is refused (403). At most 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, or an identity conflict) per person in the last 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After); UNAVAILABLE results (outages and VA 400s) never count. A backstop cap of 20 VA calls per person in the last 24 hours counts the same rows (same 429). The same Idempotency-Key within 24 hours replays an answer VA gave; after an UNAVAILABLE result, or after a fingerprint key rotation, it is a new attempt. No database lock is held during the VA call; a second attempt while one is in flight gets 409 IDEMPOTENCY_CONFLICT. NOT_CONFIRMED is not a finding that the person never served. UNAVAILABLE means VA did not answer: failure_class REQUEST_INVALID (VA refused the request, e.g. HTTP 400) means the person may correct the details and retry; other classes mean try again later. Neither UNAVAILABLE nor NOT_CONFIRMED blocks a request: the person may self-attest instead.",
         "security": [
           {
             "bearerAuth": []
           }
         ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaConfirmationRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "A check is already pending",
+            "description": "The settled result of this attempt, an identical replay, or the existing VERIFIED standing",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdVerification"
+                  "$ref": "#/components/schemas/VaConfirmationResult"
                 }
               }
             }
           },
-          "201": {
-            "description": "Check started",
+          "400": {
+            "description": "VALIDATION_FAILED: a field does not match the VA pattern, an unknown field was sent, or the Idempotency-Key header is missing; the message names fields only, never values. VA_NOTICE_VERSION_REQUIRED: noticeVersion is missing or not va-notice-v1.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdVerification"
+                  "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             }
@@ -3093,8 +3082,38 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "description": "VERIFICATION_REVOKED: SUAS revoked this person's confirmation; no new attempt is taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "VA_NAME_MISMATCH: the typed name does not match the account display name (no VA call, not counted). VA_IDENTITY_ALREADY_VERIFIED: these details cannot be used to verify this account (counted; the message never names another account). IDEMPOTENCY_CONFLICT: the key was used with a different body, or another attempt is still in flight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "VERIFICATION_ATTEMPT_LIMIT: 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, an attempt in flight or an identity conflict) in the last 24 hours, or the backstop cap of 20 VA calls, which counts the same rows; outages and VA 400s (UNAVAILABLE) count toward neither. Retry-After gives the seconds until the person is under the 5 tries again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "503": {
-            "description": "ID_VERIFICATION_UNAVAILABLE: no verification provider is configured or it is down",
+            "description": "ID_VERIFICATION_UNAVAILABLE: VA confirmation is not offered in this environment (SUAS_VA_CONFIRMATION_MODE=disabled). Not an outage; self-attestation stays available.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3106,11 +3125,79 @@
         }
       }
     },
+    "/api/v0/veterans/me/verification/commands/self-attest": {
+      "post": {
+        "tags": ["veterans"],
+        "summary": "Self-attest Veteran status (D-016 fallback; suas-specs #72 R9.1)",
+        "operationId": "postVeteransMeVerificationSelfAttest",
+        "description": "Writes a SELF_ATTESTATION VERIFIED row with source SUAS, which opens the request gate. No VA call, no attempt limit, and available whatever the VA confirmation mode. A VERIFIED standing of any method is returned with no new row; a REVOKED standing is refused (403). The body is empty or {}.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The standing after self-attesting, or the existing VERIFIED standing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdVerification"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: a field was sent, or the Idempotency-Key header is missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "VERIFICATION_REVOKED: SUAS revoked this person's confirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v0/intake/status": {
       "get": {
         "tags": ["intake"],
         "summary": "Whether the Intake Assistant is available",
-        "description": "Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "getIntakeStatus",
         "security": [
           {
@@ -3141,7 +3228,7 @@
       "post": {
         "tags": ["intake"],
         "summary": "Send the first intake message",
-        "description": "Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "createIntakeDraft",
         "security": [
           {
@@ -3195,7 +3282,7 @@
       "get": {
         "tags": ["intake"],
         "summary": "Read one of your drafts",
-        "description": "Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "getIntakeDraft",
         "security": [
           {
@@ -3232,7 +3319,7 @@
       "patch": {
         "tags": ["intake"],
         "summary": "Edit a draft",
-        "description": "The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "updateIntakeDraft",
         "security": [
           {
@@ -3287,7 +3374,7 @@
       "post": {
         "tags": ["intake"],
         "summary": "Send a follow-up intake message",
-        "description": "Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).",
+        "description": "Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).",
         "operationId": "addIntakeMessage",
         "security": [
           {
@@ -3352,7 +3439,7 @@
       "post": {
         "tags": ["intake"],
         "summary": "Submit a draft as a Service Request",
-        "description": "The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
+        "description": "The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).",
         "operationId": "submitIntakeDraft",
         "security": [
           {
@@ -3961,7 +4048,7 @@
       "put": {
         "tags": ["veterans"],
         "summary": "Set the display name other people see",
-        "description": "Signed-in only; no ID scan needed. Guidance for the form: \"First name and last initial, like Marcus T.\" Only length and emptiness are validated.",
+        "description": "Signed-in only; no Veteran Confirmation needed. Guidance for the form: \"First name and last initial, like Marcus T.\" Only length and emptiness are validated.",
         "operationId": "putVeteransMeProfile",
         "security": [
           {
@@ -3995,6 +4082,907 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SetProfileRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/veterans/me/verification/licence": {
+      "get": {
+        "tags": ["veterans"],
+        "summary": "Whether the licence review path is offered, and the newest review (suas-specs R10.1, proposal)",
+        "operationId": "getVeteransMeVerificationLicence",
+        "description": "Any signed-in person. The path is offered only after VA answered NOT_CONFIRMED (never after UNAVAILABLE, so never after a VA 400), beside self-attestation, never instead of it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offer and newest review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenceVerification"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": ["veterans"],
+        "summary": "Send licence photos and a selfie for review (suas-specs R10.1, proposal)",
+        "operationId": "postVeteransMeVerificationLicence",
+        "description": "The server checks, in order: signed in (before the body is read), the reader is open (503), L1.4 eligibility (403), notice_version (400), no open review (409), the limit (429), then the image rules (400). It stores the three re-encoded images, records a READING review bound to the person's newest NOT_CONFIRMED VA attempt and queues the read. No Idempotency-Key: a second send while one is open gets 409 LICENCE_REVIEW_OPEN. Only reader-answered submissions count toward the limit.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceSubmission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Stored and queued: the review in its current state (READING, or already read in LOCAL and TEST)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenceReviewView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "LICENCE_NOTICE_VERSION_REQUIRED: notice_version is missing or not licence-notice-v1. VALIDATION_FAILED: an image is not a JPEG, is over 2000 px on the long side or 1,000,000 bytes, or a field is missing or unknown; the message names the fields only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "description": "The whole body is over 4,500,000 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "LICENCE_SUBMISSION_LIMIT: 3 reader-answered submissions in the last 24 hours (or the absolute cap of 10); Retry-After says when. Separate from the VA VERIFICATION_ATTEMPT_LIMIT.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "LICENCE_REVIEW_NOT_OFFERED: the newest VA-answered attempt is not NOT_CONFIRMED with PERSON_NOT_FOUND, NOT_TITLE_38 or MORE_RESEARCH_REQUIRED, the person is at the VA try limit, revoked, or already confirmed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_OPEN: a review is already open.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/veterans/me/verification/licence/{review_id}/commands/dispute": {
+      "post": {
+        "tags": ["veterans"],
+        "summary": "Dispute an ALREADY_USED decline with new photos (suas-specs R10.1 L7.3, proposal)",
+        "operationId": "postVeteransMeVerificationLicenceDispute",
+        "description": "Opens a new review marked as a dispute of this one, bound to the same VA attempt; the earlier images were deleted at the decision. It skips the L1.4 offer but follows the notice, limits and read. The queue routes it away from the admins who approved or confirmed the conflicting review.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceSubmission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Stored and queued: the review in its current state (READING, or already read in LOCAL and TEST)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LicenceReviewView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "LICENCE_NOTICE_VERSION_REQUIRED: notice_version is missing or not licence-notice-v1. VALIDATION_FAILED: an image is not a JPEG, is over 2000 px on the long side or 1,000,000 bytes, or a field is missing or unknown; the message names the fields only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "description": "The whole body is over 4,500,000 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "LICENCE_SUBMISSION_LIMIT: 3 reader-answered submissions in the last 24 hours (or the absolute cap of 10); Retry-After says when. Separate from the VA VERIFICATION_ATTEMPT_LIMIT.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "VERIFICATION_REVOKED: the person's standing is REVOKED.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: no such review of this person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_NOT_DISPUTABLE: the review is not an ALREADY_USED decline. LICENCE_REVIEW_OPEN: a review is already open.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "Licence reviews waiting for a decision, oldest first (suas-specs R10.1, proposal)",
+        "operationId": "getAdminLicenceReviews",
+        "description": "AWAITING_REVIEW and AWAITING_CONFIRMATION only, without the admin's own submissions, reviews they recused from, or disputes of an approval they made or confirmed. Age, state and a dispute marker only, never names. Requires the SUAS Admin role and MFA elevation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 25
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReviewQueue"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "FORBIDDEN or MFA_REQUIRED.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "One licence review's page (suas-specs R10.1, proposal)",
+        "operationId": "getAdminLicenceReview",
+        "description": "Requires the SUAS Admin role and MFA elevation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The review page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/images/{side}": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "One stored licence image or the selfie, inline (suas-specs R10.1, proposal)",
+        "operationId": "getAdminLicenceReviewImage",
+        "description": "Served inline with Cache-Control: no-store, private; there is no download. Requires the SUAS Admin role and MFA elevation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "side",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["front", "back", "selfie"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The re-encoded JPEG",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store, private"]
+                }
+              }
+            },
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: no such review, or its images were deleted (decided) or are gone from storage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "ID_VERIFICATION_UNAVAILABLE: object storage is disabled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/approve": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "First approval of a licence review (suas-specs R10.1 L5.4, proposal)",
+        "operationId": "postAdminLicenceReviewApprove",
+        "description": "AWAITING_REVIEW to AWAITING_CONFIRMATION, recording the admin as approved_by. No VERIFIED row yet: a second, different admin must confirm. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review page, read fresh (also on a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_REVIEW. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/confirm": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Second admin's confirmation (suas-specs R10.1 L5.5, proposal)",
+        "operationId": "postAdminLicenceReviewConfirm",
+        "description": "AWAITING_CONFIRMATION to APPROVED by an admin other than approved_by: writes a MANUAL_REVIEW VERIFIED row (source SUAS) that opens the request gate, and deletes the images and the reading. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review page, read fresh (also on a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. SECOND_REVIEWER_REQUIRED: the admin who approved cannot confirm.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_CONFIRMATION. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/decline": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Decline a licence review (suas-specs R10.1 L5.7, proposal)",
+        "operationId": "postAdminLicenceReviewDecline",
+        "description": "From AWAITING_REVIEW or AWAITING_CONFIRMATION, by one admin. Deletes the images and the reading and clears the fingerprint. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceDecline"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review page, read fresh (also on a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: still READING. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/recuse": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Recuse from a licence review (suas-specs R10.1 L5.6, proposal)",
+        "operationId": "postAdminLicenceReviewRecuse",
+        "description": "Hides the review from this admin and refuses their commands on it. Repeating it changes nothing. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceRecuse"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Recused"
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No state conflict applies. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/revoke": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Revoke a licence approval (suas-specs R10.1 L7.1, proposal)",
+        "operationId": "postAdminLicenceReviewRevoke",
+        "description": "APPROVED to REVOKED, freeing the fingerprint. FRAUD writes a REVOKED row, which outranks every method, blocks self-attestation and releases the VA identity. REVIEW_ERROR writes a newer MANUAL_REVIEW NOT_CONFIRMED row, so the approval stops opening the gate without barring the person. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceRevoke"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review page, read fresh (also on a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_DECIDED: already revoked. LICENCE_REVIEW_NOT_READY: not APPROVED. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
               }
             }
           }
@@ -4637,19 +5625,150 @@
         }
       },
       "IdVerification": {
+        "description": "The person's Veteran confirmation standing (suas-specs #72 R9.1): REVOKED when SUAS revoked it; else a VERIFIED row of VA_VETERAN_STATUS, MANUAL_REVIEW or SELF_ATTESTATION (in that order), which opens the request gate; else the newest settled VA attempt; else NOT_STARTED with method VA_VETERAN_STATUS.",
         "type": "object",
-        "required": ["method", "status", "verified_at"],
+        "required": ["method", "status", "not_confirmed_reason", "verified_at", "failure_class"],
         "properties": {
           "method": {
             "type": "string",
-            "enum": ["ID_SCAN_SELFIE"]
+            "enum": ["VA_VETERAN_STATUS", "MANUAL_REVIEW", "SELF_ATTESTATION"]
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "VERIFIED",
+              "NOT_CONFIRMED",
+              "PENDING",
+              "UNAVAILABLE",
+              "REVOKED"
+            ]
+          },
+          "not_confirmed_reason": {
+            "type": ["string", "null"],
+            "enum": ["PERSON_NOT_FOUND", "NOT_TITLE_38", "MORE_RESEARCH_REQUIRED", "ERROR", null],
+            "description": "VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise."
           },
           "verified_at": {
             "type": ["string", "null"],
             "format": "date-time"
+          },
+          "failure_class": {
+            "type": ["string", "null"],
+            "enum": [
+              "CONFIGURATION_INVALID",
+              "AUTHENTICATION_REJECTED",
+              "REQUEST_INVALID",
+              "PROVIDER_RATE_LIMITED",
+              "PROVIDER_UNAVAILABLE",
+              "PROVIDER_RESPONSE_INVALID",
+              "PROVIDER_REASON_UNKNOWN",
+              "TIMEOUT",
+              "NETWORK_ERROR",
+              null
+            ],
+            "description": "Why VA did not answer (D035 §11), with UNAVAILABLE; null when VA answered. REQUEST_INVALID means the person may correct the details and retry."
+          }
+        }
+      },
+      "VaConfirmationRequest": {
+        "description": "The VA_CONFIRMATION_V1_REQUIRED_ONLY projection: the eight required VA fields, with country fixed to USA. No SSN. Plus noticeVersion, the pre-call notice the person saw. Unknown fields are refused. Patterns are VA's; each field is at most 256 characters.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "firstName",
+          "lastName",
+          "birthDate",
+          "streetAddressLine1",
+          "city",
+          "state",
+          "zipCode",
+          "noticeVersion"
+        ],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z]+([-'/\\\\\\s][A-Za-z]+){0,9}$"
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z]+([-'/\\\\\\s][A-Za-z]+){0,9}$"
+          },
+          "birthDate": {
+            "type": "string",
+            "format": "date",
+            "description": "YYYY-MM-DD, a real date before today"
+          },
+          "streetAddressLine1": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[a-zA-Z0-9\\s,'#.\\-/\\\\]*$"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[a-zA-Z0-9\\s,'.\\-/\\\\]+$"
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[a-zA-Z]+(?:[\\s-][a-zA-Z]+){0,9}$"
+          },
+          "country": {
+            "type": "string",
+            "enum": ["USA"],
+            "description": "Optional; always USA"
+          },
+          "zipCode": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9 -]{1,16}$"
+          },
+          "noticeVersion": {
+            "type": "string",
+            "enum": ["va-notice-v1"],
+            "description": "The pre-call notice version (VA_NOTICE_V1). It is stored on the attempt, not sent to VA."
+          }
+        }
+      },
+      "VaConfirmationResult": {
+        "type": "object",
+        "required": ["status", "not_confirmed_reason", "verified_at", "failure_class"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["VERIFIED", "NOT_CONFIRMED", "UNAVAILABLE"]
+          },
+          "not_confirmed_reason": {
+            "type": ["string", "null"],
+            "enum": ["PERSON_NOT_FOUND", "NOT_TITLE_38", "MORE_RESEARCH_REQUIRED", "ERROR", null],
+            "description": "VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise."
+          },
+          "verified_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "failure_class": {
+            "type": ["string", "null"],
+            "enum": [
+              "CONFIGURATION_INVALID",
+              "AUTHENTICATION_REJECTED",
+              "REQUEST_INVALID",
+              "PROVIDER_RATE_LIMITED",
+              "PROVIDER_UNAVAILABLE",
+              "PROVIDER_RESPONSE_INVALID",
+              "PROVIDER_REASON_UNKNOWN",
+              "TIMEOUT",
+              "NETWORK_ERROR",
+              null
+            ],
+            "description": "Why VA did not answer (D035 §11), with UNAVAILABLE; null when VA answered. REQUEST_INVALID means the person may correct the details and retry."
           }
         }
       },
@@ -6803,6 +7922,611 @@
             }
           }
         ]
+      },
+      "LicenceReviewStatus": {
+        "description": "suas-specs R10.1 (proposal). Open states are READING, AWAITING_REVIEW and AWAITING_CONFIRMATION; a person has at most one open review.",
+        "type": "string",
+        "enum": [
+          "READING",
+          "UNREADABLE",
+          "AWAITING_REVIEW",
+          "AWAITING_CONFIRMATION",
+          "APPROVED",
+          "DECLINED",
+          "REVOKED"
+        ]
+      },
+      "LicenceDeclineReason": {
+        "type": "string",
+        "enum": [
+          "NO_VETERAN_DESIGNATION",
+          "UNREADABLE",
+          "EXPIRED",
+          "IDENTITY_MISMATCH",
+          "SELFIE_MISMATCH",
+          "ALREADY_USED",
+          "OTHER"
+        ]
+      },
+      "LicenceFailureClass": {
+        "description": "Why a review settled UNREADABLE. The reader was down (try later, not counted): CONFIGURATION_INVALID, AUTHENTICATION_REJECTED, REQUEST_INVALID, PROVIDER_UNAVAILABLE, PROVIDER_RESPONSE_INVALID, TIMEOUT, NETWORK_ERROR. Send again (not counted): PHOTOS_GONE, PHOTOS_EXPIRED. NOT_SYNTHETIC (STAGING: no synthetic marker, nothing was sent; not counted). NOT_A_LICENCE (the reader answered; counted).",
+        "type": "string",
+        "enum": [
+          "CONFIGURATION_INVALID",
+          "AUTHENTICATION_REJECTED",
+          "REQUEST_INVALID",
+          "PROVIDER_UNAVAILABLE",
+          "PROVIDER_RESPONSE_INVALID",
+          "TIMEOUT",
+          "NETWORK_ERROR",
+          "NOT_A_LICENCE",
+          "NOT_SYNTHETIC",
+          "PHOTOS_GONE",
+          "PHOTOS_EXPIRED"
+        ]
+      },
+      "LicenceReviewView": {
+        "description": "A licence review as the Veteran sees it: states, codes and times only, never a licence field.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "review_id",
+          "status",
+          "decline_reason",
+          "failure_class",
+          "disputable",
+          "dispute_of_review_id",
+          "submitted_at",
+          "decided_at"
+        ],
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LicenceReviewStatus"
+          },
+          "decline_reason": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceDeclineReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure_class": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceFailureClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "disputable": {
+            "type": "boolean",
+            "description": "True for an ALREADY_USED decline while the licence path is open and the person is not revoked (L7.3)."
+          },
+          "dispute_of_review_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decided_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "LicenceVerification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["offered", "notice_version", "review"],
+        "properties": {
+          "offered": {
+            "type": "boolean",
+            "description": "False when the reader is disabled or its breaker is open, the newest VA-answered attempt is not NOT_CONFIRMED (PERSON_NOT_FOUND, NOT_TITLE_38, MORE_RESEARCH_REQUIRED), the person is at the VA try limit, the standing is REVOKED, or the request gate is already open. An open review does not change it."
+          },
+          "notice_version": {
+            "type": "string",
+            "enum": ["licence-notice-v1"]
+          },
+          "review": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceReviewView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The person's newest review, or null."
+          }
+        }
+      },
+      "LicenceImage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["content_type", "data_base64"],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": ["image/jpeg"]
+          },
+          "data_base64": {
+            "type": "string",
+            "description": "A JPEG of at most 2000 px on the long side and 1,000,000 bytes, base64. The server re-encodes it, dropping EXIF, XMP, ICC and comments."
+          }
+        }
+      },
+      "LicenceSubmission": {
+        "description": "Front and back of the licence and one live selfie (camera only). The selfie is never sent to the reader.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["notice_version", "front", "back", "selfie"],
+        "properties": {
+          "notice_version": {
+            "type": "string",
+            "enum": ["licence-notice-v1"]
+          },
+          "front": {
+            "$ref": "#/components/schemas/LicenceImage"
+          },
+          "back": {
+            "$ref": "#/components/schemas/LicenceImage"
+          },
+          "selfie": {
+            "$ref": "#/components/schemas/LicenceImage"
+          }
+        }
+      },
+      "LicenceIdentityMatch": {
+        "description": "Whether the licence's first name, last name and birth date match the details given to VA (same canonical form and key). Never the values.",
+        "type": "string",
+        "enum": ["YES", "NO", "UNKNOWN"]
+      },
+      "LicenceRevokeReason": {
+        "type": "string",
+        "enum": ["FRAUD", "REVIEW_ERROR"]
+      },
+      "LicenceReadField": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "source", "agreed"],
+        "properties": {
+          "value": {
+            "type": ["string", "null"]
+          },
+          "source": {
+            "type": ["string", "null"],
+            "enum": ["barcode", "front", null]
+          },
+          "agreed": {
+            "type": "boolean",
+            "description": "False marks a field to check by eye."
+          }
+        }
+      },
+      "LicenceReading": {
+        "description": "The reader's fields without the licence number or birth date (§2.1). The consistency checks do not show the card is genuine.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fields", "veteran", "consistency_checks"],
+        "properties": {
+          "fields": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["first_name", "last_name", "issue_date", "expiry_date", "issuing_state"],
+            "properties": {
+              "first_name": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              },
+              "last_name": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              },
+              "issue_date": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              },
+              "expiry_date": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              },
+              "issuing_state": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              }
+            }
+          },
+          "veteran": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value", "source", "agreed", "barcode", "front"],
+            "properties": {
+              "value": {
+                "type": ["string", "null"],
+                "enum": ["yes", "no", null]
+              },
+              "source": {
+                "type": ["string", "null"],
+                "enum": ["barcode", "front", null]
+              },
+              "agreed": {
+                "type": "boolean"
+              },
+              "barcode": {
+                "type": ["string", "null"],
+                "enum": ["yes", "no", null]
+              },
+              "front": {
+                "type": ["string", "null"],
+                "enum": ["yes", "no", null]
+              }
+            }
+          },
+          "consistency_checks": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "not_expired",
+              "issued_before_expiry",
+              "plausible_age",
+              "veteran_designation_agrees"
+            ],
+            "properties": {
+              "not_expired": {
+                "type": "string",
+                "enum": ["pass", "fail", "not_run"]
+              },
+              "issued_before_expiry": {
+                "type": "string",
+                "enum": ["pass", "fail", "not_run"]
+              },
+              "plausible_age": {
+                "type": "string",
+                "enum": ["pass", "fail", "not_run"]
+              },
+              "veteran_designation_agrees": {
+                "type": "string",
+                "enum": ["pass", "fail", "not_run"]
+              }
+            }
+          }
+        }
+      },
+      "LicenceConflictingReview": {
+        "description": "The approved review already holding this licence: its record only; its images are gone.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "review_id",
+          "status",
+          "submitted_at",
+          "decided_at",
+          "approved_by",
+          "confirmed_by",
+          "identity_match",
+          "notice_version"
+        ],
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LicenceReviewStatus"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decided_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "approved_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "confirmed_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "identity_match": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceIdentityMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notice_version": {
+            "type": "string"
+          }
+        }
+      },
+      "AdminLicenceReview": {
+        "description": "The review page (L5.2, L5.3). The UI shows the three images first and reveals the rest only after the reviewer answers that the Veteran designation is visible. No subject name, user id, licence number or birth date.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "review_id",
+          "status",
+          "submitted_at",
+          "decided_at",
+          "notice_version",
+          "is_dispute",
+          "dispute_of_review_id",
+          "images",
+          "reading",
+          "identity_match",
+          "fingerprint_in_use",
+          "failure_class",
+          "decline_reason",
+          "revoke_reason",
+          "approved_by",
+          "approved_at",
+          "confirmed_by",
+          "confirmed_at",
+          "declined_by",
+          "revoked_by",
+          "viewer",
+          "conflicting_review"
+        ],
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LicenceReviewStatus"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decided_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "notice_version": {
+            "type": "string"
+          },
+          "is_dispute": {
+            "type": "boolean"
+          },
+          "dispute_of_review_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "images": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["front", "back", "selfie"],
+            "properties": {
+              "front": {
+                "type": "boolean"
+              },
+              "back": {
+                "type": "boolean"
+              },
+              "selfie": {
+                "type": "boolean"
+              }
+            },
+            "description": "Whether each image is still stored; all false once decided."
+          },
+          "reading": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceReading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "identity_match": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceIdentityMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fingerprint_in_use": {
+            "type": ["boolean", "null"],
+            "description": "Whether this licence is on an APPROVED review in the tenant; null when the number or state was not read."
+          },
+          "failure_class": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceFailureClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decline_reason": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceDeclineReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revoke_reason": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceRevokeReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approved_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "approved_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "confirmed_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "confirmed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "declined_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "revoked_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "viewer": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["can_approve", "can_confirm", "can_decline", "can_revoke"],
+            "properties": {
+              "can_approve": {
+                "type": "boolean"
+              },
+              "can_confirm": {
+                "type": "boolean"
+              },
+              "can_decline": {
+                "type": "boolean"
+              },
+              "can_revoke": {
+                "type": "boolean"
+              }
+            },
+            "description": "What this admin may try given the state; the server still enforces every rule."
+          },
+          "conflicting_review": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceConflictingReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "AdminLicenceReviewQueue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reviews", "limit", "next_cursor"],
+        "properties": {
+          "reviews": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["review_id", "status", "submitted_at", "is_dispute"],
+              "properties": {
+                "review_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/LicenceReviewStatus"
+                },
+                "submitted_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "is_dispute": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "LicenceApproval": {
+        "description": "The designation question and the by-eye checklist (L5.2, L5.3); every answer must be true. A 'no' means the admin declines instead.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["designation_visible", "checklist"],
+        "properties": {
+          "designation_visible": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "checklist": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["selfie_matches", "security_features", "whole_card"],
+            "properties": {
+              "selfie_matches": {
+                "type": "boolean",
+                "enum": [true],
+                "description": "The selfie and the licence portrait show the same person."
+              },
+              "security_features": {
+                "type": "boolean",
+                "enum": [true],
+                "description": "Visible security features look present, without signs of editing."
+              },
+              "whole_card": {
+                "type": "boolean",
+                "enum": [true],
+                "description": "The photo shows a whole physical card, not a screen or printout."
+              }
+            }
+          }
+        }
+      },
+      "LicenceDecline": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/LicenceDeclineReason"
+          }
+        }
+      },
+      "LicenceRevoke": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/LicenceRevokeReason"
+          }
+        }
+      },
+      "LicenceRecuse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
       }
     },
     "responses": {
