@@ -49,17 +49,22 @@ describe('D-035 proposed Veteran verification contract', () => {
     });
   });
 
-  it('does not emit an undefined reason when the source supplies none', () => {
-    expect(
-      normalizeVaVeteranStatus({
-        veteranStatus: 'not confirmed',
+  // D035 §10: a missing or unknown reason is never mapped to a more definitive state.
+  it.each([undefined, 'SOMETHING_NEW', 'null'])(
+    'normalizes not confirmed with reason %s to UNAVAILABLE',
+    (reason) => {
+      expect(
+        normalizeVaVeteranStatus({
+          veteranStatus: 'not confirmed',
+          notConfirmedReason: reason,
+          sourceContractVersion: 'va-veteran-verification-v2',
+        }),
+      ).toEqual({
+        status: 'UNAVAILABLE',
         sourceContractVersion: 'va-veteran-verification-v2',
-      }),
-    ).toEqual({
-      status: 'NOT_CONFIRMED',
-      sourceContractVersion: 'va-veteran-verification-v2',
-    });
-  });
+      });
+    },
+  );
 
   it('fails closed while the provider adapter is disabled', async () => {
     const adapter = new DisabledVeteranVerificationAdapter();

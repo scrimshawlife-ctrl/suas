@@ -17,6 +17,11 @@
 import { z } from 'zod';
 import { isSyntheticEmail } from '../testing/fixture-boundary.js';
 import { parseAllowedOrigins } from './cors-origins.js';
+import {
+  VA_CONFIRMATION_PROJECTION_ID,
+  VA_CONFIRMATION_SANDBOX_BASE_URL,
+} from '../identity/va-confirmation.js';
+import type { FingerprintKeyring } from '../identity/fingerprint-keys.js';
 import { RELEASE_MANIFEST, SPEC_018_PRODUCTION_AUTHORIZED, SPEC_VERSION } from '../release/pins.js';
 
 /** ENVIRONMENT.md §2. Exactly these logical environment classes exist. */
@@ -64,6 +69,18 @@ export const ID_VERIFICATION_MODES = ['disabled', 'fake'] as const;
 export const CHAT_PUSH_MODES = ['disabled', 'local', 'apigw'] as const;
 export type ChatPushMode = (typeof CHAT_PUSH_MODES)[number];
 export type IdVerificationMode = (typeof ID_VERIFICATION_MODES)[number];
+/**
+ * VA Veteran Confirmation (suas-specs #72 R9.1, proposal): `fixture` is LOCAL and TEST
+ * only; `sandbox` is the VA sandbox, refused in PRODUCTION until D-035 settles.
+ */
+export const VA_CONFIRMATION_MODES = ['disabled', 'fixture', 'sandbox'] as const;
+export type VaConfirmationMode = (typeof VA_CONFIRMATION_MODES)[number];
+/**
+ * Licence reader (suas-specs R10.1, proposal; L9.1): `fixture` is LOCAL and TEST only,
+ * `scry` LOCAL and STAGING only, and PRODUCTION allows `disabled` alone.
+ */
+export const LICENCE_READER_MODES = ['disabled', 'fixture', 'scry'] as const;
+export type LicenceReaderMode = (typeof LICENCE_READER_MODES)[number];
 
 /** One provisioned synthetic fixture. Identity is the pair, not the email address. */
 export interface StagingFixturePrincipal {
@@ -321,6 +338,32 @@ const rawConfigSchema = z.object({
     ID_VERIFICATION_MODES,
     'disabled',
   ),
+  SUAS_VA_CONFIRMATION_MODE: optionalEnum(
+    'SUAS_VA_CONFIRMATION_MODE',
+    VA_CONFIRMATION_MODES,
+    'disabled',
+  ),
+  SUAS_VA_CONFIRMATION_BASE_URL: optionalRaw,
+  // Server-side secret (D035 §6): shown only as a configured flag, never its value.
+  SUAS_VA_CONFIRMATION_API_KEY: optionalRaw,
+  SUAS_VA_CONFIRMATION_PROJECTION_ID: optionalRaw,
+  // Server-side secret keying the HMAC fingerprints of personal data (owner review of #72:
+  // not the session secret). Never echoed by config output.
+  SUAS_FINGERPRINT_KEY: optionalRaw,
+  SUAS_FINGERPRINT_KEY_ID: optionalRaw,
+  // Verify-only during a rotation: lookups and uniqueness checks also try it.
+  SUAS_FINGERPRINT_KEY_PREVIOUS: optionalRaw,
+  SUAS_FINGERPRINT_KEY_PREVIOUS_ID: optionalRaw,
+  SUAS_LICENCE_READER_MODE: optionalEnum(
+    'SUAS_LICENCE_READER_MODE',
+    LICENCE_READER_MODES,
+    'disabled',
+  ),
+  SUAS_SCRY_BASE_URL: optionalRaw,
+  // Server-side secret, needed only where the read runs (the job worker); never echoed.
+  SUAS_SCRY_API_TOKEN: optionalRaw,
+  // AAMVA issuer id of the synthetic sample maker (L4.2); required by STAGING `scry`.
+  SUAS_LICENCE_SYNTHETIC_IIN: optionalRaw,
   // D-052. Public self sign-up stays off unless LOCAL or TEST sets "enabled".
   SUAS_PUBLIC_SIGN_UP: optionalRaw,
   // Addresses the STAGING provision command may create. Not an admission list.
@@ -428,6 +471,8 @@ export interface SuasConfig {
     };
   };
   readonly sessionSecret: string | undefined;
+  /** Keys HMAC fingerprints of personal data, one labelled derivation per purpose. */
+  readonly fingerprintKeys: FingerprintKeyring | undefined;
   readonly browserAuth: {
     readonly mode: BrowserAuthMode;
     readonly tenantId: string | undefined;
@@ -464,6 +509,18 @@ export interface SuasConfig {
   };
   readonly idVerification: {
     readonly mode: IdVerificationMode;
+  };
+  readonly vaConfirmation: {
+    readonly mode: VaConfirmationMode;
+    readonly baseUrl: string | undefined;
+    readonly apiKey: string | undefined;
+  };
+  readonly licenceReader: {
+    readonly mode: LicenceReaderMode;
+    readonly scryBaseUrl: string | undefined;
+    readonly scryApiToken: string | undefined;
+    /** Six-digit AAMVA IIN every synthetic sample carries; checked outside LOCAL and TEST. */
+    readonly syntheticIin: string | undefined;
   };
   /** Public self sign-up. Startup refuses `enabled` outside LOCAL and TEST. */
   readonly publicSignUp: boolean;
@@ -724,6 +781,209 @@ function validateAwsCapabilities(
   if (environment === 'PRODUCTION' && raw.SUAS_OBJECT_STORAGE_MODE === 'fake') {
     issue('SUAS_OBJECT_STORAGE_MODE=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).');
   }
+}
+
+/**
+ * VA Veteran Confirmation modes (suas-specs #72 R9.1, proposal; D035 §5, §6, §14 items
+ * 2-4, 9-10). Every mismatch fails closed; issue text never includes the key.
+ */
+function validateVaConfirmation(
+  raw: z.output<typeof rawConfigSchema>,
+  environment: EnvironmentClass,
+  ctx: z.RefinementCtx,
+): void {
+  const issue = (message: string): void => {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  };
+  const mode = raw.SUAS_VA_CONFIRMATION_MODE;
+
+  if (
+    raw.SUAS_VA_CONFIRMATION_PROJECTION_ID !== undefined &&
+    raw.SUAS_VA_CONFIRMATION_PROJECTION_ID !== VA_CONFIRMATION_PROJECTION_ID
+  ) {
+    issue(`SUAS_VA_CONFIRMATION_PROJECTION_ID must be ${VA_CONFIRMATION_PROJECTION_ID} when set.`);
+  }
+  if (mode === 'fixture' && environment !== 'LOCAL' && environment !== 'TEST') {
+    issue(
+      `SUAS_VA_CONFIRMATION_MODE=fixture is allowed only in LOCAL and TEST, not ${environment}.`,
+    );
+  }
+  if (mode !== 'sandbox') return;
+
+  if (environment === 'PRODUCTION') {
+    issue(
+      'SUAS_VA_CONFIRMATION_MODE=sandbox is forbidden in PRODUCTION; PRODUCTION allows disabled only.',
+    );
+  }
+  if (environment === 'TEST') {
+    issue(
+      'SUAS_VA_CONFIRMATION_MODE=sandbox is allowed only in STAGING and LOCAL, not TEST; TEST uses fixture or disabled.',
+    );
+  }
+  if (raw.SUAS_VA_CONFIRMATION_BASE_URL !== VA_CONFIRMATION_SANDBOX_BASE_URL) {
+    issue(
+      `SUAS_VA_CONFIRMATION_BASE_URL must be exactly ${VA_CONFIRMATION_SANDBOX_BASE_URL} when SUAS_VA_CONFIRMATION_MODE=sandbox.`,
+    );
+  }
+  const key = raw.SUAS_VA_CONFIRMATION_API_KEY;
+  if (key === undefined) {
+    issue('SUAS_VA_CONFIRMATION_API_KEY is required when SUAS_VA_CONFIRMATION_MODE=sandbox.');
+  } else if (!/^[\x21-\x7E]+$/.test(key)) {
+    issue('SUAS_VA_CONFIRMATION_API_KEY is malformed: printable characters only, no spaces.');
+  }
+}
+
+/**
+ * Licence reader modes (suas-specs R10.1, proposal; L9.1). The Scry URL and token are not
+ * required at startup, because only the job worker calls Scry; without them a read settles
+ * as a configuration failure. The synthetic IIN is required wherever L4.2 applies.
+ */
+function validateLicenceReader(
+  raw: z.output<typeof rawConfigSchema>,
+  environment: EnvironmentClass,
+  ctx: z.RefinementCtx,
+): void {
+  const issue = (message: string): void => {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  };
+  const mode = raw.SUAS_LICENCE_READER_MODE;
+  const iin = raw.SUAS_LICENCE_SYNTHETIC_IIN;
+  if (iin !== undefined && !/^\d{6}$/.test(iin)) {
+    issue('SUAS_LICENCE_SYNTHETIC_IIN must be exactly 6 digits.');
+  } else if (iin !== undefined && /^(636|604)/.test(iin)) {
+    // The AAMVA blocks real jurisdictions use; a marker there could pass a real licence.
+    issue('SUAS_LICENCE_SYNTHETIC_IIN must not be in the 636xxx or 604xxx jurisdiction blocks.');
+  }
+  const token = raw.SUAS_SCRY_API_TOKEN;
+  if (token !== undefined && !/^[\x21-\x7E]+$/.test(token)) {
+    issue('SUAS_SCRY_API_TOKEN is malformed: printable characters only, no spaces.');
+  }
+  if (raw.SUAS_SCRY_BASE_URL !== undefined) {
+    validateScryBaseUrl(raw.SUAS_SCRY_BASE_URL, environment, issue);
+  }
+  if (mode === 'disabled') return;
+
+  if (environment === 'PRODUCTION') {
+    issue(
+      `SUAS_LICENCE_READER_MODE=${mode} is forbidden in PRODUCTION; PRODUCTION allows disabled only.`,
+    );
+  }
+  if (mode === 'fixture' && environment !== 'LOCAL' && environment !== 'TEST') {
+    issue(
+      `SUAS_LICENCE_READER_MODE=fixture is allowed only in LOCAL and TEST, not ${environment}.`,
+    );
+  }
+  if (mode === 'scry' && environment !== 'LOCAL' && environment !== 'STAGING') {
+    issue(
+      `SUAS_LICENCE_READER_MODE=scry is allowed only in LOCAL and STAGING, not ${environment}.`,
+    );
+  }
+  if (mode === 'scry' && environment === 'STAGING' && iin === undefined) {
+    issue('SUAS_LICENCE_SYNTHETIC_IIN is required when SUAS_LICENCE_READER_MODE=scry in STAGING.');
+  }
+  if (raw.SUAS_OBJECT_STORAGE_MODE === 'disabled') {
+    issue('SUAS_LICENCE_READER_MODE needs object storage: set SUAS_OBJECT_STORAGE_MODE.');
+  }
+}
+
+/** HTTPS, or http://localhost in LOCAL (L9.1). */
+function validateScryBaseUrl(
+  value: string,
+  environment: EnvironmentClass,
+  issue: (message: string) => void,
+): void {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    issue('SUAS_SCRY_BASE_URL must be an absolute URL.');
+    return;
+  }
+  const localHttp =
+    environment === 'LOCAL' && url.protocol === 'http:' && url.hostname === 'localhost';
+  if (url.protocol !== 'https:' && !localHttp) {
+    issue('SUAS_SCRY_BASE_URL must use HTTPS; http://localhost is allowed only in LOCAL.');
+  }
+  if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') {
+    issue('SUAS_SCRY_BASE_URL must not carry credentials, a query or a fragment.');
+  }
+}
+
+/** At least 32 bytes of key material, base64 encoded. */
+const FINGERPRINT_KEY_MIN_BYTES = 32;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+const KEY_ID = /^[A-Za-z0-9._-]{1,32}$/;
+
+/**
+ * `SUAS_FINGERPRINT_KEY` and its id are required while a capability that fingerprints
+ * personal data is on, so startup fails closed before VA is turned on without them. The
+ * key must not reuse the session secret. The previous key and id come as a pair, for
+ * verifying only. Issue text never includes a key value.
+ */
+function validateFingerprintKey(raw: z.output<typeof rawConfigSchema>, ctx: z.RefinementCtx): void {
+  const issue = (message: string): void => {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  };
+  const checkKey = (name: string, key: string): void => {
+    if (!BASE64.test(key) || Buffer.from(key, 'base64').length < FINGERPRINT_KEY_MIN_BYTES) {
+      issue(`${name} is malformed: base64 of at least ${FINGERPRINT_KEY_MIN_BYTES} bytes.`);
+    }
+    if (key === raw.SUAS_SESSION_SECRET) issue(`${name} must differ from SUAS_SESSION_SECRET.`);
+  };
+  const checkId = (name: string, id: string | undefined): void => {
+    if (id === undefined) issue(`${name} is required with its key.`);
+    else if (!KEY_ID.test(id)) issue(`${name} is malformed: 1-32 of A-Z a-z 0-9 . _ -.`);
+  };
+
+  const key = raw.SUAS_FINGERPRINT_KEY;
+  if (key === undefined) {
+    if (raw.SUAS_VA_CONFIRMATION_MODE !== 'disabled') {
+      issue(
+        'SUAS_FINGERPRINT_KEY is required when SUAS_VA_CONFIRMATION_MODE is not disabled. Deploy the key before turning VA confirmation on.',
+      );
+    }
+    if (raw.SUAS_LICENCE_READER_MODE !== 'disabled') {
+      issue(
+        'SUAS_FINGERPRINT_KEY is required when SUAS_LICENCE_READER_MODE is not disabled. Deploy the key before turning the licence reader on.',
+      );
+    }
+    if (raw.SUAS_FINGERPRINT_KEY_PREVIOUS !== undefined) {
+      issue('SUAS_FINGERPRINT_KEY_PREVIOUS needs a current SUAS_FINGERPRINT_KEY.');
+    }
+    return;
+  }
+  checkKey('SUAS_FINGERPRINT_KEY', key);
+  checkId('SUAS_FINGERPRINT_KEY_ID', raw.SUAS_FINGERPRINT_KEY_ID);
+
+  const previous = raw.SUAS_FINGERPRINT_KEY_PREVIOUS;
+  if (previous === undefined) {
+    if (raw.SUAS_FINGERPRINT_KEY_PREVIOUS_ID !== undefined) {
+      issue('SUAS_FINGERPRINT_KEY_PREVIOUS_ID is set without SUAS_FINGERPRINT_KEY_PREVIOUS.');
+    }
+    return;
+  }
+  checkKey('SUAS_FINGERPRINT_KEY_PREVIOUS', previous);
+  checkId('SUAS_FINGERPRINT_KEY_PREVIOUS_ID', raw.SUAS_FINGERPRINT_KEY_PREVIOUS_ID);
+  if (previous === key) issue('SUAS_FINGERPRINT_KEY_PREVIOUS must differ from the current key.');
+  if (raw.SUAS_FINGERPRINT_KEY_PREVIOUS_ID === raw.SUAS_FINGERPRINT_KEY_ID) {
+    issue('SUAS_FINGERPRINT_KEY_PREVIOUS_ID must differ from SUAS_FINGERPRINT_KEY_ID.');
+  }
+}
+
+/** The keyring the schema has already validated, or undefined when no key is set. */
+function shapeFingerprintKeys(
+  raw: z.output<typeof rawConfigSchema>,
+): FingerprintKeyring | undefined {
+  const { SUAS_FINGERPRINT_KEY: key, SUAS_FINGERPRINT_KEY_ID: id } = raw;
+  if (key === undefined || id === undefined) return undefined;
+  const { SUAS_FINGERPRINT_KEY_PREVIOUS: previous, SUAS_FINGERPRINT_KEY_PREVIOUS_ID: previousId } =
+    raw;
+  return {
+    current: { id, secret: key },
+    ...(previous !== undefined && previousId !== undefined
+      ? { previous: { id: previousId, secret: previous } }
+      : {}),
+  };
 }
 
 /**
@@ -1053,6 +1313,9 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   }
 
   validateAwsCapabilities(raw, environment, ctx);
+  validateVaConfirmation(raw, environment, ctx);
+  validateLicenceReader(raw, environment, ctx);
+  validateFingerprintKey(raw, ctx);
 
   // The sender is required in Resend and SES modes. Both accept either a bare
   // address or the standard display-name form: "Name <address>".
@@ -1141,6 +1404,7 @@ export function shapeConfig(
       },
     },
     sessionSecret: raw.SUAS_SESSION_SECRET,
+    fingerprintKeys: shapeFingerprintKeys(raw),
     browserAuth: {
       mode: raw.SUAS_BROWSER_AUTH_MODE,
       tenantId: raw.SUAS_BROWSER_TENANT_ID,
@@ -1170,6 +1434,17 @@ export function shapeConfig(
     },
     objectStorage: { mode: raw.SUAS_OBJECT_STORAGE_MODE, bucket: raw.SUAS_S3_BUCKET },
     idVerification: { mode: raw.SUAS_ID_VERIFICATION_MODE },
+    vaConfirmation: {
+      mode: raw.SUAS_VA_CONFIRMATION_MODE,
+      baseUrl: raw.SUAS_VA_CONFIRMATION_BASE_URL,
+      apiKey: raw.SUAS_VA_CONFIRMATION_API_KEY,
+    },
+    licenceReader: {
+      mode: raw.SUAS_LICENCE_READER_MODE,
+      scryBaseUrl: raw.SUAS_SCRY_BASE_URL,
+      scryApiToken: raw.SUAS_SCRY_API_TOKEN,
+      syntheticIin: raw.SUAS_LICENCE_SYNTHETIC_IIN,
+    },
     publicSignUp: raw.SUAS_PUBLIC_SIGN_UP === 'enabled',
     stagingAuthEmails: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) => email.toLowerCase()),
     stagingFixturePrincipals: parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY)
