@@ -3,6 +3,7 @@ import { runJobWorkerOnce } from '../helpers';
 import {
   ALERT_SWITCH,
   closePeople,
+  confirmAlert,
   contactRow,
   myUserId,
   veteranWithNotice,
@@ -34,6 +35,7 @@ test('T4: when the RED notice grant expires, the sweep turns the switch off and 
   // Turning it on again makes a new grant; the expired one stays listed.
   await page.goBack();
   await toggle.click();
+  await confirmAlert(page);
   await expect(toggle).toBeChecked();
   await page.goto('/consents');
   await expect(grant.getByText('Sharing', { exact: true })).toHaveCount(1);

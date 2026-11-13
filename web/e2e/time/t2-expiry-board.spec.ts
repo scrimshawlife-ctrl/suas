@@ -1,5 +1,5 @@
 import { expect, test } from '../fixtures';
-import { ageRequest, requestHelp, runJobWorkerOnce } from '../helpers';
+import { ageRequest, pauseAfterPoll, requestHelp, runClock, runJobWorkerOnce } from '../helpers';
 import { closePeople, helper, uniqueSummary, veteran } from '../support/support';
 
 test.afterEach(closePeople);
@@ -23,13 +23,18 @@ test('T2: a request past 72 hours leaves the open board at its next 30-second re
   await board.goto('/serve');
   const take = board.getByRole('button', { name: new RegExp(`Take this request: .*${summary}`) });
   await expect(take).toBeVisible();
+  // The board polls every 30 s (serve/api.ts BOARD_REFRESH_MS); time stands still after a poll.
+  await pauseAfterPoll(board, (url) => /ownership=open/.test(url), 30_000);
 
   await ageRequest(requestId, 73 * 60);
   const output = runJobWorkerOnce();
   expect(output).toContain('"msg":"request_expired"');
   expect(output).toContain(requestId);
 
-  // The board polls every 30 s (serve/api.ts BOARD_REFRESH_MS); the fake clock fires it now.
-  await board.clock.fastForward(30_000);
+  // Still listed just before the next poll; gone once it lands.
+  await runClock(board, 28_000);
+  await expect(take).toBeVisible();
+  await runClock(board, 2_000);
+  await board.clock.resume();
   await expect(take).toHaveCount(0, { timeout: 5_000 });
 });
