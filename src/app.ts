@@ -38,6 +38,7 @@ import {
   type ChallengeDeliveryPort,
   type MfaPort,
 } from './auth/index.js';
+import { serializeError } from './http/request-logging.js';
 import { createServer } from './http/server.js';
 import { buildInfo, type BuildInfo } from './provenance/build-info.js';
 import { RELEASE_MANIFEST, SPEC_VERSION } from './release/pins.js';
@@ -189,8 +190,16 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
             }),
             ...inlineLicenceRead,
           },
+          // Error name, code and stack frames only: a handler's message can carry PII (A4-07).
           (error, request) => {
-            console.error(`[suas] job ${request.jobType} failed`, error);
+            console.error(
+              JSON.stringify({
+                level: 'error',
+                msg: 'job_failed',
+                job_type: request.jobType,
+                ...serializeError(error),
+              }),
+            );
           },
           // A handled outbox row is marked done so the job worker skips it.
           innerQueue.implementation === 'postgres-outbox'

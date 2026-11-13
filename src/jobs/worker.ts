@@ -18,6 +18,7 @@ import { expireDueRequests } from '../coordination/expiry.js';
 import { repairMissedRequestNotices } from '../coordination/request-notices.js';
 import { widenDueRequests } from '../coordination/widening.js';
 import { assertExpectedSchemaVersion, withTransaction } from '../db/index.js';
+import { serializeError } from '../http/request-logging.js';
 import {
   expireOldReviews,
   LICENCE_CLOSE_JOB_TYPE,
@@ -69,6 +70,11 @@ function log(record: Record<string, unknown>): void {
 
 function logError(record: Record<string, unknown>): void {
   console.error(JSON.stringify(record));
+}
+
+/** Error name, code and stack frames only: a message can carry PII or SQL detail (A4-07). */
+function logFailure(record: Record<string, unknown>, error: unknown): void {
+  logError({ ...record, ...serializeError(error) });
 }
 
 interface Sweep {
@@ -189,8 +195,7 @@ async function runSweeps(pool: Pool, config: SuasConfig): Promise<void> {
     try {
       await sweep.run(pool, config);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      logError({ msg: 'sweep_failed', sweep: sweep.name, error: message });
+      logFailure({ msg: 'sweep_failed', sweep: sweep.name }, error);
     }
   }
 }
@@ -238,14 +243,15 @@ async function settleDeadLetter(
   try {
     await handler(job, lastError);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    logError({
-      msg: 'job_failed',
-      job_id: job.jobId,
-      job_type: job.jobType,
-      status: 'DEAD_LETTER_SETTLE_FAILED',
-      error: message.slice(0, 300),
-    });
+    logFailure(
+      {
+        msg: 'job_failed',
+        job_id: job.jobId,
+        job_type: job.jobType,
+        status: 'DEAD_LETTER_SETTLE_FAILED',
+      },
+      error,
+    );
   }
 }
 
@@ -305,13 +311,7 @@ export async function runJobWorker(options: JobWorkerOptions): Promise<void> {
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         const status = await markJobFailed(pool, { jobId: job.jobId, error: message });
-        logError({
-          msg: 'job_failed',
-          job_id: job.jobId,
-          job_type: job.jobType,
-          status,
-          error: message.slice(0, 300),
-        });
+        logFailure({ msg: 'job_failed', job_id: job.jobId, job_type: job.jobType, status }, error);
         if (status === 'DEAD_LETTER') await settleDeadLetter(deadLetterHandlers, job, message);
       }
     }

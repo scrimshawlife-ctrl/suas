@@ -40,8 +40,9 @@ afterAll(async () => {
   await pool.end();
 });
 
-async function drainOnce(env: Record<string, string> = {}): Promise<void> {
-  await run(
+/** Runs one worker pass; returns its stderr, where failure lines go. */
+async function drainOnce(env: Record<string, string> = {}): Promise<string> {
+  const { stderr } = await run(
     process.execPath,
     ['--import', 'tsx/esm', 'src/cli/job-worker.ts', '--once', '--limit', '50'],
     {
@@ -54,6 +55,7 @@ async function drainOnce(env: Record<string, string> = {}): Promise<void> {
       },
     },
   );
+  return stderr;
 }
 
 function newUser(tenantId: string, label: string) {
@@ -186,6 +188,25 @@ describe('job-worker --once and notification.send', () => {
       auditEvents: 0,
       jobStatus: 'DEAD_LETTER',
     });
+  });
+
+  it('logs a failed job by error name and code, never its message (A4-07)', async () => {
+    await new PostgresOutboxJobQueue(pool).enqueue({
+      jobType: 'notification.send',
+      payload: { note: 'person@example.invalid' },
+      tenantId: syntheticTenantId(),
+      idempotencyKey: randomUUID(),
+    });
+    const stderr = await drainOnce();
+    const line = stderr.split('\n').find((text) => text.includes('"job_failed"'));
+    expect(line).toBeDefined();
+    expect(JSON.parse(line!)).toMatchObject({
+      msg: 'job_failed',
+      job_type: 'notification.send',
+      type: 'Error',
+      message: 'withheld',
+    });
+    expect(stderr).not.toContain('invalid notification.send payload');
   });
 
   it('settles UNDELIVERABLE with an audit when the channel is unavailable on every try (C-06)', async () => {
