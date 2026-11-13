@@ -26,7 +26,7 @@ import {
   takePage,
   type PageRequest,
   timestampText,
-} from '../http/cursor.js';
+} from '../db/cursor.js';
 import { evaluateDisclosure, type DisclosureRequest } from '../consent/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
 import {

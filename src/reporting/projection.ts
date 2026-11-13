@@ -1,16 +1,15 @@
 /**
- * D-025 minimum reporting projection.
- *
- * The projection accepts only pre-coarsened aggregate inputs. It has no database,
- * network, URL, export, or logging effect, and configuration continues to keep
- * reporting disabled until release evidence is accepted.
+ * Aggregate reporting projection with no runtime caller; reporting stays disabled.
+ * D-025 is not released, and ANALYTICS.md allows no canonical small-cell number before it is.
+ * Inputs are pre-coarsened; no database, network, export, or logging effect.
  */
 import { z } from 'zod';
 
 export const REPORTING_RELEASE_STATE = 'IMPLEMENTED_DISABLED_PENDING_EVIDENCE' as const;
 export const REPORTING_AUDIENCES = ['INTERNAL', 'PARTNER', 'PUBLIC'] as const;
 export type ReportingAudience = (typeof REPORTING_AUDIENCES)[number];
-export const REPORTING_MINIMUM_K: Readonly<Record<ReportingAudience, number>> = {
+/** Test values from a suas-local packet, not policy. Do not cite them as released k thresholds. */
+export const PLACEHOLDER_REPORTING_MINIMUM_K: Readonly<Record<ReportingAudience, number>> = {
   INTERNAL: 10,
   PARTNER: 20,
   PUBLIC: 20,
@@ -31,10 +30,10 @@ const eventSchema = z
   .strict();
 
 /** One non-identifying, already-coarsened request outcome. */
-export type ApprovedReportingEvent = z.infer<typeof eventSchema>;
+export type AggregateReportingEvent = z.infer<typeof eventSchema>;
 
 type ReportingCellKey = Pick<
-  ApprovedReportingEvent,
+  AggregateReportingEvent,
   | 'period'
   | 'geographyLevel'
   | 'geographyCode'
@@ -45,7 +44,7 @@ type ReportingCellKey = Pick<
   | 'waitTimeBand'
 >;
 
-export interface ApprovedReportingCell extends ReportingCellKey {
+export interface AggregateReportingCell extends ReportingCellKey {
   readonly requestsInitiated: number | null;
   readonly requestsCompleted: number | null;
   readonly requestsUnfulfilled: number | null;
@@ -53,12 +52,12 @@ export interface ApprovedReportingCell extends ReportingCellKey {
   readonly suppression: 'NONE' | 'PRIMARY_K' | 'COMPLEMENTARY';
 }
 
-export interface ApprovedReportingProjection {
+export interface AggregateReportingProjection {
   readonly audience: ReportingAudience;
   readonly minimumK: number;
   readonly releaseState: typeof REPORTING_RELEASE_STATE;
   readonly fixedDimensions: readonly (keyof ReportingCellKey)[];
-  readonly cells: readonly ApprovedReportingCell[];
+  readonly cells: readonly AggregateReportingCell[];
 }
 
 const FIXED_DIMENSIONS = [
@@ -77,7 +76,7 @@ interface WorkingCell {
   initiated: number;
   completed: number;
   unfulfilled: number;
-  suppression: ApprovedReportingCell['suppression'];
+  suppression: AggregateReportingCell['suppression'];
 }
 
 function keyOf(event: ReportingCellKey): string {
@@ -89,18 +88,18 @@ function bucketOf(cell: WorkingCell): string {
 }
 
 /**
- * Projects the approved fixed-dimension aggregate only.
+ * Projects the fixed-dimension aggregate only.
  *
  * Primary suppression hides cells below k. If any primary-suppressed cell is
  * present in a period/geography bucket, every otherwise visible cell in that
  * bucket is complementarily suppressed. The report exposes no subtotal or
  * arbitrary filter that could reconstruct either suppressed count.
  */
-export function projectApprovedReporting(
+export function projectAggregateReporting(
   audience: ReportingAudience,
-  rawEvents: readonly ApprovedReportingEvent[],
-): ApprovedReportingProjection {
-  const minimumK = REPORTING_MINIMUM_K[audience];
+  rawEvents: readonly AggregateReportingEvent[],
+): AggregateReportingProjection {
+  const minimumK = PLACEHOLDER_REPORTING_MINIMUM_K[audience];
   const cells = new Map<string, WorkingCell>();
 
   for (const raw of rawEvents) {

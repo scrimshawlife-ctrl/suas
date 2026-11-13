@@ -8,21 +8,24 @@
  *   (non-goal: unsupported numeric capacity forecasts)
  * - SUAS-specs RESILIENCE.md §14 (recovery objectives), §18 (`RESILIENCE` gate),
  *   §19 (non-goal: unsupported RTO/RPO promises)
- * - docs/decision-packets/PILOT_GOVERNANCE_DECISIONS-2026-08-29.md § Pilot
- *   service objectives and recovery (approved for pilot implementation)
+ * - SUAS-specs DECISIONS.md: D-021, D-023 and D-024 are `DECISION_PENDING`
  *
  * D-021 has no released workload magnitude, so this module still refuses to
- * select a rate, concurrency level, or duration. D-023 and D-024 do have
- * approved pilot targets. They are comparison inputs only: a synthetic result
- * below a target does not establish compliance or advance a readiness gate.
+ * select a rate, concurrency level, or duration. The D-023 and D-024 numbers
+ * below are local comparison inputs from a suas decision packet, not released
+ * targets: a synthetic result below one does not establish compliance or
+ * advance a readiness gate.
  */
 
-/** Pilot decision state. D-021 lacks a released workload magnitude. */
+/** Decision register state at the pin. None of the three is released. */
 export const D_021_WORKLOAD_ENVELOPE = 'MAGNITUDES_NOT_RELEASED' as const;
-export const D_023_PERFORMANCE_SLOS = 'APPROVED_FOR_PILOT_IMPLEMENTATION' as const;
-export const D_024_RECOVERY_OBJECTIVES = 'APPROVED_FOR_PILOT_IMPLEMENTATION' as const;
+export const D_023_PERFORMANCE_SLOS = 'DECISION_PENDING' as const;
+export const D_024_RECOVERY_OBJECTIVES = 'DECISION_PENDING' as const;
 
-/** D-023 pilot targets. Do not use these values to select an unapproved load. */
+/**
+ * Local comparison inputs for D-023, which is `DECISION_PENDING`. Not released
+ * SLOs; do not cite them as targets or use them to select a load.
+ */
 export const PILOT_PERFORMANCE_SLOS = {
   successfulReadP95Ms: 1_000,
   successfulWriteP95Ms: 1_500,
@@ -34,7 +37,7 @@ export const PILOT_PERFORMANCE_SLOS = {
   acknowledgedJobLoss: 'ZERO_TOLERATED',
 } as const;
 
-/** D-024 pilot recovery targets. */
+/** Local comparison inputs for D-024 (`DECISION_PENDING`). Not released RTO/RPO. */
 export const PILOT_RECOVERY_OBJECTIVES = {
   systemOfRecord: { rtoHours: 4, rpoHours: 24 },
   durableJobStore: { rtoHours: 4, rpoHours: 1 },
@@ -105,12 +108,12 @@ export function assertWorkloadEnvelopeReleased(what: string): void {
   throw new NumericTargetUnavailableError('D-021', what);
 }
 
-/** D-023 targets are approved for pilot implementation. */
+/** Does not refuse, so the local D-023 comparison inputs stay readable; D-023 is not released. */
 export function assertPerformanceSloReleased(what: string): void {
   void what;
 }
 
-/** D-024 recovery targets are approved for pilot implementation. */
+/** Does not refuse, so the local D-024 comparison inputs stay readable; D-024 is not released. */
 export function assertRecoveryObjectivesReleased(what: string): void {
   void what;
 }

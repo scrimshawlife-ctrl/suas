@@ -1,5 +1,7 @@
 # Decision packet — D-022 Production durable job/queue implementation
 
+> **Authority:** suas-local packet, not a SUAS-specs decision. The SUAS-specs register (`DECISIONS.md` at 0.9.0) lists D-022 as `DECISION_PENDING`. Code may use this packet only as an implementation choice or a placeholder, never as a released rule.
+
 **Status:** DECIDED — Postgres outbox / SKIP LOCKED (2026-08-26)  
 **Affects gates:** `RESILIENCE`, `OPERATIONS`, `COORDINATION` (async settlement path)  
 **Blocks:** STAGING/PRODUCTION process start (already fail-closed); durable recovery evidence

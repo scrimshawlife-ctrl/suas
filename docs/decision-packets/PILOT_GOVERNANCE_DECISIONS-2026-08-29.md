@@ -1,5 +1,7 @@
 # Pilot governance decisions — 2026-08-29
 
+> **Authority:** suas-local packet, not a SUAS-specs decision. The SUAS-specs register (`DECISIONS.md` at 0.9.0) lists D-007, D-021, D-022, D-023 and D-024 as `DECISION_PENDING`. Code may use this packet only as an implementation choice or a placeholder, never as a released rule.
+
 **Status:** APPROVED_FOR_PILOT_IMPLEMENTATION
 
 The Executive Launch Owner has approved this decision set for pilot implementation with role placeholders. It does not authorize production, real provider effects, use of non-synthetic data in STAGING, or a change to any formal readiness verdict. A canonical SUAS domain and named primary/backup humans remain required before production activation or final launch.

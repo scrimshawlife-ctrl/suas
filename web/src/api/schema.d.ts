@@ -517,7 +517,7 @@ export interface paths {
     put?: never;
     /**
      * Execute a released service-request command
-     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4).
+     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4). RELEASE (DISPATCH.md §14.7; R8.5, D-059, D-061, released in 0.9.0) is the accepter's command: it needs a reason (400 VALIDATION_FAILED without one) and moves an ACCEPTED request back to SUBMITTED. The holder and accept time are cleared, the chat thread is closed, the request returns to the open list, and the requester gets an in-app notice. The same helper may accept it again; the next accept opens a new chat thread.
      */
     post: operations['executeServiceRequestCommand'];
     delete?: never;
@@ -1515,7 +1515,7 @@ export interface components {
       contact_method: string | null;
       /** @enum {string|null} */
       contact_method_kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
-      /** @description Up to three contact methods, in order (R8.8, accepted as proposal text in suas-specs D-059, not released). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
+      /** @description Up to three contact methods, in order (RESOURCES.md §12.2; R8.8, D-059, released in 0.9.0). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
       contacts: {
         /** @enum {string} */
         kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
@@ -1570,7 +1570,7 @@ export interface components {
       contact_method?: string | null;
       /** @enum {string|null} */
       contact_method_kind?: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
-      /** @description Up to three contact methods, in order (R8.8, accepted as proposal text in suas-specs D-059, not released). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
+      /** @description Up to three contact methods, in order (RESOURCES.md §12.2; R8.8, D-059, released in 0.9.0). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
       contacts?:
         | {
             /** @enum {string} */
@@ -2320,7 +2320,7 @@ export interface components {
     CatalogResourceList: {
       resources: components['schemas']['CatalogResource'][];
       limit: number;
-      /** @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. Resources matching the category and county filters across all pages, under the same tenant and visibility filters as the listed items. */
+      /** @description RESOURCES.md §12.1 (R7.1, D-057, released in 0.9.0). Resources matching the category and county filters across all pages, under the same tenant and visibility filters as the listed items. */
       total: number;
       next_cursor: string | null;
     };
@@ -2347,7 +2347,7 @@ export interface components {
       service_request_id: string;
       /**
        * Format: uuid
-       * @description suas-specs D-061 (owner-approved by ID 2026-11-09 3:19 PM PT), proposal text, not released: R8.11. Pass as `thread` to read this thread's messages. Always present in responses; optional in the contract so clients written before it still type-check.
+       * @description DISPATCH.md §14.10 (R8.11, D-061, released in 0.9.0). Pass as `thread` to read this thread's messages. Always present in responses; optional in the contract so clients written before it still type-check.
        */
       chat_thread_id?: string;
       category: components['schemas']['ServiceCategory'];
@@ -2359,14 +2359,14 @@ export interface components {
       last_message_at: string | null;
       /**
        * Format: date-time
-       * @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. When the request was accepted (the thread's creation time; a thread exists only after accept). Always present in responses; optional in the contract so clients written before it still type-check. Not consent evidence (D-051).
+       * @description DISPATCH.md §14.1 (R7.2, D-057, released in 0.9.0). When the request was accepted (the thread's creation time; a thread exists only after accept). Always present in responses; optional in the contract so clients written before it still type-check. Not consent evidence (D-051).
        */
       accepted_at?: string;
       /** @description The request is in a terminal status. */
       closed: boolean;
       /**
        * Format: date-time
-       * @description suas-specs D-061 (owner-approved by ID 2026-11-09 3:19 PM PT), proposal text, not released: R8.5, R8.11. When a release ended this thread; null while it is live. A released thread is read-only and only its requester sees it. Always present in responses; optional in the contract so clients written before it still type-check.
+       * @description DISPATCH.md §14.7, §14.10 (R8.5, R8.11, D-061, released in 0.9.0). When a release ended this thread; null while it is live. A released thread is read-only and only its requester sees it. Always present in responses; optional in the contract so clients written before it still type-check.
        */
       released_at?: string | null;
       /**
@@ -5108,7 +5108,7 @@ export interface operations {
         limit?: number;
         /** @description Opaque next_cursor from the previous page; returns older messages */
         cursor?: string;
-        /** @description suas-specs D-061 (owner-approved by ID 2026-11-09 3:19 PM PT), proposal text, not released: R8.11. A chat_thread_id of this request. Without it the live thread is returned. An earlier (released) thread is readable only by the requester; for anyone else, for a thread of another request, or for an unknown id, the response is the same 404. */
+        /** @description DISPATCH.md §14.10 (R8.11, D-061, released in 0.9.0). A chat_thread_id of this request. Without it the live thread is returned. An earlier (released) thread is readable only by the requester; for anyone else, for a thread of another request, or for an unknown id, the response is the same 404. */
         thread?: string;
       };
       header?: never;
@@ -5145,7 +5145,7 @@ export interface operations {
   sendChatMessage: {
     parameters: {
       query?: {
-        /** @description suas-specs D-061 (owner-approved by ID 2026-11-09 3:19 PM PT), proposal text, not released: R8.11. Optional. If given, it must be the live thread's chat_thread_id. An earlier (released) thread is read-only: naming it, a thread of another request, or an unknown id gets the same 404, and nothing is stored. */
+        /** @description DISPATCH.md §14.10 (R8.11, D-061, released in 0.9.0). Optional. If given, it must be the live thread's chat_thread_id. An earlier (released) thread is read-only: naming it, a thread of another request, or an unknown id gets the same 404, and nothing is stored. */
         thread?: string;
       };
       header: {

@@ -3,8 +3,8 @@
  *
  * Applies migrations to TEST_MIGRATIONS_DATABASE_URL (separate from the shared
  * suite DB), reports applied version count, and exits non-zero on drift/plan
- * failure. It does not restore a backup: the approved D-024 pilot objectives
- * remain unverified until an ops-owned restore exercise supplies its evidence.
+ * failure. It does not restore a backup: D-024 recovery objectives are
+ * DECISION_PENDING, and no restore exercise has supplied evidence.
  */
 
 import { loadConfig } from '../src/config/index.js';

@@ -1,5 +1,6 @@
 /**
- * D-007 365-day retention dry-run evaluation.
+ * Retention dry-run evaluation with a 365-day placeholder window. D-007 durations are
+ * `DECISION_PENDING` (SUAS-specs PRIVACY.md §2, §10); the 365 days are not released.
  *
  * This module only evaluates a supplied, non-identifying candidate. It never
  * selects rows, performs a deletion, or treats eligibility as authorization.
@@ -62,7 +63,7 @@ function addCalendarDays(from: Date, days: number): Date {
 }
 
 /**
- * Evaluates the approved policy: 365 days after the later of case closure and
+ * Evaluates the placeholder policy: 365 days after the later of case closure and
  * last participant activity, subject to documented exclusions. Exact boundary
  * time is eligible. The result still requires manual review.
  */

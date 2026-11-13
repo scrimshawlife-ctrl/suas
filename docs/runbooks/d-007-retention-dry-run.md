@@ -1,13 +1,15 @@
 # D-007 retention dry-run
 
-**Status:** approved for synthetic, non-destructive dry runs only. This runbook
+**Status:** synthetic, non-destructive dry runs only. D-007 retention durations are
+`DECISION_PENDING` in SUAS-specs (PRIVACY.md §2, §10); the 365-day window is a
+placeholder, not a released rule. This runbook
 does not authorize a purge, export delivery, provider contact, pilot launch, or
 production operation.
 
 ## Purpose
 
-Produce a repeatable, aggregate-only evidence record for the approved D-007
-365-day retention rule. The implementation evaluates supplied, non-identifying
+Produce a repeatable, aggregate-only evidence record for the 365-day placeholder
+retention window. The implementation evaluates supplied, non-identifying
 candidates and returns `MANUAL_REVIEW_REQUIRED` in every case.
 
 ## Preconditions

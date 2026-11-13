@@ -57,3 +57,7 @@ blob-report/
 
 # Web end-to-end suite output (web/playwright.e2e.config.ts)
 web/e2e-results/
+
+# Local agent tooling output (Playwright MCP snapshots, Claude Code worktrees)
+.playwright-mcp/
+.claude/worktrees/

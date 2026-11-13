@@ -1,6 +1,6 @@
 /**
- * Synthetic load harness — measures against an approved pilot comparison target
- * without claiming SLO compliance, because D-021 has no workload magnitude.
+ * Synthetic load harness — measures against a local comparison input without
+ * claiming SLO compliance: D-021 and D-023 are DECISION_PENDING.
  *
  * Drives concurrent authenticated GET /api/v0/health and /api/v0/resources
  * against a running startApp instance. Prints p50/p95 latency only.
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
               percentile(samples, 95) <= PILOT_PERFORMANCE_SLOS.successfulReadP95Ms,
           },
           slo_verdict: 'NOT_COMPUTABLE',
-          note: 'D-023 read target is approved for pilot comparison. D-021 workload magnitude is not released, so this local run cannot establish sustained-load compliance.',
+          note: 'The read target is a local comparison input; D-023 and D-021 are DECISION_PENDING, so this local run cannot establish SLO or sustained-load compliance.',
         },
         null,
         2,

@@ -24,7 +24,7 @@ import {
   pageSize,
   takePage,
   timestampText,
-} from '../http/cursor.js';
+} from '../db/cursor.js';
 import { assertServiceCategory, type ServiceCategory } from '../coordination/index.js';
 import type { IntegrationMode } from './port.js';
 import { INTEGRATION_MODES } from './port.js';
@@ -632,7 +632,7 @@ export interface ResourceSearchPage {
   readonly nextCursor: string | undefined;
 }
 
-export { InvalidCursorError as InvalidResourceCursorError } from '../http/cursor.js';
+export { InvalidCursorError as InvalidResourceCursorError } from '../db/cursor.js';
 
 /**
  * Keyset over (active DESC, last_verified_at DESC NULLS LAST, resource_id ASC). An empty

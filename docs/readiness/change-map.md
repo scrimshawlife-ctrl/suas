@@ -22,13 +22,13 @@
 
 ## Open D-0xx affecting pilot/production
 
-| ID                    | Class                   | Packet                                               |
-| --------------------- | ----------------------- | ---------------------------------------------------- |
-| D-022                 | DECIDED FOR STAGING     | `docs/decision-packets/D-022-durable-jobs.md`        |
-| D-021 / D-023 / D-024 | OWNER_DECISION_REQUIRED | `docs/decision-packets/D-021-023-024-slo-rto.md`     |
-| D-001 / D-005         | DECIDED FOR STAGING     | `docs/decision-packets/D-001-005-staging-hosting.md` |
-| D-025                 | OWNER_DECISION_REQUIRED | (reporting policy; packet not required for this cut) |
-| D-007                 | DECIDED FOR STAGING     | 365-day retained history; production purge deferred  |
+| ID                    | Class                                                   | Packet                                               |
+| --------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
+| D-022                 | DECISION_PENDING (specs); local choice: Postgres outbox | `docs/decision-packets/D-022-durable-jobs.md`        |
+| D-021 / D-023 / D-024 | OWNER_DECISION_REQUIRED                                 | `docs/decision-packets/D-021-023-024-slo-rto.md`     |
+| D-001 / D-005         | DECIDED FOR STAGING                                     | `docs/decision-packets/D-001-005-staging-hosting.md` |
+| D-025                 | OWNER_DECISION_REQUIRED                                 | (reporting policy; packet not required for this cut) |
+| D-007                 | DECISION_PENDING (specs)                                | 365-day window is a local placeholder; no purge      |
 
 ## HTTP vs domain gaps (remaining)
 

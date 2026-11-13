@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  projectApprovedReporting,
-  REPORTING_MINIMUM_K,
+  projectAggregateReporting,
+  PLACEHOLDER_REPORTING_MINIMUM_K,
   REPORTING_RELEASE_STATE,
-  type ApprovedReportingEvent,
+  type AggregateReportingEvent,
 } from '../../src/reporting/index.js';
 
-const BASE_EVENT: ApprovedReportingEvent = {
+const BASE_EVENT: AggregateReportingEvent = {
   period: '2026-08',
   geographyLevel: 'COUNTY',
   geographyCode: 'SYNTHETIC-COUNTY',
@@ -20,14 +20,14 @@ const BASE_EVENT: ApprovedReportingEvent = {
 
 function events(
   count: number,
-  overrides: Partial<ApprovedReportingEvent> = {},
-): ApprovedReportingEvent[] {
+  overrides: Partial<AggregateReportingEvent> = {},
+): AggregateReportingEvent[] {
   return Array.from({ length: count }, () => ({ ...BASE_EVENT, ...overrides }));
 }
 
-describe('D-025 approved reporting projection', () => {
+describe('aggregate reporting projection (D-025 not released)', () => {
   it('keeps reporting implementation disabled pending release evidence', () => {
-    const projection = projectApprovedReporting('INTERNAL', []);
+    const projection = projectAggregateReporting('INTERNAL', []);
     expect(projection.releaseState).toBe(REPORTING_RELEASE_STATE);
     expect(projection.releaseState).toBe('IMPLEMENTED_DISABLED_PENDING_EVIDENCE');
   });
@@ -39,9 +39,9 @@ describe('D-025 approved reporting projection', () => {
     ['PARTNER', 20, 'NONE'],
     ['PUBLIC', 19, 'PRIMARY_K'],
     ['PUBLIC', 20, 'NONE'],
-  ] as const)('applies the approved %s threshold at k=%i', (audience, count, suppression) => {
-    const projection = projectApprovedReporting(audience, events(count));
-    expect(projection.minimumK).toBe(REPORTING_MINIMUM_K[audience]);
+  ] as const)('applies the placeholder %s threshold at k=%i', (audience, count, suppression) => {
+    const projection = projectAggregateReporting(audience, events(count));
+    expect(projection.minimumK).toBe(PLACEHOLDER_REPORTING_MINIMUM_K[audience]);
     expect(projection.cells).toHaveLength(1);
     expect(projection.cells[0]?.suppression).toBe(suppression);
     if (suppression === 'NONE') {
@@ -62,7 +62,7 @@ describe('D-025 approved reporting projection', () => {
   });
 
   it('applies complementary suppression within a fixed period and geography bucket', () => {
-    const projection = projectApprovedReporting('INTERNAL', [
+    const projection = projectAggregateReporting('INTERNAL', [
       ...events(10),
       ...events(9, {
         resourceCategory: 'SHELTER',
@@ -82,17 +82,17 @@ describe('D-025 approved reporting projection', () => {
 
   it('accepts only fixed coarse dimensions and rejects extra row-level data', () => {
     expect(() =>
-      projectApprovedReporting('INTERNAL', [
+      projectAggregateReporting('INTERNAL', [
         {
           ...BASE_EVENT,
           userId: 'must-not-enter-the-projection',
-        } as ApprovedReportingEvent,
+        } as AggregateReportingEvent,
       ]),
     ).toThrow(/Unrecognized key/);
   });
 
   it('uses no mutable filters, provider identity, exact timestamp, or free-text field', () => {
-    const projection = projectApprovedReporting('INTERNAL', events(10));
+    const projection = projectAggregateReporting('INTERNAL', events(10));
     expect(projection.fixedDimensions).toEqual([
       'period',
       'geographyLevel',

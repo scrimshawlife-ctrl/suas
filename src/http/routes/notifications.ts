@@ -11,7 +11,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
-import { pageQuery } from '../cursor.js';
+import { pageQuery } from '../../db/cursor.js';
 import { API_PREFIX } from '../../release/pins.js';
 import {
   listRecipientNotificationPage,
