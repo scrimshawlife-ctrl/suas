@@ -231,9 +231,8 @@ test('when the open list or a Take fails on the server, the board says so and re
   await expect(page).toHaveURL(new RegExp(`/serve/requests/${id}$`));
 });
 
-// G8 (agent C): "You're helping" reads one page of `ownership=mine` and ignores `next_cursor`,
-// so a helper holding more than 20 requests never sees the oldest one.
-test.fixme('a helper holding more than one page of requests sees them all through "Show more"', async ({
+// G8 (#290): "You're helping" pages `ownership=mine` by `next_cursor` through Show more.
+test('a helper holding more than one page of requests sees them all through "Show more"', async ({
   browser,
   request,
 }) => {

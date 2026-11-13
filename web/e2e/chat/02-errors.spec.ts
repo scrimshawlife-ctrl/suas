@@ -101,7 +101,8 @@ test('after a release the old helper loses the chat, a stale chat page cannot po
   await device.getByLabel('Message Marcus T.').fill(`Still there? ${tag()}`);
   await device.getByRole('button', { name: 'Send', exact: true }).click();
   expect((await refused).status).toBe(404);
-  await expect(history(device).getByText('Not sent.')).toBeVisible();
+  // A 404 is final (G5, #280): Could not send, with no Try again.
+  await expect(history(device).getByText('Could not send.')).toBeVisible();
   await shoot(device, 'chat-02-stale-after-release');
 
   // A new helper takes it and starts with an empty chat; the Veteran sees only the new one live.
@@ -152,7 +153,7 @@ test('a send on a chat a release closed gets CHAT_CLOSED and is not stored', asy
   const { requester, text, status, code } = await sendAfterRelease(browser, request);
   expect(status).toBe(409);
   expect(code).toBe('CHAT_CLOSED');
-  await expect(history(requester).getByText('Not sent.')).toBeVisible();
+  await expect(history(requester).getByText('Could not send.')).toBeVisible();
   // A reload shows the closed thread without the refused message.
   await requester.reload();
   await expect(
@@ -162,9 +163,8 @@ test('a send on a chat a release closed gets CHAT_CLOSED and is not stored', asy
   await expect(requester.getByRole('textbox')).toHaveCount(0);
 });
 
-// G5 (agent B): the outbox treats every failure as retryable, so CHAT_CLOSED shows "Try again",
-// which can never succeed. A 4xx other than 408/429 should be final, with the reason shown.
-test.fixme('a CHAT_CLOSED send is final: no "Try again", and the person is told why', async ({
+// G5 (#280): a 4xx other than 408/429 is final: no Try again, and the reason is shown.
+test('a CHAT_CLOSED send is final: no "Try again", and the person is told why', async ({
   browser,
   request,
   allow,

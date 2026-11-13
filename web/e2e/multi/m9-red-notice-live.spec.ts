@@ -10,9 +10,8 @@ test.describe.configure({ timeout: 180_000 });
 
 const NOTICE = /Someone who named you as a trusted contact asked SUAS to send you this notice/;
 
-// Bug (handoff to C, owner of support/api.ts paging): useNotifications has no refetchInterval
-// and refetchOnWindowFocus is off, so a notice that arrives while the page is open never shows.
-test.fixme('a RED notice shows on the open Notifications page without a reload', async ({
+// The Notifications page polls every 30 s (#290), so the notice shows without a reload.
+test('a RED notice shows on the open Notifications page without a reload', async ({
   browser,
   request,
 }) => {

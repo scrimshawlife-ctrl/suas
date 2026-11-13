@@ -9,9 +9,8 @@ import { newHelper, newRequester, seedAcceptedRequests } from '../serve/serve';
 
 test.describe.configure({ timeout: 300_000 });
 
-// G8 (agent C): the list reads one page (limit 100, the server maximum) and ignores
-// `next_cursor`, so a person with more than 100 conversations never sees the oldest.
-test.fixme('a person with more than one page of conversations reaches the oldest through "Show more"', async ({
+// G8 (#290): the list pages by `next_cursor` (limit 100, the server maximum) through Show more.
+test('a person with more than one page of conversations reaches the oldest through "Show more"', async ({
   browser,
   request,
 }) => {

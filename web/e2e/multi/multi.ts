@@ -34,6 +34,11 @@ export async function veteranWithRedContact(
   await expect(row.getByText('Accepted')).toBeVisible();
   const notice = row.getByRole('switch', { name: /Send this person a notice from SUAS/ });
   await notice.click();
+  // R12.3: the consent text is confirmed before the grant.
+  await veteran
+    .getByRole('dialog', { name: 'Turn on this alert?' })
+    .getByRole('button', { name: 'Turn on' })
+    .click();
   await expect(notice).toBeChecked();
   return { veteran, contact };
 }
