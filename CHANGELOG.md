@@ -13,6 +13,10 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- Rate-limit cleanup expires only registered buckets at their own window length, preserving daily invitation caps across worker sweeps (AUTH.md §3, SECURITY.md §2).
+
 ### Changed
 
 - **Cloudflare Worker and Neon staging retired (R11.6; contributor proposal, specs #75, not released).** Removed the Worker entry (`src/worker.ts`, `src/worker/**`), `wrangler.jsonc`, `.dev.vars.example`, the Fetch bridge `src/http/dispatch.ts`, the Hyperdrive pool (`createWorkerPool`), the `runtime`/`listenPort` options of `startApp` and the `logger`/`workerRuntime` options of `createServer`, the `find-my-way` patch and `patch-package`, the `worker:dev`, `staging:contract`, `evidence:preflight` and `check:staging:path-params` scripts, and the `worker-deploy`, `staging-migrate`, `cloudflare-token-preflight`, `recovery-runtime-acceptance`, `staging-path-param-check`, `staging-acceptance`, `staging-recovery-fixtures` and `synthetic-staging-soak` workflows. An unhandled 5xx is now logged once, through pino with its route (A4-23). The fixed demo code is LOCAL only (STAGING issued it only on the Worker). `npm run dev:demo` always starts the Node server. `SUAS_WORKER_BASE_URL` is gone; the local seed hint reads `SUAS_E2E_BASE_URL`. STAGING deploys and rollbacks run by hand with CDK (`docs/runbooks/deployment-rollback.md`); the Worker runbooks are deleted. Historical evidence that cites the Worker is unchanged.

@@ -12,6 +12,11 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
 import { consumeRateLimit, enforceRateLimit } from '../../auth/index.js';
+import {
+  INVITE_LIMIT_PER_VETERAN,
+  INVITE_LIMIT_PER_ADDRESS,
+  INVITE_EMAIL_CAP_PER_RECIPIENT,
+} from '../../consent/invite-limits.js';
 import { normalizeDestination } from '../../auth/secrets.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { requireVerifiedVeteran } from '../../identity/index.js';
@@ -128,28 +133,12 @@ async function deliverInvite(
  * the invite's transaction. Both counters depend on the caller's own invites only, so a
  * 429 never tells one Veteran that someone else invited the same address.
  */
-export const INVITE_LIMIT_PER_VETERAN = {
-  bucket: 'trusted_contact.invite.veteran',
-  limit: 10,
-  windowSeconds: 86_400,
-};
-export const INVITE_LIMIT_PER_ADDRESS = {
-  bucket: 'trusted_contact.invite.veteran_address',
-  limit: 3,
-  windowSeconds: 86_400,
-};
+export {
+  INVITE_LIMIT_PER_VETERAN,
+  INVITE_LIMIT_PER_ADDRESS,
+  INVITE_EMAIL_CAP_PER_RECIPIENT,
+} from '../../consent/invite-limits.js';
 
-/**
- * Recipient protection across Veterans: at most this many invite emails to one address per
- * tenant per 24 hours. Past it the invite is still created and answered exactly as usual, and
- * only the email is suppressed (Notification UNDELIVERABLE with this reason, audited), so no
- * caller learns that someone else invited the address.
- */
-export const INVITE_EMAIL_CAP_PER_RECIPIENT = {
-  bucket: 'trusted_contact.invite.recipient',
-  limit: 5,
-  windowSeconds: 86_400,
-};
 export const INVITE_EMAIL_SUPPRESSED = 'INVITE_RECIPIENT_CAP';
 
 const idParams = z.object({ id: z.string().uuid() });
