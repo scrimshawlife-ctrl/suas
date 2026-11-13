@@ -1,8 +1,9 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
+import { createQueryClient } from '../../app/query-client';
 import { tokenStore } from '../../api/token-store';
 import type { ConsentGrant, TrustedContact } from './api';
 import { ALERT_LABEL, ALERT_OFF, ALERT_ON, ALERT_UNAVAILABLE, AlertToggle } from './AlertToggle';
@@ -38,9 +39,8 @@ const activeGrant: ConsentGrant = {
 
 function wrap(grants: readonly ConsentGrant[] | undefined) {
   return (
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}
-    >
+    // The app's own client, so a 404 template read is final as it is in the app.
+    <QueryClientProvider client={createQueryClient()}>
       <AlertToggle contact={contact} grants={grants} />
     </QueryClientProvider>
   );

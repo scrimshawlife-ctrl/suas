@@ -138,7 +138,7 @@ describe('RequestPage with the assistant', () => {
     await userEvent.paste('Library steps');
     await userEvent.click(assistant().getByRole('button', { name: 'Send request' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('That did not go through');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong on our side');
     expect(postCalls('/api/v0/intake/drafts/{id}/submit')).toHaveLength(0);
   });
 

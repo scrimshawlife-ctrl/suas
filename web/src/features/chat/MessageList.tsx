@@ -133,6 +133,15 @@ export function MessageList({
             </p>
             {item.status === 'sending' ? (
               <p className="mt-1.5 text-16 text-slate">Sending</p>
+            ) : item.status === 'refused' ? (
+              <p
+                role="alert"
+                className="mt-1.5 flex flex-wrap items-center justify-end gap-2 text-16"
+              >
+                <AlertCircleIcon size={20} />
+                <span className="font-bold">Could not send.</span>
+                <span>{item.reason}</span>
+              </p>
             ) : (
               <p
                 role="alert"

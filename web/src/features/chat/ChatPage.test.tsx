@@ -327,7 +327,7 @@ describe('failures', () => {
     expect(screen.queryByText("We couldn't load earlier messages.")).not.toBeInTheDocument();
   });
 
-  it('shows a send that the server refused (4xx) as not sent, without retrying by itself', async () => {
+  it('shows a send the server refused for good (4xx) as could not send, with no retry', async () => {
     mockApi({ messages: () => page2 });
     const user = userEvent.setup();
     renderChat(`/chat/${REQ}`);
@@ -335,11 +335,13 @@ describe('failures', () => {
     client.POST.mockImplementation((path: string) =>
       path === '/api/v0/chat/connect-tickets'
         ? Promise.reject(new ApiError(503, 'CHAT_REALTIME_UNAVAILABLE', 'No push.'))
-        : Promise.reject(new ApiError(422, 'VALIDATION_FAILED', 'Body must not be empty.')),
+        : Promise.reject(new ApiError(409, 'CHAT_CLOSED', 'This chat is closed.')),
     );
     await user.type(box, 'hello');
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(await screen.findByText('Not sent.')).toBeInTheDocument();
+    expect(await screen.findByText('Could not send.')).toBeInTheDocument();
+    expect(screen.getByText('This chat is closed.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
     const sends = client.POST.mock.calls.filter(
       ([path]) => path !== '/api/v0/chat/connect-tickets',
     );
