@@ -43,6 +43,14 @@ export function isMissingRecord(value: unknown): boolean {
   return isApiError(value) && (value.status === 404 || value.status === 400);
 }
 
+/** Code of the 408 the client raises when a request gets no answer in time (`client.ts`). */
+export const TIMEOUT_CODE = 'TIMEOUT';
+
+/** No answer came back: the fetch failed (offline, dropped connection) or timed out (408). */
+export function isConnectionError(value: unknown): boolean {
+  return !isApiError(value) || value.status === 408;
+}
+
 /**
  * The app wide query `retry` (`query-client.ts`): a 4xx will not change on retry; a 5xx or a
  * dropped connection gets two more tries.

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createApiClient } from './client';
+import { createApiClient, REQUEST_TIMEOUT_MS } from './client';
 import { ApiError } from './errors';
 import { createTokenStore } from './token-store';
 
@@ -211,5 +211,38 @@ describe('api client middleware', () => {
     expect(store.getToken()).toBe('tok');
     expect(onMfaRequired).toHaveBeenCalledTimes(1);
     expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+});
+
+describe('api client timeout (G2)', () => {
+  // A fetch on a dead connection: like fetch, it rejects with the reason once its signal aborts.
+  const hang = (request: Request) =>
+    new Promise<Response>((_, reject) => {
+      const fail = () => {
+        reject(request.signal.reason as Error);
+      };
+      if (request.signal.aborted) fail();
+      else request.signal.addEventListener('abort', fail);
+    });
+
+  it('waits 30 s by default', () => {
+    expect(REQUEST_TIMEOUT_MS).toBe(30_000);
+  });
+
+  it('turns a request with no answer into a 408 TIMEOUT ApiError', async () => {
+    const client = createApiClient({ baseUrl: 'http://localhost', timeoutMs: 20, fetch: hang });
+    await expect(
+      client.PUT('/api/v0/veterans/me/county', { body: { county: 'ALAMEDA' } }),
+    ).rejects.toMatchObject({ status: 408, code: 'TIMEOUT' });
+  });
+
+  it("keeps the caller's own abort as an abort, not a timeout", async () => {
+    const client = createApiClient({ baseUrl: 'http://localhost', timeoutMs: 5_000, fetch: hang });
+    const controller = new AbortController();
+    const pending = client.GET('/api/v0/health', { signal: controller.signal });
+    controller.abort();
+    const error: unknown = await pending.catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(ApiError);
+    expect((error as Error).name).toBe('AbortError');
   });
 });

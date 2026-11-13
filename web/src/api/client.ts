@@ -1,9 +1,12 @@
 import createClient, { type Middleware } from 'openapi-fetch';
-import { apiErrorFromResponse, GATE_CODES } from './errors';
+import { ApiError, apiErrorFromResponse, GATE_CODES, TIMEOUT_CODE } from './errors';
 import type { ApiPaths } from './client-types';
 import { tokenStore as defaultTokenStore, type TokenStore } from './token-store';
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+
+/** Every request gives up after this long (B2), so a hung fetch ends in an error, not "Loading…". */
+export const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * Sign-in endpoints answer 401 for a wrong code, and logout answers 401 when the session is
@@ -27,6 +30,8 @@ export interface ApiClientOptions {
   onMfaRequired?: () => void;
   fetch?: (input: Request) => Promise<Response>;
   newIdempotencyKey?: () => string;
+  /** Defaults to REQUEST_TIMEOUT_MS; tests shorten it. */
+  timeoutMs?: number;
 }
 
 /** Hard navigation fallback; the app registers a router based redirect instead. */
@@ -58,6 +63,7 @@ export function createApiMiddleware(options: ApiClientOptions = {}): Middleware 
   const newKey = options.newIdempotencyKey ?? (() => crypto.randomUUID());
   const onUnauthorized = options.onUnauthorized ?? (() => unauthorizedHandler());
   const onMfaRequired = options.onMfaRequired ?? (() => mfaRequiredHandler());
+  const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
   return {
     onRequest({ request }) {
@@ -68,7 +74,17 @@ export function createApiMiddleware(options: ApiClientOptions = {}): Middleware 
       if (WRITE_METHODS.has(request.method) && !request.headers.has('Idempotency-Key')) {
         request.headers.set('Idempotency-Key', newKey());
       }
-      return request;
+      // The caller's signal still cancels; the timeout ends a request nobody answers.
+      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)]);
+      return new Request(request, { signal });
+    },
+    onError({ request }) {
+      // Matched by name: under test the DOMException class comes from another realm.
+      const reason = request.signal.reason as { name?: unknown } | undefined;
+      if (reason?.name === 'TimeoutError') {
+        return new ApiError(408, TIMEOUT_CODE, 'The request got no answer in time.');
+      }
+      return undefined;
     },
     async onResponse({ request, response, schemaPath }) {
       if (response.ok) return response;
