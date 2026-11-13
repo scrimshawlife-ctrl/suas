@@ -38,6 +38,17 @@ export type MigrationsMode = (typeof MIGRATIONS_MODES)[number];
  * Unverified TLS is deliberately not offered.
  */
 export const DATABASE_SSL_MODES = ['disable', 'verify'] as const;
+
+/**
+ * Client-side bound on one query (ARCHITECTURE.md §13 finite timeouts), unless
+ * `DATABASE_QUERY_TIMEOUT_MS` sets another. Below the 29 s API Gateway and 30 s Lambda
+ * limits so the caller still answers. A mechanism value, not an SLO.
+ */
+export const DEFAULT_QUERY_TIMEOUT_MS = 20_000;
+
+/** `SUAS_JOB_QUEUE`: the LOCAL/TEST queue; STAGING/PRODUCTION always use the outbox. */
+export const LOCAL_JOB_QUEUES = ['in-memory-fake', 'postgres-outbox'] as const;
+export type LocalJobQueue = (typeof LOCAL_JOB_QUEUES)[number];
 export type DatabaseSslMode = (typeof DATABASE_SSL_MODES)[number];
 
 /**
@@ -266,9 +277,12 @@ const rawConfigSchema = z.object({
   // --- Data / persistence. ENVIRONMENT.md §3. ---
   DATABASE_URL: optionalRaw,
   DATABASE_POOL_MAX: optionalRaw,
+  DATABASE_QUERY_TIMEOUT_MS: optionalRaw,
   DATABASE_SSL_MODE: optionalRaw,
   // Path to a PEM CA bundle (e.g. the AWS RDS global bundle). Read at pool creation.
   DATABASE_SSL_CA_FILE: optionalRaw,
+  // ENVIRONMENT.md §5: an unknown queue fails closed instead of silently picking the fake.
+  SUAS_JOB_QUEUE: optionalEnum('SUAS_JOB_QUEUE', LOCAL_JOB_QUEUES, 'in-memory-fake'),
   SUAS_MIGRATIONS_MODE: requiredEnum(
     'SUAS_MIGRATIONS_MODE',
     MIGRATIONS_MODES,
@@ -457,9 +471,13 @@ export interface SuasConfig {
   readonly specVersion: string;
   readonly releaseManifest: string;
   readonly allowRealExternalEffects: boolean;
+  /** LOCAL/TEST job queue choice; ignored in STAGING/PRODUCTION. */
+  readonly localJobQueue: LocalJobQueue;
   readonly database: {
     readonly url: string | undefined;
     readonly poolMax: number;
+    /** Client-side `query_timeout` for every pool and client. */
+    readonly queryTimeoutMillis: number;
     readonly migrationsMode: MigrationsMode;
     /** Names or URLs that may be wiped by `migrate reset`. Empty refuses every reset. */
     readonly resetAllowlist: readonly string[];
@@ -1384,6 +1402,7 @@ export function shapeConfig(
     specVersion: SPEC_VERSION,
     releaseManifest: RELEASE_MANIFEST,
     allowRealExternalEffects: raw.SUAS_ALLOW_REAL_EXTERNAL_EFFECTS,
+    localJobQueue: raw.SUAS_JOB_QUEUE,
     database: {
       url: raw.DATABASE_URL,
       // ENVIRONMENT.md §3: the pool must be bounded. The exact production value
@@ -1393,6 +1412,14 @@ export function shapeConfig(
         raw.DATABASE_POOL_MAX,
         5,
         { min: 1, max: 100 },
+        ctx,
+      ),
+      // The upper bound is the largest delay a Node timer holds; above it fires at once.
+      queryTimeoutMillis: parsePositiveInt(
+        'DATABASE_QUERY_TIMEOUT_MS',
+        raw.DATABASE_QUERY_TIMEOUT_MS,
+        DEFAULT_QUERY_TIMEOUT_MS,
+        { min: 1, max: 2_147_483_647 },
         ctx,
       ),
       migrationsMode: raw.SUAS_MIGRATIONS_MODE,

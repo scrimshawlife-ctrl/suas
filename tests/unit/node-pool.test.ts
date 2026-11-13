@@ -48,6 +48,23 @@ describe('query timeouts (A4-06)', () => {
     }
   });
 
+  it('reads DATABASE_QUERY_TIMEOUT_MS and refuses a value that is not a positive integer', async () => {
+    const pool = createPool(
+      loadConfig(validEnv({ SUAS_MIGRATIONS_MODE: 'off', DATABASE_QUERY_TIMEOUT_MS: '7000' })),
+      'node',
+    );
+    try {
+      expect(pool.options.query_timeout).toBe(7_000);
+    } finally {
+      await pool.end();
+    }
+    for (const bad of ['0', '-1', '2.5', 'soon']) {
+      expect(() =>
+        loadConfig(validEnv({ SUAS_MIGRATIONS_MODE: 'off', DATABASE_QUERY_TIMEOUT_MS: bad })),
+      ).toThrow(/DATABASE_QUERY_TIMEOUT_MS/);
+    }
+  });
+
   it('discards a transaction client whose query timed out instead of reusing it', async () => {
     const sent: string[] = [];
     const release = vi.fn();
