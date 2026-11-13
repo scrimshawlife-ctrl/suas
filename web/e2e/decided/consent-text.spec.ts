@@ -2,9 +2,6 @@ import { expect, test } from '../fixtures';
 import { API_URL } from '../config';
 import { newPerson, newVerifiedVeteran, signUp, uniqueEmail, withDb } from '../helpers';
 
-/** The synthetic RED-alert template text `seed-local` publishes (src/cli/seed-local.ts). */
-const SEEDED_TEXT = 'Synthetic test template for the RED-alert notice — local development only.';
-
 /** R12.3 (contributor proposal, SUAS-specs #79): the consent text is shown before the grant. */
 test('turning on the RED alert shows the published consent text and grants only on confirm', async ({
   browser,
@@ -51,10 +48,19 @@ test('turning on the RED alert shows the published consent text and grants only 
       return rows.rows.map((row) => row.consent_template_version);
     });
 
+  // The published version now: seed-local's, or a later one another test (M2) published.
+  const token = await page.evaluate(() => sessionStorage.getItem('suas.session') ?? '');
+  const published = (await (
+    await request.get(`${API_URL}/api/v0/consent-templates/published`, {
+      params: { purpose: 'red-alert-trusted-contact' },
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  ).json()) as { version_key: string; body: string };
+
   // Cancel: the text was shown and nothing was granted.
   await toggle.click();
   const dialog = page.getByRole('dialog', { name: 'Turn on this alert?' });
-  await expect(dialog.getByText(SEEDED_TEXT)).toBeVisible();
+  await expect(dialog.getByText(published.body)).toBeVisible();
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(toggle).not.toBeChecked();
@@ -65,13 +71,5 @@ test('turning on the RED alert shows the published consent text and grants only 
   await dialog.getByRole('button', { name: 'Turn on' }).click();
   await expect(toggle).toBeChecked();
   await expect(listItem.getByText('On. The notice does not say why.')).toBeVisible();
-  const token = await page.evaluate(() => sessionStorage.getItem('suas.session') ?? '');
-  const published = (await (
-    await request.get(`${API_URL}/api/v0/consent-templates/published`, {
-      params: { purpose: 'red-alert-trusted-contact' },
-      headers: { Authorization: `Bearer ${token}` },
-    })
-  ).json()) as { version_key: string; body: string };
-  expect(published.body).toBe(SEEDED_TEXT);
   expect(await grants()).toEqual([published.version_key]);
 });
