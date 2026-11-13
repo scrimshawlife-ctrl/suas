@@ -8,7 +8,11 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { createUser, setUserDisplayName } from '../../src/identity/index.js';
+import { createUser, setUserDisplayName, setUserStatus } from '../../src/identity/index.js';
+import {
+  INVITE_LIMIT_PER_ADDRESS,
+  INVITE_LIMIT_PER_VETERAN,
+} from '../../src/http/routes/trusted-contacts.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
@@ -270,5 +274,78 @@ describe('invite delivery and the invitee read (R9.4)', () => {
     });
     expect(accepted.json().status).toBe('ACCEPTED');
     expect((await read(invitee.headers)).json()).toEqual({ invitations: [] });
+  });
+
+  it('hides an invite once the inviting Veteran is no longer ACTIVE', async () => {
+    const { headers, tenantId, user } = await veteranSession();
+    const email = syntheticEmail(`invitee-${randomUUID().slice(0, 8)}`);
+    await invite(headers, { relationship_label: 'Friend', invite_email: email });
+    const invitee = await signedIn(tenantId, email);
+    const read = async () =>
+      (
+        await app.server.inject({
+          method: 'GET',
+          url: '/api/v0/trusted-contacts/invitations',
+          headers: invitee.headers,
+        })
+      ).json().invitations as unknown[];
+    expect(await read()).toHaveLength(1);
+    await setUserStatus(requirePool(), tenantId, user.userId, 'SUSPENDED');
+    expect(await read()).toEqual([]);
+  });
+});
+
+describe('invite abuse controls', () => {
+  async function inviteSends(tenantId: string): Promise<number> {
+    const result = await requirePool().query(
+      `SELECT 1 FROM notifications WHERE tenant_id = $1 AND reason = 'trusted_contact_invited'`,
+      [tenantId],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  it('returns the open invite for an address the Veteran already invited and sends nothing more', async () => {
+    const { headers, tenantId } = await veteranSession();
+    const email = syntheticEmail(`again-${randomUUID().slice(0, 8)}`);
+    const first = await invite(headers, { relationship_label: 'Sister', invite_email: email });
+    const second = await invite(headers, {
+      relationship_label: 'Sis',
+      invite_email: email.toUpperCase(),
+    });
+    expect(first.statusCode).toBe(201);
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual({ ...first.json(), replayed: false });
+    expect(await inviteSends(tenantId)).toBe(1);
+  });
+
+  it('limits invites to one address across Veterans, with a 429 and Retry-After', async () => {
+    const email = syntheticEmail(`target-${randomUUID().slice(0, 8)}`);
+    for (let n = 0; n < INVITE_LIMIT_PER_ADDRESS.limit; n += 1) {
+      const { headers } = await veteranSession();
+      expect(
+        (await invite(headers, { relationship_label: 'Friend', invite_email: email })).statusCode,
+      ).toBe(201);
+    }
+    const { headers, tenantId } = await veteranSession();
+    const refused = await invite(headers, { relationship_label: 'Friend', invite_email: email });
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json().error.code).toBe('RATE_LIMITED');
+    expect(Number(refused.headers['retry-after'])).toBeGreaterThan(0);
+    expect(refused.body).not.toContain(email);
+    expect(await inviteSends(tenantId)).toBe(0);
+  });
+
+  it('limits how many invites one Veteran sends', async () => {
+    const { headers, tenantId } = await veteranSession();
+    const send = () =>
+      invite(headers, {
+        relationship_label: 'Friend',
+        invite_email: syntheticEmail(`many-${randomUUID().slice(0, 8)}`),
+      });
+    for (let n = 0; n < INVITE_LIMIT_PER_VETERAN.limit; n += 1) {
+      expect((await send()).statusCode).toBe(201);
+    }
+    expect((await send()).statusCode).toBe(429);
+    expect(await inviteSends(tenantId)).toBe(INVITE_LIMIT_PER_VETERAN.limit);
   });
 });

@@ -39,6 +39,7 @@ export {
   acceptTrustedContact,
   auditTrustedContactTransition,
   findInviteEmail,
+  findOpenInviteToAddress,
   findTrustedContact,
   inviteTrustedContact,
   listAcceptedContactsWithEmail,

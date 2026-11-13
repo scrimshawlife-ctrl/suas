@@ -153,6 +153,35 @@ export async function inviteTrustedContact(
 }
 
 /**
+ * The Veteran's open invite to the same address, if any, so a second invite returns it
+ * instead of emailing that person again. Locks the Veteran's user row first, which
+ * serializes their invite commands so two concurrent ones cannot both insert.
+ */
+export async function findOpenInviteToAddress(
+  db: Queryable,
+  input: Pick<
+    InviteTrustedContactInput,
+    'tenantId' | 'veteranUserId' | 'inviteEmail' | 'invitePhone'
+  >,
+): Promise<TrustedContact | undefined> {
+  await db.query(`SELECT 1 FROM users WHERE tenant_id = $1 AND user_id = $2 FOR UPDATE`, [
+    input.tenantId,
+    input.veteranUserId,
+  ]);
+  const email = input.inviteEmail === undefined ? null : normalizeDestination(input.inviteEmail);
+  const phone = input.invitePhone === undefined ? null : normalizeDestination(input.invitePhone);
+  const result = await db.query<ContactRow>(
+    `SELECT ${CONTACT_COLUMNS} FROM trusted_contacts
+      WHERE tenant_id = $1 AND veteran_user_id = $2 AND status = 'INVITED'
+        AND (invite_email = $3 OR invite_phone = $4)
+      ORDER BY invited_at LIMIT 1`,
+    [input.tenantId, input.veteranUserId, email, phone],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : toContact(row);
+}
+
+/**
  * Accept an invite, optionally binding an enrolled User.
  *
  * TRUSTED_CIRCLE.md §3.3: a User is bound only when their enrolled email or phone is
@@ -365,7 +394,7 @@ export async function listPendingInvitations(
         AND t.veteran_user_id <> me.user_id
        JOIN users v ON v.tenant_id = t.tenant_id AND v.user_id = t.veteran_user_id
       WHERE me.tenant_id = $1 AND me.user_id = $2 AND me.deleted_at IS NULL
-        AND me.status = 'ACTIVE' AND v.deleted_at IS NULL
+        AND me.status = 'ACTIVE' AND v.deleted_at IS NULL AND v.status = 'ACTIVE'
       ORDER BY t.invited_at, t.trusted_contact_id`,
     [tenantId, userId],
   );

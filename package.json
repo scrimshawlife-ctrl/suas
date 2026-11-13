@@ -2,6 +2,7 @@
   "name": "suas",
   "version": "0.2.0",
   "private": true,
+  "license": "MPL-2.0",
   "description": "SUAS implementation — conforms to SUAS-specs released stack 0.9.0",
   "type": "module",
   "engines": {

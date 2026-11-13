@@ -1,9 +1,19 @@
-import { hasApiCode } from '../../api/errors';
+import { hasApiCode, isApiError } from '../../api/errors';
 import { useIdempotencyKey } from '../../api/idempotency';
 import { useSingleFlight } from '../../lib/single-flight';
-import { useGrantConsent, useRevokeConsent, type ConsentGrant, type TrustedContact } from './api';
+import {
+  useGrantConsent,
+  usePublishedConsentTemplate,
+  useRevokeConsent,
+  type ConsentGrant,
+  type TrustedContact,
+} from './api';
 import { ErrorNotice } from './errors';
-import { findRedAlertGrant, redAlertGrantBody } from './red-alert-consent';
+import {
+  findRedAlertGrant,
+  RED_ALERT_TEMPLATE_PURPOSE,
+  redAlertGrantBody,
+} from './red-alert-consent';
 
 export const ALERT_LABEL =
   'Send this person a notice from SUAS after a Check-In shows you need support right away.';
@@ -23,25 +33,36 @@ export function AlertToggle({
   contact: TrustedContact;
   grants: readonly ConsentGrant[] | undefined;
 }) {
+  const template = usePublishedConsentTemplate(RED_ALERT_TEMPLATE_PURPOSE);
   const grant = useGrantConsent();
   const revoke = useRevokeConsent();
   const key = useIdempotencyKey();
   const flight = useSingleFlight();
   const active = grants ? findRedAlertGrant(grants, contact.trusted_contact_id) : undefined;
   const pending = grant.isPending || revoke.isPending;
-  const unavailable = hasApiCode(grant.error, 'CONSENT_TEMPLATE_UNAVAILABLE');
+  // No published template (404) or one superseded since it was read (422): turning on fails.
+  const noTemplate =
+    template.isError && isApiError(template.error) && template.error.status === 404;
+  const unavailable = noTemplate || hasApiCode(grant.error, 'CONSENT_TEMPLATE_UNAVAILABLE');
   const error = grant.error ?? revoke.error;
 
   function onChange(next: boolean) {
-    if (pending || grants === undefined) return;
+    if (pending || grants === undefined || template.isPending) return;
     flight(async () => {
       grant.reset();
       revoke.reset();
       const done = { onSuccess: () => key.renew() };
       if (next) {
+        const version = template.data?.version_key;
+        if (version === undefined) return;
         await grant.mutateAsync(
-          { body: redAlertGrantBody(contact.trusted_contact_id), headers: key.headers() },
-          done,
+          { body: redAlertGrantBody(contact.trusted_contact_id, version), headers: key.headers() },
+          {
+            ...done,
+            onError: (error) => {
+              if (hasApiCode(error, 'CONSENT_TEMPLATE_UNAVAILABLE')) void template.refetch();
+            },
+          },
         );
       } else if (active) {
         await revoke.mutateAsync(
@@ -60,7 +81,7 @@ export function AlertToggle({
           role="switch"
           className="mt-0.5 size-6 shrink-0 accent-service-blue"
           checked={active !== undefined}
-          aria-disabled={pending || grants === undefined ? true : undefined}
+          aria-disabled={pending || grants === undefined || template.isPending ? true : undefined}
           onChange={(event) => onChange(event.target.checked)}
         />
         <span className="break-words">{ALERT_LABEL}</span>

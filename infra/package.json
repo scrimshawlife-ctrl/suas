@@ -2,6 +2,7 @@
   "name": "suas-infra",
   "version": "0.1.0",
   "private": true,
+  "license": "MPL-2.0",
   "description": "SUAS v1 AWS infrastructure (CDK, us-west-2). STAGING only; synthetic data. Not an npm workspace.",
   "type": "module",
   "engines": {

@@ -449,7 +449,7 @@ export interface paths {
     put?: never;
     /**
      * Invite a trusted contact
-     * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). When the invite has an email, one EMAIL notification (reason trusted_contact_invited, template invite@1) goes to that address after the commit; it names nobody (TRUSTED_CIRCLE.md §3.2; R9.4, contributor proposal, specs #72, not released).
+     * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). When the invite has an email, one EMAIL notification (reason trusted_contact_invited, template invite@1) goes to that address after the commit; it names nobody (TRUSTED_CIRCLE.md §3.2; R9.4, contributor proposal, specs #72, not released). A new invite to an address this Veteran already has an INVITED row for returns that invite (200, replayed false) and sends nothing again. New invites are rate limited per Veteran (10 per 24 hours) and per invited address (3 per 24 hours): 429 RATE_LIMITED with Retry-After.
      */
     post: operations['inviteTrustedContact'];
     delete?: never;
@@ -3822,6 +3822,7 @@ export interface operations {
       };
       409: components['responses']['Error'];
       413: components['responses']['Error'];
+      429: components['responses']['Error'];
     };
   };
   removeTrustedContact: {

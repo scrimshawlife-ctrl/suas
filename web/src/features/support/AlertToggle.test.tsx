@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
+import { tokenStore } from '../../api/token-store';
 import type { ConsentGrant, TrustedContact } from './api';
 import { ALERT_LABEL, ALERT_OFF, ALERT_ON, ALERT_UNAVAILABLE, AlertToggle } from './AlertToggle';
 import { redAlertGrantBody } from './red-alert-consent';
@@ -17,9 +18,18 @@ const contact: TrustedContact = {
   contact_user_id: 'u-2',
 };
 
+const VERSION = 'red-alert-trusted-contact@1';
+const published = {
+  version_key: VERSION,
+  template_key: 'red-alert-trusted-contact',
+  version: 1,
+  body: 'Synthetic test template.',
+  published_at: '2026-11-04T09:00:00Z',
+};
+
 const activeGrant: ConsentGrant = {
   consent_grant_id: 'g1',
-  ...redAlertGrantBody('tc-1'),
+  ...redAlertGrantBody('tc-1', VERSION),
   status: 'ACTIVE',
   granted_at: '2026-11-04T10:00:00Z',
   expires_at: null,
@@ -42,21 +52,31 @@ function keyOf(call: unknown[]): string {
 
 beforeEach(() => {
   client.POST.mockReset();
+  client.GET.mockReset();
+  client.GET.mockResolvedValue({ data: published });
+  tokenStore.setToken('tok');
 });
+
+/** The switch, once the published template has loaded and it accepts changes. */
+async function readySwitch() {
+  const toggle = screen.getByRole('switch', { name: ALERT_LABEL });
+  await waitFor(() => expect(toggle).not.toHaveAttribute('aria-disabled'));
+  return toggle;
+}
 
 describe('AlertToggle', () => {
   it('is off with no grant, and turning it on posts the exact RED grant body with one key', async () => {
     client.POST.mockResolvedValue({ data: activeGrant });
     const user = userEvent.setup();
     render(wrap([]));
-    const toggle = screen.getByRole('switch', { name: ALERT_LABEL });
+    const toggle = await readySwitch();
     expect(toggle).not.toBeChecked();
     expect(screen.getByText(ALERT_OFF)).toBeInTheDocument();
 
     await user.click(toggle);
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(1));
     expect(client.POST).toHaveBeenCalledWith('/api/v0/consents', {
-      body: redAlertGrantBody('tc-1'),
+      body: redAlertGrantBody('tc-1', VERSION),
       headers: { 'Idempotency-Key': expect.any(String) as string },
     });
   });
@@ -65,7 +85,7 @@ describe('AlertToggle', () => {
     client.POST.mockResolvedValue({ data: { ...activeGrant, status: 'REVOKED' } });
     const user = userEvent.setup();
     render(wrap([activeGrant]));
-    const toggle = screen.getByRole('switch', { name: ALERT_LABEL });
+    const toggle = await readySwitch();
     expect(toggle).toBeChecked();
     expect(screen.getByText(ALERT_ON)).toBeInTheDocument();
 
@@ -83,8 +103,17 @@ describe('AlertToggle', () => {
     );
     const user = userEvent.setup();
     render(wrap([]));
-    await user.click(screen.getByRole('switch'));
+    await user.click(await readySwitch());
     expect(await screen.findByText(ALERT_UNAVAILABLE)).toBeInTheDocument();
+  });
+
+  it('says alerts cannot be turned on when no RED template is published, and posts nothing', async () => {
+    client.GET.mockImplementation(() => Promise.reject(new ApiError(404, 'NOT_FOUND', 'x')));
+    const user = userEvent.setup();
+    render(wrap([]));
+    expect(await screen.findByText(ALERT_UNAVAILABLE)).toBeInTheDocument();
+    await user.click(screen.getByRole('switch'));
+    expect(client.POST).not.toHaveBeenCalled();
   });
 
   it('keeps focus and ignores clicks while saving', async () => {
@@ -92,7 +121,7 @@ describe('AlertToggle', () => {
     client.POST.mockReturnValue(new Promise((resolve) => (finish = resolve)));
     const user = userEvent.setup();
     render(wrap([]));
-    const toggle = screen.getByRole('switch');
+    const toggle = await readySwitch();
     await user.click(toggle);
     expect(await screen.findByText('Saving…')).toBeInTheDocument();
     expect(toggle).toHaveAttribute('aria-disabled', 'true');
@@ -108,7 +137,7 @@ describe('AlertToggle', () => {
   it('sends one grant on a same-tick double click and shows no error', async () => {
     client.POST.mockResolvedValue({ data: activeGrant });
     render(wrap([]));
-    const toggle = screen.getByRole('switch');
+    const toggle = await readySwitch();
     fireEvent.click(toggle);
     fireEvent.click(toggle);
     await waitFor(() => expect(toggle).not.toHaveAttribute('aria-disabled'));
@@ -121,7 +150,7 @@ describe('AlertToggle', () => {
     client.POST.mockResolvedValue({ data: activeGrant });
     const user = userEvent.setup();
     const { rerender } = render(wrap([]));
-    await user.click(screen.getByRole('switch'));
+    await user.click(await readySwitch());
     await screen.findByRole('alert');
     await user.click(screen.getByRole('switch'));
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
