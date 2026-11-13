@@ -11,6 +11,10 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import type { SuasConfig } from '../config/index.js';
 import { appendDomainEvent } from '../events/index.js';
+import { createLicenceReaderPort } from '../identity/licence-reader-factory.js';
+import type { LicenceReaderPort } from '../identity/licence-reader.js';
+import { finishClosedReview, recordLicenceRead } from '../identity/licence-review.js';
+import { createObjectStoragePort, type ObjectStoragePort } from '../storage/index.js';
 import {
   attemptSend,
   parseNotificationSendPayload,
@@ -25,6 +29,17 @@ export interface JobToHandle {
   readonly jobType: string;
   readonly payload: JsonObject;
   readonly tenantId?: string | undefined;
+  /** This try, from 1, and the ceiling; set by the outbox, absent for an inline run. */
+  readonly attempts?: number;
+  readonly maxAttempts?: number;
+}
+
+/** Thrown to have the outbox run the job again on a later pass, with its backoff. */
+export class RetryLaterError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RetryLaterError';
+  }
 }
 export type JobWork = (job: JobToHandle) => Promise<void>;
 /** Runs once a job is dead-lettered, to settle the record it was working on. */
@@ -86,6 +101,55 @@ export function supportSignalComputeHandler(
       throw new Error('invalid support-signal.compute payload');
     }
     await runSupportSignalComputeJob(pool, config, parsed, { jobQueue: getJobQueue() });
+  };
+}
+
+/**
+ * Reads one licence review (suas-specs R10.1, proposal; L4). Outside LOCAL and TEST the
+ * back must carry the synthetic IIN before anything is sent. A reader-unavailable answer
+ * before the last try throws, so the outbox retries on a later pass. An inline run passes
+ * the API's own ports, so it reads the images that process stored.
+ */
+export function licenceReadHandler(
+  pool: Pool,
+  config: SuasConfig,
+  ports: { readonly storage?: ObjectStoragePort; readonly reader?: LicenceReaderPort } = {},
+): JobWork {
+  const deps = {
+    pool,
+    storage: ports.storage ?? createObjectStoragePort(config),
+    reader: ports.reader ?? createLicenceReaderPort(config),
+    keyring: config.fingerprintKeys,
+    synthetic: {
+      required: config.environment !== 'LOCAL' && config.environment !== 'TEST',
+      iin: config.licenceReader.syntheticIin,
+    },
+  };
+  return async (job) => {
+    const reviewId = job.payload['review_id'];
+    if (typeof reviewId !== 'string' || job.tenantId === undefined) {
+      throw new Error('invalid licence.read payload');
+    }
+    const outcome = await recordLicenceRead(deps, {
+      tenantId: job.tenantId,
+      reviewId,
+      attempt: job.attempts,
+      maxAttempts: job.maxAttempts,
+    });
+    if (outcome === 'retry') throw new RetryLaterError('licence reader unavailable; retrying');
+  };
+}
+
+/** Deletes the images of a review migration 0024 closed, and audits it (L7.5, L8.6). */
+export function licenceCloseHandler(pool: Pool, config: SuasConfig): JobWork {
+  const storage = createObjectStoragePort(config);
+  return async (job) => {
+    const reviewId = job.payload['review_id'];
+    const cause = job.payload['cause'];
+    if (typeof reviewId !== 'string' || typeof cause !== 'string' || job.tenantId === undefined) {
+      throw new Error('invalid licence.close payload');
+    }
+    await finishClosedReview({ pool, storage }, { tenantId: job.tenantId, reviewId, cause });
   };
 }
 

@@ -351,6 +351,127 @@ describe('IAM', () => {
   });
 });
 
+// suas-specs SCRY_LICENCE_FALLBACK.md (R10.1 proposal) §2.3, L4.7, L9 and
+// VA_CONFIRMATION_FLOW.md §2.1: licence images leave no copies, the worker sees only their
+// prefix, the new secrets reach only their holders, and the reader stays off with no egress.
+describe('licence review', () => {
+  type Statement = { Action: string | string[]; Resource: unknown; Condition?: unknown };
+  const assetsBucket = (): Resource | undefined =>
+    ofType(s.backend, 'AWS::S3::Bucket').find(([id]) => id.startsWith('AssetsBucket'))?.[1];
+  const envByHandler = (): Record<string, Record<string, unknown>> =>
+    Object.fromEntries(
+      ofType(s.backend, 'AWS::Lambda::Function')
+        .filter(([, r]) => r.Properties?.VpcConfig !== undefined)
+        .map(([, r]) => [
+          String(r.Properties?.Handler),
+          r.Properties?.Environment.Variables as Record<string, unknown>,
+        ]),
+    );
+  const s3StatementsOf = (roleIdPrefix: string): Statement[] => {
+    const roleId = ofType(s.backend, 'AWS::IAM::Role').find(([id]) =>
+      id.startsWith(roleIdPrefix),
+    )?.[0];
+    expect(roleId, roleIdPrefix).toBeDefined();
+    return ofType(s.backend, 'AWS::IAM::Policy')
+      .filter(([, p]) => JSON.stringify(p.Properties?.Roles).includes(`"${String(roleId)}"`))
+      .flatMap(([, p]) => p.Properties?.PolicyDocument.Statement as Statement[])
+      .filter((st) => [st.Action].flat().some((a) => a.startsWith('s3:')));
+  };
+  // The secret reaches exactly `holders`, only as a dynamic reference under `variable`, and
+  // no role can read it at run time (CloudFormation resolves it at deploy).
+  const expectSecretOnlyIn = (variable: string, holders: string[]): void => {
+    const ids = ofType(s.backend, 'AWS::SecretsManager::Secret')
+      .filter(([, r]) => String(r.Properties?.Description).startsWith(`${variable}:`))
+      .map(([id]) => id);
+    expect(ids).toHaveLength(1);
+    const id = ids[0] ?? '';
+    const envs = envByHandler();
+    expect(Object.keys(envs).sort()).toEqual(['job-worker.handler', 'migrate.handler', 'run.sh']);
+    for (const [handler, variables] of Object.entries(envs)) {
+      expect(JSON.stringify(variables).includes(id), handler).toBe(holders.includes(handler));
+      if (!holders.includes(handler)) continue;
+      const value = JSON.stringify(variables[variable]);
+      expect(value, handler).toContain('{{resolve:secretsmanager:');
+      expect(value, handler).toContain(id);
+    }
+    for (const [, policy] of ofType(s.backend, 'AWS::IAM::Policy')) {
+      expect(JSON.stringify(policy.Properties?.PolicyDocument)).not.toContain(id);
+    }
+  };
+
+  it('keeps no copies: the image bucket has no versioning or replication, and no AWS Backup', () => {
+    const bucket = assetsBucket();
+    expect(bucket).toBeDefined();
+    expect(bucket?.Properties?.VersioningConfiguration).toBeUndefined();
+    expect(bucket?.Properties?.ReplicationConfiguration).toBeUndefined();
+    for (const template of [s.dns, s.webCert, s.backend, s.web]) {
+      const types = Object.values(resourcesOf(template)).map((r) => r.Type);
+      expect(types.filter((t) => t.startsWith('AWS::Backup::'))).toEqual([]);
+    }
+  });
+
+  it('expires licence-reviews/ after 30 days and aborts unfinished uploads after 1', () => {
+    expect(assetsBucket()?.Properties?.LifecycleConfiguration.Rules).toEqual([
+      {
+        Id: 'LicenceReviewsBackstop',
+        Prefix: 'licence-reviews/',
+        ExpirationInDays: 30,
+        AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 },
+        Status: 'Enabled',
+      },
+    ]);
+  });
+
+  it('lets the job worker get and delete licence images only, and list the bucket unconditioned', () => {
+    const worker = envByHandler()['job-worker.handler'];
+    expect(worker?.SUAS_OBJECT_STORAGE_MODE).toBe('s3');
+    expect(JSON.stringify(worker?.SUAS_S3_BUCKET)).toContain('AssetsBucket');
+    const statements = s3StatementsOf('JobWorkerFunctionRole');
+    expect(statements).toHaveLength(2);
+    const objects = statements.find(
+      (st) => !([st.Action].flat() as string[]).includes('s3:ListBucket'),
+    );
+    expect([objects?.Action].flat().sort()).toEqual(['s3:DeleteObject', 's3:GetObject']);
+    expect(JSON.stringify(objects?.Resource)).toMatch(/AssetsBucket.*\/licence-reviews\/\*"/);
+    const list = statements.find((st) => [st.Action].flat().includes('s3:ListBucket'));
+    expect([list?.Action].flat()).toEqual(['s3:ListBucket']);
+    // Unconditioned, so a missing key is NoSuchKey (404) as AWS documents, not AccessDenied.
+    expect(list?.Condition).toBeUndefined();
+    expect(JSON.stringify(list?.Resource)).not.toContain('*');
+  });
+
+  it('lets the API put, get and delete licence images through its bucket-wide object grant', () => {
+    const objects = s3StatementsOf('ApiFunctionRole').find((st) =>
+      [st.Action].flat().includes('s3:PutObject'),
+    );
+    expect([objects?.Action].flat().sort()).toEqual([
+      's3:DeleteObject',
+      's3:GetObject',
+      's3:PutObject',
+    ]);
+    expect(JSON.stringify(objects?.Resource)).toMatch(/AssetsBucket.*\/\*"/);
+  });
+
+  it('gives the reader token to the job worker only', () => {
+    expectSecretOnlyIn('SUAS_SCRY_API_TOKEN', ['job-worker.handler']);
+  });
+
+  it('gives the fingerprint key and its id to the API and job worker only', () => {
+    expectSecretOnlyIn('SUAS_FINGERPRINT_KEY', ['job-worker.handler', 'run.sh']);
+    for (const [handler, variables] of Object.entries(envByHandler())) {
+      const expected = handler === 'migrate.handler' ? undefined : 'staging-1';
+      expect(variables.SUAS_FINGERPRINT_KEY_ID, handler).toBe(expected);
+    }
+  });
+
+  it('keeps the reader disabled with no reader URL on every function', () => {
+    for (const [handler, variables] of Object.entries(envByHandler())) {
+      expect(variables.SUAS_LICENCE_READER_MODE, handler).toBe('disabled');
+      expect(variables.SUAS_SCRY_BASE_URL, handler).toBeUndefined();
+    }
+  });
+});
+
 describe('DNS and email', () => {
   it('owns a retained public zone and creates no apex or www record', () => {
     s.dns.hasResource('AWS::Route53::HostedZone', {

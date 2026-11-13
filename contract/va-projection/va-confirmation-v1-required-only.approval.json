@@ -1,0 +1,13 @@
+{
+  "record": "D035_VA_CONFIRMATION_PROJECTION_APPROVAL",
+  "contract": "D035_VA_CONFIRMATION_ADAPTER.md §7",
+  "projection_id": "VA_CONFIRMATION_V1_REQUIRED_ONLY",
+  "projection_version": 1,
+  "projection_file": "evidence/d035/va-confirmation-v1-required-only.projection.json",
+  "projection_sha256": "8b5c7a02ecf6956a64872cf83645a8bb9524ebac9c7bfa743a7696cd39aa8cbf",
+  "privacy_owner": "scrimshawlife-ctrl (sandbox Privacy Owner, owner comment on suas-specs #72, 2026-11-11)",
+  "status": "DECISION_PENDING",
+  "approved_by": null,
+  "approval_timestamp": null,
+  "proposed_by": "Badri-Rajendran, 2026-11-11"
+}
