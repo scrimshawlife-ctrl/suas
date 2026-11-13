@@ -9,6 +9,7 @@
  */
 
 import type { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { QUERY_TIMEOUT_MESSAGE } from './pool.js';
 
 /** Minimal query surface shared by a Pool and a PoolClient. */
 export interface Queryable {
@@ -28,17 +29,23 @@ export async function withTransaction<T>(
   fn: (tx: PoolClient) => Promise<T>,
 ): Promise<T> {
   const client = await pool.connect();
+  let timedOut = false;
   try {
     await client.query('BEGIN');
     const result = await fn(client);
     await client.query('COMMIT');
     return result;
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {
-      // Preserve the original failure; a rollback error is secondary.
-    });
+    // A timed-out query may still be running on this connection, so it is discarded
+    // rather than returned to the pool; closing it ends the transaction server-side.
+    timedOut = error instanceof Error && error.message === QUERY_TIMEOUT_MESSAGE;
+    if (!timedOut) {
+      await client.query('ROLLBACK').catch(() => {
+        // Preserve the original failure; a rollback error is secondary.
+      });
+    }
     throw error;
   } finally {
-    client.release();
+    client.release(timedOut);
   }
 }

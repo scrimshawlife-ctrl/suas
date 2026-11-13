@@ -7,7 +7,7 @@
  */
 
 import { loadConfig } from '../config/index.js';
-import { createPool } from '../db/index.js';
+import { assertExpectedSchemaVersion, createPool } from '../db/index.js';
 import { assertSyntheticEnvironment } from '../testing/fixture-boundary.js';
 import { seedRecoveryFixtures } from '../testing/recovery-fixtures.js';
 
@@ -28,6 +28,8 @@ async function main(): Promise<void> {
   }
   const pool = createPool(config);
   try {
+    // ENVIRONMENT.md §9: refuse a schema this build cannot operate against.
+    await assertExpectedSchemaVersion(pool);
     const summary = await seedRecoveryFixtures(pool);
     console.log(
       JSON.stringify(

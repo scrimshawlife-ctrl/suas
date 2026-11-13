@@ -27,7 +27,7 @@ import {
   syntheticEmail,
   syntheticPhone,
 } from '../testing/fixture-boundary.js';
-import { createPool, withTransaction } from '../db/index.js';
+import { assertExpectedSchemaVersion, createPool, withTransaction } from '../db/index.js';
 import { createSession, elevateSession } from '../auth/index.js';
 import {
   runLocalSeed,
@@ -441,6 +441,8 @@ async function main(): Promise<void> {
 
   const pool = createPool(config);
   try {
+    // ENVIRONMENT.md §9: refuse a schema this build cannot operate against.
+    await assertExpectedSchemaVersion(pool);
     const base = await runLocalSeed(pool, { veteranLocalPart: DEMO_VETERAN_LOCAL_PART });
 
     // LOCAL demo only: re-seeding clears the sign-in rate-limit windows for the synthetic

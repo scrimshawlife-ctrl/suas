@@ -5,7 +5,7 @@ import type { Pool } from 'pg';
 
 import { DEMO_FIXED_CODE_DESTINATION } from '../auth/demo-fixed-code.js';
 import { loadConfig } from '../config/index.js';
-import { createPool } from '../db/index.js';
+import { assertExpectedSchemaVersion, createPool } from '../db/index.js';
 import { createUser, findUserByDestination, setUserStatus } from '../identity/index.js';
 
 export const STAGING_AUTH_TENANT_ID = '00000000-0000-4000-8000-000000000001';
@@ -65,6 +65,8 @@ async function main(): Promise<void> {
 
   const pool = createPool(config);
   try {
+    // ENVIRONMENT.md §9: refuse a schema this build cannot operate against.
+    await assertExpectedSchemaVersion(pool);
     const artifact = await provisionExplicitFixtures(pool, emails);
     // Reviewable registry for SUAS_STAGING_FIXTURE_REGISTRY. Identifiers only:
     // no addresses, credentials, or session material.

@@ -7,23 +7,13 @@
  */
 
 import { startApp } from './app.js';
+import { installShutdown } from './cli/shutdown.js';
 
 async function main(): Promise<void> {
   const app = await startApp({ env: process.env });
-
-  const shutdown = (signal: string): void => {
-    app.server.log.info({ signal }, 'shutting down');
-    void app.close().then(
-      () => process.exit(0),
-      (error: unknown) => {
-        console.error(error);
-        process.exit(1);
-      },
-    );
-  };
-
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  installShutdown(() => app.close(), {
+    onSignal: (signal) => app.server.log.info({ signal }, 'shutting down'),
+  });
 }
 
 main().catch((error: unknown) => {

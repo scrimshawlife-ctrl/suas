@@ -247,10 +247,15 @@ describe('validate mode', () => {
     );
   });
 
-  it('never mutates the schema', async () => {
-    await runMigrations(pool, { mode: 'validate', provenance }).catch(() => undefined);
-    const applied = await readAppliedMigrations(pool);
-    expect(applied).toHaveLength(0);
+  it('never mutates the schema, not even to create its bookkeeping table (A4-16)', async () => {
+    await expect(runMigrations(pool, { mode: 'validate', provenance })).rejects.toThrow(
+      /migration\(s\) are pending/,
+    );
+    const table = await pool.query<{ present: boolean }>(
+      `SELECT to_regclass($1) IS NOT NULL AS present`,
+      [MIGRATIONS_TABLE],
+    );
+    expect(table.rows[0]?.present).toBe(false);
   });
 });
 

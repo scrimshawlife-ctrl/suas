@@ -28,7 +28,7 @@
  */
 
 import { appendFileSync } from 'node:fs';
-import { createPool } from '../db/index.js';
+import { assertExpectedSchemaVersion, createPool } from '../db/index.js';
 import { loadConfig } from '../config/index.js';
 import { createSession } from '../auth/index.js';
 import { findUserByDestination } from '../identity/users.js';
@@ -49,6 +49,8 @@ async function main(): Promise<void> {
 
   const pool = createPool(config);
   try {
+    // ENVIRONMENT.md §9: refuse a schema this build cannot operate against.
+    await assertExpectedSchemaVersion(pool);
     const veteranEmail = syntheticEmail('veteran');
     const accepterEmail = syntheticEmail('accepter');
 

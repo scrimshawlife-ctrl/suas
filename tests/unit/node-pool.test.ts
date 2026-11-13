@@ -1,11 +1,14 @@
 /**
  * An idle-client failure must be logged, not thrown: pg-pool emits 'error' on the pool and
- * an unhandled 'error' event would crash the process.
+ * an unhandled 'error' event would crash the process. Queries carry a finite timeout
+ * (ARCHITECTURE.md §13), and a timed-out transaction client is discarded, not reused.
  */
 
 import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
-import { createPool } from '../../src/db/pool.js';
+import type { Pool } from 'pg';
+import { createPool, DEFAULT_QUERY_TIMEOUT_MS, QUERY_TIMEOUT_MESSAGE } from '../../src/db/pool.js';
+import { withTransaction } from '../../src/db/transaction.js';
 import { validEnv } from '../helpers/env.js';
 
 describe('createPool (node)', () => {
@@ -28,5 +31,41 @@ describe('createPool (node)', () => {
       log.mockRestore();
       await pool.end();
     }
+  });
+});
+
+describe('query timeouts (A4-06)', () => {
+  it('bounds every query by default and takes an override', async () => {
+    const config = loadConfig(validEnv({ SUAS_MIGRATIONS_MODE: 'off' }));
+    const bounded = createPool(config, 'node');
+    const custom = createPool(config, 'node', { queryTimeoutMillis: 5_000 });
+    try {
+      expect(bounded.options.query_timeout).toBe(DEFAULT_QUERY_TIMEOUT_MS);
+      expect(custom.options.query_timeout).toBe(5_000);
+    } finally {
+      await bounded.end();
+      await custom.end();
+    }
+  });
+
+  it('discards a transaction client whose query timed out instead of reusing it', async () => {
+    const sent: string[] = [];
+    const release = vi.fn();
+    const client = {
+      query: (text: string) => {
+        sent.push(text);
+        return text === 'BEGIN'
+          ? Promise.resolve({ rows: [] })
+          : Promise.reject(new Error(QUERY_TIMEOUT_MESSAGE));
+      },
+      release,
+    };
+    const pool = { connect: () => Promise.resolve(client) } as unknown as Pool;
+
+    await expect(withTransaction(pool, (tx) => tx.query('SELECT pg_sleep(60)'))).rejects.toThrow(
+      QUERY_TIMEOUT_MESSAGE,
+    );
+    expect(sent).toEqual(['BEGIN', 'SELECT pg_sleep(60)']);
+    expect(release).toHaveBeenCalledWith(true);
   });
 });

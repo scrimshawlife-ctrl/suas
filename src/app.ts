@@ -27,11 +27,7 @@ import {
   markJobSucceeded,
   type DurableJobQueuePort,
 } from './jobs/index.js';
-import {
-  licenceReadHandler,
-  notificationSendHandler,
-  supportSignalComputeHandler,
-} from './jobs/handlers.js';
+import { createJobHandlers, licenceReadHandler } from './jobs/handlers.js';
 import { createLicenceReaderPort } from './identity/licence-reader-factory.js';
 import { LICENCE_READ_JOB_TYPE } from './identity/licence-review.js';
 import { createObjectStoragePort, type ObjectStoragePort } from './storage/index.js';
@@ -102,6 +98,25 @@ export interface StartAppOptions {
   readonly runtime?: AppRuntime;
 }
 
+const LOCAL_JOB_QUEUES = ['in-memory-fake', 'postgres-outbox'] as const;
+
+/**
+ * `SUAS_JOB_QUEUE` picks the LOCAL/TEST queue. Unset means the in-memory fake; any value
+ * other than the two known ones fails closed instead of silently picking the fake
+ * (ENVIRONMENT.md §5).
+ */
+function readLocalJobQueue(env: ConfigSource): (typeof LOCAL_JOB_QUEUES)[number] {
+  const value = env.SUAS_JOB_QUEUE;
+  if (value === undefined || value === '') return 'in-memory-fake';
+  const known = LOCAL_JOB_QUEUES.find((queue) => queue === value);
+  if (known === undefined) {
+    throw new ConfigurationError([
+      `SUAS_JOB_QUEUE must be one of ${LOCAL_JOB_QUEUES.join(', ')} (got "${value}").`,
+    ]);
+  }
+  return known;
+}
+
 export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   const runtime = options.runtime ?? 'node';
   if (runtime === 'worker' && options.env.SUAS_MIGRATIONS_MODE === 'apply') {
@@ -114,6 +129,8 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   const config = loadConfig(
     runtime === 'worker' ? { ...options.env, SUAS_MIGRATIONS_MODE: 'validate' } : options.env,
   );
+
+  const localImpl = readLocalJobQueue(options.env);
 
   // Pin scoring availability before any job or HTTP handler can run. `disabled`
   // fails closed at computeSignal as well as the job entry (ENVIRONMENT.md §3).
@@ -151,11 +168,10 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     }
   }
 
-  // 3. Durable async-work seam (D-022 = Postgres outbox for STAGING/PRODUCTION).
+  // 3. Durable async-work seam: Postgres outbox for STAGING/PRODUCTION, a local choice
+  // pending D-022 (DECISION_PENDING).
   // LOCAL/TEST keep the in-memory fake unless a pool + override is supplied.
   // CHECKIN_COMPLETED still commits before scoring.
-  const localImpl =
-    options.env.SUAS_JOB_QUEUE === 'postgres-outbox' ? 'postgres-outbox' : 'in-memory-fake';
   const innerQueue = createJobQueue(config, {
     ...(pool !== undefined ? { pool } : {}),
     ...(config.environment === 'LOCAL' || config.environment === 'TEST'
@@ -186,8 +202,12 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
       : new DispatchingJobQueue(
           innerQueue,
           {
-            'support-signal.compute': supportSignalComputeHandler(pool, config, () => jobQueue),
-            'notification.send': notificationSendHandler(pool, channelRegistry),
+            ...createJobHandlers({
+              pool,
+              config,
+              channels: channelRegistry,
+              getJobQueue: () => jobQueue,
+            }),
             ...inlineLicenceRead,
           },
           (error, request) => {
