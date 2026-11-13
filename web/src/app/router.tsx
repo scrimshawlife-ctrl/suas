@@ -118,6 +118,13 @@ export const routes: RouteObject[] = [
                     path: paths.verify,
                     ...page('Confirm you served', () => import('../features/request/VerifyPage')),
                   },
+                  {
+                    path: paths.verifyLicence,
+                    ...page(
+                      'Confirm with your licence',
+                      () => import('../features/licence/LicencePage'),
+                    ),
+                  },
                 ],
               },
             ],
@@ -285,6 +292,22 @@ export const routes: RouteObject[] = [
                             ...page(
                               'Resource draft',
                               () => import('../features/admin/AdminDraftPage'),
+                              'SUAS Admin',
+                            ),
+                          },
+                          {
+                            path: paths.adminLicenceReviews,
+                            ...page(
+                              'Licence reviews',
+                              () => import('../features/admin/AdminLicenceReviewsPage'),
+                              'SUAS Admin',
+                            ),
+                          },
+                          {
+                            path: '/admin/licence-reviews/:id',
+                            ...page(
+                              'Licence review',
+                              () => import('../features/admin/AdminLicenceReviewPage'),
                               'SUAS Admin',
                             ),
                           },
