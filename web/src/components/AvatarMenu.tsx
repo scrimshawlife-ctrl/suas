@@ -7,17 +7,32 @@ export interface AvatarMenuProps {
   /** "Marcus T." or null before the profile is set. */
   displayName: string | null;
   tone?: 'light' | 'harbor';
+  /** `me.is_admin`: adds the Admin console link. The link grants nothing; the guards still check. */
+  isAdmin?: boolean;
   onSignOut: () => void;
 }
 
-/** Initial avatar that opens a small panel with the name and "Sign out". */
-export function AvatarMenu({ displayName, tone = 'light', onSignOut }: AvatarMenuProps) {
+/**
+ * Initial avatar that opens a small panel: the name, Settings, Invitations, Admin console
+ * (admins only) and "Sign out" (R12.4, contributor proposal, SUAS-specs #79).
+ */
+export function AvatarMenu({
+  displayName,
+  tone = 'light',
+  isAdmin = false,
+  onSignOut,
+}: AvatarMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const initial = displayName?.trim().charAt(0).toUpperCase() ?? '';
   const first = displayName?.trim().split(/\s+/)[0];
+  const links = [
+    { label: 'Settings', to: '/settings' },
+    { label: 'Invitations', to: '/invitations' },
+    ...(isAdmin ? [{ label: 'Admin console', to: '/admin' }] : []),
+  ];
 
   useEffect(() => {
     if (!open) return;
@@ -69,6 +84,18 @@ export function AvatarMenu({ displayName, tone = 'light', onSignOut }: AvatarMen
           className="absolute top-full right-0 z-40 mt-2 flex w-60 flex-col gap-1 rounded-12 border border-line bg-white p-2 text-ink"
         >
           {displayName ? <p className="px-3 py-2 font-bold">{displayName}</p> : null}
+          {links.map((link) => (
+            <Button
+              key={link.to}
+              variant="ghost"
+              size="small"
+              className="justify-start"
+              href={link.to}
+              onClick={() => setOpen(false)}
+            >
+              {link.label}
+            </Button>
+          ))}
           <Button variant="ghost" size="small" className="justify-start" onClick={onSignOut}>
             Sign out
           </Button>

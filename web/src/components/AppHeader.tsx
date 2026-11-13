@@ -11,6 +11,8 @@ export interface AppHeaderProps {
   /** Which nav item is current. `none` on screens that belong to neither (notifications, crisis). */
   current: 'home' | 'chat' | 'none';
   displayName: string | null;
+  /** Shows the Admin console link in the avatar menu. */
+  isAdmin?: boolean;
   onSignOut: () => void;
   onModeSelect?: (mode: Mode) => void;
   /** Unread chat messages. Shown as a number badge on Chat when above zero. */
@@ -22,6 +24,7 @@ function AppHeader({
   mode,
   current,
   displayName,
+  isAdmin = false,
   onSignOut,
   onModeSelect,
   chatUnread = 0,
@@ -89,6 +92,7 @@ function AppHeader({
         <AvatarMenu
           displayName={displayName}
           tone={harbor ? 'harbor' : 'light'}
+          isAdmin={isAdmin}
           onSignOut={onSignOut}
         />
       </div>

@@ -103,6 +103,7 @@ function SignedInChrome({ mode }: { mode: Mode }) {
       <ServeHeader
         current={current}
         displayName={me.data?.display_name ?? null}
+        isAdmin={me.data?.is_admin === true}
         onSignOut={signOut}
         onModeSelect={setMode}
         chatUnread={chatUnread}
@@ -111,6 +112,7 @@ function SignedInChrome({ mode }: { mode: Mode }) {
       <VeteranHeader
         current={current}
         displayName={me.data?.display_name ?? null}
+        isAdmin={me.data?.is_admin === true}
         onSignOut={signOut}
         onModeSelect={setMode}
         chatUnread={chatUnread}

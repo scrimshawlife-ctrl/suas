@@ -27,6 +27,9 @@ export interface AdminLayoutProps {
 const itemClass =
   'flex min-h-11.5 items-center justify-between gap-2.5 rounded-8 px-3.5 font-bold no-underline';
 
+const footerClass =
+  'justify-start px-0 text-white underline hover:bg-transparent hover:text-harbor-tint';
+
 /** Admin shell: Harbor sidebar with the white logo and "Admin", content on Mist. Base text 17 px. */
 export function AdminLayout({
   nav,
@@ -84,14 +87,15 @@ export function AdminLayout({
             ),
           )}
         </nav>
-        <Button
-          variant="ghost"
-          size="small"
-          className="mt-auto justify-start px-0 text-white underline hover:bg-transparent hover:text-harbor-tint"
-          onClick={onSignOut}
-        >
-          Sign out
-        </Button>
+        <div className="mt-auto flex flex-col items-start gap-1">
+          {/* Back to the app Home (R12.4, contributor proposal, SUAS-specs #79). */}
+          <Button variant="ghost" size="small" className={footerClass} href="/home">
+            Back to SUAS
+          </Button>
+          <Button variant="ghost" size="small" className={footerClass} onClick={onSignOut}>
+            Sign out
+          </Button>
+        </div>
       </aside>
       <main
         id="main"
