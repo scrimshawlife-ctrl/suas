@@ -9,6 +9,18 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 export const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
+ * Calls that wait on the model: up to 4 server model calls of up to 30 s each
+ * (`src/intake/assistant.ts`, `src/inference/bedrock-inference.ts`), so the server's own
+ * FALLBACK_FORM answer arrives well before this.
+ */
+export const MODEL_REQUEST_TIMEOUT_MS = 150_000;
+const MODEL_PATHS = new Set([
+  '/api/v0/intake/drafts',
+  '/api/v0/intake/drafts/{id}/messages',
+  '/api/v0/admin/resource-drafts/commands/extract',
+]);
+
+/**
  * Sign-in endpoints answer 401 for a wrong code, and logout answers 401 when the session is
  * already gone. Neither is an expiry to redirect on: sign-out ends on "/" by itself.
  */
@@ -30,8 +42,6 @@ export interface ApiClientOptions {
   onMfaRequired?: () => void;
   fetch?: (input: Request) => Promise<Response>;
   newIdempotencyKey?: () => string;
-  /** Defaults to REQUEST_TIMEOUT_MS; tests shorten it. */
-  timeoutMs?: number;
 }
 
 /** Hard navigation fallback; the app registers a router based redirect instead. */
@@ -63,10 +73,9 @@ export function createApiMiddleware(options: ApiClientOptions = {}): Middleware 
   const newKey = options.newIdempotencyKey ?? (() => crypto.randomUUID());
   const onUnauthorized = options.onUnauthorized ?? (() => unauthorizedHandler());
   const onMfaRequired = options.onMfaRequired ?? (() => mfaRequiredHandler());
-  const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
   return {
-    onRequest({ request }) {
+    onRequest({ request, schemaPath }) {
       const token = store.getToken();
       if (token !== null && !request.headers.has('Authorization')) {
         request.headers.set('Authorization', `Bearer ${token}`);
@@ -75,7 +84,11 @@ export function createApiMiddleware(options: ApiClientOptions = {}): Middleware 
         request.headers.set('Idempotency-Key', newKey());
       }
       // The caller's signal still cancels; the timeout ends a request nobody answers.
-      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)]);
+      const limit =
+        request.method === 'POST' && MODEL_PATHS.has(schemaPath)
+          ? MODEL_REQUEST_TIMEOUT_MS
+          : REQUEST_TIMEOUT_MS;
+      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(limit)]);
       return new Request(request, { signal });
     },
     onError({ request }) {

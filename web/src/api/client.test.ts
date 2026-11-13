@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createApiClient, REQUEST_TIMEOUT_MS } from './client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createApiClient, MODEL_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS } from './client';
 import { ApiError } from './errors';
 import { createTokenStore } from './token-store';
 
@@ -224,13 +224,41 @@ describe('api client timeout (G2)', () => {
       if (request.signal.aborted) fail();
       else request.signal.addEventListener('abort', fail);
     });
+  const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+  // Records each limit asked for, and fires after 20 ms instead.
+  const shortTimeouts = () =>
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => realTimeout(20));
 
-  it('waits 30 s by default', () => {
-    expect(REQUEST_TIMEOUT_MS).toBe(30_000);
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('waits 30 s, and 150 s on the calls that wait on the model', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const { client } = setup(() => json(200, {}));
+    await client.GET('/api/v0/intake/status');
+    await client.PUT('/api/v0/veterans/me/county', { body: { county: 'ALAMEDA' } });
+    await client.POST('/api/v0/intake/drafts', { body: { text: 'I need a ride' } });
+    await client.POST('/api/v0/intake/drafts/{id}/messages', {
+      params: { path: { id: 'd1' } },
+      body: { text: 'Tomorrow' },
+    });
+    await client.POST('/api/v0/admin/resource-drafts/commands/extract', {
+      body: { source_text: 'Open Mondays.', source_link: 'https://pantry.example.invalid/hours' },
+    });
+    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([
+      REQUEST_TIMEOUT_MS,
+      REQUEST_TIMEOUT_MS,
+      MODEL_REQUEST_TIMEOUT_MS,
+      MODEL_REQUEST_TIMEOUT_MS,
+      MODEL_REQUEST_TIMEOUT_MS,
+    ]);
+    expect([REQUEST_TIMEOUT_MS, MODEL_REQUEST_TIMEOUT_MS]).toEqual([30_000, 150_000]);
   });
 
   it('turns a request with no answer into a 408 TIMEOUT ApiError', async () => {
-    const client = createApiClient({ baseUrl: 'http://localhost', timeoutMs: 20, fetch: hang });
+    shortTimeouts();
+    const client = createApiClient({ baseUrl: 'http://localhost', fetch: hang });
     await expect(
       client.PUT('/api/v0/veterans/me/county', { body: { county: 'ALAMEDA' } }),
     ).rejects.toMatchObject({
@@ -241,7 +269,7 @@ describe('api client timeout (G2)', () => {
   });
 
   it("keeps the caller's own abort as an abort, not a timeout", async () => {
-    const client = createApiClient({ baseUrl: 'http://localhost', timeoutMs: 5_000, fetch: hang });
+    const client = createApiClient({ baseUrl: 'http://localhost', fetch: hang });
     const controller = new AbortController();
     const pending = client.GET('/api/v0/health', { signal: controller.signal });
     controller.abort();
