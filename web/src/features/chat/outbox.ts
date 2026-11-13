@@ -2,6 +2,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useCallback, useSyncExternalStore } from 'react';
 import { tokenStore } from '../../api/token-store';
 import { applyMessageToCaches, postChatMessage } from './api';
+import { isFinalSendError, sendRefusedText } from './copy';
 import type { ChatMessage } from './messages';
 
 export interface PendingMessage {
@@ -9,13 +10,15 @@ export interface PendingMessage {
   /** One Idempotency-Key per send; "Try again" reuses it so the server never stores twice. */
   key: string;
   body: string;
-  status: 'sending' | 'failed';
+  /** `failed` can be sent again ("Not sent."); `refused` cannot ("Could not send."). */
+  status: 'sending' | 'failed' | 'refused';
+  /** Why a `refused` send cannot go, in plain words. */
+  reason?: string;
 }
 
-type SendFn = (id: string, body: string, key: string, signal: AbortSignal) => Promise<ChatMessage>;
-
-/** A send with no answer by then is given up ("Not sent."), so later messages still go. */
-export const SEND_TIMEOUT_MS = 30_000;
+// A send with no answer is given up by the API client's request timeout ("Not sent."),
+// so later messages in the chat still go.
+type SendFn = (id: string, body: string, key: string) => Promise<ChatMessage>;
 
 const NONE: readonly PendingMessage[] = [];
 
@@ -57,22 +60,19 @@ export function createOutbox(send: SendFn = postChatMessage): Outbox {
 
   const attempt = async (queryClient: QueryClient, id: string, item: PendingMessage) => {
     const startedIn = epoch;
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      controller.abort();
-    }, SEND_TIMEOUT_MS);
     try {
-      const sent = await send(id, item.body, item.key, controller.signal);
+      const sent = await send(id, item.body, item.key);
       if (startedIn !== epoch) return;
       applyMessageToCaches(queryClient, sent, true);
       update(id, (list) => list.filter((p) => p.clientId !== item.clientId));
-    } catch {
+    } catch (error) {
       if (startedIn !== epoch) return;
+      const failed: Partial<PendingMessage> = isFinalSendError(error)
+        ? { status: 'refused', reason: sendRefusedText(error) }
+        : { status: 'failed' };
       update(id, (list) =>
-        list.map((p) => (p.clientId === item.clientId ? { ...p, status: 'failed' } : p)),
+        list.map((p) => (p.clientId === item.clientId ? { ...p, ...failed } : p)),
       );
-    } finally {
-      clearTimeout(timer);
     }
   };
   const enqueue = (queryClient: QueryClient, id: string, item: PendingMessage) => {
@@ -97,7 +97,7 @@ export function createOutbox(send: SendFn = postChatMessage): Outbox {
     },
     retry(queryClient, id, clientId) {
       const item = (byRequest.get(id) ?? NONE).find((p) => p.clientId === clientId);
-      if (item === undefined || item.status === 'sending') return;
+      if (item?.status !== 'failed') return;
       const again: PendingMessage = { ...item, status: 'sending' };
       update(id, (list) => list.map((p) => (p.clientId === clientId ? again : p)));
       enqueue(queryClient, id, again);

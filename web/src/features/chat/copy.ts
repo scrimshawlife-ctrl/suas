@@ -29,11 +29,14 @@ export function threadTitle(thread: ChatThread): string {
   return thread.summary?.trim() || NEEDS[thread.category].label;
 }
 
+const NOT_ACCEPTED_YET = 'Chat opens once someone accepts your request.';
+const NO_SUCH_CONVERSATION = "We couldn't find that conversation.";
+
 /** Plain-words explanation for a failed conversation load. */
 export function conversationErrorText(error: unknown): string {
   if (isApiError(error)) {
-    if (error.code === 'CHAT_UNAVAILABLE') return 'Chat opens once someone accepts your request.';
-    if (error.status === 404) return "We couldn't find that conversation.";
+    if (error.code === 'CHAT_UNAVAILABLE') return NOT_ACCEPTED_YET;
+    if (error.status === 404) return NO_SUCH_CONVERSATION;
   }
   return "We couldn't load this conversation. Try again.";
 }
@@ -41,4 +44,30 @@ export function conversationErrorText(error: unknown): string {
 /** A 409 or 404 will not change on retry, so it gets no "Try again". */
 export function isPermanentConversationError(error: unknown): boolean {
   return isApiError(error) && (error.status === 404 || error.code === 'CHAT_UNAVAILABLE');
+}
+
+/**
+ * A send the server refused for good: a 4xx other than 408 (timed out) and 429 (too many tries),
+ * which sending the same message again cannot fix.
+ */
+export function isFinalSendError(error: unknown): boolean {
+  return (
+    isApiError(error) &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 408 &&
+    error.status !== 429
+  );
+}
+
+/** Why a final send failure happened, shown after "Could not send." */
+export function sendRefusedText(error: unknown): string {
+  if (isApiError(error)) {
+    if (error.code === 'CHAT_CLOSED') return 'This chat is closed.';
+    if (error.code === 'CHAT_UNAVAILABLE') return NOT_ACCEPTED_YET;
+    if (error.status === 413) return 'The message is too long.';
+    if (error.status === 404) return NO_SUCH_CONVERSATION;
+    if (error.status === 403) return 'You can no longer send messages here.';
+  }
+  return 'The message was not accepted.';
 }

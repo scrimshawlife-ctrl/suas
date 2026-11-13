@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
-import { SEND_TIMEOUT_MS, createOutbox } from './outbox';
+import { ApiError } from '../../api/errors';
+import { createOutbox } from './outbox';
 import type { ChatMessage } from './messages';
 
 const sent = (body: string): ChatMessage => ({
@@ -81,33 +82,55 @@ describe('outbox', () => {
     expect(outbox.get('r1').map((p) => p.body)).toEqual(['second']);
   });
 
-  it('gives up on a send with no answer, so the next message in that chat still goes', async () => {
-    vi.useFakeTimers();
-    try {
-      // The first send answers only when aborted, like a fetch on a dead connection.
-      const send = vi.fn(
-        (_id: string, body: string, _key: string, signal: AbortSignal) =>
-          new Promise<ChatMessage>((resolve, reject) => {
-            if (body === 'first') {
-              signal.addEventListener('abort', () => {
-                reject(new Error('aborted'));
-              });
-            } else resolve(sent(body));
-          }),
-      );
-      const outbox = createOutbox(send);
-      const queryClient = new QueryClient();
+  it('marks a timed-out send as not sent, so the next message in that chat still goes', async () => {
+    // The API client turns a send with no answer into a 408 TIMEOUT after 30 s.
+    const send = vi.fn((_id: string, body: string) =>
+      body === 'first'
+        ? Promise.reject(new ApiError(408, 'TIMEOUT', 'No answer.'))
+        : Promise.resolve(sent(body)),
+    );
+    const outbox = createOutbox(send);
+    const queryClient = new QueryClient();
 
-      outbox.send(queryClient, 'r1', 'first');
-      outbox.send(queryClient, 'r1', 'second');
-      await vi.advanceTimersByTimeAsync(SEND_TIMEOUT_MS - 1);
-      expect(send).toHaveBeenCalledTimes(1);
-
-      await vi.advanceTimersByTimeAsync(1);
+    outbox.send(queryClient, 'r1', 'first');
+    outbox.send(queryClient, 'r1', 'second');
+    await vi.waitFor(() => {
       expect(send).toHaveBeenCalledTimes(2);
+    });
+    await vi.waitFor(() => {
       expect(outbox.get('r1').map((p) => [p.body, p.status])).toEqual([['first', 'failed']]);
-    } finally {
-      vi.useRealTimers();
-    }
+    });
+  });
+
+  // G5: a refusal that sending again cannot fix gets no retry; busy or timed out still can.
+  it.each([
+    ['409 CHAT_CLOSED', new ApiError(409, 'CHAT_CLOSED', 'x'), 'refused', 'This chat is closed.'],
+    [
+      '409 CHAT_UNAVAILABLE',
+      new ApiError(409, 'CHAT_UNAVAILABLE', 'x'),
+      'refused',
+      'Chat opens once someone accepts your request.',
+    ],
+    ['413', new ApiError(413, 'PAYLOAD_TOO_LARGE', 'x'), 'refused', 'The message is too long.'],
+    ['429', new ApiError(429, 'RATE_LIMITED', 'x'), 'failed', undefined],
+    ['408 TIMEOUT', new ApiError(408, 'TIMEOUT', 'x'), 'failed', undefined],
+    ['503', new ApiError(503, 'UNAVAILABLE', 'x'), 'failed', undefined],
+    ['a dropped connection', new TypeError('Failed to fetch'), 'failed', undefined],
+  ])('a send rejected with %s is %s', async (_label, error, status, reason) => {
+    const send = vi.fn(() => Promise.reject(error));
+    const outbox = createOutbox(send);
+    const queryClient = new QueryClient();
+
+    outbox.send(queryClient, 'r1', 'hi');
+    await vi.waitFor(() => {
+      expect(outbox.get('r1')[0]?.status).toBe(status);
+    });
+    expect(outbox.get('r1')[0]?.reason).toBe(reason);
+
+    outbox.retry(queryClient, 'r1', outbox.get('r1')[0]?.clientId ?? '');
+    if (status === 'refused') expect(outbox.get('r1')[0]?.status).toBe('refused');
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(status === 'refused' ? 1 : 2);
+    });
   });
 });

@@ -49,12 +49,10 @@ export async function postChatMessage(
   serviceRequestId: string,
   body: string,
   idempotencyKey: string,
-  signal?: AbortSignal,
 ): Promise<ChatMessage> {
   const { data } = await api.POST('/api/v0/service-requests/{id}/chat/messages', {
     params: { path: { id: serviceRequestId }, header: { 'Idempotency-Key': idempotencyKey } },
     body: { body },
-    signal,
   });
   return requireData(data, 'message');
 }
