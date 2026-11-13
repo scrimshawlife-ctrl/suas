@@ -237,3 +237,46 @@ describe('RequireAdmin loading and failed screens', () => {
     expectCrisisStrip();
   });
 });
+
+describe('redirects while the target route is still loading', () => {
+  // Regression: an unverified person on /requests/:id re-rendered the guard while the lazy
+  // /verify chunk loaded, and each render navigated again (CI, request/07-deep-links).
+  it('sends an unverified person from a request link to /verify once, with no update loop', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    client.GET.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'Resource not found.'));
+    tokenStore.setToken('tok');
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(queryKeys.me, me({}, 'NOT_STARTED'));
+    let loaded: () => void = () => undefined;
+    const verifyChunk = new Promise<void>((resolve) => (loaded = resolve));
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/verify',
+          lazy: async () => {
+            await verifyChunk;
+            return { element: <p>verify page</p> };
+          },
+        },
+        {
+          element: <RequireVerifiedOrAccepter />,
+          children: [{ path: '/requests/:id', element: <p>request page</p> }],
+        },
+      ],
+      { initialEntries: ['/requests/22222222-2222-4222-8222-222222222222'] },
+    );
+    const navigations = vi.fn();
+    router.subscribe(navigations);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await new Promise((settle) => setTimeout(settle, 500));
+    loaded();
+    expect(await screen.findByText('verify page')).toBeInTheDocument();
+    expect(errors.mock.calls.flat().join(' ')).not.toContain('Maximum update depth');
+    expect(navigations.mock.calls.length).toBeLessThan(5);
+    errors.mockRestore();
+  });
+});
