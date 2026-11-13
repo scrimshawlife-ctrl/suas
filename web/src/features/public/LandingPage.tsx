@@ -10,7 +10,7 @@ const steps = [
   },
   {
     title: 'Confirm you served',
-    body: 'Asking for help needs a quick ID check. Anyone signed in can help.',
+    body: 'Anyone signed in can help. To ask for help, confirm with VA or tell us you served.',
   },
   { title: 'Ask, or pick one up', body: 'Food, rides, temporary shelter and peer support.' },
   { title: 'Talk it through', body: 'Once a veteran takes your request, you can chat.' },

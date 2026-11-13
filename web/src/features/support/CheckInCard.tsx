@@ -5,7 +5,7 @@ import { useResumableCheckIn } from './api';
 
 /**
  * Home's Check-In card. "Continue Check-In" while an unfinished one can still be resumed,
- * else "Start Check-In". The list needs the ID check, so it is only read for a verified person.
+ * else "Start Check-In". The list needs the VA check, so it is only read for a verified person.
  */
 export function CheckInCard({ verified }: { verified: boolean }) {
   const resumable = useResumableCheckIn(verified);
