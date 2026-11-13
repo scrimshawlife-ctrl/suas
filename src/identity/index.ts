@@ -16,18 +16,37 @@ export {
 } from './users.js';
 export { listBorderingCounties, SERVICE_COUNTIES, type ServiceCounty } from './counties.js';
 export {
+  beginVaAttempt,
   confirmVeteranStatus,
   hasConfirmedVeteranStatus,
+  isVaVerified,
   readVeteranConfirmation,
+  selfAttestVeteranStatus,
+  settleVaAttempt,
+  VA_CONFIRMATION_FINGERPRINT_LABEL,
   VA_CONFIRMATION_MAX_ATTEMPTS,
+  VA_CONFIRMATION_MAX_CALLS,
   VeteranConfirmationAttemptLimitError,
   VeteranConfirmationRevokedError,
-  type ConfirmVeteranInput,
+  type AskVa,
+  type VaAttemptInput,
   type VeteranConfirmationStanding,
 } from './va-confirmation-store.js';
 export {
+  displayNameMatches,
+  IDENTITY_HASH_LABEL,
+  identityCanonicalForm,
+  identityHash,
+  normalizeNamePart,
+  VaIdentityAlreadyVerifiedError,
+  VaNameMismatchError,
+} from './va-identity.js';
+export type { FingerprintKey, FingerprintKeyring } from './fingerprint-keys.js';
+export {
   VA_CONFIRMATION_PROJECTION_ID,
+  VA_NOTICE_V1,
   vaConfirmationRequestSchema,
+  VaNoticeVersionRequiredError,
   VeteranConfirmationUnavailableError,
   type VaConfirmationProjection,
   type VeteranConfirmationPort,

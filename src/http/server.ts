@@ -362,6 +362,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerVeteranRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
+      fingerprintKeys: deps.config.fingerprintKeys,
       ...(deps.veteranConfirmation !== undefined
         ? { veteranConfirmation: deps.veteranConfirmation }
         : {}),

@@ -21,7 +21,7 @@ export const VA_CONFIRMATION_CONTRACT_VERSION = 'va-veteran-confirmation-v1' as 
 export const VA_CONFIRMATION_SANDBOX_BASE_URL =
   'https://sandbox-api.va.gov/services/veteran-confirmation/v1';
 
-/** D035 §11 adapter failure classes; migration 0022 bounds the column to this list. */
+/** D035 §11 adapter failure classes; the column (0022, 0023) also admits IDENTITY_CONFLICT. */
 export const VA_CONFIRMATION_FAILURE_CLASSES = [
   'CONFIGURATION_INVALID',
   'AUTHENTICATION_REJECTED',
@@ -78,11 +78,44 @@ export const vaConfirmationProjectionSchema = z
   .strict();
 export type VaConfirmationProjection = z.infer<typeof vaConfirmationProjectionSchema>;
 
-/** The API body: the projection, where `country` may be left out and is then USA. */
+/**
+ * The pre-call notice version the person must have seen (R9.1 D6; VETERAN_VERIFICATION §9).
+ * The wording lives in suas-specs VA_CONFIRMATION_FLOW.md and the web client; a change to
+ * it needs a new version.
+ */
+export const VA_NOTICE_V1 = 'va-notice-v1' as const;
+
+/** The confirm body carries an old or missing notice version. */
+export class VaNoticeVersionRequiredError extends Error {
+  readonly code = 'VA_NOTICE_VERSION_REQUIRED';
+  readonly httpStatus = 400;
+
+  constructor() {
+    super(`Show the current VA notice (${VA_NOTICE_V1}) before sending details to VA.`);
+    this.name = 'VaNoticeVersionRequiredError';
+  }
+}
+
+/**
+ * The API body: the projection, where `country` may be left out and is then USA, plus the
+ * notice version (checked first, see `VaNoticeVersionRequiredError`).
+ */
 export const vaConfirmationRequestSchema = z
-  .object({ ...projectionFields, country: z.literal('USA').optional() })
+  .object({
+    ...projectionFields,
+    country: z.literal('USA').optional(),
+    noticeVersion: z.literal(VA_NOTICE_V1),
+  })
   .strict()
-  .transform((body): VaConfirmationProjection => ({ ...body, country: 'USA' }));
+  .transform(
+    ({
+      noticeVersion,
+      ...body
+    }): { noticeVersion: string; projection: VaConfirmationProjection } => ({
+      noticeVersion,
+      projection: { ...body, country: 'USA' },
+    }),
+  );
 
 /** Projection field names, for log redaction. */
 export const VA_CONFIRMATION_PROJECTION_FIELDS = [

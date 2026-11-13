@@ -21,6 +21,7 @@ import {
   VA_CONFIRMATION_PROJECTION_ID,
   VA_CONFIRMATION_SANDBOX_BASE_URL,
 } from '../identity/va-confirmation.js';
+import type { FingerprintKeyring } from '../identity/fingerprint-keys.js';
 import {
   CORS_GUARD_SPEC_VERSION,
   RELEASE_MANIFEST,
@@ -345,6 +346,13 @@ const rawConfigSchema = z.object({
   // Server-side secret (D035 §6): shown only as a configured flag, never its value.
   SUAS_VA_CONFIRMATION_API_KEY: optionalRaw,
   SUAS_VA_CONFIRMATION_PROJECTION_ID: optionalRaw,
+  // Server-side secret keying the HMAC fingerprints of personal data (owner review of #72:
+  // not the session secret). Never echoed by config output.
+  SUAS_FINGERPRINT_KEY: optionalRaw,
+  SUAS_FINGERPRINT_KEY_ID: optionalRaw,
+  // Verify-only during a rotation: lookups and uniqueness checks also try it.
+  SUAS_FINGERPRINT_KEY_PREVIOUS: optionalRaw,
+  SUAS_FINGERPRINT_KEY_PREVIOUS_ID: optionalRaw,
   // D-052. Public self sign-up stays off unless LOCAL or TEST sets "enabled".
   SUAS_PUBLIC_SIGN_UP: optionalRaw,
   // Addresses the STAGING provision command may create. Not an admission list.
@@ -452,6 +460,8 @@ export interface SuasConfig {
     };
   };
   readonly sessionSecret: string | undefined;
+  /** Keys HMAC fingerprints of personal data, one labelled derivation per purpose. */
+  readonly fingerprintKeys: FingerprintKeyring | undefined;
   readonly browserAuth: {
     readonly mode: BrowserAuthMode;
     readonly tenantId: string | undefined;
@@ -801,6 +811,78 @@ function validateVaConfirmation(
   }
 }
 
+/** At least 32 bytes of key material, base64 encoded. */
+const FINGERPRINT_KEY_MIN_BYTES = 32;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+const KEY_ID = /^[A-Za-z0-9._-]{1,32}$/;
+
+/**
+ * `SUAS_FINGERPRINT_KEY` and its id are required while a capability that fingerprints
+ * personal data is on, so startup fails closed before VA is turned on without them. The
+ * key must not reuse the session secret. The previous key and id come as a pair, for
+ * verifying only. Issue text never includes a key value.
+ */
+function validateFingerprintKey(raw: z.output<typeof rawConfigSchema>, ctx: z.RefinementCtx): void {
+  const issue = (message: string): void => {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  };
+  const checkKey = (name: string, key: string): void => {
+    if (!BASE64.test(key) || Buffer.from(key, 'base64').length < FINGERPRINT_KEY_MIN_BYTES) {
+      issue(`${name} is malformed: base64 of at least ${FINGERPRINT_KEY_MIN_BYTES} bytes.`);
+    }
+    if (key === raw.SUAS_SESSION_SECRET) issue(`${name} must differ from SUAS_SESSION_SECRET.`);
+  };
+  const checkId = (name: string, id: string | undefined): void => {
+    if (id === undefined) issue(`${name} is required with its key.`);
+    else if (!KEY_ID.test(id)) issue(`${name} is malformed: 1-32 of A-Z a-z 0-9 . _ -.`);
+  };
+
+  const key = raw.SUAS_FINGERPRINT_KEY;
+  if (key === undefined) {
+    if (raw.SUAS_VA_CONFIRMATION_MODE !== 'disabled') {
+      issue(
+        'SUAS_FINGERPRINT_KEY is required when SUAS_VA_CONFIRMATION_MODE is not disabled. Deploy the key before turning VA confirmation on.',
+      );
+    }
+    if (raw.SUAS_FINGERPRINT_KEY_PREVIOUS !== undefined) {
+      issue('SUAS_FINGERPRINT_KEY_PREVIOUS needs a current SUAS_FINGERPRINT_KEY.');
+    }
+    return;
+  }
+  checkKey('SUAS_FINGERPRINT_KEY', key);
+  checkId('SUAS_FINGERPRINT_KEY_ID', raw.SUAS_FINGERPRINT_KEY_ID);
+
+  const previous = raw.SUAS_FINGERPRINT_KEY_PREVIOUS;
+  if (previous === undefined) {
+    if (raw.SUAS_FINGERPRINT_KEY_PREVIOUS_ID !== undefined) {
+      issue('SUAS_FINGERPRINT_KEY_PREVIOUS_ID is set without SUAS_FINGERPRINT_KEY_PREVIOUS.');
+    }
+    return;
+  }
+  checkKey('SUAS_FINGERPRINT_KEY_PREVIOUS', previous);
+  checkId('SUAS_FINGERPRINT_KEY_PREVIOUS_ID', raw.SUAS_FINGERPRINT_KEY_PREVIOUS_ID);
+  if (previous === key) issue('SUAS_FINGERPRINT_KEY_PREVIOUS must differ from the current key.');
+  if (raw.SUAS_FINGERPRINT_KEY_PREVIOUS_ID === raw.SUAS_FINGERPRINT_KEY_ID) {
+    issue('SUAS_FINGERPRINT_KEY_PREVIOUS_ID must differ from SUAS_FINGERPRINT_KEY_ID.');
+  }
+}
+
+/** The keyring the schema has already validated, or undefined when no key is set. */
+function shapeFingerprintKeys(
+  raw: z.output<typeof rawConfigSchema>,
+): FingerprintKeyring | undefined {
+  const { SUAS_FINGERPRINT_KEY: key, SUAS_FINGERPRINT_KEY_ID: id } = raw;
+  if (key === undefined || id === undefined) return undefined;
+  const { SUAS_FINGERPRINT_KEY_PREVIOUS: previous, SUAS_FINGERPRINT_KEY_PREVIOUS_ID: previousId } =
+    raw;
+  return {
+    current: { id, secret: key },
+    ...(previous !== undefined && previousId !== undefined
+      ? { previous: { id: previousId, secret: previous } }
+      : {}),
+  };
+}
+
 /**
  * Full configuration schema including the ENVIRONMENT.md §5 cross-field
  * startup-validation invariants. Every failure here is fail-closed by design.
@@ -1133,6 +1215,7 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
 
   validateAwsCapabilities(raw, environment, ctx);
   validateVaConfirmation(raw, environment, ctx);
+  validateFingerprintKey(raw, ctx);
 
   // The sender is required in Resend and SES modes. Both accept either a bare
   // address or the standard display-name form: "Name <address>".
@@ -1221,6 +1304,7 @@ export function shapeConfig(
       },
     },
     sessionSecret: raw.SUAS_SESSION_SECRET,
+    fingerprintKeys: shapeFingerprintKeys(raw),
     browserAuth: {
       mode: raw.SUAS_BROWSER_AUTH_MODE,
       tenantId: raw.SUAS_BROWSER_TENANT_ID,

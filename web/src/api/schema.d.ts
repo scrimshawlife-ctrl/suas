@@ -920,10 +920,30 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Confirm Veteran status with VA (one attempt; suas-specs #72 R9.1, proposal)
-     * @description Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values. Any signed-in person may call it. A person whose standing is already VERIFIED gets it back with no VA call and no attempt counted; a REVOKED standing is refused (403) the same way and stays the standing whatever later attempts say. At most 5 attempts per person per rolling 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After). NOT_CONFIRMED is not a finding that the person never served; UNAVAILABLE means VA could not answer and the person may retry.
+     * Confirm Veteran status with VA (one attempt; suas-specs #72 R9.1)
+     * @description Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values; the attempt row keeps the result, the notice version, a keyed request fingerprint and, when VA answered, a keyed identity hash (HMAC under SUAS_FINGERPRINT_KEY, with its key id). Any signed-in person may call it. The body must carry noticeVersion va-notice-v1, the pre-call notice the person saw (400 VA_NOTICE_VERSION_REQUIRED otherwise). The typed first and last name must match the account display name ("First Last" or "First L.", ignoring case, accents and punctuation); otherwise 409 VA_NAME_MISMATCH with no VA call and no attempt counted. A VA VERIFIED standing is returned with no VA call; a REVOKED standing is refused (403). At most 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, or an identity conflict) per person in the last 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After); UNAVAILABLE results (outages and VA 400s) never count. A backstop cap of 20 VA calls per person in the last 24 hours counts the same rows (same 429). The same Idempotency-Key within 24 hours replays an answer VA gave; after an UNAVAILABLE result, or after a fingerprint key rotation, it is a new attempt. No database lock is held during the VA call; a second attempt while one is in flight gets 409 IDEMPOTENCY_CONFLICT. NOT_CONFIRMED is not a finding that the person never served. UNAVAILABLE means VA did not answer: failure_class REQUEST_INVALID (VA refused the request, e.g. HTTP 400) means the person may correct the details and retry; other classes mean try again later. Neither UNAVAILABLE nor NOT_CONFIRMED blocks a request: the person may self-attest instead.
      */
     post: operations['postVeteransMeVerificationVaConfirm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/verification/commands/self-attest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Self-attest Veteran status (D-016 fallback; suas-specs #72 R9.1)
+     * @description Writes a SELF_ATTESTATION VERIFIED row with source SUAS, which opens the request gate. No VA call, no attempt limit, and available whatever the VA confirmation mode. A VERIFIED standing of any method is returned with no new row; a REVOKED standing is refused (403). The body is empty or {}.
+     */
+    post: operations['postVeteransMeVerificationSelfAttest'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1446,10 +1466,10 @@ export interface components {
     MfaVerified: {
       mfa_elevated: boolean;
     };
-    /** @description The person's VA Veteran Confirmation standing: REVOKED when SUAS revoked it, else the newest settled attempt, or NOT_STARTED. VERIFIED opens the request gate (suas-specs #72 R9.1, proposal). */
+    /** @description The person's Veteran confirmation standing (suas-specs #72 R9.1): REVOKED when SUAS revoked it; else a VERIFIED row of VA_VETERAN_STATUS, MANUAL_REVIEW or SELF_ATTESTATION (in that order), which opens the request gate; else the newest settled VA attempt; else NOT_STARTED with method VA_VETERAN_STATUS. */
     IdVerification: {
       /** @enum {string} */
-      method: 'VA_VETERAN_STATUS';
+      method: 'VA_VETERAN_STATUS' | 'MANUAL_REVIEW' | 'SELF_ATTESTATION';
       /** @enum {string} */
       status: 'NOT_STARTED' | 'VERIFIED' | 'NOT_CONFIRMED' | 'PENDING' | 'UNAVAILABLE' | 'REVOKED';
       /**
@@ -1460,8 +1480,23 @@ export interface components {
         'PERSON_NOT_FOUND' | 'NOT_TITLE_38' | 'MORE_RESEARCH_REQUIRED' | 'ERROR' | null;
       /** Format: date-time */
       verified_at: string | null;
+      /**
+       * @description Why VA did not answer (D035 §11), with UNAVAILABLE; null when VA answered. REQUEST_INVALID means the person may correct the details and retry.
+       * @enum {string|null}
+       */
+      failure_class:
+        | 'CONFIGURATION_INVALID'
+        | 'AUTHENTICATION_REJECTED'
+        | 'REQUEST_INVALID'
+        | 'PROVIDER_RATE_LIMITED'
+        | 'PROVIDER_UNAVAILABLE'
+        | 'PROVIDER_RESPONSE_INVALID'
+        | 'PROVIDER_REASON_UNKNOWN'
+        | 'TIMEOUT'
+        | 'NETWORK_ERROR'
+        | null;
     };
-    /** @description The VA_CONFIRMATION_V1_REQUIRED_ONLY projection: the eight required VA fields, with country fixed to USA. No SSN. Unknown fields are refused. Patterns are VA's; each field is at most 256 characters. */
+    /** @description The VA_CONFIRMATION_V1_REQUIRED_ONLY projection: the eight required VA fields, with country fixed to USA. No SSN. Plus noticeVersion, the pre-call notice the person saw. Unknown fields are refused. Patterns are VA's; each field is at most 256 characters. */
     VaConfirmationRequest: {
       firstName: string;
       lastName: string;
@@ -1479,6 +1514,11 @@ export interface components {
        */
       country?: 'USA';
       zipCode: string;
+      /**
+       * @description The pre-call notice version (VA_NOTICE_V1). It is stored on the attempt, not sent to VA.
+       * @enum {string}
+       */
+      noticeVersion: 'va-notice-v1';
     };
     VaConfirmationResult: {
       /** @enum {string} */
@@ -1491,6 +1531,21 @@ export interface components {
         'PERSON_NOT_FOUND' | 'NOT_TITLE_38' | 'MORE_RESEARCH_REQUIRED' | 'ERROR' | null;
       /** Format: date-time */
       verified_at: string | null;
+      /**
+       * @description Why VA did not answer (D035 §11), with UNAVAILABLE; null when VA answered. REQUEST_INVALID means the person may correct the details and retry.
+       * @enum {string|null}
+       */
+      failure_class:
+        | 'CONFIGURATION_INVALID'
+        | 'AUTHENTICATION_REJECTED'
+        | 'REQUEST_INVALID'
+        | 'PROVIDER_RATE_LIMITED'
+        | 'PROVIDER_UNAVAILABLE'
+        | 'PROVIDER_RESPONSE_INVALID'
+        | 'PROVIDER_REASON_UNKNOWN'
+        | 'TIMEOUT'
+        | 'NETWORK_ERROR'
+        | null;
     };
     /** @description The current case of a Veteran: not RESOLVED or CLOSED. A Veteran whose case is resolved has none until they ask for help again, which opens a new case. */
     OpenCaseSummary: {
@@ -4121,7 +4176,7 @@ export interface operations {
           'application/json': components['schemas']['VaConfirmationResult'];
         };
       };
-      /** @description VALIDATION_FAILED: a field does not match the VA pattern, an unknown field was sent, or the Idempotency-Key header is missing. The message names fields only, never values. */
+      /** @description VALIDATION_FAILED: a field does not match the VA pattern, an unknown field was sent, or the Idempotency-Key header is missing; the message names fields only, never values. VA_NOTICE_VERSION_REQUIRED: noticeVersion is missing or not va-notice-v1. */
       400: {
         headers: {
           [name: string]: unknown;
@@ -4140,8 +4195,16 @@ export interface operations {
           'application/json': components['schemas']['ErrorBody'];
         };
       };
-      409: components['responses']['Error'];
-      /** @description VERIFICATION_ATTEMPT_LIMIT: 5 attempts in the last 24 hours */
+      /** @description VA_NAME_MISMATCH: the typed name does not match the account display name (no VA call, not counted). VA_IDENTITY_ALREADY_VERIFIED: these details cannot be used to verify this account (counted; the message never names another account). IDEMPOTENCY_CONFLICT: the key was used with a different body, or another attempt is still in flight. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description VERIFICATION_ATTEMPT_LIMIT: 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, an attempt in flight or an identity conflict) in the last 24 hours, or the backstop cap of 20 VA calls, which counts the same rows; outages and VA 400s (UNAVAILABLE) count toward neither. Retry-After gives the seconds until the person is under the 5 tries again. */
       429: {
         headers: {
           [name: string]: unknown;
@@ -4150,7 +4213,7 @@ export interface operations {
           'application/json': components['schemas']['ErrorBody'];
         };
       };
-      /** @description ID_VERIFICATION_UNAVAILABLE: VA confirmation is not configured (SUAS_VA_CONFIRMATION_MODE=disabled) */
+      /** @description ID_VERIFICATION_UNAVAILABLE: VA confirmation is not offered in this environment (SUAS_VA_CONFIRMATION_MODE=disabled). Not an outage; self-attestation stays available. */
       503: {
         headers: {
           [name: string]: unknown;
@@ -4159,6 +4222,53 @@ export interface operations {
           'application/json': components['schemas']['ErrorBody'];
         };
       };
+    };
+  };
+  postVeteransMeVerificationSelfAttest: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': Record<string, never>;
+      };
+    };
+    responses: {
+      /** @description The standing after self-attesting, or the existing VERIFIED standing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdVerification'];
+        };
+      };
+      /** @description VALIDATION_FAILED: a field was sent, or the Idempotency-Key header is missing */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REVOKED: SUAS revoked this person's confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      409: components['responses']['Error'];
     };
   };
   getIntakeStatus: {

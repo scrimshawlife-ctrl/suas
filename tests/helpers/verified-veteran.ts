@@ -18,10 +18,12 @@ export async function markVerifiedVeteran(
   await pool.query(
     `INSERT INTO veteran_verifications
        (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
-        verified_at, provider_environment, projection_id, settled_at)
+        verified_at, provider_environment, projection_id, settled_at, identity_hash,
+        identity_key_id)
      VALUES ($1, $2, $3, 'VA_VETERAN_STATUS', 'VERIFIED', 'SUAS', 'test', now(), 'NONE',
-             'VA_CONFIRMATION_V1_REQUIRED_ONLY', now())`,
-    [randomUUID(), tenantId, userId],
+             'VA_CONFIRMATION_V1_REQUIRED_ONLY', now(), $4, 'test')`,
+    // A unique synthetic identity hash per row: a settled VERIFIED row must carry one.
+    [randomUUID(), tenantId, userId, randomUUID()],
   );
   if (county !== null) {
     await pool.query(

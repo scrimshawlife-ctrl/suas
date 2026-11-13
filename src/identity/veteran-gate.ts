@@ -2,8 +2,9 @@
  * The reusable authorization checks for requesting help.
  *
  * Plan citations: V1_PROJECT_PLAN.md §2.1 ("a signed-in person can only help others"
- * until verified) and §4.3 F10. suas-specs #72 R9.1 (proposal) makes a VERIFIED VA
- * Veteran Confirmation the gate in place of the ID scan + selfie.
+ * until verified) and §4.3 F10. suas-specs #72 R9.1 replaces the ID scan + selfie: the
+ * gate opens on a VERIFIED VA Veteran Confirmation, manual review or D-016
+ * self-attestation, and a REVOKED row outranks all three.
  *
  * `requireVerifiedVeteran` guards every route that is the Veteran's own: requesting
  * help, Resources, Check-Ins, Trusted Contacts, Consent Grants. Routes where a
@@ -31,7 +32,7 @@ export class VeteranVerificationRequiredError extends Error {
   }
 }
 
-/** Deny unless the person's newest VA Veteran Confirmation result is VERIFIED. */
+/** Deny unless the person's standing is VERIFIED (see `readVeteranConfirmation`). */
 export async function requireVerifiedVeteran(db: Queryable, context: AuthContext): Promise<void> {
   if (!(await hasConfirmedVeteranStatus(db, context.tenantId, context.userId))) {
     throw new VeteranVerificationRequiredError();
