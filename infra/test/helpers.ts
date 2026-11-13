@@ -25,6 +25,10 @@ export function synthesize(context: Record<string, string> = {}): Synthesized {
 
 type Json = unknown;
 
+/** What the validator sees for the SSM fixture registry: one synthetic tenant-id:user-id pair. */
+export const SAMPLE_FIXTURE_REGISTRY =
+  '00000000-0000-4000-8000-000000000001:11111111-1111-4111-8111-111111111111';
+
 /**
  * Turns a template property into the string the Lambda would see, so the real
  * configuration validator can run on it. References become stable fake values, shaped like
@@ -42,6 +46,8 @@ export function resolveForValidation(
     const type = resources[logicalId]?.Type;
     if (type === 'AWS::ApiGatewayV2::Api') return 'abc123def4';
     if (type === 'AWS::S3::Bucket') return 'suas-staging-assets-example';
+    // A template parameter resolved from SSM at deploy (pass Parameters in with the resources).
+    if (type === 'AWS::SSM::Parameter::Value<String>') return SAMPLE_FIXTURE_REGISTRY;
     return logicalId.toLowerCase();
   }
   if ('Fn::GetAtt' in node)

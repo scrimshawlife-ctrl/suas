@@ -9,6 +9,26 @@
 
 import type { SuasConfig } from '../config/index.js';
 import type { EnvironmentClass, StagingFixturePrincipal } from '../config/schema.js';
+import { isSyntheticEmail } from '../testing/fixture-boundary.js';
+
+const PLUS_TAG = /^[a-z0-9-]{1,32}$/;
+
+/**
+ * May this address belong to a STAGING fixture principal? Yes if it is synthetic, or a plus
+ * address `local+tag@domain` of the configured fixture mailbox (R11.7, contributor proposal,
+ * specs #75, not released), so emailed codes reach the owner's inbox. The bare mailbox is not.
+ */
+export function isStagingFixtureAddress(email: string, mailbox: string | undefined): boolean {
+  if (isSyntheticEmail(email)) return true;
+  if (mailbox === undefined) return false;
+  const normalized = email.trim().toLowerCase();
+  const at = normalized.lastIndexOf('@');
+  const plus = normalized.indexOf('+');
+  if (plus < 1 || at < plus) return false;
+  const tag = normalized.slice(plus + 1, at);
+  const base = normalized.slice(0, plus) + normalized.slice(at);
+  return PLUS_TAG.test(tag) && base === mailbox.trim().toLowerCase();
+}
 
 export interface StagingAccess {
   readonly environment: EnvironmentClass;

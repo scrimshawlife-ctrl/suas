@@ -15,7 +15,7 @@
  */
 
 import { z } from 'zod';
-import { isSyntheticEmail } from '../testing/fixture-boundary.js';
+import { isStagingFixtureAddress } from '../auth/staging-access.js';
 import { parseAllowedOrigins } from './cors-origins.js';
 import {
   VA_CONFIRMATION_PROJECTION_ID,
@@ -98,6 +98,9 @@ export interface StagingFixturePrincipal {
   readonly tenantId: string;
   readonly userId: string;
 }
+
+/** One plain address: no whitespace, no `+` in the local part, a dotted domain. */
+const FIXTURE_MAILBOX_PATTERN = /^[^\s@+]+@[^\s@]+\.[^\s@]+$/;
 
 const FIXTURE_PRINCIPAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -384,6 +387,8 @@ const rawConfigSchema = z.object({
   SUAS_STAGING_AUTH_EMAILS: optionalRaw,
   // Explicit tenant-id:user-id pairs STAGING auth admits. Empty admits nobody.
   SUAS_STAGING_FIXTURE_REGISTRY: optionalRaw,
+  // R11.7: STAGING-only real mailbox whose plus addresses may be fixture addresses.
+  SUAS_STAGING_FIXTURE_MAILBOX: optionalRaw,
 
   SUAS_CHAT_PUSH_MODE: optionalEnum('SUAS_CHAT_PUSH_MODE', CHAT_PUSH_MODES, 'disabled'),
   // `https://{api-id}.execute-api.{region}.amazonaws.com/{stage}` of the WebSocket API.
@@ -549,6 +554,8 @@ export interface SuasConfig {
    * Empty or absent admits nobody. The demo account is not added implicitly.
    */
   readonly stagingFixturePrincipals: readonly StagingFixturePrincipal[];
+  /** STAGING only: plus addresses of this mailbox count as fixture addresses (R11.7). */
+  readonly stagingFixtureMailbox: string | undefined;
   readonly chatPush: {
     readonly mode: ChatPushMode;
     /** WebSocket API management endpoint; set only for `apigw`. */
@@ -1049,10 +1056,24 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
       message: 'SUAS_STAGING_AUTH_EMAILS must contain at most 10 addresses.',
     });
   }
-  if (stagingPrincipals.some((email) => !isSyntheticEmail(email))) {
+  const mailbox = raw.SUAS_STAGING_FIXTURE_MAILBOX?.toLowerCase();
+  if (mailbox !== undefined && environment !== 'STAGING') {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'SUAS_STAGING_AUTH_EMAILS must contain only synthetic fixture addresses.',
+      message: 'SUAS_STAGING_FIXTURE_MAILBOX is STAGING-only.',
+    });
+  } else if (mailbox !== undefined && !FIXTURE_MAILBOX_PATTERN.test(mailbox)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SUAS_STAGING_FIXTURE_MAILBOX must be one email address without a +tag.',
+    });
+  }
+  if (stagingPrincipals.some((email) => !isStagingFixtureAddress(email, mailbox))) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'SUAS_STAGING_AUTH_EMAILS must contain only synthetic fixture addresses ' +
+        'or plus addresses of SUAS_STAGING_FIXTURE_MAILBOX.',
     });
   }
   const registry = parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY);
@@ -1476,6 +1497,7 @@ export function shapeConfig(
     stagingAuthEmails: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) => email.toLowerCase()),
     stagingFixturePrincipals: parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY)
       .principals,
+    stagingFixtureMailbox: raw.SUAS_STAGING_FIXTURE_MAILBOX?.toLowerCase(),
     chatPush: {
       mode: raw.SUAS_CHAT_PUSH_MODE,
       apiGatewayEndpoint: raw.SUAS_CHAT_WS_ENDPOINT,
