@@ -25,9 +25,12 @@ export function synthesize(context: Record<string, string> = {}): Synthesized {
 
 type Json = unknown;
 
-/** What the validator sees for the SSM fixture registry: one synthetic tenant-id:user-id pair. */
-export const SAMPLE_FIXTURE_REGISTRY =
-  '00000000-0000-4000-8000-000000000001:11111111-1111-4111-8111-111111111111';
+/** What the validator sees for each SSM parameter, by parameter name. No real address. */
+export const SAMPLE_SSM_VALUES: Record<string, string> = {
+  '/suas/staging/fixture-registry':
+    '00000000-0000-4000-8000-000000000001:11111111-1111-4111-8111-111111111111',
+  '/suas/staging/fixture-mailbox': 'fixture-mailbox@example.com',
+};
 
 /**
  * Turns a template property into the string the Lambda would see, so the real
@@ -44,10 +47,15 @@ export function resolveForValidation(
     const logicalId = String(node.Ref);
     if (logicalId === 'AWS::URLSuffix') return 'amazonaws.com';
     const type = resources[logicalId]?.Type;
+    const ssmName = (resources[logicalId] as { Default?: string } | undefined)?.Default;
     if (type === 'AWS::ApiGatewayV2::Api') return 'abc123def4';
     if (type === 'AWS::S3::Bucket') return 'suas-staging-assets-example';
     // A template parameter resolved from SSM at deploy (pass Parameters in with the resources).
-    if (type === 'AWS::SSM::Parameter::Value<String>') return SAMPLE_FIXTURE_REGISTRY;
+    if (type === 'AWS::SSM::Parameter::Value<String>') {
+      const sample = SAMPLE_SSM_VALUES[String(ssmName)];
+      if (sample === undefined) throw new Error(`No sample value for SSM parameter ${ssmName}.`);
+      return sample;
+    }
     return logicalId.toLowerCase();
   }
   if ('Fn::GetAtt' in node)

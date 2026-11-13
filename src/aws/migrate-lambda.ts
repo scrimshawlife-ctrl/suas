@@ -48,7 +48,7 @@ export async function handler(
     throw new Error('Unknown action. Use "migrate" or "seed-staging-fixtures".');
   }
   const config = loadConfig(process.env);
-  const pool = createPool(config, 'node');
+  const pool = createPool(config);
   try {
     if (action === 'seed-staging-fixtures') {
       const seeded = await seedStagingFixtures(pool, config, event.fixtures);

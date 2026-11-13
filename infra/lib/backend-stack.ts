@@ -61,9 +61,9 @@ const FINGERPRINT_KEY_ID = 'staging-1';
 
 type Env = Record<string, string>;
 
-/** SSM parameter holding SUAS_STAGING_FIXTURE_REGISTRY for an environment. */
-export function fixtureRegistryParameterName(environment: string): string {
-  return `/suas/${environment}/fixture-registry`;
+/** SSM parameter `/suas/<environment>/<name>` (fixture-registry, fixture-mailbox). */
+export function fixtureParameterName(environment: string, name: string): string {
+  return `/suas/${environment}/${name}`;
 }
 
 export class BackendStack extends Stack {
@@ -246,13 +246,12 @@ export class BackendStack extends Stack {
     // -------------------------------------------------------------------- api
     const code = suasLambdaCode();
 
-    // R11.5 (D-052): the tenant-id:user-id pairs STAGING admits. The operator creates this
-    // String parameter before the first deploy (infra/README.md). CloudFormation resolves it
-    // at each deploy, so no function reads SSM at run time and none gets an SSM grant.
-    const fixtureRegistry = ssm.StringParameter.valueForStringParameter(
-      this,
-      fixtureRegistryParameterName(config.name),
-    );
+    // R11.5 (D-052): the tenant-id:user-id pairs STAGING admits, and R11.7: the mailbox whose
+    // plus addresses may be fixture addresses. The operator creates both String parameters
+    // before the first deploy (infra/README.md). CloudFormation resolves them at each deploy,
+    // so no function reads SSM at run time and none gets an SSM grant.
+    const fixtureParameter = (name: string): string =>
+      ssm.StringParameter.valueForStringParameter(this, fixtureParameterName(config.name, name));
 
     // Settings every function needs for configuration to validate (src/config/schema.ts).
     const baseEnv: Env = {
@@ -280,7 +279,8 @@ export class BackendStack extends Stack {
       DATABASE_POOL_MAX: '3',
       DATABASE_SSL_MODE: 'verify',
       SUAS_MIGRATIONS_MODE: 'off',
-      SUAS_STAGING_FIXTURE_REGISTRY: fixtureRegistry,
+      SUAS_STAGING_FIXTURE_REGISTRY: fixtureParameter('fixture-registry'),
+      SUAS_STAGING_FIXTURE_MAILBOX: fixtureParameter('fixture-mailbox'),
     };
     const viaProxy: Env = { DATABASE_URL: databaseUrl(proxy.endpoint) };
 

@@ -23,7 +23,7 @@ function lifecycleFromEnvironment(): ConnectionLifecycle {
       'SUAS_CHAT_PUSH_MODE=apigw is required for the WebSocket Lambda.',
     ]);
   }
-  cachedLifecycle = createChatConnectionLifecycle(createPool(config, 'node'));
+  cachedLifecycle = createChatConnectionLifecycle(createPool(config));
   return cachedLifecycle;
 }
 

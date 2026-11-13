@@ -45,13 +45,20 @@ describe('R11.3 cross-origin allowlist', () => {
 });
 
 describe('R11.5 fixture registry', () => {
-  it('passes one deploy-time SSM parameter to the API, job worker and migrate functions', () => {
+  it('passes the registry and the fixture mailbox (R11.7) from deploy-time SSM parameters to the API, job worker and migrate functions', () => {
     const parameters = (s.backend.toJSON().Parameters ?? {}) as Record<string, Resource>;
-    for (const handler of HANDLERS) {
-      const value = envOf(s.backend, handler).SUAS_STAGING_FIXTURE_REGISTRY as { Ref: string };
-      const parameter = parameters[value.Ref];
-      expect(parameter?.Type, handler).toBe('AWS::SSM::Parameter::Value<String>');
-      expect(parameter?.Default, handler).toBe('/suas/staging/fixture-registry');
+    for (const [variable, name] of [
+      ['SUAS_STAGING_FIXTURE_REGISTRY', '/suas/staging/fixture-registry'],
+      ['SUAS_STAGING_FIXTURE_MAILBOX', '/suas/staging/fixture-mailbox'],
+    ] as const) {
+      for (const handler of HANDLERS) {
+        const value = envOf(s.backend, handler)[variable] as { Ref: string };
+        const parameter = parameters[value.Ref];
+        expect(parameter?.Type, `${handler} ${variable}`).toBe(
+          'AWS::SSM::Parameter::Value<String>',
+        );
+        expect(parameter?.Default, `${handler} ${variable}`).toBe(name);
+      }
     }
   });
 
