@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../fixtures';
 import { API_URL } from '../config';
 import { shoot } from '../helpers';
 import { LANDING, expectNoDeadControls } from '../auth/auth';
@@ -90,7 +90,10 @@ test('the overview shows what this build reports, and every sidebar control goes
 test('when build info or the adapter list fails to load, the overview says so and Try again recovers', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/admin\/(build-info|adapter-catalog) :: 500$/, /status of 500/);
   const page = await elevatedAdmin(browser, request);
   // A 5xx cannot be reached on the real stack, so it is routed until the retry.
   let failing = true;

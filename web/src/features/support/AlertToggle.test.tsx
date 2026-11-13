@@ -191,6 +191,27 @@ describe('AlertToggle', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('cites the re-read template with a new key after a superseded one (M2)', async () => {
+    client.POST.mockImplementationOnce(() =>
+      Promise.reject(new ApiError(422, 'CONSENT_TEMPLATE_UNAVAILABLE', 'x')),
+    );
+    client.POST.mockResolvedValue({ data: activeGrant });
+    const next = { ...published, version_key: 'red-alert-trusted-contact@2', version: 2 };
+    client.GET.mockResolvedValueOnce({ data: published }).mockResolvedValue({ data: next });
+    const user = userEvent.setup();
+    render(wrap([]));
+    await turnOn(user, await readySwitch());
+    await waitFor(() => expect(client.GET).toHaveBeenCalledTimes(2));
+    await turnOn(user, await readySwitch());
+    await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
+    const [first, retry] = client.POST.mock.calls;
+    expect((retry![1] as { body: unknown }).body).toMatchObject({
+      consent_template_version: 'red-alert-trusted-contact@2',
+    });
+    // Same key with a new body is a 409 IDEMPOTENCY_CONFLICT on the server.
+    expect(keyOf(retry!)).not.toBe(keyOf(first!));
+  });
+
   it('reuses the key on a retry after an error and renews it only after a success', async () => {
     client.POST.mockImplementationOnce(() => Promise.reject(new ApiError(503, 'UNAVAILABLE', 'x')));
     client.POST.mockResolvedValue({ data: activeGrant });

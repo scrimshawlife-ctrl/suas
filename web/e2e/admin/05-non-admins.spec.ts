@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '../fixtures';
+import type { Page } from '@playwright/test';
 import { newPerson, shoot, signUp, uniqueEmail } from '../helpers';
 import { elevatedAdmin, openNewDraft, uniqueName } from './admin';
 
@@ -67,7 +68,10 @@ test('a Veteran and a helper deep-linking to any admin address are sent to /home
 test('while the account is loading or fails to load on an admin address, the crisis strip is there', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/veterans\/me :: 500$/, /status of 500/);
   const page = await newPerson(browser);
   await signUp(page, request, {
     email: uniqueEmail('admin-slow'),

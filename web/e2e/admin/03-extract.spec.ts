@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../fixtures';
 import { scriptModel, shoot } from '../helpers';
 import { errorCode, expectNoDeadControls, nextResponse } from '../auth/auth';
 import { elevatedAdmin, extractDrafts, scriptExtraction, uniqueName } from './admin';
@@ -114,7 +114,10 @@ test('a source with no resources in it makes no drafts and keeps the text to adj
 test('when the builder fails or is unavailable, the page says so in plain words and a retry works', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/commands\/extract :: 50[023]$/, /status of 50[023]/);
   const page = await elevatedAdmin(browser, request);
   const name = uniqueName('Riverside Food Shelf');
   await page.goto('/admin/drafts');

@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test } from '../fixtures';
+import type { APIRequestContext, Page } from '@playwright/test';
 import { API_URL } from '../config';
 import { newPerson, readSignInCode, shoot, withDb } from '../helpers';
 import { errorCode, expectNoDeadControls, nextResponse, resetSignInLimits } from '../auth/auth';
@@ -91,7 +92,10 @@ test('an admin opening the console steps up first, and lands on the page that se
 test('a wrong response is a real 401, the old check is spent, and a new check works', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const page = await signInAdmin(browser, request);
   await page.goto('/admin');
   await page.getByRole('button', { name: 'Start check' }).click();
@@ -188,7 +192,10 @@ test('once stepped up, the console nav works without a new check', async ({ brow
 test('a stale client MFA flag gets a real 403 MFA_REQUIRED and goes to the step-up', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 403/);
   const page = await signInAdmin(browser, request);
   await page.evaluate(() => sessionStorage.setItem('suas.mfa', '1'));
   const refused = nextResponse(page, 'GET', DRAFTS);
@@ -207,7 +214,10 @@ test('a stale client MFA flag gets a real 403 MFA_REQUIRED and goes to the step-
 test('when the step-up expires, the next admin page asks again and comes back after it', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 403/);
   const page = await signInAdmin(browser, request);
   await page.goto('/admin/drafts');
   await passMfa(page);
@@ -228,7 +238,10 @@ test('when the step-up expires, the next admin page asks again and comes back af
 test('when the admin session itself expires, the console goes to sign in, then step-up, then back', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const page = await signInAdmin(browser, request);
   await page.goto('/admin/drafts?status=REJECTED');
   await passMfa(page);
@@ -249,7 +262,10 @@ test('when the admin session itself expires, the console goes to sign in, then s
 test('when two admin requests hit the expired session at once, sign-in still returns to the page', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const page = await signInAdmin(browser, request);
   await page.goto('/admin/drafts');
   await passMfa(page);

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '../fixtures';
+import type { Page } from '@playwright/test';
 import { newVerifiedVeteran, shoot, withDb } from '../helpers';
 import { errorCode, expectNoDeadControls, nextResponse, sidewaysScroll } from '../auth/auth';
 import { duplicateTab, elevatedAdmin, openNewDraft, uniqueName } from './admin';
@@ -225,7 +226,10 @@ test('discarding asks first; Keep draft changes nothing; a discarded draft never
 test('the editor refuses an empty name, an empty contact row and a crisis number (real 400)', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 400/);
   const page = await elevatedAdmin(browser, request);
   const name = uniqueName('Validation Pantry');
   await openNewDraft(page, request, { service_name: name, category: 'FOOD' });
@@ -297,7 +301,10 @@ test('double-clicking Save sends one edit; a refresh with unsaved edits shows th
 test('a publish that fails says so inside the dialog, and trying again publishes', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/commands\/publish :: 500$/, /status of 500/);
   const page = await elevatedAdmin(browser, request);
   await openNewDraft(page, request, {
     service_name: uniqueName('Flaky Publish'),
@@ -323,7 +330,10 @@ test('a publish that fails says so inside the dialog, and trying again publishes
 test('two admin tabs on one draft: the stale tab saves, gets 409 and shows the current state', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 409/);
   const page = await elevatedAdmin(browser, request);
   const id = await openNewDraft(page, request, {
     service_name: uniqueName('Two Tabs Pantry'),
@@ -357,7 +367,10 @@ test('two admin tabs on one draft: the stale tab saves, gets 409 and shows the c
 test('a draft address that does not exist, or is malformed, reads as not found with a way back', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 40[04]/);
   const page = await elevatedAdmin(browser, request);
   // A malformed id is a 400, shown as not found rather than a load failure (QA ADMIN-4).
   for (const id of [randomUUID(), 'abc']) {
