@@ -970,7 +970,7 @@ describe('0017 request holder backfill', () => {
       const closedNoChat = await insertRequest(tenantId, caseB, veteranB, 'CLOSED');
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([17, 18, 19, 20, 21]);
+      expect(result.appliedNow).toEqual([17, 18, 19, 20, 21, 22]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const holders = await pool.query<{ id: string; holder: string | null }>(
@@ -1102,7 +1102,7 @@ describe('0020 request expiry and release', () => {
       );
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([20, 21]);
+      expect(result.appliedNow).toEqual([20, 21, 22]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const setting = await pool.query<{ value: unknown }>(
@@ -1188,7 +1188,7 @@ describe('0021 resource contacts and area', () => {
       const draftNoContact = await draft(null, null);
 
       const result = await runMigrations(pool, { mode: 'apply', provenance });
-      expect(result.appliedNow).toEqual([21]);
+      expect(result.appliedNow).toEqual([21, 22]);
       expect(await readSchemaVersion(pool)).toBe(EXPECTED_SCHEMA_VERSION);
 
       const read = async (table: string, key: string, id: string) => {
@@ -1239,6 +1239,53 @@ describe('0021 resource contacts and area', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// suas-specs #72 R9.1 (proposal): a VA confirmation row keeps only bounded result fields.
+describe('0022 VA veteran confirmation', () => {
+  it('admits each confirmation result and bounds the environment and failure class', async () => {
+    await runMigrations(pool, { mode: 'apply', provenance });
+    const tenantId = randomUUID();
+    const userId = randomUUID();
+    await pool.query(`INSERT INTO users (user_id, tenant_id, status) VALUES ($1, $2, 'ACTIVE')`, [
+      userId,
+      tenantId,
+    ]);
+    const insert = (
+      status: string,
+      reason: string | null,
+      environment: string | null,
+      failureClass: string | null,
+    ) =>
+      pool.query(
+        `INSERT INTO veteran_verifications
+           (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
+            verified_at, not_confirmed_reason, provider_environment, projection_id,
+            failure_class, settled_at)
+         VALUES ($1, $2, $3, 'VA_VETERAN_STATUS', $4::suas_veteran_verification_status, 'VA',
+                 'test', CASE WHEN $4 = 'VERIFIED' THEN now() END,
+                 $5::suas_va_not_confirmed_reason, $6, 'VA_CONFIRMATION_V1_REQUIRED_ONLY', $7,
+                 now())`,
+        [randomUUID(), tenantId, userId, status, reason, environment, failureClass],
+      );
+
+    await insert('VERIFIED', null, 'SANDBOX', null);
+    await insert('NOT_CONFIRMED', 'NOT_TITLE_38', 'NONE', null);
+    await insert('NOT_CONFIRMED', 'PERSON_NOT_FOUND', 'SANDBOX', 'REQUEST_INVALID');
+    await insert('UNAVAILABLE', 'ERROR', 'SANDBOX', 'PROVIDER_UNAVAILABLE');
+    await insert('UNAVAILABLE', null, null, 'TIMEOUT');
+
+    await expect(insert('UNAVAILABLE', null, 'STAGING', null)).rejects.toThrow(
+      /veteran_verifications_provider_environment_check/,
+    );
+    await expect(insert('UNAVAILABLE', null, 'SANDBOX', 'SOMETHING_ELSE')).rejects.toThrow(
+      /veteran_verifications_failure_class_check/,
+    );
+    // A VA NOT_CONFIRMED result still needs its VA reason (0014).
+    await expect(insert('NOT_CONFIRMED', null, 'SANDBOX', null)).rejects.toThrow(
+      /veteran_verifications_not_confirmed_reason_check/,
+    );
   });
 });
 
