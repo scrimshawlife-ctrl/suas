@@ -80,7 +80,8 @@ test('while the account is loading or fails to load on an admin address, the cri
   });
   await watchForAdminFlash(page);
 
-  // Slow /me (held, not faked): the guard's loading screen shows with the strip.
+  // Slow /me (held, not faked): the real /me answers too fast to see the loading screen, so the
+  // read is held to check that screen carries the crisis strip.
   let release: () => void = () => undefined;
   const held = new Promise<void>((resolve) => (release = resolve));
   await page.route('**/api/v0/veterans/me', async (route) => {

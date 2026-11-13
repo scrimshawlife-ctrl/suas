@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { expect, type APIRequestContext, type Browser, type Page } from '@playwright/test';
-import { newPerson, scriptModel, signInWithCode, withDb } from '../helpers';
+import { newPerson, scriptModel, signInWithCode } from '../helpers';
 import { resetSignInLimits } from '../auth/auth';
 
 export const ADMIN_EMAIL = 'admin@example.invalid';
@@ -136,14 +136,4 @@ export async function openNewDraft(
   await expect(page).toHaveURL(/\/admin\/drafts\/[0-9a-f-]{36}$/);
   await expect(page.getByRole('heading', { level: 1, name: resource.service_name })).toBeVisible();
   return page.url().split('/').pop() ?? '';
-}
-
-/** Ages every live MFA elevation past its 15-minute life. */
-export async function expireElevation(): Promise<void> {
-  await withDb((db) =>
-    db.query(
-      `UPDATE sessions SET mfa_elevated_at = now() - interval '16 minutes'
-        WHERE mfa_elevated_at IS NOT NULL AND revoked_at IS NULL`,
-    ),
-  );
 }

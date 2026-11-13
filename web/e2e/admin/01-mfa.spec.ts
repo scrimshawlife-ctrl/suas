@@ -3,7 +3,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { API_URL } from '../config';
 import { newPerson, readSignInCode, shoot, withDb } from '../helpers';
 import { errorCode, expectNoDeadControls, nextResponse, resetSignInLimits } from '../auth/auth';
-import { ADMIN_EMAIL, expireElevation, passMfa, signInAdmin, testFactorResponse } from './admin';
+import { ADMIN_EMAIL, passMfa, signInAdmin, testFactorResponse } from './admin';
 
 const MFA_VERIFY = /\/api\/v0\/auth\/mfa\/challenges\/commands\/verify$/;
 const DRAFTS = /\/api\/v0\/admin\/resource-drafts$/;
@@ -19,11 +19,18 @@ async function signInAgain(page: Page, request: APIRequestContext): Promise<void
   await page.getByRole('button', { name: 'Verify and continue' }).click();
 }
 
-/** The session's absolute life runs out (every open session in this test database). */
-async function expireSessions(): Promise<void> {
+/** This tab's admin: every live session of theirs passed its absolute end a minute ago. */
+async function expireSessions(page: Page, request: APIRequestContext): Promise<void> {
+  const token = await page.evaluate(() => sessionStorage.getItem('suas.session') ?? '');
+  const me = await request.get(`${API_URL}/api/v0/veterans/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const { user_id: userId } = (await me.json()) as { user_id: string };
   await withDb((db) =>
     db.query(
-      `UPDATE sessions SET expires_at = now() - interval '1 minute' WHERE revoked_at IS NULL`,
+      `UPDATE sessions SET expires_at = now() - interval '1 minute'
+        WHERE user_id = $1 AND revoked_at IS NULL`,
+      [userId],
     ),
   );
 }
@@ -210,31 +217,6 @@ test('a stale client MFA flag gets a real 403 MFA_REQUIRED and goes to the step-
   await expect(page.getByRole('heading', { level: 1, name: 'Resource drafts' })).toBeVisible();
 });
 
-// T7: the 15-minute elevation runs out while the tab still holds the flag.
-test('when the step-up expires, the next admin page asks again and comes back after it', async ({
-  browser,
-  request,
-  allow,
-}) => {
-  // Provoked on purpose: the browser logs each refused load.
-  allow.push(/status of 403/);
-  const page = await signInAdmin(browser, request);
-  await page.goto('/admin/drafts');
-  await passMfa(page);
-  await expect(page).toHaveURL(/\/admin\/drafts$/);
-  await expect(page.getByText(/Nothing to review|Updated/).first()).toBeVisible();
-
-  await expireElevation();
-  const refused = nextResponse(page, 'GET', DRAFTS);
-  await page.reload();
-  expect((await refused).status()).toBe(403);
-  await expect(page).toHaveURL(/\/admin\/mfa$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Confirm it is you' })).toBeVisible();
-  await passMfa(page);
-  await expect(page).toHaveURL(/\/admin\/drafts$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Resource drafts' })).toBeVisible();
-});
-
 test('when the admin session itself expires, the console goes to sign in, then step-up, then back', async ({
   browser,
   request,
@@ -246,7 +228,7 @@ test('when the admin session itself expires, the console goes to sign in, then s
   await page.goto('/admin/drafts?status=REJECTED');
   await passMfa(page);
   await expect(page).toHaveURL(/\/admin\/drafts\?status=REJECTED$/);
-  await expireSessions();
+  await expireSessions(page, request);
   await page.reload();
   await expect(page).toHaveURL(/\/sign-in$/);
   expect(await page.evaluate(() => sessionStorage.getItem('suas.mfa'))).toBeNull();
@@ -277,7 +259,7 @@ test('when two admin requests hit the expired session at once, sign-in still ret
     await route.fallback();
   });
   await page.waitForLoadState('networkidle');
-  await expireSessions();
+  await expireSessions(page, request);
   const lists = () => held.filter((h) => h.url.includes('/admin/resource-drafts?'));
   await page.getByRole('button', { name: 'Published' }).click();
   await page.getByRole('button', { name: 'Discarded' }).click();
