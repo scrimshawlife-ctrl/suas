@@ -137,8 +137,10 @@ test('signing out from the Need support header, then Back, shows no private page
 }) => {
   const { page } = await signedUpPerson(browser, request, { label: 'out-home', name: 'Quinn A.' });
   await expect(page.getByText(/Good (morning|afternoon|evening), Quinn\./)).toBeVisible();
+  // Sign out only after the page's own read is back, so no read is in flight.
+  const read = page.waitForResponse(/\/api\/v0\/notifications/);
   await page.goto('/notifications');
-  await page.waitForLoadState('networkidle');
+  await read;
   await signOutFromAvatar(page, 'Quinn');
   await expect(page).toHaveURL(LANDING);
   // A fresh page load does not know the sign-out was on purpose, so Back may land on /sign-in.
@@ -159,7 +161,9 @@ test('signing out from the Serve header, then Back, shows no private page', asyn
     name: 'Rory B.',
     role: 'serve',
   });
-  await page.waitForLoadState('networkidle');
+  const read = page.waitForResponse(/\/api\/v0\/service-requests\?ownership=open/);
+  await page.reload();
+  await read;
   await signOutFromAvatar(page, 'Rory');
   await expect(page).toHaveURL(LANDING);
   await page.goBack();
@@ -172,8 +176,9 @@ test('signing out from the chat screen header ends on the landing page', async (
   request,
 }) => {
   const { page } = await signedUpPerson(browser, request, { label: 'out-chat', name: 'Sky C.' });
+  const read = page.waitForResponse(/\/api\/v0\/chat\/threads/);
   await page.goto('/chat');
-  await page.waitForLoadState('networkidle');
+  await read;
   await signOutFromAvatar(page, 'Sky');
   await expect(page).toHaveURL(LANDING);
   await page.goBack();
@@ -192,7 +197,7 @@ for (const where of ['/welcome', '/verify']) {
       await page.goto('/request');
       await expect(page).toHaveURL(/\/verify$/);
     }
-    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(LANDING);
     await page.goBack();
@@ -230,8 +235,7 @@ test('signing out while a page is still loading ends on the landing page', async
   const held = page.waitForResponse(/\/api\/v0\/service-requests\?ownership=open/);
   await signOutFromAvatar(page, 'Val');
   expect((await held).status(), 'the held read reaches the server after the sign-out').toBe(401);
-  await page.waitForLoadState('networkidle');
-  expect(page.url()).toMatch(LANDING);
+  await expect(page).toHaveURL(LANDING);
   await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
 });
 
