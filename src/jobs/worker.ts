@@ -25,7 +25,7 @@ import {
 } from '../identity/licence-review.js';
 import { createChannelRegistry, deliverQueuedInApp } from '../notifications/index.js';
 import { claimDueWork, markFollowUpDue } from '../settlement/index.js';
-import { abandonStaleCheckIns } from '../signals/index.js';
+import { abandonStaleCheckIns, requeueUnsettledCheckIns } from '../signals/index.js';
 import { createObjectStoragePort } from '../storage/index.js';
 import {
   claimDueJobs,
@@ -125,6 +125,14 @@ const SWEEPS: readonly Sweep[] = [
     run: async (pool) => {
       const delivered = await deliverQueuedInApp(pool);
       if (delivered > 0) log({ msg: 'in_app_delivered', count: delivered });
+    },
+  },
+  // CHECKINS.md §6 rules 6-7: a completed Check-In whose signal job was lost gets it back.
+  {
+    name: 'check_in_signal_requeue',
+    run: async (pool) => {
+      const { requeued } = await requeueUnsettledCheckIns(pool, new PostgresOutboxJobQueue(pool));
+      if (requeued > 0) log({ msg: 'check_in_signals_requeued', count: requeued });
     },
   },
   // Check-In idle sweep (R8.10).

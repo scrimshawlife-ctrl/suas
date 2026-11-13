@@ -144,7 +144,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
 
   app.post(`${API_PREFIX}/auth/mfa/challenges`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    const challenge = await deps.mfa.begin(context.userId);
+    const challenge = await deps.mfa.begin({
+      userId: context.userId,
+      sessionId: context.session.sessionId,
+    });
     return { challenge_id: challenge.challengeId, factor_type: challenge.factorType };
   });
 
@@ -152,7 +155,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const body = mfaVerifyBody.parse(request.body);
 
-    const verified = await deps.mfa.verify(body.challenge_id, body.response);
+    const verified = await deps.mfa.verify(body.challenge_id, body.response, {
+      userId: context.userId,
+      sessionId: context.session.sessionId,
+    });
     if (!verified) {
       await withTransaction(deps.pool, (tx) =>
         appendAuditEvent(tx, {

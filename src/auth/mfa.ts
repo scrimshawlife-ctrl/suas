@@ -14,7 +14,9 @@
  * implementation is a test factor that produces no external effect.
  */
 
+import { randomUUID } from 'node:crypto';
 import type { EnvironmentClass, SuasConfig } from '../config/index.js';
+import { CHALLENGE_TTL_SECONDS } from './constants.js';
 
 export type MfaFactorType = 'TEST_FACTOR';
 
@@ -47,48 +49,77 @@ export interface MfaChallenge {
   readonly factorType: MfaFactorType;
 }
 
+/** The signed-in session a factor challenge belongs to. Only it may answer the challenge. */
+export interface MfaBinding {
+  readonly userId: string;
+  readonly sessionId: string;
+}
+
 export interface MfaPort {
   readonly factorType: MfaFactorType;
   readonly implementation: string;
-  /** Begin a factor challenge for a user. */
-  begin(userId: string): Promise<MfaChallenge>;
-  /** Verify a factor response. A true result authorizes elevation, nothing more. */
-  verify(challengeId: string, response: string): Promise<boolean>;
+  /** Begin a factor challenge for the caller's session. */
+  begin(binding: MfaBinding): Promise<MfaChallenge>;
+  /**
+   * Verify a factor response from the session that began the challenge. A true result
+   * authorizes elevation of that session, nothing more.
+   */
+  verify(challengeId: string, response: string, binding: MfaBinding): Promise<boolean>;
 }
 
 /**
  * Deterministic test factor for the synthetic environment classes.
  *
  * It proves the elevation boundary — that privileged work is refused until a
- * factor is verified — without standing in for a real second factor. The code is
- * returned by `begin` because there is no channel to deliver it on; that is only
- * acceptable because these environments forbid real users.
+ * factor is verified — without standing in for a real second factor: the answer is
+ * still derived from the challenge id because there is no channel to deliver a code
+ * on, which is only acceptable because these environments forbid real users.
+ * Challenges are random, expire, and answer only the session that began them
+ * (AUTH.md §3, §4). They live in this process, so one instance must serve both calls.
  */
 export class TestMfaFactor implements MfaPort {
   readonly factorType: MfaFactorType = 'TEST_FACTOR';
   readonly implementation = 'test-factor';
 
-  private readonly pending = new Map<string, { userId: string; response: string }>();
-  private counter = 0;
+  private readonly pending = new Map<string, MfaBinding & { expiresAt: number }>();
 
-  begin(userId: string): Promise<MfaChallenge> {
-    this.counter += 1;
-    const challengeId = `mfa-test-${this.counter}`;
-    this.pending.set(challengeId, { userId, response: this.expectedResponse(challengeId) });
+  begin(binding: MfaBinding): Promise<MfaChallenge> {
+    this.dropExpired();
+    const challengeId = `mfa-test-${randomUUID()}`;
+    this.pending.set(challengeId, {
+      userId: binding.userId,
+      sessionId: binding.sessionId,
+      expiresAt: Date.now() + CHALLENGE_TTL_SECONDS.value * 1000,
+    });
     return Promise.resolve({ challengeId, factorType: this.factorType });
   }
 
-  verify(challengeId: string, response: string): Promise<boolean> {
+  verify(challengeId: string, response: string, binding: MfaBinding): Promise<boolean> {
     const entry = this.pending.get(challengeId);
-    if (entry === undefined) return Promise.resolve(false);
+    // Another session's challenge is refused without consuming it, so it cannot be burned.
+    if (
+      entry === undefined ||
+      entry.userId !== binding.userId ||
+      entry.sessionId !== binding.sessionId
+    ) {
+      return Promise.resolve(false);
+    }
     // Single-use, mirroring the challenge contract of AUTH.md §3.
     this.pending.delete(challengeId);
-    return Promise.resolve(entry.response === response);
+    if (entry.expiresAt <= Date.now()) return Promise.resolve(false);
+    return Promise.resolve(response === this.expectedResponse(challengeId));
   }
 
   /** Test-only: the response this factor will accept. */
   expectedResponse(challengeId: string): string {
     return `ok-${challengeId}`;
+  }
+
+  private dropExpired(): void {
+    const now = Date.now();
+    for (const [id, entry] of this.pending) {
+      if (entry.expiresAt <= now) this.pending.delete(id);
+    }
   }
 }
 

@@ -444,7 +444,10 @@ export interface paths {
     /** List the veteran trusted circle */
     get: operations['listTrustedContacts'];
     put?: never;
-    /** Invite a trusted contact */
+    /**
+     * Invite a trusted contact
+     * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). No invite message is sent yet.
+     */
     post: operations['inviteTrustedContact'];
     delete?: never;
     options?: never;
@@ -620,7 +623,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Accept a trusted-contact invite (invitee) */
+    /**
+     * Accept a trusted-contact invite (invitee)
+     * @description Only a signed-in person whose enrolled email or phone is the invited address can accept; anyone else gets 404 (TRUSTED_CIRCLE.md §3.3; SECURITY.md §5). Acceptance is audited and grants no consent (§3.4).
+     */
     post: operations['acceptTrustedContact'];
     delete?: never;
     options?: never;
@@ -1085,7 +1091,7 @@ export interface paths {
     put?: never;
     /**
      * Extract Resource Drafts from pasted source text
-     * @description SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans.
+     * @description SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans. Requires Idempotency-Key: a retry with the same key returns the drafts the first request created (re-read, so their current state) with replayed true, and creates no second set or model call (API.md §7).
      */
     post: operations['extractAdminResourceDrafts'];
     delete?: never;
@@ -1546,6 +1552,8 @@ export interface components {
     };
     ResourceDraftExtraction: {
       drafts: components['schemas']['ResourceDraft'][];
+      /** @description True when an earlier request with the same Idempotency-Key created these drafts. */
+      replayed: boolean;
     };
     ResourceDraftExtractRequest: {
       source_text: string;
@@ -3610,7 +3618,10 @@ export interface operations {
   inviteTrustedContact: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -3620,13 +3631,22 @@ export interface operations {
       };
     };
     responses: {
+      /** @description Replay of an invite already created with this Idempotency-Key */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrustedContactResult'];
+        };
+      };
       /** @description Invitation created */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['TrustedContact'];
+          'application/json': components['schemas']['TrustedContactResult'];
         };
       };
       400: components['responses']['Error'];
@@ -3640,6 +3660,7 @@ export interface operations {
           'application/json': components['schemas']['ErrorBody'];
         };
       };
+      409: components['responses']['Error'];
     };
   };
   removeTrustedContact: {
@@ -4969,7 +4990,10 @@ export interface operations {
   extractAdminResourceDrafts: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -4991,6 +5015,7 @@ export interface operations {
       400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
+      409: components['responses']['Error'];
       502: components['responses']['Error'];
       503: components['responses']['Error'];
     };

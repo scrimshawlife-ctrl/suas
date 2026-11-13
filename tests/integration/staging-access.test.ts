@@ -17,6 +17,7 @@ import { createIdVerificationPort } from '../../src/identity/id-verification.js'
 import { createUser } from '../../src/identity/users.js';
 import { API_PREFIX } from '../../src/release/pins.js';
 import { DEMO_FIXED_CODE_DESTINATION } from '../../src/auth/demo-fixed-code.js';
+import { CHALLENGE_VERIFY_LIMIT } from '../../src/auth/constants.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
 
@@ -414,6 +415,30 @@ describe('D-052 STAGING fixture registry', () => {
         ),
       ).rejects.toThrow(/invalid or has expired/);
       expect(await effectCounts(pool, app)).toEqual(before);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('spends the verify budget for a non-fixture address too, so both reach 429 (A1-16)', async () => {
+    const tenantId = randomUUID();
+    const email = syntheticEmail(`budget-${randomUUID().slice(0, 8)}`);
+    const app = await stagingApp([{ tenantId, userId: randomUUID() }]);
+    try {
+      const pool = app.pool;
+      if (pool === undefined) throw new Error('The test app has no database pool.');
+      await createUser(pool, { tenantId, email, status: 'ACTIVE' });
+      const statuses: number[] = [];
+      for (let attempt = 0; attempt <= CHALLENGE_VERIFY_LIMIT.value; attempt += 1) {
+        const response = await app.server.inject({
+          method: 'POST',
+          url: `${API_PREFIX}/auth/challenges/commands/verify`,
+          payload: { tenant_id: tenantId, destination: email, code: '000000' },
+        });
+        statuses.push(response.statusCode);
+      }
+      expect(statuses.slice(0, -1).every((status) => status === 401)).toBe(true);
+      expect(statuses.at(-1)).toBe(429);
     } finally {
       await app.close();
     }

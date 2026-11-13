@@ -85,11 +85,15 @@ function scriptResources(resources: unknown[]) {
   });
 }
 
-async function extract(headers: Record<string, string>, target: StartedApp = app) {
+async function extract(
+  headers: Record<string, string>,
+  target: StartedApp = app,
+  idempotencyKey: string = randomUUID(),
+) {
   return target.server.inject({
     method: 'POST',
     url: '/api/v0/admin/resource-drafts/commands/extract',
-    headers,
+    headers: { ...headers, 'idempotency-key': idempotencyKey },
     payload: { source_text: SOURCE_TEXT, source_link: SOURCE_LINK },
   });
 }
@@ -166,6 +170,35 @@ describe('extract', () => {
       [tenantId],
     );
     expect(audit.rowCount).toBe(1);
+  });
+
+  it('replays a retried extract with the same key: no second set, no second model call (C-10)', async () => {
+    const tenantId = randomUUID();
+    const admin = await credential(app, tenantId, { admin: true, elevate: true });
+    scriptResources([validResource, { ...validResource, service_name: 'Second Pantry' }]);
+    const key = randomUUID();
+
+    const first = await extract(admin.headers, app, key);
+    expect(first.statusCode).toBe(200);
+    expect(first.json().replayed).toBe(false);
+    // Nothing is scripted for a second call, so a replay must not reach the model.
+    const retry = await extract(admin.headers, app, key);
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toEqual({ ...first.json(), replayed: true });
+    expect(await draftCount(tenantId)).toBe(2);
+  });
+
+  it('requires an Idempotency-Key (API.md §7)', async () => {
+    const tenantId = randomUUID();
+    const admin = await credential(app, tenantId, { admin: true, elevate: true });
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/admin/resource-drafts/commands/extract',
+      headers: admin.headers,
+      payload: { source_text: SOURCE_TEXT, source_link: SOURCE_LINK },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(await draftCount(tenantId)).toBe(0);
   });
 
   it('creates no draft when the model output is invalid', async () => {

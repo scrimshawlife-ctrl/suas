@@ -1386,19 +1386,35 @@
       "post": {
         "tags": ["consent"],
         "summary": "Invite a trusted contact",
+        "description": "Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). No invite message is sent yet.",
         "operationId": "inviteTrustedContact",
         "security": [
           {
             "bearerAuth": []
           }
         ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "responses": {
+          "200": {
+            "description": "Replay of an invite already created with this Idempotency-Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrustedContactResult"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Invitation created",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TrustedContact"
+                  "$ref": "#/components/schemas/TrustedContactResult"
                 }
               }
             }
@@ -1407,6 +1423,9 @@
             "$ref": "#/components/responses/Error"
           },
           "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
             "$ref": "#/components/responses/Error"
           },
           "403": {
@@ -1974,6 +1993,7 @@
       "post": {
         "tags": ["consent"],
         "summary": "Accept a trusted-contact invite (invitee)",
+        "description": "Only a signed-in person whose enrolled email or phone is the invited address can accept; anyone else gets 404 (TRUSTED_CIRCLE.md §3.3; SECURITY.md §5). Acceptance is audited and grants no consent (§3.4).",
         "operationId": "acceptTrustedContact",
         "security": [
           {
@@ -3533,10 +3553,15 @@
         "tags": ["admin"],
         "summary": "Extract Resource Drafts from pasted source text",
         "operationId": "extractAdminResourceDrafts",
-        "description": "SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans.",
+        "description": "SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans. Requires Idempotency-Key: a retry with the same key returns the drafts the first request created (re-read, so their current state) with replayed true, and creates no second set or model call (API.md \u00a77).",
         "security": [
           {
             "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -3567,6 +3592,9 @@
             "$ref": "#/components/responses/Error"
           },
           "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
             "$ref": "#/components/responses/Error"
           },
           "502": {
@@ -5286,13 +5314,17 @@
       },
       "ResourceDraftExtraction": {
         "type": "object",
-        "required": ["drafts"],
+        "required": ["drafts", "replayed"],
         "properties": {
           "drafts": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ResourceDraft"
             }
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True when an earlier request with the same Idempotency-Key created these drafts."
           }
         }
       },

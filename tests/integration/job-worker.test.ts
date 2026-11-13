@@ -311,4 +311,29 @@ describe('job-worker --once and the Check-In idle sweep', () => {
     );
     expect(row.rows[0]?.status).toBe('ABANDONED');
   });
+
+  it('re-enqueues the signal job of a completed Check-In that lost it (A2-02, CHECKINS.md §6)', async () => {
+    const tenantId = syntheticTenantId();
+    const veteran = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail(`veteran-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    await ensurePublishedQv001(pool, veteran.userId);
+    const checkIn = await startCheckIn(pool, { tenantId, veteranUserId: veteran.userId });
+    // Committed as COMPLETED, but the enqueue after the commit never happened.
+    await pool.query(
+      `UPDATE check_ins SET status = 'COMPLETED', completed_at = now() - interval '10 minutes'
+       WHERE check_in_id = $1`,
+      [checkIn.checkInId],
+    );
+
+    await drainOnce();
+
+    const jobs = await pool.query(
+      `SELECT 1 FROM job_outbox WHERE job_type = 'support-signal.compute' AND idempotency_key = $1`,
+      [`support-signal:${checkIn.checkInId}`],
+    );
+    expect(jobs.rowCount).toBe(1);
+  });
 });

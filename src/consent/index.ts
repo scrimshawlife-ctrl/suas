@@ -28,6 +28,7 @@ export {
 } from './templates.js';
 export {
   acceptTrustedContact,
+  auditTrustedContactTransition,
   findTrustedContact,
   inviteTrustedContact,
   listAcceptedContactsWithEmail,
