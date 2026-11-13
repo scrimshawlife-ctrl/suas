@@ -32,11 +32,8 @@ interface Confirming {
 }
 
 /**
- * The switch-like control that creates or ends the RED-alert grant for one accepted contact.
- * Turning it on first shows the published consent text; the grant is sent only on confirm
- * (R12.3, contributor proposal, SUAS-specs #79). It stays focusable while saving
- * (aria-disabled) and ignores changes until the save ends. The Idempotency-Key is kept
- * across retries and renewed only after a success.
+ * Creates or ends the RED-alert grant for one contact; turning on first shows the published
+ * consent text (R12.3). The Idempotency-Key is kept across retries and renewed after a success.
  */
 export function AlertToggle({
   contact,
