@@ -15,6 +15,8 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
+- Command execution locks its reservation through the domain transaction and fences completion/failure by attempt, preserving a newer outcome after lease takeover (API.md §7, ARCHITECTURE.md §10).
+
 - Invitation recipient admission, suppression and audit now commit with the notification, so retries cannot queue a send before its cap check (NOTIFICATIONS.md §3, §5).
 
 - Rate-limit cleanup expires only registered buckets at their own window length, preserving daily invitation caps across worker sweeps (AUTH.md §3, SECURITY.md §2).
