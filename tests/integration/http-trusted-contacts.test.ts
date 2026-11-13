@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
+import { createUser, setUserDisplayName } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
@@ -185,5 +186,89 @@ describe('GET/POST /api/v0/trusted-contacts', () => {
     expect(events.rows).toHaveLength(1);
     expect(events.rows[0]?.payload).toEqual({ status: 'INVITED', channels: ['EMAIL'] });
     expect(await auditActions(tenantId, id)).toEqual(['INVITE_TRUSTED_CONTACT']);
+  });
+});
+
+describe('invite delivery and the invitee read (R9.4)', () => {
+  async function signedIn(tenantId: string, email: string) {
+    const user = await createUser(requirePool(), { tenantId, email, status: 'ACTIVE' });
+    const session = await createSession(requirePool(), TEST_SESSION_SECRET, {
+      tenantId,
+      userId: user.userId,
+    });
+    return { user, headers: { authorization: `Bearer ${session.credential}` } };
+  }
+
+  it('sends one EMAIL to the invited address, recording the template version', async () => {
+    const { headers, tenantId } = await veteranSession();
+    const email = syntheticEmail(`invitee-${randomUUID().slice(0, 8)}`);
+    const key = `invite-${randomUUID()}`;
+    const first = await invite(headers, { relationship_label: 'Sister', invite_email: email }, key);
+    await invite(headers, { relationship_label: 'Sister', invite_email: email }, key);
+    const phoneOnly = await invite(headers, {
+      relationship_label: 'Brother',
+      invite_phone: '+15555550123',
+    });
+    expect(phoneOnly.statusCode).toBe(201);
+
+    const sends = await requirePool().query<{
+      destination: string;
+      reason: string;
+      channel: string;
+      template_version: string;
+      subject_id: string;
+      recipient_user_id: string | null;
+    }>(
+      `SELECT destination, reason, channel, template_version, subject_id, recipient_user_id
+         FROM notifications WHERE tenant_id = $1 AND reason = 'trusted_contact_invited'`,
+      [tenantId],
+    );
+    expect(sends.rows).toEqual([
+      {
+        destination: email,
+        reason: 'trusted_contact_invited',
+        channel: 'EMAIL',
+        template_version: 'invite@1',
+        subject_id: first.json().trusted_contact_id,
+        recipient_user_id: null,
+      },
+    ]);
+  });
+
+  it('shows the invitee display name and relationship only, then nothing once accepted', async () => {
+    const { headers, tenantId, user } = await veteranSession();
+    await setUserDisplayName(requirePool(), tenantId, user.userId, 'Marcus T.');
+    const email = syntheticEmail(`invitee-${randomUUID().slice(0, 8)}`);
+    const created = await invite(headers, { relationship_label: 'Sister', invite_email: email });
+    const id = created.json().trusted_contact_id as string;
+    const invitee = await signedIn(tenantId, email.toUpperCase());
+    const bystander = await signedIn(tenantId, syntheticEmail(`other-${randomUUID().slice(0, 8)}`));
+
+    const read = (auth: Record<string, string>) =>
+      app.server.inject({
+        method: 'GET',
+        url: '/api/v0/trusted-contacts/invitations',
+        headers: auth,
+      });
+    expect(
+      (await app.server.inject({ method: 'GET', url: '/api/v0/trusted-contacts/invitations' }))
+        .statusCode,
+    ).toBe(401);
+    expect((await read(invitee.headers)).json()).toEqual({
+      invitations: [
+        { trusted_contact_id: id, veteran_display_name: 'Marcus T.', relationship_label: 'Sister' },
+      ],
+    });
+    expect((await read(bystander.headers)).json()).toEqual({ invitations: [] });
+    // The Veteran never sees their own invite as one to accept.
+    expect((await read(headers)).json()).toEqual({ invitations: [] });
+
+    const accepted = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/trusted-contacts/${id}/commands/accept`,
+      headers: { ...invitee.headers, 'idempotency-key': randomUUID() },
+    });
+    expect(accepted.json().status).toBe('ACCEPTED');
+    expect((await read(invitee.headers)).json()).toEqual({ invitations: [] });
   });
 });

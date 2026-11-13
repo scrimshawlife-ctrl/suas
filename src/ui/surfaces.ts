@@ -308,7 +308,7 @@ function qrfCard(model: QrfCardViewModel): Renderable {
 
 export function renderLanding(model: LandingViewModel): string {
   const markup = document(model.shell, [
-    h1({}, 'Shut Up and Serve'),
+    h1({}, 'SUAS'),
     // §7.4: mission framing without statistics or clinical efficacy claims.
     p({}, model.missionLine),
     ol(

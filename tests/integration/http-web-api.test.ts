@@ -252,6 +252,32 @@ describe('display name and the me projection', () => {
   });
 });
 
+describe('profile change audit (R9.5 a)', () => {
+  it('audits a changed county or display name with no value in the payload, and an unchanged one not at all', async () => {
+    const who = await person(randomUUID(), { county: 'SANTA_CLARA' });
+    const put = (url: string, payload: Record<string, unknown>) =>
+      app.server.inject({ method: 'PUT', url, headers: who.headers, payload });
+    expect((await put('/api/v0/veterans/me/county', { county: 'ALAMEDA' })).statusCode).toBe(200);
+    await put('/api/v0/veterans/me/county', { county: 'ALAMEDA' });
+    await put('/api/v0/veterans/me/profile', { display_name: 'Marcus T.' });
+    await put('/api/v0/veterans/me/profile', { display_name: 'Marcus T.' });
+    await put('/api/v0/veterans/me/profile', { display_name: 'Marc T.' });
+
+    const audits = await pool().query<{ event_type: string; actor_id: string; payload: object }>(
+      `SELECT event_type, actor_id, payload FROM audit_events
+        WHERE tenant_id = $1 AND target_type = 'User' AND target_id = $2
+          AND event_type IN ('USER_COUNTY_CHANGED', 'USER_DISPLAY_NAME_CHANGED')
+        ORDER BY occurred_at`,
+      [who.tenantId, who.userId],
+    );
+    expect(audits.rows).toEqual([
+      { event_type: 'USER_COUNTY_CHANGED', actor_id: who.userId, payload: {} },
+      { event_type: 'USER_DISPLAY_NAME_CHANGED', actor_id: who.userId, payload: {} },
+      { event_type: 'USER_DISPLAY_NAME_CHANGED', actor_id: who.userId, payload: {} },
+    ]);
+  });
+});
+
 describe('meeting place', () => {
   const MARKER = `zz-meet-${randomUUID()}`;
 

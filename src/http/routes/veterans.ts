@@ -25,6 +25,8 @@ import { findCurrentCase } from '../../coordination/index.js';
 import { commandScope, fingerprintRequest } from '../../idempotency/fingerprint.js';
 import { runIdempotentCommand } from '../../idempotency/run.js';
 import {
+  changeUserCounty,
+  changeUserDisplayName,
   confirmVeteranStatus,
   displayNameMatches,
   isVaVerified,
@@ -42,7 +44,7 @@ import {
   type VeteranConfirmationStanding,
 } from '../../identity/index.js';
 import { SERVICE_COUNTIES } from '../../identity/counties.js';
-import { findUserById, setUserCounty, setUserDisplayName } from '../../identity/users.js';
+import { findUserById } from '../../identity/users.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { CATEGORY_CARDS } from '../../ui/categories.js';
 import { presentQrfState } from '../../ui/qrf.js';
@@ -158,7 +160,12 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
   app.put(`${API_PREFIX}/veterans/me/county`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const body = countyBody.parse(request.body);
-    const user = await setUserCounty(deps.pool, context.tenantId, context.userId, body.county);
+    const user = await changeUserCounty(deps.pool, {
+      tenantId: context.tenantId,
+      userId: context.userId,
+      county: body.county,
+      correlationId: String(request.id),
+    });
     if (user === undefined) throw new ResourceNotVisibleError();
     return { county: user.county ?? null };
   });
@@ -167,12 +174,12 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
   app.put(`${API_PREFIX}/veterans/me/profile`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const body = profileBody.parse(request.body);
-    const user = await setUserDisplayName(
-      deps.pool,
-      context.tenantId,
-      context.userId,
-      body.display_name,
-    );
+    const user = await changeUserDisplayName(deps.pool, {
+      tenantId: context.tenantId,
+      userId: context.userId,
+      displayName: body.display_name,
+      correlationId: String(request.id),
+    });
     if (user === undefined) throw new ResourceNotVisibleError();
     return { display_name: user.displayName ?? null };
   });

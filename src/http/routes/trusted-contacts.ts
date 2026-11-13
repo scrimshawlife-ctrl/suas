@@ -16,8 +16,10 @@ import { requireVerifiedVeteran } from '../../identity/index.js';
 import {
   acceptTrustedContact,
   auditTrustedContactTransition,
+  findInviteEmail,
   findTrustedContact,
   inviteTrustedContact,
+  listPendingInvitations,
   listTrustedCircle,
   setTrustedContactStatus,
   type TrustedContact,
@@ -25,12 +27,78 @@ import {
 import { withTransaction } from '../../db/index.js';
 import { appendDomainEvent } from '../../events/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
+import type { DurableJobQueuePort } from '../../jobs/index.js';
+import { buildNotificationSendPayload, enqueueNotification } from '../../notifications/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 
 export interface TrustedContactRouteDeps {
   readonly pool: Pool;
   readonly sessionSecret: string | undefined;
+  /** Where present, the invite's `notification.send` job is enqueued at once. */
+  readonly jobQueue?: DurableJobQueuePort;
+}
+
+export const TRUSTED_CONTACT_INVITE_REASON = 'trusted_contact_invited';
+export const TRUSTED_CONTACT_INVITE_TEMPLATE_VERSION = 'invite@1';
+
+/**
+ * TRUSTED_CIRCLE.md §3.2: send the invite only to the email the Veteran gave; the
+ * Notification records the template version. One send per invite (dedupe key), so a
+ * replayed invite command repairs a send whose job was never enqueued and adds nothing
+ * else. The email names nobody, so the basis is the Veteran's own request, not a grant.
+ * A phone-only invite has no EMAIL to send (R9.4 is EMAIL only).
+ */
+async function deliverInvite(
+  deps: TrustedContactRouteDeps,
+  input: {
+    tenantId: string;
+    veteranUserId: string;
+    trustedContactId: string;
+    correlationId: string;
+  },
+): Promise<void> {
+  const destination = await findInviteEmail(deps.pool, input.tenantId, input.trustedContactId);
+  if (destination === undefined) return;
+  const disclosure = {
+    tenantId: input.tenantId,
+    veteranUserId: input.veteranUserId,
+    permission: 'can_view',
+    scope: 'current_requests',
+    granteeType: 'SYSTEM',
+    granteeId: 'notifications',
+    purpose: 'Send the Trusted Contact invite the Veteran asked for',
+    systemBasis: 'SYSTEM_INTERNAL_PROCESSING',
+  } as const;
+  const { notification, deduplicated } = await enqueueNotification(
+    deps.pool,
+    {
+      tenantId: input.tenantId,
+      destination,
+      reason: TRUSTED_CONTACT_INVITE_REASON,
+      channel: 'EMAIL',
+      templateVersion: TRUSTED_CONTACT_INVITE_TEMPLATE_VERSION,
+      dedupeKey: `trusted-contact-invite:${input.trustedContactId}`,
+      subjectType: 'TrustedContact',
+      subjectId: input.trustedContactId,
+      disclosure,
+      correlationId: input.correlationId,
+    },
+    deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {},
+  );
+  if (
+    deduplicated &&
+    deps.jobQueue !== undefined &&
+    notification.cancelledAt === undefined &&
+    (notification.deliveryStatus === 'QUEUED' || notification.deliveryStatus === 'FAILED')
+  ) {
+    await deps.jobQueue.enqueue({
+      jobType: 'notification.send',
+      payload: buildNotificationSendPayload(notification.notificationId, disclosure),
+      idempotencyKey: notification.notificationId,
+      tenantId: input.tenantId,
+    });
+  }
 }
 
 const idParams = z.object({ id: z.string().uuid() });
@@ -137,10 +205,37 @@ export function registerTrustedContactRoutes(
       },
     );
 
+    // After the commit, so the send never names a row that rolled back.
+    const trustedContactId = run.result.trusted_contact_id;
+    if (typeof trustedContactId === 'string') {
+      await deliverInvite(deps, {
+        tenantId: context.tenantId,
+        veteranUserId: context.userId,
+        trustedContactId,
+        correlationId: String(request.id),
+      });
+    }
     if (!run.replayed) {
       return reply.status(201).send({ ...run.result, replayed: false });
     }
     return { ...run.result, replayed: true };
+  });
+
+  /**
+   * R9.4 (contributor proposal, specs #72): the invites waiting for the caller, matched on
+   * their enrolled email, with the inviting Veteran's display name and the relationship
+   * label only. Accepting goes through the accept command below.
+   */
+  app.get(`${API_PREFIX}/trusted-contacts/invitations`, async (request) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const invitations = await listPendingInvitations(deps.pool, context.tenantId, context.userId);
+    return {
+      invitations: invitations.map((invitation) => ({
+        trusted_contact_id: invitation.trustedContactId,
+        veteran_display_name: invitation.veteranDisplayName ?? null,
+        relationship_label: invitation.relationshipLabel,
+      })),
+    };
   });
 
   app.post(`${API_PREFIX}/trusted-contacts/:id/commands/remove`, async (request) => {

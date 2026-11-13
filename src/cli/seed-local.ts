@@ -75,6 +75,7 @@ import {
   inviteTrustedContact,
   listTrustedCircle,
   publishConsentTemplateVersion,
+  RED_ALERT_CONSENT_TEMPLATE_KEY,
 } from '../consent/index.js';
 import { enqueueNotification, listNotificationsForRecipient } from '../notifications/index.js';
 import {
@@ -336,19 +337,37 @@ async function refetchCase(pool: Pool, caseId: string): Promise<SupportCase> {
  * boolean. Idempotent: the template is get-or-create and the grant is skipped
  * when an identical live one already exists.
  */
-async function ensureConsent(pool: Pool, veteran: User, accepter: User): Promise<string> {
-  const versionKey = consentTemplateVersionKey('local-seed-consent', 1);
+async function ensurePublishedTemplate(
+  pool: Pool,
+  templateKey: string,
+  body: string,
+  publishedBy: string,
+): Promise<void> {
+  const versionKey = consentTemplateVersionKey(templateKey, 1);
   const template = await findConsentTemplateVersion(pool, versionKey);
   if (template === undefined) {
-    await createConsentTemplateVersion(pool, {
-      templateKey: 'local-seed-consent',
-      version: 1,
-      body: 'Synthetic consent template — local development only.',
-    });
+    await createConsentTemplateVersion(pool, { templateKey, version: 1, body });
   }
-  if (template === undefined || template.status !== 'PUBLISHED') {
-    await publishConsentTemplateVersion(pool, versionKey, accepter.userId);
+  if (template === undefined || template.status === 'DRAFT') {
+    await publishConsentTemplateVersion(pool, versionKey, publishedBy);
   }
+}
+
+async function ensureConsent(pool: Pool, veteran: User, accepter: User): Promise<string> {
+  await ensurePublishedTemplate(
+    pool,
+    'local-seed-consent',
+    'Synthetic consent template — local development only.',
+    accepter.userId,
+  );
+  // The RED-alert grant the web offers on the Trusted contacts page (R9.3).
+  await ensurePublishedTemplate(
+    pool,
+    RED_ALERT_CONSENT_TEMPLATE_KEY,
+    'Synthetic test template for the RED-alert notice — local development only.',
+    accepter.userId,
+  );
+  const versionKey = consentTemplateVersionKey('local-seed-consent', 1);
 
   const existing = await findActiveGrant(pool, {
     tenantId: TENANT_ID,

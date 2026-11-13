@@ -348,7 +348,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   app.get('/app', async (_request, reply) => {
     await reply.type(HTML).send(
       renderLanding({
-        shell: shell('Shut Up and Serve', { showMobileNav: false }),
+        shell: shell('Veterans helping veterans', { showMobileNav: false }),
         // §7.4: mission framing with no statistic or clinical efficacy claim.
         missionLine: 'Veteran peer support, coordinated by people who served.',
         ...(demoSignIn === undefined ? {} : { demoSignIn }),

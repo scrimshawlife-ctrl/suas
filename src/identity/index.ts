@@ -14,6 +14,7 @@ export {
   type User,
   type UserStatus,
 } from './users.js';
+export { changeUserCounty, changeUserDisplayName } from './profile-changes.js';
 export { listBorderingCounties, SERVICE_COUNTIES, type ServiceCounty } from './counties.js';
 export {
   beginVaAttempt,
