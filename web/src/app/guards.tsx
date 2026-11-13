@@ -52,7 +52,7 @@ export function RequireProfile({ framed = false }: { framed?: boolean }) {
   return <Outlet />;
 }
 
-/** 3. The ID scan is VERIFIED. Requester routes only: helping and Serve never need it. */
+/** 3. The VA confirmation is VERIFIED. Requester routes only: helping and Serve never need it. */
 export function RequireVerified() {
   const me = useMe();
   const location = useLocation();
