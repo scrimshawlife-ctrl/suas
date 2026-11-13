@@ -1,3 +1,4 @@
+import type { Request } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { newPerson, readSignInCode, shoot, uniqueEmail } from '../helpers';
 import {
@@ -176,9 +177,17 @@ test('signing out from the chat screen header ends on the landing page', async (
   request,
 }) => {
   const { page } = await signedUpPerson(browser, request, { label: 'out-chat', name: 'Sky C.' });
-  const read = page.waitForResponse(/\/api\/v0\/chat\/threads/);
+  // The chat screen reads its threads and asks for socket tickets; all must be back first.
+  const open = new Set<Request>();
+  page.on('request', (r) => {
+    if (r.url().includes('/api/v0/')) open.add(r);
+  });
+  page.on('requestfinished', (r) => open.delete(r));
+  page.on('requestfailed', (r) => open.delete(r));
+  const ticket = page.waitForResponse(/\/api\/v0\/chat\/connect-tickets$/);
   await page.goto('/chat');
-  await read;
+  await ticket;
+  await expect.poll(() => open.size).toBe(0);
   await signOutFromAvatar(page, 'Sky');
   await expect(page).toHaveURL(LANDING);
   await page.goBack();
