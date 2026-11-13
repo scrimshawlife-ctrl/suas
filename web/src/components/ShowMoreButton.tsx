@@ -5,14 +5,23 @@ import { Button } from './Button';
 export interface PagedList {
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  isFetchNextPageError: boolean;
   fetchNextPage: () => Promise<unknown>;
 }
 
-/** "Show more" under a list paged by `next_cursor`. Renders nothing on the last page. */
+/**
+ * "Show more" under a list paged by `next_cursor`. Renders nothing on the last page. A failed
+ * next page says so here; the rows already loaded stay as they are.
+ */
 export function ShowMoreButton({ list, className }: { list: PagedList; className?: string }) {
   if (!list.hasNextPage) return null;
   return (
-    <div className={cn('flex', className)}>
+    <div className={cn('flex flex-col items-start gap-2', className)}>
+      {list.isFetchNextPageError ? (
+        <p role="status" className="text-slate">
+          Couldn&apos;t load more. Try again.
+        </p>
+      ) : null}
       <Button
         variant="secondary"
         size="small"
