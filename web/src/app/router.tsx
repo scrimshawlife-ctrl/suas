@@ -153,6 +153,11 @@ export const routes: RouteObject[] = [
                 path: paths.notifications,
                 ...page('Notifications', () => import('../features/support/NotificationsPage')),
               },
+              {
+                // An invitee may not have a profile yet: signed in is enough.
+                path: paths.invitations,
+                ...page('Invitations', () => import('../features/support/InvitationsPage')),
+              },
             ],
           },
           {
@@ -267,6 +272,14 @@ export const routes: RouteObject[] = [
                             ...page(
                               'Resource drafts',
                               () => import('../features/admin/AdminDraftsPage'),
+                              'SUAS Admin',
+                            ),
+                          },
+                          {
+                            path: paths.adminConsentTemplates,
+                            ...page(
+                              'Consent templates',
+                              () => import('../features/admin/AdminConsentTemplatesPage'),
                               'SUAS Admin',
                             ),
                           },

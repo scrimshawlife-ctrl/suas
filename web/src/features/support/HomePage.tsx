@@ -18,6 +18,7 @@ const PRIVACY_LINKS = [
   { to: paths.consents, label: 'Consents' },
   { to: paths.trustedContacts, label: 'Trusted contacts' },
   { to: paths.notifications, label: 'Notifications' },
+  { to: paths.invitations, label: 'Invitations' },
 ] as const;
 
 /** Veteran home: the Home and QrfActive boards, with the Phone board's two-column tiles. */

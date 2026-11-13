@@ -10,6 +10,7 @@ import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { createUser, setUserDisplayName, setUserStatus } from '../../src/identity/index.js';
 import {
+  INVITE_EMAIL_CAP_PER_RECIPIENT,
   INVITE_LIMIT_PER_ADDRESS,
   INVITE_LIMIT_PER_VETERAN,
 } from '../../src/http/routes/trusted-contacts.js';
@@ -318,21 +319,94 @@ describe('invite abuse controls', () => {
     expect(await inviteSends(tenantId)).toBe(1);
   });
 
-  it('limits invites to one address across Veterans, with a 429 and Retry-After', async () => {
+  it('limits one Veteran re-inviting an address, with a 429 and Retry-After, and nobody else', async () => {
     const email = syntheticEmail(`target-${randomUUID().slice(0, 8)}`);
+    const a = await veteranSession();
+    // Invite, remove, invite again: each new invite to the address counts for this Veteran.
     for (let n = 0; n < INVITE_LIMIT_PER_ADDRESS.limit; n += 1) {
-      const { headers } = await veteranSession();
-      expect(
-        (await invite(headers, { relationship_label: 'Friend', invite_email: email })).statusCode,
-      ).toBe(201);
+      const sent = await invite(a.headers, { relationship_label: 'Friend', invite_email: email });
+      expect(sent.statusCode).toBe(201);
+      await app.server.inject({
+        method: 'POST',
+        url: `/api/v0/trusted-contacts/${String(sent.json().trusted_contact_id)}/commands/remove`,
+        headers: a.headers,
+      });
     }
-    const { headers, tenantId } = await veteranSession();
-    const refused = await invite(headers, { relationship_label: 'Friend', invite_email: email });
+    const refused = await invite(a.headers, { relationship_label: 'Friend', invite_email: email });
     expect(refused.statusCode).toBe(429);
     expect(refused.json().error.code).toBe('RATE_LIMITED');
     expect(Number(refused.headers['retry-after'])).toBeGreaterThan(0);
     expect(refused.body).not.toContain(email);
-    expect(await inviteSends(tenantId)).toBe(0);
+
+    // Veteran B sees exactly what a first invite to a fresh address gets: no oracle.
+    const b = await veteranSession();
+    const toTaken = await invite(b.headers, { relationship_label: 'Friend', invite_email: email });
+    const toFresh = await invite(b.headers, {
+      relationship_label: 'Friend',
+      invite_email: syntheticEmail(`fresh-${randomUUID().slice(0, 8)}`),
+    });
+    expect(toTaken.statusCode).toBe(201);
+    expect(toFresh.statusCode).toBe(201);
+    const shape = (body: Record<string, unknown>) => ({ ...body, trusted_contact_id: 'id' });
+    expect(shape(toTaken.json())).toEqual(shape(toFresh.json()));
+    expect(await inviteSends(b.tenantId)).toBe(2);
+  });
+
+  it('past the recipient cap, answers exactly as usual and suppresses only the email', async () => {
+    const tenantId = randomUUID();
+    const inTenant = async () => {
+      const user = await createVerifiedUser(requirePool(), {
+        tenantId,
+        email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
+        status: 'ACTIVE',
+      });
+      const session = await createSession(requirePool(), TEST_SESSION_SECRET, {
+        tenantId,
+        userId: user.userId,
+      });
+      return { authorization: `Bearer ${session.credential}` };
+    };
+    const target = syntheticEmail(`bombed-${randomUUID().slice(0, 8)}`);
+    for (let n = 0; n < INVITE_EMAIL_CAP_PER_RECIPIENT.limit; n += 1) {
+      const sent = await invite(await inTenant(), {
+        relationship_label: 'Friend',
+        invite_email: target,
+      });
+      expect(sent.statusCode).toBe(201);
+    }
+    const late = await inTenant();
+    const capped = await invite(late, { relationship_label: 'Friend', invite_email: target });
+    const fresh = await invite(late, {
+      relationship_label: 'Friend',
+      invite_email: syntheticEmail(`fresh-${randomUUID().slice(0, 8)}`),
+    });
+    expect(capped.statusCode).toBe(fresh.statusCode);
+    const cappedId = String(capped.json().trusted_contact_id);
+    const freshId = String(fresh.json().trusted_contact_id);
+    expect(capped.body.replace(cappedId, 'id')).toBe(fresh.body.replace(freshId, 'id'));
+
+    const sends = await requirePool().query<{
+      notification_id: string;
+      subject_id: string;
+      delivery_status: string;
+      attempt_count: number;
+    }>(
+      `SELECT notification_id, subject_id, delivery_status, attempt_count FROM notifications
+        WHERE tenant_id = $1 AND subject_id = ANY($2::uuid[])`,
+      [tenantId, [cappedId, freshId]],
+    );
+    const byContact = new Map(sends.rows.map((row) => [row.subject_id, row]));
+    expect(byContact.get(cappedId)?.delivery_status).toBe('UNDELIVERABLE');
+    expect(byContact.get(freshId)?.delivery_status).not.toBe('UNDELIVERABLE');
+    // The test app runs send jobs inline: the fresh invite was sent, the capped one never tried.
+    expect(byContact.get(freshId)?.delivery_status).toBe('SENT');
+    expect(byContact.get(cappedId)?.attempt_count).toBe(0);
+    const audit = await requirePool().query<{ payload: { failure_reason: string } }>(
+      `SELECT payload FROM audit_events
+        WHERE tenant_id = $1 AND event_type = 'NOTIFICATION_UNDELIVERABLE' AND target_id = $2`,
+      [tenantId, byContact.get(cappedId)?.notification_id],
+    );
+    expect(audit.rows[0]?.payload.failure_reason).toBe('INVITE_RECIPIENT_CAP');
   });
 
   it('limits how many invites one Veteran sends', async () => {

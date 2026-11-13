@@ -11,7 +11,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
-import { enforceRateLimit } from '../../auth/index.js';
+import { consumeRateLimit, enforceRateLimit } from '../../auth/index.js';
 import { normalizeDestination } from '../../auth/secrets.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { requireVerifiedVeteran } from '../../identity/index.js';
@@ -31,7 +31,11 @@ import { withTransaction } from '../../db/index.js';
 import { appendDomainEvent } from '../../events/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
-import { buildNotificationSendPayload, enqueueNotification } from '../../notifications/index.js';
+import {
+  buildNotificationSendPayload,
+  enqueueNotification,
+  settleUndeliverable,
+} from '../../notifications/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 
@@ -73,24 +77,37 @@ async function deliverInvite(
     purpose: 'Send the Trusted Contact invite the Veteran asked for',
     systemBasis: 'SYSTEM_INTERNAL_PROCESSING',
   } as const;
-  const { notification, deduplicated } = await enqueueNotification(
-    deps.pool,
-    {
-      tenantId: input.tenantId,
-      destination,
-      reason: TRUSTED_CONTACT_INVITE_REASON,
-      channel: 'EMAIL',
-      templateVersion: TRUSTED_CONTACT_INVITE_TEMPLATE_VERSION,
-      dedupeKey: `trusted-contact-invite:${input.trustedContactId}`,
-      subjectType: 'TrustedContact',
-      subjectId: input.trustedContactId,
-      disclosure,
-      correlationId: input.correlationId,
-    },
-    deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {},
-  );
+  // No job yet: a fresh send first passes the recipient cap below.
+  const { notification, deduplicated } = await enqueueNotification(deps.pool, {
+    tenantId: input.tenantId,
+    destination,
+    reason: TRUSTED_CONTACT_INVITE_REASON,
+    channel: 'EMAIL',
+    templateVersion: TRUSTED_CONTACT_INVITE_TEMPLATE_VERSION,
+    dedupeKey: `trusted-contact-invite:${input.trustedContactId}`,
+    subjectType: 'TrustedContact',
+    subjectId: input.trustedContactId,
+    disclosure,
+    correlationId: input.correlationId,
+  });
+  if (!deduplicated) {
+    const recipient = await consumeRateLimit(
+      deps.pool,
+      INVITE_EMAIL_CAP_PER_RECIPIENT,
+      `${input.tenantId}:${destination}`,
+    );
+    if (!recipient.allowed) {
+      await settleUndeliverable(deps.pool, {
+        tenantId: input.tenantId,
+        notificationId: notification.notificationId,
+        failureReason: INVITE_EMAIL_SUPPRESSED,
+      });
+      return;
+    }
+  }
+  // Fresh, or a replay whose send job may never have been enqueued: the job is keyed by the
+  // Notification, so enqueuing again is safe. Settled or suppressed rows need nothing.
   if (
-    deduplicated &&
     deps.jobQueue !== undefined &&
     notification.cancelledAt === undefined &&
     (notification.deliveryStatus === 'QUEUED' || notification.deliveryStatus === 'FAILED')
@@ -108,7 +125,8 @@ async function deliverInvite(
  * Each new invite sends an email, so invites are rate limited in the shared counter the
  * sign-in challenges use (AUTH.md §3; SECURITY.md §2). Implementation-owned values: no
  * released limit exists. Only committed invites count, since the counter is bumped in
- * the invite's transaction.
+ * the invite's transaction. Both counters depend on the caller's own invites only, so a
+ * 429 never tells one Veteran that someone else invited the same address.
  */
 export const INVITE_LIMIT_PER_VETERAN = {
   bucket: 'trusted_contact.invite.veteran',
@@ -116,10 +134,23 @@ export const INVITE_LIMIT_PER_VETERAN = {
   windowSeconds: 86_400,
 };
 export const INVITE_LIMIT_PER_ADDRESS = {
-  bucket: 'trusted_contact.invite.address',
+  bucket: 'trusted_contact.invite.veteran_address',
   limit: 3,
   windowSeconds: 86_400,
 };
+
+/**
+ * Recipient protection across Veterans: at most this many invite emails to one address per
+ * tenant per 24 hours. Past it the invite is still created and answered exactly as usual, and
+ * only the email is suppressed (Notification UNDELIVERABLE with this reason, audited), so no
+ * caller learns that someone else invited the address.
+ */
+export const INVITE_EMAIL_CAP_PER_RECIPIENT = {
+  bucket: 'trusted_contact.invite.recipient',
+  limit: 5,
+  windowSeconds: 86_400,
+};
+export const INVITE_EMAIL_SUPPRESSED = 'INVITE_RECIPIENT_CAP';
 
 const idParams = z.object({ id: z.string().uuid() });
 
@@ -209,7 +240,11 @@ export function registerTrustedContactRoutes(
         );
         for (const destination of [body.invite_email, body.invite_phone]) {
           if (destination !== undefined) {
-            await enforceRateLimit(tx, INVITE_LIMIT_PER_ADDRESS, normalizeDestination(destination));
+            await enforceRateLimit(
+              tx,
+              INVITE_LIMIT_PER_ADDRESS,
+              `${context.tenantId}:${context.userId}:${normalizeDestination(destination)}`,
+            );
           }
         }
         const contact = await inviteTrustedContact(tx, {

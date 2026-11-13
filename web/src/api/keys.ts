@@ -37,6 +37,7 @@ export const queryKeys = {
   notifications: resourceKeys('notifications'),
   resources: resourceKeys('resources'),
   adminDrafts: resourceKeys('admin-resource-drafts'),
+  adminConsentTemplates: resourceKeys('admin-consent-templates'),
   /** Admin licence reviews (R10.1 proposal); detail also keys its images. */
   adminLicenceReviews: resourceKeys('admin-licence-reviews'),
 };
