@@ -40,4 +40,40 @@ describe('ErrorNotice', () => {
       'We could not load things. Check your connection and try again.',
     );
   });
+
+  // G3, G4: only a dropped connection or a timeout asks to check the connection.
+  it.each([
+    [
+      new TypeError('Failed to fetch'),
+      'We could not load things. Check your connection and try again.',
+    ],
+    [
+      new ApiError(408, 'TIMEOUT', 'x'),
+      'We could not load things. Check your connection and try again.',
+    ],
+    [
+      new ApiError(413, 'PAYLOAD_TOO_LARGE', 'x'),
+      'We could not load things. What you entered is too long.',
+    ],
+    [
+      new ApiError(400, 'VALIDATION_FAILED', 'x'),
+      'We could not load things. Some of what you entered needs another look.',
+    ],
+    [
+      new ApiError(422, 'VALIDATION_FAILED', 'x'),
+      'We could not load things. Some of what you entered needs another look.',
+    ],
+    [
+      new ApiError(403, 'FORBIDDEN', 'x'),
+      'We could not load things. You do not have access to that.',
+    ],
+    [new ApiError(404, 'NOT_FOUND', 'x'), 'That is no longer available.'],
+    [
+      new ApiError(409, 'CONFLICT', 'x'),
+      'We could not load things. This changed while you were looking. Reload the page.',
+    ],
+    [new ApiError(410, 'GONE', 'x'), 'We could not load things. Try again.'],
+  ])('words %s by its status', (error, sentence) => {
+    expect(errorSentence(error, 'load things')).toBe(sentence);
+  });
 });

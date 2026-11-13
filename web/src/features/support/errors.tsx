@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router';
-import { GATE_CODES, isApiError } from '../../api/errors';
+import { GATE_CODES, isApiError, isConnectionError } from '../../api/errors';
 import { Button } from '../../components/Button';
 import { AlertCircleIcon } from '../../components/icons';
 import { paths } from '../../app/paths';
@@ -13,14 +13,26 @@ export function gateTarget(error: unknown): string | null {
   return null;
 }
 
-/** A plain sentence for any failure. Server text is never shown as is. */
+/**
+ * A plain sentence for any failure, by status. Server text is never shown as is; only a
+ * dropped connection or a timeout asks the person to check their connection.
+ */
 export function errorSentence(error: unknown, doing: string): string {
-  if (isApiError(error)) {
-    if (error.status === 429) return `There were too many tries. Wait a moment, then ${doing}.`;
-    if (error.status >= 500) return `Something went wrong on our side. Try to ${doing} again.`;
-    if (error.status === 404) return `That is no longer available.`;
+  if (!isApiError(error) || isConnectionError(error)) {
+    return `We could not ${doing}. Check your connection and try again.`;
   }
-  return `We could not ${doing}. Check your connection and try again.`;
+  if (error.status === 429) return `There were too many tries. Wait a moment, then ${doing}.`;
+  if (error.status >= 500) return `Something went wrong on our side. Try to ${doing} again.`;
+  if (error.status === 404) return `That is no longer available.`;
+  if (error.status === 413) return `We could not ${doing}. What you entered is too long.`;
+  if (error.status === 400 || error.status === 422) {
+    return `We could not ${doing}. Some of what you entered needs another look.`;
+  }
+  if (error.status === 403) return `We could not ${doing}. You do not have access to that.`;
+  if (error.status === 409) {
+    return `We could not ${doing}. This changed while you were looking. Reload the page.`;
+  }
+  return `We could not ${doing}. Try again.`;
 }
 
 /**
