@@ -135,6 +135,25 @@ describe('route guards', () => {
     expect(screen.getByText('serve page')).toBeInTheDocument();
   });
 
+  it('waits for the me re-read after the ID check instead of bouncing back to /verify', async () => {
+    // Regression: Continue right after the ID check saw the stale NOT_STARTED and bounced.
+    let answer: (value: { data: MeResponse }) => void = () => undefined;
+    client.GET.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    tokenStore.setToken('tok');
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(queryKeys.me, me({}, 'NOT_STARTED'));
+    await queryClient.invalidateQueries({ queryKey: queryKeys.me });
+    const router = createMemoryRouter(routes, { initialEntries: ['/request'] });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Loading…');
+    answer({ data: me() });
+    expect(await screen.findByText('request page')).toBeInTheDocument();
+  });
+
   it('lets a verified requester in', () => {
     visit('/request', me());
     expect(screen.getByText('request page')).toBeInTheDocument();
