@@ -27,7 +27,14 @@ import {
   markJobSucceeded,
   type DurableJobQueuePort,
 } from './jobs/index.js';
-import { notificationSendHandler, supportSignalComputeHandler } from './jobs/handlers.js';
+import {
+  licenceReadHandler,
+  notificationSendHandler,
+  supportSignalComputeHandler,
+} from './jobs/handlers.js';
+import { createLicenceReaderPort } from './identity/licence-reader-factory.js';
+import { LICENCE_READ_JOB_TYPE } from './identity/licence-review.js';
+import { createObjectStoragePort, type ObjectStoragePort } from './storage/index.js';
 import { configureSupportSignalScoring } from './signals/index.js';
 import {
   createChallengeDelivery,
@@ -41,7 +48,12 @@ import { RELEASE_MANIFEST, SPEC_VERSION } from './release/pins.js';
 import { createFulfillmentAdapterRegistry, type AdapterRegistry } from './fulfillment/index.js';
 import { createChannelRegistry } from './notifications/index.js';
 import { createModelInferencePort, type ModelInferencePort } from './inference/index.js';
-import { createIdVerificationPort, type IdVerificationPort } from './identity/index.js';
+import {
+  createIdVerificationPort,
+  createVeteranConfirmationPort,
+  type IdVerificationPort,
+  type VeteranConfirmationPort,
+} from './identity/index.js';
 import { createChatConnectionLifecycle } from './chat/index.js';
 import {
   createConnectionPushPort,
@@ -58,10 +70,14 @@ export interface StartedApp {
   readonly mfa: MfaPort;
   readonly fulfillmentAdapters: AdapterRegistry;
   readonly modelInference: ModelInferencePort;
-  /** Undefined when ID verification is disabled. */
+  /** Undefined when ID verification is disabled. It no longer feeds the request gate (R9.1). */
   readonly idVerification: IdVerificationPort | undefined;
+  /** VA Veteran Confirmation, the request gate; undefined when disabled. */
+  readonly veteranConfirmation: VeteranConfirmationPort | undefined;
   /** Chat live-update push; undefined when SUAS_CHAT_PUSH_MODE=disabled. */
   readonly chatPush: ConnectionPushPort | undefined;
+  /** Licence images (R10.1, proposal); undefined when SUAS_OBJECT_STORAGE_MODE=disabled. */
+  readonly objectStorage: ObjectStoragePort | undefined;
   readonly buildInfo: BuildInfo;
   close(): Promise<void>;
 }
@@ -148,6 +164,20 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   });
   // Channel ports are shared by notification.send and authentication delivery.
   const channelRegistry = createChannelRegistry(config);
+  // Licence review (suas-specs R10.1, proposal). A durable queue leaves the slow read to
+  // the job worker; the in-memory queue (LOCAL and TEST only) has no worker, so the read
+  // runs inline here, against this process's own storage.
+  const objectStorage = createObjectStoragePort(config);
+  const licenceReader = createLicenceReaderPort(config);
+  const inlineLicenceRead =
+    pool !== undefined && innerQueue.durability === 'non-durable'
+      ? {
+          [LICENCE_READ_JOB_TYPE]: licenceReadHandler(pool, config, {
+            ...(objectStorage !== undefined ? { storage: objectStorage } : {}),
+            ...(licenceReader !== undefined ? { reader: licenceReader } : {}),
+          }),
+        }
+      : {};
   // The compute handler enqueues notification.send on the queue that wraps it,
   // so it reads that queue lazily.
   const jobQueue: DurableJobQueuePort =
@@ -158,6 +188,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
           {
             'support-signal.compute': supportSignalComputeHandler(pool, config, () => jobQueue),
             'notification.send': notificationSendHandler(pool, channelRegistry),
+            ...inlineLicenceRead,
           },
           (error, request) => {
             console.error(`[suas] job ${request.jobType} failed`, error);
@@ -181,8 +212,12 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   // 5b. Model inference (Intake Assistant, catalog builder). The unavailable port
   // when no model is configured, so callers fall back to the plain form.
   const modelInference = createModelInferencePort(config);
-  // 5b. ID scan + selfie capability port (fake adapter only until a provider is chosen).
+  // 5b. ID scan + selfie port: still validated at startup, no longer the gate.
   const idVerification = createIdVerificationPort(config);
+  // 5b. VA Veteran Confirmation (suas-specs #72 R9.1, proposal). Content-free logs only.
+  const veteranConfirmation = createVeteranConfirmationPort(config, {
+    logger: (record) => console.info(JSON.stringify({ msg: 'va_confirmation', ...record })),
+  });
   // 5b. Chat live updates. Messages travel over REST; this only pushes new ones.
   const chatPush =
     pool !== undefined
@@ -207,8 +242,10 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     mfa,
     jobQueue,
     modelInference,
-    ...(idVerification !== undefined ? { idVerification } : {}),
+    ...(veteranConfirmation !== undefined ? { veteranConfirmation } : {}),
     ...(chatPush !== undefined ? { chatPush } : {}),
+    ...(licenceReader !== undefined ? { licenceReader } : {}),
+    ...(objectStorage !== undefined ? { objectStorage } : {}),
     // Pino's default transport uses worker_threads, which Workers do not run.
     ...(runtime === 'worker' ? { logger: false, workerRuntime: true } : {}),
   });
@@ -236,7 +273,9 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
     fulfillmentAdapters,
     modelInference,
     idVerification,
+    veteranConfirmation,
     chatPush,
+    objectStorage,
     buildInfo: resolveBuildInfo(),
     close: async () => {
       await server.close();
