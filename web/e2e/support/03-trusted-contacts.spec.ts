@@ -94,7 +94,8 @@ test('when adding a contact fails on the server, the form says so and keeps what
   allow,
 }) => {
   // The 500 is the one this test returns on purpose.
-  allow.push(/:: 500$/, /status of 500/);
+  // Only the routed add may 500; a real backend 500 still fails the test.
+  allow.push(/POST \S+\/api\/v0\/trusted-contacts :: 500$/, /status of 500/);
   const { page } = await veteran(browser, request, { name: 'Tess Q.', county: 'Alameda' });
   await page.goto('/trusted-contacts');
   await page.route('**/api/v0/trusted-contacts', (route) =>

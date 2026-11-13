@@ -57,7 +57,8 @@ test('when saving an answer fails, the page says so, keeps the choice, and the n
   allow,
 }) => {
   // The 500 is the one this test returns on purpose.
-  allow.push(/:: 500$/, /status of 500/);
+  // Only the routed answer save may 500; a real backend 500 still fails the test.
+  allow.push(/\/check-ins\/[^/]+\/responses :: 500$/, /status of 500/);
   const { page } = await veteran(browser, request, { name: 'Di F.', county: 'Alameda' });
   await startCheckIn(page);
   await page.route('**/api/v0/check-ins/*/responses', (route) => route.fulfill(serverError()));

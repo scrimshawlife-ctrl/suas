@@ -80,10 +80,20 @@ export async function passMfa(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Confirm' }).click();
 }
 
+/** R12.3: turning the RED alert on is confirmed in the consent text dialog. */
+export async function confirmAlert(page: Page): Promise<void> {
+  await page
+    .getByRole('dialog', { name: 'Turn on this alert?' })
+    .getByRole('button', { name: 'Turn on' })
+    .click();
+}
+
 /** The seeded admin, signed in and stepped up with the test second factor, on /admin. */
 export async function elevatedAdmin(browser: Browser, request: APIRequestContext): Promise<Page> {
-  // The admin may ask for three codes per 15 minutes; dropping the counters moves that window on.
-  await withDb((db) => db.query(`DELETE FROM auth_rate_limits`));
+  // The admin may ask for three codes per 15 minutes; dropping its counters moves that window on.
+  await withDb((db) =>
+    db.query(`DELETE FROM auth_rate_limits WHERE subject = $1`, ['admin@example.invalid']),
+  );
   const page = track(await newPerson(browser));
   await signInWithCode(page, request, 'admin@example.invalid');
   await expect(page).toHaveURL(/\/home$/);
@@ -194,6 +204,7 @@ export async function veteranWithNotice(
   await page.reload();
   const toggle = contactRow(page, label).getByRole('switch', { name: ALERT_SWITCH });
   await toggle.click();
+  await confirmAlert(page);
   await expect(toggle).toBeChecked();
   return vet;
 }

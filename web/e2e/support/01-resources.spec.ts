@@ -148,7 +148,8 @@ test('when the listings fail to load, the page says so and Try again recovers', 
   allow,
 }) => {
   // The 500s are the ones this test returns on purpose.
-  allow.push(/:: 500$/, /status of 500/);
+  // Only the routed resource list may 500; a real backend 500 still fails the test.
+  allow.push(/\/api\/v0\/resources\?.* :: 500$/, /status of 500/);
   const { page } = await veteran(browser, request, { name: 'Sam D.', county: 'Santa Clara' });
   let fail = true;
   await page.route('**/api/v0/resources?**', (route) =>

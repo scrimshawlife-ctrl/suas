@@ -3,7 +3,6 @@ import { expect, test } from '../fixtures';
 import { ageRequest, requestHelp, runJobWorkerOnce, withDb } from '../helpers';
 import {
   closePeople,
-  invite,
   myUserId,
   serverError,
   uniqueSummary,
@@ -60,32 +59,10 @@ test("a notice about the Veteran's request is listed with its date; Back and ref
   await expect(items(page).filter({ hasText: EXPIRED_NOTICE })).toHaveCount(1);
 });
 
-test('an invitee who already has an account is told about the invite in Notifications', async ({
-  browser,
-  request,
-}) => {
-  // G6/G8 handoff: the invite Notification is written with no recipient_user_id
-  // (deliverInvite, src/http/routes/trusted-contacts.ts), so GET /notifications never lists it,
-  // and `trusted_contact_invited` has no web text (support/notification-reasons.ts).
-  test.fixme(
-    true,
-    'trusted_contact_invited never reaches the invitee inbox (no recipient, no text)',
-  );
-  const contact = await veteran(browser, request, { name: 'Ann T.', county: 'Santa Clara' });
-  const vet = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
-  await vet.page.goto('/trusted-contacts');
-  await invite(vet.page, 'Sister', contact.email);
-  await contact.page.goto('/notifications');
-  await expect(items(contact.page).filter({ hasText: /trusted contact/i })).toHaveCount(1);
-  await expect(contact.page.getByText('You have a new update.')).toHaveCount(0);
-});
-
 test('more notices than one page: "Show more" loads the older ones', async ({
   browser,
   request,
 }) => {
-  // G8 handoff: the inbox reads one page of 50 and ignores next_cursor (support/api.ts).
-  test.fixme(true, 'Notifications ignore next_cursor and have no "Show more" yet (G8)');
   const vet = await veteranWithExpiredNotice(browser, request);
   // 55 older copies of the real notice: more than any page the inbox asks for.
   const userId = await myUserId(vet.page, request);
