@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { newPerson, newVerifiedVeteran, requestHelp, signUp, uniqueEmail } from './helpers';
 
 /** WCAG 2.0, 2.1 and 2.2 at levels A and AA. */

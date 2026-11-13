@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import {
   ageRequest,
   newPerson,
@@ -38,7 +39,10 @@ async function take(page: Page, summary: string, requestId: string): Promise<voi
 test('a helper releases a request, the next helper gets a fresh chat and the requester keeps the old one read-only', async ({
   browser,
   request,
+  allow,
 }) => {
+  // The released helper reopens the case on purpose and gets the documented 404.
+  allow.push(/status of 404/);
   const requester = await newVerifiedVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',

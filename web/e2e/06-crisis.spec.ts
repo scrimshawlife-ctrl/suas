@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { expectCrisisScreen, shoot, signUp, uniqueEmail } from './helpers';
 
 test('the crisis screen opens signed out, and signed in without the ID check', async ({

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { newVerifiedVeteran } from './helpers';
 
 test('a Veteran saves a Check-In to finish later, then resumes at the next question and completes', async ({
