@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { queryKeys } from '../../api/keys';
@@ -6,10 +6,12 @@ import { requireData } from '../../api/require-data';
 import { serviceRequestQueryOptions } from '../../api/service-requests';
 import { useSessionToken } from '../../api/token-store';
 import type { Schemas, ServiceCategory } from '../../api/types';
+import { isDraftGone, openDraft } from './open-draft';
 import { isSettled } from './request-card';
 
 export type IntakeTurn = Schemas['IntakeTurn'];
 export type IntakeDraft = Schemas['IntakeDraft'];
+export type IntakeDraftWithText = Schemas['IntakeDraftWithText'];
 export type IntakeResource = Schemas['IntakeResource'];
 
 /** Detail polling while a request is open: "every ~15 s" (sprint 2 brief). */
@@ -29,6 +31,40 @@ export function useIntakeStatus() {
   });
 }
 
+/** A gone draft (404, or no longer DRAFT) is not resumed after a reload. */
+function dropGoneDraft(error: unknown): void {
+  if (isDraftGone(error)) openDraft.clear();
+}
+
+/**
+ * GET /intake/drafts/{id} for the draft id kept across a reload (R12.1). Resolves to null,
+ * and forgets the id, when the draft is gone or no longer DRAFT. Never served from cache.
+ */
+export function useOpenDraft() {
+  const token = useSessionToken();
+  const [draftId] = useState(() => openDraft.get());
+  return useQuery({
+    queryKey: queryKeys.intake.detail(draftId ?? ''),
+    enabled: token !== null && draftId !== null,
+    queryFn: async (): Promise<IntakeDraftWithText | null> => {
+      try {
+        const { data } = await api.GET('/api/v0/intake/drafts/{id}', {
+          params: { path: { id: draftId ?? '' } },
+        });
+        const draft = requireData(data, 'draft');
+        if (draft.status === 'DRAFT') return draft;
+        openDraft.clear();
+        return null;
+      } catch (error) {
+        if (!isDraftGone(error)) throw error;
+        openDraft.clear();
+        return null;
+      }
+    },
+    gcTime: 0,
+  });
+}
+
 /** POST /intake/drafts, then POST /intake/drafts/{id}/messages for each follow-up. */
 export function useSendIntakeMessage() {
   return useMutation({
@@ -43,6 +79,10 @@ export function useSendIntakeMessage() {
       });
       return requireData(data, 'assistant reply');
     },
+    onSuccess: (turn) => {
+      if (turn.draft?.status === 'DRAFT') openDraft.set(turn.draft.draft_id);
+    },
+    onError: dropGoneDraft,
   });
 }
 
@@ -64,6 +104,7 @@ export function useUpdateDraft() {
       });
       return requireData(data, 'draft');
     },
+    onError: dropGoneDraft,
   });
 }
 
@@ -89,7 +130,11 @@ export function useSubmitDraft() {
       });
       return requireData(data, 'request').service_request;
     },
-    onSuccess: created,
+    onSuccess: async () => {
+      openDraft.clear();
+      await created();
+    },
+    onError: dropGoneDraft,
   });
 }
 

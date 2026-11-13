@@ -4,7 +4,7 @@ import { Button } from '../../components/Button';
 import { SendIcon } from '../../components/icons';
 import { TextArea } from '../../components/TextArea';
 import { useSingleFlight } from '../../lib/single-flight';
-import { useSendIntakeMessage, type IntakeDraft, type IntakeTurn } from './api';
+import { useOpenDraft, useSendIntakeMessage, type IntakeDraft, type IntakeTurn } from './api';
 import { DraftCard } from './DraftCard';
 import { useDraftEditor } from './draft-editor';
 import { gateRedirect, requestErrorMessage } from './errors';
@@ -26,6 +26,7 @@ export interface AssistantPanelProps {
 /**
  * The Intake Assistant: type what you need, read the reply, then check and send the draft.
  * What you type stays in this component's memory; it is sent to the API and never logged.
+ * After a reload, an open draft comes back with its fields and typed text, not the replies.
  */
 export function AssistantPanel({ onFallback }: AssistantPanelProps) {
   const navigate = useNavigate();
@@ -37,6 +38,15 @@ export function AssistantPanel({ onFallback }: AssistantPanelProps) {
   const send = useSendIntakeMessage();
   const flight = useSingleFlight();
   const editor = useDraftEditor(draft);
+  const open = useOpenDraft();
+  const [resumedText, setResumedText] = useState<string | null>(null);
+
+  // Resume once, and only into an untouched panel: a message sent meanwhile made a new draft.
+  if (open.data && draft === null && resumedText === null && exchanges.length === 0) {
+    setDraft(open.data);
+    setReady(true);
+    setResumedText(open.data.intake_text);
+  }
 
   const onSend = async () => {
     const typed = text.trim();
@@ -61,6 +71,12 @@ export function AssistantPanel({ onFallback }: AssistantPanelProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      {resumedText !== null ? (
+        <div className="flex flex-col gap-1 border-l-4 border-line pl-4">
+          <span className="text-16 font-bold text-slate">You wrote</span>
+          <p className="whitespace-pre-line break-words">{resumedText}</p>
+        </div>
+      ) : null}
       {exchanges.length > 0 ? (
         <ol aria-live="polite" aria-label="Conversation" className="flex flex-col gap-4">
           {exchanges.map((exchange) => (
