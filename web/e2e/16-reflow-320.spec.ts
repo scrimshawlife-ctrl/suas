@@ -26,8 +26,9 @@ test('at 320 px the request flow reflows from sign-up to a sent request', async 
   await expectReflow(page);
   await passIdCheck(page);
   await expectReflow(page);
+  // Continue with no return path goes to /request (R9.1 Verify page).
   await page.getByRole('link', { name: 'Continue' }).click();
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/request$/);
   await expectReflow(page);
   await page.goto('/request');
   await expectReflow(page);
