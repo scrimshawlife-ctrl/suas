@@ -1,6 +1,5 @@
 import { infiniteQueryOptions, useInfiniteQuery, type QueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { retryServerErrors } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { useSessionToken } from '../../api/token-store';
@@ -33,7 +32,6 @@ export function chatMessagesQueryOptions(serviceRequestId: string, threadId?: st
       return requireData(data, 'messages');
     },
     getNextPageParam: (page) => page.next_cursor ?? undefined,
-    retry: retryServerErrors,
   });
 }
 

@@ -43,15 +43,26 @@ export function isMissingRecord(value: unknown): boolean {
   return isApiError(value) && (value.status === 404 || value.status === 400);
 }
 
+/** Code of the 408 the client raises when a request gets no answer in time (`client.ts`). */
+export const TIMEOUT_CODE = 'TIMEOUT';
+
+/** No answer came back: the fetch failed (offline, dropped connection) or timed out (408). */
+export function isConnectionError(value: unknown): boolean {
+  return !isApiError(value) || value.status === 408;
+}
+
 /**
- * Builds an ApiError from a failed response. A body that is not the documented envelope
- * (a proxy error page, an empty 502) still yields a typed error with a stable code.
+ * The app wide query `retry` (`query-client.ts`): a 4xx will not change on retry; a 5xx or a
+ * dropped connection gets two more tries.
  */
-/** Query `retry`: a 4xx will not change on retry; a 5xx or a dropped connection gets two more tries. */
 export function retryServerErrors(failureCount: number, error: unknown): boolean {
   return !(isApiError(error) && error.status < 500) && failureCount < 2;
 }
 
+/**
+ * Builds an ApiError from a failed response. A body that is not the documented envelope
+ * (a proxy error page, an empty 502) still yields a typed error with a stable code.
+ */
 export async function apiErrorFromResponse(response: Response): Promise<ApiError> {
   let code = `HTTP_${response.status}`;
   let message = response.statusText || 'The request did not go through.';

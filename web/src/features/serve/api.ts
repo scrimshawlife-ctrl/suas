@@ -1,7 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { api } from '../../api/client';
-import { retryServerErrors } from '../../api/errors';
 import { serviceRequestsQueryOptions } from '../../api/service-requests';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
@@ -39,7 +38,6 @@ export function useOpenRequests() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     refetchInterval: BOARD_REFRESH_MS,
-    retry: retryServerErrors,
     enabled: token !== null,
   });
 }
@@ -96,7 +94,6 @@ export function useAlerts() {
       return latestAlerts(requireData(data, 'alerts').notifications);
     },
     refetchInterval: BOARD_REFRESH_MS,
-    retry: retryServerErrors,
     enabled: token !== null,
   });
 }
@@ -115,7 +112,6 @@ export function useContactAttempts(caseId: string | undefined) {
       });
       return requireData(data, 'contact attempts').contact_attempts;
     },
-    retry: retryServerErrors,
     enabled: token !== null && caseId !== undefined,
   });
 }
@@ -131,7 +127,6 @@ export function useCaseServiceRequests(caseId: string | undefined) {
       });
       return requireData(data, 'case requests').service_requests;
     },
-    retry: retryServerErrors,
     enabled: token !== null && caseId !== undefined,
   });
 }

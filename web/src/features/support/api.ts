@@ -1,6 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { retryServerErrors } from '../../api/errors';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { useSessionToken } from '../../api/token-store';
@@ -165,7 +164,6 @@ export function usePublishedConsentTemplate(purpose: string) {
       });
       return requireData(data, 'consent template');
     },
-    retry: retryServerErrors,
   });
 }
 

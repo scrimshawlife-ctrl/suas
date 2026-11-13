@@ -1,9 +1,24 @@
 import createClient, { type Middleware } from 'openapi-fetch';
-import { apiErrorFromResponse, GATE_CODES } from './errors';
+import { ApiError, apiErrorFromResponse, GATE_CODES, TIMEOUT_CODE } from './errors';
 import type { ApiPaths } from './client-types';
 import { tokenStore as defaultTokenStore, type TokenStore } from './token-store';
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+
+/** Every request gives up after this long (B2), so a hung fetch ends in an error, not "Loading…". */
+export const REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * Calls that wait on the model: up to 4 server model calls of up to 30 s each
+ * (`src/intake/assistant.ts`, `src/inference/bedrock-inference.ts`), so the server's own
+ * FALLBACK_FORM answer arrives well before this.
+ */
+export const MODEL_REQUEST_TIMEOUT_MS = 150_000;
+const MODEL_PATHS = new Set([
+  '/api/v0/intake/drafts',
+  '/api/v0/intake/drafts/{id}/messages',
+  '/api/v0/admin/resource-drafts/commands/extract',
+]);
 
 /**
  * Sign-in endpoints answer 401 for a wrong code, and logout answers 401 when the session is
@@ -60,7 +75,7 @@ export function createApiMiddleware(options: ApiClientOptions = {}): Middleware 
   const onMfaRequired = options.onMfaRequired ?? (() => mfaRequiredHandler());
 
   return {
-    onRequest({ request }) {
+    onRequest({ request, schemaPath }) {
       const token = store.getToken();
       if (token !== null && !request.headers.has('Authorization')) {
         request.headers.set('Authorization', `Bearer ${token}`);
@@ -68,7 +83,26 @@ export function createApiMiddleware(options: ApiClientOptions = {}): Middleware 
       if (WRITE_METHODS.has(request.method) && !request.headers.has('Idempotency-Key')) {
         request.headers.set('Idempotency-Key', newKey());
       }
-      return request;
+      // The caller's signal still cancels; the timeout ends a request nobody answers.
+      const limit =
+        request.method === 'POST' && MODEL_PATHS.has(schemaPath)
+          ? MODEL_REQUEST_TIMEOUT_MS
+          : REQUEST_TIMEOUT_MS;
+      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(limit)]);
+      return new Request(request, { signal });
+    },
+    onError({ request }) {
+      // Matched by name: under test the DOMException class comes from another realm.
+      const reason = request.signal.reason as { name?: unknown } | undefined;
+      if (reason?.name === 'TimeoutError') {
+        // Screens that show `message` as is (sign-in, Welcome) get the connection advice too.
+        return new ApiError(
+          408,
+          TIMEOUT_CODE,
+          'SUAS did not answer in time. Check your connection and try again.',
+        );
+      }
+      return undefined;
     },
     async onResponse({ request, response, schemaPath }) {
       if (response.ok) return response;

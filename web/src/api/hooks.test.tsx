@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createQueryClient } from '../app/query-client';
 import { useChatThreads } from './chat';
 import { ApiError } from './errors';
 import { queryKeys } from './keys';
@@ -67,9 +68,9 @@ describe('useServiceRequest', () => {
   it('reports a 404 at once instead of retrying it (not yours, or gone)', async () => {
     tokenStore.setToken('tok');
     client.GET.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'Resource not found.'));
-    // The app's real default, so the 3 retries with back-off would apply without the fix.
+    // The app's own client: its default retry must leave a 4xx alone.
     const detail = renderHook(() => useServiceRequest('abc'), {
-      wrapper: wrapper(new QueryClient()),
+      wrapper: wrapper(createQueryClient()),
     });
     await waitFor(() => expect(detail.result.current.isError).toBe(true));
     expect(client.GET).toHaveBeenCalledTimes(1);

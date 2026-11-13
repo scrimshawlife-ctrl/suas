@@ -1,6 +1,5 @@
 import { queryOptions, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from './client';
-import { retryServerErrors } from './errors';
 import { queryKeys } from './keys';
 import { requireData } from './require-data';
 import { useSessionToken } from './token-store';
@@ -51,8 +50,6 @@ export function serviceRequestQueryOptions(id: string) {
       });
       return requireData(data, 'request');
     },
-    // A 404 (not yours, or gone) or a 400 (malformed id) is final; see retryServerErrors.
-    retry: retryServerErrors,
   });
 }
 

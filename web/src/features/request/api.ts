@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { retryServerErrors } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { serviceRequestQueryOptions } from '../../api/service-requests';
@@ -26,8 +25,6 @@ export function useIntakeStatus() {
       return requireData(data, 'assistant status');
     },
     enabled: token !== null,
-    // A gate error will not change on retry; the page redirects.
-    retry: retryServerErrors,
     staleTime: 0,
   });
 }
