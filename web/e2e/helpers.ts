@@ -75,11 +75,30 @@ export async function signUp(
   await expect(page).toHaveURL(role === 'need' ? /\/home$/ : /\/serve$/);
 }
 
-/** The fake ID check: Start verification, then wait for the confirmed state. */
+/**
+ * Opens the request gate through the API with D-016 self-attestation (suas-specs #72
+ * R9.1 D1), for scenarios about something else; the Verify form itself is driven in
+ * 15-verify. VA confirmation binds one identity per account and needs a matching name, so a
+ * shared synthetic person cannot confirm every e2e user. Then the page shows the
+ * confirmed state.
+ */
 export async function passIdCheck(page: Page): Promise<void> {
+  const token = await page.evaluate(() => window.sessionStorage.getItem('suas.session'));
+  expect(token, 'a signed-in session').not.toBeNull();
+  const response = await page.request.post(
+    `${API_URL}/api/v0/veterans/me/verification/commands/self-attest`,
+    {
+      headers: { authorization: `Bearer ${token}`, 'idempotency-key': randomUUID() },
+      data: {},
+    },
+  );
+  expect(response.status()).toBe(200);
   await page.goto('/verify');
-  await page.getByRole('button', { name: 'Start verification' }).click();
-  await expect(page.getByRole('heading', { name: /You're confirmed/ })).toBeVisible();
+  // A self-attested standing reads "Thanks. You can ask for help now." once the page names
+  // how the person was confirmed; "You're confirmed" is kept for a VA answer.
+  await expect(
+    page.getByRole('heading', { name: /You're confirmed|Thanks\. You can ask for help now\./ }),
+  ).toBeVisible();
 }
 
 /** A new, signed-in, ID-checked Veteran in the given county, on /home. */
@@ -92,10 +111,10 @@ export async function newVerifiedVeteran(
   const email = uniqueEmail(options.label ?? 'vet');
   await signUp(page, request, { email, name: options.name, county: options.county });
   await passIdCheck(page);
-  await page
-    .getByRole('link', { name: 'Continue' })
-    .or(page.getByRole('button', { name: 'Continue' }))
-    .click();
+  // Continue with no return path goes to /request; Home is one link back from there.
+  await page.getByRole('link', { name: 'Continue' }).click();
+  await expect(page).toHaveURL(/\/request$/);
+  await page.getByRole('link', { name: /back to home/i }).click();
   await expect(page).toHaveURL(/\/home$/);
   return { page, email };
 }
