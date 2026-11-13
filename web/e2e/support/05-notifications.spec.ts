@@ -1,14 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { ageRequest, requestHelp, runJobWorkerOnce, withDb } from '../helpers';
-import {
-  closePeople,
-  myUserId,
-  serverError,
-  uniqueSummary,
-  veteran,
-  type Person,
-} from './support';
+import { closePeople, myUserId, serverError, uniqueSummary, veteran, type Person } from './support';
 
 test.afterEach(closePeople);
 
