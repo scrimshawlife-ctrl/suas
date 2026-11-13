@@ -11,6 +11,7 @@ export {
   IdempotencyConflictError,
   IdempotencyResultTooLargeError,
   readCommandRecord,
+  RESERVATION_LEASE_SECONDS,
   reserveCommand,
   type CommandIdempotencyRecord,
   type CommandIdempotencyState,
@@ -19,7 +20,6 @@ export {
   type ReserveOutcome,
 } from './store.js';
 export {
-  CommandFailedFinalError,
   CommandInProgressError,
   runIdempotentCommand,
   type CommandExecutionOutput,

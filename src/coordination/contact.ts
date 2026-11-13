@@ -119,77 +119,94 @@ export async function recordContact(
   pool: Pool,
   input: RecordContactInput,
 ): Promise<RecordContactResult> {
+  return withTransaction(pool, (tx) => recordContactInTx(tx, input));
+}
+
+/**
+ * The event dedupe key for one caller's contact command on one case. The raw client key is
+ * scoped to the case, the actor and the command, so a reused key never resolves to another
+ * case's or another person's contact fact (EVENT_MODEL.md §2.1; API.md §7 rule 2).
+ */
+function contactEventKey(input: RecordContactInput, key: string): string {
+  return `contact:${input.command}:${input.caseId}:${input.loggedByUserId}:${key}`;
+}
+
+/** {@link recordContact} inside the caller's transaction (commits with the idempotency record). */
+export async function recordContactInTx(
+  tx: Queryable,
+  input: RecordContactInput,
+): Promise<RecordContactResult> {
   if (input.command === 'complete-contact' && input.outcome === 'PENDING') {
     throw new ContactOutcomeRequiredError();
   }
 
-  return withTransaction(pool, async (tx) => {
-    if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
-      throw new NoActiveAssignmentError(input.command);
-    }
+  if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
+    throw new NoActiveAssignmentError(input.command);
+  }
 
-    const attemptedAt = input.attemptedAt ?? new Date();
-    const contactAttemptId = randomUUID();
+  const attemptedAt = input.attemptedAt ?? new Date();
+  const contactAttemptId = randomUUID();
 
-    // The event carries the idempotency key, so a replayed command resolves to
-    // the persisted event instead of emitting a second logical contact fact
-    // (EVENT_MODEL.md §2.1).
-    const eventResult = await appendDomainEvent(tx, {
-      eventType: 'RESPONDER_CONTACT_LOGGED',
-      aggregateType: 'SupportCase',
-      aggregateId: input.caseId,
-      tenantId: input.tenantId,
-      actorType: 'USER',
-      actorId: input.loggedByUserId,
-      payload: {
-        contact_attempt_id: contactAttemptId,
-        at: attemptedAt.toISOString(),
-        channel: input.channel,
-        outcome: input.outcome,
-        actor_id: input.loggedByUserId,
-        command: input.command,
-      },
-      ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
-      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
-    });
-
-    if (eventResult.deduplicated) {
-      // A replay: return the contact fact the original command created rather
-      // than inserting a second row.
-      const originalId = eventResult.event.payload.contact_attempt_id;
-      const existing = await tx.query<ContactRow>(
-        `SELECT ${CONTACT_COLUMNS} FROM contact_attempts WHERE contact_attempt_id = $1`,
-        [originalId],
-      );
-      const row = existing.rows[0];
-      if (row === undefined) {
-        throw new Error('Contact event was deduplicated but its contact attempt is missing.');
-      }
-      return { contactAttempt: toContactAttempt(row), deduplicated: true };
-    }
-
-    const inserted = await tx.query<ContactRow>(
-      `INSERT INTO contact_attempts
-         (contact_attempt_id, tenant_id, case_id, logged_by_user_id, attempted_at,
-          channel, outcome, note)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING ${CONTACT_COLUMNS}`,
-      [
-        contactAttemptId,
-        input.tenantId,
-        input.caseId,
-        input.loggedByUserId,
-        attemptedAt,
-        input.channel,
-        input.outcome,
-        input.note ?? null,
-      ],
-    );
-    const row = inserted.rows[0];
-    if (row === undefined) throw new Error('Contact attempt insert returned no row.');
-
-    return { contactAttempt: toContactAttempt(row), deduplicated: false };
+  // The event carries the idempotency key, so a replayed command resolves to
+  // the persisted event instead of emitting a second logical contact fact
+  // (EVENT_MODEL.md §2.1).
+  const eventResult = await appendDomainEvent(tx, {
+    eventType: 'RESPONDER_CONTACT_LOGGED',
+    aggregateType: 'SupportCase',
+    aggregateId: input.caseId,
+    tenantId: input.tenantId,
+    actorType: 'USER',
+    actorId: input.loggedByUserId,
+    payload: {
+      contact_attempt_id: contactAttemptId,
+      at: attemptedAt.toISOString(),
+      channel: input.channel,
+      outcome: input.outcome,
+      actor_id: input.loggedByUserId,
+      command: input.command,
+    },
+    ...(input.idempotencyKey !== undefined
+      ? { idempotencyKey: contactEventKey(input, input.idempotencyKey) }
+      : {}),
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
   });
+
+  if (eventResult.deduplicated) {
+    // A replay: return the contact fact the original command created rather
+    // than inserting a second row.
+    const originalId = eventResult.event.payload.contact_attempt_id;
+    const existing = await tx.query<ContactRow>(
+      `SELECT ${CONTACT_COLUMNS} FROM contact_attempts WHERE contact_attempt_id = $1`,
+      [originalId],
+    );
+    const row = existing.rows[0];
+    if (row === undefined) {
+      throw new Error('Contact event was deduplicated but its contact attempt is missing.');
+    }
+    return { contactAttempt: toContactAttempt(row), deduplicated: true };
+  }
+
+  const inserted = await tx.query<ContactRow>(
+    `INSERT INTO contact_attempts
+       (contact_attempt_id, tenant_id, case_id, logged_by_user_id, attempted_at,
+        channel, outcome, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING ${CONTACT_COLUMNS}`,
+    [
+      contactAttemptId,
+      input.tenantId,
+      input.caseId,
+      input.loggedByUserId,
+      attemptedAt,
+      input.channel,
+      input.outcome,
+      input.note ?? null,
+    ],
+  );
+  const row = inserted.rows[0];
+  if (row === undefined) throw new Error('Contact attempt insert returned no row.');
+
+  return { contactAttempt: toContactAttempt(row), deduplicated: false };
 }
 
 export async function listContactAttempts(
