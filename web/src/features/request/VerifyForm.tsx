@@ -82,7 +82,8 @@ function BirthDateField({
       <p id="va-birth-hint" className="text-16 text-slate">
         For example: 4 28 1986
       </p>
-      <div className="flex gap-4">
+      {/* Wraps at 320 px so the Year field never scrolls sideways (WCAG 1.4.10). */}
+      <div className="flex flex-wrap gap-4">
         {parts.map((part) => (
           <div key={part.key} className="flex flex-col gap-1">
             <label htmlFor={part.id} className="text-16">

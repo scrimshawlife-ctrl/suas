@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Navigate, Outlet, useLocation, useParams } from 'react-router';
 import { useMe } from '../api/me';
 import { useServiceRequest } from '../api/service-requests';
@@ -12,6 +12,17 @@ function returnPath(location: { pathname: string; search: string }): string {
 }
 
 /**
+ * A redirect that remembers where the person was going. Its `state` keeps one identity per
+ * address: a new object on each render re-ran Navigate's effect, so a guard re-rendering while
+ * a lazy target loaded navigated in a loop ("Maximum update depth exceeded").
+ */
+function RedirectWithReturn({ to }: { to: string }) {
+  const from = returnPath(useLocation());
+  const state = useMemo(() => ({ from }), [from]);
+  return <Navigate to={to} replace state={state} />;
+}
+
+/**
  * Route guards, applied by nesting in router.tsx in this order:
  * signed in, profile complete, verified (requester routes only), admin.
  */
@@ -19,17 +30,10 @@ function returnPath(location: { pathname: string; search: string }): string {
 /** 1. A session token exists. Otherwise sign in, and come back to where the person was going. */
 export function RequireSignedIn() {
   const token = useSessionToken();
-  const location = useLocation();
   if (token === null) {
     // Signing out on purpose ends on the landing page, not on a sign-in prompt with a return path.
     if (tokenStore.isSignedOut()) return <Navigate to={paths.landing} replace />;
-    return (
-      <Navigate
-        to={paths.signIn}
-        replace
-        state={{ from: `${location.pathname}${location.search}` }}
-      />
-    );
+    return <RedirectWithReturn to={paths.signIn} />;
   }
   return <Outlet />;
 }
@@ -41,13 +45,12 @@ export function RequireSignedIn() {
  */
 export function RequireProfile({ framed = false }: { framed?: boolean }) {
   const me = useMe();
-  const location = useLocation();
   const standalone = (screen: ReactNode) =>
     framed ? screen : <WithCrisisStrip>{screen}</WithCrisisStrip>;
   if (me.isPending) return standalone(<LoadingScreen />);
   if (me.isError) return standalone(<LoadFailedScreen onRetry={() => void me.refetch()} />);
   if (!me.data.display_name || !me.data.county) {
-    return <Navigate to={paths.welcome} replace state={{ from: returnPath(location) }} />;
+    return <RedirectWithReturn to={paths.welcome} />;
   }
   return <Outlet />;
 }
@@ -55,13 +58,12 @@ export function RequireProfile({ framed = false }: { framed?: boolean }) {
 /** 3. The VA confirmation is VERIFIED. Requester routes only: helping and Serve never need it. */
 export function RequireVerified() {
   const me = useMe();
-  const location = useLocation();
   if (me.isPending) return <LoadingScreen />;
   if (me.isError) return <LoadFailedScreen onRetry={() => void me.refetch()} />;
   if (me.data.id_verification.status !== 'VERIFIED') {
     // Right after the ID check, `me` is being re-read; wait for it instead of bouncing back.
     if (me.isFetching) return <LoadingScreen />;
-    return <Navigate to={paths.verify} replace state={{ from: returnPath(location) }} />;
+    return <RedirectWithReturn to={paths.verify} />;
   }
   return <Outlet />;
 }
@@ -110,15 +112,6 @@ export function RequireAdmin() {
 /** 4b. Admin session has passed MFA step-up. Otherwise the step-up screen. */
 export function RequireMfa() {
   const elevated = useMfaElevated();
-  const location = useLocation();
-  if (!elevated) {
-    return (
-      <Navigate
-        to={paths.adminMfa}
-        replace
-        state={{ from: `${location.pathname}${location.search}` }}
-      />
-    );
-  }
+  if (!elevated) return <RedirectWithReturn to={paths.adminMfa} />;
   return <Outlet />;
 }

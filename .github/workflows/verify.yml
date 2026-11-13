@@ -162,8 +162,9 @@ jobs:
     # web/e2e/stack.ts builds: a throwaway suas_local_* database on this runner,
     # fake and sink adapters, no real external effects (ENVIRONMENT.md §2).
     runs-on: ubuntu-24.04
-    # One worker on one stack: the per-area suites (UI conformance 13-19) run past 20 min.
-    timeout-minutes: 60
+    # One worker on one stack: the full per-area suite takes about 75 min on a hosted runner
+    # (UI conformance 13-20). Sharding it under 20 min per job (plan D10) is the follow-up.
+    timeout-minutes: 120
     permissions:
       contents: read
 

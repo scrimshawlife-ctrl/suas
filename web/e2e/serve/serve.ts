@@ -13,16 +13,14 @@ import {
   type Page,
 } from '@playwright/test';
 import { API_URL } from '../config';
+import { bearer, tag } from '../helpers';
+
+export { bearer, tag };
 import { newVerifiedVeteran, requestHelp, signUp, uniqueEmail, type CountyLabel } from '../helpers';
 
 export const PHONE = { width: 390, height: 844 };
 
 type Viewport = { width: number; height: number };
-
-/** A short random tag so summaries never collide between tests. */
-export function tag(): string {
-  return uniqueEmail('t').slice(6, 14);
-}
 
 /** A signed-up, ID-checked Veteran, on /home. */
 export async function newRequester(
@@ -118,13 +116,6 @@ export async function cancelOwnRequest(requester: Page, requestId: string): Prom
     .getByRole('button', { name: 'Cancel request' })
     .click();
   await expect(requester.getByText('Request cancelled.')).toBeVisible();
-}
-
-/** The page's Bearer token, for API seeding as that person. */
-export async function bearer(page: Page): Promise<Record<string, string>> {
-  const token = await page.evaluate(() => sessionStorage.getItem('suas.session') ?? '');
-  expect(token, 'the page holds a session').not.toBe('');
-  return { Authorization: `Bearer ${token}` };
 }
 
 /**

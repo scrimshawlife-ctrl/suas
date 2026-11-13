@@ -57,10 +57,14 @@ test('onboarding, a request, a trusted contact and a Check-In answer each send o
   expect(profiles()).toBe(1);
 
   await page.goto('/verify');
-  const starts = writes(page, /\/id-verification\/commands\/start$/);
-  await page.getByRole('button', { name: 'Start verification' }).dblclick();
-  await expect(page.getByRole('heading', { name: /You're confirmed/ })).toBeVisible();
-  expect(starts()).toBe(1);
+  // R9.1: self-attestation opens the request gate; a double click attests once.
+  await page.getByRole('button', { name: 'Tell us you served' }).click();
+  const attests = writes(page, /\/verification\/commands\/self-attest$/);
+  await page.getByRole('button', { name: 'Yes, I served' }).dblclick();
+  await expect(
+    page.getByRole('heading', { name: 'Thanks. You can ask for help now.' }),
+  ).toBeVisible();
+  expect(attests()).toBe(1);
 
   // The draft card's Send request submits the draft once and makes one request.
   await scriptModel(request, draftTurns({ category: 'FOOD', summary: uniqueSummary('Groceries') }));

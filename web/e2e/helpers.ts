@@ -246,6 +246,12 @@ export async function runClock(page: Page, ms: number): Promise<void> {
 }
 
 /**
+ * How far before the next poll a test checks that nothing changed yet: the poll is seen up to a
+ * few steps late on a slow runner, so the pause can sit a little after it.
+ */
+export const POLL_MARGIN_MS = 5_000;
+
+/**
  * Pauses this page's installed clock within a second after its next poll matching `isPoll`, so
  * the test knows the poll phase: the following poll is `intervalMs` later, not sooner.
  */
@@ -257,11 +263,59 @@ export async function pauseAfterPoll(
   await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 100);
   for (let ran = 0; ran <= intervalMs; ran += 1000) {
     const polled = page
-      .waitForRequest((r) => r.method() === 'GET' && isPoll(r.url()), { timeout: 300 })
+      .waitForRequest((r) => r.method() === 'GET' && isPoll(r.url()), { timeout: 1_000 })
       .then(() => true)
       .catch(() => false);
     await page.clock.runFor(1000);
     if (await polled) return;
   }
   throw new Error(`no poll within ${String(intervalMs)} ms`);
+}
+
+/** A short random tag, so names and summaries never collide between tests or runs. */
+export function tag(): string {
+  return randomUUID().slice(0, 8);
+}
+
+/** `prefix` and a tag: a unique, readable synthetic name or summary. */
+export function uniqueText(prefix: string): string {
+  return `${prefix} ${tag()}`;
+}
+
+/** The tab's session token, for the API steps a person cannot do in the UI. */
+export async function sessionToken(page: Page): Promise<string> {
+  return page.evaluate(() => sessionStorage.getItem('suas.session') ?? '');
+}
+
+/** The tab's Bearer header, for API seeding as that person. */
+export async function bearer(page: Page): Promise<Record<string, string>> {
+  const token = await sessionToken(page);
+  expect(token, 'the page holds a session').not.toBe('');
+  return { Authorization: `Bearer ${token}` };
+}
+
+/** The signed-in person's user id, for database steps scoped to them. */
+export async function myUserId(page: Page, request: APIRequestContext): Promise<string> {
+  const me = await request.get(`${API_URL}/api/v0/veterans/me`, { headers: await bearer(page) });
+  expect(me.ok()).toBe(true);
+  return ((await me.json()) as { user_id: string }).user_id;
+}
+
+/**
+ * A second tab of the same browser on `path`. sessionStorage is per tab, so the session and
+ * MFA flag are copied over, as a duplicated tab would carry them.
+ */
+export async function duplicateTab(page: Page, path: string): Promise<Page> {
+  const stored = await page.evaluate(() => ({
+    session: sessionStorage.getItem('suas.session') ?? '',
+    mfa: sessionStorage.getItem('suas.mfa'),
+  }));
+  const tab = await page.context().newPage();
+  await tab.goto('/');
+  await tab.evaluate(({ session, mfa }) => {
+    sessionStorage.setItem('suas.session', session);
+    if (mfa !== null) sessionStorage.setItem('suas.mfa', mfa);
+  }, stored);
+  await tab.goto(path);
+  return tab;
 }

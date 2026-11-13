@@ -1,17 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { API_URL } from './config';
-import { newPerson, newVerifiedVeteran, signUp, uniqueEmail } from './helpers';
+import { bearer, newPerson, newVerifiedVeteran, signUp, uniqueEmail } from './helpers';
 
 // G8: lists longer than one page load the rest by `next_cursor` through "Show more". The rows
 // are seeded through the API (the same calls the screens make), then read from the pages.
 const REQUESTS = 51; // over the Serve page (20) and the case list page (50)
 const ATTEMPTS = 51; // over the contact-attempt page (50)
-
-const bearer = async (page: Page) => ({
-  Authorization: `Bearer ${await page.evaluate(() => sessionStorage.getItem('suas.session') ?? '')}`,
-});
 
 async function post(
   request: APIRequestContext,

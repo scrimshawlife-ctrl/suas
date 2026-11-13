@@ -12,6 +12,8 @@ import {
   type Page,
 } from '@playwright/test';
 import { API_URL } from '../config';
+export { tag } from '../helpers';
+export { take } from '../serve/serve';
 import { newPerson, newVerifiedVeteran, signUp, uniqueEmail, type CountyLabel } from '../helpers';
 
 /** A signed-up, ID-checked Veteran on /home. */
@@ -42,18 +44,6 @@ export async function helper(
     role: 'serve',
   });
   return page;
-}
-
-/** The helper takes the request from the open list and lands on its case page. */
-export async function take(page: Page, summary: string, requestId: string): Promise<void> {
-  await page.goto('/serve');
-  await page.getByRole('button', { name: new RegExp(`Take this request: .*${summary}`) }).click();
-  await expect(page).toHaveURL(new RegExp(`/serve/requests/${requestId}$`));
-}
-
-/** A short random tag so summaries never collide between tests. */
-export function tag(): string {
-  return randomUUID().slice(0, 8);
 }
 
 /** The id at the end of a /requests/:id address. */

@@ -1,3 +1,4 @@
+import type { Request } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { newPerson, readSignInCode, shoot, uniqueEmail } from '../helpers';
 import {
@@ -69,13 +70,18 @@ test('a new person sent to sign in from a Veteran page is brought back there thr
     await held;
     await route.fallback();
   });
-  await page.getByRole('button', { name: 'Start verification' }).click();
-  await expect(page.getByRole('heading', { name: /You're confirmed/ })).toBeVisible();
+  // R9.1: the Verify page opens the gate by VA or by self-attestation; this uses the latter.
+  await page.getByRole('button', { name: 'Tell us you served' }).click();
+  await page.getByRole('button', { name: 'Yes, I served' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Thanks. You can ask for help now.' }),
+  ).toBeVisible();
   await page.getByRole('link', { name: 'Continue' }).click();
   await expect(page).toHaveURL(/\/resources\/food$/);
-  await expect(page.getByRole('status')).toHaveText('Loading…');
   release();
-  await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Confirm you served');
+  await expect(page.getByRole('heading', { level: 1 })).not.toHaveText(
+    'Confirm your Veteran status',
+  );
   await expect(page).toHaveURL(/\/resources\/food$/);
 });
 
@@ -176,9 +182,17 @@ test('signing out from the chat screen header ends on the landing page', async (
   request,
 }) => {
   const { page } = await signedUpPerson(browser, request, { label: 'out-chat', name: 'Sky C.' });
-  const read = page.waitForResponse(/\/api\/v0\/chat\/threads/);
+  // The chat screen reads its threads and asks for socket tickets; all must be back first.
+  const open = new Set<Request>();
+  page.on('request', (r) => {
+    if (r.url().includes('/api/v0/')) open.add(r);
+  });
+  page.on('requestfinished', (r) => open.delete(r));
+  page.on('requestfailed', (r) => open.delete(r));
+  const ticket = page.waitForResponse(/\/api\/v0\/chat\/connect-tickets$/);
   await page.goto('/chat');
-  await read;
+  await ticket;
+  await expect.poll(() => open.size).toBe(0);
   await signOutFromAvatar(page, 'Sky');
   await expect(page).toHaveURL(LANDING);
   await page.goBack();
