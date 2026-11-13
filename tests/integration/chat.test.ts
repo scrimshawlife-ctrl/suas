@@ -205,6 +205,23 @@ describe('participant-only access', () => {
     expect(second.messages.map((m) => m.body)).toEqual(['one']);
     expect(second.next_cursor).toBeNull();
   });
+
+  it('accepts a cursor in the format the chat-only encoder issued before C-21', async () => {
+    const s = await scenario({ accepted: true });
+    for (const text of ['one', 'two']) await send(s.requester, s.serviceRequestId, text);
+    const stored = await pool().query<{ at: string; id: string }>(
+      `SELECT to_char(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at,
+              m.chat_message_id AS id
+         FROM chat_messages m
+         JOIN chat_threads t ON t.chat_thread_id = m.chat_thread_id
+        WHERE t.service_request_id = $1 AND m.body = 'two'`,
+      [s.serviceRequestId],
+    );
+    const { at, id } = stored.rows[0]!;
+    const legacy = Buffer.from(`${at}|${id}`, 'utf8').toString('base64url');
+    const page = (await list(s.accepter, s.serviceRequestId, `?cursor=${legacy}`)).json<ChatPage>();
+    expect(page.messages.map((m) => m.body)).toEqual(['one']);
+  });
 });
 
 describe('chat before a request is accepted', () => {
@@ -333,8 +350,11 @@ describe('connect tickets', () => {
       userId: s.requester.userId,
       sessionId: s.requester.sessionId,
     });
-    expect(expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(60_000);
-    expect(expiresAt.getTime() - Date.now()).toBeGreaterThan(50_000);
+    // expires_at comes from the DB clock; measure against it, not Node's (they drift by ms).
+    const { rows } = await pool().query<{ now: Date }>('SELECT now() AS now');
+    const ttl = expiresAt.getTime() - rows[0]!.now.getTime();
+    expect(ttl).toBeLessThanOrEqual(60_000);
+    expect(ttl).toBeGreaterThan(50_000);
 
     const lifecycle = createChatConnectionLifecycle(pool());
     expect(await lifecycle.connect({ connectionId: 'c-1', ticket })).toBe('accepted');

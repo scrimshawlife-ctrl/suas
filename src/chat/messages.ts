@@ -7,12 +7,17 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import {
+  decodeTimeIdCursor,
+  encodeTimeIdCursor,
+  pageSize,
+  takePage,
+  timestampText,
+} from '../db/cursor.js';
 import type { Queryable } from '../db/index.js';
 import { ChatClosedError } from './access.js';
 
 export const MAX_MESSAGE_LENGTH = 2000;
-const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 100;
 
 export interface ChatMessage {
   readonly chatMessageId: string;
@@ -23,16 +28,6 @@ export interface ChatMessage {
   readonly createdAt: string;
 }
 
-export class InvalidChatCursorError extends Error {
-  readonly code = 'VALIDATION_FAILED';
-  readonly httpStatus = 400;
-
-  constructor() {
-    super('The pagination cursor is not valid.');
-    this.name = 'InvalidChatCursorError';
-  }
-}
-
 interface MessageRow {
   chat_message_id: string;
   sender_user_id: string;
@@ -40,10 +35,7 @@ interface MessageRow {
   created_at: string;
 }
 
-/** Microsecond-exact UTC text: a JS Date would truncate to milliseconds and break keyset ties. */
-const CREATED_AT_TEXT = `to_char(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
+const CREATED_AT_TEXT = timestampText('m.created_at');
 
 function toMessage(row: MessageRow, serviceRequestId: string): ChatMessage {
   return {
@@ -101,25 +93,6 @@ export interface ChatMessagePage {
   readonly nextCursor: string | undefined;
 }
 
-function encodeCursor(createdAt: string, chatMessageId: string): string {
-  return Buffer.from(`${createdAt}|${chatMessageId}`, 'utf8').toString('base64url');
-}
-
-function decodeCursor(cursor: string): { createdAt: string; id: string } {
-  const parts = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-  const [createdAt, id] = parts;
-  if (
-    parts.length !== 2 ||
-    createdAt === undefined ||
-    id === undefined ||
-    !TIMESTAMP_PATTERN.test(createdAt) ||
-    !UUID_PATTERN.test(id)
-  ) {
-    throw new InvalidChatCursorError();
-  }
-  return { createdAt, id };
-}
-
 /** Keyset page over (created_at, id), newest first, stable while new messages arrive. */
 export async function listChatMessages(
   db: Queryable,
@@ -131,12 +104,12 @@ export async function listChatMessages(
     readonly cursor?: string;
   },
 ): Promise<ChatMessagePage> {
-  const limit = Math.min(Math.max(input.limit ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
+  const limit = pageSize(input.limit);
   const values: unknown[] = [input.tenantId, input.chatThreadId];
   let cursorCondition = '';
   if (input.cursor !== undefined) {
-    const decoded = decodeCursor(input.cursor);
-    values.push(decoded.createdAt, decoded.id);
+    const { at, id } = decodeTimeIdCursor(input.cursor);
+    values.push(at, id);
     cursorCondition = `AND (m.created_at, m.chat_message_id) < ($3::timestamptz, $4::uuid)`;
   }
   values.push(limit + 1);
@@ -149,13 +122,8 @@ export async function listChatMessages(
       LIMIT $${String(values.length)}`,
     values,
   );
-  const rows = result.rows.slice(0, limit);
-  const last = rows[rows.length - 1];
-  return {
-    messages: rows.map((row) => toMessage(row, input.serviceRequestId)),
-    nextCursor:
-      result.rows.length > limit && last !== undefined
-        ? encodeCursor(last.created_at, last.chat_message_id)
-        : undefined,
-  };
+  const { rows, nextCursor } = takePage(result.rows, limit, (row) =>
+    encodeTimeIdCursor({ at: row.created_at, id: row.chat_message_id }),
+  );
+  return { messages: rows.map((row) => toMessage(row, input.serviceRequestId)), nextCursor };
 }

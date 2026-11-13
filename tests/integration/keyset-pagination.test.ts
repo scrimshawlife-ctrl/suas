@@ -295,3 +295,74 @@ describe('closed_last_30_days ignores the session time zone (A2-18)', () => {
     }
   });
 });
+
+describe('case request list and contact log paging (A2-24)', () => {
+  it('pages both lists by cursor, keeps the helper scope, and refuses a bad cursor', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester');
+    const helper = await person(tenantId, 'helper');
+    await markVerifiedVeteran(pool(), tenantId, requester.userId);
+    const post = (url: string, payload?: object) =>
+      app.server.inject({
+        method: 'POST',
+        url: `/api/v0${url}`,
+        headers: { ...requester.headers, 'idempotency-key': randomUUID() },
+        ...(payload !== undefined ? { payload } : {}),
+      });
+    const caseId: string = (await post('/cases')).json().case_id;
+    const requestIds: string[] = [];
+    for (const at of SAME_MS) {
+      const id: string = (
+        await post(`/cases/${caseId}/service-requests`, {
+          category: 'FOOD',
+          details: { meeting_place: 'Main Street library' },
+        })
+      ).json().service_request_id;
+      await pool().query(
+        `UPDATE service_requests SET created_at = $2 WHERE service_request_id = $1`,
+        [id, at],
+      );
+      requestIds.push(id);
+    }
+    const requests = `/api/v0/cases/${caseId}/service-requests`;
+    const all = await walk(
+      requester,
+      `${requests}?limit=1`,
+      'service_requests',
+      'service_request_id',
+    );
+    expect(all.pages.flat()).toEqual(requestIds);
+
+    // A helper still sees only the request they hold.
+    await holdRequest(pool(), {
+      tenantId,
+      serviceRequestId: requestIds[1]!,
+      acceptedByUserId: helper.userId,
+    });
+    const held = await walk(helper, requests, 'service_requests', 'service_request_id');
+    expect(held.pages).toEqual([[requestIds[1]]]);
+
+    const attemptIds: string[] = [];
+    for (const at of SAME_MS) {
+      const id = randomUUID();
+      await pool().query(
+        `INSERT INTO contact_attempts
+           (contact_attempt_id, tenant_id, case_id, logged_by_user_id, attempted_at, channel, outcome)
+         VALUES ($1, $2, $3, $4, $5, 'PHONE', 'PENDING')`,
+        [id, tenantId, caseId, helper.userId, at],
+      );
+      attemptIds.push(id);
+    }
+    const attempts = `/api/v0/cases/${caseId}/contact-attempts`;
+    const log = await walk(helper, `${attempts}?limit=1`, 'contact_attempts', 'contact_attempt_id');
+    expect(log.pages.flat()).toEqual(attemptIds);
+    expect((await walk(helper, attempts, 'contact_attempts', 'contact_attempt_id')).pages).toEqual([
+      attemptIds,
+    ]);
+
+    for (const url of [`${requests}?cursor=nope`, `${attempts}?cursor=nope`]) {
+      const bad = await app.server.inject({ method: 'GET', url, headers: helper.headers });
+      expect(bad.statusCode, url).toBe(400);
+    }
+  });
+});

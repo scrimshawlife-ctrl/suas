@@ -20,6 +20,7 @@ import {
   recordContactInTx,
   type ContactAttempt,
 } from '../../coordination/index.js';
+import { pageQuery } from '../../db/cursor.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 
@@ -65,8 +66,12 @@ export function registerContactLogRoutes(app: FastifyInstance, deps: ContactLogR
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { caseId } = caseIdParams.parse(request.params);
     assertAccepter(await resolveCaseAccess(deps.pool, context, caseId), 'The contact log');
-    const attempts = await listContactAttempts(deps.pool, context.tenantId, caseId);
-    return { contact_attempts: attempts.map(publicContactAttempt) };
+    const query = pageQuery.parse(request.query);
+    const page = await listContactAttempts(deps.pool, context.tenantId, caseId, query);
+    return {
+      contact_attempts: page.attempts.map(publicContactAttempt),
+      next_cursor: page.nextCursor ?? null,
+    };
   });
 
   app.post(`${API_PREFIX}/cases/:caseId/commands/log-contact-attempt`, async (request, reply) => {

@@ -19,8 +19,6 @@ import { assertMfaElevated, assertSuasAdmin } from '../../authz/index.js';
 import {
   createResourceDrafts,
   discardResourceDraft,
-  DRAFT_DEFAULT_PAGE_SIZE,
-  DRAFT_MAX_PAGE_SIZE,
   draftChangesSchema,
   editResourceDraft,
   extractResourceDrafts,
@@ -34,6 +32,7 @@ import {
   type ExtractionFailure,
   type ResourceDraft,
 } from '../../catalog/index.js';
+import { pageQuery } from '../../db/cursor.js';
 import { withTransaction } from '../../db/index.js';
 import {
   commandScope,
@@ -68,11 +67,7 @@ const FAILURE_MESSAGES: Record<Exclude<ExtractionFailure, 'unavailable'>, string
 
 const idParams = z.object({ id: z.string().uuid() });
 
-const listQuery = z.object({
-  status: z.enum(RESOURCE_DRAFT_STATUSES).optional(),
-  cursor: z.string().min(1).max(512).optional(),
-  limit: z.coerce.number().int().min(1).max(DRAFT_MAX_PAGE_SIZE).default(DRAFT_DEFAULT_PAGE_SIZE),
-});
+const listQuery = pageQuery.extend({ status: z.enum(RESOURCE_DRAFT_STATUSES).optional() });
 
 const extractBody = z
   .object({

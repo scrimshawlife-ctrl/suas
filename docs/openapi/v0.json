@@ -1258,6 +1258,12 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/PageCursor"
+          },
+          {
+            "$ref": "#/components/parameters/PageLimit"
           }
         ],
         "responses": {
@@ -2156,6 +2162,12 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/PageCursor"
+          },
+          {
+            "$ref": "#/components/parameters/PageLimit"
           }
         ],
         "responses": {
@@ -2165,13 +2177,17 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["contact_attempts"],
+                  "required": ["contact_attempts", "next_cursor"],
                   "properties": {
                     "contact_attempts": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/ContactAttempt"
                       }
+                    },
+                    "next_cursor": {
+                      "type": ["string", "null"],
+                      "description": "Pass back as cursor for older attempts (newest attempted_at first); null on the last page."
                     }
                   }
                 }
@@ -6931,13 +6947,17 @@
       },
       "CaseServiceRequestList": {
         "type": "object",
-        "required": ["service_requests"],
+        "required": ["service_requests", "next_cursor"],
         "properties": {
           "service_requests": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ServiceRequestRef"
             }
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Pass back as cursor for older requests (newest first); null on the last page."
           }
         }
       },

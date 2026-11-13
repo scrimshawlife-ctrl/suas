@@ -2082,6 +2082,8 @@ export interface components {
     };
     CaseServiceRequestList: {
       service_requests: components['schemas']['ServiceRequestRef'][];
+      /** @description Pass back as cursor for older requests (newest first); null on the last page. */
+      next_cursor: string | null;
     };
     ContactAttempt: {
       /** Format: uuid */
@@ -3506,7 +3508,11 @@ export interface operations {
   };
   listCaseServiceRequests: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
       header?: never;
       path: {
         caseId: string;
@@ -4093,7 +4099,11 @@ export interface operations {
   };
   listContactAttempts: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
       header?: never;
       path: {
         caseId: string;
@@ -4110,6 +4120,8 @@ export interface operations {
         content: {
           'application/json': {
             contact_attempts: components['schemas']['ContactAttempt'][];
+            /** @description Pass back as cursor for older attempts (newest attempted_at first); null on the last page. */
+            next_cursor: string | null;
           };
         };
       };

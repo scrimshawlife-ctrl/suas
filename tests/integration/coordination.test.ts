@@ -474,7 +474,9 @@ describe('RESPONDER_WORKFLOWS.md §7 — contact log', () => {
 
     expect(replay.deduplicated).toBe(true);
     expect(replay.contactAttempt.contactAttemptId).toBe(first.contactAttempt.contactAttemptId);
-    expect(await listContactAttempts(pool, tenantId, supportCase.caseId)).toHaveLength(1);
+    expect((await listContactAttempts(pool, tenantId, supportCase.caseId)).attempts).toHaveLength(
+      1,
+    );
   });
 
   it('does not emit RESPONDER_CONTACT_LOGGED for a Case Note', async () => {
