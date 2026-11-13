@@ -1,9 +1,9 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, type InfiniteData } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
-import { serviceRequestsQueryOptions } from '../../api/service-requests';
+import { infiniteServiceRequestsKey } from '../../api/service-requests';
 import type { ServiceRequestListItem } from '../../api/types';
 import { ReleaseDialog } from './ReleaseDialog';
 
@@ -20,6 +20,12 @@ function open(queryClient = new QueryClient({ defaultOptions: { mutations: { ret
   return handlers;
 }
 
+type Pages = InfiniteData<{
+  service_requests: ServiceRequestListItem[];
+  next_cursor: string | null;
+  counts?: { helping_now: number; closed_last_30_days: number };
+}>;
+
 const confirm = () => screen.getByRole('button', { name: /Confirm release|Releasing/ });
 const keyOf = (call: number) =>
   (client.POST.mock.calls[call]?.[1] as { headers: Record<string, string> }).headers[
@@ -32,22 +38,29 @@ beforeEach(() => {
 });
 
 describe('ReleaseDialog', () => {
-  it('drops the released request from the cached "mine" list, so the board does not re-read it', async () => {
+  it('drops the released request from the board\'s cached "mine" pages, so it does not re-read it', async () => {
     const queryClient = new QueryClient();
-    const key = serviceRequestsQueryOptions({ ownership: 'mine' }).queryKey;
+    // The key the Serve board reads (useInfiniteServiceRequests('mine')).
+    const key = infiniteServiceRequestsKey('mine');
     const held = (id: string) => ({ service_request_id: id }) as ServiceRequestListItem;
-    queryClient.setQueryData(key, {
-      service_requests: [held('r1'), held('r2')],
-      next_cursor: null,
-      counts: { helping_now: 2, closed_last_30_days: 0 },
+    const counts = { helping_now: 3, closed_last_30_days: 0 };
+    queryClient.setQueryData<Pages>(key, {
+      pageParams: [undefined, 'c1'],
+      pages: [
+        { service_requests: [held('r2'), held('r3')], next_cursor: 'c1', counts },
+        { service_requests: [held('r1')], next_cursor: null, counts },
+      ],
     });
     const { onReleased } = open(queryClient);
     await userEvent.type(screen.getByRole('textbox'), 'My car broke down.');
     await userEvent.click(confirm());
     await waitFor(() => expect(onReleased).toHaveBeenCalledTimes(1));
-    const list = queryClient.getQueryData(key);
-    expect(list?.service_requests.map((item) => item.service_request_id)).toEqual(['r2']);
-    expect(list?.counts?.helping_now).toBe(1);
+    const pages = queryClient.getQueryData<Pages>(key)?.pages;
+    expect(pages?.map((page) => page.service_requests.map((i) => i.service_request_id))).toEqual([
+      ['r2', 'r3'],
+      [],
+    ]);
+    expect(pages?.[0]?.counts?.helping_now).toBe(2);
   });
 
   it('needs a reason before it can confirm, and bounds its length', async () => {
