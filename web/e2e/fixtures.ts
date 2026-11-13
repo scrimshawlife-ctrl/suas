@@ -10,6 +10,15 @@ import { expectClean, watchContext, type Allow, type Problem } from './watch';
 
 export { expect };
 
+/** Closes a context, ignoring only the error for one that is already closed. */
+async function closeOpen(context: BrowserContext): Promise<void> {
+  try {
+    await context.close();
+  } catch (error) {
+    if (!/has been closed/.test(String(error))) throw error;
+  }
+}
+
 export const test = base.extend<{ allow: Allow; guard: void }>({
   /** Patterns of expected noise for this test: `allow.push(/status of 409/)`. */
   // eslint-disable-next-line no-empty-pattern
@@ -65,8 +74,9 @@ export const test = base.extend<{ allow: Allow; guard: void }>({
       while (pending.length > 0) await pending.shift();
       const seen = [...problems];
       const broken = [...violations];
-      // Extra contexts would otherwise keep polling into later tests.
-      await Promise.all(opened.map((extra) => extra.close()));
+      // Extra contexts would otherwise keep polling into later tests. One the test (or a timeout)
+      // already closed is skipped; any other close failure still fails the test.
+      await Promise.all(opened.map(closeOpen));
       expect(broken, 'responses that break docs/openapi/v0.json').toEqual([]);
       expectClean(seen, allow);
     },
