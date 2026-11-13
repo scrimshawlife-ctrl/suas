@@ -8,6 +8,7 @@ export const paths = {
   signInCode: '/sign-in/code',
   welcome: '/welcome',
   verify: '/verify',
+  verifyLicence: '/verify/licence',
   crisis: '/crisis',
   home: '/home',
   request: '/request',
@@ -27,6 +28,8 @@ export const paths = {
   adminDrafts: '/admin/drafts',
   adminDraft: (id: string) => `/admin/drafts/${id}`,
   adminConsentTemplates: '/admin/consent-templates',
+  adminLicenceReviews: '/admin/licence-reviews',
+  adminLicenceReview: (id: string) => `/admin/licence-reviews/${id}`,
   adminMfa: '/admin/mfa',
   devComponents: '/dev/components',
 } as const;
