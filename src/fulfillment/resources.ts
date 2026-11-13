@@ -14,6 +14,17 @@
 import { randomUUID } from 'node:crypto';
 import type { Queryable } from '../db/transaction.js';
 import { appendAuditEvent } from '../events/index.js';
+import {
+  decodeCursor,
+  DEFAULT_PAGE_SIZE,
+  encodeCursor,
+  isUtcTimestamp,
+  isUuid,
+  MAX_PAGE_SIZE,
+  pageSize,
+  takePage,
+  timestampText,
+} from '../http/cursor.js';
 import { assertServiceCategory, type ServiceCategory } from '../coordination/index.js';
 import type { IntegrationMode } from './port.js';
 import { INTEGRATION_MODES } from './port.js';
@@ -612,8 +623,8 @@ export interface ResourceSearchResult {
 }
 
 /** API.md §5 bounds — shared by JSON and HTML list surfaces. */
-export const RESOURCE_DEFAULT_PAGE_SIZE = 20;
-export const RESOURCE_MAX_PAGE_SIZE = 100;
+export const RESOURCE_DEFAULT_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+export const RESOURCE_MAX_PAGE_SIZE = MAX_PAGE_SIZE;
 
 export interface ResourceSearchPage {
   readonly results: readonly ResourceSearchResult[];
@@ -621,49 +632,27 @@ export interface ResourceSearchPage {
   readonly nextCursor: string | undefined;
 }
 
-export class InvalidResourceCursorError extends Error {
-  readonly code = 'VALIDATION_FAILED';
-  readonly httpStatus = 400;
+export { InvalidCursorError as InvalidResourceCursorError } from '../http/cursor.js';
 
-  constructor() {
-    super('The pagination cursor is not valid.');
-    this.name = 'InvalidResourceCursorError';
-  }
+/**
+ * Keyset over (active DESC, last_verified_at DESC NULLS LAST, resource_id ASC). An empty
+ * middle part stands for a null `last_verified_at`.
+ */
+function encodeResourceCursor(row: ResourceRow & { last_verified_key: string | null }): string {
+  return encodeCursor([row.active ? '1' : '0', row.last_verified_key ?? '', row.resource_id]);
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Keyset over (active DESC, last_verified_at DESC NULLS LAST, resource_id ASC). */
-function encodeResourceCursor(
-  active: boolean,
-  lastVerifiedAt: Date | undefined,
-  resourceId: string,
-): string {
-  const verified = lastVerifiedAt === undefined ? '' : lastVerifiedAt.toISOString();
-  return Buffer.from(`${active ? '1' : '0'}|${verified}|${resourceId}`, 'utf8').toString(
-    'base64url',
-  );
-}
-
-function decodeResourceCursor(
-  cursor: string,
-): { active: boolean; lastVerifiedAt: string | null; resourceId: string } | undefined {
-  try {
-    const parts = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-    if (parts.length !== 3) return undefined;
-    const [activePart, verifiedPart, resourceId] = parts;
-    if (activePart !== '0' && activePart !== '1') return undefined;
-    if (resourceId === undefined || !UUID_PATTERN.test(resourceId)) return undefined;
-    if (verifiedPart === undefined) return undefined;
-    if (verifiedPart !== '' && Number.isNaN(Date.parse(verifiedPart))) return undefined;
-    return {
-      active: activePart === '1',
-      lastVerifiedAt: verifiedPart === '' ? null : verifiedPart,
-      resourceId,
-    };
-  } catch {
-    return undefined;
-  }
+function decodeResourceCursor(cursor: string): {
+  active: boolean;
+  lastVerifiedAt: string | null;
+  resourceId: string;
+} {
+  const [active, verified, resourceId] = decodeCursor(cursor, [
+    (part) => part === '0' || part === '1',
+    (part) => part === '' || isUtcTimestamp(part),
+    isUuid,
+  ]) as [string, string, string];
+  return { active: active === '1', lastVerifiedAt: verified === '' ? null : verified, resourceId };
 }
 
 /** WHERE conditions and bound values shared by the page query and the total. */
@@ -719,16 +708,12 @@ export async function searchResources(
   filters: ResourceSearchFilters = {},
   page: { cursor?: string; limit?: number } = {},
 ): Promise<ResourceSearchPage> {
-  const limit = Math.min(
-    Math.max(page.limit ?? RESOURCE_DEFAULT_PAGE_SIZE, 1),
-    RESOURCE_MAX_PAGE_SIZE,
-  );
+  const limit = pageSize(page.limit);
 
   const { conditions, values } = filterConditions(tenantId, filters);
 
   if (page.cursor !== undefined) {
     const decoded = decodeResourceCursor(page.cursor);
-    if (decoded === undefined) throw new InvalidResourceCursorError();
     values.push(decoded.active, decoded.lastVerifiedAt, decoded.resourceId);
     const activeParam = `$${values.length - 2}`;
     const verifiedParam = `$${values.length - 1}`;
@@ -762,17 +747,16 @@ export async function searchResources(
 
   values.push(limit + 1);
 
-  const result = await db.query<ResourceRow>(
-    `SELECT ${RESOURCE_COLUMNS} FROM resources
+  const result = await db.query<ResourceRow & { last_verified_key: string | null }>(
+    `SELECT ${RESOURCE_COLUMNS}, ${timestampText('last_verified_at')} AS last_verified_key
+     FROM resources
      WHERE ${conditions.join(' AND ')}
      ORDER BY active DESC, last_verified_at DESC NULLS LAST, resource_id
      LIMIT $${values.length}`,
     values,
   );
 
-  const rows = result.rows.slice(0, limit);
-  const last = rows[rows.length - 1];
-  const hasMore = result.rows.length > limit;
+  const { rows, nextCursor } = takePage(result.rows, limit, encodeResourceCursor);
   const now = new Date();
 
   return {
@@ -781,10 +765,7 @@ export async function searchResources(
       const band = freshnessBand(resource.lastVerifiedAt, now);
       return { resource, freshness: band, staleWarning: requiresStaleWarning(band) };
     }),
-    nextCursor:
-      hasMore && last !== undefined
-        ? encodeResourceCursor(last.active, last.last_verified_at ?? undefined, last.resource_id)
-        : undefined,
+    nextCursor,
   };
 }
 

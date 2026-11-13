@@ -47,7 +47,10 @@ describe('shared read hooks', () => {
       expect(mine.result.current.isSuccess).toBe(true);
       expect(detail.result.current.isSuccess).toBe(true);
     });
-    expect(client.GET).toHaveBeenCalledWith('/api/v0/chat/threads');
+    // The server's maximum: every thread the list showed before it paged (API.md §5).
+    expect(client.GET).toHaveBeenCalledWith('/api/v0/chat/threads', {
+      params: { query: { limit: 100 } },
+    });
     expect(client.GET).toHaveBeenCalledWith('/api/v0/service-requests', {
       params: { query: { ownership: 'mine', limit: 5 } },
     });

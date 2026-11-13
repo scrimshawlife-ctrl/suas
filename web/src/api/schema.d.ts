@@ -114,7 +114,7 @@ export interface paths {
     };
     /**
      * List the caller's unfinished Check-In that can still be resumed
-     * @description Round 8 R8.10 (accepted as proposal text in suas-specs D-059, not released): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.
+     * @description CHECKINS.md §4.2 (v0.9.0, R8.10, D-059): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.
      */
     get: operations['listCheckIns'];
     put?: never;
@@ -2027,7 +2027,7 @@ export interface components {
     ServiceRequestList: {
       service_requests: components['schemas']['ServiceRequestListItem'][];
       next_cursor: string | null;
-      /** @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. ownership=mine only: summary counts for the caller as a helper, over the same requests as the mine list (all pages, not just this one). Never returned for another user or aggregated across users. */
+      /** @description DISPATCH.md §14.2 (v0.9.0, R7.3, R7.4, D-057). ownership=mine only: summary counts for the caller as a helper, over the same requests as the mine list (all pages, not just this one). Never returned for another user or aggregated across users. */
       counts?: {
         /** @description Requests the caller accepted that are not in a terminal status (CLOSED, CANCELLED, EXPIRED, UNFULFILLABLE). Includes CONFIRMED, which waits for the helper's CLOSE, and ESCALATED. */
         helping_now: number;
@@ -2052,7 +2052,7 @@ export interface components {
       created_at: string;
       /**
        * Format: date-time
-       * @description Proposal: suas-specs #69 Round 7 (D-057), not released; not authority until the spec is tagged and pins.ts re-pinned. When the request was accepted (the chat thread's creation time). null when no accept time is recorded: before accept, or legacy accepted requests. null does not mean not accepted. Not consent evidence (D-051). Shown only to the requester and the user recorded as having accepted, like meeting_place.
+       * @description DISPATCH.md §14.1 (v0.9.0, R7.2). When the request was accepted (the chat thread's creation time). null when no accept time is recorded: before accept, or legacy accepted requests. null does not mean not accepted. Not consent evidence (D-051). Shown only to the requester and the user recorded as having accepted, like meeting_place.
        */
       accepted_at: string | null;
       widened: boolean;
@@ -2379,6 +2379,8 @@ export interface components {
     };
     ChatThreadList: {
       threads: components['schemas']['ChatThread'][];
+      /** @description Pass back as cursor for older threads; null on the last page. */
+      next_cursor: string | null;
     };
     ChatConnectTicket: {
       ticket: string;
@@ -2691,6 +2693,9 @@ export interface components {
     /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
     IdempotencyKey: string;
     CaseIdPath: string;
+    /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+    PageCursor: string;
+    PageLimit: number;
   };
   requestBodies: never;
   headers: never;
@@ -3941,14 +3946,18 @@ export interface operations {
   };
   listNotifications: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
       header?: never;
       path?: never;
       cookie?: never;
     };
     requestBody?: never;
     responses: {
-      /** @description Bounded inbox without destinations */
+      /** @description Bounded inbox without destinations, newest first (by creation time) */
       200: {
         headers: {
           [name: string]: unknown;
@@ -3957,9 +3966,12 @@ export interface operations {
           'application/json': {
             notifications: components['schemas']['Notification'][];
             limit: number;
+            /** @description Pass back as cursor for older notifications; null on the last page. */
+            next_cursor: string | null;
           };
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
     };
   };
@@ -5217,14 +5229,18 @@ export interface operations {
   };
   listChatThreads: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
       header?: never;
       path?: never;
       cookie?: never;
     };
     requestBody?: never;
     responses: {
-      /** @description The caller threads (as requester or accepter), newest activity first, at most 100 */
+      /** @description The caller threads (as requester or accepter), newest activity first. A thread that gets a new message moves to the first page. */
       200: {
         headers: {
           [name: string]: unknown;
@@ -5233,6 +5249,7 @@ export interface operations {
           'application/json': components['schemas']['ChatThreadList'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
     };
   };

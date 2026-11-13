@@ -1,5 +1,5 @@
 /**
- * Requester edit of a waiting Service Request (V1_MVP_PROPOSAL.md R8.1, R8.7).
+ * Requester edit of a waiting Service Request (DISPATCH.md §14.3, §14.9; v0.9.0, R8.1, R8.7, D-063).
  *
  * Summary, timing, meeting place and destination change in place while nobody has accepted
  * the request. Category never changes. Locks the case row, then the request row, the same

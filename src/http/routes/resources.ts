@@ -16,6 +16,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import type { SafetyCopyMode } from '../../config/index.js';
 import { authenticate } from '../authenticate.js';
+import { pageQuery } from '../cursor.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { requireVerifiedVeteran } from '../../identity/index.js';
 import { SERVICE_CATEGORIES } from '../../coordination/index.js';
@@ -23,8 +24,6 @@ import {
   findResource,
   freshnessBand,
   requiresStaleWarning,
-  RESOURCE_DEFAULT_PAGE_SIZE,
-  RESOURCE_MAX_PAGE_SIZE,
   countResources,
   searchResources,
   verifiedAtIso,
@@ -42,17 +41,9 @@ export interface ResourceRouteDeps {
 
 const idParams = z.object({ id: z.string().uuid() });
 
-const listQuery = z.object({
+const listQuery = pageQuery.extend({
   category: z.enum(SERVICE_CATEGORIES).optional(),
   county: z.string().min(1).max(128).optional(),
-  // API.md §5: cursor + limit; bounds come from the catalog module.
-  cursor: z.string().min(1).max(512).optional(),
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(RESOURCE_MAX_PAGE_SIZE)
-    .default(RESOURCE_DEFAULT_PAGE_SIZE),
 });
 
 /** Public catalog projection — RESOURCES.md §6 + list freshness (UI parity). */

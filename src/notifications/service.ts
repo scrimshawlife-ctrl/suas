@@ -19,6 +19,14 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendAuditEvent } from '../events/index.js';
+import {
+  decodeTimeIdCursor,
+  encodeTimeIdCursor,
+  pageSize,
+  takePage,
+  type PageRequest,
+  timestampText,
+} from '../http/cursor.js';
 import { evaluateDisclosure, type DisclosureRequest } from '../consent/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
 import {
@@ -660,12 +668,39 @@ export async function listNotificationsForRecipient(
   recipientUserId: string,
   limit = 50,
 ): Promise<Notification[]> {
-  const result = await db.query<NotificationRow>(
-    `SELECT ${NOTIFICATION_COLUMNS} FROM notifications
-     WHERE tenant_id = $1 AND recipient_user_id = $2
-     ORDER BY updated_at DESC
-     LIMIT $3`,
-    [tenantId, recipientUserId, Math.min(Math.max(limit, 1), 100)],
+  const page = await listRecipientNotificationPage(db, tenantId, recipientUserId, { limit });
+  return page.notifications;
+}
+
+/**
+ * The inbox as an API.md §5 keyset page, newest first by `created_at` (which, unlike
+ * `updated_at`, never changes, so a delivery update cannot move a row across pages).
+ */
+export async function listRecipientNotificationPage(
+  db: Queryable,
+  tenantId: string,
+  recipientUserId: string,
+  page: PageRequest = {},
+): Promise<{ notifications: Notification[]; nextCursor: string | undefined }> {
+  const limit = pageSize(page.limit);
+  const values: unknown[] = [tenantId, recipientUserId];
+  let cursorCondition = '';
+  if (page.cursor !== undefined) {
+    const { at, id } = decodeTimeIdCursor(page.cursor);
+    values.push(at, id);
+    cursorCondition = 'AND (created_at, notification_id) < ($3::timestamptz, $4::uuid)';
+  }
+  values.push(limit + 1);
+  const result = await db.query<NotificationRow & { created_at_key: string }>(
+    `SELECT ${NOTIFICATION_COLUMNS}, ${timestampText('created_at')} AS created_at_key
+     FROM notifications
+     WHERE tenant_id = $1 AND recipient_user_id = $2 ${cursorCondition}
+     ORDER BY created_at DESC, notification_id DESC
+     LIMIT $${values.length}`,
+    values,
   );
-  return result.rows.map(toNotification);
+  const { rows, nextCursor } = takePage(result.rows, limit, (row) =>
+    encodeTimeIdCursor({ at: row.created_at_key, id: row.notification_id }),
+  );
+  return { notifications: rows.map(toNotification), nextCursor };
 }

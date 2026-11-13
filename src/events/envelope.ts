@@ -27,8 +27,8 @@ export type ActorType = (typeof ACTOR_TYPES)[number];
 
 /**
  * EVENT_MODEL.md §3 domain event catalog as released in v0.1, plus
- * `SERVICE_REQUEST_RELEASED` (suas-specs 0.9.0 prepared text: DISPATCH.md §4 and §14.7,
- * R8.5; an additive type, event schema 0.1.0 unchanged).
+ * `SERVICE_REQUEST_RELEASED` (released in v0.9.0: DISPATCH.md §4 and §14.7, R8.5; an
+ * additive type, event schema 0.1.0 unchanged).
  *
  * The catalog is not permanently closed, but adding a type is an additive spec
  * change reconciled across the owning domain spec, this catalog, the data model,

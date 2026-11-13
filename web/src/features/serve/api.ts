@@ -81,13 +81,18 @@ export function useAcceptRequest() {
   });
 }
 
+/** Notifications the Alerts card picks from, as many as before the server's default dropped to 20. */
+const ALERT_SOURCE_LIMIT = 50;
+
 /** GET /notifications for the Alerts card: the latest few, in plain words. */
 export function useAlerts() {
   const token = useSessionToken();
   return useQuery({
     queryKey: queryKeys.notifications.list({ surface: 'serve-alerts' }),
     queryFn: async () => {
-      const { data } = await api.GET('/api/v0/notifications');
+      const { data } = await api.GET('/api/v0/notifications', {
+        params: { query: { limit: ALERT_SOURCE_LIMIT } },
+      });
       return latestAlerts(requireData(data, 'alerts').notifications);
     },
     refetchInterval: BOARD_REFRESH_MS,

@@ -245,14 +245,19 @@ export function useRemoveTrustedContact() {
   });
 }
 
-/** GET /notifications (the server's default page of 50). The screen sorts newest first. */
+/** The inbox's page size from before the server's default dropped to 20 (API.md §5). */
+const NOTIFICATION_LIMIT = 50;
+
+/** GET /notifications, the latest NOTIFICATION_LIMIT. The screen sorts newest first. */
 export function useNotifications() {
   const token = useSessionToken();
   return useQuery({
     queryKey: queryKeys.notifications.list(),
     enabled: token !== null,
     queryFn: async () => {
-      const { data } = await api.GET('/api/v0/notifications');
+      const { data } = await api.GET('/api/v0/notifications', {
+        params: { query: { limit: NOTIFICATION_LIMIT } },
+      });
       return requireData(data, 'notifications').notifications;
     },
   });
