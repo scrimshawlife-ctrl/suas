@@ -3,5004 +3,6302 @@
  */
 
 export interface paths {
-    "/api/v0/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Liveness probe */
-        get: operations["getHealth"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/auth/challenges": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start an authentication challenge */
-        post: operations["createAuthChallenge"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/auth/challenges/commands/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Verify an authentication challenge */
-        post: operations["verifyAuthChallenge"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/auth/mfa/challenges": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start an MFA challenge */
-        post: operations["createMfaChallenge"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/auth/mfa/challenges/commands/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Verify an MFA challenge */
-        post: operations["verifyMfaChallenge"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/auth/sessions/commands/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Revoke the current session */
-        post: operations["logoutSession"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/check-ins": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the caller's unfinished Check-In that can still be resumed
-         * @description CHECKINS.md §4.2 (v0.9.0, R8.10, D-059): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.
-         */
-        get: operations["listCheckIns"];
-        put?: never;
-        /** Start a Check-In on the published questionnaire */
-        post: operations["startCheckIn"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/check-ins/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read an owned Check-In */
-        get: operations["getCheckIn"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/check-ins/{id}/responses": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Save one closed-choice answer */
-        post: operations["saveCheckInResponse"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/check-ins/{id}/commands/complete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Complete a Check-In and request scoring */
-        post: operations["completeCheckIn"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Open or reuse the authenticated Veteran's non-closed Support Case */
-        post: operations["openCase"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read a case visible to the actor */
-        get: operations["getCase"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/resources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List active tenant resources */
-        get: operations["listResources"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/resources/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read one active tenant resource */
-        get: operations["getResource"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/immediate-resources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Immediate-resource / approved safety-copy slot (public: signed out and unverified people can read it) */
-        get: operations["getImmediateResources"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/build-info": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Build provenance (SUAS-admin + MFA) */
-        get: operations["getAdminBuildInfo"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/adapter-catalog": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List adapter catalog entries */
-        get: operations["getAdminAdapterCatalog"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/adapter-configurations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List adapter configurations
-         * @description Reads only; it writes no rows. tenant_id must be the caller's own tenant, or the answer is 404 (API.md §4).
-         */
-        get: operations["getAdminAdapterConfigurations"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/adapter-configurations/commands/enable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Enable an adapter configuration */
-        post: operations["enableAdminAdapterConfiguration"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/adapter-configurations/commands/disable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Disable an adapter configuration */
-        post: operations["disableAdminAdapterConfiguration"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/adapter-configurations/commands/set-routing": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Set adapter routing preference */
-        post: operations["setAdminAdapterRouting"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/veterans/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Veteran self status / enrollment projection */
-        get: operations["getVeteransMe"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/consents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List consent grants for the authenticated veteran */
-        get: operations["listConsents"];
-        put?: never;
-        /** Grant consent (veteran self) */
-        post: operations["grantConsent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{caseId}/service-requests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List service requests for a visible case */
-        get: operations["listCaseServiceRequests"];
-        put?: never;
-        /** Create a service request under the caller's own case */
-        post: operations["createCaseServiceRequest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/service-requests/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read a request (its requester or the person who accepted it only) */
-        get: operations["getServiceRequest"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/trusted-contacts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List the veteran trusted circle */
-        get: operations["listTrustedContacts"];
-        put?: never;
-        /**
-         * Invite a trusted contact
-         * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). When the invite has an email, one EMAIL notification (reason trusted_contact_invited, template invite@1) goes to that address after the commit; it names nobody (TRUSTED_CIRCLE.md §3.2; R9.4, contributor proposal, specs #72, not released).
-         */
-        post: operations["inviteTrustedContact"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/trusted-contacts/{id}/commands/remove": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Remove an owned trusted contact */
-        post: operations["removeTrustedContact"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/consents/{id}/commands/revoke": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Revoke an owned consent grant */
-        post: operations["revokeConsent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/service-requests/{id}/commands/edit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Edit a service request nobody has accepted yet
-         * @description Requester only (404 for anyone who is neither requester nor accepter). Category never changes. Idempotency-Key is required.
-         */
-        post: operations["editServiceRequest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/service-requests/{id}/commands/{command}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Execute a released service-request command
-         * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4). RELEASE (DISPATCH.md §14.7; R8.5, D-059, D-061, released in 0.9.0) is the accepter's command: it needs a reason (400 VALIDATION_FAILED without one) and moves an ACCEPTED request back to SUBMITTED. The holder and accept time are cleared, the chat thread is closed, the request returns to the open list, and the requester gets an in-app notice. The same helper may accept it again; the next accept opens a new chat thread.
-         */
-        post: operations["executeServiceRequestCommand"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{caseId}/follow-ups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List open follow-ups for a visible case */
-        get: operations["listCaseFollowUps"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/follow-ups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create a follow-up (person who accepted) */
-        post: operations["createFollowUp"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/follow-ups/{id}/commands/complete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Complete a follow-up */
-        post: operations["completeFollowUp"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/notifications": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List notifications for the authenticated recipient */
-        get: operations["listNotifications"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/notifications/preferences": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Set a channel preference (never grants consent) */
-        put: operations["putNotificationPreferences"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/trusted-contacts/{id}/commands/accept": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Accept a trusted-contact invite (invitee)
-         * @description Only a signed-in person whose enrolled email or phone is the invited address can accept; anyone else gets 404 (TRUSTED_CIRCLE.md §3.3; SECURITY.md §5). Acceptance is audited and grants no consent (§3.4).
-         */
-        post: operations["acceptTrustedContact"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{caseId}/contact-attempts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List contact attempts for a case (person who accepted) */
-        get: operations["listContactAttempts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{caseId}/commands/log-contact-attempt": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Log a contact attempt (person who accepted) */
-        post: operations["logContactAttempt"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{caseId}/commands/complete-contact": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Complete a contact with a settled outcome */
-        post: operations["completeContact"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/commands/resolve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Resolve a Case with required Settlement content */
-        post: operations["resolveCaseWithSettlement"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/settlements": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Settlements for a Case (actor-bounded visibility) */
-        get: operations["listCaseSettlements"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/settlements/{settlement_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read one Settlement (actor-bounded visibility) */
-        get: operations["getCaseSettlement"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/commands/triage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Triage an OPEN case */
-        post: operations["triageCase"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/commands/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Activate an ASSIGNED case (person who accepted) */
-        post: operations["activateCase"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/commands/move-to-followup": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Move ACTIVE case to FOLLOWUP (reason required) */
-        post: operations["moveCaseToFollowup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/commands/resume-active": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Resume FOLLOWUP case to ACTIVE */
-        post: operations["resumeCaseActive"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/commands/escalate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Escalate ASSIGNED/ACTIVE/FOLLOWUP case (reason required) */
-        post: operations["escalateCase"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/commands/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Close a RESOLVED case */
-        post: operations["closeCase"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/cases/{id}/commands/reopen": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reopen a CLOSED case (org admin; reason required)
-         * @description Answers 409 ILLEGAL_TRANSITION when the Veteran already has a newer current case (a case that is not RESOLVED or CLOSED): a Veteran has at most one at a time, and nothing is merged.
-         */
-        post: operations["reopenCase"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/service-requests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List service requests: open ones the caller can accept (ownership=open), ones the caller accepted (ownership=mine), or the caller own requests (ownership=requested) */
-        get: operations["listServiceRequests"];
-        put?: never;
-        /**
-         * Plain request form: create a Service Request
-         * @description Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
-         */
-        post: operations["createServiceRequestForm"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/service-requests/{id}/accept": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Accept an open service request (first accept wins)
-         * @description Accepts this one Service Request: records the caller as its holder and moves it to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). Other requests of the same Veteran stay open to other people. A first accept on an OPEN case also moves the case to ASSIGNED. First accept wins: a second person gets 409 ALREADY_CLAIMED. The accepter then runs START, FULFILL; the requester runs CONFIRM.
-         */
-        post: operations["acceptServiceRequest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/veterans/me/county": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Set or change the signed-in person's county */
-        put: operations["putVeteransMeCounty"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/veterans/me/id-verification": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** ID scan + selfie status; a pending check is resolved with the verification port */
-        get: operations["getVeteransMeIdVerification"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/veterans/me/id-verification/commands/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start an ID scan + selfie check (idempotent: reuses a pending check, leaves a verified standing alone) */
-        post: operations["postVeteransMeIdVerificationStart"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/intake/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Whether the Intake Assistant is available
-         * @description Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
-         */
-        get: operations["getIntakeStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/intake/drafts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Send the first intake message
-         * @description Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
-         */
-        post: operations["createIntakeDraft"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/intake/drafts/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read one of your drafts
-         * @description Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
-         */
-        get: operations["getIntakeDraft"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Edit a draft
-         * @description The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
-         */
-        patch: operations["updateIntakeDraft"];
-        trace?: never;
-    };
-    "/api/v0/intake/drafts/{id}/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Send a follow-up intake message
-         * @description Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise).
-         */
-        post: operations["addIntakeMessage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/intake/drafts/{id}/submit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Submit a draft as a Service Request
-         * @description The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran who passed the ID scan and selfie check (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
-         */
-        post: operations["submitIntakeDraft"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/resource-drafts/{id}/commands/edit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Edit a pending Resource Draft
-         * @description SUAS administrator (MFA-elevated session) only. Changes any subset of the draft fields; null clears an optional field. A draft that is already published or discarded returns 409 ILLEGAL_TRANSITION.
-         */
-        post: operations["editAdminResourceDraft"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/resource-drafts/commands/extract": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Extract Resource Drafts from pasted source text
-         * @description SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans. Requires Idempotency-Key: a retry with the same key returns the drafts the first request created (re-read, so their current state) with replayed true, and creates no second set or model call (API.md §7).
-         */
-        post: operations["extractAdminResourceDrafts"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/resource-drafts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Resource Drafts
-         * @description SUAS administrator (MFA-elevated session) only. Newest first, bounded by limit and cursor. `builder.available` is false, with a plain message, when the catalog builder cannot run; Resources can still be created without it.
-         */
-        get: operations["getAdminResourceDrafts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/resource-drafts/{id}/commands/discard": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Discard a pending Resource Draft
-         * @description SUAS administrator (MFA-elevated session) only. Marks the draft REJECTED and keeps it on record; no Resource is created. Audited.
-         */
-        post: operations["discardAdminResourceDraft"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/resource-drafts/{id}/commands/publish": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Publish a pending Resource Draft
-         * @description SUAS administrator (MFA-elevated session) only. Creates the Resource, records the verification against the draft's source link, and activates it, in one transaction. The publish is the verification act; the model never sets last_verified_at. Audited.
-         */
-        post: operations["publishAdminResourceDraft"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/resource-drafts/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read one Resource Draft
-         * @description SUAS administrator (MFA-elevated session) only.
-         */
-        get: operations["getAdminResourceDraft"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/service-requests/{id}/chat/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List chat messages for a Service Request, newest first (requester and the person who accepted only) */
-        get: operations["listChatMessages"];
-        put?: never;
-        /** Send a text message (idempotent; requester and the person who accepted only) */
-        post: operations["sendChatMessage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/chat/connect-tickets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Issue a one-time WebSocket connect ticket (valid about 60 seconds, single use)
-         * @description Open the WebSocket at websocket_url with ?ticket=<ticket>. The session credential is never sent in the URL. An expired, used or unknown ticket is refused at connect.
-         */
-        post: operations["issueChatConnectTicket"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/chat/threads": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List the caller's chat threads */
-        get: operations["listChatThreads"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/veterans/me/profile": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Set the display name other people see
-         * @description Signed-in only; no ID scan needed. Guidance for the form: "First name and last initial, like Marcus T." Only length and emptiness are validated.
-         */
-        put: operations["putVeteransMeProfile"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/consent-templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List consent template versions
-         * @description SUAS administrator (MFA-elevated session) only. Every version of every template key, newest version first (CONSENT.md §6; ADMIN.md §2). R9.3 (contributor proposal, specs #72, not released).
-         */
-        get: operations["listAdminConsentTemplates"];
-        put?: never;
-        /**
-         * Create the next DRAFT version of a consent template
-         * @description SUAS administrator (MFA-elevated session) only. The server numbers the version (1 for a new key). Audited (CONSENT_TEMPLATE_VERSION_CREATED, key and version only). A retry with the same Idempotency-Key returns the version it made (200, replayed true); a concurrent create of the same key is 409 STALE_STATE. R9.3 (contributor proposal, specs #72, not released).
-         */
-        post: operations["createAdminConsentTemplateVersion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/admin/consent-templates/{version}/commands/publish": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Publish a DRAFT consent template version
-         * @description SUAS administrator (MFA-elevated session) only; one admin publishes (R9.3 owner answer). The key's earlier PUBLISHED version becomes SUPERSEDED in the same transaction, so new grants must cite the new version. Audited (CONSENT_TEMPLATE_PUBLISHED). A version that is not a DRAFT is 409 ILLEGAL_TRANSITION. R9.3 (contributor proposal, specs #72, not released).
-         */
-        post: operations["publishAdminConsentTemplateVersion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/consent-templates/published": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read the current published version of a consent template
-         * @description Any signed-in person. `purpose` is the template key, for example `red-alert-trusted-contact`; the answer is the version a new grant must cite. 404 when none is published. R9.3 (contributor proposal, specs #72, not released).
-         */
-        get: operations["getPublishedConsentTemplate"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/trusted-contacts/invitations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List invites waiting for the signed-in person
-         * @description Invites still INVITED to the caller's enrolled email, with the inviting Veteran's display name and the relationship label only; invites do not expire. Accept with POST /trusted-contacts/{id}/commands/accept. R9.4 (contributor proposal, specs #72, not released).
-         */
-        get: operations["listTrustedContactInvitations"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
+  '/api/v0/health': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Liveness probe */
+    get: operations['getHealth'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/auth/challenges': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start an authentication challenge */
+    post: operations['createAuthChallenge'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/auth/challenges/commands/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Verify an authentication challenge */
+    post: operations['verifyAuthChallenge'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/auth/mfa/challenges': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start an MFA challenge */
+    post: operations['createMfaChallenge'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/auth/mfa/challenges/commands/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Verify an MFA challenge */
+    post: operations['verifyMfaChallenge'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/auth/sessions/commands/logout': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Revoke the current session */
+    post: operations['logoutSession'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/check-ins': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the caller's unfinished Check-In that can still be resumed
+     * @description CHECKINS.md §4.2 (v0.9.0, R8.10, D-059): only the caller's own STARTED or IN_PROGRESS Check-In that started within the last 24 hours, newest first. Older unfinished Check-Ins are marked ABANDONED and stay stored.
+     */
+    get: operations['listCheckIns'];
+    put?: never;
+    /** Start a Check-In on the published questionnaire */
+    post: operations['startCheckIn'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/check-ins/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read an owned Check-In */
+    get: operations['getCheckIn'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/check-ins/{id}/responses': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Save one closed-choice answer */
+    post: operations['saveCheckInResponse'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/check-ins/{id}/commands/complete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Complete a Check-In and request scoring */
+    post: operations['completeCheckIn'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Open or reuse the authenticated Veteran's non-closed Support Case */
+    post: operations['openCase'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read a case visible to the actor */
+    get: operations['getCase'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/resources': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List active tenant resources */
+    get: operations['listResources'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/resources/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one active tenant resource */
+    get: operations['getResource'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/immediate-resources': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Immediate-resource / approved safety-copy slot (public: signed out and unverified people can read it) */
+    get: operations['getImmediateResources'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/build-info': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Build provenance (SUAS-admin + MFA) */
+    get: operations['getAdminBuildInfo'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/adapter-catalog': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List adapter catalog entries */
+    get: operations['getAdminAdapterCatalog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/adapter-configurations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List adapter configurations
+     * @description Reads only; it writes no rows. tenant_id must be the caller's own tenant, or the answer is 404 (API.md §4).
+     */
+    get: operations['getAdminAdapterConfigurations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/adapter-configurations/commands/enable': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Enable an adapter configuration */
+    post: operations['enableAdminAdapterConfiguration'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/adapter-configurations/commands/disable': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Disable an adapter configuration */
+    post: operations['disableAdminAdapterConfiguration'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/adapter-configurations/commands/set-routing': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Set adapter routing preference */
+    post: operations['setAdminAdapterRouting'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Veteran self status / enrollment projection */
+    get: operations['getVeteransMe'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/consents': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List consent grants for the authenticated veteran */
+    get: operations['listConsents'];
+    put?: never;
+    /** Grant consent (veteran self) */
+    post: operations['grantConsent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{caseId}/service-requests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List service requests for a visible case */
+    get: operations['listCaseServiceRequests'];
+    put?: never;
+    /** Create a service request under the caller's own case */
+    post: operations['createCaseServiceRequest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/service-requests/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read a request (its requester or the person who accepted it only) */
+    get: operations['getServiceRequest'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/trusted-contacts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the veteran trusted circle */
+    get: operations['listTrustedContacts'];
+    put?: never;
+    /**
+     * Invite a trusted contact
+     * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). When the invite has an email, one EMAIL notification (reason trusted_contact_invited, template invite@1) goes to that address after the commit; it names nobody (TRUSTED_CIRCLE.md §3.2; R9.4, contributor proposal, specs #72, not released).
+     */
+    post: operations['inviteTrustedContact'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/trusted-contacts/{id}/commands/remove': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Remove an owned trusted contact */
+    post: operations['removeTrustedContact'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/consents/{id}/commands/revoke': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Revoke an owned consent grant */
+    post: operations['revokeConsent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/service-requests/{id}/commands/edit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Edit a service request nobody has accepted yet
+     * @description Requester only (404 for anyone who is neither requester nor accepter). Category never changes. Idempotency-Key is required.
+     */
+    post: operations['editServiceRequest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/service-requests/{id}/commands/{command}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Execute a released service-request command
+     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4). RELEASE (DISPATCH.md §14.7; R8.5, D-059, D-061, released in 0.9.0) is the accepter's command: it needs a reason (400 VALIDATION_FAILED without one) and moves an ACCEPTED request back to SUBMITTED. The holder and accept time are cleared, the chat thread is closed, the request returns to the open list, and the requester gets an in-app notice. The same helper may accept it again; the next accept opens a new chat thread.
+     */
+    post: operations['executeServiceRequestCommand'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{caseId}/follow-ups': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List open follow-ups for a visible case */
+    get: operations['listCaseFollowUps'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/follow-ups': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a follow-up (person who accepted) */
+    post: operations['createFollowUp'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/follow-ups/{id}/commands/complete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Complete a follow-up */
+    post: operations['completeFollowUp'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/notifications': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List notifications for the authenticated recipient */
+    get: operations['listNotifications'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/notifications/preferences': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Set a channel preference (never grants consent) */
+    put: operations['putNotificationPreferences'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/trusted-contacts/{id}/commands/accept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Accept a trusted-contact invite (invitee)
+     * @description Only a signed-in person whose enrolled email or phone is the invited address can accept; anyone else gets 404 (TRUSTED_CIRCLE.md §3.3; SECURITY.md §5). Acceptance is audited and grants no consent (§3.4).
+     */
+    post: operations['acceptTrustedContact'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{caseId}/contact-attempts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List contact attempts for a case (person who accepted) */
+    get: operations['listContactAttempts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{caseId}/commands/log-contact-attempt': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Log a contact attempt (person who accepted) */
+    post: operations['logContactAttempt'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{caseId}/commands/complete-contact': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Complete a contact with a settled outcome */
+    post: operations['completeContact'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/commands/resolve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Resolve a Case with required Settlement content */
+    post: operations['resolveCaseWithSettlement'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/settlements': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Settlements for a Case (actor-bounded visibility) */
+    get: operations['listCaseSettlements'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/settlements/{settlement_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one Settlement (actor-bounded visibility) */
+    get: operations['getCaseSettlement'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/commands/triage': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Triage an OPEN case */
+    post: operations['triageCase'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/commands/activate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Activate an ASSIGNED case (person who accepted) */
+    post: operations['activateCase'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/commands/move-to-followup': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Move ACTIVE case to FOLLOWUP (reason required) */
+    post: operations['moveCaseToFollowup'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/commands/resume-active': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Resume FOLLOWUP case to ACTIVE */
+    post: operations['resumeCaseActive'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/commands/escalate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Escalate ASSIGNED/ACTIVE/FOLLOWUP case (reason required) */
+    post: operations['escalateCase'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/commands/close': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Close a RESOLVED case */
+    post: operations['closeCase'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/cases/{id}/commands/reopen': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reopen a CLOSED case (org admin; reason required)
+     * @description Answers 409 ILLEGAL_TRANSITION when the Veteran already has a newer current case (a case that is not RESOLVED or CLOSED): a Veteran has at most one at a time, and nothing is merged.
+     */
+    post: operations['reopenCase'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/service-requests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List service requests: open ones the caller can accept (ownership=open), ones the caller accepted (ownership=mine), or the caller own requests (ownership=requested) */
+    get: operations['listServiceRequests'];
+    put?: never;
+    /**
+     * Plain request form: create a Service Request
+     * @description Same result as submitting a draft, with no assistant. Shown whenever the assistant is unavailable. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
+     */
+    post: operations['createServiceRequestForm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/service-requests/{id}/accept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Accept an open service request (first accept wins)
+     * @description Accepts this one Service Request: records the caller as its holder and moves it to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). Other requests of the same Veteran stay open to other people. A first accept on an OPEN case also moves the case to ASSIGNED. First accept wins: a second person gets 409 ALREADY_CLAIMED. The accepter then runs START, FULFILL; the requester runs CONFIRM.
+     */
+    post: operations['acceptServiceRequest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/county': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Set or change the signed-in person's county */
+    put: operations['putVeteransMeCounty'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/verification/va/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm Veteran status with VA (one attempt; suas-specs #72 R9.1)
+     * @description Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values; the attempt row keeps the result, the notice version, a keyed request fingerprint and, when VA answered, a keyed identity hash (HMAC under SUAS_FINGERPRINT_KEY, with its key id). Any signed-in person may call it. The body must carry noticeVersion va-notice-v1, the pre-call notice the person saw (400 VA_NOTICE_VERSION_REQUIRED otherwise). The typed first and last name must match the account display name ("First Last" or "First L.", ignoring case, accents and punctuation); otherwise 409 VA_NAME_MISMATCH with no VA call and no attempt counted. A VA VERIFIED standing is returned with no VA call; a REVOKED standing is refused (403). At most 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, or an identity conflict) per person in the last 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After); UNAVAILABLE results (outages and VA 400s) never count. A backstop cap of 20 VA calls per person in the last 24 hours counts the same rows (same 429). The same Idempotency-Key within 24 hours replays an answer VA gave; after an UNAVAILABLE result, or after a fingerprint key rotation, it is a new attempt. No database lock is held during the VA call; a second attempt while one is in flight gets 409 IDEMPOTENCY_CONFLICT. NOT_CONFIRMED is not a finding that the person never served. UNAVAILABLE means VA did not answer: failure_class REQUEST_INVALID (VA refused the request, e.g. HTTP 400) means the person may correct the details and retry; other classes mean try again later. Neither UNAVAILABLE nor NOT_CONFIRMED blocks a request: the person may self-attest instead.
+     */
+    post: operations['postVeteransMeVerificationVaConfirm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/verification/commands/self-attest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Self-attest Veteran status (D-016 fallback; suas-specs #72 R9.1)
+     * @description Writes a SELF_ATTESTATION VERIFIED row with source SUAS, which opens the request gate. No VA call, no attempt limit, and available whatever the VA confirmation mode. A VERIFIED standing of any method is returned with no new row; a REVOKED standing is refused (403). The body is empty or {}.
+     */
+    post: operations['postVeteransMeVerificationSelfAttest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/intake/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Whether the Intake Assistant is available
+     * @description Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
+     */
+    get: operations['getIntakeStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/intake/drafts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send the first intake message
+     * @description Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
+     */
+    post: operations['createIntakeDraft'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/intake/drafts/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read one of your drafts
+     * @description Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
+     */
+    get: operations['getIntakeDraft'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Edit a draft
+     * @description The Veteran changes the reviewed fields. Only an open draft can change. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
+     */
+    patch: operations['updateIntakeDraft'];
+    trace?: never;
+  };
+  '/api/v0/intake/drafts/{id}/messages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a follow-up intake message
+     * @description Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
+     */
+    post: operations['addIntakeMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/intake/drafts/{id}/submit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Submit a draft as a Service Request
+     * @description The only way a draft becomes a Service Request. Opens the Support Case if needed, creates the request and submits it. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise). Requires a county (422 COUNTY_REQUIRED).
+     */
+    post: operations['submitIntakeDraft'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/resource-drafts/{id}/commands/edit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Edit a pending Resource Draft
+     * @description SUAS administrator (MFA-elevated session) only. Changes any subset of the draft fields; null clears an optional field. A draft that is already published or discarded returns 409 ILLEGAL_TRANSITION.
+     */
+    post: operations['editAdminResourceDraft'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/resource-drafts/commands/extract': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Extract Resource Drafts from pasted source text
+     * @description SUAS administrator (MFA-elevated session) only. Sends the pasted text to the model and stores zero or more drafts with the source link. Output that fails validation creates no draft and returns 502 CATALOG_EXTRACTION_FAILED. Returns 503 CATALOG_BUILDER_UNAVAILABLE when no model is configured. Nothing here creates a Resource or reaches Veterans. Requires Idempotency-Key: a retry with the same key returns the drafts the first request created (re-read, so their current state) with replayed true, and creates no second set or model call (API.md §7).
+     */
+    post: operations['extractAdminResourceDrafts'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/resource-drafts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Resource Drafts
+     * @description SUAS administrator (MFA-elevated session) only. Newest first, bounded by limit and cursor. `builder.available` is false, with a plain message, when the catalog builder cannot run; Resources can still be created without it.
+     */
+    get: operations['getAdminResourceDrafts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/resource-drafts/{id}/commands/discard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Discard a pending Resource Draft
+     * @description SUAS administrator (MFA-elevated session) only. Marks the draft REJECTED and keeps it on record; no Resource is created. Audited.
+     */
+    post: operations['discardAdminResourceDraft'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/resource-drafts/{id}/commands/publish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Publish a pending Resource Draft
+     * @description SUAS administrator (MFA-elevated session) only. Creates the Resource, records the verification against the draft's source link, and activates it, in one transaction. The publish is the verification act; the model never sets last_verified_at. Audited.
+     */
+    post: operations['publishAdminResourceDraft'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/resource-drafts/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read one Resource Draft
+     * @description SUAS administrator (MFA-elevated session) only.
+     */
+    get: operations['getAdminResourceDraft'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/service-requests/{id}/chat/messages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List chat messages for a Service Request, newest first (requester and the person who accepted only) */
+    get: operations['listChatMessages'];
+    put?: never;
+    /** Send a text message (idempotent; requester and the person who accepted only) */
+    post: operations['sendChatMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/chat/connect-tickets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Issue a one-time WebSocket connect ticket (valid about 60 seconds, single use)
+     * @description Open the WebSocket at websocket_url with ?ticket=<ticket>. The session credential is never sent in the URL. An expired, used or unknown ticket is refused at connect.
+     */
+    post: operations['issueChatConnectTicket'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/chat/threads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the caller's chat threads */
+    get: operations['listChatThreads'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/profile': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set the display name other people see
+     * @description Signed-in only; no Veteran Confirmation needed. Guidance for the form: "First name and last initial, like Marcus T." Only length and emptiness are validated.
+     */
+    put: operations['putVeteransMeProfile'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/verification/licence': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Whether the licence review path is offered, and the newest review (suas-specs R10.1, proposal)
+     * @description Any signed-in person. The path is offered only after VA answered NOT_CONFIRMED (never after UNAVAILABLE, so never after a VA 400), beside self-attestation, never instead of it.
+     */
+    get: operations['getVeteransMeVerificationLicence'];
+    put?: never;
+    /**
+     * Send licence photos and a selfie for review (suas-specs R10.1, proposal)
+     * @description The server checks, in order: signed in (before the body is read), the reader is open (503), L1.4 eligibility (403), notice_version (400), no open review (409), the limit (429), then the image rules (400). It stores the three re-encoded images, records a READING review bound to the person's newest NOT_CONFIRMED VA attempt and queues the read. No Idempotency-Key: a second send while one is open gets 409 LICENCE_REVIEW_OPEN. Only reader-answered submissions count toward the limit.
+     */
+    post: operations['postVeteransMeVerificationLicence'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/veterans/me/verification/licence/{review_id}/commands/dispute': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Dispute an ALREADY_USED decline with new photos (suas-specs R10.1 L7.3, proposal)
+     * @description Opens a new review marked as a dispute of this one, bound to the same VA attempt; the earlier images were deleted at the decision. It skips the L1.4 offer but follows the notice, limits and read. The queue routes it away from the admins who approved or confirmed the conflicting review.
+     */
+    post: operations['postVeteransMeVerificationLicenceDispute'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Licence reviews waiting for a decision, oldest first (suas-specs R10.1, proposal)
+     * @description AWAITING_REVIEW and AWAITING_CONFIRMATION only, without the admin's own submissions, reviews they recused from, or disputes of an approval they made or confirmed. Age, state and a dispute marker only, never names. Requires the SUAS Admin role and MFA elevation.
+     */
+    get: operations['getAdminLicenceReviews'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One licence review's page (suas-specs R10.1, proposal)
+     * @description Requires the SUAS Admin role and MFA elevation.
+     */
+    get: operations['getAdminLicenceReview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/images/{side}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One stored licence image or the selfie, inline (suas-specs R10.1, proposal)
+     * @description Served inline with Cache-Control: no-store, private; there is no download. Requires the SUAS Admin role and MFA elevation.
+     */
+    get: operations['getAdminLicenceReviewImage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * First approval of a licence review (suas-specs R10.1 L5.4, proposal)
+     * @description AWAITING_REVIEW to AWAITING_CONFIRMATION, recording the admin as approved_by. No VERIFIED row yet: a second, different admin must confirm. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewApprove'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Second admin's confirmation (suas-specs R10.1 L5.5, proposal)
+     * @description AWAITING_CONFIRMATION to APPROVED by an admin other than approved_by: writes a MANUAL_REVIEW VERIFIED row (source SUAS) that opens the request gate, and deletes the images and the reading. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewConfirm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/decline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Decline a licence review (suas-specs R10.1 L5.7, proposal)
+     * @description From AWAITING_REVIEW or AWAITING_CONFIRMATION, by one admin. Deletes the images and the reading and clears the fingerprint. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewDecline'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/recuse': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Recuse from a licence review (suas-specs R10.1 L5.6, proposal)
+     * @description Hides the review from this admin and refuses their commands on it. Repeating it changes nothing. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewRecuse'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/revoke': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Revoke a licence approval (suas-specs R10.1 L7.1, proposal)
+     * @description APPROVED to REVOKED, freeing the fingerprint. FRAUD writes a REVOKED row, which outranks every method, blocks self-attestation and releases the VA identity. REVIEW_ERROR writes a newer MANUAL_REVIEW NOT_CONFIRMED row, so the approval stops opening the gate without barring the person. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewRevoke'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/consent-templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List consent template versions
+     * @description SUAS administrator (MFA-elevated session) only. Every version of every template key, newest version first (CONSENT.md §6; ADMIN.md §2). R9.3 (contributor proposal, specs #72, not released).
+     */
+    get: operations['listAdminConsentTemplates'];
+    put?: never;
+    /**
+     * Create the next DRAFT version of a consent template
+     * @description SUAS administrator (MFA-elevated session) only. The server numbers the version (1 for a new key). Audited (CONSENT_TEMPLATE_VERSION_CREATED, key and version only). A retry with the same Idempotency-Key returns the version it made (200, replayed true); a concurrent create of the same key is 409 STALE_STATE. R9.3 (contributor proposal, specs #72, not released).
+     */
+    post: operations['createAdminConsentTemplateVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/consent-templates/{version}/commands/publish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Publish a DRAFT consent template version
+     * @description SUAS administrator (MFA-elevated session) only; one admin publishes (R9.3 owner answer). The key's earlier PUBLISHED version becomes SUPERSEDED in the same transaction, so new grants must cite the new version. Audited (CONSENT_TEMPLATE_PUBLISHED). A version that is not a DRAFT is 409 ILLEGAL_TRANSITION. R9.3 (contributor proposal, specs #72, not released).
+     */
+    post: operations['publishAdminConsentTemplateVersion'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/consent-templates/published': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read the current published version of a consent template
+     * @description Any signed-in person. `purpose` is the template key, for example `red-alert-trusted-contact`; the answer is the version a new grant must cite. 404 when none is published. R9.3 (contributor proposal, specs #72, not released).
+     */
+    get: operations['getPublishedConsentTemplate'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/trusted-contacts/invitations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List invites waiting for the signed-in person
+     * @description Invites still INVITED to the caller's enrolled email, with the inviting Veteran's display name and the relationship label only; invites do not expire. Accept with POST /trusted-contacts/{id}/commands/accept. R9.4 (contributor proposal, specs #72, not released).
+     */
+    get: operations['listTrustedContactInvitations'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        ErrorBody: {
-            error: {
-                code: string;
-                message: string;
-                /** @description Optional machine-readable detail. A 400 VALIDATION_FAILED from schema validation carries issues: [{ path, code, message }]. */
-                details?: {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        CatalogResource: {
-            /** Format: uuid */
-            resource_id: string;
-            service_name: string;
-            /** @enum {string} */
-            category: "FOOD" | "TRANSPORTATION" | "SHELTER" | "PEER_SUPPORT";
-            counties: string[];
-            hours: string | null;
-            cost: string | null;
-            contact_method: string | null;
-            /** @enum {string|null} */
-            contact_method_kind: "PHONE" | "EMAIL" | "URL" | "FREEFORM" | null;
-            /** @description Up to three contact methods, in order. The first is mirrored in contact_method. */
-            contacts: {
-                /** @enum {string} */
-                kind: "PHONE" | "EMAIL" | "URL" | "FREEFORM";
-                value: string;
-            }[];
-            area: string | null;
-            /**
-             * Format: date-time
-             * @description The stored last_verified_at under a client-facing name; the publish date until a re-verify command exists.
-             */
-            verified_at: string | null;
-            /** @enum {string} */
-            freshness: "FRESH" | "AGING" | "STALE" | "UNVERIFIED";
-            stale_warning: boolean;
-        };
-        /** @description A Resource Draft. It has no verification fields and is never shown to Veterans. */
-        ResourceDraft: {
-            /** Format: uuid */
-            resource_draft_id: string;
-            /** @enum {string} */
-            status: "DRAFT" | "PUBLISHED" | "REJECTED";
-            source_link: string;
-            service_name: string;
-            /** @enum {string} */
-            category: "FOOD" | "TRANSPORTATION" | "SHELTER" | "PEER_SUPPORT";
-            counties: ("SANTA_CLARA" | "SAN_MATEO" | "ALAMEDA" | "SANTA_CRUZ" | "SAN_BENITO" | "MERCED" | "STANISLAUS")[];
-            eligibility: string | null;
-            hours: string | null;
-            contact_method: string | null;
-            /** @enum {string|null} */
-            contact_method_kind: "PHONE" | "EMAIL" | "URL" | "FREEFORM" | null;
-            /** @description Up to three contact methods, in order (RESOURCES.md §12.2; R8.8, D-059, released in 0.9.0). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
-            contacts: {
-                /** @enum {string} */
-                kind: "PHONE" | "EMAIL" | "URL" | "FREEFORM";
-                value: string;
-            }[];
-            area: string | null;
-            referral_method: string | null;
-            cost: string | null;
-            /** Format: uuid */
-            published_resource_id: string | null;
-            /** Format: uuid */
-            reviewed_by: string | null;
-            /** Format: date-time */
-            reviewed_at: string | null;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        ResourceDraftList: {
-            builder: {
-                available: boolean;
-                message: string | null;
-            };
-            drafts: components["schemas"]["ResourceDraft"][];
-            limit: number;
-            next_cursor: string | null;
-        };
-        ResourceDraftExtraction: {
-            drafts: components["schemas"]["ResourceDraft"][];
-            /** @description True when an earlier request with the same Idempotency-Key created these drafts. */
-            replayed: boolean;
-        };
-        ResourceDraftExtractRequest: {
-            source_text: string;
-            /** @description http or https URL of the pasted source; kept on every draft and used as the verification source on publish. */
-            source_link: string;
-        };
-        ResourceDraftEditRequest: {
-            service_name?: string;
-            /** @enum {string} */
-            category?: "FOOD" | "TRANSPORTATION" | "SHELTER" | "PEER_SUPPORT";
-            counties?: ("SANTA_CLARA" | "SAN_MATEO" | "ALAMEDA" | "SANTA_CRUZ" | "SAN_BENITO" | "MERCED" | "STANISLAUS")[];
-            eligibility?: string | null;
-            hours?: string | null;
-            contact_method?: string | null;
-            /** @enum {string|null} */
-            contact_method_kind?: "PHONE" | "EMAIL" | "URL" | "FREEFORM" | null;
-            /** @description Up to three contact methods, in order (RESOURCES.md §12.2; R8.8, D-059, released in 0.9.0). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
-            contacts?: {
-                /** @enum {string} */
-                kind: "PHONE" | "EMAIL" | "URL" | "FREEFORM";
-                value: string;
-            }[] | null;
-            area?: string | null;
-            referral_method?: string | null;
-            cost?: string | null;
-        };
-        ResourceDraftPublished: {
-            draft: components["schemas"]["ResourceDraft"];
-            /** Format: uuid */
-            resource_id: string;
-        };
-        ChatMessage: {
-            /** Format: uuid */
-            chat_message_id: string;
-            /** Format: uuid */
-            service_request_id: string;
-            /** Format: uuid */
-            sender_user_id: string;
-            body: string;
-            /** Format: date-time */
-            created_at: string;
-        };
-        /** @enum {string} */
-        ServiceCategory: "FOOD" | "TRANSPORTATION" | "SHELTER" | "PEER_SUPPORT";
-        /** @enum {string} */
-        ServiceCounty: "SANTA_CLARA" | "SAN_MATEO" | "ALAMEDA" | "SANTA_CRUZ" | "SAN_BENITO" | "MERCED" | "STANISLAUS";
-        /** @enum {string} */
-        ServiceRequestStatus: "CREATED" | "SUBMITTED" | "TRIAGED" | "MATCHING" | "ASSIGNED" | "ACCEPTED" | "IN_PROGRESS" | "FULFILLED" | "CONFIRMED" | "CLOSED" | "CANCELLED" | "DECLINED" | "EXPIRED" | "UNFULFILLABLE" | "ESCALATED";
-        /** @enum {string} */
-        CaseStatus: "OPEN" | "TRIAGED" | "ASSIGNED" | "ACTIVE" | "FOLLOWUP" | "RESOLVED" | "CLOSED";
-        /** @enum {string} */
-        SignalLevel: "GREEN" | "YELLOW" | "ORANGE" | "RED";
-        AuthChallengeRequest: {
-            /**
-             * Format: uuid
-             * @description Legacy filter; people do not choose an organization.
-             */
-            tenant_id?: string;
-            destination: string;
-            /** @enum {string} */
-            method: "MAGIC_LINK" | "EMAIL_OTP" | "PHONE_OTP";
-        };
-        AuthChallengeAccepted: {
-            /** @enum {string} */
-            status: "accepted";
-        };
-        AuthVerifyRequest: {
-            /** Format: uuid */
-            tenant_id?: string;
-            destination: string;
-            code: string;
-        };
-        AuthSession: {
-            session_credential: string;
-            /** Format: date-time */
-            expires_at: string;
-            mfa_elevated: boolean;
-        };
-        LogoutRequest: {
-            everywhere?: boolean;
-        };
-        MfaChallenge: {
-            challenge_id: string;
-            factor_type: string;
-        };
-        MfaVerifyRequest: {
-            challenge_id: string;
-            response: string;
-        };
-        MfaVerified: {
-            mfa_elevated: boolean;
-        };
-        IdVerification: {
-            /** @enum {string} */
-            method: "ID_SCAN_SELFIE";
-            status: string;
-            /** Format: date-time */
-            verified_at: string | null;
-        };
-        /** @description The current case of a Veteran: not RESOLVED or CLOSED. A Veteran whose case is resolved has none until they ask for help again, which opens a new case. */
-        OpenCaseSummary: {
-            /** Format: uuid */
-            case_id: string;
-            status: components["schemas"]["CaseStatus"];
-            priority_signal_level: components["schemas"]["SignalLevel"] | null;
-        };
-        /** @description The caller's newest open Service Request, of any category (FOOD, TRANSPORTATION, SHELTER or PEER_SUPPORT). */
-        ActiveQrf: {
-            /** Format: uuid */
-            service_request_id: string;
-            category: components["schemas"]["ServiceCategory"];
-            state: string;
-            headline: string;
-            cancellable: boolean;
-        };
-        CategoryCard: {
-            label: string;
-            /** @enum {string} */
-            disposition: "OPERATIONAL" | "INFORMATION_ONLY" | "COMING_SOON";
-            category: components["schemas"]["ServiceCategory"] | null;
-            note: string | null;
-        };
-        VeteranMe: {
-            /** Format: uuid */
-            user_id: string;
-            /** @enum {string} */
-            status: "INVITED" | "ACTIVE" | "SUSPENDED" | "REVOKED";
-            enrolled_channels: {
-                email: boolean;
-                phone: boolean;
-            };
-            county: components["schemas"]["ServiceCounty"] | null;
-            display_name: string | null;
-            /** @description True when the person holds the SUAS System Administrator grant. */
-            is_admin: boolean;
-            id_verification: components["schemas"]["IdVerification"];
-            open_case: components["schemas"]["OpenCaseSummary"] | null;
-            active_qrf: components["schemas"]["ActiveQrf"] | null;
-            categories: components["schemas"]["CategoryCard"][];
-        };
-        SetCountyRequest: {
-            county: components["schemas"]["ServiceCounty"];
-        };
-        SetCountyResponse: {
-            county: components["schemas"]["ServiceCounty"] | null;
-        };
-        SetProfileRequest: {
-            /** @description Trimmed, 1 to 40 characters. Guidance for the form: "First name and last initial, like Marcus T." */
-            display_name: string;
-        };
-        SetProfileResponse: {
-            display_name: string | null;
-        };
-        CheckIn: {
-            /** Format: uuid */
-            check_in_id: string;
-            questionnaire_version: string;
-            /** @enum {string} */
-            status: "STARTED" | "IN_PROGRESS" | "COMPLETED" | "ABANDONED" | "INCOMPLETE";
-            /**
-             * Format: date-time
-             * @description Server clock. The Check-In can be resumed for 24 hours from this time (CHECKINS.md §4.2, §4.4).
-             */
-            started_at: string;
-            /** Format: date-time */
-            completed_at: string | null;
-        };
-        CheckInQuestion: {
-            /** Format: uuid */
-            question_id: string;
-            question_key: string;
-            prompt: string;
-            dimension: string | null;
-            required: boolean;
-            options: {
-                /** Format: uuid */
-                answer_option_id: string;
-                option_key: string;
-                label: string;
-            }[];
-        };
-        CheckInWithQuestions: components["schemas"]["CheckIn"] & {
-            questions: components["schemas"]["CheckInQuestion"][];
-        };
-        CheckInDetail: components["schemas"]["CheckInWithQuestions"] & {
-            /** @description Questions that already have a saved answer, so a resumed Check-In can skip them. */
-            answered_question_ids: string[];
-        };
-        CheckInResponseRequest: {
-            /** Format: uuid */
-            question_id: string;
-            /** Format: uuid */
-            answer_option_id: string;
-        };
-        CheckInCompleted: components["schemas"]["CheckIn"] & {
-            incomplete: boolean;
-            already_completed: boolean;
-            support_signal: {
-                /** Format: uuid */
-                support_signal_id: string;
-                level: components["schemas"]["SignalLevel"];
-            } | null;
-            support_case: components["schemas"]["OpenCaseSummary"] | null;
-        };
-        SupportCase: {
-            /** Format: uuid */
-            case_id: string;
-            status: components["schemas"]["CaseStatus"];
-            priority_signal_level: components["schemas"]["SignalLevel"] | null;
-        };
-        OpenCaseResult: components["schemas"]["SupportCase"] & {
-            created: boolean;
-            replayed: boolean;
-        };
-        CaseCommandResult: components["schemas"]["SupportCase"] & {
-            replayed: boolean;
-        };
-        CaseCommandRequest: {
-            reason?: string;
-            expected_status?: components["schemas"]["CaseStatus"];
-        };
-        CaseCommandReasonRequest: {
-            reason: string;
-            expected_status?: components["schemas"]["CaseStatus"];
-        };
-        Settlement: {
-            /** Format: uuid */
-            settlement_id: string;
-            /** Format: uuid */
-            case_id: string;
-            resolution_cycle: number;
-            requested: {
-                [key: string]: unknown;
-            };
-            occurred: {
-                [key: string]: unknown;
-            };
-            fulfilled: {
-                [key: string]: unknown;
-            };
-            unresolved: {
-                [key: string]: unknown;
-            };
-            remaining_follow_ups: {
-                [key: string]: unknown;
-            }[];
-            /** Format: uuid */
-            authored_by: string;
-            /** Format: uuid */
-            accepted_by_user_id: string;
-            /** Format: uuid */
-            veteran_confirmed_by: string | null;
-            /** Format: date-time */
-            settled_at: string;
-        };
-        VeteranSettlement: {
-            /** Format: uuid */
-            settlement_id: string;
-            resolution_cycle: number;
-            requested: {
-                [key: string]: unknown;
-            };
-            fulfilled: {
-                [key: string]: unknown;
-            };
-            unresolved: {
-                [key: string]: unknown;
-            };
-            remaining_follow_ups: {
-                [key: string]: unknown;
-            }[];
-            /** Format: date-time */
-            settled_at: string;
-        };
-        /** @description The author, the accepter and the requester confirmation are derived on the server from the session (the person resolving must hold a request of the case); they are not accepted from the body. */
-        ResolveCaseRequest: {
-            requested: {
-                [key: string]: unknown;
-            };
-            occurred: {
-                [key: string]: unknown;
-            };
-            fulfilled: {
-                [key: string]: unknown;
-            };
-            unresolved: {
-                [key: string]: unknown;
-            };
-            /** @enum {string} */
-            expected_status?: "ACTIVE" | "FOLLOWUP";
-        };
-        ResolveCaseResult: components["schemas"]["SupportCase"] & {
-            /** Format: uuid */
-            settlement_id: string;
-            resolution_cycle: number;
-            settlement: components["schemas"]["Settlement"];
-            replayed: boolean;
-        };
-        ServiceRequestRef: {
-            /** Format: uuid */
-            service_request_id: string;
-            /** Format: uuid */
-            case_id: string;
-            category: components["schemas"]["ServiceCategory"];
-            status: components["schemas"]["ServiceRequestStatus"];
-        };
-        ServiceRequestCommandResult: components["schemas"]["ServiceRequestRef"] & {
-            replayed: boolean;
-        };
-        /** @description SUBMIT, CANCEL and CONFIRM belong to the requester; every other command belongs to the person who accepted (403 otherwise). */
-        ServiceRequestCommandRequest: {
-            reason?: string;
-            /** @description RETURN_FROM_ESCALATION only: the target status (TRIAGED or MATCHING). */
-            to?: components["schemas"]["ServiceRequestStatus"];
-            expected_status?: components["schemas"]["ServiceRequestStatus"];
-            /** Format: uuid */
-            grantee_id?: string;
-        };
-        CreateCaseServiceRequestRequest: {
-            category: components["schemas"]["ServiceCategory"];
-            /** @description Same bounded fields as the plain form. Unknown keys are refused (400). */
-            details?: {
-                summary?: string;
-                timing?: string;
-                meeting_place?: string;
-                /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
-                destination?: string;
-            };
-        };
-        ServiceRequestFormRequest: {
-            category: components["schemas"]["ServiceCategory"];
-            summary: string;
-            timing?: string;
-            /** @description Where to meet. Required to submit FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE); optional for PEER_SUPPORT. Never shown in lists. */
-            meeting_place?: string;
-            /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
-            destination?: string;
-        };
-        ServiceRequestFormResult: components["schemas"]["ServiceRequestRef"] & {
-            replayed: boolean;
-        };
-        ServiceRequestListItem: {
-            /** Format: uuid */
-            service_request_id: string;
-            /**
-             * Format: uuid
-             * @description ownership=mine and requested only. The open list never carries it, so helpers cannot link one Veteran's requests (DISPATCH.md §13.3, PRIVACY.md §4).
-             */
-            case_id?: string;
-            category: components["schemas"]["ServiceCategory"];
-            status: components["schemas"]["ServiceRequestStatus"];
-            /** @description The requester one-line summary. Timing and meeting place are never listed. */
-            summary: string | null;
-            /** Format: date-time */
-            created_at: string;
-            /** @description ownership=open and mine only: the requester county. */
-            county?: components["schemas"]["ServiceCounty"];
-            /** @description ownership=open and mine only. */
-            widened?: boolean;
-            /** @description ownership=mine only: the requester display name. */
-            counterpart_display_name?: string | null;
-            /**
-             * Format: date-time
-             * @description ownership=requested only.
-             */
-            updated_at?: string;
-            /**
-             * Format: date-time
-             * @description ownership=requested only: set once the request reached a terminal status.
-             */
-            closed_at?: string | null;
-        };
-        ServiceRequestList: {
-            service_requests: components["schemas"]["ServiceRequestListItem"][];
-            next_cursor: string | null;
-            /** @description DISPATCH.md §14.2 (v0.9.0, R7.3, R7.4, D-057). ownership=mine only: summary counts for the caller as a helper, over the same requests as the mine list (all pages, not just this one). Never returned for another user or aggregated across users. */
-            counts?: {
-                /** @description Requests the caller accepted that are not in a terminal status (CLOSED, CANCELLED, EXPIRED, UNFULFILLABLE). Includes CONFIRMED, which waits for the helper's CLOSE, and ESCALATED. */
-                helping_now: number;
-                /** @description Requests the caller accepted that reached CLOSED in the last 30 days (rolling 30 x 24 hours on the server clock, by terminal time, inclusive). CANCELLED is not counted as closed. */
-                closed_last_30_days: number;
-            };
-        };
-        AcceptServiceRequestResult: {
-            /** Format: uuid */
-            service_request_id: string;
-            /** Format: uuid */
-            case_id: string;
-            case_status: components["schemas"]["CaseStatus"];
-        };
-        ServiceRequestDetail: components["schemas"]["ServiceRequestRef"] & {
-            summary: string | null;
-            timing: string | null;
-            meeting_place: string | null;
-            /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
-            destination: string | null;
-            /** Format: date-time */
-            created_at: string;
-            /**
-             * Format: date-time
-             * @description DISPATCH.md §14.1 (v0.9.0, R7.2). When the request was accepted (the chat thread's creation time). null when no accept time is recorded: before accept, or legacy accepted requests. null does not mean not accepted. Not consent evidence (D-051). Shown only to the requester and the user recorded as having accepted, like meeting_place.
-             */
-            accepted_at: string | null;
-            widened: boolean;
-            county: components["schemas"]["ServiceCounty"] | null;
-            /** @description For the requester: the display name of the person who accepted (null until accepted or if unnamed). For the accepter: the requester display name. */
-            counterpart_display_name: string | null;
-            /**
-             * @description The caller side of this request.
-             * @enum {string}
-             */
-            viewer_role: "REQUESTER" | "ACCEPTER";
-        };
-        CaseServiceRequestList: {
-            service_requests: components["schemas"]["ServiceRequestRef"][];
-            /** @description Pass back as cursor for older requests (newest first); null on the last page. */
-            next_cursor: string | null;
-        };
-        ContactAttempt: {
-            /** Format: uuid */
-            contact_attempt_id: string;
-            /** Format: uuid */
-            case_id: string;
-            /** Format: uuid */
-            logged_by_user_id: string;
-            /** Format: date-time */
-            attempted_at: string;
-            /** @enum {string} */
-            channel: "EMAIL" | "SMS" | "IN_APP" | "PHONE";
-            /** @enum {string} */
-            outcome: "PENDING" | "REACHED" | "NO_ANSWER" | "LEFT_MESSAGE" | "DECLINED" | "UNABLE";
-        };
-        ContactAttemptResult: components["schemas"]["ContactAttempt"] & {
-            deduplicated: boolean;
-            replayed: boolean;
-        };
-        LogContactAttemptRequest: {
-            /** @enum {string} */
-            channel: "EMAIL" | "SMS" | "IN_APP" | "PHONE";
-            /** @enum {string} */
-            outcome?: "PENDING";
-            note?: string;
-            /** Format: date-time */
-            attempted_at?: string;
-        };
-        CompleteContactRequest: {
-            /** @enum {string} */
-            channel: "EMAIL" | "SMS" | "IN_APP" | "PHONE";
-            /** @enum {string} */
-            outcome: "REACHED" | "NO_ANSWER" | "LEFT_MESSAGE" | "DECLINED" | "UNABLE";
-            note?: string;
-            /** Format: date-time */
-            attempted_at?: string;
-        };
-        FollowUp: {
-            /** Format: uuid */
-            follow_up_id: string;
-            /** Format: uuid */
-            case_id: string;
-            /** Format: uuid */
-            service_request_id: string | null;
-            /** Format: date-time */
-            due_at: string;
-            schedule_version: number;
-            /** @enum {string} */
-            responsible_type: "USER" | "VETERAN" | "SYSTEM";
-            /** Format: uuid */
-            responsible_id: string;
-            /** @enum {string} */
-            status: "SCHEDULED" | "DUE" | "COMPLETED" | "RESCHEDULED" | "OVERDUE" | "ESCALATED" | "CANCELLED";
-            coordination_attempt_count: number;
-            /** @enum {string|null} */
-            resolution_disposition: "BLOCKING" | "CARRIED_FORWARD" | null;
-        };
-        CreateFollowUpRequest: {
-            /** Format: uuid */
-            case_id: string;
-            /** Format: date-time */
-            due_at: string;
-            /** @enum {string} */
-            responsible_type: "USER" | "VETERAN" | "SYSTEM";
-            /** Format: uuid */
-            responsible_id: string;
-            /** Format: uuid */
-            service_request_id?: string;
-            /** @enum {string} */
-            resolution_disposition?: "BLOCKING" | "CARRIED_FORWARD";
-        };
-        FollowUpResult: components["schemas"]["FollowUp"] & {
-            replayed: boolean;
-        };
-        FollowUpCompleted: components["schemas"]["FollowUp"] & {
-            already_completed: boolean;
-            replayed: boolean;
-        };
-        Notification: {
-            /** Format: uuid */
-            notification_id: string;
-            reason: string;
-            /** @enum {string} */
-            channel: "EMAIL" | "SMS" | "IN_APP";
-            /** @enum {string} */
-            delivery_status: "QUEUED" | "SENT" | "FAILED" | "DELIVERED" | "BOUNCED" | "UNDELIVERABLE";
-            attempt_count: number;
-            subject_type: string | null;
-            subject_id: string | null;
-            /** Format: date-time */
-            sent_at: string | null;
-            /** Format: date-time */
-            cancelled_at: string | null;
-        };
-        NotificationPreferenceRequest: {
-            /** @enum {string} */
-            channel: "EMAIL" | "SMS" | "IN_APP";
-            enabled: boolean;
-        };
-        ConsentGrant: {
-            /** Format: uuid */
-            consent_grant_id: string;
-            /** @enum {string} */
-            permission: "can_receive" | "can_view" | "can_share";
-            scope: string;
-            purpose: string;
-            /** @enum {string} */
-            grantee_type: "TRUSTED_CONTACT" | "USER" | "SERVICE_PROVIDER" | "SYSTEM";
-            /** Format: uuid */
-            grantee_id: string;
-            consent_template_version: string;
-            /** @enum {string} */
-            status: "ACTIVE" | "REVOKED" | "EXPIRED";
-            /** Format: date-time */
-            granted_at: string;
-            /** Format: date-time */
-            expires_at: string | null;
-            /** Format: date-time */
-            revoked_at: string | null;
-        };
-        ConsentGrantResult: components["schemas"]["ConsentGrant"] & {
-            replayed: boolean;
-        };
-        GrantConsentRequest: {
-            /** @enum {string} */
-            permission: "can_receive" | "can_view" | "can_share";
-            /** @enum {string} */
-            scope: "YELLOW" | "ORANGE" | "RED" | "support_signal" | "checkin_answers" | "current_requests" | "location" | "service_request_fulfillment";
-            purpose: string;
-            /** @enum {string} */
-            grantee_type: "TRUSTED_CONTACT" | "USER" | "SERVICE_PROVIDER" | "SYSTEM";
-            /** Format: uuid */
-            grantee_id: string;
-            consent_template_version: string;
-            /** Format: date-time */
-            expires_at?: string;
-        };
-        TrustedContact: {
-            /** Format: uuid */
-            trusted_contact_id: string;
-            relationship_label: string;
-            /** @enum {string} */
-            status: "INVITED" | "ACCEPTED" | "SUSPENDED" | "REMOVED" | "REVOKED";
-            /** Format: uuid */
-            contact_user_id: string | null;
-        };
-        TrustedContactResult: components["schemas"]["TrustedContact"] & {
-            replayed: boolean;
-        };
-        /** @description At least one of invite_email and invite_phone is required. */
-        InviteTrustedContactRequest: {
-            relationship_label: string;
-            /** Format: email */
-            invite_email?: string;
-            invite_phone?: string;
-        };
-        IntakeDraft: {
-            /** Format: uuid */
-            draft_id: string;
-            /** @enum {string} */
-            status: "DRAFT" | "SUBMITTED" | "DISCARDED";
-            category: components["schemas"]["ServiceCategory"] | null;
-            summary: string | null;
-            timing: string | null;
-            meeting_place: string | null;
-            destination: string | null;
-            /** Format: uuid */
-            service_request_id: string | null;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-            /** Format: date-time */
-            submitted_at: string | null;
-        };
-        IntakeDraftWithText: components["schemas"]["IntakeDraft"] & {
-            intake_text: string;
-        };
-        IntakeResource: {
-            /** Format: uuid */
-            resource_id: string;
-            service_name: string;
-            category: string;
-            counties: string[];
-            hours: string | null;
-            cost: string | null;
-            contact_method: string | null;
-            contact_method_kind: string | null;
-            /** @description Up to three contact methods, in order. The first is mirrored in contact_method. */
-            contacts: {
-                /** @enum {string} */
-                kind: "PHONE" | "EMAIL" | "URL" | "FREEFORM";
-                value: string;
-            }[];
-            area: string | null;
-            /**
-             * Format: date-time
-             * @description The stored last_verified_at under a client-facing name; the publish date until a re-verify command exists.
-             */
-            verified_at: string | null;
-            freshness: string;
-            stale_warning: boolean;
-        };
-        RequestFormPointer: {
-            /** @enum {string} */
-            method: "POST";
-            path: string;
-        };
-        IntakeTurn: {
-            /**
-             * @description FALLBACK_FORM: the assistant did not answer; nothing new was stored, show the plain request form (request_form).
-             * @enum {string}
-             */
-            outcome: "DRAFT_READY" | "NO_DRAFT" | "FALLBACK_FORM";
-            assistant_message: string | null;
-            not_available_yet: boolean;
-            notice: string | null;
-            draft: components["schemas"]["IntakeDraft"] | null;
-            resources: components["schemas"]["IntakeResource"][];
-            request_form: components["schemas"]["RequestFormPointer"] | null;
-        };
-        IntakeStatus: {
-            assistant_available: boolean;
-            request_form: components["schemas"]["RequestFormPointer"];
-        };
-        IntakeMessageRequest: {
-            text: string;
-        };
-        IntakeDraftEditRequest: {
-            category?: components["schemas"]["ServiceCategory"];
-            summary?: string;
-            timing?: string | null;
-            meeting_place?: string | null;
-            /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
-            destination?: string | null;
-        };
-        IntakeSubmitResult: {
-            service_request: components["schemas"]["ServiceRequestRef"];
-            draft: components["schemas"]["IntakeDraft"];
-            replayed: boolean;
-        };
-        CatalogResourceList: {
-            resources: components["schemas"]["CatalogResource"][];
-            limit: number;
-            /** @description RESOURCES.md §12.1 (R7.1, D-057, released in 0.9.0). Resources matching the category and county filters across all pages, under the same tenant and visibility filters as the listed items. */
-            total: number;
-            next_cursor: string | null;
-        };
-        ImmediateResources: {
-            /** @enum {string} */
-            state: "APPROVED" | "PLACEHOLDER";
-            basis: string;
-            placeholder: string | null;
-            resources: {
-                label: string;
-                destination: string;
-                approved_under: string;
-            }[];
-        };
-        ChatMessageSent: components["schemas"]["ChatMessage"] & {
-            replayed: boolean;
-        };
-        ChatMessagePage: {
-            messages: components["schemas"]["ChatMessage"][];
-            next_cursor: string | null;
-        };
-        ChatThread: {
-            /** Format: uuid */
-            service_request_id: string;
-            /**
-             * Format: uuid
-             * @description DISPATCH.md §14.10 (R8.11, D-061, released in 0.9.0). Pass as `thread` to read this thread's messages. Always present in responses; optional in the contract so clients written before it still type-check.
-             */
-            chat_thread_id?: string;
-            category: components["schemas"]["ServiceCategory"];
-            summary: string | null;
-            counterpart_display_name: string | null;
-            /** @description Truncated to 140 characters; null when no message was sent yet. */
-            last_message_body: string | null;
-            /** Format: date-time */
-            last_message_at: string | null;
-            /**
-             * Format: date-time
-             * @description DISPATCH.md §14.1 (R7.2, D-057, released in 0.9.0). When the request was accepted (the thread's creation time; a thread exists only after accept). Always present in responses; optional in the contract so clients written before it still type-check. Not consent evidence (D-051).
-             */
-            accepted_at?: string;
-            /** @description The request is in a terminal status. */
-            closed: boolean;
-            /**
-             * Format: date-time
-             * @description DISPATCH.md §14.7, §14.10 (R8.5, R8.11, D-061, released in 0.9.0). When a release ended this thread; null while it is live. A released thread is read-only and only its requester sees it. Always present in responses; optional in the contract so clients written before it still type-check.
-             */
-            released_at?: string | null;
-            /**
-             * @description The caller side of the thread.
-             * @enum {string}
-             */
-            role: "REQUESTER" | "ACCEPTER";
-            /** @description True when the latest message was sent by the caller; null when there are no messages. */
-            last_message_from_me: boolean | null;
-        };
-        ChatThreadList: {
-            threads: components["schemas"]["ChatThread"][];
-            /** @description Pass back as cursor for older threads; null on the last page. */
-            next_cursor: string | null;
-        };
-        ChatConnectTicket: {
-            ticket: string;
-            /** Format: date-time */
-            expires_at: string;
-            websocket_url: string;
-        };
-        AdapterCatalogEntry: {
-            adapter_id: string;
-            capability: string;
-            integration_mode: string;
-            decision: string;
-            label: string;
-            secret_presence: string;
-        };
-        AdapterConfiguration: {
-            /** Format: uuid */
-            adapter_configuration_id: string;
-            /** Format: uuid */
-            tenant_id: string;
-            adapter_id: string;
-            capability: components["schemas"]["ServiceCategory"];
-            integration_mode: string;
-            enabled: boolean;
-            routing_priority: number;
-            health: string;
-            coverage_counties: string[];
-            secret_presence: string;
-            label: string;
-        };
-        AdapterEnableRequest: {
-            /** Format: uuid */
-            tenant_id: string;
-            adapter_id: string;
-            capability: components["schemas"]["ServiceCategory"];
-            coverage_counties?: string[];
-            routing_priority?: number;
-        };
-        AdapterDisableRequest: {
-            /** Format: uuid */
-            tenant_id: string;
-            adapter_id: string;
-            capability: components["schemas"]["ServiceCategory"];
-        };
-        AdapterRoutingRequest: {
-            /** Format: uuid */
-            tenant_id: string;
-            adapter_id: string;
-            capability: components["schemas"]["ServiceCategory"];
-            coverage_counties: string[];
-            routing_priority: number;
-        };
-        /** @description Build provenance (app commit/version, spec version, manifest, environment, schema version). No secrets. */
-        BuildInfo: {
-            [key: string]: unknown;
-        };
-        /** @description Fields to change. Absent keys stay as they are. At least one field other than expected_status is required (400). */
-        ServiceRequestEditRequest: {
-            summary?: string;
-            /** @description null clears the timing. */
-            timing?: string | null;
-            /** @description null clears the meeting place; refused (422) for FOOD, TRANSPORTATION and SHELTER. */
-            meeting_place?: string | null;
-            /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
-            destination?: string | null;
-            /** @description Optional stale-state check; 409 STALE_STATE when the request is in another status. An unknown status is 400. */
-            expected_status?: components["schemas"]["ServiceRequestStatus"];
-        };
-        ServiceRequestEditResult: components["schemas"]["ServiceRequestDetail"] & {
-            replayed: boolean;
-        };
-        ConsentTemplateVersion: {
-            /** @description <template_key>@<version>; what a grant cites as consent_template_version. */
-            version_key: string;
-            template_key: string;
-            version: number;
-            /** @enum {string} */
-            status: "DRAFT" | "PUBLISHED" | "SUPERSEDED";
-            /** @description Administrator-written copy (CONSENT.md §6). */
-            body: string | null;
-            /** Format: date-time */
-            published_at: string | null;
-            /** Format: date-time */
-            created_at: string;
-        };
-        ConsentTemplateVersionResult: components["schemas"]["ConsentTemplateVersion"] & {
-            replayed: boolean;
-        };
-        ConsentTemplatePublished: components["schemas"]["ConsentTemplateVersion"] & {
-            superseded_version_keys: string[];
-        };
-        CreateConsentTemplateVersionRequest: {
-            template_key: string;
-            body: string;
-        };
-        PublishedConsentTemplate: {
-            version_key: string;
-            template_key: string;
-            version: number;
-            body: string | null;
-            /** Format: date-time */
-            published_at: string | null;
-        };
-        TrustedContactInvitation: {
-            /** Format: uuid */
-            trusted_contact_id: string;
-            veteran_display_name: string | null;
-            relationship_label: string;
-        };
+  schemas: {
+    ErrorBody: {
+      error: {
+        code: string;
+        message: string;
+        /** @description Optional machine-readable detail. A 400 VALIDATION_FAILED from schema validation carries issues: [{ path, code, message }]. */
+        details?: {
+          [key: string]: unknown;
+        };
+      };
     };
-    responses: {
-        /** @description Canonical API.md §6 error body */
-        Error: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorBody"];
-            };
-        };
+    CatalogResource: {
+      /** Format: uuid */
+      resource_id: string;
+      service_name: string;
+      /** @enum {string} */
+      category: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
+      counties: string[];
+      hours: string | null;
+      cost: string | null;
+      contact_method: string | null;
+      /** @enum {string|null} */
+      contact_method_kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
+      /** @description Up to three contact methods, in order. The first is mirrored in contact_method. */
+      contacts: {
+        /** @enum {string} */
+        kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+        value: string;
+      }[];
+      area: string | null;
+      /**
+       * Format: date-time
+       * @description The stored last_verified_at under a client-facing name; the publish date until a re-verify command exists.
+       */
+      verified_at: string | null;
+      /** @enum {string} */
+      freshness: 'FRESH' | 'AGING' | 'STALE' | 'UNVERIFIED';
+      stale_warning: boolean;
     };
-    parameters: {
-        IdPath: string;
-        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-        IdempotencyKey: string;
-        CaseIdPath: string;
-        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
-        PageCursor: string;
-        PageLimit: number;
+    /** @description A Resource Draft. It has no verification fields and is never shown to Veterans. */
+    ResourceDraft: {
+      /** Format: uuid */
+      resource_draft_id: string;
+      /** @enum {string} */
+      status: 'DRAFT' | 'PUBLISHED' | 'REJECTED';
+      source_link: string;
+      service_name: string;
+      /** @enum {string} */
+      category: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
+      counties: (
+        | 'SANTA_CLARA'
+        | 'SAN_MATEO'
+        | 'ALAMEDA'
+        | 'SANTA_CRUZ'
+        | 'SAN_BENITO'
+        | 'MERCED'
+        | 'STANISLAUS'
+      )[];
+      eligibility: string | null;
+      hours: string | null;
+      contact_method: string | null;
+      /** @enum {string|null} */
+      contact_method_kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
+      /** @description Up to three contact methods, in order (RESOURCES.md §12.2; R8.8, D-059, released in 0.9.0). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
+      contacts: {
+        /** @enum {string} */
+        kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+        value: string;
+      }[];
+      area: string | null;
+      referral_method: string | null;
+      cost: string | null;
+      /** Format: uuid */
+      published_resource_id: string | null;
+      /** Format: uuid */
+      reviewed_by: string | null;
+      /** Format: date-time */
+      reviewed_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
     };
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    ResourceDraftList: {
+      builder: {
+        available: boolean;
+        message: string | null;
+      };
+      drafts: components['schemas']['ResourceDraft'][];
+      limit: number;
+      next_cursor: string | null;
+    };
+    ResourceDraftExtraction: {
+      drafts: components['schemas']['ResourceDraft'][];
+      /** @description True when an earlier request with the same Idempotency-Key created these drafts. */
+      replayed: boolean;
+    };
+    ResourceDraftExtractRequest: {
+      source_text: string;
+      /** @description http or https URL of the pasted source; kept on every draft and used as the verification source on publish. */
+      source_link: string;
+    };
+    ResourceDraftEditRequest: {
+      service_name?: string;
+      /** @enum {string} */
+      category?: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
+      counties?: (
+        | 'SANTA_CLARA'
+        | 'SAN_MATEO'
+        | 'ALAMEDA'
+        | 'SANTA_CRUZ'
+        | 'SAN_BENITO'
+        | 'MERCED'
+        | 'STANISLAUS'
+      )[];
+      eligibility?: string | null;
+      hours?: string | null;
+      contact_method?: string | null;
+      /** @enum {string|null} */
+      contact_method_kind?: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM' | null;
+      /** @description Up to three contact methods, in order (RESOURCES.md §12.2; R8.8, D-059, released in 0.9.0). 911, 988 and 838255 are refused, also with separators or a leading +1 or 1. A URL contact must be an http or https address and an EMAIL contact one plain address; anything else is refused with 400. */
+      contacts?:
+        | {
+            /** @enum {string} */
+            kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+            value: string;
+          }[]
+        | null;
+      area?: string | null;
+      referral_method?: string | null;
+      cost?: string | null;
+    };
+    ResourceDraftPublished: {
+      draft: components['schemas']['ResourceDraft'];
+      /** Format: uuid */
+      resource_id: string;
+    };
+    ChatMessage: {
+      /** Format: uuid */
+      chat_message_id: string;
+      /** Format: uuid */
+      service_request_id: string;
+      /** Format: uuid */
+      sender_user_id: string;
+      body: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /** @enum {string} */
+    ServiceCategory: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
+    /** @enum {string} */
+    ServiceCounty:
+      | 'SANTA_CLARA'
+      | 'SAN_MATEO'
+      | 'ALAMEDA'
+      | 'SANTA_CRUZ'
+      | 'SAN_BENITO'
+      | 'MERCED'
+      | 'STANISLAUS';
+    /** @enum {string} */
+    ServiceRequestStatus:
+      | 'CREATED'
+      | 'SUBMITTED'
+      | 'TRIAGED'
+      | 'MATCHING'
+      | 'ASSIGNED'
+      | 'ACCEPTED'
+      | 'IN_PROGRESS'
+      | 'FULFILLED'
+      | 'CONFIRMED'
+      | 'CLOSED'
+      | 'CANCELLED'
+      | 'DECLINED'
+      | 'EXPIRED'
+      | 'UNFULFILLABLE'
+      | 'ESCALATED';
+    /** @enum {string} */
+    CaseStatus: 'OPEN' | 'TRIAGED' | 'ASSIGNED' | 'ACTIVE' | 'FOLLOWUP' | 'RESOLVED' | 'CLOSED';
+    /** @enum {string} */
+    SignalLevel: 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED';
+    AuthChallengeRequest: {
+      /**
+       * Format: uuid
+       * @description Legacy filter; people do not choose an organization.
+       */
+      tenant_id?: string;
+      destination: string;
+      /** @enum {string} */
+      method: 'MAGIC_LINK' | 'EMAIL_OTP' | 'PHONE_OTP';
+    };
+    AuthChallengeAccepted: {
+      /** @enum {string} */
+      status: 'accepted';
+    };
+    AuthVerifyRequest: {
+      /** Format: uuid */
+      tenant_id?: string;
+      destination: string;
+      code: string;
+    };
+    AuthSession: {
+      session_credential: string;
+      /** Format: date-time */
+      expires_at: string;
+      mfa_elevated: boolean;
+    };
+    LogoutRequest: {
+      everywhere?: boolean;
+    };
+    MfaChallenge: {
+      challenge_id: string;
+      factor_type: string;
+    };
+    MfaVerifyRequest: {
+      challenge_id: string;
+      response: string;
+    };
+    MfaVerified: {
+      mfa_elevated: boolean;
+    };
+    /** @description The person's Veteran confirmation standing (suas-specs #72 R9.1): REVOKED when SUAS revoked it; else a VERIFIED row of VA_VETERAN_STATUS, MANUAL_REVIEW or SELF_ATTESTATION (in that order), which opens the request gate; else the newest settled VA attempt; else NOT_STARTED with method VA_VETERAN_STATUS. */
+    IdVerification: {
+      /** @enum {string} */
+      method: 'VA_VETERAN_STATUS' | 'MANUAL_REVIEW' | 'SELF_ATTESTATION';
+      /** @enum {string} */
+      status: 'NOT_STARTED' | 'VERIFIED' | 'NOT_CONFIRMED' | 'PENDING' | 'UNAVAILABLE' | 'REVOKED';
+      /**
+       * @description VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise.
+       * @enum {string|null}
+       */
+      not_confirmed_reason:
+        'PERSON_NOT_FOUND' | 'NOT_TITLE_38' | 'MORE_RESEARCH_REQUIRED' | 'ERROR' | null;
+      /** Format: date-time */
+      verified_at: string | null;
+      /**
+       * @description Why VA did not answer (D035 §11), with UNAVAILABLE; null when VA answered. REQUEST_INVALID means the person may correct the details and retry.
+       * @enum {string|null}
+       */
+      failure_class:
+        | 'CONFIGURATION_INVALID'
+        | 'AUTHENTICATION_REJECTED'
+        | 'REQUEST_INVALID'
+        | 'PROVIDER_RATE_LIMITED'
+        | 'PROVIDER_UNAVAILABLE'
+        | 'PROVIDER_RESPONSE_INVALID'
+        | 'PROVIDER_REASON_UNKNOWN'
+        | 'TIMEOUT'
+        | 'NETWORK_ERROR'
+        | null;
+    };
+    /** @description The VA_CONFIRMATION_V1_REQUIRED_ONLY projection: the eight required VA fields, with country fixed to USA. No SSN. Plus noticeVersion, the pre-call notice the person saw. Unknown fields are refused. Patterns are VA's; each field is at most 256 characters. */
+    VaConfirmationRequest: {
+      firstName: string;
+      lastName: string;
+      /**
+       * Format: date
+       * @description YYYY-MM-DD, a real date before today
+       */
+      birthDate: string;
+      streetAddressLine1: string;
+      city: string;
+      state: string;
+      /**
+       * @description Optional; always USA
+       * @enum {string}
+       */
+      country?: 'USA';
+      zipCode: string;
+      /**
+       * @description The pre-call notice version (VA_NOTICE_V1). It is stored on the attempt, not sent to VA.
+       * @enum {string}
+       */
+      noticeVersion: 'va-notice-v1';
+    };
+    VaConfirmationResult: {
+      /** @enum {string} */
+      status: 'VERIFIED' | 'NOT_CONFIRMED' | 'UNAVAILABLE';
+      /**
+       * @description VA's reason. ERROR comes with UNAVAILABLE; the others with NOT_CONFIRMED. Null otherwise.
+       * @enum {string|null}
+       */
+      not_confirmed_reason:
+        'PERSON_NOT_FOUND' | 'NOT_TITLE_38' | 'MORE_RESEARCH_REQUIRED' | 'ERROR' | null;
+      /** Format: date-time */
+      verified_at: string | null;
+      /**
+       * @description Why VA did not answer (D035 §11), with UNAVAILABLE; null when VA answered. REQUEST_INVALID means the person may correct the details and retry.
+       * @enum {string|null}
+       */
+      failure_class:
+        | 'CONFIGURATION_INVALID'
+        | 'AUTHENTICATION_REJECTED'
+        | 'REQUEST_INVALID'
+        | 'PROVIDER_RATE_LIMITED'
+        | 'PROVIDER_UNAVAILABLE'
+        | 'PROVIDER_RESPONSE_INVALID'
+        | 'PROVIDER_REASON_UNKNOWN'
+        | 'TIMEOUT'
+        | 'NETWORK_ERROR'
+        | null;
+    };
+    /** @description The current case of a Veteran: not RESOLVED or CLOSED. A Veteran whose case is resolved has none until they ask for help again, which opens a new case. */
+    OpenCaseSummary: {
+      /** Format: uuid */
+      case_id: string;
+      status: components['schemas']['CaseStatus'];
+      priority_signal_level: components['schemas']['SignalLevel'] | null;
+    };
+    /** @description The caller's newest open Service Request, of any category (FOOD, TRANSPORTATION, SHELTER or PEER_SUPPORT). */
+    ActiveQrf: {
+      /** Format: uuid */
+      service_request_id: string;
+      category: components['schemas']['ServiceCategory'];
+      state: string;
+      headline: string;
+      cancellable: boolean;
+    };
+    CategoryCard: {
+      label: string;
+      /** @enum {string} */
+      disposition: 'OPERATIONAL' | 'INFORMATION_ONLY' | 'COMING_SOON';
+      category: components['schemas']['ServiceCategory'] | null;
+      note: string | null;
+    };
+    VeteranMe: {
+      /** Format: uuid */
+      user_id: string;
+      /** @enum {string} */
+      status: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED';
+      enrolled_channels: {
+        email: boolean;
+        phone: boolean;
+      };
+      county: components['schemas']['ServiceCounty'] | null;
+      display_name: string | null;
+      /** @description True when the person holds the SUAS System Administrator grant. */
+      is_admin: boolean;
+      id_verification: components['schemas']['IdVerification'];
+      open_case: components['schemas']['OpenCaseSummary'] | null;
+      active_qrf: components['schemas']['ActiveQrf'] | null;
+      categories: components['schemas']['CategoryCard'][];
+    };
+    SetCountyRequest: {
+      county: components['schemas']['ServiceCounty'];
+    };
+    SetCountyResponse: {
+      county: components['schemas']['ServiceCounty'] | null;
+    };
+    SetProfileRequest: {
+      /** @description Trimmed, 1 to 40 characters. Guidance for the form: "First name and last initial, like Marcus T." */
+      display_name: string;
+    };
+    SetProfileResponse: {
+      display_name: string | null;
+    };
+    CheckIn: {
+      /** Format: uuid */
+      check_in_id: string;
+      questionnaire_version: string;
+      /** @enum {string} */
+      status: 'STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED' | 'INCOMPLETE';
+      /**
+       * Format: date-time
+       * @description Server clock. The Check-In can be resumed for 24 hours from this time (CHECKINS.md §4.2, §4.4).
+       */
+      started_at: string;
+      /** Format: date-time */
+      completed_at: string | null;
+    };
+    CheckInQuestion: {
+      /** Format: uuid */
+      question_id: string;
+      question_key: string;
+      prompt: string;
+      dimension: string | null;
+      required: boolean;
+      options: {
+        /** Format: uuid */
+        answer_option_id: string;
+        option_key: string;
+        label: string;
+      }[];
+    };
+    CheckInWithQuestions: components['schemas']['CheckIn'] & {
+      questions: components['schemas']['CheckInQuestion'][];
+    };
+    CheckInDetail: components['schemas']['CheckInWithQuestions'] & {
+      /** @description Questions that already have a saved answer, so a resumed Check-In can skip them. */
+      answered_question_ids: string[];
+    };
+    CheckInResponseRequest: {
+      /** Format: uuid */
+      question_id: string;
+      /** Format: uuid */
+      answer_option_id: string;
+    };
+    CheckInCompleted: components['schemas']['CheckIn'] & {
+      incomplete: boolean;
+      already_completed: boolean;
+      support_signal: {
+        /** Format: uuid */
+        support_signal_id: string;
+        level: components['schemas']['SignalLevel'];
+      } | null;
+      support_case: components['schemas']['OpenCaseSummary'] | null;
+    };
+    SupportCase: {
+      /** Format: uuid */
+      case_id: string;
+      status: components['schemas']['CaseStatus'];
+      priority_signal_level: components['schemas']['SignalLevel'] | null;
+    };
+    OpenCaseResult: components['schemas']['SupportCase'] & {
+      created: boolean;
+      replayed: boolean;
+    };
+    CaseCommandResult: components['schemas']['SupportCase'] & {
+      replayed: boolean;
+    };
+    CaseCommandRequest: {
+      reason?: string;
+      expected_status?: components['schemas']['CaseStatus'];
+    };
+    CaseCommandReasonRequest: {
+      reason: string;
+      expected_status?: components['schemas']['CaseStatus'];
+    };
+    Settlement: {
+      /** Format: uuid */
+      settlement_id: string;
+      /** Format: uuid */
+      case_id: string;
+      resolution_cycle: number;
+      requested: {
+        [key: string]: unknown;
+      };
+      occurred: {
+        [key: string]: unknown;
+      };
+      fulfilled: {
+        [key: string]: unknown;
+      };
+      unresolved: {
+        [key: string]: unknown;
+      };
+      remaining_follow_ups: {
+        [key: string]: unknown;
+      }[];
+      /** Format: uuid */
+      authored_by: string;
+      /** Format: uuid */
+      accepted_by_user_id: string;
+      /** Format: uuid */
+      veteran_confirmed_by: string | null;
+      /** Format: date-time */
+      settled_at: string;
+    };
+    VeteranSettlement: {
+      /** Format: uuid */
+      settlement_id: string;
+      resolution_cycle: number;
+      requested: {
+        [key: string]: unknown;
+      };
+      fulfilled: {
+        [key: string]: unknown;
+      };
+      unresolved: {
+        [key: string]: unknown;
+      };
+      remaining_follow_ups: {
+        [key: string]: unknown;
+      }[];
+      /** Format: date-time */
+      settled_at: string;
+    };
+    /** @description The author, the accepter and the requester confirmation are derived on the server from the session (the person resolving must hold a request of the case); they are not accepted from the body. */
+    ResolveCaseRequest: {
+      requested: {
+        [key: string]: unknown;
+      };
+      occurred: {
+        [key: string]: unknown;
+      };
+      fulfilled: {
+        [key: string]: unknown;
+      };
+      unresolved: {
+        [key: string]: unknown;
+      };
+      /** @enum {string} */
+      expected_status?: 'ACTIVE' | 'FOLLOWUP';
+    };
+    ResolveCaseResult: components['schemas']['SupportCase'] & {
+      /** Format: uuid */
+      settlement_id: string;
+      resolution_cycle: number;
+      settlement: components['schemas']['Settlement'];
+      replayed: boolean;
+    };
+    ServiceRequestRef: {
+      /** Format: uuid */
+      service_request_id: string;
+      /** Format: uuid */
+      case_id: string;
+      category: components['schemas']['ServiceCategory'];
+      status: components['schemas']['ServiceRequestStatus'];
+    };
+    ServiceRequestCommandResult: components['schemas']['ServiceRequestRef'] & {
+      replayed: boolean;
+    };
+    /** @description SUBMIT, CANCEL and CONFIRM belong to the requester; every other command belongs to the person who accepted (403 otherwise). */
+    ServiceRequestCommandRequest: {
+      reason?: string;
+      /** @description RETURN_FROM_ESCALATION only: the target status (TRIAGED or MATCHING). */
+      to?: components['schemas']['ServiceRequestStatus'];
+      expected_status?: components['schemas']['ServiceRequestStatus'];
+      /** Format: uuid */
+      grantee_id?: string;
+    };
+    CreateCaseServiceRequestRequest: {
+      category: components['schemas']['ServiceCategory'];
+      /** @description Same bounded fields as the plain form. Unknown keys are refused (400). */
+      details?: {
+        summary?: string;
+        timing?: string;
+        meeting_place?: string;
+        /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+        destination?: string;
+      };
+    };
+    ServiceRequestFormRequest: {
+      category: components['schemas']['ServiceCategory'];
+      summary: string;
+      timing?: string;
+      /** @description Where to meet. Required to submit FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE); optional for PEER_SUPPORT. Never shown in lists. */
+      meeting_place?: string;
+      /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+      destination?: string;
+    };
+    ServiceRequestFormResult: components['schemas']['ServiceRequestRef'] & {
+      replayed: boolean;
+    };
+    ServiceRequestListItem: {
+      /** Format: uuid */
+      service_request_id: string;
+      /**
+       * Format: uuid
+       * @description ownership=mine and requested only. The open list never carries it, so helpers cannot link one Veteran's requests (DISPATCH.md §13.3, PRIVACY.md §4).
+       */
+      case_id?: string;
+      category: components['schemas']['ServiceCategory'];
+      status: components['schemas']['ServiceRequestStatus'];
+      /** @description The requester one-line summary. Timing and meeting place are never listed. */
+      summary: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** @description ownership=open and mine only: the requester county. */
+      county?: components['schemas']['ServiceCounty'];
+      /** @description ownership=open and mine only. */
+      widened?: boolean;
+      /** @description ownership=mine only: the requester display name. */
+      counterpart_display_name?: string | null;
+      /**
+       * Format: date-time
+       * @description ownership=requested only.
+       */
+      updated_at?: string;
+      /**
+       * Format: date-time
+       * @description ownership=requested only: set once the request reached a terminal status.
+       */
+      closed_at?: string | null;
+    };
+    ServiceRequestList: {
+      service_requests: components['schemas']['ServiceRequestListItem'][];
+      next_cursor: string | null;
+      /** @description DISPATCH.md §14.2 (v0.9.0, R7.3, R7.4, D-057). ownership=mine only: summary counts for the caller as a helper, over the same requests as the mine list (all pages, not just this one). Never returned for another user or aggregated across users. */
+      counts?: {
+        /** @description Requests the caller accepted that are not in a terminal status (CLOSED, CANCELLED, EXPIRED, UNFULFILLABLE). Includes CONFIRMED, which waits for the helper's CLOSE, and ESCALATED. */
+        helping_now: number;
+        /** @description Requests the caller accepted that reached CLOSED in the last 30 days (rolling 30 x 24 hours on the server clock, by terminal time, inclusive). CANCELLED is not counted as closed. */
+        closed_last_30_days: number;
+      };
+    };
+    AcceptServiceRequestResult: {
+      /** Format: uuid */
+      service_request_id: string;
+      /** Format: uuid */
+      case_id: string;
+      case_status: components['schemas']['CaseStatus'];
+    };
+    ServiceRequestDetail: components['schemas']['ServiceRequestRef'] & {
+      summary: string | null;
+      timing: string | null;
+      meeting_place: string | null;
+      /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+      destination: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: date-time
+       * @description DISPATCH.md §14.1 (v0.9.0, R7.2). When the request was accepted (the chat thread's creation time). null when no accept time is recorded: before accept, or legacy accepted requests. null does not mean not accepted. Not consent evidence (D-051). Shown only to the requester and the user recorded as having accepted, like meeting_place.
+       */
+      accepted_at: string | null;
+      widened: boolean;
+      county: components['schemas']['ServiceCounty'] | null;
+      /** @description For the requester: the display name of the person who accepted (null until accepted or if unnamed). For the accepter: the requester display name. */
+      counterpart_display_name: string | null;
+      /**
+       * @description The caller side of this request.
+       * @enum {string}
+       */
+      viewer_role: 'REQUESTER' | 'ACCEPTER';
+    };
+    CaseServiceRequestList: {
+      service_requests: components['schemas']['ServiceRequestRef'][];
+      /** @description Pass back as cursor for older requests (newest first); null on the last page. */
+      next_cursor: string | null;
+    };
+    ContactAttempt: {
+      /** Format: uuid */
+      contact_attempt_id: string;
+      /** Format: uuid */
+      case_id: string;
+      /** Format: uuid */
+      logged_by_user_id: string;
+      /** Format: date-time */
+      attempted_at: string;
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP' | 'PHONE';
+      /** @enum {string} */
+      outcome: 'PENDING' | 'REACHED' | 'NO_ANSWER' | 'LEFT_MESSAGE' | 'DECLINED' | 'UNABLE';
+    };
+    ContactAttemptResult: components['schemas']['ContactAttempt'] & {
+      deduplicated: boolean;
+      replayed: boolean;
+    };
+    LogContactAttemptRequest: {
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP' | 'PHONE';
+      /** @enum {string} */
+      outcome?: 'PENDING';
+      note?: string;
+      /** Format: date-time */
+      attempted_at?: string;
+    };
+    CompleteContactRequest: {
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP' | 'PHONE';
+      /** @enum {string} */
+      outcome: 'REACHED' | 'NO_ANSWER' | 'LEFT_MESSAGE' | 'DECLINED' | 'UNABLE';
+      note?: string;
+      /** Format: date-time */
+      attempted_at?: string;
+    };
+    FollowUp: {
+      /** Format: uuid */
+      follow_up_id: string;
+      /** Format: uuid */
+      case_id: string;
+      /** Format: uuid */
+      service_request_id: string | null;
+      /** Format: date-time */
+      due_at: string;
+      schedule_version: number;
+      /** @enum {string} */
+      responsible_type: 'USER' | 'VETERAN' | 'SYSTEM';
+      /** Format: uuid */
+      responsible_id: string;
+      /** @enum {string} */
+      status:
+        'SCHEDULED' | 'DUE' | 'COMPLETED' | 'RESCHEDULED' | 'OVERDUE' | 'ESCALATED' | 'CANCELLED';
+      coordination_attempt_count: number;
+      /** @enum {string|null} */
+      resolution_disposition: 'BLOCKING' | 'CARRIED_FORWARD' | null;
+    };
+    CreateFollowUpRequest: {
+      /** Format: uuid */
+      case_id: string;
+      /** Format: date-time */
+      due_at: string;
+      /** @enum {string} */
+      responsible_type: 'USER' | 'VETERAN' | 'SYSTEM';
+      /** Format: uuid */
+      responsible_id: string;
+      /** Format: uuid */
+      service_request_id?: string;
+      /** @enum {string} */
+      resolution_disposition?: 'BLOCKING' | 'CARRIED_FORWARD';
+    };
+    FollowUpResult: components['schemas']['FollowUp'] & {
+      replayed: boolean;
+    };
+    FollowUpCompleted: components['schemas']['FollowUp'] & {
+      already_completed: boolean;
+      replayed: boolean;
+    };
+    Notification: {
+      /** Format: uuid */
+      notification_id: string;
+      reason: string;
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP';
+      /** @enum {string} */
+      delivery_status: 'QUEUED' | 'SENT' | 'FAILED' | 'DELIVERED' | 'BOUNCED' | 'UNDELIVERABLE';
+      attempt_count: number;
+      subject_type: string | null;
+      subject_id: string | null;
+      /** Format: date-time */
+      sent_at: string | null;
+      /** Format: date-time */
+      cancelled_at: string | null;
+    };
+    NotificationPreferenceRequest: {
+      /** @enum {string} */
+      channel: 'EMAIL' | 'SMS' | 'IN_APP';
+      enabled: boolean;
+    };
+    ConsentGrant: {
+      /** Format: uuid */
+      consent_grant_id: string;
+      /** @enum {string} */
+      permission: 'can_receive' | 'can_view' | 'can_share';
+      scope: string;
+      purpose: string;
+      /** @enum {string} */
+      grantee_type: 'TRUSTED_CONTACT' | 'USER' | 'SERVICE_PROVIDER' | 'SYSTEM';
+      /** Format: uuid */
+      grantee_id: string;
+      consent_template_version: string;
+      /** @enum {string} */
+      status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+      /** Format: date-time */
+      granted_at: string;
+      /** Format: date-time */
+      expires_at: string | null;
+      /** Format: date-time */
+      revoked_at: string | null;
+    };
+    ConsentGrantResult: components['schemas']['ConsentGrant'] & {
+      replayed: boolean;
+    };
+    GrantConsentRequest: {
+      /** @enum {string} */
+      permission: 'can_receive' | 'can_view' | 'can_share';
+      /** @enum {string} */
+      scope:
+        | 'YELLOW'
+        | 'ORANGE'
+        | 'RED'
+        | 'support_signal'
+        | 'checkin_answers'
+        | 'current_requests'
+        | 'location'
+        | 'service_request_fulfillment';
+      purpose: string;
+      /** @enum {string} */
+      grantee_type: 'TRUSTED_CONTACT' | 'USER' | 'SERVICE_PROVIDER' | 'SYSTEM';
+      /** Format: uuid */
+      grantee_id: string;
+      consent_template_version: string;
+      /** Format: date-time */
+      expires_at?: string;
+    };
+    TrustedContact: {
+      /** Format: uuid */
+      trusted_contact_id: string;
+      relationship_label: string;
+      /** @enum {string} */
+      status: 'INVITED' | 'ACCEPTED' | 'SUSPENDED' | 'REMOVED' | 'REVOKED';
+      /** Format: uuid */
+      contact_user_id: string | null;
+    };
+    TrustedContactResult: components['schemas']['TrustedContact'] & {
+      replayed: boolean;
+    };
+    /** @description At least one of invite_email and invite_phone is required. */
+    InviteTrustedContactRequest: {
+      relationship_label: string;
+      /** Format: email */
+      invite_email?: string;
+      invite_phone?: string;
+    };
+    IntakeDraft: {
+      /** Format: uuid */
+      draft_id: string;
+      /** @enum {string} */
+      status: 'DRAFT' | 'SUBMITTED' | 'DISCARDED';
+      category: components['schemas']['ServiceCategory'] | null;
+      summary: string | null;
+      timing: string | null;
+      meeting_place: string | null;
+      destination: string | null;
+      /** Format: uuid */
+      service_request_id: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+      /** Format: date-time */
+      submitted_at: string | null;
+    };
+    IntakeDraftWithText: components['schemas']['IntakeDraft'] & {
+      intake_text: string;
+    };
+    IntakeResource: {
+      /** Format: uuid */
+      resource_id: string;
+      service_name: string;
+      category: string;
+      counties: string[];
+      hours: string | null;
+      cost: string | null;
+      contact_method: string | null;
+      contact_method_kind: string | null;
+      /** @description Up to three contact methods, in order. The first is mirrored in contact_method. */
+      contacts: {
+        /** @enum {string} */
+        kind: 'PHONE' | 'EMAIL' | 'URL' | 'FREEFORM';
+        value: string;
+      }[];
+      area: string | null;
+      /**
+       * Format: date-time
+       * @description The stored last_verified_at under a client-facing name; the publish date until a re-verify command exists.
+       */
+      verified_at: string | null;
+      freshness: string;
+      stale_warning: boolean;
+    };
+    RequestFormPointer: {
+      /** @enum {string} */
+      method: 'POST';
+      path: string;
+    };
+    IntakeTurn: {
+      /**
+       * @description FALLBACK_FORM: the assistant did not answer; nothing new was stored, show the plain request form (request_form).
+       * @enum {string}
+       */
+      outcome: 'DRAFT_READY' | 'NO_DRAFT' | 'FALLBACK_FORM';
+      assistant_message: string | null;
+      not_available_yet: boolean;
+      notice: string | null;
+      draft: components['schemas']['IntakeDraft'] | null;
+      resources: components['schemas']['IntakeResource'][];
+      request_form: components['schemas']['RequestFormPointer'] | null;
+    };
+    IntakeStatus: {
+      assistant_available: boolean;
+      request_form: components['schemas']['RequestFormPointer'];
+    };
+    IntakeMessageRequest: {
+      text: string;
+    };
+    IntakeDraftEditRequest: {
+      category?: components['schemas']['ServiceCategory'];
+      summary?: string;
+      timing?: string | null;
+      meeting_place?: string | null;
+      /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+      destination?: string | null;
+    };
+    IntakeSubmitResult: {
+      service_request: components['schemas']['ServiceRequestRef'];
+      draft: components['schemas']['IntakeDraft'];
+      replayed: boolean;
+    };
+    CatalogResourceList: {
+      resources: components['schemas']['CatalogResource'][];
+      limit: number;
+      /** @description RESOURCES.md §12.1 (R7.1, D-057, released in 0.9.0). Resources matching the category and county filters across all pages, under the same tenant and visibility filters as the listed items. */
+      total: number;
+      next_cursor: string | null;
+    };
+    ImmediateResources: {
+      /** @enum {string} */
+      state: 'APPROVED' | 'PLACEHOLDER';
+      basis: string;
+      placeholder: string | null;
+      resources: {
+        label: string;
+        destination: string;
+        approved_under: string;
+      }[];
+    };
+    ChatMessageSent: components['schemas']['ChatMessage'] & {
+      replayed: boolean;
+    };
+    ChatMessagePage: {
+      messages: components['schemas']['ChatMessage'][];
+      next_cursor: string | null;
+    };
+    ChatThread: {
+      /** Format: uuid */
+      service_request_id: string;
+      /**
+       * Format: uuid
+       * @description DISPATCH.md §14.10 (R8.11, D-061, released in 0.9.0). Pass as `thread` to read this thread's messages. Always present in responses; optional in the contract so clients written before it still type-check.
+       */
+      chat_thread_id?: string;
+      category: components['schemas']['ServiceCategory'];
+      summary: string | null;
+      counterpart_display_name: string | null;
+      /** @description Truncated to 140 characters; null when no message was sent yet. */
+      last_message_body: string | null;
+      /** Format: date-time */
+      last_message_at: string | null;
+      /**
+       * Format: date-time
+       * @description DISPATCH.md §14.1 (R7.2, D-057, released in 0.9.0). When the request was accepted (the thread's creation time; a thread exists only after accept). Always present in responses; optional in the contract so clients written before it still type-check. Not consent evidence (D-051).
+       */
+      accepted_at?: string;
+      /** @description The request is in a terminal status. */
+      closed: boolean;
+      /**
+       * Format: date-time
+       * @description DISPATCH.md §14.7, §14.10 (R8.5, R8.11, D-061, released in 0.9.0). When a release ended this thread; null while it is live. A released thread is read-only and only its requester sees it. Always present in responses; optional in the contract so clients written before it still type-check.
+       */
+      released_at?: string | null;
+      /**
+       * @description The caller side of the thread.
+       * @enum {string}
+       */
+      role: 'REQUESTER' | 'ACCEPTER';
+      /** @description True when the latest message was sent by the caller; null when there are no messages. */
+      last_message_from_me: boolean | null;
+    };
+    ChatThreadList: {
+      threads: components['schemas']['ChatThread'][];
+      /** @description Pass back as cursor for older threads; null on the last page. */
+      next_cursor: string | null;
+    };
+    ChatConnectTicket: {
+      ticket: string;
+      /** Format: date-time */
+      expires_at: string;
+      websocket_url: string;
+    };
+    AdapterCatalogEntry: {
+      adapter_id: string;
+      capability: string;
+      integration_mode: string;
+      decision: string;
+      label: string;
+      secret_presence: string;
+    };
+    AdapterConfiguration: {
+      /** Format: uuid */
+      adapter_configuration_id: string;
+      /** Format: uuid */
+      tenant_id: string;
+      adapter_id: string;
+      capability: components['schemas']['ServiceCategory'];
+      integration_mode: string;
+      enabled: boolean;
+      routing_priority: number;
+      health: string;
+      coverage_counties: string[];
+      secret_presence: string;
+      label: string;
+    };
+    AdapterEnableRequest: {
+      /** Format: uuid */
+      tenant_id: string;
+      adapter_id: string;
+      capability: components['schemas']['ServiceCategory'];
+      coverage_counties?: string[];
+      routing_priority?: number;
+    };
+    AdapterDisableRequest: {
+      /** Format: uuid */
+      tenant_id: string;
+      adapter_id: string;
+      capability: components['schemas']['ServiceCategory'];
+    };
+    AdapterRoutingRequest: {
+      /** Format: uuid */
+      tenant_id: string;
+      adapter_id: string;
+      capability: components['schemas']['ServiceCategory'];
+      coverage_counties: string[];
+      routing_priority: number;
+    };
+    /** @description Build provenance (app commit/version, spec version, manifest, environment, schema version). No secrets. */
+    BuildInfo: {
+      [key: string]: unknown;
+    };
+    /** @description Fields to change. Absent keys stay as they are. At least one field other than expected_status is required (400). */
+    ServiceRequestEditRequest: {
+      summary?: string;
+      /** @description null clears the timing. */
+      timing?: string | null;
+      /** @description null clears the meeting place; refused (422) for FOOD, TRANSPORTATION and SHELTER. */
+      meeting_place?: string | null;
+      /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
+      destination?: string | null;
+      /** @description Optional stale-state check; 409 STALE_STATE when the request is in another status. An unknown status is 400. */
+      expected_status?: components['schemas']['ServiceRequestStatus'];
+    };
+    ServiceRequestEditResult: components['schemas']['ServiceRequestDetail'] & {
+      replayed: boolean;
+    };
+    /**
+     * @description suas-specs R10.1 (proposal). Open states are READING, AWAITING_REVIEW and AWAITING_CONFIRMATION; a person has at most one open review.
+     * @enum {string}
+     */
+    LicenceReviewStatus:
+      | 'READING'
+      | 'UNREADABLE'
+      | 'AWAITING_REVIEW'
+      | 'AWAITING_CONFIRMATION'
+      | 'APPROVED'
+      | 'DECLINED'
+      | 'REVOKED';
+    /** @enum {string} */
+    LicenceDeclineReason:
+      | 'NO_VETERAN_DESIGNATION'
+      | 'UNREADABLE'
+      | 'EXPIRED'
+      | 'IDENTITY_MISMATCH'
+      | 'SELFIE_MISMATCH'
+      | 'ALREADY_USED'
+      | 'OTHER';
+    /**
+     * @description Why a review settled UNREADABLE. The reader was down (try later, not counted): CONFIGURATION_INVALID, AUTHENTICATION_REJECTED, REQUEST_INVALID, PROVIDER_UNAVAILABLE, PROVIDER_RESPONSE_INVALID, TIMEOUT, NETWORK_ERROR. Send again (not counted): PHOTOS_GONE, PHOTOS_EXPIRED. NOT_SYNTHETIC (STAGING: no synthetic marker, nothing was sent; not counted). NOT_A_LICENCE (the reader answered; counted).
+     * @enum {string}
+     */
+    LicenceFailureClass:
+      | 'CONFIGURATION_INVALID'
+      | 'AUTHENTICATION_REJECTED'
+      | 'REQUEST_INVALID'
+      | 'PROVIDER_UNAVAILABLE'
+      | 'PROVIDER_RESPONSE_INVALID'
+      | 'TIMEOUT'
+      | 'NETWORK_ERROR'
+      | 'NOT_A_LICENCE'
+      | 'NOT_SYNTHETIC'
+      | 'PHOTOS_GONE'
+      | 'PHOTOS_EXPIRED';
+    /** @description A licence review as the Veteran sees it: states, codes and times only, never a licence field. */
+    LicenceReviewView: {
+      /** Format: uuid */
+      review_id: string;
+      status: components['schemas']['LicenceReviewStatus'];
+      decline_reason: components['schemas']['LicenceDeclineReason'] | null;
+      failure_class: components['schemas']['LicenceFailureClass'] | null;
+      /** @description True for an ALREADY_USED decline while the licence path is open and the person is not revoked (L7.3). */
+      disputable: boolean;
+      /** Format: uuid */
+      dispute_of_review_id: string | null;
+      /** Format: date-time */
+      submitted_at: string;
+      /** Format: date-time */
+      decided_at: string | null;
+    };
+    LicenceVerification: {
+      /** @description False when the reader is disabled or its breaker is open, the newest VA-answered attempt is not NOT_CONFIRMED (PERSON_NOT_FOUND, NOT_TITLE_38, MORE_RESEARCH_REQUIRED), the person is at the VA try limit, the standing is REVOKED, or the request gate is already open. An open review does not change it. */
+      offered: boolean;
+      /** @enum {string} */
+      notice_version: 'licence-notice-v1';
+      /** @description The person's newest review, or null. */
+      review: components['schemas']['LicenceReviewView'] | null;
+    };
+    LicenceImage: {
+      /** @enum {string} */
+      content_type: 'image/jpeg';
+      /** @description A JPEG of at most 2000 px on the long side and 1,000,000 bytes, base64. The server re-encodes it, dropping EXIF, XMP, ICC and comments. */
+      data_base64: string;
+    };
+    /** @description Front and back of the licence and one live selfie (camera only). The selfie is never sent to the reader. */
+    LicenceSubmission: {
+      /** @enum {string} */
+      notice_version: 'licence-notice-v1';
+      front: components['schemas']['LicenceImage'];
+      back: components['schemas']['LicenceImage'];
+      selfie: components['schemas']['LicenceImage'];
+    };
+    /**
+     * @description Whether the licence's first name, last name and birth date match the details given to VA (same canonical form and key). Never the values.
+     * @enum {string}
+     */
+    LicenceIdentityMatch: 'YES' | 'NO' | 'UNKNOWN';
+    /** @enum {string} */
+    LicenceRevokeReason: 'FRAUD' | 'REVIEW_ERROR';
+    LicenceReadField: {
+      value: string | null;
+      /** @enum {string|null} */
+      source: 'barcode' | 'front' | null;
+      /** @description False marks a field to check by eye. */
+      agreed: boolean;
+    };
+    /** @description The reader's fields without the licence number or birth date (§2.1). The consistency checks do not show the card is genuine. */
+    LicenceReading: {
+      fields: {
+        first_name: components['schemas']['LicenceReadField'];
+        last_name: components['schemas']['LicenceReadField'];
+        issue_date: components['schemas']['LicenceReadField'];
+        expiry_date: components['schemas']['LicenceReadField'];
+        issuing_state: components['schemas']['LicenceReadField'];
+      };
+      veteran: {
+        /** @enum {string|null} */
+        value: 'yes' | 'no' | null;
+        /** @enum {string|null} */
+        source: 'barcode' | 'front' | null;
+        agreed: boolean;
+        /** @enum {string|null} */
+        barcode: 'yes' | 'no' | null;
+        /** @enum {string|null} */
+        front: 'yes' | 'no' | null;
+      };
+      consistency_checks: {
+        /** @enum {string} */
+        not_expired: 'pass' | 'fail' | 'not_run';
+        /** @enum {string} */
+        issued_before_expiry: 'pass' | 'fail' | 'not_run';
+        /** @enum {string} */
+        plausible_age: 'pass' | 'fail' | 'not_run';
+        /** @enum {string} */
+        veteran_designation_agrees: 'pass' | 'fail' | 'not_run';
+      };
+    };
+    /** @description The approved review already holding this licence: its record only; its images are gone. */
+    LicenceConflictingReview: {
+      /** Format: uuid */
+      review_id: string;
+      status: components['schemas']['LicenceReviewStatus'];
+      /** Format: date-time */
+      submitted_at: string;
+      /** Format: date-time */
+      decided_at: string | null;
+      /** Format: uuid */
+      approved_by: string | null;
+      /** Format: uuid */
+      confirmed_by: string | null;
+      identity_match: components['schemas']['LicenceIdentityMatch'] | null;
+      notice_version: string;
+    };
+    /** @description The review page (L5.2, L5.3). The UI shows the three images first and reveals the rest only after the reviewer answers that the Veteran designation is visible. No subject name, user id, licence number or birth date. */
+    AdminLicenceReview: {
+      /** Format: uuid */
+      review_id: string;
+      status: components['schemas']['LicenceReviewStatus'];
+      /** Format: date-time */
+      submitted_at: string;
+      /** Format: date-time */
+      decided_at: string | null;
+      notice_version: string;
+      is_dispute: boolean;
+      /** Format: uuid */
+      dispute_of_review_id: string | null;
+      /** @description Whether each image is still stored; all false once decided. */
+      images: {
+        front: boolean;
+        back: boolean;
+        selfie: boolean;
+      };
+      reading: components['schemas']['LicenceReading'] | null;
+      identity_match: components['schemas']['LicenceIdentityMatch'] | null;
+      /** @description Whether this licence is on an APPROVED review in the tenant; null when the number or state was not read. */
+      fingerprint_in_use: boolean | null;
+      failure_class: components['schemas']['LicenceFailureClass'] | null;
+      decline_reason: components['schemas']['LicenceDeclineReason'] | null;
+      revoke_reason: components['schemas']['LicenceRevokeReason'] | null;
+      /** Format: uuid */
+      approved_by: string | null;
+      /** Format: date-time */
+      approved_at: string | null;
+      /** Format: uuid */
+      confirmed_by: string | null;
+      /** Format: date-time */
+      confirmed_at: string | null;
+      /** Format: uuid */
+      declined_by: string | null;
+      /** Format: uuid */
+      revoked_by: string | null;
+      /** @description What this admin may try given the state; the server still enforces every rule. */
+      viewer: {
+        can_approve: boolean;
+        can_confirm: boolean;
+        can_decline: boolean;
+        can_revoke: boolean;
+      };
+      conflicting_review: components['schemas']['LicenceConflictingReview'] | null;
+    };
+    AdminLicenceReviewQueue: {
+      reviews: {
+        /** Format: uuid */
+        review_id: string;
+        status: components['schemas']['LicenceReviewStatus'];
+        /** Format: date-time */
+        submitted_at: string;
+        is_dispute: boolean;
+      }[];
+      limit: number;
+      next_cursor: string | null;
+    };
+    /** @description The designation question and the by-eye checklist (L5.2, L5.3); every answer must be true. A 'no' means the admin declines instead. */
+    LicenceApproval: {
+      /** @enum {boolean} */
+      designation_visible: true;
+      checklist: {
+        /**
+         * @description The selfie and the licence portrait show the same person.
+         * @enum {boolean}
+         */
+        selfie_matches: true;
+        /**
+         * @description Visible security features look present, without signs of editing.
+         * @enum {boolean}
+         */
+        security_features: true;
+        /**
+         * @description The photo shows a whole physical card, not a screen or printout.
+         * @enum {boolean}
+         */
+        whole_card: true;
+      };
+    };
+    LicenceDecline: {
+      reason: components['schemas']['LicenceDeclineReason'];
+    };
+    LicenceRevoke: {
+      reason: components['schemas']['LicenceRevokeReason'];
+    };
+    LicenceRecuse: Record<string, never>;
+    ConsentTemplateVersion: {
+      /** @description <template_key>@<version>; what a grant cites as consent_template_version. */
+      version_key: string;
+      template_key: string;
+      version: number;
+      /** @enum {string} */
+      status: 'DRAFT' | 'PUBLISHED' | 'SUPERSEDED';
+      /** @description Administrator-written copy (CONSENT.md §6). */
+      body: string | null;
+      /** Format: date-time */
+      published_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    ConsentTemplateVersionResult: components['schemas']['ConsentTemplateVersion'] & {
+      replayed: boolean;
+    };
+    ConsentTemplatePublished: components['schemas']['ConsentTemplateVersion'] & {
+      superseded_version_keys: string[];
+    };
+    CreateConsentTemplateVersionRequest: {
+      template_key: string;
+      body: string;
+    };
+    PublishedConsentTemplate: {
+      version_key: string;
+      template_key: string;
+      version: number;
+      body: string | null;
+      /** Format: date-time */
+      published_at: string | null;
+    };
+    TrustedContactInvitation: {
+      /** Format: uuid */
+      trusted_contact_id: string;
+      veteran_display_name: string | null;
+      relationship_label: string;
+    };
+  };
+  responses: {
+    /** @description Canonical API.md §6 error body */
+    Error: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['ErrorBody'];
+      };
+    };
+  };
+  parameters: {
+    IdPath: string;
+    /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+    IdempotencyKey: string;
+    CaseIdPath: string;
+    /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+    PageCursor: string;
+    PageLimit: number;
+  };
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    getHealth: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Process is up; dependency posture without secrets */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        status: "ok";
-                        dependencies: {
-                            database: {
-                                /** @enum {string} */
-                                status: "configured" | "absent";
-                            };
-                            job_queue: {
-                                /** @enum {string} */
-                                status: "configured" | "absent";
-                                /** @enum {string} */
-                                durability?: "durable" | "non-durable";
-                                implementation?: string;
-                            };
-                        };
-                    };
-                };
-            };
-        };
-    };
-    createAuthChallenge: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AuthChallengeRequest"];
-            };
-        };
-        responses: {
-            /** @description Accepted. The same answer for any address, so it cannot be used to find out who is enrolled. A code goes to the address for an enrolled person and, for EMAIL_OTP, to a new address (self sign-up). */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthChallengeAccepted"];
-                };
-            };
-            400: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            429: components["responses"]["Error"];
-            503: components["responses"]["Error"];
-        };
-    };
-    verifyAuthChallenge: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AuthVerifyRequest"];
-            };
-        };
-        responses: {
-            /** @description Session created. A code for a new address creates the user (ACTIVE, no county, no display name) first. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthSession"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            429: components["responses"]["Error"];
-        };
-    };
-    createMfaChallenge: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description MFA challenge started */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MfaChallenge"];
-                };
-            };
-            401: components["responses"]["Error"];
-        };
-    };
-    verifyMfaChallenge: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MfaVerifyRequest"];
-            };
-        };
-        responses: {
-            /** @description Session elevated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MfaVerified"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    logoutSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["LogoutRequest"];
-            };
-        };
-        responses: {
-            /** @description Session revoked (or every session, with everywhere: true) */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    listCheckIns: {
-        parameters: {
-            query: {
-                status: "IN_PROGRESS" | "in_progress";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Bounded list; at most one is expected */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        check_ins: components["schemas"]["CheckIn"][];
-                    };
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    startCheckIn: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description An in-flight Check-In (started in the last 24 hours) already exists, so it is returned instead of a second one */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckInWithQuestions"];
-                };
-            };
-            /** @description Check-in started with its questions */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckInWithQuestions"];
-                };
-            };
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    getCheckIn: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Check-in with its questions and the questions already answered */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckInDetail"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: components["responses"]["Error"];
-        };
-    };
-    saveCheckInResponse: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CheckInResponseRequest"];
-            };
-        };
-        responses: {
-            /** @description Answer saved */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckIn"];
-                };
-            };
-            /** @description VALIDATION_FAILED: malformed body, or the question is not part of this Check-In's questionnaire version, or the option is not one of that question's options */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    completeCheckIn: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Check-in completed (or incomplete) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckInCompleted"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: components["responses"]["Error"];
-        };
-    };
-    openCase: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Existing or replayed non-closed Support Case */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenCaseResult"];
-                };
-            };
-            /** @description Support Case created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenCaseResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            409: components["responses"]["Error"];
-            /** @description COUNTY_REQUIRED: the person has not chosen a county */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    getCase: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Case projection */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SupportCase"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    listResources: {
-        parameters: {
-            query?: {
-                category?: "FOOD" | "TRANSPORTATION" | "SHELTER" | "PEER_SUPPORT";
-                county?: string;
-                /** @description Opaque keyset cursor taken from a prior response's next_cursor. */
-                cursor?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Active Resources */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogResourceList"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    getResource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One active Resource */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogResource"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: components["responses"]["Error"];
-        };
-    };
-    getImmediateResources: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Approved crisis destinations or labelled placeholder */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImmediateResources"];
-                };
-            };
-        };
-    };
-    getAdminBuildInfo: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Build info without secrets */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BuildInfo"];
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-        };
-    };
-    getAdminAdapterCatalog: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Catalog */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        adapters: components["schemas"]["AdapterCatalogEntry"][];
-                    };
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-        };
-    };
-    getAdminAdapterConfigurations: {
-        parameters: {
-            query: {
-                tenant_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Configurations for the tenant */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        configurations: components["schemas"]["AdapterConfiguration"][];
-                    };
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    enableAdminAdapterConfiguration: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AdapterEnableRequest"];
-            };
-        };
-        responses: {
-            /** @description Configuration after the change */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdapterConfiguration"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    disableAdminAdapterConfiguration: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AdapterDisableRequest"];
-            };
-        };
-        responses: {
-            /** @description Configuration after the change */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdapterConfiguration"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    setAdminAdapterRouting: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AdapterRoutingRequest"];
-            };
-        };
-        responses: {
-            /** @description Configuration after the change */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdapterConfiguration"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    getVeteransMe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The signed-in person */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VeteranMe"];
-                };
-            };
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    listConsents: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Caller grants only */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        consents: components["schemas"]["ConsentGrant"][];
-                    };
-                };
-            };
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    grantConsent: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GrantConsentRequest"];
-            };
-        };
-        responses: {
-            /** @description Identical idempotent replay */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentGrantResult"];
-                };
-            };
-            /** @description Grant created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentGrantResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    listCaseServiceRequests: {
-        parameters: {
-            query?: {
-                /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
-                cursor?: components["parameters"]["PageCursor"];
-                limit?: components["parameters"]["PageLimit"];
-            };
-            header?: never;
-            path: {
-                caseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Service Requests of the case */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseServiceRequestList"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    createCaseServiceRequest: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                caseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCaseServiceRequestRequest"];
-            };
-        };
-        responses: {
-            /** @description Idempotent replay */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceRequestFormResult"];
-                };
-            };
-            /** @description Service Request created (status CREATED) */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceRequestFormResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            /** @description COUNTY_REQUIRED: the person has not chosen a county; UNPROCESSABLE: destination given for a category other than TRANSPORTATION */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    getServiceRequest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The request, for its requester or the one person who accepted it only (another helper on the same Veteran's case gets 404) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceRequestDetail"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    listTrustedContacts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Trusted circle */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        trusted_contacts: components["schemas"]["TrustedContact"][];
-                    };
-                };
-            };
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    inviteTrustedContact: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InviteTrustedContactRequest"];
-            };
-        };
-        responses: {
-            /** @description Replay of an invite already created with this Idempotency-Key */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrustedContactResult"];
-                };
-            };
-            /** @description Invitation created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrustedContactResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    removeTrustedContact: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Contact removed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrustedContact"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description VERIFICATION_REQUIRED: the person has not passed the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: components["responses"]["Error"];
-        };
-    };
-    revokeConsent: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Grant after revoke */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentGrantResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-        };
-    };
-    editServiceRequest: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ServiceRequestEditRequest"];
-            };
-        };
-        responses: {
-            /** @description The request after the edit, with the same fields as the detail read. On an idempotent replay the current detail is returned with replayed true; the edited text is never stored with the idempotency record. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceRequestEditResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description FORBIDDEN: the caller is the person who accepted this request, not the requester */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: components["responses"]["Error"];
-            /** @description ILLEGAL_TRANSITION when the request was accepted or is not SUBMITTED, TRIAGED or MATCHING; STALE_STATE when expected_status does not match */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            413: components["responses"]["Error"];
-            /** @description UNPROCESSABLE: meeting_place cleared on FOOD, TRANSPORTATION or SHELTER, or destination given for another category */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    executeServiceRequestCommand: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-                /** @description The command in lowercase, as API.md §8 and §18 name it (for example `release`, `start-matching`). Matching is case-insensitive and `-` equals `_`; the UPPERCASE enum value (`RELEASE`) is kept as an alias for existing clients. Both spellings share one idempotency scope. */
-                command: "submit" | "triage" | "start-matching" | "assign" | "accept" | "start" | "fulfill" | "confirm" | "close" | "decline" | "rematch" | "cancel" | "expire" | "mark-unfulfillable" | "escalate" | "return-from-escalation" | "release" | "SUBMIT" | "TRIAGE" | "START_MATCHING" | "ASSIGN" | "ACCEPT" | "START" | "FULFILL" | "CONFIRM" | "CLOSE" | "DECLINE" | "REMATCH" | "CANCEL" | "EXPIRE" | "MARK_UNFULFILLABLE" | "ESCALATE" | "RETURN_FROM_ESCALATION" | "RELEASE";
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["ServiceRequestCommandRequest"];
-            };
-        };
-        responses: {
-            /** @description Request after the command */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceRequestCommandResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits before passing the ID scan + selfie check */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    listCaseFollowUps: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                caseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Open Follow-Ups */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        follow_ups: components["schemas"]["FollowUp"][];
-                    };
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    createFollowUp: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateFollowUpRequest"];
-            };
-        };
-        responses: {
-            /** @description Idempotent replay */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FollowUpResult"];
-                };
-            };
-            /** @description Follow-Up created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FollowUpResult"];
-                };
-            };
-            /** @description VALIDATION_FAILED: malformed body, a service_request_id that is not a request of this case, or a responsible_id that is not the actor responsible_type names (the case's Veteran for VETERAN, a user of the tenant for USER) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    completeFollowUp: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Follow-Up completed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FollowUpCompleted"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-        };
-    };
-    listNotifications: {
-        parameters: {
-            query?: {
-                /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
-                cursor?: components["parameters"]["PageCursor"];
-                limit?: components["parameters"]["PageLimit"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Bounded inbox without destinations, newest first (by creation time) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        notifications: components["schemas"]["Notification"][];
-                        limit: number;
-                        /** @description Pass back as cursor for older notifications; null on the last page. */
-                        next_cursor: string | null;
-                    };
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-        };
-    };
-    putNotificationPreferences: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NotificationPreferenceRequest"];
-            };
-        };
-        responses: {
-            /** @description Preference stored */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NotificationPreferenceRequest"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    acceptTrustedContact: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Invitation accepted */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrustedContactResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-        };
-    };
-    listContactAttempts: {
-        parameters: {
-            query?: {
-                /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
-                cursor?: components["parameters"]["PageCursor"];
-                limit?: components["parameters"]["PageLimit"];
-            };
-            header?: never;
-            path: {
-                caseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Contact attempts */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        contact_attempts: components["schemas"]["ContactAttempt"][];
-                        /** @description Pass back as cursor for older attempts (newest attempted_at first); null on the last page. */
-                        next_cursor: string | null;
-                    };
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    logContactAttempt: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                caseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["LogContactAttemptRequest"];
-            };
-        };
-        responses: {
-            /** @description Replay or duplicate of an earlier attempt */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContactAttemptResult"];
-                };
-            };
-            /** @description Contact attempt logged */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContactAttemptResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    completeContact: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                caseId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CompleteContactRequest"];
-            };
-        };
-        responses: {
-            /** @description Replay or duplicate of an earlier contact */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContactAttemptResult"];
-                };
-            };
-            /** @description Contact recorded */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContactAttemptResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    resolveCaseWithSettlement: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResolveCaseRequest"];
-            };
-        };
-        responses: {
-            /** @description Case resolved; Settlement created for this resolution cycle */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResolveCaseResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    listCaseSettlements: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Settlements. The requester gets VeteranSettlement items (no internal actors); the accepter gets full Settlements. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        settlements: (components["schemas"]["Settlement"] | components["schemas"]["VeteranSettlement"])[];
-                    };
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    getCaseSettlement: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-                settlement_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One Settlement (full for the accepter, reduced for the requester) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Settlement"] | components["schemas"]["VeteranSettlement"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    triageCase: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["CaseCommandRequest"];
-            };
-        };
-        responses: {
-            /** @description Case after the command */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseCommandResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    activateCase: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["CaseCommandRequest"];
-            };
-        };
-        responses: {
-            /** @description Case after the command */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseCommandResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    moveCaseToFollowup: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CaseCommandReasonRequest"];
-            };
-        };
-        responses: {
-            /** @description Case after the command */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseCommandResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    resumeCaseActive: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["CaseCommandRequest"];
-            };
-        };
-        responses: {
-            /** @description Case after the command */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseCommandResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    escalateCase: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CaseCommandReasonRequest"];
-            };
-        };
-        responses: {
-            /** @description Case after the command */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseCommandResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    closeCase: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["CaseCommandRequest"];
-            };
-        };
-        responses: {
-            /** @description Case after the command */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseCommandResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    reopenCase: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CaseCommandReasonRequest"];
-            };
-        };
-        responses: {
-            /** @description Case after the command */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseCommandResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    listServiceRequests: {
-        parameters: {
-            query?: {
-                ownership?: "open" | "mine" | "requested";
-                /** @description Opaque keyset cursor taken from a prior response's next_cursor. */
-                cursor?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Bounded page. ownership=open: requests the caller could accept (category, county, status, summary). ownership=mine: requests the caller accepted, with the requester name. ownership=requested: the caller own requests in any status, newest first (no county needed). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceRequestList"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description COUNTY_REQUIRED: the caller has not chosen a county */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    createServiceRequestForm: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ServiceRequestFormRequest"];
-            };
-        };
-        responses: {
-            /** @description Idempotent replay */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceRequestFormResult"];
-                };
-            };
-            /** @description Service Request created and submitted */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ServiceRequestFormResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    acceptServiceRequest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Accepted (or the same answer again for the person who already holds it) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcceptServiceRequestResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            /** @description The caller is the requester */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            404: components["responses"]["Error"];
-            /** @description Someone else accepted first */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description COUNTY_REQUIRED */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    putVeteransMeCounty: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetCountyRequest"];
-            };
-        };
-        responses: {
-            /** @description County stored */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SetCountyResponse"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    getVeteransMeIdVerification: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ID scan and selfie status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdVerification"];
-                };
-            };
-            401: components["responses"]["Error"];
-        };
-    };
-    postVeteransMeIdVerificationStart: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A check is already pending */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdVerification"];
-                };
-            };
-            /** @description Check started */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdVerification"];
-                };
-            };
-            401: components["responses"]["Error"];
-            /** @description ID_VERIFICATION_UNAVAILABLE: no verification provider is configured or it is down */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    getIntakeStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Availability and the plain request form to use otherwise */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeStatus"];
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-        };
-    };
-    createIntakeDraft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IntakeMessageRequest"];
-            };
-        };
-        responses: {
-            /** @description Assistant unavailable or failed: show the plain request form */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeTurn"];
-                };
-            };
-            /** @description Draft created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeTurn"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    getIntakeDraft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Draft with the text you typed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeDraftWithText"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    updateIntakeDraft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IntakeDraftEditRequest"];
-            };
-        };
-        responses: {
-            /** @description Draft after the edit */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeDraft"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    addIntakeMessage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IntakeMessageRequest"];
-            };
-        };
-        responses: {
-            /** @description Follow-up turn */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeTurn"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            /** @description ILLEGAL_TRANSITION when the draft was submitted or discarded; STALE_STATE when another message or edit changed the draft while this one was being answered (send it again) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            413: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    submitIntakeDraft: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Idempotent replay */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeSubmitResult"];
-                };
-            };
-            /** @description Service Request created from the draft. 422 UNPROCESSABLE when the draft is incomplete or a required meeting_place is missing. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntakeSubmitResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            422: components["responses"]["Error"];
-        };
-    };
-    editAdminResourceDraft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResourceDraftEditRequest"];
-            };
-        };
-        responses: {
-            /** @description Edited draft */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceDraft"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    extractAdminResourceDrafts: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResourceDraftExtractRequest"];
-            };
-        };
-        responses: {
-            /** @description Created drafts (possibly none) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceDraftExtraction"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-            502: components["responses"]["Error"];
-            503: components["responses"]["Error"];
-        };
-    };
-    getAdminResourceDrafts: {
-        parameters: {
-            query?: {
-                status?: "DRAFT" | "PUBLISHED" | "REJECTED";
-                cursor?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Drafts and catalog builder state */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceDraftList"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-        };
-    };
-    discardAdminResourceDraft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Discarded draft */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceDraft"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-        };
-    };
-    publishAdminResourceDraft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Published draft and the new Resource id */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceDraftPublished"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-        };
-    };
-    getAdminResourceDraft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Draft */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceDraft"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    listChatMessages: {
-        parameters: {
-            query?: {
-                limit?: number;
-                /** @description Opaque next_cursor from the previous page; returns older messages */
-                cursor?: string;
-                /** @description DISPATCH.md §14.10 (R8.11, D-061, released in 0.9.0). A chat_thread_id of this request. Without it the live thread is returned. An earlier (released) thread is readable only by the requester; for anyone else, for a thread of another request, or for an unknown id, the response is the same 404. */
-                thread?: string;
-            };
-            header?: never;
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A page of messages */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatMessagePage"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            /** @description CHAT_UNAVAILABLE: the request has not been accepted yet */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    sendChatMessage: {
-        parameters: {
-            query?: {
-                /** @description DISPATCH.md §14.10 (R8.11, D-061, released in 0.9.0). Optional. If given, it must be the live thread's chat_thread_id. An earlier (released) thread is read-only: naming it, a thread of another request, or an unknown id gets the same 404, and nothing is stored. */
-                thread?: string;
-            };
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["IdPath"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    body: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Replay of an earlier send with the same Idempotency-Key */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatMessageSent"];
-                };
-            };
-            /** @description Message stored; the other participant's live connections are notified on a best-effort basis */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatMessageSent"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            /** @description CHAT_UNAVAILABLE (not accepted yet), CHAT_CLOSED (a release ended the thread; it is read-only and the requester can still read it), or IDEMPOTENCY_CONFLICT */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            413: components["responses"]["Error"];
-        };
-    };
-    issueChatConnectTicket: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One-time WebSocket connect ticket */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatConnectTicket"];
-                };
-            };
-            401: components["responses"]["Error"];
-            /** @description CHAT_REALTIME_UNAVAILABLE: live updates are not configured; messages still work over REST */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-        };
-    };
-    listChatThreads: {
-        parameters: {
-            query?: {
-                /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
-                cursor?: components["parameters"]["PageCursor"];
-                limit?: components["parameters"]["PageLimit"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The caller threads (as requester or accepter), newest activity first. A thread that gets a new message moves to the first page. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatThreadList"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-        };
-    };
-    putVeteransMeProfile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetProfileRequest"];
-            };
-        };
-        responses: {
-            /** @description Display name stored (trimmed) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SetProfileResponse"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    listAdminConsentTemplates: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Template versions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        templates: components["schemas"]["ConsentTemplateVersion"][];
-                    };
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-        };
-    };
-    createAdminConsentTemplateVersion: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateConsentTemplateVersionRequest"];
-            };
-        };
-        responses: {
-            /** @description Replay of a version already created with this Idempotency-Key */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentTemplateVersionResult"];
-                };
-            };
-            /** @description DRAFT version created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentTemplateVersionResult"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-            413: components["responses"]["Error"];
-        };
-    };
-    publishAdminConsentTemplateVersion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Version key, `<template_key>@<version>`. */
-                version: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Published version */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentTemplatePublished"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-        };
-    };
-    getPublishedConsentTemplate: {
-        parameters: {
-            query: {
-                purpose: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Current published version */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublishedConsentTemplate"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    listTrustedContactInvitations: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Pending invitations */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        invitations: components["schemas"]["TrustedContactInvitation"][];
-                    };
-                };
-            };
-            401: components["responses"]["Error"];
-        };
-    };
+  getHealth: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Process is up; dependency posture without secrets */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            status: 'ok';
+            dependencies: {
+              database: {
+                /** @enum {string} */
+                status: 'configured' | 'absent';
+              };
+              job_queue: {
+                /** @enum {string} */
+                status: 'configured' | 'absent';
+                /** @enum {string} */
+                durability?: 'durable' | 'non-durable';
+                implementation?: string;
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+  createAuthChallenge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AuthChallengeRequest'];
+      };
+    };
+    responses: {
+      /** @description Accepted. The same answer for any address, so it cannot be used to find out who is enrolled. A code goes to the address for an enrolled person and, for EMAIL_OTP, to a new address (self sign-up). */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuthChallengeAccepted'];
+        };
+      };
+      400: components['responses']['Error'];
+      413: components['responses']['Error'];
+      429: components['responses']['Error'];
+      503: components['responses']['Error'];
+    };
+  };
+  verifyAuthChallenge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AuthVerifyRequest'];
+      };
+    };
+    responses: {
+      /** @description Session created. A code for a new address creates the user (ACTIVE, no county, no display name) first. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuthSession'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      413: components['responses']['Error'];
+      429: components['responses']['Error'];
+    };
+  };
+  createMfaChallenge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description MFA challenge started */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MfaChallenge'];
+        };
+      };
+      401: components['responses']['Error'];
+    };
+  };
+  verifyMfaChallenge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MfaVerifyRequest'];
+      };
+    };
+    responses: {
+      /** @description Session elevated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MfaVerified'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  logoutSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['LogoutRequest'];
+      };
+    };
+    responses: {
+      /** @description Session revoked (or every session, with everywhere: true) */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  listCheckIns: {
+    parameters: {
+      query: {
+        status: 'IN_PROGRESS' | 'in_progress';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded list; at most one is expected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            check_ins: components['schemas']['CheckIn'][];
+          };
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  startCheckIn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description An in-flight Check-In (started in the last 24 hours) already exists, so it is returned instead of a second one */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CheckInWithQuestions'];
+        };
+      };
+      /** @description Check-in started with its questions */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CheckInWithQuestions'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getCheckIn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Check-in with its questions and the questions already answered */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CheckInDetail'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+    };
+  };
+  saveCheckInResponse: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CheckInResponseRequest'];
+      };
+    };
+    responses: {
+      /** @description Answer saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CheckIn'];
+        };
+      };
+      /** @description VALIDATION_FAILED: malformed body, or the question is not part of this Check-In's questionnaire version, or the option is not one of that question's options */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  completeCheckIn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Check-in completed (or incomplete) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CheckInCompleted'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+    };
+  };
+  openCase: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Existing or replayed non-closed Support Case */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OpenCaseResult'];
+        };
+      };
+      /** @description Support Case created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OpenCaseResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      409: components['responses']['Error'];
+      /** @description COUNTY_REQUIRED: the person has not chosen a county */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getCase: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Case projection */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SupportCase'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  listResources: {
+    parameters: {
+      query?: {
+        category?: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
+        county?: string;
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor. */
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Active Resources */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CatalogResourceList'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getResource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One active Resource */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CatalogResource'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+    };
+  };
+  getImmediateResources: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Approved crisis destinations or labelled placeholder */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ImmediateResources'];
+        };
+      };
+    };
+  };
+  getAdminBuildInfo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Build info without secrets */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['BuildInfo'];
+        };
+      };
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+    };
+  };
+  getAdminAdapterCatalog: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Catalog */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            adapters: components['schemas']['AdapterCatalogEntry'][];
+          };
+        };
+      };
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+    };
+  };
+  getAdminAdapterConfigurations: {
+    parameters: {
+      query: {
+        tenant_id: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Configurations for the tenant */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            configurations: components['schemas']['AdapterConfiguration'][];
+          };
+        };
+      };
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  enableAdminAdapterConfiguration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdapterEnableRequest'];
+      };
+    };
+    responses: {
+      /** @description Configuration after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdapterConfiguration'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  disableAdminAdapterConfiguration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdapterDisableRequest'];
+      };
+    };
+    responses: {
+      /** @description Configuration after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdapterConfiguration'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  setAdminAdapterRouting: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AdapterRoutingRequest'];
+      };
+    };
+    responses: {
+      /** @description Configuration after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdapterConfiguration'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  getVeteransMe: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The signed-in person */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['VeteranMe'];
+        };
+      };
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  listConsents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Caller grants only */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            consents: components['schemas']['ConsentGrant'][];
+          };
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  grantConsent: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GrantConsentRequest'];
+      };
+    };
+    responses: {
+      /** @description Identical idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ConsentGrantResult'];
+        };
+      };
+      /** @description Grant created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ConsentGrantResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  listCaseServiceRequests: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
+      header?: never;
+      path: {
+        caseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Service Requests of the case */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CaseServiceRequestList'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  createCaseServiceRequest: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        caseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateCaseServiceRequestRequest'];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ServiceRequestFormResult'];
+        };
+      };
+      /** @description Service Request created (status CREATED) */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ServiceRequestFormResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      /** @description COUNTY_REQUIRED: the person has not chosen a county; UNPROCESSABLE: destination given for a category other than TRANSPORTATION */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getServiceRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The request, for its requester or the one person who accepted it only (another helper on the same Veteran's case gets 404) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ServiceRequestDetail'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  listTrustedContacts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Trusted circle */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            trusted_contacts: components['schemas']['TrustedContact'][];
+          };
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  inviteTrustedContact: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['InviteTrustedContactRequest'];
+      };
+    };
+    responses: {
+      /** @description Replay of an invite already created with this Idempotency-Key */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrustedContactResult'];
+        };
+      };
+      /** @description Invitation created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrustedContactResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  removeTrustedContact: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Contact removed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrustedContact'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+    };
+  };
+  revokeConsent: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Grant after revoke */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ConsentGrantResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+    };
+  };
+  editServiceRequest: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ServiceRequestEditRequest'];
+      };
+    };
+    responses: {
+      /** @description The request after the edit, with the same fields as the detail read. On an idempotent replay the current detail is returned with replayed true; the edited text is never stored with the idempotency record. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ServiceRequestEditResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description FORBIDDEN: the caller is the person who accepted this request, not the requester */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+      /** @description ILLEGAL_TRANSITION when the request was accepted or is not SUBMITTED, TRIAGED or MATCHING; STALE_STATE when expected_status does not match */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      413: components['responses']['Error'];
+      /** @description UNPROCESSABLE: meeting_place cleared on FOOD, TRANSPORTATION or SHELTER, or destination given for another category */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  executeServiceRequestCommand: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+        /** @description The command in lowercase, as API.md §8 and §18 name it (for example `release`, `start-matching`). Matching is case-insensitive and `-` equals `_`; the UPPERCASE enum value (`RELEASE`) is kept as an alias for existing clients. Both spellings share one idempotency scope. */
+        command:
+          | 'submit'
+          | 'triage'
+          | 'start-matching'
+          | 'assign'
+          | 'accept'
+          | 'start'
+          | 'fulfill'
+          | 'confirm'
+          | 'close'
+          | 'decline'
+          | 'rematch'
+          | 'cancel'
+          | 'expire'
+          | 'mark-unfulfillable'
+          | 'escalate'
+          | 'return-from-escalation'
+          | 'release'
+          | 'SUBMIT'
+          | 'TRIAGE'
+          | 'START_MATCHING'
+          | 'ASSIGN'
+          | 'ACCEPT'
+          | 'START'
+          | 'FULFILL'
+          | 'CONFIRM'
+          | 'CLOSE'
+          | 'DECLINE'
+          | 'REMATCH'
+          | 'CANCEL'
+          | 'EXPIRE'
+          | 'MARK_UNFULFILLABLE'
+          | 'ESCALATE'
+          | 'RETURN_FROM_ESCALATION'
+          | 'RELEASE';
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['ServiceRequestCommandRequest'];
+      };
+    };
+    responses: {
+      /** @description Request after the command */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ServiceRequestCommandResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description FORBIDDEN, or VERIFICATION_REQUIRED when a requester submits without a VERIFIED VA Veteran Confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  listCaseFollowUps: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        caseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Open Follow-Ups */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            follow_ups: components['schemas']['FollowUp'][];
+          };
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  createFollowUp: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateFollowUpRequest'];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FollowUpResult'];
+        };
+      };
+      /** @description Follow-Up created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FollowUpResult'];
+        };
+      };
+      /** @description VALIDATION_FAILED: malformed body, a service_request_id that is not a request of this case, or a responsible_id that is not the actor responsible_type names (the case's Veteran for VETERAN, a user of the tenant for USER) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  completeFollowUp: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Follow-Up completed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FollowUpCompleted'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+    };
+  };
+  listNotifications: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded inbox without destinations, newest first (by creation time) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            notifications: components['schemas']['Notification'][];
+            limit: number;
+            /** @description Pass back as cursor for older notifications; null on the last page. */
+            next_cursor: string | null;
+          };
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+    };
+  };
+  putNotificationPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NotificationPreferenceRequest'];
+      };
+    };
+    responses: {
+      /** @description Preference stored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['NotificationPreferenceRequest'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  acceptTrustedContact: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Invitation accepted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrustedContactResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+    };
+  };
+  listContactAttempts: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
+      header?: never;
+      path: {
+        caseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Contact attempts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            contact_attempts: components['schemas']['ContactAttempt'][];
+            /** @description Pass back as cursor for older attempts (newest attempted_at first); null on the last page. */
+            next_cursor: string | null;
+          };
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  logContactAttempt: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        caseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['LogContactAttemptRequest'];
+      };
+    };
+    responses: {
+      /** @description Replay or duplicate of an earlier attempt */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ContactAttemptResult'];
+        };
+      };
+      /** @description Contact attempt logged */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ContactAttemptResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  completeContact: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        caseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CompleteContactRequest'];
+      };
+    };
+    responses: {
+      /** @description Replay or duplicate of an earlier contact */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ContactAttemptResult'];
+        };
+      };
+      /** @description Contact recorded */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ContactAttemptResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  resolveCaseWithSettlement: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResolveCaseRequest'];
+      };
+    };
+    responses: {
+      /** @description Case resolved; Settlement created for this resolution cycle */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ResolveCaseResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  listCaseSettlements: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Settlements. The requester gets VeteranSettlement items (no internal actors); the accepter gets full Settlements. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            settlements: (
+              components['schemas']['Settlement'] | components['schemas']['VeteranSettlement']
+            )[];
+          };
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  getCaseSettlement: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+        settlement_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One Settlement (full for the accepter, reduced for the requester) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json':
+            components['schemas']['Settlement'] | components['schemas']['VeteranSettlement'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  triageCase: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['CaseCommandRequest'];
+      };
+    };
+    responses: {
+      /** @description Case after the command */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  activateCase: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['CaseCommandRequest'];
+      };
+    };
+    responses: {
+      /** @description Case after the command */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  moveCaseToFollowup: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CaseCommandReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description Case after the command */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  resumeCaseActive: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['CaseCommandRequest'];
+      };
+    };
+    responses: {
+      /** @description Case after the command */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  escalateCase: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CaseCommandReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description Case after the command */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  closeCase: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['CaseCommandRequest'];
+      };
+    };
+    responses: {
+      /** @description Case after the command */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  reopenCase: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CaseCommandReasonRequest'];
+      };
+    };
+    responses: {
+      /** @description Case after the command */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CaseCommandResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  listServiceRequests: {
+    parameters: {
+      query?: {
+        ownership?: 'open' | 'mine' | 'requested';
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor. */
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Bounded page. ownership=open: requests the caller could accept (category, county, status, summary). ownership=mine: requests the caller accepted, with the requester name. ownership=requested: the caller own requests in any status, newest first (no county needed). */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ServiceRequestList'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description COUNTY_REQUIRED: the caller has not chosen a county */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  createServiceRequestForm: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ServiceRequestFormRequest'];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ServiceRequestFormResult'];
+        };
+      };
+      /** @description Service Request created and submitted */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ServiceRequestFormResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  acceptServiceRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted (or the same answer again for the person who already holds it) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AcceptServiceRequestResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      /** @description The caller is the requester */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      404: components['responses']['Error'];
+      /** @description Someone else accepted first */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description COUNTY_REQUIRED */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  putVeteransMeCounty: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetCountyRequest'];
+      };
+    };
+    responses: {
+      /** @description County stored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SetCountyResponse'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  postVeteransMeVerificationVaConfirm: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VaConfirmationRequest'];
+      };
+    };
+    responses: {
+      /** @description The settled result of this attempt, an identical replay, or the existing VERIFIED standing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['VaConfirmationResult'];
+        };
+      };
+      /** @description VALIDATION_FAILED: a field does not match the VA pattern, an unknown field was sent, or the Idempotency-Key header is missing; the message names fields only, never values. VA_NOTICE_VERSION_REQUIRED: noticeVersion is missing or not va-notice-v1. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REVOKED: SUAS revoked this person's confirmation; no new attempt is taken */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description VA_NAME_MISMATCH: the typed name does not match the account display name (no VA call, not counted). VA_IDENTITY_ALREADY_VERIFIED: these details cannot be used to verify this account (counted; the message never names another account). IDEMPOTENCY_CONFLICT: the key was used with a different body, or another attempt is still in flight. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description VERIFICATION_ATTEMPT_LIMIT: 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, an attempt in flight or an identity conflict) in the last 24 hours, or the backstop cap of 20 VA calls, which counts the same rows; outages and VA 400s (UNAVAILABLE) count toward neither. Retry-After gives the seconds until the person is under the 5 tries again. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description ID_VERIFICATION_UNAVAILABLE: VA confirmation is not offered in this environment (SUAS_VA_CONFIRMATION_MODE=disabled). Not an outage; self-attestation stays available. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postVeteransMeVerificationSelfAttest: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': Record<string, never>;
+      };
+    };
+    responses: {
+      /** @description The standing after self-attesting, or the existing VERIFIED standing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdVerification'];
+        };
+      };
+      /** @description VALIDATION_FAILED: a field was sent, or the Idempotency-Key header is missing */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REVOKED: SUAS revoked this person's confirmation */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      409: components['responses']['Error'];
+    };
+  };
+  getIntakeStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Availability and the plain request form to use otherwise */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IntakeStatus'];
+        };
+      };
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+    };
+  };
+  createIntakeDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IntakeMessageRequest'];
+      };
+    };
+    responses: {
+      /** @description Assistant unavailable or failed: show the plain request form */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IntakeTurn'];
+        };
+      };
+      /** @description Draft created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IntakeTurn'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  getIntakeDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Draft with the text you typed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IntakeDraftWithText'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  updateIntakeDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IntakeDraftEditRequest'];
+      };
+    };
+    responses: {
+      /** @description Draft after the edit */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IntakeDraft'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  addIntakeMessage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['IntakeMessageRequest'];
+      };
+    };
+    responses: {
+      /** @description Follow-up turn */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IntakeTurn'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      /** @description ILLEGAL_TRANSITION when the draft was submitted or discarded; STALE_STATE when another message or edit changed the draft while this one was being answered (send it again) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      413: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  submitIntakeDraft: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IntakeSubmitResult'];
+        };
+      };
+      /** @description Service Request created from the draft. 422 UNPROCESSABLE when the draft is incomplete or a required meeting_place is missing. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IntakeSubmitResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      422: components['responses']['Error'];
+    };
+  };
+  editAdminResourceDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResourceDraftEditRequest'];
+      };
+    };
+    responses: {
+      /** @description Edited draft */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ResourceDraft'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  extractAdminResourceDrafts: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResourceDraftExtractRequest'];
+      };
+    };
+    responses: {
+      /** @description Created drafts (possibly none) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ResourceDraftExtraction'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+      502: components['responses']['Error'];
+      503: components['responses']['Error'];
+    };
+  };
+  getAdminResourceDrafts: {
+    parameters: {
+      query?: {
+        status?: 'DRAFT' | 'PUBLISHED' | 'REJECTED';
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Drafts and catalog builder state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ResourceDraftList'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+    };
+  };
+  discardAdminResourceDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Discarded draft */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ResourceDraft'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+    };
+  };
+  publishAdminResourceDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Published draft and the new Resource id */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ResourceDraftPublished'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+    };
+  };
+  getAdminResourceDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Draft */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ResourceDraft'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  listChatMessages: {
+    parameters: {
+      query?: {
+        limit?: number;
+        /** @description Opaque next_cursor from the previous page; returns older messages */
+        cursor?: string;
+        /** @description DISPATCH.md §14.10 (R8.11, D-061, released in 0.9.0). A chat_thread_id of this request. Without it the live thread is returned. An earlier (released) thread is readable only by the requester; for anyone else, for a thread of another request, or for an unknown id, the response is the same 404. */
+        thread?: string;
+      };
+      header?: never;
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of messages */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatMessagePage'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+      /** @description CHAT_UNAVAILABLE: the request has not been accepted yet */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  sendChatMessage: {
+    parameters: {
+      query?: {
+        /** @description DISPATCH.md §14.10 (R8.11, D-061, released in 0.9.0). Optional. If given, it must be the live thread's chat_thread_id. An earlier (released) thread is read-only: naming it, a thread of another request, or an unknown id gets the same 404, and nothing is stored. */
+        thread?: string;
+      };
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['IdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          body: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Replay of an earlier send with the same Idempotency-Key */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatMessageSent'];
+        };
+      };
+      /** @description Message stored; the other participant's live connections are notified on a best-effort basis */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatMessageSent'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+      /** @description CHAT_UNAVAILABLE (not accepted yet), CHAT_CLOSED (a release ended the thread; it is read-only and the requester can still read it), or IDEMPOTENCY_CONFLICT */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      413: components['responses']['Error'];
+    };
+  };
+  issueChatConnectTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One-time WebSocket connect ticket */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatConnectTicket'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description CHAT_REALTIME_UNAVAILABLE: live updates are not configured; messages still work over REST */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  listChatThreads: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor taken from a prior response's next_cursor (API.md §5). Without it the first page is returned. */
+        cursor?: components['parameters']['PageCursor'];
+        limit?: components['parameters']['PageLimit'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The caller threads (as requester or accepter), newest activity first. A thread that gets a new message moves to the first page. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatThreadList'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+    };
+  };
+  putVeteransMeProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetProfileRequest'];
+      };
+    };
+    responses: {
+      /** @description Display name stored (trimmed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SetProfileResponse'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  getVeteransMeVerificationLicence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Offer and newest review */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LicenceVerification'];
+        };
+      };
+      401: components['responses']['Error'];
+    };
+  };
+  postVeteransMeVerificationLicence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceSubmission'];
+      };
+    };
+    responses: {
+      /** @description Stored and queued: the review in its current state (READING, or already read in LOCAL and TEST) */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LicenceReviewView'];
+        };
+      };
+      /** @description LICENCE_NOTICE_VERSION_REQUIRED: notice_version is missing or not licence-notice-v1. VALIDATION_FAILED: an image is not a JPEG, is over 2000 px on the long side or 1,000,000 bytes, or a field is missing or unknown; the message names the fields only. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description LICENCE_REVIEW_NOT_OFFERED: the newest VA-answered attempt is not NOT_CONFIRMED with PERSON_NOT_FOUND, NOT_TITLE_38 or MORE_RESEARCH_REQUIRED, the person is at the VA try limit, revoked, or already confirmed. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_OPEN: a review is already open. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description The whole body is over 4,500,000 bytes. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_SUBMISSION_LIMIT: 3 reader-answered submissions in the last 24 hours (or the absolute cap of 10); Retry-After says when. Separate from the VA VERIFICATION_ATTEMPT_LIMIT. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postVeteransMeVerificationLicenceDispute: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        review_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceSubmission'];
+      };
+    };
+    responses: {
+      /** @description Stored and queued: the review in its current state (READING, or already read in LOCAL and TEST) */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LicenceReviewView'];
+        };
+      };
+      /** @description LICENCE_NOTICE_VERSION_REQUIRED: notice_version is missing or not licence-notice-v1. VALIDATION_FAILED: an image is not a JPEG, is over 2000 px on the long side or 1,000,000 bytes, or a field is missing or unknown; the message names the fields only. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description VERIFICATION_REVOKED: the person's standing is REVOKED. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND: no such review of this person. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_NOT_DISPUTABLE: the review is not an ALREADY_USED decline. LICENCE_REVIEW_OPEN: a review is already open. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description The whole body is over 4,500,000 bytes. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_SUBMISSION_LIMIT: 3 reader-answered submissions in the last 24 hours (or the absolute cap of 10); Retry-After says when. Separate from the VA VERIFICATION_ATTEMPT_LIMIT. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getAdminLicenceReviews: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of the queue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReviewQueue'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description FORBIDDEN or MFA_REQUIRED. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getAdminLicenceReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The review page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getAdminLicenceReviewImage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        side: 'front' | 'back' | 'selfie';
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The re-encoded JPEG */
+      200: {
+        headers: {
+          'Cache-Control'?: 'no-store, private';
+          [name: string]: unknown;
+        };
+        content: {
+          'image/jpeg': string;
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND: no such review, or its images were deleted (decided) or are gone from storage. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description ID_VERIFICATION_UNAVAILABLE: object storage is disabled. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewApprove: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceApproval'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_REVIEW. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewConfirm: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceApproval'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. SECOND_REVIEWER_REQUIRED: the admin who approved cannot confirm. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_CONFIRMATION. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewDecline: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceDecline'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: still READING. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewRecuse: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceRecuse'];
+      };
+    };
+    responses: {
+      /** @description Recused */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description No state conflict applies. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewRevoke: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceRevoke'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already revoked. LICENCE_REVIEW_NOT_READY: not APPROVED. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  listAdminConsentTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Template versions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            templates: components['schemas']['ConsentTemplateVersion'][];
+          };
+        };
+      };
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+    };
+  };
+  createAdminConsentTemplateVersion: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateConsentTemplateVersionRequest'];
+      };
+    };
+    responses: {
+      /** @description Replay of a version already created with this Idempotency-Key */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ConsentTemplateVersionResult'];
+        };
+      };
+      /** @description DRAFT version created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ConsentTemplateVersionResult'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      409: components['responses']['Error'];
+      413: components['responses']['Error'];
+    };
+  };
+  publishAdminConsentTemplateVersion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Version key, `<template_key>@<version>`. */
+        version: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Published version */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ConsentTemplatePublished'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      403: components['responses']['Error'];
+      404: components['responses']['Error'];
+      409: components['responses']['Error'];
+    };
+  };
+  getPublishedConsentTemplate: {
+    parameters: {
+      query: {
+        purpose: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current published version */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PublishedConsentTemplate'];
+        };
+      };
+      400: components['responses']['Error'];
+      401: components['responses']['Error'];
+      404: components['responses']['Error'];
+    };
+  };
+  listTrustedContactInvitations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Pending invitations */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            invitations: components['schemas']['TrustedContactInvitation'][];
+          };
+        };
+      };
+      401: components['responses']['Error'];
+    };
+  };
 }
