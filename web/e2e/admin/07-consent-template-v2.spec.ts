@@ -1,3 +1,4 @@
+import type { Locator } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { newPerson, newVerifiedVeteran, signUp, uniqueEmail } from '../helpers';
 import { errorCode, nextResponse } from '../auth/auth';
@@ -6,15 +7,27 @@ import { elevatedAdmin } from './admin';
 const TEMPLATE_KEY = 'red-alert-trusted-contact';
 const CONSENTS = /\/api\/v0\/consents$/;
 
+/** Flips the switch and confirms the consent text dialog (R12.3). */
+async function turnOn(toggle: Locator): Promise<void> {
+  await toggle.click();
+  await toggle
+    .page()
+    .getByRole('dialog', { name: 'Turn on this alert?' })
+    .getByRole('button', { name: 'Turn on' })
+    .click();
+}
+
 // M2: the Veteran's page read the published RED-alert template (v1, from seed-local) before an
 // admin published the next version. Turning the alert on cites the superseded version, which
-// the API refuses (422); the page re-reads the template and the next try cites the new one.
-// Contract gap (G21, owner O12): docs/openapi/v0.json lists no 422 for grantConsent, so the
-// guard fails the real 422 this flow needs. Passed 3x before the guard; AlertToggle.test covers the fix.
-test.fixme('an admin publishes the next consent version while a Veteran is on the page; the grant cites it', async ({
+// the API refuses (422, documented by R12.8); the page re-reads the template and the next try
+// cites the new one.
+test('an admin publishes the next consent version while a Veteran is on the page; the grant cites it', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the superseded version is refused.
+  allow.push(/status of 422/);
   const veteran = await newVerifiedVeteran(browser, request, {
     name: 'Nia R.',
     county: 'Alameda',
@@ -61,7 +74,7 @@ test.fixme('an admin publishes the next consent version while a Veteran is on th
   // First try: the page still cites v1, which is superseded now.
   let answer = nextResponse(page, 'POST', CONSENTS);
   const reread = nextResponse(page, 'GET', /\/api\/v0\/consent-templates\/published$/);
-  await toggle.click();
+  await turnOn(toggle);
   const refused = await answer;
   expect(refused.status()).toBe(422);
   expect(await errorCode(refused)).toBe('CONSENT_TEMPLATE_UNAVAILABLE');
@@ -74,7 +87,7 @@ test.fixme('an admin publishes the next consent version while a Veteran is on th
   expect((await reread).ok()).toBe(true);
   // The page re-read the template; the next try cites the new version and turns the alert on.
   answer = nextResponse(page, 'POST', CONSENTS);
-  await toggle.click();
+  await turnOn(toggle);
   const granted = await answer;
   // Regression: the retry used to reuse the first Idempotency-Key and got 409.
   expect(granted.status(), await granted.text()).toBe(201);
