@@ -124,6 +124,41 @@ describe('draft resume after a reload (R12.1)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(openDraft.get()).toBe(DRAFT_ID));
   });
+
+  it('forgets the assistant draft when the request is sent through the plain form', async () => {
+    serve(() => Promise.resolve({ data: { ...draft, intake_text: TYPED } }));
+    mocks.post.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/api/v0/service-requests'
+          ? { data: { service_request_id: REQUEST_ID, status: 'SUBMITTED' } }
+          : {
+              data: {
+                outcome: 'DRAFT_READY',
+                assistant_message: 'Drafted.',
+                not_available_yet: false,
+                notice: null,
+                draft,
+                resources: [],
+                request_form: null,
+              },
+            },
+      ),
+    );
+    renderScreen(<RequestPage />, '/request?category=PEER_SUPPORT');
+    await userEvent.click(await screen.findByLabelText('Tell us what you need'));
+    await userEvent.paste(TYPED);
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(openDraft.get()).toBe(DRAFT_ID));
+
+    const form = within(screen.getByRole('region', { name: 'Simple form' }));
+    await userEvent.click(form.getByLabelText('Short summary'));
+    await userEvent.paste('Someone to talk to');
+    await userEvent.click(form.getByRole('button', { name: 'Send request' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('where')).toHaveTextContent(`/requests/${REQUEST_ID}`),
+    );
+    expect(openDraft.get()).toBeNull();
+  });
 });
 
 describe('isDraftGone', () => {

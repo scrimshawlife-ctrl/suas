@@ -157,7 +157,11 @@ export function useCreateRequest() {
       });
       return requireData(data, 'request');
     },
-    onSuccess: created,
+    // A request sent through the plain form ends the assistant's draft too, so it cannot return.
+    onSuccess: async () => {
+      openDraft.clear();
+      await created();
+    },
   });
 }
 
