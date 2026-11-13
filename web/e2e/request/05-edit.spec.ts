@@ -3,7 +3,8 @@ import { expect, test } from '../fixtures';
 import { requestHelp } from '../helpers';
 import { helper, recordPosts, take, tag, veteran } from './request';
 
-const STALE = 'This changed while you were looking. Reload the page to see where it stands.';
+const STALE =
+  'This request changed while you were editing. Someone may have accepted it. Your changes were not saved.';
 
 test('editing checks the fields, Cancel throws edits away, and an emptied optional field is cleared', async ({
   browser,
@@ -98,8 +99,8 @@ test('double-clicking Save changes saves once', async ({ browser, request }) => 
   await expect(sent).toContainText(edited);
   await expect(sent.getByRole('button', { name: 'Edit request' })).toBeVisible();
   // The second click either never left the page or replayed the first: no failure.
-  expect(posts.length).toBeGreaterThan(0);
-  expect(posts.every((p) => p.status === 200)).toBe(true);
+  expect(posts).toHaveLength(1);
+  expect(posts[0]?.status).toBe(200);
 });
 
 /**
@@ -119,6 +120,11 @@ async function editWhileAccepted(page: Page, browser: Browser, request: APIReque
   await sent.getByLabel('Short summary').fill(`Too late ${tag()}`);
 
   const helperPage = await helper(browser, request, { name: 'Dee R.' });
+  // Take right after the requester's detail poll, so the open form still holds the status it
+  // loaded when Save is pressed (the next poll is 15 s away).
+  await page.waitForResponse(
+    (r) => r.request().method() === 'GET' && r.url().endsWith(`/api/v0/service-requests/${id}`),
+  );
   await take(helperPage, summary, id);
 
   const posts = recordPosts(page, /\/commands\/edit$/);
@@ -145,9 +151,8 @@ test('M7: saving an edit after a helper accepted gets 409 and explains that the 
   await expect(page.getByRole('button', { name: 'Edit request' })).toHaveCount(0);
 });
 
-// G20 (agent C): the edit form does not send `expected_status` yet, so the API answers
-// 409 ILLEGAL_TRANSITION instead of the stale-state 409. Unskip once G20 lands.
-test.fixme('M7: the edit carries the status it was opened on and the API answers STALE_STATE', async ({
+// G20: the edit carries the status the form loaded, so the API answers the stale-state 409.
+test('M7: the edit carries the status it was opened on and the API answers STALE_STATE', async ({
   browser,
   request,
   allow,
