@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
@@ -64,8 +64,14 @@ async function readySwitch() {
   return toggle;
 }
 
+/** Turns the switch on through the consent confirm step (R12.3). */
+async function turnOn(user: ReturnType<typeof userEvent.setup>, toggle: HTMLElement) {
+  await user.click(toggle);
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Turn on' }));
+}
+
 describe('AlertToggle', () => {
-  it('is off with no grant, and turning it on posts the exact RED grant body with one key', async () => {
+  it('is off with no grant, shows the template text, and posts the exact RED grant body on confirm', async () => {
     client.POST.mockResolvedValue({ data: activeGrant });
     const user = userEvent.setup();
     render(wrap([]));
@@ -74,6 +80,11 @@ describe('AlertToggle', () => {
     expect(screen.getByText(ALERT_OFF)).toBeInTheDocument();
 
     await user.click(toggle);
+    const dialog = screen.getByRole('dialog', { name: 'Turn on this alert?' });
+    expect(within(dialog).getByText('Synthetic test template.')).toBeInTheDocument();
+    expect(client.POST).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Turn on' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(1));
     expect(client.POST).toHaveBeenCalledWith('/api/v0/consents', {
       body: redAlertGrantBody('tc-1', VERSION),
@@ -97,13 +108,46 @@ describe('AlertToggle', () => {
     });
   });
 
+  it('sends nothing when the confirm step is cancelled', async () => {
+    const user = userEvent.setup();
+    render(wrap([]));
+    const toggle = await readySwitch();
+    await user.click(toggle);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(toggle).not.toBeChecked();
+    expect(client.POST).not.toHaveBeenCalled();
+  });
+
+  it('cannot be turned on when the published template has no text, and posts nothing', async () => {
+    client.GET.mockResolvedValue({ data: { ...published, body: '  ' } });
+    const user = userEvent.setup();
+    render(wrap([]));
+    expect(await screen.findByText(ALERT_UNAVAILABLE)).toBeInTheDocument();
+    await user.click(screen.getByRole('switch'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(client.POST).not.toHaveBeenCalled();
+  });
+
+  it('cannot be turned on when the template read fails, and offers to try again', async () => {
+    client.GET.mockImplementation(() =>
+      Promise.reject(new ApiError(400, 'VALIDATION_FAILED', 'x')),
+    );
+    const user = userEvent.setup();
+    render(wrap([]));
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    await user.click(screen.getByRole('switch'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(client.POST).not.toHaveBeenCalled();
+  });
+
   it('says alerts cannot be turned on when the template is unavailable', async () => {
     client.POST.mockImplementation(() =>
       Promise.reject(new ApiError(422, 'CONSENT_TEMPLATE_UNAVAILABLE', 'x')),
     );
     const user = userEvent.setup();
     render(wrap([]));
-    await user.click(await readySwitch());
+    await turnOn(user, await readySwitch());
     expect(await screen.findByText(ALERT_UNAVAILABLE)).toBeInTheDocument();
   });
 
@@ -122,7 +166,7 @@ describe('AlertToggle', () => {
     const user = userEvent.setup();
     render(wrap([]));
     const toggle = await readySwitch();
-    await user.click(toggle);
+    await turnOn(user, toggle);
     expect(await screen.findByText('Saving…')).toBeInTheDocument();
     expect(toggle).toHaveAttribute('aria-disabled', 'true');
     expect(toggle).not.toBeDisabled();
@@ -134,12 +178,14 @@ describe('AlertToggle', () => {
     await waitFor(() => expect(toggle).not.toHaveAttribute('aria-disabled'));
   });
 
-  it('sends one grant on a same-tick double click and shows no error', async () => {
+  it('sends one grant on a same-tick double click of Turn on and shows no error', async () => {
     client.POST.mockResolvedValue({ data: activeGrant });
     render(wrap([]));
     const toggle = await readySwitch();
     fireEvent.click(toggle);
-    fireEvent.click(toggle);
+    const confirm = screen.getByRole('button', { name: 'Turn on' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
     await waitFor(() => expect(toggle).not.toHaveAttribute('aria-disabled'));
     expect(client.POST).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('alert')).toBeNull();
@@ -150,9 +196,9 @@ describe('AlertToggle', () => {
     client.POST.mockResolvedValue({ data: activeGrant });
     const user = userEvent.setup();
     const { rerender } = render(wrap([]));
-    await user.click(await readySwitch());
+    await turnOn(user, await readySwitch());
     await screen.findByRole('alert');
-    await user.click(screen.getByRole('switch'));
+    await turnOn(user, screen.getByRole('switch'));
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
     const [first, retry] = client.POST.mock.calls;
     expect(keyOf(retry!)).toBe(keyOf(first!));

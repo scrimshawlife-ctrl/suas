@@ -62,9 +62,14 @@ test('a RED Check-In alerts the trusted contact who holds a RED grant', async ({
   await page.reload();
   const listItem = page.getByRole('listitem').filter({ hasText: 'Sister' });
   await expect(listItem.getByText('Accepted')).toBeVisible();
-  // The switch is controlled: it turns on once the grant is saved, so click, then wait.
+  // The switch is controlled: it turns on once the grant is saved, after the Veteran reads
+  // the consent text and confirms (R12.3), so click, confirm, then wait.
   const notice = listItem.getByRole('switch', { name: /Send this person a notice from SUAS/ });
   await notice.click();
+  await page
+    .getByRole('dialog', { name: 'Turn on this alert?' })
+    .getByRole('button', { name: 'Turn on' })
+    .click();
   await expect(notice).toBeChecked();
   await expect(listItem.getByText('On. The notice does not say why.')).toBeVisible();
 

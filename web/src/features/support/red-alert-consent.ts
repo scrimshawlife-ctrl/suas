@@ -1,3 +1,4 @@
+import type { Schemas } from '../../api/types';
 import type { ConsentGrant, GrantConsentBody } from './api';
 
 /**
@@ -42,4 +43,15 @@ export function findRedAlertGrant(
       grant.grantee_type === 'TRUSTED_CONTACT' &&
       grant.grantee_id === trustedContactId,
   );
+}
+
+/**
+ * The template text the Veteran confirms before the grant (R12.3, contributor proposal,
+ * SUAS-specs #79). Null when there is no text to show, so the alert cannot be turned on.
+ */
+export function consentText(
+  template: Schemas['PublishedConsentTemplate'] | undefined,
+): string | null {
+  const body = template?.body?.trim() ?? '';
+  return body === '' ? null : body;
 }
