@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
+import { createSession, elevateSession } from '../../src/auth/index.js';
 import { executeCaseCommand } from '../../src/coordination/index.js';
 import { deployQrf } from '../../src/ui/commands.js';
 import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
@@ -61,6 +61,8 @@ async function person(
     tenantId,
     userId: user.userId,
   });
+  // Admin case commands need an MFA-elevated session (ADMIN.md §2).
+  if (admin) await elevateSession(pool(), session.session.sessionId);
   return {
     tenantId,
     userId: user.userId,

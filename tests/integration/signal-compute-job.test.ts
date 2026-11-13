@@ -7,13 +7,20 @@ import type { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
 import { findCurrentCase } from '../../src/coordination/index.js';
-import { DispatchingJobQueue, InMemoryJobQueue } from '../../src/jobs/index.js';
+import {
+  DispatchingJobQueue,
+  InMemoryJobQueue,
+  PostgresOutboxJobQueue,
+  type DurableJobQueuePort,
+  type JobEnqueueRequest,
+} from '../../src/jobs/index.js';
 import {
   completeCheckIn,
   ensurePublishedQv001,
   listQuestions,
   parseComputeJobPayload,
   QV_001_VERSION,
+  requeueUnsettledCheckIns,
   runSupportSignalComputeJob,
   saveResponse,
   startCheckIn,
@@ -215,5 +222,62 @@ describe('runSupportSignalComputeJob', () => {
     const opened = await findCurrentCase(pool, tenantId, veteran.userId);
     expect(opened?.prioritySignalLevel).toBe('RED');
     expect(opened?.status).toBe('OPEN');
+  });
+});
+
+describe('CHECKINS.md §6 rules 6-7: a lost compute enqueue is recovered', () => {
+  async function completedA0() {
+    const context = await veteranOnQv001();
+    await answerCheckIn(context.tenantId, context.checkIn.checkInId, A0);
+    return context;
+  }
+
+  it('re-enqueues on a completion replay after the first enqueue failed', async () => {
+    const { tenantId, veteran, checkIn } = await completedA0();
+    const failing: DurableJobQueuePort = {
+      durability: 'durable',
+      implementation: 'failing',
+      enqueue: () => Promise.reject(new Error('queue down')),
+    };
+    const input = { tenantId, checkInId: checkIn.checkInId, actorId: veteran.userId };
+    await expect(completeCheckIn(pool, input, { jobQueue: failing })).rejects.toThrow('queue down');
+
+    const queue = new InMemoryJobQueue();
+    const replay = await completeCheckIn(pool, input, { jobQueue: queue });
+    expect(replay.alreadyCompleted).toBe(true);
+    expect(queue.enqueued().map((job) => job.idempotencyKey)).toEqual([
+      `support-signal:${checkIn.checkInId}`,
+    ]);
+  });
+
+  it('the sweep enqueues a completed Check-In with no signal and no job, once', async () => {
+    const { tenantId, veteran, checkIn } = await completedA0();
+    // Completed with no queue at all: the commit happened, the enqueue never did.
+    await completeCheckIn(pool, {
+      tenantId,
+      checkInId: checkIn.checkInId,
+      actorId: veteran.userId,
+    });
+    const later = new Date(Date.now() + 10 * 60 * 1000);
+    const outbox = new PostgresOutboxJobQueue(pool);
+    const seen: JobEnqueueRequest[] = [];
+    const recording: DurableJobQueuePort = {
+      durability: 'durable',
+      implementation: 'recording',
+      enqueue: (request) => {
+        seen.push(request);
+        return outbox.enqueue(request);
+      },
+    };
+    const mine = (request: JobEnqueueRequest) =>
+      request.idempotencyKey === `support-signal:${checkIn.checkInId}`;
+
+    await requeueUnsettledCheckIns(pool, recording, { now: later, limit: 1000 });
+    expect(seen.filter(mine)).toHaveLength(1);
+    expect(seen.find(mine)?.tenantId).toBe(tenantId);
+
+    seen.length = 0;
+    await requeueUnsettledCheckIns(pool, recording, { now: later, limit: 1000 });
+    expect(seen.filter(mine)).toHaveLength(0);
   });
 });
