@@ -12,7 +12,7 @@ test('a new Veteran signs up, passes the ID check and sends a request through th
   });
   await expect(page.getByRole('heading', { name: /Marcus/ })).toBeVisible();
 
-  // Asking for help needs the scan: until then /request sends the person to /verify.
+  // Asking for help needs the VA check: until then /request sends the person to /verify.
   await page.goto('/request');
   await expect(page).toHaveURL(/\/verify$/);
   await passIdCheck(page);

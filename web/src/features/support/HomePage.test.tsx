@@ -14,7 +14,12 @@ function backend(status: 'VERIFIED' | 'NOT_STARTED', unfinished: boolean) {
           display_name: 'Pat V.',
           active_qrf: null,
           categories: [],
-          id_verification: { method: 'ID_SCAN_SELFIE', status, verified_at: null },
+          id_verification: {
+            method: 'VA_VETERAN_STATUS',
+            status,
+            not_confirmed_reason: null,
+            verified_at: null,
+          },
         },
       });
     }
