@@ -40,6 +40,7 @@ import {
   requestHeldInCurrentCycle,
   SERVICE_CATEGORIES,
   SERVICE_REQUEST_COMMANDS,
+  SERVICE_REQUEST_STATUSES,
   type ServiceRequest,
   type ServiceRequestCommand,
 } from '../../coordination/index.js';
@@ -60,10 +61,21 @@ export interface ServiceRequestRouteDeps {
 
 const idParams = z.object({ id: z.string().uuid() });
 const caseIdParams = z.object({ caseId: z.string().uuid() });
+/**
+ * API.md §8/§18 name the segment in lowercase (`/commands/release`); the UPPERCASE enum value
+ * stays an alias for existing clients. Kebab or snake case both map to the enum
+ * (`start-matching` → START_MATCHING), so either spelling shares one idempotency scope.
+ */
 const commandParams = z.object({
   id: z.string().uuid(),
-  command: z.enum(SERVICE_REQUEST_COMMANDS),
+  command: z
+    .string()
+    .max(64)
+    .transform((segment) => segment.toUpperCase().replace(/-/g, '_'))
+    .pipe(z.enum(SERVICE_REQUEST_COMMANDS)),
 });
+
+const requestStatus = z.enum(SERVICE_REQUEST_STATUSES);
 
 const createBody = z.object({
   category: z.enum(SERVICE_CATEGORIES),
@@ -80,8 +92,9 @@ const listQuery = z.object({
 
 const commandBody = z.object({
   reason: z.string().min(1).max(512).optional(),
-  to: z.string().min(1).max(64).optional(),
-  expected_status: z.string().min(1).max(64).optional(),
+  // An unknown status is a malformed request (400), not a stale or illegal transition (409).
+  to: requestStatus.optional(),
+  expected_status: requestStatus.optional(),
   grantee_id: z.string().uuid().optional(),
 });
 
@@ -92,7 +105,7 @@ const editBody = z
     timing: z.string().trim().min(1).max(TIMING_MAX).nullable().optional(),
     meeting_place: z.string().trim().min(1).max(MEETING_PLACE_MAX).nullable().optional(),
     destination: z.string().trim().min(1).max(DESTINATION_MAX).nullable().optional(),
-    expected_status: z.string().min(1).max(64).optional(),
+    expected_status: requestStatus.optional(),
   })
   .strict()
   .refine((body) => Object.keys(body).some((key) => key !== 'expected_status'), {
@@ -336,9 +349,10 @@ export function registerServiceRequestRoutes(
             closed_at: item.closedAt?.toISOString() ?? null,
           };
         }
+        // The open list carries no case_id: it would let every helper in the county link one
+        // Veteran's requests (DISPATCH.md §13.3 lists category, county and summary; PRIVACY.md §4).
         return {
           service_request_id: item.serviceRequestId,
-          case_id: item.caseId,
           category: item.category,
           status: item.status,
           county: item.county,
@@ -346,7 +360,7 @@ export function registerServiceRequestRoutes(
           summary: item.summary,
           created_at: item.createdAt.toISOString(),
           ...(query.ownership === 'mine'
-            ? { counterpart_display_name: item.requesterDisplayName }
+            ? { case_id: item.caseId, counterpart_display_name: item.requesterDisplayName }
             : {}),
         };
       }),
@@ -444,9 +458,7 @@ export function registerServiceRequestRoutes(
             ...(body.meeting_place !== undefined ? { meetingPlace: body.meeting_place } : {}),
             ...(body.destination !== undefined ? { destination: body.destination } : {}),
           },
-          ...(body.expected_status !== undefined
-            ? { expectedStatus: body.expected_status as ServiceRequest['status'] }
-            : {}),
+          ...(body.expected_status !== undefined ? { expectedStatus: body.expected_status } : {}),
           correlationId: String(request.id),
         });
         return {
@@ -519,11 +531,11 @@ export function registerServiceRequestRoutes(
             command,
             actorId: context.userId,
             actorType,
+            // The holder check above can go stale before the row lock; it is repeated under it.
+            requireHolder: actorType === 'USER',
             ...(body.reason !== undefined ? { reason: body.reason } : {}),
-            ...(body.to !== undefined ? { to: body.to as ServiceRequest['status'] } : {}),
-            ...(body.expected_status !== undefined
-              ? { expectedStatus: body.expected_status as ServiceRequest['status'] }
-              : {}),
+            ...(body.to !== undefined ? { to: body.to } : {}),
+            ...(body.expected_status !== undefined ? { expectedStatus: body.expected_status } : {}),
             ...(body.grantee_id !== undefined ? { granteeId: body.grantee_id } : {}),
             correlationId: String(request.id),
           },

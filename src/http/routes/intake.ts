@@ -14,7 +14,8 @@
  *
  * The meeting place is different in one way: it is saved on the draft and then in the
  * Service Request's `details` (same database), and the plain form's idempotency
- * fingerprint includes it as a SHA-256 hash. It is not in any stored command result,
+ * fingerprint includes it as a SHA-256 hash. It is not in any stored command result
+ * (draft submit stores ids only and re-reads the draft for its response),
  * and it is never logged, listed, or put in an event or audit payload.
  */
 
@@ -182,7 +183,13 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     );
     if (run.outcome === 'FALLBACK_FORM') return turnView(run, draft);
 
-    const saved = await saveDraftContent(deps.pool, draft, { fields: run.draft, intakeText });
+    // The model call is slow: save only if no other message or edit landed meanwhile (409).
+    const saved = await saveDraftContent(
+      deps.pool,
+      draft,
+      { fields: run.draft, intakeText },
+      { ifUnchanged: true },
+    );
     return turnView(run, saved);
   });
 
@@ -244,6 +251,8 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
           draftId: id,
           correlationId: String(request.id),
         });
+        // Ids and status only: the draft text (summary, meeting place, destination) is never
+        // stored in the idempotency record (DISPATCH.md §13.4, §14.9), so it is re-read below.
         return {
           result: {
             service_request: {
@@ -252,15 +261,15 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
               category: submitted.serviceRequest.category,
               status: submitted.serviceRequest.status,
             },
-            draft: draftView(submitted.draft),
           },
           aggregateType: 'ServiceRequest',
           aggregateId: submitted.serviceRequest.serviceRequestId,
         };
       },
     );
-    if (!run.replayed) return reply.status(201).send({ ...run.result, replayed: false });
-    return { ...run.result, replayed: true };
+    const draft = await findOwnedDraft(deps.pool, context.tenantId, context.userId, id);
+    const body = { ...run.result, draft: draftView(draft), replayed: run.replayed };
+    return run.replayed ? body : reply.status(201).send(body);
   });
 
   /**

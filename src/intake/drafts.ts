@@ -31,6 +31,8 @@ export interface ServiceRequestDraft {
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly submittedAt: Date | undefined;
+  /** Row version (Postgres `xmin`) for compare-and-set saves. Never sent to a client. */
+  readonly rowVersion: string;
 }
 
 interface DraftRow {
@@ -45,10 +47,11 @@ interface DraftRow {
   created_at: Date;
   updated_at: Date;
   submitted_at: Date | null;
+  row_version: string;
 }
 
 const DRAFT_COLUMNS = `draft_id, tenant_id, user_id, status, category, details, intake_text,
-  service_request_id, created_at, updated_at, submitted_at`;
+  service_request_id, created_at, updated_at, submitted_at, xmin::text AS row_version`;
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
@@ -72,6 +75,7 @@ function toDraft(row: DraftRow): ServiceRequestDraft {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     submittedAt: row.submitted_at ?? undefined,
+    rowVersion: row.row_version,
   };
 }
 
@@ -97,6 +101,17 @@ export class DraftNotEditableError extends Error {
 
 /** Everything the Veteran typed into one draft. Keeps a prompt and a stored row small. */
 export const INTAKE_TEXT_TOTAL_MAX = 6_000;
+
+/** The draft changed between this caller's read and its save (another message or edit won). */
+export class DraftChangedError extends Error {
+  readonly code = 'STALE_STATE';
+  readonly httpStatus = 409;
+
+  constructor() {
+    super('This draft changed while your message was being read. Send it again.');
+    this.name = 'DraftChangedError';
+  }
+}
 
 export class DraftTooLongError extends Error {
   readonly code = 'UNPROCESSABLE';
@@ -173,16 +188,21 @@ export async function findOwnedDraft(
  * Replace the editable content of a draft that is still `DRAFT`. Used for an
  * assistant turn (new text and fields) and for the Veteran's own edit (fields
  * only). A draft that was submitted or discarded meanwhile is a conflict.
+ *
+ * `ifUnchanged` saves only if the row is still the version `draft` was read at, so two
+ * slow assistant turns on one draft cannot overwrite each other's message (409 instead).
  */
 export async function saveDraftContent(
   db: Queryable,
   draft: ServiceRequestDraft,
   content: { readonly fields: IntakeDraftFields; readonly intakeText?: string },
+  options: { readonly ifUnchanged?: boolean } = {},
 ): Promise<ServiceRequestDraft> {
   const result = await db.query<DraftRow>(
     `UPDATE service_request_drafts
         SET category = $4, details = $5, intake_text = COALESCE($6, intake_text), updated_at = now()
       WHERE tenant_id = $1 AND user_id = $2 AND draft_id = $3 AND status = 'DRAFT'
+        AND ($7::text IS NULL OR xmin::text = $7)
       RETURNING ${DRAFT_COLUMNS}`,
     [
       draft.tenantId,
@@ -191,11 +211,16 @@ export async function saveDraftContent(
       content.fields.category,
       JSON.stringify(draftDetails(content.fields)),
       content.intakeText ?? null,
+      options.ifUnchanged === true ? draft.rowVersion : null,
     ],
   );
   const row = result.rows[0];
-  if (row === undefined) throw new DraftNotEditableError();
-  return toDraft(row);
+  if (row !== undefined) return toDraft(row);
+  if (options.ifUnchanged === true) {
+    const current = await findOwnedDraft(db, draft.tenantId, draft.userId, draft.draftId);
+    if (current.status === 'DRAFT') throw new DraftChangedError();
+  }
+  throw new DraftNotEditableError();
 }
 
 /** Link a draft to the Service Request created from it. Caller holds the row lock. */

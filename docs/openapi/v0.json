@@ -1610,7 +1610,7 @@
       "post": {
         "tags": ["cases"],
         "summary": "Execute a released service-request command",
-        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED.",
+        "description": "SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4).",
         "operationId": "executeServiceRequestCommand",
         "security": [
           {
@@ -1628,6 +1628,23 @@
             "schema": {
               "type": "string",
               "enum": [
+                "submit",
+                "triage",
+                "start-matching",
+                "assign",
+                "accept",
+                "start",
+                "fulfill",
+                "confirm",
+                "close",
+                "decline",
+                "rematch",
+                "cancel",
+                "expire",
+                "mark-unfulfillable",
+                "escalate",
+                "return-from-escalation",
+                "release",
                 "SUBMIT",
                 "TRIAGE",
                 "START_MATCHING",
@@ -1646,7 +1663,8 @@
                 "RETURN_FROM_ESCALATION",
                 "RELEASE"
               ]
-            }
+            },
+            "description": "The command in lowercase, as API.md §8 and §18 name it (for example `release`, `start-matching`). Matching is case-insensitive and `-` equals `_`; the UPPERCASE enum value (`RELEASE`) is kept as an alias for existing clients. Both spellings share one idempotency scope."
           },
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -1784,6 +1802,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FollowUpResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: malformed body, a service_request_id that is not a request of this case, or a responsible_id that is not the actor responsible_type names (the case's Veteran for VETERAN, a user of the tenant for USER)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             }
@@ -3357,7 +3385,14 @@
             "$ref": "#/components/responses/Error"
           },
           "409": {
-            "$ref": "#/components/responses/Error"
+            "description": "ILLEGAL_TRANSITION when the draft was submitted or discarded; STALE_STATE when another message or edit changed the draft while this one was being answered (send it again)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           },
           "422": {
             "$ref": "#/components/responses/Error"
@@ -6332,9 +6367,8 @@
             "maxLength": 512
           },
           "to": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
+            "$ref": "#/components/schemas/ServiceRequestStatus",
+            "description": "RETURN_FROM_ESCALATION only: the target status (TRIAGED or MATCHING)."
           },
           "expected_status": {
             "$ref": "#/components/schemas/ServiceRequestStatus"
@@ -6433,14 +6467,7 @@
       },
       "ServiceRequestListItem": {
         "type": "object",
-        "required": [
-          "service_request_id",
-          "case_id",
-          "category",
-          "status",
-          "summary",
-          "created_at"
-        ],
+        "required": ["service_request_id", "category", "status", "summary", "created_at"],
         "properties": {
           "service_request_id": {
             "type": "string",
@@ -6448,7 +6475,8 @@
           },
           "case_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "ownership=mine and requested only. The open list never carries it, so helpers cannot link one Veteran's requests (DISPATCH.md §13.3, PRIVACY.md §4)."
           },
           "category": {
             "$ref": "#/components/schemas/ServiceCategory"
@@ -7787,10 +7815,8 @@
             "description": "Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events."
           },
           "expected_status": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64,
-            "description": "Optional stale-state check; 409 STALE_STATE when the request is in another status."
+            "$ref": "#/components/schemas/ServiceRequestStatus",
+            "description": "Optional stale-state check; 409 STALE_STATE when the request is in another status. An unknown status is 400."
           }
         },
         "additionalProperties": false,

@@ -134,6 +134,42 @@ export interface CreateFollowUpInput {
 }
 
 /**
+ * FOLLOWUP.md §3: the optional request must be one of this case's (the FK checks the tenant
+ * only), and `responsible_id` must reference the actor `responsible_type` names: the case's
+ * Veteran for VETERAN, a user of the tenant for USER. SYSTEM has no actor row to check.
+ */
+async function assertFollowUpReferences(tx: Queryable, input: CreateFollowUpInput): Promise<void> {
+  if (input.serviceRequestId !== undefined) {
+    const request = await tx.query(
+      `SELECT 1 FROM service_requests
+        WHERE tenant_id = $1 AND case_id = $2 AND service_request_id = $3`,
+      [input.tenantId, input.caseId, input.serviceRequestId],
+    );
+    if ((request.rowCount ?? 0) === 0) {
+      throw new FollowUpValidationError('service_request_id is not a request of this case.');
+    }
+  }
+  const responsible =
+    input.responsibleType === 'VETERAN'
+      ? await tx.query(
+          `SELECT 1 FROM support_cases
+            WHERE tenant_id = $1 AND case_id = $2 AND veteran_user_id = $3`,
+          [input.tenantId, input.caseId, input.responsibleId],
+        )
+      : input.responsibleType === 'USER'
+        ? await tx.query(`SELECT 1 FROM users WHERE tenant_id = $1 AND user_id = $2`, [
+            input.tenantId,
+            input.responsibleId,
+          ])
+        : undefined;
+  if (responsible !== undefined && (responsible.rowCount ?? 0) === 0) {
+    throw new FollowUpValidationError(
+      'responsible_id does not reference the actor named by responsible_type (FOLLOWUP.md §3).',
+    );
+  }
+}
+
+/**
  * Create a Follow-Up and emit `FOLLOWUP_CREATED`.
  *
  * FOLLOWUP.md §3 and §11: creation without `due_at` or a responsible party
@@ -150,6 +186,7 @@ export async function createFollowUpInTx(
   if (input.responsibleId.trim() === '') {
     throw new FollowUpValidationError('A Follow-Up requires a responsible party (FOLLOWUP.md §3).');
   }
+  await assertFollowUpReferences(tx, input);
 
   const followUpId = randomUUID();
   const result = await tx.query<FollowUpRow>(

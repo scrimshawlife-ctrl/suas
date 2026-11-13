@@ -17,6 +17,7 @@ import {
   executeServiceRequestCommand,
   NotRequestHolderError,
 } from '../../src/coordination/index.js';
+import { listAggregateEvents } from '../../src/events/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
@@ -434,5 +435,80 @@ describe('widening after a release', () => {
     const due = await widenDueRequests(pool(), { now: later });
     expect(due.widened.map((item) => item.serviceRequestId)).toContain(id);
     expect(await widenedAt()).not.toBeNull();
+  });
+});
+
+describe('request command path and actor rules', () => {
+  it('takes the lowercase command path from API.md §8/§18 and keeps UPPERCASE as an alias', async () => {
+    const first = await acceptedRequest();
+    const lower = await command(first.helper, first.id, 'release', { reason: 'cannot make it' });
+    expect(lower.statusCode).toBe(200);
+    expect(lower.json().status).toBe('SUBMITTED');
+
+    const second = await acceptedRequest();
+    const upper = await command(second.helper, second.id, 'RELEASE', { reason: 'cannot make it' });
+    expect(upper.statusCode).toBe(200);
+    expect(upper.json().status).toBe('SUBMITTED');
+  });
+
+  it('refuses EXPIRE from the holder: only the System expires a request (DISPATCH.md §4)', async () => {
+    const { requester, helper, id } = await acceptedRequest();
+    const response = await command(helper, id, 'expire');
+    expect(response.statusCode).toBe(403);
+    expect((await get(requester, `/service-requests/${id}`)).json().status).toBe('ACCEPTED');
+  });
+
+  it('answers an unknown to or expected_status with 400, not a conflict', async () => {
+    const { helper, id } = await acceptedRequest();
+    for (const payload of [{ expected_status: 'NOT_A_STATUS' }, { to: 'NOWHERE' }]) {
+      const response = await command(helper, id, 'start', payload);
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_FAILED');
+    }
+  });
+
+  it('re-checks the holder under the row lock for a non-release command', async () => {
+    const { tenantId, helper, bystander, id } = await acceptedRequest();
+    expect((await command(helper, id, 'release', { reason: 'busy' })).statusCode).toBe(200);
+    expect((await accept(bystander, id)).statusCode).toBe(200);
+    await expect(
+      executeServiceRequestCommand(pool(), {
+        tenantId,
+        serviceRequestId: id,
+        command: 'START',
+        actorId: helper.userId,
+        actorType: 'USER',
+        requireHolder: true,
+      }),
+    ).rejects.toBeInstanceOf(NotRequestHolderError);
+  });
+
+  it('emits SERVICE_FULFILLED on FULFILL, ids only (DISPATCH.md §4)', async () => {
+    const { tenantId, helper, id } = await acceptedRequest();
+    expect((await command(helper, id, 'start')).statusCode).toBe(200);
+    expect((await command(helper, id, 'fulfill')).statusCode).toBe(200);
+    const events = await listAggregateEvents(pool(), {
+      tenantId,
+      aggregateType: 'ServiceRequest',
+      aggregateId: id,
+    });
+    const fulfilled = events.filter((event) => event.eventType === 'SERVICE_FULFILLED');
+    expect(fulfilled).toHaveLength(1);
+    expect(Object.keys(fulfilled[0]?.payload ?? {}).sort()).toEqual(['case_id', 'category']);
+  });
+
+  it('leaves case_id off the open list (DISPATCH.md §13.3)', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester');
+    const helper = await person(tenantId, 'helper');
+    const id = await submittedRequest(requester);
+    const response = await get(helper, '/service-requests?ownership=open');
+    const item = response
+      .json()
+      .service_requests.find(
+        (entry: { service_request_id: string }) => entry.service_request_id === id,
+      );
+    expect(item).toBeDefined();
+    expect(item).not.toHaveProperty('case_id');
   });
 });

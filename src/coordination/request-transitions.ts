@@ -317,8 +317,8 @@ export const SERVICE_REQUEST_TRANSITIONS: readonly ServiceRequestTransition[] = 
     requiresReason: true,
     mayDiscloseExternally: false,
   },
-  // Helper release (suas-specs V1_MVP_PROPOSAL.md R8.5, proposal): the accepter hands the
-  // request back, and it waits for a new accept like a fresh submit.
+  // Helper release (DISPATCH.md §4, §14.7; v0.9.0, R8.5): the accepter hands the request
+  // back, and it waits for a new accept like a fresh submit.
   {
     from: 'ACCEPTED',
     to: 'SUBMITTED',

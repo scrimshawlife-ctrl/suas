@@ -517,7 +517,7 @@ export interface paths {
     put?: never;
     /**
      * Execute a released service-request command
-     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED.
+     * @description SUBMIT, CANCEL and CONFIRM may be run only by the requester; every other command only by the person who accepted this request (403 for the requester; 404 for anyone else, including another helper on the same case). SUBMIT needs a meeting_place on the request for FOOD, TRANSPORTATION and SHELTER (422 UNPROCESSABLE). Only SUBMIT needs a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise); the other commands do not. A command whose transition needs a reason (for example CANCEL) sent without one is 400 VALIDATION_FAILED. EXPIRE is run only by the System (DISPATCH.md §4, §14.6): 403 for any caller. The accepter's command is re-checked against the current holder under the request row lock (403 if someone else holds it now). An unknown `to` or `expected_status` value is 400 VALIDATION_FAILED. FULFILL emits SERVICE_FULFILLED and ACCEPT emits SERVICE_ACCEPTED (DISPATCH.md §4).
      */
     post: operations['executeServiceRequestCommand'];
     delete?: never;
@@ -1964,7 +1964,8 @@ export interface components {
     /** @description SUBMIT, CANCEL and CONFIRM belong to the requester; every other command belongs to the person who accepted (403 otherwise). */
     ServiceRequestCommandRequest: {
       reason?: string;
-      to?: string;
+      /** @description RETURN_FROM_ESCALATION only: the target status (TRIAGED or MATCHING). */
+      to?: components['schemas']['ServiceRequestStatus'];
       expected_status?: components['schemas']['ServiceRequestStatus'];
       /** Format: uuid */
       grantee_id?: string;
@@ -1995,8 +1996,11 @@ export interface components {
     ServiceRequestListItem: {
       /** Format: uuid */
       service_request_id: string;
-      /** Format: uuid */
-      case_id: string;
+      /**
+       * Format: uuid
+       * @description ownership=mine and requested only. The open list never carries it, so helpers cannot link one Veteran's requests (DISPATCH.md §13.3, PRIVACY.md §4).
+       */
+      case_id?: string;
       category: components['schemas']['ServiceCategory'];
       status: components['schemas']['ServiceRequestStatus'];
       /** @description The requester one-line summary. Timing and meeting place are never listed. */
@@ -2440,8 +2444,8 @@ export interface components {
       meeting_place?: string | null;
       /** @description Where a ride is going. TRANSPORTATION only (422 UNPROCESSABLE for any other category). Optional. Shown only to the requester and the user recorded as having accepted, never in lists, logs or events. */
       destination?: string | null;
-      /** @description Optional stale-state check; 409 STALE_STATE when the request is in another status. */
-      expected_status?: string;
+      /** @description Optional stale-state check; 409 STALE_STATE when the request is in another status. An unknown status is 400. */
+      expected_status?: components['schemas']['ServiceRequestStatus'];
     };
     ServiceRequestEditResult: components['schemas']['ServiceRequestDetail'] & {
       replayed: boolean;
@@ -3763,7 +3767,25 @@ export interface operations {
       };
       path: {
         id: components['parameters']['IdPath'];
+        /** @description The command in lowercase, as API.md §8 and §18 name it (for example `release`, `start-matching`). Matching is case-insensitive and `-` equals `_`; the UPPERCASE enum value (`RELEASE`) is kept as an alias for existing clients. Both spellings share one idempotency scope. */
         command:
+          | 'submit'
+          | 'triage'
+          | 'start-matching'
+          | 'assign'
+          | 'accept'
+          | 'start'
+          | 'fulfill'
+          | 'confirm'
+          | 'close'
+          | 'decline'
+          | 'rematch'
+          | 'cancel'
+          | 'expire'
+          | 'mark-unfulfillable'
+          | 'escalate'
+          | 'return-from-escalation'
+          | 'release'
           | 'SUBMIT'
           | 'TRIAGE'
           | 'START_MATCHING'
@@ -3873,6 +3895,15 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['FollowUpResult'];
+        };
+      };
+      /** @description VALIDATION_FAILED: malformed body, a service_request_id that is not a request of this case, or a responsible_id that is not the actor responsible_type names (the case's Veteran for VETERAN, a user of the tenant for USER) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
         };
       };
       401: components['responses']['Error'];
@@ -4841,7 +4872,15 @@ export interface operations {
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
-      409: components['responses']['Error'];
+      /** @description ILLEGAL_TRANSITION when the draft was submitted or discarded; STALE_STATE when another message or edit changed the draft while this one was being answered (send it again) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
       422: components['responses']['Error'];
     };
   };
