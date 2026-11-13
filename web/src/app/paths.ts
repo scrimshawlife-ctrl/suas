@@ -8,6 +8,7 @@ export const paths = {
   signInCode: '/sign-in/code',
   welcome: '/welcome',
   verify: '/verify',
+  verifyLicence: '/verify/licence',
   crisis: '/crisis',
   home: '/home',
   request: '/request',

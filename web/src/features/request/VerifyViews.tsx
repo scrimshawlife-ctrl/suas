@@ -4,6 +4,7 @@ import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { AlertCircleIcon, CheckIcon } from '../../components/icons';
 import type { VerifyView } from '../public/verify-status';
+import { LICENCE_APPROVED_TEXT } from '../licence/licence-status';
 
 // Wording: VA_CONFIRMATION_FLOW.md §4 (suas-specs #72, contributor proposal); the
 // self-attestation step is DECISION_PENDING owner copy, as no released D-016 wording exists.
@@ -91,8 +92,31 @@ export function SelfAttestButton({ onChoose }: { onChoose: () => void }) {
   );
 }
 
+/** The text beside the licence choice (SCRY_LICENCE_FALLBACK.md L1.2, suas-specs #73 proposal). */
+export const LICENCE_OFFER_TEXT =
+  'Some states print "Veteran" on the driver licence or state ID. You can send photos of yours, and a SUAS admin will look at them.';
+
+/**
+ * The R10.1 licence choice, beside self-attestation on a real VA "not confirmed" answer only.
+ * With a review open it leads back to that review instead (L4.8).
+ */
+export function LicenceChoiceButton({ open }: { open: boolean }) {
+  return (
+    <Button variant="secondary" size="form" href={paths.verifyLicence}>
+      {open ? 'See your licence review' : 'Confirm with your Veteran licence'}
+    </Button>
+  );
+}
+
 export interface ViewMessageProps {
   view: VerifyView;
+  /**
+   * The licence choice, beside self-attestation, when the API offers it or a review is open.
+   * Only passed on the not-found and not-confirmed views; on not-found it sits under the form.
+   */
+  licence?: ReactNode;
+  /** One line on the open licence review, shown with the licence choice. */
+  licenceStatus?: string | null;
   /** The limit view's "You can try VA again after …" sentence. */
   retryAfter: string;
   continueTo: string;
@@ -111,8 +135,14 @@ export function ViewMessage(props: ViewMessageProps) {
     <div className="flex flex-wrap gap-4">
       {primary}
       <SelfAttestButton onChoose={onChooseSelfAttest} />
+      {props.licence}
     </div>
   );
+  const licenceText = props.licence ? (
+    <p>
+      {props.licenceStatus ? `Your licence review: ${props.licenceStatus}.` : LICENCE_OFFER_TEXT}
+    </p>
+  ) : null;
   const continueButton = (
     <div>
       <Button size="form" href={continueTo}>
@@ -136,6 +166,7 @@ export function ViewMessage(props: ViewMessageProps) {
             <li>For a name like O'Leary, try it without the apostrophe: OLeary.</li>
           </ul>
           <p>{SELF_ATTEST_INSTEAD}</p>
+          {licenceText}
         </div>
       );
     case 'not_confirmed':
@@ -149,6 +180,7 @@ export function ViewMessage(props: ViewMessageProps) {
             </p>
             <p>You can ask VA to review your records.</p>
             <p>{SELF_ATTEST_INSTEAD}</p>
+            {licenceText}
           </div>
           {actions(
             <Button size="form" onClick={onReopen}>
@@ -283,6 +315,21 @@ export function ViewMessage(props: ViewMessageProps) {
             <p className="text-slate">
               VA confirmed your Veteran status. You can ask for help now.
             </p>
+          </div>
+          {continueButton}
+        </>
+      );
+    case 'licence_verified':
+      return (
+        <>
+          <div className="flex flex-col gap-3">
+            <Heading>
+              <span className="flex items-center gap-2.5">
+                <CheckIcon size={28} />
+                You're confirmed
+              </span>
+            </Heading>
+            <p className="text-slate">{LICENCE_APPROVED_TEXT}</p>
           </div>
           {continueButton}
         </>

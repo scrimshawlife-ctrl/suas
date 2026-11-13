@@ -37,6 +37,7 @@ const screens: { path: string; title: string }[] = [
   { path: '/', title: 'SUAS · Veterans helping veterans' },
   { path: '/welcome', title: 'Welcome · SUAS' },
   { path: '/verify', title: 'Confirm you served · SUAS' },
+  { path: '/verify/licence', title: 'Confirm with your licence · SUAS' },
   { path: '/crisis', title: 'Immediate resources · SUAS' },
   { path: '/home', title: 'Home · SUAS' },
   { path: '/request', title: 'Request help · SUAS' },
@@ -90,6 +91,12 @@ describe('route table', () => {
     await waitFor(() => expect(document.title).toBe(title));
     expect(screen.queryByText('We could not find that page.')).toBeNull();
     expect(screen.queryByText('Something went wrong.')).toBeNull();
+  });
+
+  it('keeps the crisis strip on the licence page, whatever its state (R10.1 L10)', async () => {
+    renderAt('/verify/licence');
+    await waitFor(() => expect(document.title).toBe('Confirm with your licence · SUAS'));
+    expect(screen.getByRole('complementary', { name: 'Crisis support' })).toBeInTheDocument();
   });
 
   it('sets a page title for a screen that is still loading', async () => {

@@ -7,6 +7,8 @@ import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
 import { AlertCircleIcon, LockIcon } from '../../components/icons';
 import { useSingleFlight } from '../../lib/single-flight';
+import { useLicenceReview } from '../licence/api';
+import { isOpenReview, LICENCE_HEADINGS } from '../licence/licence-status';
 import { useConfirmVeteranStatus, useIdVerification, useSelfAttest } from '../public/api';
 import { safeFrom } from '../public/signin-flow';
 import {
@@ -25,7 +27,14 @@ import {
   type VerifyOutcome,
 } from '../public/verify-status';
 import { VerifyForm } from './VerifyForm';
-import { HelpOthers, SelfAttestButton, VaNotice, ViewMessage } from './VerifyViews';
+import { VerifyCrisisCard } from './VerifyAside';
+import {
+  HelpOthers,
+  LicenceChoiceButton,
+  SelfAttestButton,
+  VaNotice,
+  ViewMessage,
+} from './VerifyViews';
 
 /** The send failures that are not about one field. Codes are never shown. */
 function sendErrorText(error: unknown): string {
@@ -49,7 +58,8 @@ function sendErrorText(error: unknown): string {
  */
 export default function VerifyPage() {
   const location = useLocation();
-  const continueTo = safeFrom((location.state as { from?: unknown } | null)?.from) ?? paths.request;
+  const state = location.state as { from?: unknown; choice?: unknown } | null;
+  const continueTo = safeFrom(state?.from) ?? paths.request;
   const standing = useIdVerification();
   const confirm = useConfirmVeteranStatus();
   const selfAttest = useSelfAttest();
@@ -60,12 +70,29 @@ export default function VerifyPage() {
   const [attempt, setAttempt] = useState(0);
   const [sendError, setSendError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<VerifyOutcome | null>(null);
-  const [choice, setChoice] = useState<VerifyChoice>(null);
+  // The licence page's "Tell us you served" opens this page on the self-attestation step.
+  const [choice, setChoice] = useState<VerifyChoice>(
+    state?.choice === 'self_attest' ? 'self_attest' : null,
+  );
   const [attestError, setAttestError] = useState<string | null>(null);
   // Changes with every answer, so the same view shown twice is still announced and focused.
   const [answered, setAnswered] = useState(0);
 
   const view = verifyView(standing.data, outcome, choice);
+  const licence = useLicenceReview();
+
+  // R10.1 L1: the licence choice sits beside self-attestation after a real VA "not confirmed"
+  // answer, only when the API offers it (never after UNAVAILABLE), or to reach an open review.
+  const licenceReview = licence.data?.review ?? null;
+  const reviewOpen = isOpenReview(licenceReview?.status);
+  const licenceChoice =
+    (view === 'not_found' || view === 'not_confirmed') &&
+    (licence.data?.offered === true || reviewOpen) ? (
+      <LicenceChoiceButton open={reviewOpen} />
+    ) : null;
+  const licenceStatus = reviewOpen
+    ? LICENCE_HEADINGS[licenceReview?.status === 'READING' ? 'reading' : 'awaiting']
+    : null;
   const retryAfter = retryAfterText(
     outcome !== null && 'error' in outcome ? outcome.error.retryAfterSeconds : null,
   );
@@ -172,6 +199,8 @@ export default function VerifyPage() {
                 <div key={answered} className="flex flex-col gap-5">
                   <ViewMessage
                     view={view}
+                    licence={licenceChoice}
+                    licenceStatus={licenceStatus}
                     retryAfter={retryAfter}
                     continueTo={continueTo}
                     attesting={selfAttest.isPending}
@@ -194,11 +223,18 @@ export default function VerifyPage() {
                     sendError={sendError}
                     onChange={change}
                     onSubmit={() => flight(submit)}
-                    alternative={<SelfAttestButton onChoose={chooseSelfAttest} />}
+                    alternative={
+                      <>
+                        <SelfAttestButton onChoose={chooseSelfAttest} />
+                        {licenceChoice}
+                      </>
+                    }
                   />
                 </>
               ) : null}
-              {view === 'verified' || view === 'attested' ? null : <HelpOthers />}
+              {view === 'verified' || view === 'licence_verified' || view === 'attested' ? null : (
+                <HelpOthers />
+              )}
             </div>
           </Card>
         )}
@@ -215,55 +251,7 @@ export default function VerifyPage() {
               your details. We don't keep the name, birth date or address you type here.
             </p>
           </Card>
-          <Card
-            aria-labelledby="now"
-            className="flex flex-col gap-3 border-ink bg-harbor text-white"
-          >
-            <h2 id="now" className="text-20 font-bold">
-              Immediate danger?{' '}
-              <a
-                href="tel:911"
-                aria-label="Call 911"
-                className="inline-flex min-h-11 min-w-11 items-center px-1 text-white"
-              >
-                Call 911
-              </a>
-              .
-            </h2>
-            <p>
-              For suicide or emotional crisis support,{' '}
-              <a
-                href="tel:988"
-                aria-label="Call 988"
-                className="inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white"
-              >
-                call
-              </a>{' '}
-              or{' '}
-              <a
-                href="sms:988"
-                aria-label="Text 988"
-                className="inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white"
-              >
-                text 988
-              </a>
-              .
-            </p>
-            <p className="font-bold">
-              Veterans Crisis Line:{' '}
-              <a
-                href="sms:838255"
-                aria-label="Veterans Crisis Line: Text 838255"
-                className="inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white"
-              >
-                Text 838255
-              </a>
-              .
-            </p>
-            <p className="text-harbor-tint">
-              SUAS provides practical support coordination and is not an emergency-response service.
-            </p>
-          </Card>
+          <VerifyCrisisCard />
         </aside>
       </div>
     </Page>

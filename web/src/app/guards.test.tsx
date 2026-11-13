@@ -128,6 +128,15 @@ describe('route guards', () => {
     expect(screen.getByText('verify page')).toBeInTheDocument();
   });
 
+  it('lets in a requester an admin confirmed from their licence (MANUAL_REVIEW)', () => {
+    const verified = me();
+    visit('/request', {
+      ...verified,
+      id_verification: { ...verified.id_verification, method: 'MANUAL_REVIEW' },
+    });
+    expect(screen.getByText('request page')).toBeInTheDocument();
+  });
+
   it('remembers where the person was going on the /welcome and /verify detours', () => {
     const toWelcome = visit('/serve?tab=open', me({ display_name: null }));
     expect(toWelcome.state.location.state).toEqual({ from: '/serve?tab=open' });

@@ -3,7 +3,8 @@ import { isApiError, type ApiError } from '../../api/errors';
 /**
  * What the Verify screen shows (VA_CONFIRMATION_FLOW §4.4). `start`, `not_found`,
  * `request_invalid` and `name_mismatch` show the notice and the form; `self_attest` is the
- * "Tell us you served" step; `verified` and `attested` are the two ways the gate opens.
+ * "Tell us you served" step; `verified`, `licence_verified` (an admin approved a licence, suas-specs
+ * #73 R10.1 proposal) and `attested` are the ways the gate opens.
  */
 export type VerifyView =
   | 'start'
@@ -17,6 +18,7 @@ export type VerifyView =
   | 'identity_taken'
   | 'self_attest'
   | 'verified'
+  | 'licence_verified'
   | 'attested'
   | 'revoked';
 
@@ -60,13 +62,14 @@ export function isGateError(error: unknown): error is ApiError {
 function resultView(result: VerifyResult): VerifyView | null {
   switch (result.status) {
     case 'VERIFIED':
-      // Only a VA answer may say "VA confirmed"; self-attestation (and later review) does not.
-      return result.method === undefined || result.method === 'VA_VETERAN_STATUS'
-        ? 'verified'
-        : 'attested';
+      // Only a VA answer may say "VA confirmed"; a licence review and self-attestation do not.
+      if (result.method === undefined || result.method === 'VA_VETERAN_STATUS') return 'verified';
+      return result.method === 'MANUAL_REVIEW' ? 'licence_verified' : 'attested';
     case 'REVOKED':
       return 'revoked';
     case 'NOT_CONFIRMED':
+      // A withdrawn licence approval (REVIEW_ERROR) is not a VA answer: show the form.
+      if (result.method === 'MANUAL_REVIEW') return null;
       return result.not_confirmed_reason === 'PERSON_NOT_FOUND' ? 'not_found' : 'not_confirmed';
     case 'UNAVAILABLE':
       return result.failure_class === 'REQUEST_INVALID' ? 'request_invalid' : 'unavailable';
@@ -102,19 +105,24 @@ export function verifyView(
 }
 
 /**
- * When VA may be tried again, from a 429's Retry-After seconds: "You can try VA again after
- * 3:45 PM tomorrow." Never says "today": the limit is a rolling 24 hours, not a calendar day.
+ * When a rolling 24-hour limit lifts, from a 429's Retry-After seconds: "3:45 PM", "3:45 PM
+ * tomorrow" or "3:45 PM on Friday, November 12". Never "today": the limit is not a calendar day.
  */
-export function retryAfterText(seconds: number | null, now: Date = new Date()): string {
-  if (seconds === null) return 'You can try VA again later.';
+export function retryAtText(seconds: number, now: Date = new Date()): string {
   const minute = 60_000;
   const at = new Date(Math.ceil((now.getTime() + seconds * 1000) / minute) * minute);
   const time = at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const days = Math.round(
     (new Date(at).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000,
   );
-  if (days === 0) return `You can try VA again after ${time}.`;
-  if (days === 1) return `You can try VA again after ${time} tomorrow.`;
+  if (days === 0) return time;
+  if (days === 1) return `${time} tomorrow`;
   const date = at.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  return `You can try VA again after ${time} on ${date}.`;
+  return `${time} on ${date}`;
+}
+
+/** The VA limit view's sentence: "You can try VA again after 3:45 PM tomorrow." */
+export function retryAfterText(seconds: number | null, now: Date = new Date()): string {
+  if (seconds === null) return 'You can try VA again later.';
+  return `You can try VA again after ${retryAtText(seconds, now)}.`;
 }
