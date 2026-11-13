@@ -22,7 +22,7 @@ export const LICENCE_READER_UNAVAILABLE_CLASSES = [
 ] as const;
 export type LicenceReaderUnavailableClass = (typeof LICENCE_READER_UNAVAILABLE_CLASSES)[number];
 
-/** Every reason a review can settle UNREADABLE; migration 0023 bounds the column to it. */
+/** Every reason a review can settle UNREADABLE; migration 0024 bounds the column to it. */
 export const LICENCE_FAILURE_CLASSES = [
   ...LICENCE_READER_UNAVAILABLE_CLASSES,
   'NOT_A_LICENCE',
