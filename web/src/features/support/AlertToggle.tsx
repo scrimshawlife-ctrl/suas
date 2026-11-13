@@ -33,7 +33,8 @@ interface Confirming {
 
 /**
  * Creates or ends the RED-alert grant for one contact; turning on first shows the published
- * consent text (R12.3). The Idempotency-Key is kept across retries and renewed after a success.
+ * consent text (R12.3). The Idempotency-Key is kept across retries and renewed after a success
+ * or a superseded template (the retry then cites a new version, so it is a new request).
  */
 export function AlertToggle({
   contact,
@@ -90,7 +91,10 @@ export function AlertToggle({
         {
           onSuccess: () => key.renew(),
           onError: (error) => {
-            if (hasApiCode(error, 'CONSENT_TEMPLATE_UNAVAILABLE')) void template.refetch();
+            if (hasApiCode(error, 'CONSENT_TEMPLATE_UNAVAILABLE')) {
+              key.renew();
+              void template.refetch();
+            }
           },
         },
       ),
