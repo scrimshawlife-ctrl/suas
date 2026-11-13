@@ -394,6 +394,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "UNPROCESSABLE: no questionnaire version is published, so a Check-In cannot be started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         },
         "x-requires": ["verified_veteran"]
@@ -500,6 +510,16 @@
           "404": {
             "$ref": "#/components/responses/Error"
           },
+          "409": {
+            "description": "ILLEGAL_TRANSITION: the Check-In is finished or past its 24-hour window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "413": {
             "$ref": "#/components/responses/Error"
           }
@@ -561,6 +581,16 @@
           },
           "404": {
             "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "ILLEGAL_TRANSITION: the Check-In is finished or past its 24-hour window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         },
         "x-requires": ["verified_veteran"]
@@ -1224,6 +1254,16 @@
           },
           "413": {
             "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "description": "CONSENT_TEMPLATE_UNAVAILABLE: the cited consent_template_version is not the published version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         },
         "x-requires": ["verified_veteran"],
@@ -1940,6 +1980,16 @@
           },
           "403": {
             "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "description": "The Case does not exist or the caller is neither its owner nor an accepter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           },
           "409": {
             "$ref": "#/components/responses/Error"
@@ -2987,6 +3037,7 @@
       "get": {
         "tags": ["cases"],
         "summary": "List service requests: open ones the caller can accept (ownership=open), ones the caller accepted (ownership=mine), or the caller own requests (ownership=requested)",
+        "description": "ownership=open requires a county (422 COUNTY_REQUIRED); requested and mine do not.",
         "operationId": "listServiceRequests",
         "security": [
           {
@@ -3117,7 +3168,8 @@
           "422": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran", "county"]
       }
     },
     "/api/v0/service-requests/{id}/accept": {
@@ -3186,7 +3238,8 @@
             }
           }
         },
-        "description": "Accepts this one Service Request: records the caller as its holder and moves it to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). Other requests of the same Veteran stay open to other people. A first accept on an OPEN case also moves the case to ASSIGNED. First accept wins: a second person gets 409 ALREADY_CLAIMED. The accepter then runs START, FULFILL; the requester runs CONFIRM."
+        "description": "Accepts this one Service Request: records the caller as its holder and moves it to ACCEPTED in one transaction (peer accept: no provider consent evaluation, because the accepter is a peer). Other requests of the same Veteran stay open to other people. A first accept on an OPEN case also moves the case to ASSIGNED. First accept wins: a second person gets 409 ALREADY_CLAIMED. The accepter then runs START, FULFILL; the requester runs CONFIRM.",
+        "x-requires": ["county"]
       }
     },
     "/api/v0/veterans/me/county": {
@@ -3424,7 +3477,8 @@
           "403": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/intake/drafts": {
@@ -3481,7 +3535,8 @@
           "413": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/intake/drafts/{id}": {
@@ -3523,7 +3578,8 @@
           "404": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       },
       "patch": {
         "tags": ["intake"],
@@ -3578,8 +3634,19 @@
           },
           "413": {
             "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "description": "UNPROCESSABLE: a destination on a category other than TRANSPORTATION",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/intake/drafts/{id}/messages": {
@@ -3647,7 +3714,8 @@
           "422": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran"]
       }
     },
     "/api/v0/intake/drafts/{id}/submit": {
@@ -3708,7 +3776,8 @@
           "422": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "x-requires": ["verified_veteran", "county"]
       }
     },
     "/api/v0/admin/resource-drafts/{id}/commands/edit": {
