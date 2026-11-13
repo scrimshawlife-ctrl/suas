@@ -17,15 +17,47 @@ export {
 export { changeUserCounty, changeUserDisplayName } from './profile-changes.js';
 export { listBorderingCounties, SERVICE_COUNTIES, type ServiceCounty } from './counties.js';
 export {
-  findLatestIdScan,
-  hasPassedIdScan,
-  IdVerificationUnavailableError,
-  readIdScanStatus,
-  startIdScan,
-  type IdScanRecord,
-  type IdScanStatus,
-  type IdScanView,
-} from './id-scan.js';
+  beginVaAttempt,
+  confirmVeteranStatus,
+  hasConfirmedVeteranStatus,
+  isVaVerified,
+  readVeteranConfirmation,
+  selfAttestVeteranStatus,
+  settleVaAttempt,
+  VA_CONFIRMATION_FINGERPRINT_LABEL,
+  VA_CONFIRMATION_MAX_ATTEMPTS,
+  VA_CONFIRMATION_MAX_CALLS,
+  VeteranConfirmationAttemptLimitError,
+  VeteranConfirmationRevokedError,
+  type AskVa,
+  type VaAttemptInput,
+  type VeteranConfirmationStanding,
+} from './va-confirmation-store.js';
+export {
+  displayNameMatches,
+  IDENTITY_HASH_LABEL,
+  identityCanonicalForm,
+  identityHash,
+  normalizeNamePart,
+  VaIdentityAlreadyVerifiedError,
+  VaNameMismatchError,
+} from './va-identity.js';
+export type { FingerprintKey, FingerprintKeyring } from './fingerprint-keys.js';
+export {
+  VA_CONFIRMATION_PROJECTION_ID,
+  VA_NOTICE_V1,
+  vaConfirmationRequestSchema,
+  VaNoticeVersionRequiredError,
+  VeteranConfirmationUnavailableError,
+  type VaConfirmationProjection,
+  type VeteranConfirmationPort,
+  type VeteranConfirmationResult,
+} from './va-confirmation.js';
+export { createVeteranConfirmationPort } from './va-confirmation-factory.js';
+export {
+  FixtureVeteranConfirmation,
+  VA_CONFIRMATION_FIXTURE_ZIPS,
+} from './va-confirmation-fixture.js';
 export {
   requireCounty,
   requireVerifiedVeteran,
@@ -45,6 +77,7 @@ export { selectUserForSignIn } from './signin-tenant.js';
 export { grantSuasAdmin, isSuasAdmin, revokeSuasAdmin, type SuasAdminGrant } from './admins.js';
 export {
   DisabledVeteranVerificationAdapter,
+  isVaNotConfirmedReason,
   normalizeVaVeteranStatus,
   VA_NOT_CONFIRMED_REASONS,
   VETERAN_VERIFICATION_METHODS,
