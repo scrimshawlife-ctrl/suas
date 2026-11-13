@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { API_URL } from './config';
 import { newPerson, newVerifiedVeteran, shoot, signUp, uniqueEmail, withDb } from './helpers';
@@ -17,33 +16,46 @@ test('a RED Check-In alerts the trusted contact who holds a RED grant', async ({
   });
   const page = veteran.page;
 
-  // The Veteran adds a trusted contact. The SUAS UI cannot do the contact's side (accepting
-  // the invite), so that one step goes through the API as the contact, signed in by the UI.
+  // The Veteran adds a trusted contact; SUAS emails the invitation (R9.4).
   await page.goto('/trusted-contacts');
   const contactEmail = uniqueEmail('sister');
   await page.getByLabel('Who is this to you?').fill('Sister');
   await page.getByLabel('Their email').fill(contactEmail);
   await page.getByRole('button', { name: 'Add trusted contact' }).click();
   await expect(page.getByText('Added. They are listed below.')).toBeVisible();
+  await expect
+    .poll(async () =>
+      withDb(async (db) => {
+        const rows = await db.query<{ template_version: string }>(
+          `SELECT template_version FROM notifications
+            WHERE reason = 'trusted_contact_invited' AND destination = $1`,
+          [contactEmail],
+        );
+        return rows.rows.map((row) => row.template_version);
+      }),
+    )
+    .toEqual(['invite@1']);
 
+  // The contact signs up with that address and accepts on the Invitations page, which shows
+  // the Veteran's display name and the relationship only.
   const contact = await newPerson(browser);
   await signUp(contact, request, { email: contactEmail, name: 'Ann T.', county: 'Santa Clara' });
+  await contact.getByRole('link', { name: 'Invitations' }).click();
+  await expect(contact).toHaveURL(/\/invitations$/);
+  await expect(contact.getByText('Marcus T.')).toBeVisible();
+  await expect(contact.getByText('They listed you as: Sister')).toBeVisible();
+  await shoot(contact, '04-invitation');
+  await contact.getByRole('button', { name: 'Accept the invitation from Marcus T.' }).click();
+  await expect(
+    contact.getByText('Accepted. They can now choose what SUAS may tell you.'),
+  ).toBeVisible();
+  await expect(contact.getByText('You have no invitations.')).toBeVisible();
   const veteranAuth = { Authorization: `Bearer ${await sessionToken(page)}` };
   const circle = await request.get(`${API_URL}/api/v0/trusted-contacts`, { headers: veteranAuth });
   const trustedContactId = (
     (await circle.json()) as { trusted_contacts: { trusted_contact_id: string }[] }
   ).trusted_contacts[0]?.trusted_contact_id;
   expect(trustedContactId).toBeTruthy();
-  const accepted = await request.post(
-    `${API_URL}/api/v0/trusted-contacts/${trustedContactId}/commands/accept`,
-    {
-      headers: {
-        Authorization: `Bearer ${await sessionToken(contact)}`,
-        'Idempotency-Key': randomUUID(),
-      },
-    },
-  );
-  expect(accepted.ok()).toBe(true);
 
   // Back in the UI: the contact is Accepted and the Veteran turns on the RED notice.
   await page.reload();
