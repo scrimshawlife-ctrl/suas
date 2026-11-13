@@ -53,6 +53,22 @@ beforeAll(async () => {
   });
   local = app.chatPush as LocalWebSocketPush;
   localPort = await local.listen(0);
+  // Connection ids below are fixed, and registration ignores an existing id, so rows left
+  // by an earlier run on the same database would belong to another user.
+  await pool().query(`DELETE FROM chat_connections WHERE connection_id = ANY($1)`, [
+    [
+      'c-1',
+      'c-2',
+      'c-x',
+      'aws-gone',
+      'aws-live',
+      'revoked-conn',
+      'live-conn',
+      'idle-conn',
+      'helper-conn',
+      'failing-conn',
+    ],
+  ]);
 });
 
 afterAll(async () => {
