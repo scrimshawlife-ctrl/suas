@@ -233,7 +233,11 @@ describe('api client timeout (G2)', () => {
     const client = createApiClient({ baseUrl: 'http://localhost', timeoutMs: 20, fetch: hang });
     await expect(
       client.PUT('/api/v0/veterans/me/county', { body: { county: 'ALAMEDA' } }),
-    ).rejects.toMatchObject({ status: 408, code: 'TIMEOUT' });
+    ).rejects.toMatchObject({
+      status: 408,
+      code: 'TIMEOUT',
+      message: 'SUAS did not answer in time. Check your connection and try again.',
+    });
   });
 
   it("keeps the caller's own abort as an abort, not a timeout", async () => {

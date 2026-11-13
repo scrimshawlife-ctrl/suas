@@ -82,7 +82,12 @@ export function createApiMiddleware(options: ApiClientOptions = {}): Middleware 
       // Matched by name: under test the DOMException class comes from another realm.
       const reason = request.signal.reason as { name?: unknown } | undefined;
       if (reason?.name === 'TimeoutError') {
-        return new ApiError(408, TIMEOUT_CODE, 'The request got no answer in time.');
+        // Screens that show `message` as is (sign-in, Welcome) get the connection advice too.
+        return new ApiError(
+          408,
+          TIMEOUT_CODE,
+          'SUAS did not answer in time. Check your connection and try again.',
+        );
       }
       return undefined;
     },
