@@ -35,7 +35,11 @@ export function validateWelcome(displayName: string, county: string): WelcomeErr
 
 /** The line shown when saving the name or county fails (Welcome and Settings). */
 export function profileSaveError(error: unknown): string {
-  return isApiError(error) && error.status < 500
-    ? error.message
-    : 'We could not save that. Check your connection and try again.';
+  if (!isApiError(error) || error.status >= 500) {
+    return 'We could not save that. Check your connection and try again.';
+  }
+  // A 400 carries the API's field text ("display_name: …"), which is not for a person.
+  return error.status === 400
+    ? 'We could not save that. Check your name and county, then try again.'
+    : error.message;
 }
