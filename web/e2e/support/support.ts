@@ -4,13 +4,13 @@
  * steps that move time or read what the server recorded.
  */
 
-import { randomUUID } from 'node:crypto';
 import { expect, type APIRequestContext, type Browser, type Page } from '@playwright/test';
-import { API_URL } from '../config';
+import { elevatedAdmin as elevatedAdminPage } from '../admin/admin';
+export { passMfa } from '../admin/admin';
+export { myUserId, sessionToken, uniqueText as uniqueSummary } from '../helpers';
 import {
   newPerson,
   newVerifiedVeteran,
-  signInWithCode,
   signUp,
   uniqueEmail,
   withDb,
@@ -69,17 +69,6 @@ export async function helper(
   return page;
 }
 
-/** On /admin/mfa: starts a check and answers it with the test second factor's response. */
-export async function passMfa(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/admin\/mfa$/);
-  await page.getByRole('button', { name: 'Start check' }).click();
-  const hint = (await page.getByText(/This check id is/).textContent()) ?? '';
-  const checkId = /This check id is ([^\s]+?)\.$/.exec(hint.trim())?.[1];
-  expect(checkId, 'the dev hint names the check id').toBeTruthy();
-  await page.getByLabel('Your response').fill(`ok-${checkId ?? ''}`);
-  await page.getByRole('button', { name: 'Confirm' }).click();
-}
-
 /** R12.3: turning the RED alert on is confirmed in the consent text dialog. */
 export async function confirmAlert(page: Page): Promise<void> {
   await page
@@ -88,19 +77,9 @@ export async function confirmAlert(page: Page): Promise<void> {
     .click();
 }
 
-/** The seeded admin, signed in and stepped up with the test second factor, on /admin. */
+/** The seeded admin, signed in and stepped up (admin/admin.ts), closed after the test. */
 export async function elevatedAdmin(browser: Browser, request: APIRequestContext): Promise<Page> {
-  // The admin may ask for three codes per 15 minutes; dropping its counters moves that window on.
-  await withDb((db) =>
-    db.query(`DELETE FROM auth_rate_limits WHERE subject = $1`, ['admin@example.invalid']),
-  );
-  const page = track(await newPerson(browser));
-  await signInWithCode(page, request, 'admin@example.invalid');
-  await expect(page).toHaveURL(/\/home$/);
-  await page.goto('/admin');
-  await passMfa(page);
-  await expect(page).toHaveURL(/\/admin$/);
-  return page;
+  return track(await elevatedAdminPage(browser, request));
 }
 
 /** A 5xx in the API's error envelope, for the `page.route` failures the real stack cannot give. */
@@ -111,20 +90,6 @@ export function serverError(status = 500) {
     contentType: 'application/json',
     body: JSON.stringify({ error: { code, message: 'Unexpected internal failure.' } }),
   };
-}
-
-/** The bearer token in this tab, for the steps a person cannot do in the UI. */
-export async function sessionToken(page: Page): Promise<string> {
-  return page.evaluate(() => sessionStorage.getItem('suas.session') ?? '');
-}
-
-/** The signed-in person's user id, for the database steps that move time. */
-export async function myUserId(page: Page, request: APIRequestContext): Promise<string> {
-  const me = await request.get(`${API_URL}/api/v0/veterans/me`, {
-    headers: { Authorization: `Bearer ${await sessionToken(page)}` },
-  });
-  expect(me.ok()).toBe(true);
-  return ((await me.json()) as { user_id: string }).user_id;
 }
 
 /** The crisis band and footer (SAFETY_COPY.md §2.2, §2.3), each with real call/text targets. */
@@ -285,9 +250,4 @@ export async function ageCheckIns(userId: string): Promise<void> {
       [userId],
     ),
   );
-}
-
-/** A unique, readable summary so runs never collide on the shared boards. */
-export function uniqueSummary(prefix: string): string {
-  return `${prefix} ${randomUUID().slice(0, 8)}`;
 }

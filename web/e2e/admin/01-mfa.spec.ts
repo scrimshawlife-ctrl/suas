@@ -1,7 +1,8 @@
 import { expect, test } from '../fixtures';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { API_URL } from '../config';
-import { newPerson, readSignInCode, shoot, withDb } from '../helpers';
+import { myUserId, newPerson, readSignInCode, shoot } from '../helpers';
+import { expireSessions } from '../time/time';
 import { errorCode, expectNoDeadControls, nextResponse, resetSignInLimits } from '../auth/auth';
 import { ADMIN_EMAIL, passMfa, signInAdmin, testFactorResponse } from './admin';
 
@@ -17,22 +18,6 @@ async function signInAgain(page: Page, request: APIRequestContext): Promise<void
   await expect(page).toHaveURL(/\/sign-in\/code$/);
   await page.getByLabel('6-digit code').fill(await readSignInCode(request, ADMIN_EMAIL));
   await page.getByRole('button', { name: 'Verify and continue' }).click();
-}
-
-/** This tab's admin: every live session of theirs passed its absolute end a minute ago. */
-async function expireSessions(page: Page, request: APIRequestContext): Promise<void> {
-  const token = await page.evaluate(() => sessionStorage.getItem('suas.session') ?? '');
-  const me = await request.get(`${API_URL}/api/v0/veterans/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const { user_id: userId } = (await me.json()) as { user_id: string };
-  await withDb((db) =>
-    db.query(
-      `UPDATE sessions SET expires_at = now() - interval '1 minute'
-        WHERE user_id = $1 AND revoked_at IS NULL`,
-      [userId],
-    ),
-  );
 }
 
 test('signed out, every admin address goes to sign in, and the admin comes back after the step-up', async ({
@@ -228,7 +213,7 @@ test('when the admin session itself expires, the console goes to sign in, then s
   await page.goto('/admin/drafts?status=REJECTED');
   await passMfa(page);
   await expect(page).toHaveURL(/\/admin\/drafts\?status=REJECTED$/);
-  await expireSessions(page, request);
+  await expireSessions(await myUserId(page, request));
   await page.reload();
   await expect(page).toHaveURL(/\/sign-in$/);
   expect(await page.evaluate(() => sessionStorage.getItem('suas.mfa'))).toBeNull();
@@ -259,7 +244,7 @@ test('when two admin requests hit the expired session at once, sign-in still ret
     await route.fallback();
   });
   await page.waitForLoadState('networkidle');
-  await expireSessions(page, request);
+  await expireSessions(await myUserId(page, request));
   const lists = () => held.filter((h) => h.url.includes('/admin/resource-drafts?'));
   await page.getByRole('button', { name: 'Published' }).click();
   await page.getByRole('button', { name: 'Discarded' }).click();

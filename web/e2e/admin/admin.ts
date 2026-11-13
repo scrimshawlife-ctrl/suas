@@ -7,6 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import { newPerson, scriptModel, signInWithCode } from '../helpers';
+export { duplicateTab, uniqueText as uniqueName } from '../helpers';
 import { resetSignInLimits } from '../auth/auth';
 
 export const ADMIN_EMAIL = 'admin@example.invalid';
@@ -49,25 +50,6 @@ export async function elevatedAdmin(browser: Browser, request: APIRequestContext
   return page;
 }
 
-/**
- * A second tab of the same browser on `path`. sessionStorage is per tab, so the session and
- * MFA flag are copied over, as a duplicated tab would carry them.
- */
-export async function duplicateTab(page: Page, path: string): Promise<Page> {
-  const stored = await page.evaluate(() => ({
-    session: sessionStorage.getItem('suas.session') ?? '',
-    mfa: sessionStorage.getItem('suas.mfa'),
-  }));
-  const tab = await page.context().newPage();
-  await tab.goto('/');
-  await tab.evaluate(({ session, mfa }) => {
-    sessionStorage.setItem('suas.session', session);
-    if (mfa !== null) sessionStorage.setItem('suas.mfa', mfa);
-  }, stored);
-  await tab.goto(path);
-  return tab;
-}
-
 export type ExtractedResource = {
   service_name: string;
   category: 'FOOD' | 'TRANSPORTATION' | 'SHELTER' | 'PEER_SUPPORT';
@@ -79,11 +61,6 @@ export type ExtractedResource = {
   referral_method?: string;
   cost?: string;
 };
-
-/** A unique synthetic service name, so runs and tests never collide. */
-export function uniqueName(prefix: string): string {
-  return `${prefix} ${randomUUID().slice(0, 6)}`;
-}
 
 /** Queues one catalog-builder reply that records the given resources. */
 export async function scriptExtraction(
