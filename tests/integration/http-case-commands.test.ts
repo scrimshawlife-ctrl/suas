@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
+import { createSession, elevateSession } from '../../src/auth/index.js';
 import { findCurrentCase } from '../../src/coordination/index.js';
 import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
@@ -42,10 +42,11 @@ interface QuestionJson {
   options: { answer_option_id: string; option_key: string }[];
 }
 
-async function bearer(tenantId: string, userId: string) {
+async function bearer(tenantId: string, userId: string, elevate = false) {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
   const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId });
+  if (elevate) await elevateSession(pool, session.session.sessionId);
   return { authorization: `Bearer ${session.credential}` };
 }
 
@@ -96,11 +97,14 @@ async function openRedCase() {
   return { pool, tenantId, veteran, headers, supportCase };
 }
 
-/** A signed-in person in the launch county. `admin` adds the SUAS System Administrator grant. */
+/**
+ * A signed-in person in the launch county. `admin` adds the SUAS System Administrator grant
+ * and, unless `elevate` is false, an MFA-elevated session.
+ */
 async function person(
   tenantId: string,
   label: string,
-  options: { admin?: boolean } = {},
+  options: { admin?: boolean; elevate?: boolean } = {},
 ): Promise<{ userId: string; headers: Record<string, string> }> {
   const pool = app.pool;
   if (pool === undefined) throw new Error('no pool');
@@ -111,7 +115,8 @@ async function person(
     county: 'SANTA_CLARA',
   });
   if (options.admin === true) await grantSuasAdmin(pool, user.userId, undefined);
-  return { userId: user.userId, headers: await bearer(tenantId, user.userId) };
+  const elevate = options.admin === true && options.elevate !== false;
+  return { userId: user.userId, headers: await bearer(tenantId, user.userId, elevate) };
 }
 
 /** The requester submits a request on their case, which puts it on the open list. */
@@ -294,6 +299,30 @@ describe('CASE_COMMANDS over /api/v0', () => {
       payload: {},
     });
     expect(foreign.statusCode).toBe(404);
+  });
+});
+
+describe('ADMIN.md §2 / SECURITY.md §2 — admin case commands need MFA', () => {
+  it('refuses triage, reopen and close from an unelevated SUAS admin with MFA_REQUIRED', async () => {
+    const { pool, supportCase, tenantId } = await openRedCase();
+    const unelevated = await person(tenantId, 'staff', { admin: true, elevate: false });
+
+    for (const [kebab, payload] of [
+      ['triage', {}],
+      ['reopen', { reason: 'recurrence' }],
+      ['close', {}],
+    ] as const) {
+      const response = await app.server.inject({
+        method: 'POST',
+        url: `/api/v0/cases/${supportCase.caseId}/commands/${kebab}`,
+        headers: { ...unelevated.headers, 'idempotency-key': `${kebab}-${randomUUID()}` },
+        payload,
+      });
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('MFA_REQUIRED');
+    }
+    const after = await findCurrentCase(pool, tenantId, supportCase.veteranUserId);
+    expect(after?.status).toBe(supportCase.status);
   });
 });
 

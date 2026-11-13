@@ -83,6 +83,19 @@ describe('POST /api/v0/check-ins', () => {
     expect(body.questions.every((question) => question.options.length > 0)).toBe(true);
   });
 
+  it('returns the in-flight Check-In instead of starting a second one', async () => {
+    const { headers } = await veteranSession();
+    const first = await app.server.inject({ method: 'POST', url: '/api/v0/check-ins', headers });
+    const second = await app.server.inject({ method: 'POST', url: '/api/v0/check-ins', headers });
+    expect(first.statusCode).toBe(201);
+    expect(second.statusCode).toBe(200);
+    const firstBody: { check_in_id: string; started_at: string } = first.json();
+    const secondBody: { check_in_id: string; started_at: string } = second.json();
+    expect(secondBody.check_in_id).toBe(firstBody.check_in_id);
+    expect(Date.parse(firstBody.started_at)).not.toBeNaN();
+    expect(secondBody.started_at).toBe(firstBody.started_at);
+  });
+
   it('refuses an unauthenticated start', async () => {
     const response = await app.server.inject({ method: 'POST', url: '/api/v0/check-ins' });
     expect(response.statusCode).toBe(401);
@@ -129,6 +142,34 @@ describe('Check-In answer and complete', () => {
       expect(saved.statusCode).toBe(200);
     }
   }
+
+  it('refuses an option of another question, or an unknown id, with 400 and saves nothing', async () => {
+    const { session, body } = await startOwned();
+    const [first, second] = body.questions;
+    if (first === undefined || second === undefined) throw new Error('need two questions');
+    const foreignOption = second.options[0]?.answer_option_id;
+    const attempts = [
+      { question_id: first.question_id, answer_option_id: foreignOption },
+      { question_id: first.question_id, answer_option_id: randomUUID() },
+      { question_id: randomUUID(), answer_option_id: first.options[0]?.answer_option_id },
+    ];
+    for (const payload of attempts) {
+      const response = await app.server.inject({
+        method: 'POST',
+        url: `/api/v0/check-ins/${body.check_in_id}/responses`,
+        headers: session.headers,
+        payload,
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+    }
+    const detail = await app.server.inject({
+      method: 'GET',
+      url: `/api/v0/check-ins/${body.check_in_id}`,
+      headers: session.headers,
+    });
+    expect(detail.json()).toMatchObject({ status: 'STARTED', answered_question_ids: [] });
+  });
 
   it("hides another veteran's Check-In", async () => {
     const first = await startOwned();
