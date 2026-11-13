@@ -1,7 +1,13 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 import { useRef } from 'react';
 import { api } from '../../api/client';
-import { serviceRequestsQueryOptions } from '../../api/service-requests';
+import { infiniteServiceRequestsKey } from '../../api/service-requests';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import { useSessionToken } from '../../api/token-store';
@@ -206,15 +212,31 @@ interface HeldList {
   counts?: { helping_now: number };
 }
 
-/** A helper's list without one request they no longer hold, its "helping now" count to match. */
-function withoutHeld<T extends HeldList>(list: T, serviceRequestId: string): T {
-  const kept = list.service_requests.filter((item) => item.service_request_id !== serviceRequestId);
-  if (kept.length === list.service_requests.length) return list;
-  const counts = list.counts && {
-    ...list.counts,
-    helping_now: Math.max(0, list.counts.helping_now - 1),
+/**
+ * A helper's paged list without one request they no longer hold. Every page carries the
+ * all-pages counts, so each "helping now" drops by one when any page held it.
+ */
+function withoutHeld<T extends HeldList>(
+  data: InfiniteData<T>,
+  serviceRequestId: string,
+): InfiniteData<T> {
+  const isIt = (item: { service_request_id: string }) =>
+    item.service_request_id === serviceRequestId;
+  if (!data.pages.some((page) => page.service_requests.some(isIt))) return data;
+  return {
+    ...data,
+    pages: data.pages.map((page) => {
+      const counts = page.counts && {
+        ...page.counts,
+        helping_now: Math.max(0, page.counts.helping_now - 1),
+      };
+      return {
+        ...page,
+        service_requests: page.service_requests.filter((item) => !isIt(item)),
+        ...(counts ? { counts } : {}),
+      };
+    }),
   };
-  return { ...list, service_requests: kept, ...(counts ? { counts } : {}) };
 }
 
 /**
@@ -236,10 +258,10 @@ export function useReleaseRequest(serviceRequestId: string) {
     // would re-read into a 404. The Serve board the caller navigates to re-reads on mount.
     onSuccess: (_data, reason) => {
       keys.renew(reason);
-      // Drop it from the cached "mine" list at once, or the board renders its row and re-reads it.
-      queryClient.setQueryData(
-        serviceRequestsQueryOptions({ ownership: 'mine' }).queryKey,
-        (list) => (list === undefined ? list : withoutHeld(list, serviceRequestId)),
+      // Drop it from the board's cached "mine" pages at once, or its row renders and re-reads it.
+      queryClient.setQueryData<InfiniteData<HeldList>>(
+        infiniteServiceRequestsKey('mine'),
+        (data) => (data === undefined ? data : withoutHeld(data, serviceRequestId)),
       );
       const stale = { refetchType: 'none' } as const;
       void queryClient.invalidateQueries({ queryKey: queryKeys.serviceRequests.all, ...stale });

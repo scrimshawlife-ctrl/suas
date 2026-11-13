@@ -63,11 +63,16 @@ export function useServiceRequest(id: string | undefined) {
 
 const PAGE_SIZE = 20;
 
+/** Cache key of `useInfiniteServiceRequests`, for mutations that edit the paged list in place. */
+export function infiniteServiceRequestsKey(ownership: Ownership) {
+  return queryKeys.serviceRequests.list({ ownership, limit: PAGE_SIZE, paged: true });
+}
+
 /** The same list as `useServiceRequests`, paged by `next_cursor` for a "Show more" button. */
 export function useInfiniteServiceRequests(ownership: Ownership) {
   const token = useSessionToken();
   return useInfiniteQuery({
-    queryKey: queryKeys.serviceRequests.list({ ownership, limit: PAGE_SIZE, paged: true }),
+    queryKey: infiniteServiceRequestsKey(ownership),
     enabled: token !== null,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
