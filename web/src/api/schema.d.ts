@@ -868,7 +868,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List service requests: open ones the caller can accept (ownership=open), ones the caller accepted (ownership=mine), or the caller own requests (ownership=requested) */
+        /**
+         * List service requests: open ones the caller can accept (ownership=open), ones the caller accepted (ownership=mine), or the caller own requests (ownership=requested)
+         * @description ownership=open requires a county (422 COUNTY_REQUIRED); requested and mine do not.
+         */
         get: operations["listServiceRequests"];
         put?: never;
         /**
@@ -2522,6 +2525,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            /** @description UNPROCESSABLE: no questionnaire version is published, so a Check-In cannot be started */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     getCheckIn: {
@@ -2602,6 +2614,15 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            /** @description ILLEGAL_TRANSITION: the Check-In is finished or past its 24-hour window */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             413: components["responses"]["Error"];
         };
     };
@@ -2637,6 +2658,15 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            /** @description ILLEGAL_TRANSITION: the Check-In is finished or past its 24-hour window */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     openCase: {
@@ -3069,6 +3099,15 @@ export interface operations {
             };
             409: components["responses"]["Error"];
             413: components["responses"]["Error"];
+            /** @description CONSENT_TEMPLATE_UNAVAILABLE: the cited consent_template_version is not the published version */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     listCaseServiceRequests: {
@@ -3509,6 +3548,15 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            /** @description The Case does not exist or the caller is neither its owner nor an accepter */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             409: components["responses"]["Error"];
             413: components["responses"]["Error"];
         };
@@ -4427,6 +4475,15 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             413: components["responses"]["Error"];
+            /** @description UNPROCESSABLE: a destination on a category other than TRANSPORTATION */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     addIntakeMessage: {
