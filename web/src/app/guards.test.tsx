@@ -29,7 +29,13 @@ function me(
     status: 'ACTIVE',
     enrolled_channels: { email: true, phone: false },
     county: 'SANTA_CLARA',
-    id_verification: { method: 'ID_SCAN_SELFIE', status, verified_at: null },
+    id_verification: {
+      method: 'VA_VETERAN_STATUS',
+      status,
+      not_confirmed_reason: null,
+      verified_at: null,
+      failure_class: null,
+    },
     open_case: null,
     active_qrf: null,
     categories: [],
@@ -120,6 +126,15 @@ describe('route guards', () => {
   it('sends an unverified requester to /verify but lets them into Serve', () => {
     visit('/request', me({}, 'NOT_STARTED'));
     expect(screen.getByText('verify page')).toBeInTheDocument();
+  });
+
+  it('lets in a requester an admin confirmed from their licence (MANUAL_REVIEW)', () => {
+    const verified = me();
+    visit('/request', {
+      ...verified,
+      id_verification: { ...verified.id_verification, method: 'MANUAL_REVIEW' },
+    });
+    expect(screen.getByText('request page')).toBeInTheDocument();
   });
 
   it('remembers where the person was going on the /welcome and /verify detours', () => {
