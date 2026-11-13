@@ -26,7 +26,9 @@ import {
   VA_CONFIRMATION_PROJECTION_FIELDS,
   type VeteranConfirmationPort,
 } from '../identity/va-confirmation.js';
+import type { LicenceReaderPort } from '../identity/licence-reader.js';
 import type { ConnectionPushPort } from '../realtime/index.js';
+import type { ObjectStoragePort } from '../storage/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { stagingAccessFromConfig } from '../auth/staging-access.js';
 import { authenticate } from './authenticate.js';
@@ -40,6 +42,7 @@ import { registerContactLogRoutes } from './routes/contact-log.js';
 import { registerFollowUpRoutes } from './routes/follow-ups.js';
 import { registerIntakeRoutes } from './routes/intake.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
+import { registerLicenceReviewRoutes } from './routes/licence-reviews.js';
 import { registerResourceRoutes } from './routes/resources.js';
 import { registerAdminResourceDraftRoutes } from './routes/admin-resource-drafts.js';
 import { registerServiceRequestRoutes } from './routes/service-requests.js';
@@ -66,6 +69,10 @@ export interface ServerDependencies {
   readonly veteranConfirmation?: VeteranConfirmationPort;
   /** Pushes new chat messages to live connections; absent when disabled. */
   readonly chatPush?: ConnectionPushPort;
+  /** Licence reader (R10.1, proposal); absent when `SUAS_LICENCE_READER_MODE=disabled`. */
+  readonly licenceReader?: LicenceReaderPort;
+  /** Object storage for licence images; absent when `SUAS_OBJECT_STORAGE_MODE=disabled`. */
+  readonly objectStorage?: ObjectStoragePort;
   /**
    * Fastify logger. `false` disables pino (Worker isolates cannot use
    * worker_threads). Default keeps the Node structured logger.
@@ -146,6 +153,11 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
                 ...VA_CONFIRMATION_PROJECTION_FIELDS.flatMap((field) => [
                   `body.${field}`,
                   `req.body.${field}`,
+                ]),
+                // suas-specs R10.1 (proposal): licence images are never logged.
+                ...['front', 'back', 'selfie'].flatMap((side) => [
+                  `body.${side}`,
+                  `req.body.${side}`,
                 ]),
               ],
               remove: true,
@@ -366,6 +378,14 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       ...(deps.veteranConfirmation !== undefined
         ? { veteranConfirmation: deps.veteranConfirmation }
         : {}),
+    });
+
+    registerLicenceReviewRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      readerConfigured: deps.licenceReader !== undefined,
+      ...(deps.objectStorage !== undefined ? { storage: deps.objectStorage } : {}),
+      ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
     });
 
     registerConsentRoutes(app, {
