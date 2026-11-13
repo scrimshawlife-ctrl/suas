@@ -16,7 +16,7 @@ afterAll(async () => {
   await resetKernelTables(pool);
   await pool.end();
 });
-describe('D-007 approved pilot data operations', () => {
+describe('D-007 placeholder (DECISION_PENDING) pilot data operations', () => {
   it('records verifier, authorizer, coverage, and idempotently audits an operation', async () => {
     const tenantId = syntheticTenantId();
     const user = await createUser(pool, {

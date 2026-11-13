@@ -7,9 +7,6 @@
  * exact host, `*` anywhere rejected (also percent-encoded `%2a`), trailing-dot hosts and
  * empty host labels rejected, no loopback names or IP literals in STAGING/PRODUCTION, a port
  * only when written and not the scheme default. Fails closed.
- *
- * The allowlist is a D-038 (0.7.0) feature. A build pinned to a released spec stack below
- * `CORS_MIN_SPEC_VERSION` refuses a non-empty allowlist at startup (`corsPinIssue`).
  */
 
 export const MAX_CORS_ALLOWED_ORIGINS = 20;
@@ -19,9 +16,6 @@ const HTTP_ALLOWED_ENVIRONMENTS = new Set(['LOCAL', 'TEST']);
 const SHARED_ENVIRONMENTS = new Set(['STAGING', 'PRODUCTION']);
 const IPV4_LITERAL = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 
-/** First released spec stack that carries D-038 (SUAS-specs 0.7.0). */
-export const CORS_MIN_SPEC_VERSION = '0.7.0';
-
 /** True when `hostname` (as normalised by URL) is a loopback name or an IP literal. */
 function isLoopbackOrIpLiteral(hostname: string): boolean {
   return (
@@ -29,37 +23,6 @@ function isLoopbackOrIpLiteral(hostname: string): boolean {
     hostname.endsWith('.localhost') ||
     hostname.startsWith('[') ||
     IPV4_LITERAL.test(hostname)
-  );
-}
-
-function compareVersions(a: string, b: string): number {
-  const pa = a.split('.').map((part) => Number.parseInt(part, 10));
-  const pb = b.split('.').map((part) => Number.parseInt(part, 10));
-  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
-    const x = pa[i] ?? 0;
-    const y = pb[i] ?? 0;
-    if (Number.isNaN(x) || Number.isNaN(y)) return Number.NaN;
-    if (x !== y) return x < y ? -1 : 1;
-  }
-  return 0;
-}
-
-/**
- * Refuse a non-empty allowlist while this build is pinned to a released spec stack
- * below `CORS_MIN_SPEC_VERSION`: the 0.6.0 contract has no cross-origin allowlist, so an
- * operator cannot switch the allowlist on under an older pin. No environment is exempt,
- * TEST included (SUAS-specs ENVIRONMENT.md §3).
- */
-export function corsPinIssue(
-  origins: readonly string[],
-  pinnedSpecVersion: string,
-): string | undefined {
-  if (origins.length === 0) return undefined;
-  const order = compareVersions(pinnedSpecVersion, CORS_MIN_SPEC_VERSION);
-  if (order >= 0) return undefined;
-  return (
-    `SUAS_CORS_ALLOWED_ORIGINS must be empty: this build pins spec ${pinnedSpecVersion}, and the ` +
-    `cross-origin allowlist (D-038) needs a released spec of ${CORS_MIN_SPEC_VERSION} or later.`
   );
 }
 

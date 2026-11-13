@@ -28,6 +28,7 @@ import {
 import { appendDomainEvent } from '../../events/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
+import { readIdempotencyKey } from '../idempotency-header.js';
 
 export interface ConsentRouteDeps {
   readonly pool: Pool;
@@ -45,23 +46,6 @@ const grantBody = z.object({
   consent_template_version: z.string().min(1).max(256),
   expires_at: z.string().datetime().optional(),
 });
-
-class MissingIdempotencyKeyError extends Error {
-  readonly code = 'VALIDATION_FAILED';
-  readonly httpStatus = 400;
-  constructor() {
-    super('Idempotency-Key header is required for this command (SUAS-specs API.md §7).');
-    this.name = 'MissingIdempotencyKeyError';
-  }
-}
-
-function readIdempotencyKey(header: string | string[] | undefined): string {
-  const value = Array.isArray(header) ? header[0] : header;
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new MissingIdempotencyKeyError();
-  }
-  return value.trim();
-}
 
 function publicGrant(grant: ConsentGrant) {
   return {
@@ -141,7 +125,8 @@ export function registerConsentRoutes(app: FastifyInstance, deps: ConsentRouteDe
             grantee_type: grant.granteeType,
             grantee_id: grant.granteeId,
           },
-          idempotencyKey: `consent-granted:${idempotencyKey}`,
+          // Scoped to the new grant, not the bare client key, which other veterans may reuse.
+          idempotencyKey: `consent-granted:${grant.consentGrantId}`,
           correlationId: String(request.id),
         });
         const projection = publicGrant(grant);

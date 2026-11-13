@@ -17,11 +17,10 @@ import {
   enableAdapterConfiguration,
   listAdapterCatalog,
   listAdapterConfigurations,
-  seedManualAdapterConfigurations,
   setAdapterRouting,
 } from '../../fulfillment/index.js';
 import { API_PREFIX } from '../../release/pins.js';
-import { assertMfaElevated, assertSuasAdmin } from '../../authz/index.js';
+import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
 import { authenticate } from '../authenticate.js';
 
 export interface AdminAdapterRouteDeps {
@@ -93,6 +92,12 @@ export function registerAdminAdapterRoutes(
     return context;
   };
 
+  // API.md §4: the tenant comes from the session. A named tenant other than the
+  // caller's reads as absent (404), so no admin route reads or writes another tenant.
+  const assertOwnTenant = (context: { tenantId: string }, tenantId: string): void => {
+    if (tenantId !== context.tenantId) throw new ResourceNotVisibleError();
+  };
+
   app.get(`${API_PREFIX}/admin/adapter-catalog`, async (request) => {
     await gate(request);
     return {
@@ -108,9 +113,10 @@ export function registerAdminAdapterRoutes(
   });
 
   app.get(`${API_PREFIX}/admin/adapter-configurations`, async (request) => {
-    await gate(request);
+    const context = await gate(request);
     const query = tenantQuery.parse(request.query);
-    await seedManualAdapterConfigurations(deps.pool, query.tenant_id);
+    assertOwnTenant(context, query.tenant_id);
+    // A read writes nothing (C-23): rows come from the enable/disable/routing commands.
     const configurations = await listAdapterConfigurations(deps.pool, deps.config, query.tenant_id);
     return { configurations: configurations.map(publicConfiguration) };
   });
@@ -118,6 +124,7 @@ export function registerAdminAdapterRoutes(
   app.post(`${API_PREFIX}/admin/adapter-configurations/commands/enable`, async (request) => {
     const context = await gate(request);
     const body = enableBody.parse(request.body);
+    assertOwnTenant(context, body.tenant_id);
     const view = await enableAdapterConfiguration(deps.pool, deps.config, {
       tenantId: body.tenant_id,
       adapterId: body.adapter_id,
@@ -133,6 +140,7 @@ export function registerAdminAdapterRoutes(
   app.post(`${API_PREFIX}/admin/adapter-configurations/commands/disable`, async (request) => {
     const context = await gate(request);
     const body = disableBody.parse(request.body);
+    assertOwnTenant(context, body.tenant_id);
     const view = await disableAdapterConfiguration(deps.pool, deps.config, {
       tenantId: body.tenant_id,
       adapterId: body.adapter_id,
@@ -146,6 +154,7 @@ export function registerAdminAdapterRoutes(
   app.post(`${API_PREFIX}/admin/adapter-configurations/commands/set-routing`, async (request) => {
     const context = await gate(request);
     const body = routingBody.parse(request.body);
+    assertOwnTenant(context, body.tenant_id);
     const view = await setAdapterRouting(deps.pool, deps.config, {
       tenantId: body.tenant_id,
       adapterId: body.adapter_id,

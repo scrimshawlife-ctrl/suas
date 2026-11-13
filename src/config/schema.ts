@@ -16,18 +16,13 @@
 
 import { z } from 'zod';
 import { isSyntheticEmail } from '../testing/fixture-boundary.js';
-import { corsPinIssue, parseAllowedOrigins } from './cors-origins.js';
+import { parseAllowedOrigins } from './cors-origins.js';
 import {
   VA_CONFIRMATION_PROJECTION_ID,
   VA_CONFIRMATION_SANDBOX_BASE_URL,
 } from '../identity/va-confirmation.js';
 import type { FingerprintKeyring } from '../identity/fingerprint-keys.js';
-import {
-  CORS_GUARD_SPEC_VERSION,
-  RELEASE_MANIFEST,
-  SPEC_018_PRODUCTION_AUTHORIZED,
-  SPEC_VERSION,
-} from '../release/pins.js';
+import { RELEASE_MANIFEST, SPEC_018_PRODUCTION_AUTHORIZED, SPEC_VERSION } from '../release/pins.js';
 
 /** ENVIRONMENT.md §2. Exactly these logical environment classes exist. */
 export const ENVIRONMENT_CLASSES = ['LOCAL', 'TEST', 'STAGING', 'PRODUCTION'] as const;
@@ -772,15 +767,19 @@ function validateAwsCapabilities(
     );
   }
 
-  if (environment === 'PRODUCTION') {
-    for (const [varName, value] of [
-      ['SUAS_MODEL_INFERENCE_MODE', raw.SUAS_MODEL_INFERENCE_MODE],
-      ['SUAS_OBJECT_STORAGE_MODE', raw.SUAS_OBJECT_STORAGE_MODE],
-    ] as const) {
-      if (value === 'fake') {
-        issue(`${varName}=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).`);
-      }
-    }
+  // SAFETY.md §6, RESOURCES.md §5.1, API.md §17: model extraction and the intake assistant
+  // are not authorized (R2.15 unapproved), so a deployed class runs with inference off.
+  if (
+    (environment === 'STAGING' || environment === 'PRODUCTION') &&
+    raw.SUAS_MODEL_INFERENCE_MODE !== 'disabled'
+  ) {
+    issue(
+      `SUAS_MODEL_INFERENCE_MODE=${raw.SUAS_MODEL_INFERENCE_MODE} is forbidden in ${environment}; ` +
+        'model inference is not authorized by the released spec (SAFETY.md §6).',
+    );
+  }
+  if (environment === 'PRODUCTION' && raw.SUAS_OBJECT_STORAGE_MODE === 'fake') {
+    issue('SUAS_OBJECT_STORAGE_MODE=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).');
   }
 }
 
@@ -1061,10 +1060,6 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
   const corsOrigins = parseAllowedOrigins(raw.SUAS_CORS_ALLOWED_ORIGINS, environment);
   for (const message of corsOrigins.issues) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message });
-  }
-  const corsPin = corsPinIssue(corsOrigins.origins, CORS_GUARD_SPEC_VERSION);
-  if (corsPin !== undefined) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: corsPin });
   }
 
   const vaSandboxEnabled = raw.SUAS_VA_SANDBOX_OAUTH_ENABLED === 'true';

@@ -1,12 +1,7 @@
 /** Browser origin policy and CORS helpers (SUAS-specs D-038, released in 0.7.0). */
 
 import { describe, expect, it } from 'vitest';
-import {
-  CORS_MIN_SPEC_VERSION,
-  corsPinIssue,
-  MAX_CORS_ALLOWED_ORIGINS,
-  parseAllowedOrigins,
-} from '../../src/config/cors-origins.js';
+import { MAX_CORS_ALLOWED_ORIGINS, parseAllowedOrigins } from '../../src/config/cors-origins.js';
 import {
   allowedRequestOrigin,
   corsFallbackHeaders,
@@ -296,28 +291,5 @@ describe('parseAllowedOrigins', () => {
       (_v, i) => `https://o${i}.example`,
     );
     expect(parseAllowedOrigins(many.join(','), 'STAGING').issues).toHaveLength(1);
-  });
-});
-
-describe('corsPinIssue', () => {
-  const origins = ['https://app.example.org'];
-
-  it('refuses a non-empty allowlist while pinned below the D-038 release', () => {
-    expect(corsPinIssue(origins, '0.6.0')).toContain(CORS_MIN_SPEC_VERSION);
-    expect(corsPinIssue(origins, '0.6.9')).toBeDefined();
-  });
-
-  it('allows an empty allowlist at any pin', () => {
-    expect(corsPinIssue([], '0.6.0')).toBeUndefined();
-  });
-
-  it('allows a non-empty allowlist from the D-038 release on', () => {
-    for (const version of ['0.7.0', '0.7.1', '0.10.0', '1.0.0']) {
-      expect(corsPinIssue(origins, version)).toBeUndefined();
-    }
-  });
-
-  it('fails closed on an unparseable pin', () => {
-    expect(corsPinIssue(origins, 'next')).toBeDefined();
   });
 });

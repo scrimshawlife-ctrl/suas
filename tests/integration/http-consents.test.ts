@@ -213,6 +213,30 @@ describe('POST /api/v0/consents', () => {
       headers: { authorization: headers.authorization },
     });
     expect(listed.json().consents).toHaveLength(1);
+
+    // Another veteran in the tenant reusing the same key still gets their own grant and
+    // their own CONSENT_GRANTED: the event key is the grant, not the client key.
+    const other = await createVerifiedUser(pool, {
+      tenantId,
+      email: syntheticEmail(`vet2-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    const otherSession = await createSession(pool, TEST_SESSION_SECRET, {
+      tenantId,
+      userId: other.userId,
+    });
+    const otherGrant = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/consents',
+      headers: { authorization: `Bearer ${otherSession.credential}`, 'idempotency-key': key },
+      payload,
+    });
+    expect(otherGrant.statusCode).toBe(201);
+    const events = await pool.query(
+      `SELECT 1 FROM domain_events WHERE tenant_id = $1 AND event_type = 'CONSENT_GRANTED'`,
+      [tenantId],
+    );
+    expect(events.rowCount).toBe(2);
   });
 
   it('rejects a conflicting payload for the same Idempotency-Key', async () => {

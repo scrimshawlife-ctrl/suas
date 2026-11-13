@@ -34,7 +34,11 @@ describe('AWS capability config defaults', () => {
   it('describes modes without secrets or identifiers', () => {
     const described = describeConfig(
       loadConfig(
-        staging({ SUAS_MODEL_INFERENCE_MODE: 'fake', SUAS_BEDROCK_MODEL_ID: 'secret-id' }),
+        validEnv({
+          SUAS_ENV: 'LOCAL',
+          SUAS_MODEL_INFERENCE_MODE: 'fake',
+          SUAS_BEDROCK_MODEL_ID: 'secret-id',
+        }),
       ),
     );
     expect(described.model_inference_mode).toBe('fake');
@@ -43,22 +47,38 @@ describe('AWS capability config defaults', () => {
 });
 
 describe('real AWS modes', () => {
-  it('accepts SES, Bedrock and S3 in STAGING with their configuration', () => {
+  it('accepts SES and S3 in STAGING with their configuration', () => {
     const config = loadConfig(
       staging({
         SUAS_AWS_REGION: 'us-west-2',
         SUAS_EMAIL_MODE: 'ses',
         SUAS_EMAIL_FROM: 'sender@example.invalid',
-        SUAS_MODEL_INFERENCE_MODE: 'bedrock',
         SUAS_OBJECT_STORAGE_MODE: 's3',
         SUAS_S3_BUCKET: 'suas-staging-assets',
       }),
     );
     expect(config.notifications.email).toBe('ses');
     expect(config.aws.region).toBe('us-west-2');
-    expect(config.modelInference.mode).toBe('bedrock');
-    expect(config.modelInference.bedrockModelId).toBeUndefined();
+    expect(config.modelInference.mode).toBe('disabled');
     expect(config.objectStorage.bucket).toBe('suas-staging-assets');
+  });
+
+  // C-02, A6-06, C-13: SAFETY.md §6 and RESOURCES.md §5.1 do not authorize model use yet.
+  it.each([
+    ['STAGING', 'bedrock'],
+    ['STAGING', 'fake'],
+    ['PRODUCTION', 'bedrock'],
+  ])('refuses model inference in %s (mode %s)', (environment, mode) => {
+    expect(
+      issuesFor(
+        validEnv({
+          SUAS_ENV: environment,
+          SUAS_MODEL_INFERENCE_MODE: mode,
+          SUAS_AWS_REGION: 'us-west-2',
+          SUAS_BEDROCK_MODEL_ID: 'test-model-id',
+        }),
+      ),
+    ).toContain(`SUAS_MODEL_INFERENCE_MODE=${mode} is forbidden in ${environment}`);
   });
 
   it.each([
