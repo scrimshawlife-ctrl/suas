@@ -7,7 +7,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { isApiError, retryServerErrors } from '../../api/errors';
+import { isApiError } from '../../api/errors';
 import { useIdempotencyKey } from '../../api/idempotency';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
@@ -32,7 +32,6 @@ export function useBuildInfo(enabled = true) {
         const { data } = await api.GET('/api/v0/admin/build-info');
         return requireData(data, 'build information');
       },
-      retry: retryServerErrors,
     }),
   );
 }
@@ -45,7 +44,6 @@ export function useAdapterCatalog() {
         const { data } = await api.GET('/api/v0/admin/adapter-catalog');
         return requireData(data, 'adapter catalog').adapters;
       },
-      retry: retryServerErrors,
     }),
   );
 }
@@ -71,7 +69,6 @@ export function useResourceDrafts(status: DraftStatus) {
     },
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     placeholderData: keepPreviousData,
-    retry: retryServerErrors,
   });
 }
 
@@ -84,7 +81,6 @@ export function useResourceDraft(id: string) {
       });
       return requireData(data, 'draft');
     },
-    retry: retryServerErrors,
   });
 }
 
@@ -196,7 +192,6 @@ export function useConsentTemplates() {
       const { data } = await api.GET('/api/v0/admin/consent-templates');
       return requireData(data, 'consent templates').templates;
     },
-    retry: retryServerErrors,
   });
 }
 
