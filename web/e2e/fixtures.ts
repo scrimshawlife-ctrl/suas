@@ -4,7 +4,7 @@
  * response is checked against the OpenAPI document and logged for `npm run ui:coverage`.
  */
 
-import { expect, test as base, type BrowserContext } from '@playwright/test';
+import { expect, test as base, type BrowserContext, type Response } from '@playwright/test';
 import { checkResponse, recordHit } from './contract';
 import { expectClean, watchContext, type Allow, type Problem } from './watch';
 
@@ -25,23 +25,30 @@ export const test = base.extend<{ allow: Allow; guard: void }>({
       const opened: BrowserContext[] = [];
       const testName = testInfo.titlePath.join(' > ');
 
-      const watch = (watched: BrowserContext) => {
-        watchContext(watched, problems);
-        watched.on('response', (response) => {
+      const watched: { context: BrowserContext; onResponse: (response: Response) => void }[] = [];
+      const watch = (target: BrowserContext) => {
+        watchContext(target, problems);
+        const onResponse = (response: Response) => {
           const pageRoute = new URL(response.frame().url()).pathname;
           pending.push(
-            checkResponse(response).then((result) => {
-              if (result === undefined) return;
-              if (result.problem !== undefined) violations.push(result.problem);
-              if (result.operationId === '?') return;
-              const { problem: _problem, ...hit } = result;
-              recordHit(
-                { ...hit, status: response.status(), pageRoute, test: testName },
-                testInfo.workerIndex,
-              );
-            }),
+            checkResponse(response)
+              .then((result) => {
+                if (result === undefined) return;
+                if (result.problem !== undefined) violations.push(result.problem);
+                if (result.operationId === '?') return;
+                const { problem: _problem, ...hit } = result;
+                recordHit(
+                  { ...hit, status: response.status(), pageRoute, test: testName },
+                  testInfo.workerIndex,
+                );
+              })
+              .catch((error: unknown) => {
+                violations.push(`${response.url()}: ${String(error)}`);
+              }),
           );
-        });
+        };
+        target.on('response', onResponse);
+        watched.push({ context: target, onResponse });
       };
       const onContext = (created: BrowserContext) => {
         opened.push(created);
@@ -51,7 +58,9 @@ export const test = base.extend<{ allow: Allow; guard: void }>({
       watch(context);
       browser.on('context', onContext);
       await provide();
+      // Stop listening first: polls after this point belong to no test and are not checked.
       browser.off('context', onContext);
+      for (const { context: target, onResponse } of watched) target.off('response', onResponse);
 
       while (pending.length > 0) await pending.shift();
       const seen = [...problems];
