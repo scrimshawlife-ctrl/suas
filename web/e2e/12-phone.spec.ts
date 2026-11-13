@@ -39,8 +39,9 @@ test('on a phone, a Veteran signs up, passes the ID check and sends a request', 
   await expectNoSideways(page);
 
   await passIdCheck(page);
+  // Continue with no return path goes to Request help (VA_CONFIRMATION_FLOW W2 step 6).
   await page.getByRole('link', { name: 'Continue' }).click();
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/request$/);
 
   const summary = `Groceries for the week ${uniqueEmail('x').slice(6, 14)}`;
   await requestHelp(
