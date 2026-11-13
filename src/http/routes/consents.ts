@@ -196,28 +196,35 @@ export function registerConsentRoutes(app: FastifyInstance, deps: ConsentRouteDe
           throw new ResourceNotVisibleError();
         }
         const revoked = await revokeConsent(tx, context.tenantId, id);
-        // Already revoked (or raced) — return current owned projection without inventing state.
-        const grant = revoked ?? owned;
+        // Already revoked (or raced): return the current projection and append nothing,
+        // because nothing changed (CONSENT.md §4).
+        if (revoked === undefined) {
+          return {
+            result: publicGrant(owned),
+            aggregateType: 'ConsentGrant',
+            aggregateId: owned.consentGrantId,
+          };
+        }
         const appended = await appendDomainEvent(tx, {
           eventType: 'CONSENT_REVOKED',
           aggregateType: 'ConsentGrant',
-          aggregateId: grant.consentGrantId,
+          aggregateId: revoked.consentGrantId,
           tenantId: context.tenantId,
           actorType: 'VETERAN',
           actorId: context.userId,
           payload: {
-            permission: grant.permission,
-            scope: grant.scope,
-            status: grant.status,
+            permission: revoked.permission,
+            scope: revoked.scope,
+            status: revoked.status,
           },
-          idempotencyKey: `consent-revoked:${idempotencyKey}`,
+          // A grant is revoked once, so the grant id is the natural event key.
+          idempotencyKey: `consent-revoked:${revoked.consentGrantId}`,
           correlationId: String(request.id),
         });
-        const projection = publicGrant(grant);
         return {
-          result: projection,
+          result: publicGrant(revoked),
           aggregateType: 'ConsentGrant',
-          aggregateId: grant.consentGrantId,
+          aggregateId: revoked.consentGrantId,
           eventId: appended.event.eventId,
         };
       },

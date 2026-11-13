@@ -1467,6 +1467,10 @@ export interface components {
       error: {
         code: string;
         message: string;
+        /** @description Optional machine-readable detail. A 400 VALIDATION_FAILED from schema validation carries issues: [{ path, code, message }]. */
+        details?: {
+          [key: string]: unknown;
+        };
       };
     };
     CatalogResource: {
@@ -2770,6 +2774,7 @@ export interface operations {
         };
       };
       400: components['responses']['Error'];
+      413: components['responses']['Error'];
       429: components['responses']['Error'];
       503: components['responses']['Error'];
     };
@@ -2798,6 +2803,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
+      413: components['responses']['Error'];
       429: components['responses']['Error'];
     };
   };
@@ -2846,6 +2852,7 @@ export interface operations {
       };
       400: components['responses']['Error'];
       401: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   logoutSession: {
@@ -2868,7 +2875,9 @@ export interface operations {
         };
         content?: never;
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   listCheckIns: {
@@ -2965,6 +2974,7 @@ export interface operations {
           'application/json': components['schemas']['CheckInDetail'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
@@ -3022,6 +3032,7 @@ export interface operations {
         };
       };
       404: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   completeCheckIn: {
@@ -3044,6 +3055,7 @@ export interface operations {
           'application/json': components['schemas']['CheckInCompleted'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
@@ -3130,6 +3142,7 @@ export interface operations {
           'application/json': components['schemas']['SupportCase'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
     };
@@ -3191,6 +3204,7 @@ export interface operations {
           'application/json': components['schemas']['CatalogResource'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
@@ -3318,8 +3332,10 @@ export interface operations {
           'application/json': components['schemas']['AdapterConfiguration'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   disableAdminAdapterConfiguration: {
@@ -3344,8 +3360,10 @@ export interface operations {
           'application/json': components['schemas']['AdapterConfiguration'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   setAdminAdapterRouting: {
@@ -3370,8 +3388,10 @@ export interface operations {
           'application/json': components['schemas']['AdapterConfiguration'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   getVeteransMe: {
@@ -3474,6 +3494,7 @@ export interface operations {
         };
       };
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   listCaseServiceRequests: {
@@ -3496,6 +3517,7 @@ export interface operations {
           'application/json': components['schemas']['CaseServiceRequestList'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
     };
@@ -3536,6 +3558,7 @@ export interface operations {
           'application/json': components['schemas']['ServiceRequestFormResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       /** @description FORBIDDEN: the caller is a helper on this case, not its requester (only the requester adds a request); VERIFICATION_REQUIRED: the requester has no VERIFIED VA Veteran Confirmation */
       403: {
@@ -3548,6 +3571,7 @@ export interface operations {
       };
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       /** @description COUNTY_REQUIRED: the person has not chosen a county; UNPROCESSABLE: destination given for a category other than TRANSPORTATION */
       422: {
         headers: {
@@ -3579,6 +3603,7 @@ export interface operations {
           'application/json': components['schemas']['ServiceRequestDetail'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
     };
@@ -3661,6 +3686,7 @@ export interface operations {
         };
       };
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   removeTrustedContact: {
@@ -3683,6 +3709,7 @@ export interface operations {
           'application/json': components['schemas']['TrustedContact'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       /** @description VERIFICATION_REQUIRED: the person has no VERIFIED VA Veteran Confirmation */
       403: {
@@ -3773,6 +3800,7 @@ export interface operations {
           'application/json': components['schemas']['ErrorBody'];
         };
       };
+      413: components['responses']['Error'];
       /** @description UNPROCESSABLE: meeting_place cleared on FOOD, TRANSPORTATION or SHELTER, or destination given for another category */
       422: {
         headers: {
@@ -3860,6 +3888,7 @@ export interface operations {
       };
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -3885,6 +3914,7 @@ export interface operations {
           };
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
     };
@@ -3935,6 +3965,7 @@ export interface operations {
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   completeFollowUp: {
@@ -3960,6 +3991,7 @@ export interface operations {
           'application/json': components['schemas']['FollowUpCompleted'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
@@ -4018,7 +4050,9 @@ export interface operations {
           'application/json': components['schemas']['NotificationPreferenceRequest'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   acceptTrustedContact: {
@@ -4044,6 +4078,7 @@ export interface operations {
           'application/json': components['schemas']['TrustedContactResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
@@ -4071,6 +4106,7 @@ export interface operations {
           };
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -4112,9 +4148,11 @@ export interface operations {
           'application/json': components['schemas']['ContactAttemptResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4154,9 +4192,11 @@ export interface operations {
           'application/json': components['schemas']['ContactAttemptResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4187,10 +4227,12 @@ export interface operations {
           'application/json': components['schemas']['ResolveCaseResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4218,6 +4260,7 @@ export interface operations {
           };
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -4245,6 +4288,7 @@ export interface operations {
             components['schemas']['Settlement'] | components['schemas']['VeteranSettlement'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -4277,10 +4321,12 @@ export interface operations {
           'application/json': components['schemas']['CaseCommandResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4311,10 +4357,12 @@ export interface operations {
           'application/json': components['schemas']['CaseCommandResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4345,10 +4393,12 @@ export interface operations {
           'application/json': components['schemas']['CaseCommandResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4379,10 +4429,12 @@ export interface operations {
           'application/json': components['schemas']['CaseCommandResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4413,10 +4465,12 @@ export interface operations {
           'application/json': components['schemas']['CaseCommandResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4447,10 +4501,12 @@ export interface operations {
           'application/json': components['schemas']['CaseCommandResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4481,10 +4537,12 @@ export interface operations {
           'application/json': components['schemas']['CaseCommandResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4562,6 +4620,7 @@ export interface operations {
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4585,6 +4644,7 @@ export interface operations {
           'application/json': components['schemas']['AcceptServiceRequestResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       /** @description The caller is the requester */
       403: {
@@ -4641,6 +4701,7 @@ export interface operations {
       400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   postVeteransMeVerificationVaConfirm: {
@@ -4819,6 +4880,7 @@ export interface operations {
       400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   getIntakeDraft: {
@@ -4841,6 +4903,7 @@ export interface operations {
           'application/json': components['schemas']['IntakeDraftWithText'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -4875,6 +4938,7 @@ export interface operations {
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   addIntakeMessage: {
@@ -4914,6 +4978,7 @@ export interface operations {
           'application/json': components['schemas']['ErrorBody'];
         };
       };
+      413: components['responses']['Error'];
       422: components['responses']['Error'];
     };
   };
@@ -4949,6 +5014,7 @@ export interface operations {
           'application/json': components['schemas']['IntakeSubmitResult'];
         };
       };
+      400: components['responses']['Error'];
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       404: components['responses']['Error'];
@@ -4985,6 +5051,7 @@ export interface operations {
       403: components['responses']['Error'];
       404: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   extractAdminResourceDrafts: {
@@ -5016,6 +5083,7 @@ export interface operations {
       401: components['responses']['Error'];
       403: components['responses']['Error'];
       409: components['responses']['Error'];
+      413: components['responses']['Error'];
       502: components['responses']['Error'];
       503: components['responses']['Error'];
     };
@@ -5220,6 +5288,7 @@ export interface operations {
           'application/json': components['schemas']['ErrorBody'];
         };
       };
+      413: components['responses']['Error'];
     };
   };
   issueChatConnectTicket: {
@@ -5303,6 +5372,7 @@ export interface operations {
       400: components['responses']['Error'];
       401: components['responses']['Error'];
       404: components['responses']['Error'];
+      413: components['responses']['Error'];
     };
   };
   getVeteransMeVerificationLicence: {

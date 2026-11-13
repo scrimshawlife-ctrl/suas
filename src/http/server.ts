@@ -13,7 +13,12 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
+import Fastify, {
+  type FastifyError,
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from 'fastify';
 import type { Pool } from 'pg';
 import { ZodError } from 'zod';
 import type { SuasConfig } from '../config/index.js';
@@ -53,6 +58,16 @@ import { registerVeteranRoutes } from './routes/veterans.js';
 import { registerVaSandboxOAuthRoutes } from './routes/va-sandbox-oauth.js';
 import { registerDevRoutes } from './routes/dev.js';
 import { BROWSER_SECURITY_HEADERS, requiresNoStore } from './security-headers.js';
+import {
+  errorBody,
+  frameworkMessage,
+  handleClientError,
+  handleFrameworkError,
+  isMalformedRequestStatus,
+  VALIDATION_FAILED,
+  validationErrorBody,
+} from './error-envelope.js';
+import { failureLogLine, serializeError, serializeRequest } from './request-logging.js';
 import { registerOriginPolicy } from './origin-policy.js';
 import { demoFixedCodeFor } from '../auth/demo-fixed-code.js';
 
@@ -112,7 +127,7 @@ function asDomainError(error: unknown): DomainHttpError | undefined {
 
   // API.md §6: a malformed request body is 400, not an internal failure.
   if (error instanceof ZodError) {
-    return { code: 'VALIDATION_FAILED', httpStatus: 400 };
+    return { code: VALIDATION_FAILED, httpStatus: 400 };
   }
 
   const candidate = error as {
@@ -132,6 +147,19 @@ function asDomainError(error: unknown): DomainHttpError | undefined {
       ? { retryAfterSeconds: Math.ceil(candidate.retryAfterSeconds) }
       : {}),
   };
+}
+
+/** Correlation id, browser security headers, and no-store on every response. */
+function applyResponseHeaders(request: FastifyRequest, reply: FastifyReply): void {
+  void reply.header('x-request-id', request.id);
+  for (const [name, value] of Object.entries(BROWSER_SECURITY_HEADERS)) {
+    void reply.header(name, value);
+  }
+  // A route may only tighten this (the licence images add "private"), never relax it.
+  const own = reply.getHeader('cache-control');
+  if (requiresNoStore(request.url) && !(typeof own === 'string' && /\bno-store\b/.test(own))) {
+    void reply.header('cache-control', 'no-store');
+  }
 }
 
 export function createServer(deps: ServerDependencies): FastifyInstance {
@@ -163,7 +191,16 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
               ],
               remove: true,
             },
+            // SECURITY.md §2: no query string (OAuth code, dev destination) and no error
+            // message or driver detail (pg `detail` quotes row values) in logs.
+            serializers: { req: serializeRequest, err: serializeError },
           },
+    // Router refusals skip the onSend hook, so they set the common headers themselves.
+    frameworkErrors: (error, request, reply) => {
+      applyResponseHeaders(request, reply);
+      handleFrameworkError(error, request, reply);
+    },
+    clientErrorHandler: handleClientError,
     genReqId: (req) => {
       const header = req.headers['x-request-id'];
       const supplied = Array.isArray(header) ? header[0] : header;
@@ -192,15 +229,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
   });
 
   app.addHook('onSend', (request, reply, payload, done) => {
-    void reply.header('x-request-id', request.id);
-    for (const [name, value] of Object.entries(BROWSER_SECURITY_HEADERS)) {
-      void reply.header(name, value);
-    }
-    // A route may only tighten this (the licence images add "private"), never relax it.
-    const own = reply.getHeader('cache-control');
-    if (requiresNoStore(request.url) && !(typeof own === 'string' && /\bno-store\b/.test(own))) {
-      void reply.header('cache-control', 'no-store');
-    }
+    applyResponseHeaders(request, reply);
     done(null, payload);
   });
 
@@ -231,32 +260,33 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     if (status >= 500) {
       request.log.error({ err: error }, 'unhandled request failure');
       // Workers run with logger:false; still emit a structured console line for
-      // wrangler tail / observability (do not include secrets).
-      const err = error instanceof Error ? error : undefined;
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          msg: 'unhandled_request_failure',
-          path: request.url,
-          error_name: err?.name ?? 'unknown',
-          error_message: err?.message?.slice(0, 400),
-          error_stack: err?.stack?.split('\n').slice(0, 10),
-        }),
-      );
+      // wrangler tail / observability, with the same content-free fields.
+      console.error(failureLogLine(request, error));
     }
-    void reply.status(status).send({
-      error: {
-        code:
-          domain?.code ??
-          (status === 400
-            ? 'VALIDATION_FAILED'
+
+    if (error instanceof ZodError) {
+      void reply.status(400).send(validationErrorBody(error));
+      return;
+    }
+    // A Fastify refusal (body too large, bad JSON, wrong media type) gets a fixed message:
+    // the parser's own text can quote the body.
+    const framework = domain === undefined && error.code?.startsWith('FST_') === true;
+    void reply.status(status).send(
+      errorBody(
+        domain?.code ??
+          (isMalformedRequestStatus(status)
+            ? VALIDATION_FAILED
             : status >= 500
               ? 'INTERNAL_ERROR'
               : 'REQUEST_FAILED'),
         // Non-sensitive message only; internals are logged, not returned.
-        message: status >= 500 ? 'Unexpected internal failure.' : error.message,
-      },
-    });
+        status >= 500
+          ? 'Unexpected internal failure.'
+          : framework
+            ? frameworkMessage(status)
+            : error.message,
+      ),
+    );
   });
 
   if (deps.pool !== undefined && deps.config.vaSandboxOAuth.enabled) {

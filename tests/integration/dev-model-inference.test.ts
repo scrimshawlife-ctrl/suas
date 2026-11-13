@@ -147,5 +147,22 @@ describe('POST /api/v0/dev/model-inference/turns', () => {
     });
     expect(response.statusCode).toBe(422);
     expect(response.json().error.message).toContain('meeting_place');
+
+    // A1-21: another signed-in user in the tenant who neither owns nor holds it gets 404.
+    const stranger = await createUser(pool, {
+      tenantId,
+      email: syntheticEmail(`sim-x-${randomUUID().slice(0, 8)}`),
+      status: 'ACTIVE',
+    });
+    const strangerSession = await createSession(pool, TEST_SESSION_SECRET, {
+      tenantId,
+      userId: stranger.userId,
+    });
+    const refused = await local.server.inject({
+      method: 'POST',
+      url: `/api/v0/dev/service-requests/${request.serviceRequestId}/simulate`,
+      headers: { authorization: `Bearer ${strangerSession.credential}` },
+    });
+    expect(refused.statusCode).toBe(404);
   });
 });

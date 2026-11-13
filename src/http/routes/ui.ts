@@ -35,7 +35,12 @@ import {
   verifyAndCreateSession,
   type ChallengeDeliveryPort,
 } from '../../auth/index.js';
-import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
+import {
+  assertMfaElevated,
+  assertSuasAdmin,
+  ResourceNotVisibleError,
+  UnauthenticatedError,
+} from '../../authz/index.js';
 import type { SafetyCopyMode, SupportSignalMode, SuasConfig } from '../../config/index.js';
 import { findCurrentCase, SERVICE_CATEGORIES } from '../../coordination/index.js';
 import { withTransaction } from '../../db/index.js';
@@ -506,7 +511,17 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   });
 
   app.post('/app/auth/logout', async (request, reply) => {
-    const context = await authenticate(pool, sessionSecret, request);
+    const clearCookie = clearBrowserSessionCookie(browserCookieSameSite(config.corsAllowedOrigins));
+    const context = await authenticate(pool, sessionSecret, request).catch((error: unknown) => {
+      if (error instanceof UnauthenticatedError) return undefined;
+      throw error;
+    });
+    // AUTH.md §9.1: an expired or revoked session has nothing left to revoke, but the stale
+    // cookie is still cleared, so sign out always ends signed out.
+    if (context === undefined) {
+      void reply.header('set-cookie', clearCookie);
+      return reply.redirect('/app', 303);
+    }
     await withTransaction(pool, async (tx) => {
       await revokeSession(tx, context.session.sessionId, 'LOGOUT');
       await appendAuditEvent(tx, {
@@ -523,10 +538,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
         correlationId: String(request.id),
       });
     });
-    void reply.header(
-      'set-cookie',
-      clearBrowserSessionCookie(browserCookieSameSite(config.corsAllowedOrigins)),
-    );
+    void reply.header('set-cookie', clearCookie);
     return reply.redirect('/app', 303);
   });
 
