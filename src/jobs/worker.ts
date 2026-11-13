@@ -18,9 +18,15 @@ import { expireDueRequests } from '../coordination/expiry.js';
 import { repairMissedRequestNotices } from '../coordination/request-notices.js';
 import { widenDueRequests } from '../coordination/widening.js';
 import { assertExpectedSchemaVersion, withTransaction } from '../db/index.js';
+import {
+  expireOldReviews,
+  LICENCE_CLOSE_JOB_TYPE,
+  LICENCE_READ_JOB_TYPE,
+} from '../identity/licence-review.js';
 import { createChannelRegistry, deliverQueuedInApp } from '../notifications/index.js';
 import { claimDueWork, markFollowUpDue } from '../settlement/index.js';
 import { abandonStaleCheckIns, requeueUnsettledCheckIns } from '../signals/index.js';
+import { createObjectStoragePort } from '../storage/index.js';
 import {
   claimDueJobs,
   markJobFailed,
@@ -31,6 +37,8 @@ import {
 import {
   createDeadLetterHandlers,
   createJobHandlers,
+  licenceCloseHandler,
+  licenceReadHandler,
   type DeadLetterWork,
   type JobWork,
 } from './handlers.js';
@@ -65,7 +73,7 @@ function logError(record: Record<string, unknown>): void {
 
 interface Sweep {
   readonly name: string;
-  run(pool: Pool): Promise<void>;
+  run(pool: Pool, config: SuasConfig): Promise<void>;
 }
 
 const SWEEPS: readonly Sweep[] = [
@@ -162,21 +170,50 @@ const SWEEPS: readonly Sweep[] = [
       if (pruned > 0) log({ msg: 'rate_limits_pruned', count: pruned });
     },
   },
+  // Licence reviews past their photo window become PHOTOS_EXPIRED (R10.1 §2.3, proposal).
+  {
+    name: 'licence_expiry',
+    run: async (pool, config) => {
+      const expired = await expireOldReviews({ pool, storage: createObjectStoragePort(config) });
+      if (expired > 0) log({ msg: 'licence_reviews_expired', count: expired });
+    },
+  },
 ];
 
 /**
  * A failed sweep is logged and does not stop the others or the outbox drain: the next
  * pass repeats it, and each sweep is idempotent.
  */
-async function runSweeps(pool: Pool): Promise<void> {
+async function runSweeps(pool: Pool, config: SuasConfig): Promise<void> {
   for (const sweep of SWEEPS) {
     try {
-      await sweep.run(pool);
+      await sweep.run(pool, config);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       logError({ msg: 'sweep_failed', sweep: sweep.name, error: message });
     }
   }
+}
+
+/**
+ * Job types capped per pass, with their lease. One licence read (a reader call of up to
+ * 75 s) per pass keeps a pass inside the 2-minute worker; its lease outlasts the worker,
+ * so an overlapping pass cannot claim the same read again.
+ */
+export const PER_PASS_JOB_LIMITS: Readonly<Record<string, { limit: number; leaseMs: number }>> = {
+  [LICENCE_READ_JOB_TYPE]: { limit: 1, leaseMs: 150_000 },
+};
+
+/** One pass's batch: up to `limit` uncapped jobs, plus each capped type up to its cap. */
+async function claimPass(pool: Pool, owner: string, limit: number): Promise<JobOutboxRow[]> {
+  const capped = Object.entries(PER_PASS_JOB_LIMITS);
+  const claimed = [
+    ...(await claimDueJobs(pool, { owner, limit, exceptJobTypes: capped.map(([type]) => type) })),
+  ];
+  for (const [jobType, cap] of capped) {
+    claimed.push(...(await claimDueJobs(pool, { owner, jobType, ...cap })));
+  }
+  return claimed;
 }
 
 async function handleJob(
@@ -233,17 +270,22 @@ export async function runJobWorker(options: JobWorkerOptions): Promise<void> {
   await assertExpectedSchemaVersion(pool);
 
   const outbox = new PostgresOutboxJobQueue(pool);
-  const handlers = createJobHandlers({
-    pool,
-    config,
-    channels: createChannelRegistry(config),
-    getJobQueue: () => outbox,
-  });
+  const handlers = {
+    ...createJobHandlers({
+      pool,
+      config,
+      channels: createChannelRegistry(config),
+      getJobQueue: () => outbox,
+    }),
+    // Worker-only: a durable queue leaves the slow licence read and the close to this loop.
+    [LICENCE_READ_JOB_TYPE]: licenceReadHandler(pool, config),
+    [LICENCE_CLOSE_JOB_TYPE]: licenceCloseHandler(pool, config),
+  };
   const deadLetterHandlers = createDeadLetterHandlers(pool);
 
   while (signal?.aborted !== true) {
-    await runSweeps(pool);
-    const claimed = await claimDueJobs(pool, { owner, limit });
+    await runSweeps(pool, config);
+    const claimed = await claimPass(pool, owner, limit);
     if (claimed.length === 0) {
       if (once) break;
       await pause(IDLE_POLL_MS, signal);
