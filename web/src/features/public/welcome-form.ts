@@ -1,3 +1,4 @@
+import { isApiError } from '../../api/errors';
 import type { County } from '../../api/types';
 
 export const COUNTY_OPTIONS: readonly { value: County; label: string }[] = [
@@ -30,4 +31,11 @@ export function validateWelcome(displayName: string, county: string): WelcomeErr
     errors.displayName = `Use ${DISPLAY_NAME_MAX} characters or fewer.`;
   if (!isCounty(county)) errors.county = 'Choose your county.';
   return errors;
+}
+
+/** The line shown when saving the name or county fails (Welcome and Settings). */
+export function profileSaveError(error: unknown): string {
+  return isApiError(error) && error.status < 500
+    ? error.message
+    : 'We could not save that. Check your connection and try again.';
 }
