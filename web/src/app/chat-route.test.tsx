@@ -24,7 +24,12 @@ function mockApi() {
             county: 'SANTA_CLARA',
             display_name: 'Dee R.',
             is_admin: false,
-            id_verification: { method: 'ID_SCAN_SELFIE', status: 'VERIFIED', verified_at: null },
+            id_verification: {
+              method: 'VA_VETERAN_STATUS',
+              status: 'VERIFIED',
+              not_confirmed_reason: null,
+              verified_at: null,
+            },
             open_case: null,
             active_qrf: null,
             categories: [],

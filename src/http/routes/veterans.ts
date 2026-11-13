@@ -7,23 +7,39 @@
  * - SUAS-specs PRIVACY.md (minimum necessary; self-profile only)
  * - SUAS-specs MVP_REFERENCE.md §5–§7 (category cards + QRF truthfulness)
  * - SUAS-specs AUTH.md §2 (enrolled contact channels)
- * - V1_PROJECT_PLAN.md §2.1 / §4.3 F1 (county), F2 (ID scan + selfie status)
+ * - V1_PROJECT_PLAN.md §2.1 / §4.3 F1 (county)
+ * - suas-specs #72 R9.1: VA Veteran Confirmation and the D-016 self-attestation fallback;
+ *   D035_VA_CONFIRMATION_ADAPTER.md §9, §11, §12
  *
- * The county and ID scan routes are open to any signed-in person: a person who has
- * not passed the scan can still set a county and help others.
+ * The county and confirmation routes are open to any signed-in person: a person who is
+ * not confirmed can still set a county and help others.
  */
 
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
+import { readIdempotencyKey } from '../idempotency-header.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { findCurrentCase } from '../../coordination/index.js';
+import { commandScope, fingerprintRequest } from '../../idempotency/fingerprint.js';
+import { runIdempotentCommand } from '../../idempotency/run.js';
 import {
-  readIdScanStatus,
-  startIdScan,
-  type IdScanView,
-  type IdVerificationPort,
+  confirmVeteranStatus,
+  displayNameMatches,
+  isVaVerified,
+  readVeteranConfirmation,
+  selfAttestVeteranStatus,
+  VA_NOTICE_V1,
+  vaConfirmationRequestSchema,
+  VaNameMismatchError,
+  VaNoticeVersionRequiredError,
+  VeteranConfirmationRevokedError,
+  VeteranConfirmationUnavailableError,
+  type FingerprintKeyring,
+  type VaConfirmationProjection,
+  type VeteranConfirmationPort,
+  type VeteranConfirmationStanding,
 } from '../../identity/index.js';
 import { SERVICE_COUNTIES } from '../../identity/counties.js';
 import { findUserById, setUserCounty, setUserDisplayName } from '../../identity/users.js';
@@ -35,21 +51,57 @@ import { readActiveQrf } from '../../ui/read.js';
 export interface VeteranRouteDeps {
   readonly pool: Pool;
   readonly sessionSecret: string | undefined;
-  /** Undefined when ID verification is disabled; the scan then reports unavailable. */
-  readonly idVerification?: IdVerificationPort;
+  /** Undefined when VA confirmation is disabled; the confirm route then answers 503. */
+  readonly veteranConfirmation?: VeteranConfirmationPort;
+  /** `SUAS_FINGERPRINT_KEY`; startup requires it whenever VA confirmation is on. */
+  readonly fingerprintKeys: FingerprintKeyring | undefined;
 }
 
 const countyBody = z.object({ county: z.enum(SERVICE_COUNTIES) });
 // Only length and emptiness are validated. The format hint ("First name and last
 // initial, like Marcus T.") is guidance shown by the client.
 const profileBody = z.object({ display_name: z.string().trim().min(1).max(40) });
+/** Self-attestation takes no fields; an absent body is the same as `{}`. */
+const selfAttestBody = z.object({}).strict();
 
-function publicIdVerification(view: IdScanView) {
+/** The confirm result; never any projection value. */
+function confirmationResult(standing: VeteranConfirmationStanding | undefined) {
   return {
-    method: 'ID_SCAN_SELFIE',
-    status: view.status,
-    verified_at: view.verifiedAt?.toISOString() ?? null,
+    status: standing?.status ?? 'NOT_STARTED',
+    not_confirmed_reason: standing?.notConfirmedReason ?? null,
+    verified_at: standing?.verifiedAt?.toISOString() ?? null,
+    failure_class: standing?.failureClass ?? null,
   };
+}
+
+function publicIdVerification(standing: VeteranConfirmationStanding | undefined) {
+  return { method: standing?.method ?? 'VA_VETERAN_STATUS', ...confirmationResult(standing) };
+}
+
+/** 400 naming only the fields that failed, so no submitted value is echoed. */
+class VeteranConfirmationInputError extends Error {
+  readonly code = 'VALIDATION_FAILED';
+  readonly httpStatus = 400;
+
+  constructor(fields: readonly string[]) {
+    super(`Check these fields: ${fields.join(', ')}.`);
+    this.name = 'VeteranConfirmationInputError';
+  }
+}
+
+/** The notice version is checked first: details are sent only after the current notice. */
+function parseConfirmBody(body: unknown): {
+  projection: VaConfirmationProjection;
+  noticeVersion: string;
+} {
+  const record = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  if (record.noticeVersion !== VA_NOTICE_V1) throw new VaNoticeVersionRequiredError();
+  const parsed = vaConfirmationRequestSchema.safeParse(record);
+  if (parsed.success) return parsed.data;
+  const fields = parsed.error.issues.flatMap((issue) =>
+    issue.code === 'unrecognized_keys' ? ['unknown fields'] : [issue.path.join('.') || 'body'],
+  );
+  throw new VeteranConfirmationInputError([...new Set(fields)]);
 }
 
 export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDeps): void {
@@ -58,12 +110,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
     const user = await findUserById(deps.pool, context.tenantId, context.userId);
     if (user === undefined) throw new ResourceNotVisibleError();
 
-    const idScan = await readIdScanStatus(
-      deps.pool,
-      deps.idVerification,
-      context.tenantId,
-      context.userId,
-    );
+    const confirmation = await readVeteranConfirmation(deps.pool, context.tenantId, context.userId);
     const openCase = await findCurrentCase(deps.pool, context.tenantId, context.userId);
     const activeQrf = await readActiveQrf(deps.pool, context.tenantId, context.userId);
 
@@ -77,7 +124,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
       county: user.county ?? null,
       display_name: user.displayName ?? null,
       is_admin: context.isSuasAdmin,
-      id_verification: publicIdVerification(idScan),
+      id_verification: publicIdVerification(confirmation),
       open_case:
         openCase === undefined
           ? null
@@ -116,7 +163,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
     return { county: user.county ?? null };
   });
 
-  /** Signed-in only: a person can set a name before passing the ID scan. */
+  /** Signed-in only: a person can set a name before confirming Veteran status. */
   app.put(`${API_PREFIX}/veterans/me/profile`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const body = profileBody.parse(request.body);
@@ -130,21 +177,77 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
     return { display_name: user.displayName ?? null };
   });
 
-  app.get(`${API_PREFIX}/veterans/me/id-verification`, async (request) => {
+  /**
+   * One VA Veteran Confirmation attempt (R9.1). A VA VERIFIED standing returns as is and a
+   * REVOKED one is refused, with no VA call and no attempt. The typed name must match the
+   * account name first (409 VA_NAME_MISMATCH, not counted). The attempt row is the
+   * idempotency record and keeps only the bounded result and keyed hashes.
+   */
+  app.post(`${API_PREFIX}/veterans/me/verification/va/confirm`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    return publicIdVerification(
-      await readIdScanStatus(deps.pool, deps.idVerification, context.tenantId, context.userId),
-    );
+    const port = deps.veteranConfirmation;
+    const keyring = deps.fingerprintKeys;
+    if (port === undefined || keyring === undefined) {
+      throw new VeteranConfirmationUnavailableError();
+    }
+    const { projection, noticeVersion } = parseConfirmBody(request.body);
+    const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
+
+    const current = await readVeteranConfirmation(deps.pool, context.tenantId, context.userId);
+    if (current?.status === 'REVOKED') throw new VeteranConfirmationRevokedError();
+    if (isVaVerified(current)) return confirmationResult(current);
+
+    const user = await findUserById(deps.pool, context.tenantId, context.userId);
+    if (user === undefined) throw new ResourceNotVisibleError();
+    if (!displayNameMatches(user.displayName, projection)) throw new VaNameMismatchError();
+
+    const standing = await confirmVeteranStatus(deps.pool, keyring, (sent) => port.confirm(sent), {
+      tenantId: context.tenantId,
+      userId: context.userId,
+      projection,
+      noticeVersion,
+      idempotencyKey,
+      providerEnvironment: port.providerEnvironment,
+      correlationId: String(request.id),
+    });
+    return confirmationResult(standing);
   });
 
-  app.post(`${API_PREFIX}/veterans/me/id-verification/commands/start`, async (request, reply) => {
+  /**
+   * D-016 self-attestation, the fallback VA never blocks (R9.1 D1). Works whatever the VA
+   * mode, with no attempt limit; a REVOKED standing is refused and a VERIFIED one returned.
+   */
+  app.post(`${API_PREFIX}/veterans/me/verification/commands/self-attest`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
-    const { view, created } = await startIdScan(
+    selfAttestBody.parse(request.body ?? {});
+    const idempotencyKey = readIdempotencyKey(request.headers['idempotency-key']);
+    const run = await runIdempotentCommand(
       deps.pool,
-      deps.idVerification,
-      context.tenantId,
-      context.userId,
+      {
+        tenantId: context.tenantId,
+        commandScope: commandScope({
+          command: 'POST /veterans/me/verification/commands/self-attest',
+          aggregateType: 'User',
+          aggregateId: context.userId,
+          actorId: context.userId,
+        }),
+        idempotencyKey,
+        requestFingerprint: fingerprintRequest({ actor_id: context.userId }),
+      },
+      async (tx) => {
+        const { verificationId, standing } = await selfAttestVeteranStatus(tx, {
+          tenantId: context.tenantId,
+          userId: context.userId,
+          correlationId: String(request.id),
+        });
+        return {
+          result: publicIdVerification(standing),
+          ...(verificationId !== undefined
+            ? { aggregateType: 'VeteranVerification', aggregateId: verificationId }
+            : {}),
+        };
+      },
     );
-    return reply.status(created ? 201 : 200).send(publicIdVerification(view));
+    return run.result;
   });
 }
