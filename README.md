@@ -33,11 +33,11 @@ Canonical released specs:
 
 `SUAS-specs` is canonical. This repository is the web and API implementation. Keep all three implementation repositories in future considerations:
 
-| Repository                                                                              | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | Fastify JSON API `/api/v0` (`src/`), React web app (`web/`), AWS CDK infrastructure (`infra/`, not deployed). The Cloudflare Worker (`src/worker*`, `wrangler.jsonc`) is the legacy synthetic STAGING host, kept until the AWS cutover. Legacy HTML `/app`. OpenAPI document `docs/openapi/v0.json` (not served live). `/api/v0` auth is an opaque Bearer session credential; `/app` also accepts a session cookie (`SameSite=Strict`; `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty). Cross-origin access follows `SUAS_CORS_ALLOWED_ORIGINS` (D-038, released in spec 0.7.0). Observed synthetic STAGING origin: `https://suasqrf.com`. |
-| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Repository                                                                              | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | Fastify JSON API `/api/v0` (`src/`), React web app (`web/`), AWS CDK infrastructure (`infra/`, not deployed). The Cloudflare Worker and its Neon staging database are retired (R11.6). Legacy HTML `/app`. OpenAPI document `docs/openapi/v0.json` (not served live). `/api/v0` auth is an opaque Bearer session credential; `/app` also accepts a session cookie (`SameSite=Strict`; `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty). Cross-origin access follows `SUAS_CORS_ALLOWED_ORIGINS` (D-038, released in spec 0.7.0). Synthetic STAGING moves to `https://api.staging.suasqrf.com` (API) and `https://staging.suasqrf.com` (web) once the CDK stacks are deployed. |
+| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 Native client contract: [`MOBILE_SURFACE.md`](https://github.com/scrimshawlife-ctrl/SUAS-specs/blob/main/MOBILE_SURFACE.md) (D-033).
 
@@ -47,15 +47,14 @@ If you change `/api/v0`, auth, environment class, or a Veteran journey, consider
 
 ## Repository layout
 
-| Path                            | What it is                                                                                                                                             |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/`                          | Fastify app (`src/app.ts`), `/api/v0` routes (`src/http/routes/`), domain modules and adapters. `src/main.ts` runs it on Node.                         |
-| `src/aws/`                      | AWS Lambda entries for the job worker, migrations and WebSocket push. The API Lambda runs `src/main.ts` behind the Lambda Web Adapter.                 |
-| `web/`                          | React single-page app for v1 (Vite). A separate package: see [web/README.md](web/README.md).                                                           |
-| `infra/`                        | AWS CDK app for v1 synthetic STAGING in `us-west-2`. Synthesized and tested offline only; nothing is deployed. See [infra/README.md](infra/README.md). |
-| `src/worker*`, `wrangler.jsonc` | Cloudflare Worker: the legacy synthetic STAGING host, kept until the AWS cutover.                                                                      |
-| `migrations/`                   | SQL migrations. The expected schema version is `EXPECTED_SCHEMA_VERSION` in `src/db/schema-version.ts`.                                                |
-| `docs/openapi/v0.json`          | The `/api/v0` contract. `npm run openapi:check` compares it with the registered routes; `web/` generates its client types from it.                     |
+| Path                   | What it is                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/`                 | Fastify app (`src/app.ts`), `/api/v0` routes (`src/http/routes/`), domain modules and adapters. `src/main.ts` runs it on Node.                         |
+| `src/aws/`             | AWS Lambda entries for the job worker, migrations and WebSocket push. The API Lambda runs `src/main.ts` behind the Lambda Web Adapter.                 |
+| `web/`                 | React single-page app for v1 (Vite). A separate package: see [web/README.md](web/README.md).                                                           |
+| `infra/`               | AWS CDK app for v1 synthetic STAGING in `us-west-2`. Synthesized and tested offline only; nothing is deployed. See [infra/README.md](infra/README.md). |
+| `migrations/`          | SQL migrations. The expected schema version is `EXPECTED_SCHEMA_VERSION` in `src/db/schema-version.ts`.                                                |
+| `docs/openapi/v0.json` | The `/api/v0` contract. `npm run openapi:check` compares it with the registered routes; `web/` generates its client types from it.                     |
 
 ## Local development
 
@@ -87,7 +86,7 @@ both values from `.env.example`.
 
 ### One-command demo (`npm run dev:demo`)
 
-Brings up the real Worker locally from a clean clone with migrations applied and
+Brings up the Node server (`src/main.ts`) locally from a clean clone with migrations applied and
 the synthetic demo seed loaded. LOCAL only: it refuses non-loopback database
 hosts, never targets staging or any production host, and all data is synthetic
 (`@example.invalid` emails, 555-0100 to 555-0199 phone numbers).
@@ -99,17 +98,16 @@ prints install steps.
 
 ```bash
 npm ci
-npm run dev:demo            # wrangler dev (src/worker.ts) on http://127.0.0.1:3000
+npm run dev:demo            # Node server (src/main.ts) on http://127.0.0.1:3000
 npm run dev:demo -- --reset # drop and recreate the suas_demo database first
-npm run dev:demo -- --node  # Node runtime (src/main.ts) instead of wrangler dev
 npm run smoke:demo          # second terminal: end-to-end smoke over /api/v0
 ```
 
 What it does: creates `suas_demo` (override with `SUAS_DEMO_DATABASE_URL`),
 runs `migrate apply` and `migrate validate`, runs `src/cli/seed-demo.ts`, writes
 a session secret and the seed summary to the gitignored `.local-secrets/`, then
-starts `wrangler@4.148.0 dev` with `SUAS_ENV=LOCAL`, fake email and SMS, and
-Hyperdrive pointed at the local database.
+starts `src/main.ts` with `SUAS_ENV=LOCAL`, fake email and SMS, against the
+local database.
 
 | Item             | Value                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------- |
@@ -126,16 +124,12 @@ scripted turns (`{"turns": [...]}`) with `POST /api/v0/dev/model-inference/turns
 answers `409` unless the model is the scripted fake). To let a new email address sign up, set
 `SUAS_BROWSER_TENANT_ID` to the tenant new people join.
 
-The fixed code `123456` works only for `demo@example.invalid`. On the LOCAL
-demo Worker three gates must all pass (`src/auth/demo-fixed-code.ts`):
-`SUAS_ENV=LOCAL`, the opt-in `SUAS_DEMO_FIXED_CODE=enabled` that
-`npm run dev:demo` sets, and a local database URL (loopback, or the
-`*.hyperdrive.local` proxy that `wrangler dev` exposes after the launcher has
-refused any non-loopback upstream). Synthetic STAGING may use the same account
-when the Worker deploy sets `SUAS_DEMO_FIXED_CODE=enabled`. That path exists
-only in the Worker runtime. The sign-in page shows the email and code, and no
-email is required. TEST and PRODUCTION reject the flag, and a Node process
-pointed at the staging database cannot mint the code. Every other account
+The fixed code `123456` works only for `demo@example.invalid`. Three gates
+must all pass (`src/auth/demo-fixed-code.ts`): `SUAS_ENV=LOCAL`, the opt-in
+`SUAS_DEMO_FIXED_CODE=enabled` that `npm run dev:demo` sets, and a loopback
+database URL. The sign-in page shows the email and code, and no email is
+required. TEST and PRODUCTION reject the flag, and STAGING never issues the
+code. Every other account
 still gets a random code. The same `123456` is the code for the Android and
 iOS no-server demo modes.
 
@@ -148,12 +142,12 @@ host is loopback (`localhost`, `127.0.0.1`, `::1`), so it can never run against
 staging or any shared database.
 
 `contract/demo-fixtures.json` is owned here. `npm run demo:fixtures` regenerates
-it from the running LOCAL demo Worker; the Android and iOS apps keep copies of
+it from the running LOCAL demo server; the Android and iOS apps keep copies of
 this export and must not hand-edit them.
 
 The native apps have matching demo modes that use the same accounts and code:
 
-| Client  | No server (in-memory fixture)                               | Real client against this LOCAL Worker                    |
+| Client  | No server (in-memory fixture)                               | Real client against this LOCAL server                    |
 | ------- | ----------------------------------------------------------- | -------------------------------------------------------- |
 | Android | debug launcher "SUAS Demo (no server)" (`DemoRootActivity`) | debug launcher "SUAS Local Worker" (`LocalRootActivity`) |
 | iOS     | shared Xcode scheme `Demo` (`-SUASDemoMode`, DEBUG)         | shared Xcode scheme `Local` (`-SUASLocal`, DEBUG)        |
@@ -233,11 +227,10 @@ Commands:
 | `npm run migrate -- validate`     | verify schema state without mutating it                |
 | `npm run provenance`              | print the build-info object                            |
 | `npm run privacy:deletion-drill`  | synthetic deletion path against the TEST database      |
-| `npm run worker:dev`              | Wrangler local Worker (`src/worker.ts`, no `listen()`) |
-| `npm run dev:demo`                | one-command LOCAL demo Worker with migrations and seed |
+| `npm run dev:demo`                | one-command LOCAL demo server with migrations and seed |
 | `npm run smoke:demo`              | smoke over the main `/api/v0` endpoints (LOCAL only)   |
 | `npm run seed:demo`               | re-run the synthetic demo seed against `.env`          |
-| `npm run demo:fixtures`           | capture native demo fixtures from the LOCAL Worker     |
+| `npm run demo:fixtures`           | capture native demo fixtures from the LOCAL server     |
 
 Integration tests use two databases, created once:
 
@@ -256,62 +249,20 @@ separately. Override either with `TEST_DATABASE_URL` and `TEST_MIGRATIONS_DATABA
 (`V1_PROJECT_PLAN.md` §6 in SUAS-specs, a proposal). It defines a DNS stack, a
 web stack (S3 and CloudFront for `web/dist`) and a backend stack (RDS PostgreSQL
 17 behind RDS Proxy; API, job worker and migrate Lambdas; HTTP API; EventBridge
-Scheduler). Nothing is deployed and there is no deploy workflow.
+Scheduler). Nothing is deployed and there is no deploy workflow; STAGING deploys
+are run by hand with CDK ([docs/runbooks/deployment-rollback.md](docs/runbooks/deployment-rollback.md)).
 `cd infra && npm ci && npm run check` typechecks, tests and synthesizes it
 offline. Details: [infra/README.md](infra/README.md).
 
-## Cloudflare Worker (legacy synthetic STAGING)
+## Synthetic STAGING
 
-The Worker is the pre-v1 host. It stays until the AWS cutover; new v1 work
-targets the Fastify app, `web/` and `infra/`. The Worker (`wrangler.jsonc`,
-`src/worker.ts`) serves `/app` and `/api/v0` on synthetic STAGING. It builds the existing Fastify app once per isolate
-with `listen: false` and answers through `inject()`. Native iOS and Android
-clients consume `/api/v0` from this Worker; HTML `/app` is not the mobile
-contract. GitHub Pages `docs/` stays the static poster and is not the API host.
-
-Request-path Postgres uses **Cloudflare Hyperdrive** and `node-postgres`
-(`nodejs_compat`). The isolate reads `env.HYPERDRIVE.connectionString` as
-`DATABASE_URL` and forces `SUAS_MIGRATIONS_MODE=validate`. If the recorded
-schema version is not `EXPECTED_SCHEMA_VERSION`, startup fails closed and the fetch handler
-returns `503`. Apply migrations with `npm run migrate` against the
-**unpooled** URL in `.env`. Never put that URL, a Neon password, or a
-Hyperdrive connection string in `wrangler.jsonc`.
-
-Store `SUAS_SESSION_SECRET` with `npx wrangler secret put SUAS_SESSION_SECRET`.
-Copy `.dev.vars.example` to `.dev.vars` for `wrangler dev`. Replace
-`YOUR_HYPERDRIVE_ID` in `wrangler.jsonc` with the id from
-`npx wrangler hyperdrive create` — do not commit connection strings.
-
-The committed `wrangler.jsonc` remains a safe LOCAL template. The formal
-synthetic STAGING deployment supplies `SUAS_ENV=STAGING` and the D-022
-Postgres-outbox job queue through owner-controlled deployment configuration.
-PRODUCTION remains rejected until SPEC-018. Email and SMS stay `sink`, and no
-real support-provider effects are authorized. This repository does not claim
-production readiness. The shared synthetic topology (GitHub + Worker + Neon) is in
-[docs/decision-packets/D-001-005-staging-hosting.md](docs/decision-packets/D-001-005-staging-hosting.md);
-owner-authorized publish uses Actions `worker-deploy` (`workflow_dispatch` only)
-or `npx wrangler deploy` — see
-[docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
-
-### Synthetic STAGING deploys
-
-Synthetic STAGING (`https://suasqrf.com`) is deployed only by running the
-`worker-deploy` workflow by hand (`workflow_dispatch`, environment
-`suas-synthetic-staging`). The Worker never deploys on a merge or a tag. The last
-deploy recorded in this repository is `80c27e7` (#196, 2026-10-08). That deploy sets
-`SUAS_DEMO_FIXED_CODE=enabled` (worker-deploy run
-[37746194370](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37746194370)).
-The sign-in page shows `demo@example.invalid` and code `123456`.
-
-After each successful `worker-deploy`, the `staging-path-param-check` workflow
-signs in with the existing synthetic test bearers and calls path-parameter
-routes such as `GET /api/v0/cases/{id}/service-requests`. It fails on any
-`400`. The check after the current deploy passed (run
-[37746257527](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37746257527)).
-The first check, after `0f7aeae`, passed with `200` on both routes (run
-[37686583961](https://github.com/scrimshawlife-ctrl/suas/actions/runs/37686583961)).
-It can also be started by hand. The deploy record is in
-[docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
+STAGING is the AWS CDK app above. The Cloudflare Worker and its Neon database,
+the pre-v1 STAGING host at `https://suasqrf.com`, were retired on 2026-11-12
+(R11.6, specs #75, contributor proposal, not released), together with
+`wrangler.jsonc` and the Worker and Neon workflows. Evidence recorded against
+the Worker stays under `docs/readiness/evidence/` as written. PRODUCTION remains
+rejected until SPEC-018, and no real support-provider effects are authorized.
+This repository does not claim production readiness.
 
 Pinned formal STAGING evidence is under
 `docs/readiness/evidence/staging-soak-2026-08-27/`. The settlement command is an
@@ -319,25 +270,24 @@ evidence gate, not a standalone static check: `npm run settle:check` requires
 `full-verify.log` and `ci-run.txt` under `SUAS_SETTLE_SCRATCH` for the current
 HEAD.
 
-Browser acceptance defaults to the formal synthetic Worker. Install Chromium
-once with `npx playwright install chromium`, then run the public suite without
+Browser acceptance (`npm run test:e2e:staging`) runs by hand against the origin
+in `SUAS_E2E_BASE_URL`; no workflow schedules it. Install Chromium once with
+`npx playwright install chromium`, then run the public suite without
 credentials. Authenticated routes are opt-in via fresh gitignored synthetic seed
 sessions in `SUAS_E2E_VETERAN_BEARER`, `SUAS_E2E_RESPONDER_BEARER`, and
-`SUAS_E2E_ADMIN_BEARER`. The scheduled `staging-acceptance` workflow uses the
-same names as repository secrets and reports those tests as skipped when secrets
-are absent. Never supply production sessions or real veteran data.
+`SUAS_E2E_ADMIN_BEARER`, and are skipped when those are absent. Never supply
+production sessions or real veteran data.
 
 ### Fixed-profile synthetic-STAGING soak
 
-The `synthetic-staging-soak` GitHub Actions workflow is manual-only and uses the
-existing `suas-synthetic-staging` Environment variable `SUAS_E2E_BASE_URL` plus
-the existing `SUAS_E2E_VETERAN_BEARER` and `SUAS_E2E_RESPONDER_BEARER` secrets.
-It does not provision or deploy anything. Dispatch requires the exact
-`synthetic-staging-read-only` confirmation.
+`npm run soak:staging` runs by hand (its workflow was retired with the Neon
+staging) against `SUAS_E2E_BASE_URL` with `SUAS_E2E_VETERAN_BEARER` and
+`SUAS_E2E_RESPONDER_BEARER`. It does not provision or deploy anything, and it
+requires `SUAS_SOAK_CONFIRM=synthetic-staging-read-only`.
 
 The canonical profile is one warm-up VU for 5 minutes, 5 VUs for 120 minutes,
 10 VUs for 15 minutes, then up to 15 minutes to drain in-flight requests. The
-dispatch duration inputs default to those values and may only shorten them,
+duration settings default to those values and may only shorten them,
 which permits brief harness checks without silently expanding the approved
 workload. VU counts, one-second pacing, and the route mix are fixed in code.
 
@@ -364,10 +314,6 @@ production-capacity claim.
 Do not run the soak until the synthetic-STAGING deployment and operator
 authorization prerequisites in
 `docs/readiness/evidence/synthetic-staging-2026-08-29/soak/status.md` are met.
-
-Cloudflare published limits (not SUAS SLOs): 30 s CPU default on paid plans
-(10 ms on free), 128 MB memory, 50 subrequests per invocation on free / 10,000
-on paid.
 
 The full `/api/v0` surface, with the authorization each operation needs, is in
 [docs/openapi/v0.json](docs/openapi/v0.json).

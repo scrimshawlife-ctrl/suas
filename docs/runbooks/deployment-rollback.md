@@ -1,35 +1,46 @@
-# Deployment and rollback runbook (synthetic / non-production)
+# Deployment and rollback runbook (synthetic STAGING, AWS)
+
+STAGING runs on the AWS CDK app in [`infra/`](../../infra/README.md). There is no deploy
+workflow yet (plan §8 item 17), so every STAGING deploy and rollback is run by hand with CDK
+(R11.6, specs #75, contributor proposal, not released). The Cloudflare Worker and the Neon
+staging database are retired. This runbook does not authorize PRODUCTION, a pilot, real Veteran
+data or real external effects, and a deploy is not SPEC-018 evidence.
 
 ## Preconditions
 
-- `SUAS_ENV` is `LOCAL`, `TEST`, or (when authorized) `STAGING` — never enable `PRODUCTION` to “try deploy”.
+- The AWS account layout is decided and `CDK_DEFAULT_ACCOUNT` names it (never commit it).
+  Until then, follow "Deploy order (not done yet)" in [`infra/README.md`](../../infra/README.md): nothing is deployed.
+- The commit is on `main`, CI is green, and `cd infra && npm run check` passes locally.
 - Spec pin `SUAS_SPEC_VERSION=0.9.0` and `SUAS_RELEASE_MANIFEST=RELEASE_MANIFEST-0.9.0.md` (`src/release/pins.ts`).
-- `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`.
-- Durable job product still D-022: STAGING process start fails closed until decided.
+- `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`; synthetic data only (`ENVIRONMENT.md` §2).
 
-## Deploy (application)
+## Deploy
 
-Compute is the Cloudflare Worker in `src/worker.ts`. GitHub Pages `docs/` stays
-the static poster. See [cloudflare-workers.md](cloudflare-workers.md) for
-Hyperdrive and `wrangler secret` steps. Do not treat a Worker publish as
-SPEC-018 authorization.
+From `infra/`, with credentials for the chosen account:
 
-1. Build: `npm ci && npm run build`
-2. Migrate explicitly on Node with the unpooled URL (never on the Worker request path):  
-   `SUAS_MIGRATIONS_MODE=apply npm run migrate -- apply`
-3. Validate: `npm run migrate -- validate` / `status`
-4. Stamp provenance on the Worker: `SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`
-5. Probe: `GET /api/v0/health` → `status=ok` after isolate start; a failed
-   start returns `503` `NOT_READY`. Admin build-info only under MFA SUAS-admin.
+1. `npm ci` at the repository root and in `infra/`.
+2. If the web app changed, build it for staging (see "Web" in `infra/README.md`).
+3. `npx cdk diff` for the stacks you will deploy, and read it.
+4. `npx cdk deploy Suas-Staging-Backend` (and `Suas-Staging-Web` for a web change).
+   Do not pass `bedrockModelId`.
+5. If the commit adds migrations, invoke the migrate function (`MigrateFunctionName` output) as
+   in "Manual steps" of `infra/README.md`, and read `schema_version` and `applied_now`. Until it
+   has run, the API fails closed at startup (`SUAS_MIGRATIONS_MODE=validate`).
+6. Probe `GET https://<ApiUrl>/api/v0/health`: `status` is `ok`. Admin build-info is MFA SUAS-admin only.
 
 ## Rollback
 
-1. Stop new traffic to the bad Worker version.
-2. Roll back to the previous known-good Worker version (or Node `main.ts` revision).
-3. Schema: **prefer forward-repair**. Do not silently reverse migrations that may have written data. If a destructive reverse is required, treat it as an incident with backup restore (see incident runbook + D-024).
-4. Confirm health + OpenAPI drift check on the rolled-back revision’s CI green run.
+The stacks publish no Lambda versions or aliases, so a rollback is a redeploy of the last
+known-good commit.
+
+1. Check out the last known-good commit and repeat "Deploy" steps 1–4 from it.
+2. Schema: **prefer forward repair.** There are no down migrations (D-053). An older build refuses
+   a newer schema at startup (`ENVIRONMENT.md` §9), so if the bad commit applied a migration, fix
+   forward instead of rolling the code back. A destructive reverse is an incident: restore from an
+   RDS snapshot (7-day automated backups) under the incident runbook and D-024.
+3. Probe health as in "Deploy" step 6, and confirm CI is green for the rolled-back commit.
 
 ## Explicit non-goals
 
 - No automatic production cutover.
-- No real veteran data migration.
+- No real Veteran data migration.

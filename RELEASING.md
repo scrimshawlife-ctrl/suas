@@ -1,6 +1,6 @@
-# Releasing the SUAS Worker
+# Releasing SUAS
 
-The Worker uses [Semantic Versioning](https://semver.org/) and stays below
+The application uses [Semantic Versioning](https://semver.org/) and stays below
 1.0.0 while SPEC-018 (launch readiness) is blocked. A version or tag is not
 permission to deploy to production, run a pilot, or use real Veteran data.
 
@@ -45,6 +45,5 @@ in `src/release/pins.ts`.
    gh release create v0.3.0 --verify-tag --title "suas v0.3.0" --notes-file <(awk '/^## \[0.3.0\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
    ```
 
-Tagging does not deploy. Synthetic STAGING is deployed only by running the
-`worker-deploy` workflow by hand; see
-[docs/runbooks/cloudflare-workers.md](docs/runbooks/cloudflare-workers.md).
+Tagging does not deploy. Synthetic STAGING is deployed only by hand with CDK;
+see [docs/runbooks/deployment-rollback.md](docs/runbooks/deployment-rollback.md).
