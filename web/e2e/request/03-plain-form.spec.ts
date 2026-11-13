@@ -132,9 +132,7 @@ test('a lost answer says so, keeps the form filled, and the retry makes one requ
   const summary = `Someone to talk to ${tag()}`;
   await form.getByLabel('Short summary').fill(summary);
   await form.getByRole('button', { name: 'Send request' }).click();
-  await expect(
-    form.getByText('That did not go through. Check your connection and try again.'),
-  ).toBeVisible();
+  await expect(form.getByText('Something went wrong on our side. Try again.')).toBeVisible();
   await expect(form.getByLabel('Short summary')).toHaveValue(summary);
   await expect(page).toHaveURL(/\/request\?category=PEER_SUPPORT$/);
 

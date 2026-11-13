@@ -3,7 +3,7 @@ import { requestRows, tag, veteran } from './request';
 
 const FALLBACK =
   'The assistant is not available right now. The simple form below sends the same request.';
-const SEND_FAILED = 'That did not go through. Check your connection and try again.';
+const SEND_FAILED = 'Something went wrong on our side. Try again.';
 
 test('when the assistant cannot answer, the form takes over with what the Veteran typed', async ({
   browser,
