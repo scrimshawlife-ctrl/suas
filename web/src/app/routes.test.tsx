@@ -12,7 +12,12 @@ const admin = {
   status: 'ACTIVE',
   enrolled_channels: { email: true, phone: false },
   county: 'SANTA_CLARA',
-  id_verification: { method: 'ID_SCAN_SELFIE', status: 'VERIFIED', verified_at: null },
+  id_verification: {
+    method: 'VA_VETERAN_STATUS',
+    status: 'VERIFIED',
+    not_confirmed_reason: null,
+    verified_at: null,
+  },
   open_case: null,
   active_qrf: null,
   categories: [],

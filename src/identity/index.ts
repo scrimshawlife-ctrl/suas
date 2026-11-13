@@ -16,15 +16,28 @@ export {
 } from './users.js';
 export { listBorderingCounties, SERVICE_COUNTIES, type ServiceCounty } from './counties.js';
 export {
-  findLatestIdScan,
-  hasPassedIdScan,
-  IdVerificationUnavailableError,
-  readIdScanStatus,
-  startIdScan,
-  type IdScanRecord,
-  type IdScanStatus,
-  type IdScanView,
-} from './id-scan.js';
+  confirmVeteranStatus,
+  hasConfirmedVeteranStatus,
+  readVeteranConfirmation,
+  VA_CONFIRMATION_MAX_ATTEMPTS,
+  VeteranConfirmationAttemptLimitError,
+  VeteranConfirmationRevokedError,
+  type ConfirmVeteranInput,
+  type VeteranConfirmationStanding,
+} from './va-confirmation-store.js';
+export {
+  VA_CONFIRMATION_PROJECTION_ID,
+  vaConfirmationRequestSchema,
+  VeteranConfirmationUnavailableError,
+  type VaConfirmationProjection,
+  type VeteranConfirmationPort,
+  type VeteranConfirmationResult,
+} from './va-confirmation.js';
+export { createVeteranConfirmationPort } from './va-confirmation-factory.js';
+export {
+  FixtureVeteranConfirmation,
+  VA_CONFIRMATION_FIXTURE_ZIPS,
+} from './va-confirmation-fixture.js';
 export {
   requireCounty,
   requireVerifiedVeteran,
@@ -44,6 +57,7 @@ export { selectUserForSignIn } from './signin-tenant.js';
 export { grantSuasAdmin, isSuasAdmin, revokeSuasAdmin, type SuasAdminGrant } from './admins.js';
 export {
   DisabledVeteranVerificationAdapter,
+  isVaNotConfirmedReason,
   normalizeVaVeteranStatus,
   VA_NOT_CONFIRMED_REASONS,
   VETERAN_VERIFICATION_METHODS,
