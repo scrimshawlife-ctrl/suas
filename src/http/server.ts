@@ -27,8 +27,13 @@ import type { BuildInfo } from '../provenance/build-info.js';
 import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
 import type { DurableJobQueuePort } from '../jobs/index.js';
 import { UnavailableModelInference, type ModelInferencePort } from '../inference/index.js';
-import type { IdVerificationPort } from '../identity/index.js';
+import {
+  VA_CONFIRMATION_PROJECTION_FIELDS,
+  type VeteranConfirmationPort,
+} from '../identity/va-confirmation.js';
+import type { LicenceReaderPort } from '../identity/licence-reader.js';
 import type { ConnectionPushPort } from '../realtime/index.js';
+import type { ObjectStoragePort } from '../storage/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { stagingAccessFromConfig } from '../auth/staging-access.js';
 import { authenticate } from './authenticate.js';
@@ -42,7 +47,9 @@ import { registerContactLogRoutes } from './routes/contact-log.js';
 import { registerFollowUpRoutes } from './routes/follow-ups.js';
 import { registerIntakeRoutes } from './routes/intake.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
+import { registerLicenceReviewRoutes } from './routes/licence-reviews.js';
 import { registerResourceRoutes } from './routes/resources.js';
+import { registerAdminLicenceReviewRoutes } from './routes/admin-licence-reviews.js';
 import { registerAdminResourceDraftRoutes } from './routes/admin-resource-drafts.js';
 import { registerServiceRequestRoutes } from './routes/service-requests.js';
 import { registerTrustedContactRoutes } from './routes/trusted-contacts.js';
@@ -74,10 +81,18 @@ export interface ServerDependencies {
   readonly mfa?: MfaPort;
   readonly jobQueue?: DurableJobQueuePort;
   readonly modelInference?: ModelInferencePort;
-  /** ID scan + selfie port; absent when `SUAS_ID_VERIFICATION_MODE=disabled`. */
-  readonly idVerification?: IdVerificationPort;
+  /** VA Veteran Confirmation port; absent when `SUAS_VA_CONFIRMATION_MODE=disabled`. */
+  readonly veteranConfirmation?: VeteranConfirmationPort;
   /** Pushes new chat messages to live connections; absent when disabled. */
   readonly chatPush?: ConnectionPushPort;
+  /** Licence reader (R10.1, proposal); absent when `SUAS_LICENCE_READER_MODE=disabled`. */
+  readonly licenceReader?: LicenceReaderPort;
+  /** Object storage for licence images; absent when `SUAS_OBJECT_STORAGE_MODE=disabled`. */
+  readonly objectStorage?: ObjectStoragePort;
+  /** Fastify logger. `false` disables pino (a test that needs no logs). Default keeps the Node structured logger. */
+  readonly logger?: boolean;
+  /** Where pino writes; stdout when absent. Lets a test inspect what the server logs. */
+  readonly logStream?: { write(line: string): void };
 }
 
 export interface RegisteredApiRoute {
@@ -132,7 +147,9 @@ function applyResponseHeaders(request: FastifyRequest, reply: FastifyReply): voi
   for (const [name, value] of Object.entries(BROWSER_SECURITY_HEADERS)) {
     void reply.header(name, value);
   }
-  if (requiresNoStore(request.url)) {
+  // A route may only tighten this (the licence images add "private"), never relax it.
+  const own = reply.getHeader('cache-control');
+  if (requiresNoStore(request.url) && !(typeof own === 'string' && /\bno-store\b/.test(own))) {
     void reply.header('cache-control', 'no-store');
   }
 }
@@ -141,21 +158,35 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
   registeredApiRoutes.length = 0;
 
   const app = Fastify({
-    logger: {
-      level: deps.config.logLevel,
-      // ENVIRONMENT.md §6: secret material is never written to logs.
-      redact: {
-        paths: [
-          'req.headers.authorization',
-          'req.headers.cookie',
-          'req.headers["idempotency-key"]',
-        ],
-        remove: true,
-      },
-      // SECURITY.md §2: no query string (OAuth code, dev destination) and no error
-      // message or driver detail (pg `detail` quotes row values) in logs.
-      serializers: { req: serializeRequest, err: serializeError },
-    },
+    logger:
+      deps.logger === false
+        ? false
+        : {
+            level: deps.config.logLevel,
+            ...(deps.logStream !== undefined ? { stream: deps.logStream } : {}),
+            // ENVIRONMENT.md §6: secret material is never written to logs.
+            redact: {
+              paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                'req.headers["idempotency-key"]',
+                // suas-specs #72 R9.1 (proposal): projection values are never logged.
+                ...VA_CONFIRMATION_PROJECTION_FIELDS.flatMap((field) => [
+                  `body.${field}`,
+                  `req.body.${field}`,
+                ]),
+                // suas-specs R10.1 (proposal): licence images are never logged.
+                ...['front', 'back', 'selfie'].flatMap((side) => [
+                  `body.${side}`,
+                  `req.body.${side}`,
+                ]),
+              ],
+              remove: true,
+            },
+            // SECURITY.md §2: no query string (OAuth code, dev destination) and no error
+            // message or driver detail (pg `detail` quotes row values) in logs.
+            serializers: { req: serializeRequest, err: serializeError },
+          },
     // Router refusals skip the onSend hook, so they set the common headers themselves.
     frameworkErrors: (error, request, reply) => {
       applyResponseHeaders(request, reply);
@@ -362,7 +393,24 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     registerVeteranRoutes(app, {
       pool,
       sessionSecret: deps.config.sessionSecret,
-      ...(deps.idVerification !== undefined ? { idVerification: deps.idVerification } : {}),
+      fingerprintKeys: deps.config.fingerprintKeys,
+      ...(deps.veteranConfirmation !== undefined
+        ? { veteranConfirmation: deps.veteranConfirmation }
+        : {}),
+    });
+
+    registerLicenceReviewRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      readerConfigured: deps.licenceReader !== undefined,
+      ...(deps.objectStorage !== undefined ? { storage: deps.objectStorage } : {}),
+      ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
+    });
+
+    registerAdminLicenceReviewRoutes(app, {
+      pool,
+      sessionSecret: deps.config.sessionSecret,
+      ...(deps.objectStorage !== undefined ? { storage: deps.objectStorage } : {}),
     });
 
     registerConsentRoutes(app, {
