@@ -233,13 +233,17 @@ export const routes: RouteObject[] = [
                 ],
               },
               {
-                // Chat follows the last chosen mode: requester and accepter share the screen.
+                // Chat and Settings follow the last chosen mode: both modes share the screen.
                 element: <ModeLayout />,
                 children: [
                   { path: paths.chat, ...page('Chat', () => import('../features/chat/ChatPage')) },
                   {
                     path: '/chat/:serviceRequestId',
                     ...page('Chat', () => import('../features/chat/ChatPage')),
+                  },
+                  {
+                    path: paths.settings,
+                    ...page('Settings', () => import('../features/support/SettingsPage')),
                   },
                 ],
               },

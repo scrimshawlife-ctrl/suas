@@ -8,13 +8,11 @@ import { LoadFailedScreen, LoadingScreen } from '../../app/status-screens';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
-import { Select } from '../../components/Select';
-import { TextField } from '../../components/TextField';
 import { AlertCircleIcon } from '../../components/icons';
-import { isApiError } from '../../api/errors';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { ProfileFields } from './ProfileFields';
 import { afterSignInPath, safeFrom } from './signin-flow';
-import { COUNTY_OPTIONS, isCounty, validateWelcome, type WelcomeErrors } from './welcome-form';
+import { isCounty, profileSaveError, validateWelcome, type WelcomeErrors } from './welcome-form';
 
 function WelcomeForm({ me }: { me: Me }) {
   const navigate = useNavigate();
@@ -44,11 +42,7 @@ function WelcomeForm({ me }: { me: Me }) {
       await updateProfile.mutateAsync(displayName.trim());
       await updateCounty.mutateAsync(county);
     } catch (error) {
-      setSaveError(
-        isApiError(error) && error.status < 500
-          ? error.message
-          : 'We could not save that. Check your connection and try again.',
-      );
+      setSaveError(profileSaveError(error));
       setSaving(false);
       return;
     }
@@ -74,32 +68,18 @@ function WelcomeForm({ me }: { me: Me }) {
             Set up your profile
           </h2>
           <form ref={formRef} noValidate onSubmit={submit} className="flex flex-col gap-6">
-            <TextField
-              label="Name other veterans will see"
-              helper="First name and last initial, like Marcus T."
-              name="display_name"
-              autoComplete="given-name"
-              value={displayName}
-              onChange={(event) => {
-                setDisplayName(event.target.value);
+            <ProfileFields
+              displayName={displayName}
+              county={county}
+              errors={errors}
+              onDisplayNameChange={(value) => {
+                setDisplayName(value);
                 setErrors((current) => ({ ...current, displayName: undefined }));
               }}
-              error={errors.displayName}
-              required
-            />
-            <Select
-              label="County"
-              helper="We match requests with people in the same county."
-              name="county"
-              placeholder="Choose your county"
-              options={COUNTY_OPTIONS}
-              value={county}
-              onChange={(event) => {
-                setCounty(event.target.value);
+              onCountyChange={(value) => {
+                setCounty(value);
                 setErrors((current) => ({ ...current, county: undefined }));
               }}
-              error={errors.county}
-              required
             />
             <div aria-live="polite" className="empty:hidden">
               {saveError ? (

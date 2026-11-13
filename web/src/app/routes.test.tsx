@@ -53,6 +53,7 @@ const screens: { path: string; title: string }[] = [
   { path: '/serve/requests/abc', title: 'Case · SUAS' },
   { path: '/chat', title: 'Chat · SUAS' },
   { path: '/chat/abc', title: 'Chat · SUAS' },
+  { path: '/settings', title: 'Settings · SUAS' },
   { path: '/admin', title: 'Overview · SUAS Admin' },
   { path: '/admin/drafts', title: 'Resource drafts · SUAS Admin' },
   { path: '/admin/drafts/abc', title: 'Resource draft · SUAS Admin' },
