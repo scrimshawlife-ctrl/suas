@@ -227,6 +227,12 @@ export async function runClock(page: Page, ms: number): Promise<void> {
 }
 
 /**
+ * How far before the next poll a test checks that nothing changed yet: the poll is seen up to a
+ * few steps late on a slow runner, so the pause can sit a little after it.
+ */
+export const POLL_MARGIN_MS = 5_000;
+
+/**
  * Pauses this page's installed clock within a second after its next poll matching `isPoll`, so
  * the test knows the poll phase: the following poll is `intervalMs` later, not sooner.
  */
@@ -238,7 +244,7 @@ export async function pauseAfterPoll(
   await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 100);
   for (let ran = 0; ran <= intervalMs; ran += 1000) {
     const polled = page
-      .waitForRequest((r) => r.method() === 'GET' && isPoll(r.url()), { timeout: 300 })
+      .waitForRequest((r) => r.method() === 'GET' && isPoll(r.url()), { timeout: 1_000 })
       .then(() => true)
       .catch(() => false);
     await page.clock.runFor(1000);

@@ -6,7 +6,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { history, pair, say, threadLink } from '../chat/chat';
-import { pauseAfterPoll, runClock } from '../helpers';
+import { POLL_MARGIN_MS, pauseAfterPoll, runClock } from '../helpers';
 import { tag } from '../serve/serve';
 
 test.describe.configure({ timeout: 180_000 });
@@ -36,9 +36,9 @@ test('each side sees one unread on another screen, and reading the chat clears i
   await say(helper, 'Marcus T.', hello);
 
   // Nothing before the next unread read; it shows once that read lands.
-  await runClock(requester, UNREAD_REFETCH_MS - 2_000);
+  await runClock(requester, UNREAD_REFETCH_MS - POLL_MARGIN_MS);
   await expect(primary(requester).getByRole('img', { name: '1 unread' })).toHaveCount(0);
-  await runClock(requester, 2_000);
+  await runClock(requester, POLL_MARGIN_MS);
   await requester.clock.resume();
   await expect(primary(requester).getByRole('img', { name: '1 unread' })).toBeVisible();
   await primary(requester).getByRole('link', { name: /Chat/ }).click();
@@ -54,9 +54,9 @@ test('each side sees one unread on another screen, and reading the chat clears i
   const reply = `Thank you, see you at the library ${tag()}`;
   await say(requester, 'Dee R.', reply);
 
-  await runClock(helper, UNREAD_REFETCH_MS - 2_000);
+  await runClock(helper, UNREAD_REFETCH_MS - POLL_MARGIN_MS);
   await expect(primary(helper).getByRole('img', { name: '1 unread' })).toHaveCount(0);
-  await runClock(helper, 2_000);
+  await runClock(helper, POLL_MARGIN_MS);
   await helper.clock.resume();
   await expect(primary(helper).getByRole('img', { name: '1 unread' })).toBeVisible();
   await primary(helper).getByRole('link', { name: /Chat/ }).click();

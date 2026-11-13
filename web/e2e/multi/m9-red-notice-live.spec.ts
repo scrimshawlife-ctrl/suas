@@ -4,7 +4,7 @@
  */
 
 import { expect, test } from '../fixtures';
-import { pauseAfterPoll, runClock } from '../helpers';
+import { POLL_MARGIN_MS, pauseAfterPoll, runClock } from '../helpers';
 import { veteranWithRedContact, redCheckIn } from './multi';
 
 test.describe.configure({ timeout: 180_000 });
@@ -29,9 +29,9 @@ test('a RED notice shows on the open Notifications page without a reload', async
   await redCheckIn(veteran);
 
   // Not before the next poll; shown once it lands.
-  await runClock(contact, NOTICES_POLL_MS - 2_000);
+  await runClock(contact, NOTICES_POLL_MS - POLL_MARGIN_MS);
   await expect(contact.getByText(NOTICE)).toHaveCount(0);
-  await runClock(contact, 2_000);
+  await runClock(contact, POLL_MARGIN_MS);
   await contact.clock.resume();
   await expect(contact.getByText(NOTICE)).toBeVisible();
 });

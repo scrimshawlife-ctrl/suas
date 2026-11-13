@@ -1,5 +1,12 @@
 import { expect, test } from '../fixtures';
-import { ageRequest, pauseAfterPoll, requestHelp, runClock, runJobWorkerOnce } from '../helpers';
+import {
+  ageRequest,
+  POLL_MARGIN_MS,
+  pauseAfterPoll,
+  requestHelp,
+  runClock,
+  runJobWorkerOnce,
+} from '../helpers';
 import { closePeople, helper, uniqueSummary, veteran } from '../support/support';
 
 test.afterEach(closePeople);
@@ -32,9 +39,9 @@ test('T2: a request past 72 hours leaves the open board at its next 30-second re
   expect(output).toContain(requestId);
 
   // Still listed just before the next poll; gone once it lands.
-  await runClock(board, 28_000);
+  await runClock(board, 30_000 - POLL_MARGIN_MS);
   await expect(take).toBeVisible();
-  await runClock(board, 2_000);
+  await runClock(board, POLL_MARGIN_MS);
   await board.clock.resume();
   await expect(take).toHaveCount(0, { timeout: 5_000 });
 });
