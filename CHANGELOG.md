@@ -15,6 +15,8 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
+- Chat keeps manual retry for in-flight idempotency conflicts with the original message and key; permanent chat refusals remain final (API.md §7.5).
+
 - SMTP relay transport loss is an ambiguous acknowledgement unless Lambda explicitly rejected execution, preventing blind resend after a lost response (NOTIFICATIONS.md §5). Gmail mode remains unreleased.
 
 - Command execution locks its reservation through the domain transaction and fences completion/failure by attempt, preserving a newer outcome after lease takeover (API.md §7, ARCHITECTURE.md §10).
