@@ -1,183 +1,166 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
+import { isApiError } from '../../api/errors';
+import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
-import { Stepper } from '../../components/Stepper';
-import { AlertCircleIcon, CheckIcon, LockIcon } from '../../components/icons';
+import { AlertCircleIcon, LockIcon } from '../../components/icons';
 import { useSingleFlight } from '../../lib/single-flight';
-import { useIdVerification, useStartIdVerification } from '../public/api';
+import { useLicenceReview } from '../licence/api';
+import { isOpenReview, LICENCE_HEADINGS } from '../licence/licence-status';
+import { useConfirmVeteranStatus, useIdVerification, useSelfAttest } from '../public/api';
 import { safeFrom } from '../public/signin-flow';
 import {
-  isOtherStartError,
-  verifyStep,
+  EMPTY_VERIFY_FORM,
+  toConfirmBody,
+  validateVerifyForm,
+  type VerifyFormErrors,
+  type VerifyFormValues,
+} from '../public/verify-form';
+import {
+  FORM_VIEWS,
+  isGateError,
+  retryAfterText,
   verifyView,
-  type VerifyView,
+  type VerifyChoice,
+  type VerifyOutcome,
 } from '../public/verify-status';
+import { VerifyForm } from './VerifyForm';
+import { VerifyCrisisCard } from './VerifyAside';
+import {
+  HelpOthers,
+  LicenceChoiceButton,
+  SelfAttestButton,
+  VaNotice,
+  ViewMessage,
+} from './VerifyViews';
 
-const STEPS = ['Scan your ID', 'Take a quick selfie', "You're in"] as const;
-
-function Notice({ children }: { children: string }) {
-  return (
-    <p className="flex items-start gap-2.5 font-bold">
-      <AlertCircleIcon className="mt-0.5" />
-      {children}
-    </p>
-  );
-}
-
-function Heading({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 id="check" tabIndex={-1} className="heading text-30">
-      {children}
-    </h2>
-  );
-}
-
-/** The action card: what the person can do now, by status. */
-function StatusCard({
-  view,
-  starting,
-  onStart,
-  continueTo,
-  startFailed,
-}: {
-  view: VerifyView;
-  starting: boolean;
-  onStart: () => void;
-  continueTo: string;
-  startFailed: boolean;
-}) {
-  const startButton = (label: string) => (
-    <div>
-      <Button size="form" onClick={onStart} disabled={starting}>
-        {starting ? 'Starting' : label}
-      </Button>
-    </div>
-  );
-  const helpOthers = (
-    <div className="flex flex-col gap-2 border-t border-line pt-5">
-      <h3 className="text-20 font-bold">You can still help others</h3>
-      <p className="text-slate">Helping does not need the ID check.</p>
-      <div>
-        <Button variant="secondary" href="/serve">
-          Go to Serve
-        </Button>
-      </div>
-    </div>
-  );
-
-  // The button that was pressed leaves with the old view; keep focus in the card, on its new
-  // heading, instead of dropping it to the top of the page.
-  const live = useRef<HTMLDivElement>(null);
-  const shown = useRef(view);
-  useEffect(() => {
-    if (shown.current === view) return;
-    shown.current = view;
-    const active = document.activeElement;
-    if (active === null || active === document.body || live.current?.contains(active)) {
-      live.current?.querySelector<HTMLElement>('#check')?.focus();
+/** The send failures that are not about one field. Codes are never shown. */
+function sendErrorText(error: unknown): string {
+  if (isApiError(error)) {
+    if (error.code === 'VALIDATION_FAILED') {
+      return 'Some details are not in a form VA accepts. Check each one and send again.';
     }
-  }, [view]);
-
-  return (
-    <Card padding="lg" aria-labelledby="check" className="flex flex-col gap-5">
-      <div ref={live} aria-live="polite" className="flex flex-col gap-5">
-        {view === 'start' ? (
-          <>
-            <div className="flex flex-col gap-1.5">
-              <Heading>Check your ID</Heading>
-              <p className="text-slate">
-                A Veteran ID Card, or a driver's license with the Veteran designation, plus a quick
-                selfie.
-              </p>
-            </div>
-            {startFailed ? <Notice>We could not start the check. Try again.</Notice> : null}
-            {startButton('Start verification')}
-          </>
-        ) : null}
-
-        {view === 'pending' ? (
-          <div className="flex flex-col gap-1.5">
-            <Heading>Checking now</Heading>
-            <p role="status" className="text-slate">
-              Your check is in progress. This page updates by itself, so you can keep it open.
-            </p>
-          </div>
-        ) : null}
-
-        {view === 'verified' ? (
-          <>
-            <div className="flex flex-col gap-1.5">
-              <Heading>
-                <span className="flex items-center gap-2.5">
-                  <CheckIcon size={28} />
-                  You're confirmed
-                </span>
-              </Heading>
-              <p className="text-slate">Thank you. You can ask for help now.</p>
-            </div>
-            <div>
-              <Button size="form" href={continueTo}>
-                Continue
-              </Button>
-            </div>
-          </>
-        ) : null}
-
-        {view === 'not_confirmed' ? (
-          <>
-            <div className="flex flex-col gap-1.5">
-              <Heading>We could not confirm your ID</Heading>
-              <p className="text-slate">
-                This can happen with glare or a blurry photo. You can start the check again.
-              </p>
-            </div>
-            {startFailed ? <Notice>We could not start the check. Try again.</Notice> : null}
-            {startButton('Try again')}
-            {helpOthers}
-          </>
-        ) : null}
-
-        {view === 'unavailable' ? (
-          <>
-            <div className="flex flex-col gap-1.5">
-              <Heading>ID checks are not available right now</Heading>
-              <p className="text-slate">
-                We cannot run the check at the moment. Nothing is wrong with your account. Try again
-                later.
-              </p>
-            </div>
-            {startButton('Try again')}
-            {helpOthers}
-          </>
-        ) : null}
-
-        {view === 'revoked' ? (
-          <>
-            <div className="flex flex-col gap-1.5">
-              <Heading>Your ID check is no longer valid</Heading>
-              <p className="text-slate">You can still help others.</p>
-            </div>
-            {helpOthers}
-          </>
-        ) : null}
-      </div>
-    </Card>
-  );
+    if (error.code === 'IDEMPOTENCY_CONFLICT') {
+      return "We couldn't send your details just now. Wait a moment, then send them again.";
+    }
+    if (error.code === 'VA_NOTICE_VERSION_REQUIRED') {
+      return 'This page is out of date. Reload it, read the notice again, then send.';
+    }
+  }
+  return 'We could not send your details. Check your connection and try again.';
 }
 
-/** Verify (Verify board, no camera): start the ID check, then follow its status. */
+/**
+ * Verify: the person either sends their details to VA once and sees VA's answer, or tells us
+ * they served (D-016 self-attestation). Either one opens the request gate.
+ */
 export default function VerifyPage() {
   const location = useLocation();
-  const continueTo = safeFrom((location.state as { from?: unknown } | null)?.from) ?? '/home';
-  const status = useIdVerification();
-  const start = useStartIdVerification();
+  const state = location.state as { from?: unknown; choice?: unknown } | null;
+  const continueTo = safeFrom(state?.from) ?? paths.request;
+  const standing = useIdVerification();
+  const confirm = useConfirmVeteranStatus();
+  const selfAttest = useSelfAttest();
   const flight = useSingleFlight();
 
-  // The status route is the source of truth; a failed start can only add "unavailable".
-  const view = verifyView(status.data?.status, start.error);
-  const startFailed = start.isError && isOtherStartError(start.error);
+  const [values, setValues] = useState<VerifyFormValues>(EMPTY_VERIFY_FORM);
+  const [errors, setErrors] = useState<VerifyFormErrors>({});
+  const [attempt, setAttempt] = useState(0);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<VerifyOutcome | null>(null);
+  // The licence page's "Tell us you served" opens this page on the self-attestation step.
+  const [choice, setChoice] = useState<VerifyChoice>(
+    state?.choice === 'self_attest' ? 'self_attest' : null,
+  );
+  const [attestError, setAttestError] = useState<string | null>(null);
+  // Changes with every answer, so the same view shown twice is still announced and focused.
+  const [answered, setAnswered] = useState(0);
+
+  const view = verifyView(standing.data, outcome, choice);
+  const licence = useLicenceReview();
+
+  // R10.1 L1: the licence choice sits beside self-attestation after a real VA "not confirmed"
+  // answer, only when the API offers it (never after UNAVAILABLE), or to reach an open review.
+  const licenceReview = licence.data?.review ?? null;
+  const reviewOpen = isOpenReview(licenceReview?.status);
+  const licenceChoice =
+    (view === 'not_found' || view === 'not_confirmed') &&
+    (licence.data?.offered === true || reviewOpen) ? (
+      <LicenceChoiceButton open={reviewOpen} />
+    ) : null;
+  const licenceStatus = reviewOpen
+    ? LICENCE_HEADINGS[licenceReview?.status === 'READING' ? 'reading' : 'awaiting']
+    : null;
+  const retryAfter = retryAfterText(
+    outcome !== null && 'error' in outcome ? outcome.error.retryAfterSeconds : null,
+  );
+
+  // The pressed button often leaves with the old view; keep focus in the card, on its heading.
+  const card = useRef<HTMLDivElement>(null);
+  const shown = useRef(`${view}|${answered}`);
+  useEffect(() => {
+    const signal = `${view}|${answered}`;
+    if (shown.current === signal) return;
+    shown.current = signal;
+    const active = document.activeElement;
+    if (active === null || active === document.body || card.current?.contains(active)) {
+      card.current?.querySelector<HTMLElement>('#check')?.focus();
+    }
+  }, [view, answered]);
+
+  const change = (field: keyof VerifyFormValues, value: string) => {
+    setValues((current) => ({ ...current, [field]: value }));
+    const key = field.startsWith('birth') ? 'birthDate' : field;
+    setErrors((current) => ({ ...current, [key]: undefined }));
+  };
+
+  const submit = async () => {
+    setAttempt((count) => count + 1);
+    setSendError(null);
+    const found = validateVerifyForm(values);
+    setErrors(found);
+    if (Object.keys(found).length > 0 || confirm.isPending) return;
+    try {
+      const result = await confirm.mutateAsync(toConfirmBody(values));
+      if (result.status === 'VERIFIED') setValues(EMPTY_VERIFY_FORM);
+      answer({ result });
+    } catch (error) {
+      if (isGateError(error)) answer({ error });
+      else setSendError(sendErrorText(error));
+    } finally {
+      // Drops the request body from the mutation cache.
+      confirm.reset();
+    }
+  };
+
+  const answer = (next: VerifyOutcome | null, nextChoice: VerifyChoice = null) => {
+    setOutcome(next);
+    setChoice(nextChoice);
+    setAnswered((count) => count + 1);
+  };
+  const reopen = () => answer(null, 'form');
+  const chooseSelfAttest = () => {
+    setAttestError(null);
+    setChoice('self_attest');
+    setAnswered((count) => count + 1);
+  };
+
+  const attest = async () => {
+    setAttestError(null);
+    try {
+      const result = await selfAttest.mutateAsync();
+      // The standing is now VERIFIED; drop what was typed for VA.
+      setValues(EMPTY_VERIFY_FORM);
+      answer({ result });
+    } catch (error) {
+      if (isApiError(error) && error.code === 'VERIFICATION_REVOKED') answer({ error });
+      else if (isApiError(error) && error.code === 'IDEMPOTENCY_CONFLICT') {
+        setAttestError("We couldn't save that just now. Wait a moment, then try again.");
+      } else setAttestError('We could not save that. Check your connection and try again.');
+    }
+  };
 
   return (
     <Page className="gap-7 pt-12 pb-18">
@@ -185,105 +168,90 @@ export default function VerifyPage() {
       <div className="flex max-w-[760px] flex-col gap-2.5">
         <h1 className="heading text-56 max-sm:text-40">Confirm you served</h1>
         <p className="text-20 text-slate">
-          Anyone signed in can help. Asking for help needs a quick ID check.
+          Anyone signed in can help. To ask for help, confirm with VA or tell us you served.
         </p>
       </div>
 
-      <Stepper steps={STEPS} current={verifyStep(view)} label="Verification steps" />
-
       <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] items-start gap-6 max-[860px]:grid-cols-1">
-        {status.isPending ? (
+        {standing.isPending ? (
           <Card padding="lg">
             <p role="status" className="text-slate">
               Loading…
             </p>
           </Card>
-        ) : status.isError && status.data === undefined ? (
+        ) : standing.isError && standing.data === undefined ? (
           <Card padding="lg" className="flex flex-col gap-4">
-            <Notice>We could not load your check status.</Notice>
+            <p className="flex items-start gap-2.5 font-bold">
+              <AlertCircleIcon className="mt-0.5" />
+              We could not load your check status.
+            </p>
             <div>
-              <Button variant="secondary" onClick={() => void status.refetch()}>
+              <Button variant="secondary" onClick={() => void standing.refetch()}>
                 Try again
               </Button>
             </div>
           </Card>
         ) : (
-          <StatusCard
-            view={view}
-            starting={start.isPending}
-            onStart={() => flight(() => start.mutateAsync())}
-            continueTo={continueTo}
-            startFailed={startFailed}
-          />
+          <Card padding="lg" aria-labelledby="check">
+            <div ref={card} className="flex flex-col gap-6">
+              {/* The region stays mounted; its content is replaced per answer, so it is announced. */}
+              <div aria-live="polite">
+                <div key={answered} className="flex flex-col gap-5">
+                  <ViewMessage
+                    view={view}
+                    licence={licenceChoice}
+                    licenceStatus={licenceStatus}
+                    retryAfter={retryAfter}
+                    continueTo={continueTo}
+                    attesting={selfAttest.isPending}
+                    attestError={attestError}
+                    onReopen={reopen}
+                    onChooseSelfAttest={chooseSelfAttest}
+                    onAttest={() => flight(attest)}
+                    onBack={reopen}
+                  />
+                </div>
+              </div>
+              {FORM_VIEWS.has(view) ? (
+                <>
+                  <VaNotice />
+                  <VerifyForm
+                    values={values}
+                    errors={errors}
+                    attempt={attempt}
+                    sending={confirm.isPending}
+                    sendError={sendError}
+                    onChange={change}
+                    onSubmit={() => flight(submit)}
+                    alternative={
+                      <>
+                        <SelfAttestButton onChoose={chooseSelfAttest} />
+                        {licenceChoice}
+                      </>
+                    }
+                  />
+                </>
+              ) : null}
+              {view === 'verified' || view === 'licence_verified' || view === 'attested' ? null : (
+                <HelpOthers />
+              )}
+            </div>
+          </Card>
         )}
 
         <aside className="flex flex-col gap-4">
           <Card aria-labelledby="keep" className="flex flex-col gap-3">
             <h2 id="keep" className="flex items-center gap-2.5 text-20 font-bold">
               <LockIcon />
-              What we keep
-            </h2>
-            <p>Only the result: verified or not, when, and how it was checked.</p>
-            <p>
-              Your card photo and selfie are deleted right after the check. They are never shown to
-              other veterans.
-            </p>
-          </Card>
-          <Card aria-labelledby="why" className="flex flex-col gap-3">
-            <h2 id="why" className="text-20 font-bold">
-              Why a selfie too?
-            </h2>
-            <p>It shows the card belongs to you, so nobody can sign up with someone else's ID.</p>
-          </Card>
-          <Card
-            aria-labelledby="now"
-            className="flex flex-col gap-3 border-ink bg-harbor text-white"
-          >
-            <h2 id="now" className="text-20 font-bold">
-              Immediate danger?{' '}
-              <a
-                href="tel:911"
-                aria-label="Call 911"
-                className="inline-flex min-h-11 min-w-11 items-center px-1 text-white"
-              >
-                Call 911
-              </a>
-              .
+              What SUAS keeps
             </h2>
             <p>
-              For suicide or emotional crisis support,{' '}
-              <a
-                href="tel:988"
-                aria-label="Call 988"
-                className="inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white"
-              >
-                call
-              </a>{' '}
-              or{' '}
-              <a
-                href="sms:988"
-                aria-label="Text 988"
-                className="inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white"
-              >
-                text 988
-              </a>
-              .
-            </p>
-            <p className="font-bold">
-              Veterans Crisis Line:{' '}
-              <a
-                href="sms:838255"
-                aria-label="Veterans Crisis Line: Text 838255"
-                className="inline-flex min-h-11 min-w-11 items-center px-1 font-bold text-white"
-              >
-                Text 838255
-              </a>
-              .
-            </p>
-            <p className="text-harbor-tint">
-              SUAS provides practical support coordination and is not an emergency-response service.
+              The result, the reason VA gave, when you checked, which version of the notice you saw,
+              and a keyed fingerprint of your details. The fingerprint can't be turned back into
+              your details. We don't keep the name, birth date or address you type here.
             </p>
           </Card>
+          <VerifyCrisisCard />
         </aside>
       </div>
     </Page>
