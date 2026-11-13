@@ -29,12 +29,7 @@ export function capabilityRows(capabilities: Capabilities): CapabilityRow[] {
     } else if (email === 'disabled') {
       rows.push({ name: 'Email sign-in', kind: 'off', status: 'Off', note: 'Email is turned off' });
     } else {
-      const ready =
-        email === 'resend'
-          ? capabilities.resend_api_key_configured === true &&
-            capabilities.email_from_configured === true
-          : capabilities.email_from_configured === true &&
-            capabilities.aws_region_configured === true;
+      const ready = emailReady(email, capabilities);
       rows.push({
         name: 'Email sign-in',
         kind: ready ? 'ok' : 'off',
@@ -50,7 +45,7 @@ export function capabilityRows(capabilities: Capabilities): CapabilityRow[] {
       name: 'Crisis copy',
       kind: 'ok',
       status: 'Approved copy on',
-      note: 'D-012 wording, 911 and 988 only',
+      note: 'Wording from SAFETY_COPY (D-012, D-050)',
     });
   } else if (safety === 'placeholder_test_only') {
     rows.push({
@@ -86,6 +81,26 @@ export function capabilityRows(capabilities: Capabilities): CapabilityRow[] {
   }
 
   return rows;
+}
+
+/**
+ * Whether a real email mode has what it needs to send, by the build-info flags. `gmail_smtp`
+ * sends through its relay, or directly with the Gmail address and app password (R11.2).
+ */
+function emailReady(mode: string, capabilities: Capabilities): boolean {
+  if (mode === 'resend') {
+    return (
+      capabilities.resend_api_key_configured === true && capabilities.email_from_configured === true
+    );
+  }
+  if (mode === 'gmail_smtp') {
+    return (
+      capabilities.smtp_relay_configured === true ||
+      (capabilities.smtp_user_configured === true &&
+        capabilities.smtp_app_password_configured === true)
+    );
+  }
+  return false;
 }
 
 /** "NOT_READY" becomes "not ready". */
