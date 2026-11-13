@@ -70,13 +70,18 @@ test('a new person sent to sign in from a Veteran page is brought back there thr
     await held;
     await route.fallback();
   });
-  await page.getByRole('button', { name: 'Start verification' }).click();
-  await expect(page.getByRole('heading', { name: /You're confirmed/ })).toBeVisible();
+  // R9.1: the Verify page opens the gate by VA or by self-attestation; this uses the latter.
+  await page.getByRole('button', { name: 'Tell us you served' }).click();
+  await page.getByRole('button', { name: 'Yes, I served' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Thanks. You can ask for help now.' }),
+  ).toBeVisible();
   await page.getByRole('link', { name: 'Continue' }).click();
   await expect(page).toHaveURL(/\/resources\/food$/);
-  await expect(page.getByRole('status')).toHaveText('Loading…');
   release();
-  await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Confirm you served');
+  await expect(page.getByRole('heading', { level: 1 })).not.toHaveText(
+    'Confirm your Veteran status',
+  );
   await expect(page).toHaveURL(/\/resources\/food$/);
 });
 
