@@ -18,6 +18,8 @@ build/
 .tsbuildinfo
 .next/
 coverage/
+# The UI-less operation list for npm run ui:coverage is source, not a coverage report.
+!web/e2e/coverage/
 .cache/
 .tmp/
 tmp/

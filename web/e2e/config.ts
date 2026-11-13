@@ -87,7 +87,8 @@ export function stackEnv(sessionSecret: string): NodeJS.ProcessEnv {
     SUAS_SENSITIVE_AGGREGATE_REPORTING: 'disabled',
     SUAS_DEMO_FIXED_CODE: 'disabled',
     SUAS_EMAIL_MODE: 'fake',
-    SUAS_ID_VERIFICATION_MODE: 'fake',
+    // A degraded stack sets these to `disabled` to reach the real 503 paths.
+    SUAS_ID_VERIFICATION_MODE: process.env['SUAS_E2E_ID_VERIFICATION_MODE'] ?? 'fake',
     SUAS_VA_CONFIRMATION_MODE: 'fixture',
     SUAS_FINGERPRINT_KEY: fingerprintKey,
     SUAS_FINGERPRINT_KEY_ID: 'e2e-k1',
@@ -95,8 +96,8 @@ export function stackEnv(sessionSecret: string): NodeJS.ProcessEnv {
     // the API process's memory, so the read runs inline after the submit (no separate worker).
     SUAS_LICENCE_READER_MODE: 'fixture',
     SUAS_OBJECT_STORAGE_MODE: 'fake',
-    SUAS_MODEL_INFERENCE_MODE: 'fake',
-    SUAS_CHAT_PUSH_MODE: 'local',
+    SUAS_MODEL_INFERENCE_MODE: process.env['SUAS_E2E_MODEL_INFERENCE_MODE'] ?? 'fake',
+    SUAS_CHAT_PUSH_MODE: process.env['SUAS_E2E_CHAT_PUSH_MODE'] ?? 'local',
     SUAS_CHAT_LOCAL_WS_PORT: String(WS_PORT),
     // CI keeps placeholder_test_only (AGENTS.md); local runs default to the approved copy.
     SUAS_SAFETY_COPY_MODE: process.env['SUAS_E2E_SAFETY_COPY_MODE'] ?? 'approved',

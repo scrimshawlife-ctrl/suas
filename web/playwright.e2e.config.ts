@@ -1,5 +1,13 @@
+import { rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { API_PORT, API_URL, WEB_PORT, WEB_URL } from './e2e/config';
+
+// Each run starts a fresh coverage log (e2e/contract.ts). Workers load this file too, so only
+// the main process, which has no TEST_WORKER_INDEX, clears it.
+if (process.env['TEST_WORKER_INDEX'] === undefined) {
+  rmSync(resolve(import.meta.dirname, 'e2e-results', 'coverage'), { recursive: true, force: true });
+}
 
 /**
  * End-to-end suite for the web app against the LOCAL fake stack (not the staging suite

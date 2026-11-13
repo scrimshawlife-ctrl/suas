@@ -1,0 +1,94 @@
+{
+  "getHealth": {
+    "reason": "Ops liveness probe; no person-facing screen.",
+    "ref": "R12.5"
+  },
+  "getImmediateResources": {
+    "reason": "The web app shows the compiled SAFETY_COPY crisis text (SURFACES §6 fallback); only legacy /app reads this slot.",
+    "ref": "R12.5; plan O3(a)"
+  },
+  "putNotificationPreferences": {
+    "reason": "Notification preferences have no GET, so the web app has no settings for them in v1; legacy /app only.",
+    "ref": "R12.5; plan O6(a)"
+  },
+  "getAdminAdapterConfigurations": {
+    "reason": "Adapter configuration needs a tenant_id the web app cannot learn; provider adapters are read-only in v1.",
+    "ref": "R12.5; R5.17 (V1_MVP_PROPOSAL.md:115); plan O5(a)"
+  },
+  "enableAdminAdapterConfiguration": {
+    "reason": "Adapter configuration needs a tenant_id the web app cannot learn; provider adapters are read-only in v1.",
+    "ref": "R12.5; R5.17 (V1_MVP_PROPOSAL.md:115); plan O5(a)"
+  },
+  "disableAdminAdapterConfiguration": {
+    "reason": "Adapter configuration needs a tenant_id the web app cannot learn; provider adapters are read-only in v1.",
+    "ref": "R12.5; R5.17 (V1_MVP_PROPOSAL.md:115); plan O5(a)"
+  },
+  "setAdminAdapterRouting": {
+    "reason": "Adapter configuration needs a tenant_id the web app cannot learn; provider adapters are read-only in v1.",
+    "ref": "R12.5; R5.17 (V1_MVP_PROPOSAL.md:115); plan O5(a)"
+  },
+  "openCase": {
+    "reason": "Creating a request reuses the case server-side; the web app never opens a case itself.",
+    "ref": "R12.5; R8.3 Option A (V1_MVP_PROPOSAL.md:181)"
+  },
+  "getCase": {
+    "reason": "The web app reads case_id off the service request and never reads the case.",
+    "ref": "R12.5; R8.3 Option A (V1_MVP_PROPOSAL.md:181)"
+  },
+  "createCaseServiceRequest": {
+    "reason": "The helper 'add a need' action was dropped; requests are created by the Veteran.",
+    "ref": "R12.5; R8.3 Option A (V1_MVP_PROPOSAL.md:181,229)"
+  },
+  "listCaseFollowUps": {
+    "reason": "Responder-era follow-ups; no v1 web surface until R11.1 is released.",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "createFollowUp": {
+    "reason": "Responder-era follow-ups; no v1 web surface until R11.1 is released.",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "completeFollowUp": {
+    "reason": "Responder-era follow-ups; no v1 web surface until R11.1 is released.",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "resolveCaseWithSettlement": {
+    "reason": "Responder-era settlements; no v1 web surface until R11.1 is released.",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "listCaseSettlements": {
+    "reason": "Responder-era settlements; no v1 web surface until R11.1 is released.",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "getCaseSettlement": {
+    "reason": "Responder-era settlements; no v1 web surface until R11.1 is released.",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "triageCase": {
+    "reason": "SUAS-admin case command; the admin cannot read or list cases in v1, so there is no admin case screen.",
+    "ref": "R12.5; plan O4(a), O7(a)"
+  },
+  "activateCase": {
+    "reason": "Responder-era case command; organizations are removed in v1 (V1_PROJECT_PLAN.md §2.1).",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "moveCaseToFollowup": {
+    "reason": "Responder-era case command; organizations are removed in v1 (V1_PROJECT_PLAN.md §2.1).",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "resumeCaseActive": {
+    "reason": "Responder-era case command; organizations are removed in v1 (V1_PROJECT_PLAN.md §2.1).",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "escalateCase": {
+    "reason": "Responder-era case command; organizations are removed in v1 (V1_PROJECT_PLAN.md §2.1).",
+    "ref": "R12.5; plan O7(a)"
+  },
+  "closeCase": {
+    "reason": "Responder-era / SUAS-admin case command; the admin cannot read or list cases in v1.",
+    "ref": "R12.5; plan O4(a), O7(a)"
+  },
+  "reopenCase": {
+    "reason": "SUAS-admin case command; the admin cannot read or list cases in v1, so there is no admin case screen.",
+    "ref": "R12.5; plan O4(a), O7(a)"
+  }
+}
