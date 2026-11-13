@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 import { chatThreadsQueryOptions } from '../../api/chat';
 import { tokenStore, useSessionToken } from '../../api/token-store';
 import type { ChatThread } from '../../api/types';
-import { threadKey } from './threads';
+import { allThreads, threadKey } from './threads';
 
 /**
  * Which conversations the person has read, kept per browser tab in sessionStorage.
@@ -104,11 +104,11 @@ export const UNREAD_REFETCH_MS = 60_000;
  */
 export function useChatUnreadCount(): number {
   const token = useSessionToken();
-  const threads = useQuery({
+  const threads = useInfiniteQuery({
     ...chatThreadsQueryOptions(),
     enabled: token !== null,
     refetchInterval: UNREAD_REFETCH_MS,
   });
   const state = useSyncExternalStore(seenStore.subscribe, seenStore.getState);
-  return countUnread(threads.data?.threads ?? [], state);
+  return countUnread(allThreads(threads.data) ?? [], state);
 }

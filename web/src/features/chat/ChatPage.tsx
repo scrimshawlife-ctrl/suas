@@ -5,7 +5,7 @@ import { Page } from '../../components/Page';
 import { cn } from '../../lib/cn';
 import { Conversation } from './Conversation';
 import { ThreadList } from './ThreadList';
-import { pickThread, THREAD_PARAM, threadKey } from './threads';
+import { allThreads, pickThread, THREAD_PARAM, threadKey } from './threads';
 import { useChatRealtime } from './useChatRealtime';
 
 /**
@@ -19,7 +19,8 @@ export default function ChatPage() {
   const me = useMe();
   const threads = useChatThreads();
   useChatRealtime();
-  const thread = pickThread(threads.data?.threads, serviceRequestId, threadParam);
+  const list = allThreads(threads.data);
+  const thread = pickThread(list, serviceRequestId, threadParam);
 
   return (
     <Page>
@@ -27,7 +28,8 @@ export default function ChatPage() {
       <h1 className="heading text-40 max-sm:text-32">Chat</h1>
       <div className="grid h-[clamp(480px,calc(100dvh-20rem),720px)] grid-cols-[340px_minmax(0,1fr)] overflow-hidden rounded-12 border border-line bg-white max-[860px]:h-[clamp(360px,calc(100dvh-26rem),720px)] max-[860px]:grid-cols-1">
         <ThreadList
-          threads={threads.data?.threads}
+          threads={list}
+          more={threads}
           selectedKey={thread === undefined ? undefined : threadKey(thread)}
           isError={threads.isError}
           onRetry={() => void threads.refetch()}
