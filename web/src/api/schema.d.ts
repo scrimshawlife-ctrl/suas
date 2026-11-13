@@ -1293,6 +1293,166 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v0/admin/licence-reviews': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Licence reviews waiting for a decision, oldest first (suas-specs R10.1, proposal)
+     * @description AWAITING_REVIEW and AWAITING_CONFIRMATION only, without the admin's own submissions, reviews they recused from, or disputes of an approval they made or confirmed. Age, state and a dispute marker only, never names. Requires the SUAS Admin role and MFA elevation.
+     */
+    get: operations['getAdminLicenceReviews'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One licence review's page (suas-specs R10.1, proposal)
+     * @description Requires the SUAS Admin role and MFA elevation.
+     */
+    get: operations['getAdminLicenceReview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/images/{side}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One stored licence image or the selfie, inline (suas-specs R10.1, proposal)
+     * @description Served inline with Cache-Control: no-store, private; there is no download. Requires the SUAS Admin role and MFA elevation.
+     */
+    get: operations['getAdminLicenceReviewImage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * First approval of a licence review (suas-specs R10.1 L5.4, proposal)
+     * @description AWAITING_REVIEW to AWAITING_CONFIRMATION, recording the admin as approved_by. No VERIFIED row yet: a second, different admin must confirm. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewApprove'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Second admin's confirmation (suas-specs R10.1 L5.5, proposal)
+     * @description AWAITING_CONFIRMATION to APPROVED by an admin other than approved_by: writes a MANUAL_REVIEW VERIFIED row (source SUAS) that opens the request gate, and deletes the images and the reading. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewConfirm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/decline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Decline a licence review (suas-specs R10.1 L5.7, proposal)
+     * @description From AWAITING_REVIEW or AWAITING_CONFIRMATION, by one admin. Deletes the images and the reading and clears the fingerprint. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewDecline'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/recuse': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Recuse from a licence review (suas-specs R10.1 L5.6, proposal)
+     * @description Hides the review from this admin and refuses their commands on it. Repeating it changes nothing. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewRecuse'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v0/admin/licence-reviews/{id}/commands/revoke': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Revoke a licence approval (suas-specs R10.1 L7.1, proposal)
+     * @description APPROVED to REVOKED, freeing the fingerprint. FRAUD writes a REVOKED row, which outranks every method, blocks self-attestation and releases the VA identity. REVIEW_ERROR writes a newer MANUAL_REVIEW NOT_CONFIRMED row, so the approval stops opening the gate without barring the person. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
+     */
+    post: operations['postAdminLicenceReviewRevoke'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2361,6 +2521,155 @@ export interface components {
       back: components['schemas']['LicenceImage'];
       selfie: components['schemas']['LicenceImage'];
     };
+    /**
+     * @description Whether the licence's first name, last name and birth date match the details given to VA (same canonical form and key). Never the values.
+     * @enum {string}
+     */
+    LicenceIdentityMatch: 'YES' | 'NO' | 'UNKNOWN';
+    /** @enum {string} */
+    LicenceRevokeReason: 'FRAUD' | 'REVIEW_ERROR';
+    LicenceReadField: {
+      value: string | null;
+      /** @enum {string|null} */
+      source: 'barcode' | 'front' | null;
+      /** @description False marks a field to check by eye. */
+      agreed: boolean;
+    };
+    /** @description The reader's fields without the licence number or birth date (§2.1). The consistency checks do not show the card is genuine. */
+    LicenceReading: {
+      fields: {
+        first_name: components['schemas']['LicenceReadField'];
+        last_name: components['schemas']['LicenceReadField'];
+        issue_date: components['schemas']['LicenceReadField'];
+        expiry_date: components['schemas']['LicenceReadField'];
+        issuing_state: components['schemas']['LicenceReadField'];
+      };
+      veteran: {
+        /** @enum {string|null} */
+        value: 'yes' | 'no' | null;
+        /** @enum {string|null} */
+        source: 'barcode' | 'front' | null;
+        agreed: boolean;
+        /** @enum {string|null} */
+        barcode: 'yes' | 'no' | null;
+        /** @enum {string|null} */
+        front: 'yes' | 'no' | null;
+      };
+      consistency_checks: {
+        /** @enum {string} */
+        not_expired: 'pass' | 'fail' | 'not_run';
+        /** @enum {string} */
+        issued_before_expiry: 'pass' | 'fail' | 'not_run';
+        /** @enum {string} */
+        plausible_age: 'pass' | 'fail' | 'not_run';
+        /** @enum {string} */
+        veteran_designation_agrees: 'pass' | 'fail' | 'not_run';
+      };
+    };
+    /** @description The approved review already holding this licence: its record only; its images are gone. */
+    LicenceConflictingReview: {
+      /** Format: uuid */
+      review_id: string;
+      status: components['schemas']['LicenceReviewStatus'];
+      /** Format: date-time */
+      submitted_at: string;
+      /** Format: date-time */
+      decided_at: string | null;
+      /** Format: uuid */
+      approved_by: string | null;
+      /** Format: uuid */
+      confirmed_by: string | null;
+      identity_match: components['schemas']['LicenceIdentityMatch'] | null;
+      notice_version: string;
+    };
+    /** @description The review page (L5.2, L5.3). The UI shows the three images first and reveals the rest only after the reviewer answers that the Veteran designation is visible. No subject name, user id, licence number or birth date. */
+    AdminLicenceReview: {
+      /** Format: uuid */
+      review_id: string;
+      status: components['schemas']['LicenceReviewStatus'];
+      /** Format: date-time */
+      submitted_at: string;
+      /** Format: date-time */
+      decided_at: string | null;
+      notice_version: string;
+      is_dispute: boolean;
+      /** Format: uuid */
+      dispute_of_review_id: string | null;
+      /** @description Whether each image is still stored; all false once decided. */
+      images: {
+        front: boolean;
+        back: boolean;
+        selfie: boolean;
+      };
+      reading: components['schemas']['LicenceReading'] | null;
+      identity_match: components['schemas']['LicenceIdentityMatch'] | null;
+      /** @description Whether this licence is on an APPROVED review in the tenant; null when the number or state was not read. */
+      fingerprint_in_use: boolean | null;
+      failure_class: components['schemas']['LicenceFailureClass'] | null;
+      decline_reason: components['schemas']['LicenceDeclineReason'] | null;
+      revoke_reason: components['schemas']['LicenceRevokeReason'] | null;
+      /** Format: uuid */
+      approved_by: string | null;
+      /** Format: date-time */
+      approved_at: string | null;
+      /** Format: uuid */
+      confirmed_by: string | null;
+      /** Format: date-time */
+      confirmed_at: string | null;
+      /** Format: uuid */
+      declined_by: string | null;
+      /** Format: uuid */
+      revoked_by: string | null;
+      /** @description What this admin may try given the state; the server still enforces every rule. */
+      viewer: {
+        can_approve: boolean;
+        can_confirm: boolean;
+        can_decline: boolean;
+        can_revoke: boolean;
+      };
+      conflicting_review: components['schemas']['LicenceConflictingReview'] | null;
+    };
+    AdminLicenceReviewQueue: {
+      reviews: {
+        /** Format: uuid */
+        review_id: string;
+        status: components['schemas']['LicenceReviewStatus'];
+        /** Format: date-time */
+        submitted_at: string;
+        is_dispute: boolean;
+      }[];
+      limit: number;
+      next_cursor: string | null;
+    };
+    /** @description The designation question and the by-eye checklist (L5.2, L5.3); every answer must be true. A 'no' means the admin declines instead. */
+    LicenceApproval: {
+      /** @enum {boolean} */
+      designation_visible: true;
+      checklist: {
+        /**
+         * @description The selfie and the licence portrait show the same person.
+         * @enum {boolean}
+         */
+        selfie_matches: true;
+        /**
+         * @description Visible security features look present, without signs of editing.
+         * @enum {boolean}
+         */
+        security_features: true;
+        /**
+         * @description The photo shows a whole physical card, not a screen or printout.
+         * @enum {boolean}
+         */
+        whole_card: true;
+      };
+    };
+    LicenceDecline: {
+      reason: components['schemas']['LicenceDeclineReason'];
+    };
+    LicenceRevoke: {
+      reason: components['schemas']['LicenceRevokeReason'];
+    };
+    LicenceRecuse: Record<string, never>;
   };
   responses: {
     /** @description Canonical API.md §6 error body */
@@ -5096,6 +5405,460 @@ export interface operations {
       };
       /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open. */
       503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getAdminLicenceReviews: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One page of the queue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReviewQueue'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description FORBIDDEN or MFA_REQUIRED. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getAdminLicenceReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The review page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  getAdminLicenceReviewImage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        side: 'front' | 'back' | 'selfie';
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The re-encoded JPEG */
+      200: {
+        headers: {
+          'Cache-Control'?: 'no-store, private';
+          [name: string]: unknown;
+        };
+        content: {
+          'image/jpeg': string;
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND: no such review, or its images were deleted (decided) or are gone from storage. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description ID_VERIFICATION_UNAVAILABLE: object storage is disabled. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewApprove: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceApproval'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_REVIEW. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewConfirm: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceApproval'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. SECOND_REVIEWER_REQUIRED: the admin who approved cannot confirm. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_CONFIRMATION. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewDecline: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceDecline'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: still READING. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewRecuse: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceRecuse'];
+      };
+    };
+    responses: {
+      /** @description Recused */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description No state conflict applies. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+    };
+  };
+  postAdminLicenceReviewRevoke: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Client-chosen key that makes a retried command safe (API.md §7). Reusing it with a different request is 409 IDEMPOTENCY_CONFLICT. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LicenceRevoke'];
+      };
+    };
+    responses: {
+      /** @description The review page, read fresh (also on a replay) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AdminLicenceReview'];
+        };
+      };
+      /** @description VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      401: components['responses']['Error'];
+      /** @description 401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description NOT_FOUND */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorBody'];
+        };
+      };
+      /** @description LICENCE_REVIEW_DECIDED: already revoked. LICENCE_REVIEW_NOT_READY: not APPROVED. IDEMPOTENCY_CONFLICT: the key was used for another request. */
+      409: {
         headers: {
           [name: string]: unknown;
         };

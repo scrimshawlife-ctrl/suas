@@ -4241,6 +4241,664 @@
           }
         }
       }
+    },
+    "/api/v0/admin/licence-reviews": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "Licence reviews waiting for a decision, oldest first (suas-specs R10.1, proposal)",
+        "operationId": "getAdminLicenceReviews",
+        "description": "AWAITING_REVIEW and AWAITING_CONFIRMATION only, without the admin's own submissions, reviews they recused from, or disputes of an approval they made or confirmed. Age, state and a dispute marker only, never names. Requires the SUAS Admin role and MFA elevation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 25
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReviewQueue"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "FORBIDDEN or MFA_REQUIRED.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "One licence review's page (suas-specs R10.1, proposal)",
+        "operationId": "getAdminLicenceReview",
+        "description": "Requires the SUAS Admin role and MFA elevation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The review page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/images/{side}": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "One stored licence image or the selfie, inline (suas-specs R10.1, proposal)",
+        "operationId": "getAdminLicenceReviewImage",
+        "description": "Served inline with Cache-Control: no-store, private; there is no download. Requires the SUAS Admin role and MFA elevation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "side",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["front", "back", "selfie"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The re-encoded JPEG",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "enum": ["no-store, private"]
+                }
+              }
+            },
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: no such review, or its images were deleted (decided) or are gone from storage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "ID_VERIFICATION_UNAVAILABLE: object storage is disabled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/approve": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "First approval of a licence review (suas-specs R10.1 L5.4, proposal)",
+        "operationId": "postAdminLicenceReviewApprove",
+        "description": "AWAITING_REVIEW to AWAITING_CONFIRMATION, recording the admin as approved_by. No VERIFIED row yet: a second, different admin must confirm. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review page, read fresh (also on a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_REVIEW. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/confirm": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Second admin's confirmation (suas-specs R10.1 L5.5, proposal)",
+        "operationId": "postAdminLicenceReviewConfirm",
+        "description": "AWAITING_CONFIRMATION to APPROVED by an admin other than approved_by: writes a MANUAL_REVIEW VERIFIED row (source SUAS) that opens the request gate, and deletes the images and the reading. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review page, read fresh (also on a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review. SECOND_REVIEWER_REQUIRED: the admin who approved cannot confirm.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: not AWAITING_CONFIRMATION. LICENCE_FINGERPRINT_MISSING: the number or state was not read. LICENCE_ALREADY_USED: the licence is on an APPROVED review in the tenant. LICENCE_IDENTITY_MISMATCH: identity match is not YES. All three can still be declined. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/decline": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Decline a licence review (suas-specs R10.1 L5.7, proposal)",
+        "operationId": "postAdminLicenceReviewDecline",
+        "description": "From AWAITING_REVIEW or AWAITING_CONFIRMATION, by one admin. Deletes the images and the reading and clears the fingerprint. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceDecline"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review page, read fresh (also on a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_DECIDED: already decided. LICENCE_REVIEW_NOT_READY: still READING. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/recuse": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Recuse from a licence review (suas-specs R10.1 L5.6, proposal)",
+        "operationId": "postAdminLicenceReviewRecuse",
+        "description": "Hides the review from this admin and refuses their commands on it. Repeating it changes nothing. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceRecuse"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Recused"
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No state conflict applies. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v0/admin/licence-reviews/{id}/commands/revoke": {
+      "post": {
+        "tags": ["admin"],
+        "summary": "Revoke a licence approval (suas-specs R10.1 L7.1, proposal)",
+        "operationId": "postAdminLicenceReviewRevoke",
+        "description": "APPROVED to REVOKED, freeing the fingerprint. FRAUD writes a REVOKED row, which outranks every method, blocks self-attestation and releases the VA identity. REVIEW_ERROR writes a newer MANUAL_REVIEW NOT_CONFIRMED row, so the approval stops opening the gate without barring the person. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenceRevoke"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review page, read fresh (also on a replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLicenceReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED: the body is not as documented, or the Idempotency-Key header is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "description": "401 and 403 (FORBIDDEN, MFA_REQUIRED) as on every admin route. SELF_REVIEW_FORBIDDEN: the review is the admin's own. REVIEWER_RECUSED: the admin recused, or (a dispute) approved or confirmed the conflicting review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "LICENCE_REVIEW_DECIDED: already revoked. LICENCE_REVIEW_NOT_READY: not APPROVED. IDEMPOTENCY_CONFLICT: the key was used for another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7318,6 +7976,447 @@
             "$ref": "#/components/schemas/LicenceImage"
           }
         }
+      },
+      "LicenceIdentityMatch": {
+        "description": "Whether the licence's first name, last name and birth date match the details given to VA (same canonical form and key). Never the values.",
+        "type": "string",
+        "enum": ["YES", "NO", "UNKNOWN"]
+      },
+      "LicenceRevokeReason": {
+        "type": "string",
+        "enum": ["FRAUD", "REVIEW_ERROR"]
+      },
+      "LicenceReadField": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "source", "agreed"],
+        "properties": {
+          "value": {
+            "type": ["string", "null"]
+          },
+          "source": {
+            "type": ["string", "null"],
+            "enum": ["barcode", "front", null]
+          },
+          "agreed": {
+            "type": "boolean",
+            "description": "False marks a field to check by eye."
+          }
+        }
+      },
+      "LicenceReading": {
+        "description": "The reader's fields without the licence number or birth date (§2.1). The consistency checks do not show the card is genuine.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fields", "veteran", "consistency_checks"],
+        "properties": {
+          "fields": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["first_name", "last_name", "issue_date", "expiry_date", "issuing_state"],
+            "properties": {
+              "first_name": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              },
+              "last_name": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              },
+              "issue_date": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              },
+              "expiry_date": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              },
+              "issuing_state": {
+                "$ref": "#/components/schemas/LicenceReadField"
+              }
+            }
+          },
+          "veteran": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value", "source", "agreed", "barcode", "front"],
+            "properties": {
+              "value": {
+                "type": ["string", "null"],
+                "enum": ["yes", "no", null]
+              },
+              "source": {
+                "type": ["string", "null"],
+                "enum": ["barcode", "front", null]
+              },
+              "agreed": {
+                "type": "boolean"
+              },
+              "barcode": {
+                "type": ["string", "null"],
+                "enum": ["yes", "no", null]
+              },
+              "front": {
+                "type": ["string", "null"],
+                "enum": ["yes", "no", null]
+              }
+            }
+          },
+          "consistency_checks": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "not_expired",
+              "issued_before_expiry",
+              "plausible_age",
+              "veteran_designation_agrees"
+            ],
+            "properties": {
+              "not_expired": {
+                "type": "string",
+                "enum": ["pass", "fail", "not_run"]
+              },
+              "issued_before_expiry": {
+                "type": "string",
+                "enum": ["pass", "fail", "not_run"]
+              },
+              "plausible_age": {
+                "type": "string",
+                "enum": ["pass", "fail", "not_run"]
+              },
+              "veteran_designation_agrees": {
+                "type": "string",
+                "enum": ["pass", "fail", "not_run"]
+              }
+            }
+          }
+        }
+      },
+      "LicenceConflictingReview": {
+        "description": "The approved review already holding this licence: its record only; its images are gone.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "review_id",
+          "status",
+          "submitted_at",
+          "decided_at",
+          "approved_by",
+          "confirmed_by",
+          "identity_match",
+          "notice_version"
+        ],
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LicenceReviewStatus"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decided_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "approved_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "confirmed_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "identity_match": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceIdentityMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notice_version": {
+            "type": "string"
+          }
+        }
+      },
+      "AdminLicenceReview": {
+        "description": "The review page (L5.2, L5.3). The UI shows the three images first and reveals the rest only after the reviewer answers that the Veteran designation is visible. No subject name, user id, licence number or birth date.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "review_id",
+          "status",
+          "submitted_at",
+          "decided_at",
+          "notice_version",
+          "is_dispute",
+          "dispute_of_review_id",
+          "images",
+          "reading",
+          "identity_match",
+          "fingerprint_in_use",
+          "failure_class",
+          "decline_reason",
+          "revoke_reason",
+          "approved_by",
+          "approved_at",
+          "confirmed_by",
+          "confirmed_at",
+          "declined_by",
+          "revoked_by",
+          "viewer",
+          "conflicting_review"
+        ],
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LicenceReviewStatus"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decided_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "notice_version": {
+            "type": "string"
+          },
+          "is_dispute": {
+            "type": "boolean"
+          },
+          "dispute_of_review_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "images": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["front", "back", "selfie"],
+            "properties": {
+              "front": {
+                "type": "boolean"
+              },
+              "back": {
+                "type": "boolean"
+              },
+              "selfie": {
+                "type": "boolean"
+              }
+            },
+            "description": "Whether each image is still stored; all false once decided."
+          },
+          "reading": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceReading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "identity_match": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceIdentityMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fingerprint_in_use": {
+            "type": ["boolean", "null"],
+            "description": "Whether this licence is on an APPROVED review in the tenant; null when the number or state was not read."
+          },
+          "failure_class": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceFailureClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decline_reason": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceDeclineReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revoke_reason": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceRevokeReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approved_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "approved_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "confirmed_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "confirmed_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "declined_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "revoked_by": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "viewer": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["can_approve", "can_confirm", "can_decline", "can_revoke"],
+            "properties": {
+              "can_approve": {
+                "type": "boolean"
+              },
+              "can_confirm": {
+                "type": "boolean"
+              },
+              "can_decline": {
+                "type": "boolean"
+              },
+              "can_revoke": {
+                "type": "boolean"
+              }
+            },
+            "description": "What this admin may try given the state; the server still enforces every rule."
+          },
+          "conflicting_review": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LicenceConflictingReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "AdminLicenceReviewQueue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reviews", "limit", "next_cursor"],
+        "properties": {
+          "reviews": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["review_id", "status", "submitted_at", "is_dispute"],
+              "properties": {
+                "review_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/LicenceReviewStatus"
+                },
+                "submitted_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "is_dispute": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "LicenceApproval": {
+        "description": "The designation question and the by-eye checklist (L5.2, L5.3); every answer must be true. A 'no' means the admin declines instead.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["designation_visible", "checklist"],
+        "properties": {
+          "designation_visible": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "checklist": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["selfie_matches", "security_features", "whole_card"],
+            "properties": {
+              "selfie_matches": {
+                "type": "boolean",
+                "enum": [true],
+                "description": "The selfie and the licence portrait show the same person."
+              },
+              "security_features": {
+                "type": "boolean",
+                "enum": [true],
+                "description": "Visible security features look present, without signs of editing."
+              },
+              "whole_card": {
+                "type": "boolean",
+                "enum": [true],
+                "description": "The photo shows a whole physical card, not a screen or printout."
+              }
+            }
+          }
+        }
+      },
+      "LicenceDecline": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/LicenceDeclineReason"
+          }
+        }
+      },
+      "LicenceRevoke": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/LicenceRevokeReason"
+          }
+        }
+      },
+      "LicenceRecuse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
       }
     },
     "responses": {
