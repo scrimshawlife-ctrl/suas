@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { hasApiCode, isApiError } from '../../api/errors';
 import { useIdempotencyKey } from '../../api/idempotency';
+import { Button } from '../../components/Button';
+import { Dialog } from '../../components/Dialog';
 import { useSingleFlight } from '../../lib/single-flight';
 import {
   useGrantConsent,
@@ -10,6 +13,7 @@ import {
 } from './api';
 import { ErrorNotice } from './errors';
 import {
+  consentText,
   findRedAlertGrant,
   RED_ALERT_TEMPLATE_PURPOSE,
   redAlertGrantBody,
@@ -21,10 +25,15 @@ export const ALERT_ON = 'On. The notice does not say why.';
 export const ALERT_OFF = 'Off. This person will not get a notice.';
 export const ALERT_UNAVAILABLE = 'Alerts cannot be turned on in this environment yet.';
 
+/** The template version the Veteran is reading, and so the one the grant will cite. */
+interface Confirming {
+  version: string;
+  text: string;
+}
+
 /**
- * The switch-like control that creates or ends the RED-alert grant for one accepted contact.
- * It stays focusable while saving (aria-disabled) and ignores changes until the save ends.
- * The Idempotency-Key is kept across retries and renewed only after a success.
+ * Creates or ends the RED-alert grant for one contact; turning on first shows the published
+ * consent text (R12.3). The Idempotency-Key is kept across retries and renewed after a success.
  */
 export function AlertToggle({
   contact,
@@ -38,39 +47,54 @@ export function AlertToggle({
   const revoke = useRevokeConsent();
   const key = useIdempotencyKey();
   const flight = useSingleFlight();
+  const [confirming, setConfirming] = useState<Confirming | null>(null);
+  const text = consentText(template.data);
   const active = grants ? findRedAlertGrant(grants, contact.trusted_contact_id) : undefined;
   const pending = grant.isPending || revoke.isPending;
-  // No published template (404) or one superseded since it was read (422): turning on fails.
+  // No published template (404), one with no text to show, or one superseded since it was
+  // read (422): turning on fails.
   const noTemplate =
     template.isError && isApiError(template.error) && template.error.status === 404;
-  const unavailable = noTemplate || hasApiCode(grant.error, 'CONSENT_TEMPLATE_UNAVAILABLE');
+  const unavailable =
+    noTemplate ||
+    (template.isSuccess && text === null) ||
+    hasApiCode(grant.error, 'CONSENT_TEMPLATE_UNAVAILABLE');
   const error = grant.error ?? revoke.error;
+  const readFailed = template.isError && !noTemplate;
 
   function onChange(next: boolean) {
     if (pending || grants === undefined || template.isPending) return;
-    flight(async () => {
-      grant.reset();
-      revoke.reset();
-      const done = { onSuccess: () => key.renew() };
-      if (next) {
-        const version = template.data?.version_key;
-        if (version === undefined) return;
-        await grant.mutateAsync(
-          { body: redAlertGrantBody(contact.trusted_contact_id, version), headers: key.headers() },
-          {
-            ...done,
-            onError: (error) => {
-              if (hasApiCode(error, 'CONSENT_TEMPLATE_UNAVAILABLE')) void template.refetch();
-            },
-          },
-        );
-      } else if (active) {
-        await revoke.mutateAsync(
-          { consentGrantId: active.consent_grant_id, headers: key.headers() },
-          done,
-        );
+    grant.reset();
+    revoke.reset();
+    if (next) {
+      // Nothing is sent yet: the grant waits for the Veteran to read and confirm the text.
+      if (template.data && text !== null) {
+        setConfirming({ version: template.data.version_key, text });
       }
-    });
+      return;
+    }
+    if (!active) return;
+    flight(() =>
+      revoke.mutateAsync(
+        { consentGrantId: active.consent_grant_id, headers: key.headers() },
+        { onSuccess: () => key.renew() },
+      ),
+    );
+  }
+
+  function onConfirm(version: string) {
+    setConfirming(null);
+    flight(() =>
+      grant.mutateAsync(
+        { body: redAlertGrantBody(contact.trusted_contact_id, version), headers: key.headers() },
+        {
+          onSuccess: () => key.renew(),
+          onError: (error) => {
+            if (hasApiCode(error, 'CONSENT_TEMPLATE_UNAVAILABLE')) void template.refetch();
+          },
+        },
+      ),
+    );
   }
 
   return (
@@ -97,6 +121,28 @@ export function AlertToggle({
         <div className="pl-9">
           <ErrorNotice error={error} doing="change this setting" />
         </div>
+      ) : readFailed ? (
+        <div className="pl-9">
+          <ErrorNotice
+            error={template.error}
+            doing="load the alert's consent text"
+            onRetry={() => void template.refetch()}
+          />
+        </div>
+      ) : null}
+      {confirming ? (
+        <Dialog open onClose={() => setConfirming(null)} title="Turn on this alert?">
+          <p>Read what you agree to. Nothing is turned on until you choose Turn on.</p>
+          <p className="rounded-8 border border-line bg-white px-4 py-3 whitespace-pre-line break-words">
+            {confirming.text}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => onConfirm(confirming.version)}>Turn on</Button>
+            <Button variant="secondary" onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+          </div>
+        </Dialog>
       ) : null}
     </div>
   );

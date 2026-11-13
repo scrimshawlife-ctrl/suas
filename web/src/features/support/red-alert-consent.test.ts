@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ConsentGrant } from './api';
 import {
+  consentText,
   findRedAlertGrant,
   RED_ALERT_PURPOSE,
   RED_ALERT_TEMPLATE_PURPOSE,
@@ -57,5 +58,21 @@ describe('RED alert consent grant', () => {
     expect(findRedAlertGrant([grant({ status: 'REVOKED' })], 'tc-1')).toBeUndefined();
     expect(findRedAlertGrant([grant({ scope: 'ORANGE' })], 'tc-1')).toBeUndefined();
     expect(findRedAlertGrant([grant({ grantee_type: 'USER' })], 'tc-1')).toBeUndefined();
+  });
+});
+
+describe('consentText (R12.3)', () => {
+  const template = {
+    version_key: 'red-alert-trusted-contact@1',
+    template_key: RED_ALERT_TEMPLATE_PURPOSE,
+    version: 1,
+    published_at: '2026-11-04T09:00:00Z',
+  };
+
+  it('is the trimmed body, or null when there is no text to confirm', () => {
+    expect(consentText({ ...template, body: '  Text.\n' })).toBe('Text.');
+    expect(consentText({ ...template, body: ' ' })).toBeNull();
+    expect(consentText({ ...template, body: null })).toBeNull();
+    expect(consentText(undefined)).toBeNull();
   });
 });
