@@ -41,6 +41,7 @@ export {
   canonicalInputFor,
   CHECK_IN_RESUME_WINDOW_MS,
   CHECK_IN_STATUSES,
+  CheckInAnswerError,
   CheckInStateError,
   completeCheckIn,
   createQuestionnaireVersion,
@@ -56,6 +57,8 @@ export {
   QuestionnaireError,
   saveResponse,
   startCheckIn,
+  startOrResumeCheckIn,
+  supportSignalComputeRequest,
   type CheckIn,
   type CheckInStatus,
   type CompleteCheckInResult,
@@ -78,6 +81,7 @@ export { alertTrustedContactsOfRed, type RedAlertSummary } from './red-alert.js'
 export { ensurePublishedQv001 } from './qv-001-publish.js';
 export {
   parseComputeJobPayload,
+  requeueUnsettledCheckIns,
   runSupportSignalComputeJob,
   type SupportSignalComputeReason,
   type SupportSignalComputeResult,

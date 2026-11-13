@@ -29,7 +29,7 @@ import {
   listQuestionsWithOptions,
   listResumableCheckIns,
   saveResponse,
-  startCheckIn,
+  startOrResumeCheckIn,
   type CheckIn,
   type QuestionWithOptions,
 } from '../../signals/index.js';
@@ -55,6 +55,7 @@ function publicCheckIn(checkIn: CheckIn) {
     check_in_id: checkIn.checkInId,
     questionnaire_version: checkIn.questionnaireVersion,
     status: checkIn.status,
+    started_at: checkIn.startedAt.toISOString(),
     completed_at: checkIn.completedAt?.toISOString() ?? null,
   };
 }
@@ -91,12 +92,13 @@ export function registerCheckInRoutes(app: FastifyInstance, deps: CheckInRouteDe
   app.post(`${API_PREFIX}/check-ins`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     await requireVerifiedVeteran(deps.pool, context);
-    const checkIn = await startCheckIn(deps.pool, {
+    // A second start while one is in flight returns that one (200) rather than a duplicate.
+    const { checkIn, created } = await startOrResumeCheckIn(deps.pool, {
       tenantId: context.tenantId,
       veteranUserId: context.userId,
     });
     const questions = await listQuestionsWithOptions(deps.pool, checkIn.questionnaireVersion);
-    return reply.status(201).send({
+    return reply.status(created ? 201 : 200).send({
       ...publicCheckIn(checkIn),
       questions: publicQuestions(questions),
     });

@@ -45,19 +45,6 @@ export class CommandInProgressError extends Error {
   }
 }
 
-/** Raised when replaying a terminally failed command. */
-export class CommandFailedFinalError extends Error {
-  readonly httpStatus = 409;
-
-  constructor(
-    readonly record: CommandIdempotencyRecord,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'CommandFailedFinalError';
-  }
-}
-
 export interface CommandExecutionOutput {
   /** Bounded authoritative outcome replayed to duplicate requests. */
   readonly result: JsonObject;
@@ -72,12 +59,6 @@ export interface RunIdempotentCommandInput {
   readonly commandScope: string;
   readonly idempotencyKey: string;
   readonly requestFingerprint: string;
-  /**
-   * Classify a failure as terminal. Default is retryable, because caching a
-   * transient failure as the authoritative outcome is worse than re-running a
-   * deterministic one.
-   */
-  readonly isFinalFailure?: (error: unknown) => boolean;
 }
 
 export interface RunIdempotentCommandResult {
@@ -112,12 +93,6 @@ export async function runIdempotentCommand(
         replayed: true,
         record: reservation.record,
       };
-    case 'failed_final':
-      throw new CommandFailedFinalError(
-        reservation.record,
-        reservation.record.lastError ??
-          `Command "${input.commandScope}" previously failed terminally for this key.`,
-      );
     case 'in_progress':
       throw new CommandInProgressError(input.idempotencyKey, input.commandScope);
     case 'reserved':
@@ -139,9 +114,8 @@ export async function runIdempotentCommand(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const final = input.isFinalFailure?.(error) ?? false;
     // Recorded on the pool, not the rolled-back transaction.
-    await failCommand(pool, recordId, { retryable: !final, error: message });
+    await failCommand(pool, recordId, { error: message });
     throw error;
   }
 }

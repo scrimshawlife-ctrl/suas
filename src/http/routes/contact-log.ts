@@ -17,7 +17,7 @@ import {
   CONTACT_CHANNELS,
   CONTACT_OUTCOMES,
   listContactAttempts,
-  recordContact,
+  recordContactInTx,
   type ContactAttempt,
 } from '../../coordination/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
@@ -100,10 +100,9 @@ export function registerContactLogRoutes(app: FastifyInstance, deps: ContactLogR
         idempotencyKey,
         requestFingerprint: fingerprint,
       },
-      async () => {
-        // recordContact opens its own transaction and dedupes on the Domain
-        // Event idempotency key; pass the HTTP key through.
-        const recorded = await recordContact(deps.pool, {
+      async (tx) => {
+        // Commits with the idempotency record; the event key is scoped to this case and actor.
+        const recorded = await recordContactInTx(tx, {
           tenantId: context.tenantId,
           caseId,
           loggedByUserId: context.userId,
@@ -163,8 +162,8 @@ export function registerContactLogRoutes(app: FastifyInstance, deps: ContactLogR
         idempotencyKey,
         requestFingerprint: fingerprint,
       },
-      async () => {
-        const recorded = await recordContact(deps.pool, {
+      async (tx) => {
+        const recorded = await recordContactInTx(tx, {
           tenantId: context.tenantId,
           caseId,
           loggedByUserId: context.userId,

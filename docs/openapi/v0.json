@@ -347,6 +347,16 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "An in-flight Check-In (started in the last 24 hours) already exists, so it is returned instead of a second one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckInWithQuestions"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Check-in started with its questions",
             "content": {
@@ -447,7 +457,14 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/Error"
+            "description": "VALIDATION_FAILED: malformed body, or the question is not part of this Check-In's questionnaire version, or the option is not one of that question's options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Error"
@@ -5191,7 +5208,13 @@
       },
       "CheckIn": {
         "type": "object",
-        "required": ["check_in_id", "questionnaire_version", "status", "completed_at"],
+        "required": [
+          "check_in_id",
+          "questionnaire_version",
+          "status",
+          "started_at",
+          "completed_at"
+        ],
         "properties": {
           "check_in_id": {
             "type": "string",
@@ -5203,6 +5226,11 @@
           "status": {
             "type": "string",
             "enum": ["STARTED", "IN_PROGRESS", "COMPLETED", "ABANDONED", "INCOMPLETE"]
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Server clock. The Check-In can be resumed for 24 hours from this time (CHECKINS.md §4.2, §4.4)."
           },
           "completed_at": {
             "type": ["string", "null"],

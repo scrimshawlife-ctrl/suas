@@ -381,49 +381,58 @@ export async function executeCaseCommand(
   pool: Pool,
   input: CaseCommandInput,
 ): Promise<SupportCase> {
-  return withTransaction(pool, async (tx) => {
-    const supportCase = await lockCase(tx, input.tenantId, input.caseId, input.expectedStatus);
-    const transition = resolveCaseTransition(input.command, supportCase.status, {
-      ...(input.reason !== undefined ? { reason: input.reason } : {}),
-    });
+  return withTransaction(pool, (tx) => executeCaseCommandInTx(tx, input));
+}
 
-    if (transition.requiresActiveAssignment) {
-      if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
-        throw new NoActiveAssignmentError(input.command);
-      }
-      if (
-        transition.actors.includes('ASSIGNED_USER') &&
-        input.actorType === 'USER' &&
-        !(await holdsRequestInCase(tx, input.tenantId, input.caseId, input.actorId))
-      ) {
-        throw new NotAssignedError();
-      }
-    }
-
-    let updated: SupportCase;
-    try {
-      updated = await setCaseStatus(tx, input.tenantId, input.caseId, transition.to);
-    } catch (error) {
-      // The Veteran already has a newer current case: the one-current-case index refuses a second.
-      if (input.command === 'REOPEN' && isUniqueViolation(error)) throw new ReopenBlockedError();
-      throw error;
-    }
-
-    if (input.command === 'ESCALATE') {
-      await appendDomainEvent(tx, {
-        eventType: 'CASE_ESCALATED',
-        aggregateType: 'SupportCase',
-        aggregateId: input.caseId,
-        tenantId: input.tenantId,
-        actorType: input.actorType,
-        actorId: input.actorId,
-        payload: { reason: input.reason ?? '', from_status: supportCase.status },
-        ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
-      });
-    }
-
-    return updated;
+/**
+ * {@link executeCaseCommand} inside the caller's transaction, so an HTTP command commits
+ * together with its idempotency record (API.md §7 rules 3 and 5).
+ */
+export async function executeCaseCommandInTx(
+  tx: PoolClient,
+  input: CaseCommandInput,
+): Promise<SupportCase> {
+  const supportCase = await lockCase(tx, input.tenantId, input.caseId, input.expectedStatus);
+  const transition = resolveCaseTransition(input.command, supportCase.status, {
+    ...(input.reason !== undefined ? { reason: input.reason } : {}),
   });
+
+  if (transition.requiresActiveAssignment) {
+    if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
+      throw new NoActiveAssignmentError(input.command);
+    }
+    if (
+      transition.actors.includes('ASSIGNED_USER') &&
+      input.actorType === 'USER' &&
+      !(await holdsRequestInCase(tx, input.tenantId, input.caseId, input.actorId))
+    ) {
+      throw new NotAssignedError();
+    }
+  }
+
+  let updated: SupportCase;
+  try {
+    updated = await setCaseStatus(tx, input.tenantId, input.caseId, transition.to);
+  } catch (error) {
+    // The Veteran already has a newer current case: the one-current-case index refuses a second.
+    if (input.command === 'REOPEN' && isUniqueViolation(error)) throw new ReopenBlockedError();
+    throw error;
+  }
+
+  if (input.command === 'ESCALATE') {
+    await appendDomainEvent(tx, {
+      eventType: 'CASE_ESCALATED',
+      aggregateType: 'SupportCase',
+      aggregateId: input.caseId,
+      tenantId: input.tenantId,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      payload: { reason: input.reason ?? '', from_status: supportCase.status },
+      ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    });
+  }
+
+  return updated;
 }
 
 /** REOPEN would give the Veteran two current cases. Nothing is merged; the admin decides. */
