@@ -81,25 +81,17 @@ test('a profile the API refuses (400 VALIDATION_FAILED) keeps the person on the 
   expect(response.status()).toBe(400);
   expect(await errorCode(response)).toBe('VALIDATION_FAILED');
   await expect(page).toHaveURL(/\/welcome$/);
+  // Plain words, not the API's field text ("display_name: String must contain …").
+  await expect(
+    page.getByText('We could not save that. Check your name and county, then try again.'),
+  ).toBeVisible();
+  await expect(page.getByText(/display_name|String must contain/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Save and continue' })).toBeEnabled();
 
   // The next save, with the name as typed, goes through.
   await page.unroute(PROFILE);
   await page.getByRole('button', { name: 'Save and continue' }).click();
   await expect(page).toHaveURL(/\/home$/);
-});
-
-test.fixme('a refused profile is explained in plain words, not the API field text', async ({
-  browser,
-  request,
-}) => {
-  // UI bug: WelcomePage.tsx shows the 4xx `error.message` as is, e.g.
-  // "display_name: String must contain at most 40 character(s)".
-  const { page } = await onWelcome(browser, request, 'welcome-400-copy');
-  await sendOverlongName(page);
-  await saveProfile(page, 'Kai W.', 'Merced');
-  await expect(page.getByText(/display_name|String must contain/)).toHaveCount(0);
-  await expect(page.getByRole('alert')).toBeVisible();
 });
 
 test('every county can be saved, and the form shows what was saved', async ({
