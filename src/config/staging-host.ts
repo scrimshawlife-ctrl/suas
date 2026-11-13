@@ -26,7 +26,7 @@ function configuredUrl(value: string | undefined, variableName: string): URL {
   if (url.hostname.endsWith(RETIRED_SHARED_ACCOUNT_SUFFIX)) {
     throw new Error(
       `${variableName} must not target the retired shared-account workers.dev host. ` +
-        'Provision an independent SUAS Cloudflare account/subdomain or custom staging hostname.',
+        'Use the owner-controlled SUAS staging hostname.',
     );
   }
 
@@ -36,7 +36,7 @@ function configuredUrl(value: string | undefined, variableName: string): URL {
 /**
  * Resolves a non-secret synthetic-STAGING origin only after its owner has
  * independently provisioned and configured it. This validates a hostname but
- * cannot attest to Cloudflare account ownership, which remains an owner check.
+ * cannot attest to who operates the host, which remains an owner check.
  */
 export function resolveSyntheticStagingOrigin(
   value: string | undefined,

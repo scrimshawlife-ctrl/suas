@@ -1,7 +1,7 @@
 /**
  * scripts/dev-demo.ts
  *
- * One command (`npm run dev:demo`) that brings up the SUAS Cloudflare Worker LOCALLY with
+ * One command (`npm run dev:demo`) that brings up the SUAS Node server (src/main.ts) LOCALLY with
  * migrations applied and demo seed data loaded.
  *
  * LOCAL only. Everything here is synthetic demo data: emails are @example.invalid and phone
@@ -10,14 +10,14 @@
  * localhost / 127.0.0.1 / ::1.
  *
  * The `/api/v0/dev/*` routes (for example `GET /api/v0/dev/last-challenge`) exist only because
- * SUAS_ENV=LOCAL; they return 404 when the Worker runs on staging.
+ * SUAS_ENV=LOCAL; they return 404 on staging.
  *
  * See SUAS-specs ENVIRONMENT.md section 2 and MOBILE_SURFACE.md (D-033).
  *
  * Usage:
  *   npm run dev:demo
  *   npm run dev:demo -- --reset
- *   npm run dev:demo -- --node --port 3001
+ *   npm run dev:demo -- --port 3001
  *   npm run dev:demo -- --seed-only
  */
 
@@ -33,7 +33,6 @@ import { SPEC_VERSION, RELEASE_MANIFEST } from '../src/release/pins.js';
 const { Client } = pg;
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const WRANGLER = 'wrangler@4.148.0';
 const TENANT_ID = '00000000-0000-4000-8000-000000000001';
 const SECRETS_DIR = path.join(ROOT, '.local-secrets');
 const DEFAULT_DATABASE_URL = 'postgresql://suas:suas@localhost:5432/suas_demo';
@@ -48,7 +47,6 @@ const SEED_JSON_FILE = 'demo-seed.json';
 const POSTGRES_WAIT_SECONDS = 60;
 
 type Flags = {
-  node: boolean;
   reset: boolean;
   seedOnly: boolean;
   port: number;
@@ -79,7 +77,6 @@ type BannerOptions = {
 
 function parseArgs(argv: readonly string[]): Flags {
   const flags: Flags = {
-    node: false,
     reset: false,
     seedOnly: false,
     port: 3000,
@@ -92,9 +89,6 @@ function parseArgs(argv: readonly string[]): Flags {
       continue;
     }
     switch (arg) {
-      case '--node':
-        flags.node = true;
-        break;
       case '--reset':
         flags.reset = true;
         break;
@@ -129,11 +123,10 @@ function printUsage(): void {
   const lines = [
     'Usage: npm run dev:demo -- [options]',
     '',
-    'Brings up the SUAS Worker LOCALLY with migrations applied and demo seed data loaded.',
+    'Brings up the SUAS Node server LOCALLY with migrations applied and demo seed data loaded.',
     'LOCAL only. Synthetic data only. Never targets staging or any production host.',
     '',
     'Options:',
-    '  --node            Use the Node runtime (src/main.ts) instead of wrangler dev',
     '  --reset           Drop and recreate the demo database first',
     '  --seed-only       Do everything except starting a server',
     '  --port <n>        Port to listen on (default 3000)',
@@ -543,48 +536,13 @@ function printBanner(options: BannerOptions): void {
   console.log(lines.join('\n'));
 }
 
-async function startServer(
-  flags: Flags,
-  env: Record<string, string>,
-  databaseUrl: string,
-  sessionSecret: string,
-): Promise<never> {
-  const wranglerArgs = [
-    '--yes',
-    WRANGLER,
-    'dev',
-    '--port',
-    String(flags.port),
-    '--ip',
-    '127.0.0.1',
-    '--var',
-    'SUAS_ENV:LOCAL',
-    '--var',
-    'SUAS_DEMO_FIXED_CODE:enabled',
-    '--var',
-    'SUAS_EMAIL_MODE:fake',
-    '--var',
-    'SUAS_SMS_MODE:fake',
-    '--var',
-    'SUAS_BROWSER_AUTH_MODE:email_otp',
-    '--var',
-    `SUAS_BROWSER_TENANT_ID:${TENANT_ID}`,
-    '--var',
-    `SUAS_SESSION_SECRET:${sessionSecret}`,
-    ...Object.entries(corsAllowedOriginsFromShell()).flatMap(([name, value]) => [
-      '--var',
-      `${name}:${value}`,
-    ]),
-  ];
-
-  const cmd = flags.node ? process.execPath : 'npx';
-  const args = flags.node ? ['--import', 'tsx/esm', 'src/main.ts'] : wranglerArgs;
-  const childEnv = flags.node
-    ? env
-    : { ...env, CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: databaseUrl };
-
+async function startServer(env: Record<string, string>): Promise<never> {
   const code = await new Promise<number>((resolve) => {
-    const child = spawn(cmd, args, { cwd: ROOT, env: childEnv, stdio: 'inherit' });
+    const child = spawn(process.execPath, ['--import', 'tsx/esm', 'src/main.ts'], {
+      cwd: ROOT,
+      env,
+      stdio: 'inherit',
+    });
 
     const forwardSigint = (): void => {
       child.kill('SIGINT');
@@ -644,7 +602,7 @@ async function main(): Promise<void> {
   const freshVeteranEmail = readSignInEmail(seed, 'freshVeteranEmail', 'newvet@example.invalid');
 
   printBanner({
-    runtime: flags.node ? 'Node runtime (src/main.ts)' : 'Cloudflare Worker via wrangler dev',
+    runtime: 'Node runtime (src/main.ts)',
     port: flags.port,
     veteranEmail,
     freshVeteranEmail,
@@ -654,7 +612,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  await startServer(flags, env, target.url, sessionSecret);
+  await startServer(env);
 }
 
 main().catch((error: unknown) => {

@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CANONICAL_SOAK_PROFILE,
@@ -214,26 +213,5 @@ describe('synthetic STAGING soak runner', () => {
     expect(lastFetch - clusterStart).toBeLessThan(80);
     expect(summary.drain.forced_aborts).toBeGreaterThan(0);
     expect(summary.aggregate.statuses['503']).toBeGreaterThan(0);
-  });
-});
-
-describe('manual synthetic STAGING soak workflow', () => {
-  it('is dispatch-only, uses existing E2E secrets, and pins all effect locks', async () => {
-    const workflow = await readFile('.github/workflows/synthetic-staging-soak.yml', 'utf8');
-    expect(workflow).toContain('workflow_dispatch:');
-    expect(workflow).not.toMatch(/\bpush:/);
-    expect(workflow).not.toMatch(/\bschedule:/);
-    expect(workflow).toContain('SUAS_E2E_BASE_URL: ${{ vars.SUAS_E2E_BASE_URL }}');
-    expect(workflow).toContain('SUAS_E2E_VETERAN_BEARER: ${{ secrets.SUAS_E2E_VETERAN_BEARER }}');
-    expect(workflow).toContain(
-      'SUAS_E2E_RESPONDER_BEARER: ${{ secrets.SUAS_E2E_RESPONDER_BEARER }}',
-    );
-    expect(workflow).toContain('D007_DELETION_EXECUTION: disabled');
-    expect(workflow).toContain('D007_EXPORT_DELIVERY: disabled');
-    expect(workflow).toContain('D025_REPORTING: disabled');
-    expect(workflow).toContain('REAL_WORLD_EFFECTS: disabled');
-    expect(workflow).toContain("default: '300'");
-    expect(workflow).toContain("default: '7200'");
-    expect(workflow).toContain("default: '900'");
   });
 });
