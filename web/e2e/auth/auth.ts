@@ -12,6 +12,7 @@ import {
   type Response,
 } from '@playwright/test';
 import { newPerson, readSignInCode, uniqueEmail, withDb, type CountyLabel } from '../helpers';
+import { deadControls } from '../watch';
 
 export const LANDING = /:\d+\/$/;
 
@@ -105,32 +106,9 @@ export function sidewaysScroll(page: Page): Promise<number> {
   );
 }
 
-/**
- * Visible links with no real target ("#", "javascript:", none) and buttons with no
- * accessible name: the QA sweep's dead-control check.
- */
+/** Fails the test if the page has a link or button with no real target or name. */
 export async function expectNoDeadControls(page: Page): Promise<void> {
-  const found = await page.evaluate(() => {
-    const dead: string[] = [];
-    const visible = (el: Element) => {
-      const box = (el as HTMLElement).getBoundingClientRect();
-      return box.width > 0 && box.height > 0 && getComputedStyle(el).visibility !== 'hidden';
-    };
-    document.querySelectorAll('a').forEach((a) => {
-      const href = a.getAttribute('href');
-      if (
-        visible(a) &&
-        (href === null || href === '' || href === '#' || href.startsWith('javascript:'))
-      )
-        dead.push(`link "${(a.textContent ?? '').trim()}" href=${String(href)}`);
-    });
-    document.querySelectorAll('button, [role="button"]').forEach((b) => {
-      const name = (b.getAttribute('aria-label') ?? b.textContent ?? '').trim();
-      if (visible(b) && name === '') dead.push(`button with no name: ${b.outerHTML.slice(0, 120)}`);
-    });
-    return dead;
-  });
-  expect(found, `dead controls on ${page.url()}`).toEqual([]);
+  expect(await deadControls(page), `dead controls on ${page.url()}`).toEqual([]);
 }
 
 /**

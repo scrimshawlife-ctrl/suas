@@ -1,4 +1,5 @@
-import { expect, test, type Response } from '@playwright/test';
+import { expect, test } from '../fixtures';
+import type { Response } from '@playwright/test';
 import { newPerson, readSignInCode, shoot, uniqueEmail, withDb } from '../helpers';
 import {
   askForCode,
@@ -52,7 +53,6 @@ test('the sign-in screen checks the email before asking for a code', async ({ br
 
 test('a returning person signs in as a helper and lands on Serve', async ({ browser, request }) => {
   const first = await signedUpPerson(browser, request, { label: 'returning', name: 'Ira S.' });
-  await first.page.context().close();
 
   const page = await newPerson(browser);
   await askForCode(page, first.email, 'serve');
@@ -69,7 +69,10 @@ test('a returning person signs in as a helper and lands on Serve', async ({ brow
 test('a wrong code is a real 401 CHALLENGE_INVALID in plain words; a short code sends nothing', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const page = await newPerson(browser);
   const email = uniqueEmail('wrong-code');
   await askForCode(page, email);
@@ -106,7 +109,9 @@ test('a wrong code is a real 401 CHALLENGE_INVALID in plain words; a short code 
   await expect(page).toHaveURL(/\/welcome$/);
 });
 
-test('an expired code is refused', async ({ browser, request }) => {
+test('an expired code is refused', async ({ browser, request, allow }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const page = await newPerson(browser);
   const email = uniqueEmail('expired');
   await askForCode(page, email);
@@ -126,7 +131,10 @@ test('an expired code is refused', async ({ browser, request }) => {
 test('asking again for a code makes the earlier code stop working', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const page = await newPerson(browser);
   const email = uniqueEmail('resend');
   await askForCode(page, email);
@@ -149,7 +157,9 @@ test('asking again for a code makes the earlier code stop working', async ({
   await expect(page).toHaveURL(/\/welcome$/);
 });
 
-test('a code that was already used does not sign in again', async ({ browser, request }) => {
+test('a code that was already used does not sign in again', async ({ browser, request, allow }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const { page, email } = await signedUpPerson(browser, request, {
     label: 'used-code',
     name: 'Uma V.',
@@ -167,7 +177,10 @@ test('a code that was already used does not sign in again', async ({ browser, re
 
 test('the fourth code request in 15 minutes is a real 429 with a wait time', async ({
   browser,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 429/);
   const page = await newPerson(browser);
   const email = uniqueEmail('issue-limit');
   for (let i = 0; i < 3; i += 1) await askForCode(page, email);
@@ -183,7 +196,10 @@ test('the fourth code request in 15 minutes is a real 429 with a wait time', asy
 test('after the verify budget the right code is refused 429; once the window passes, sign-in works', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/, /status of 429/);
   const page = await newPerson(browser);
   const email = uniqueEmail('verify-limit');
   await askForCode(page, email);
@@ -275,7 +291,10 @@ test('a signed-in person who opens sign-in again goes to their home', async ({
 test('when SUAS cannot be reached or fails, sign-in says so and works on the next try', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/ERR_INTERNET_DISCONNECTED/, /auth\/challenges :: 500$/, /status of 500/);
   const page = await newPerson(browser);
   const email = uniqueEmail('offline');
   await page.goto('/sign-in');

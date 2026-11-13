@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../fixtures';
 import { readSignInCode, withDb } from '../helpers';
 import {
   LANDING,
@@ -16,7 +16,10 @@ const VERIFY = /\/api\/v0\/auth\/challenges\/commands\/verify$/;
 test('a session signed out in another tab sends this tab to sign in, then back where it was', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const { page, email } = await signedUpPerson(browser, request, {
     label: 'two-tabs',
     name: 'Uli G.',
@@ -51,7 +54,10 @@ test('a session signed out in another tab sends this tab to sign in, then back w
 test('a person suspended mid-session is sent to sign in on their next read and cannot sign back in', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const { page, email } = await signedUpPerson(browser, request, {
     label: 'suspended',
     name: 'Sol M.',

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '../fixtures';
+import type { Page } from '@playwright/test';
 import { newPerson, shoot } from '../helpers';
 import { LANDING, expectNoDeadControls, signedUpPerson } from './auth';
 

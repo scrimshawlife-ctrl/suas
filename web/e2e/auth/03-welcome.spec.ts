@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '../fixtures';
+import type { Page } from '@playwright/test';
 import { shoot, type CountyLabel } from '../helpers';
 import {
   countRequests,
@@ -72,7 +73,10 @@ test('the welcome form asks for a name and a county, in plain words', async ({
 test('a profile the API refuses (400 VALIDATION_FAILED) keeps the person on the form to fix it', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 400/);
   const { page } = await onWelcome(browser, request, 'welcome-400');
   await sendOverlongName(page);
   const refused = nextResponse(page, 'PUT', PROFILE);
@@ -154,7 +158,9 @@ test('double-clicking Save sends the profile once', async ({ browser, request })
   expect(county()).toBe(1);
 });
 
-test('a failed save says so and the next try works', async ({ browser, request }) => {
+test('a failed save says so and the next try works', async ({ browser, request, allow }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/me\/county :: 500$/, /status of 500/);
   const { page } = await onWelcome(browser, request, 'welcome-500');
   // A 5xx cannot be reached on the real stack, so it is routed.
   await page.route(COUNTY, (route) =>

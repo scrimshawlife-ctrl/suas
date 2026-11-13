@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../fixtures';
 import { newPerson, readSignInCode, shoot, uniqueEmail } from '../helpers';
 import {
   LANDING,
@@ -60,12 +60,22 @@ test('a new person sent to sign in from a Veteran page is brought back there thr
   await expect(page).toHaveURL(/\/welcome$/);
   await saveProfile(page, 'Cy H.', 'Santa Clara');
   await expect(page).toHaveURL(/\/verify$/);
+
+  // Regression: Continue taken while the account is still being re-read used to bounce back to
+  // /verify. The re-read is held (not faked) until after the click.
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/v0/veterans/me', async (route) => {
+    await held;
+    await route.fallback();
+  });
   await page.getByRole('button', { name: 'Start verification' }).click();
   await expect(page.getByRole('heading', { name: /You're confirmed/ })).toBeVisible();
-  await page
-    .getByRole('link', { name: 'Continue' })
-    .or(page.getByRole('button', { name: 'Continue' }))
-    .click();
+  await page.getByRole('link', { name: 'Continue' }).click();
+  await expect(page).toHaveURL(/\/resources\/food$/);
+  await expect(page.getByRole('status')).toHaveText('Loading…');
+  release();
+  await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Confirm you served');
   await expect(page).toHaveURL(/\/resources\/food$/);
 });
 
@@ -74,7 +84,6 @@ test('a returning person sent to sign in from Serve comes back to Serve, even if
   request,
 }) => {
   const first = await signedUpPerson(browser, request, { label: 'return-serve', name: 'Jo L.' });
-  await first.page.context().close();
   const page = await newPerson(browser);
   await page.goto('/serve');
   await expect(page).toHaveURL(/\/sign-in$/);
@@ -196,7 +205,10 @@ for (const where of ['/welcome', '/verify']) {
 test('signing out while a page is still loading ends on the landing page', async ({
   browser,
   request,
+  allow,
 }) => {
+  // Provoked on purpose: the browser logs each refused load.
+  allow.push(/status of 401/);
   const { page } = await signedUpPerson(browser, request, {
     label: 'out-race',
     name: 'Val H.',
