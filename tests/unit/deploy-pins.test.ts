@@ -1,8 +1,8 @@
 /**
  * Every spec-pin value in deploy and CI configuration must equal src/release/pins.ts.
  *
- * The Worker fails startup when SUAS_SPEC_VERSION differs from the build pin, so a stale
- * value in wrangler.jsonc or a deploy workflow stays silent until the next deploy. This
+ * The app fails startup when SUAS_SPEC_VERSION differs from the build pin, so a stale
+ * value in a workflow or the env template stays silent until the next run. This
  * reads the files as text (no network) and fails with the file name and the bad value.
  * SUAS-specs ENVIRONMENT.md §3 (SUAS_SPEC_VERSION / SUAS_RELEASE_MANIFEST rules 1-2).
  */
@@ -25,7 +25,6 @@ const EXPECTED: Readonly<Record<string, string>> = {
 
 /** Files that must carry both pins, so the test cannot pass by matching nothing. */
 const REQUIRED_FILES = [
-  'wrangler.jsonc',
   '.env.example',
   '.github/workflows/verify.yml',
   '.github/workflows/worker-deploy.yml',

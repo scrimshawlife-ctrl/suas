@@ -1,5 +1,5 @@
 /**
- * Request-path schema check that never applies migrations.
+ * Schema check that never applies migrations.
  *
  * Spec citations:
  * - SUAS-specs ENVIRONMENT.md §9 (a build rejects a schema state it cannot
@@ -8,10 +8,9 @@
  * - SUAS-specs ENVIRONMENT.md §3 (production automatic-migration policy must
  *   be explicit in deployment runbooks; the request path is not that runbook)
  *
- * The Node migrate CLI still owns `apply` and the full file/checksum plan.
- * Cloudflare Workers have no on-disk `migrations/` tree, so the Worker isolate
- * only reads the recorded schema version and fails closed if it is not the
- * version this build requires.
+ * The migrate CLI (or the migrate Lambda) owns `apply` and the full file/checksum
+ * plan. The job worker and the database CLIs only read the recorded schema version
+ * and fail closed if it is not the version this build requires.
  */
 
 import type { Pool } from 'pg';
@@ -33,9 +32,8 @@ export async function assertExpectedSchemaVersion(
   } catch {
     throw new SchemaStateError([
       `Could not read schema version; this build requires ${expected}. ` +
-        `The Worker request path never applies migrations. Run ` +
-        `\`npm run migrate -- apply\` against the unpooled URL, then ` +
-        `\`npm run migrate -- validate\`.`,
+        `This check never applies migrations. Run ` +
+        `\`npm run migrate -- apply\`, then \`npm run migrate -- validate\`.`,
     ]);
   }
 
@@ -43,7 +41,7 @@ export async function assertExpectedSchemaVersion(
     throw new SchemaStateError([
       `Database schema version is ${version} but this build requires ${expected}. ` +
         `Schema compatibility is not inferred from the application version ` +
-        `(ENVIRONMENT.md §9). The Worker request path never applies migrations.`,
+        `(ENVIRONMENT.md §9). This check never applies migrations.`,
     ]);
   }
 

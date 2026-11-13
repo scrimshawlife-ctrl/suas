@@ -603,7 +603,6 @@ describe('push failure and gone connections', () => {
       challengeDelivery: app.challengeDelivery,
       mfa: app.mfa,
       chatPush: failing,
-      logger: false,
     });
 
     const response = await server.inject({

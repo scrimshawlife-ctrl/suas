@@ -67,7 +67,7 @@ import {
   VALIDATION_FAILED,
   validationErrorBody,
 } from './error-envelope.js';
-import { failureLogLine, serializeError, serializeRequest } from './request-logging.js';
+import { failureRoute, serializeError, serializeRequest } from './request-logging.js';
 import { registerOriginPolicy } from './origin-policy.js';
 import { demoFixedCodeFor } from '../auth/demo-fixed-code.js';
 
@@ -89,18 +89,10 @@ export interface ServerDependencies {
   readonly licenceReader?: LicenceReaderPort;
   /** Object storage for licence images; absent when `SUAS_OBJECT_STORAGE_MODE=disabled`. */
   readonly objectStorage?: ObjectStoragePort;
-  /**
-   * Fastify logger. `false` disables pino (Worker isolates cannot use
-   * worker_threads). Default keeps the Node structured logger.
-   */
+  /** Fastify logger. `false` disables pino (a test that needs no logs). Default keeps the Node structured logger. */
   readonly logger?: boolean;
   /** Where pino writes; stdout when absent. Lets a test inspect what the server logs. */
   readonly logStream?: { write(line: string): void };
-  /**
-   * True only for the Cloudflare Worker isolate. Synthetic STAGING may offer
-   * the fixed demo code on that runtime and nowhere else.
-   */
-  readonly workerRuntime?: boolean;
 }
 
 export interface RegisteredApiRoute {
@@ -258,10 +250,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     }
 
     if (status >= 500) {
-      request.log.error({ err: error }, 'unhandled request failure');
-      // Workers run with logger:false; still emit a structured console line for
-      // wrangler tail / observability, with the same content-free fields.
-      console.error(failureLogLine(request, error));
+      request.log.error({ err: error, route: failureRoute(request) }, 'unhandled request failure');
     }
 
     if (error instanceof ZodError) {
@@ -330,7 +319,6 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
         ? { challengeDelivery: deps.challengeDelivery }
         : {}),
       ...(deps.jobQueue !== undefined ? { jobQueue: deps.jobQueue } : {}),
-      ...(deps.workerRuntime === true ? { workerRuntime: true } : {}),
     });
   }
 
@@ -341,13 +329,11 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
       delivery: deps.challengeDelivery,
       mfa: deps.mfa,
       signUpTenantId: deps.config.browserAuth.tenantId,
-      // Undefined unless the LOCAL gates pass, or this is the synthetic STAGING
-      // Worker with SUAS_DEMO_FIXED_CODE=enabled. Every other path keeps random codes.
+      // Undefined unless the LOCAL gates pass. Every other path keeps random codes.
       fixedOtpCodeFor: demoFixedCodeFor({
         environment: deps.config.environment,
         demoFixedCode: deps.config.demoFixedCode,
         databaseUrl: deps.config.database.url,
-        workerRuntime: deps.workerRuntime === true,
       }),
       stagingAccess,
     });

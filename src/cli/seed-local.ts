@@ -710,8 +710,8 @@ async function main(): Promise<void> {
       return issued;
     });
 
-    const workerBaseUrl = process.env.SUAS_WORKER_BASE_URL
-      ? resolveSyntheticStagingOrigin(process.env.SUAS_WORKER_BASE_URL, 'SUAS_WORKER_BASE_URL')
+    const stagingBaseUrl = process.env.SUAS_E2E_BASE_URL
+      ? resolveSyntheticStagingOrigin(process.env.SUAS_E2E_BASE_URL, 'SUAS_E2E_BASE_URL')
       : null;
     const summary = {
       environment: config.environment,
@@ -742,11 +742,11 @@ async function main(): Promise<void> {
         adminBearer: adminSession.credential,
         expiresAt: veteranSession.session.expiresAt.toISOString(),
       },
-      workerBaseUrl: workerBaseUrl ?? 'UNCONFIGURED_INDEPENDENT_SUAS_STAGING_ORIGIN',
-      hint: workerBaseUrl
+      stagingBaseUrl: stagingBaseUrl ?? 'UNCONFIGURED_INDEPENDENT_SUAS_STAGING_ORIGIN',
+      hint: stagingBaseUrl
         ? 'Use the bearer with: curl -H "authorization: Bearer <cred>" ' +
-          `${workerBaseUrl}/app/home`
-        : 'Set SUAS_WORKER_BASE_URL to an independently owned SUAS synthetic-STAGING origin before using these credentials against a Worker.',
+          `${stagingBaseUrl}/app/home`
+        : 'Set SUAS_E2E_BASE_URL to the SUAS synthetic-STAGING origin before using these credentials against it.',
     };
     console.log(JSON.stringify(summary, null, 2));
   } finally {

@@ -125,8 +125,6 @@ export interface UiRouteDependencies {
   readonly supportSignalMode: SupportSignalMode;
   readonly jobQueue?: DurableJobQueuePort;
   readonly challengeDelivery?: ChallengeDeliveryPort;
-  /** True only when this server is the Cloudflare Worker isolate. */
-  readonly workerRuntime?: boolean;
 }
 
 function demoSignInFrom(
@@ -218,34 +216,6 @@ function shell(title: string, overrides: Partial<ShellViewModel> = {}): ShellVie
   };
 }
 
-/**
- * Fastify params under Cloudflare `handleAsNodeRequest` are sometimes null.
- * Fall back to path segments so `/app/resources/:label` and `/app/.../:id` still work.
- */
-function pathParams(
-  request: { readonly params?: Record<string, string> | null; readonly url: string },
-  kind: 'resource-label' | 'case-id' | 'check-in-id',
-): { label?: string; id?: string } {
-  const fromRoute = request.params;
-  if (fromRoute !== null && fromRoute !== undefined) {
-    return fromRoute;
-  }
-  const path = (request.url.split('?')[0] ?? '').split('/').filter(Boolean);
-  if (kind === 'resource-label' && path[0] === 'app' && path[1] === 'resources' && path[2]) {
-    return { label: path[2] };
-  }
-  if (kind === 'case-id') {
-    const i = path.indexOf('cases');
-    const id = i >= 0 ? path[i + 1] : undefined;
-    return id !== undefined ? { id } : {};
-  }
-  if (kind === 'check-in-id') {
-    const i = path.indexOf('check-ins');
-    const id = i >= 0 ? path[i + 1] : undefined;
-    return id !== undefined ? { id } : {};
-  }
-  return {};
-}
 const checkInIdParams = z.object({ id: z.string().uuid() });
 const checkInResponseBody = z.object({
   question_id: z.string().uuid(),
@@ -356,7 +326,6 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     environment: config.environment,
     demoFixedCode: config.demoFixedCode,
     databaseUrl: config.database.url,
-    workerRuntime: deps.workerRuntime === true,
   });
   const demoSignIn = demoSignInFrom(fixedOtpCodeFor);
   registerHtmlFormParser(app);
@@ -736,7 +705,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   app.get<{ Params: { id: string } }>('/app/check-ins/:id', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     await requireVerifiedVeteran(pool, context);
-    const { id } = checkInIdParams.parse(pathParams(request, 'check-in-id'));
+    const { id } = checkInIdParams.parse(request.params);
     const checkIn = await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
     const questions = await listQuestionsWithOptions(pool, checkIn.questionnaireVersion);
     const answered = new Set(await listAnsweredQuestionIds(pool, checkIn.checkInId));
@@ -793,7 +762,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   app.post<{ Params: { id: string } }>('/app/check-ins/:id/responses', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     await requireVerifiedVeteran(pool, context);
-    const { id } = checkInIdParams.parse(pathParams(request, 'check-in-id'));
+    const { id } = checkInIdParams.parse(request.params);
     await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
     const body = checkInResponseBody.parse(request.body);
     await saveResponse(pool, {
@@ -810,7 +779,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     async (request, reply) => {
       const context = await authenticate(pool, sessionSecret, request);
       await requireVerifiedVeteran(pool, context);
-      const { id } = checkInIdParams.parse(pathParams(request, 'check-in-id'));
+      const { id } = checkInIdParams.parse(request.params);
       await loadOwnedCheckIn(pool, context.tenantId, context.userId, id);
       await completeCheckIn(
         pool,
@@ -854,7 +823,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
   app.get<{ Params: { label: string } }>('/app/resources/:label', async (request, reply) => {
     const context = await authenticate(pool, sessionSecret, request);
     await requireVerifiedVeteran(pool, context);
-    const { label } = pathParams(request, 'resource-label');
+    const { label } = request.params;
     if (label === undefined || label === '') {
       throw new NonOperationalCategoryError('(missing)', 'COMING_SOON');
     }
@@ -881,8 +850,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     }
 
     const category = categoryForCard(card.label);
-    // handleAsNodeRequest may yield a null query object; coerce before Zod.
-    const query = resourceListQuery.parse(request.query ?? {});
+    const query = resourceListQuery.parse(request.query);
     const page = await searchResources(
       pool,
       context.tenantId,

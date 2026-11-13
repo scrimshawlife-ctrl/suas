@@ -13,11 +13,10 @@ import { serializeError, serializeRequest } from '../../src/http/request-logging
 import type { BuildInfo } from '../../src/provenance/build-info.js';
 import { validEnv } from '../helpers/env.js';
 
-function probeServer() {
+function probeServer(env: Record<string, string> = {}) {
   const app = createServer({
-    config: loadConfig(validEnv()),
+    config: loadConfig(validEnv(env)),
     buildInfo: () => ({}) as BuildInfo,
-    logger: false,
   });
   app.post('/api/v0/probe', (request) => {
     z.object({ category: z.enum(['FOOD', 'SHELTER', 'TRANSPORTATION']) }).parse(request.body);
@@ -131,11 +130,19 @@ describe('content-free request logs', () => {
   });
 
   it('logs a 5xx by name, code and route only, without message or driver detail', async () => {
+    const app = probeServer({ SUAS_LOG_LEVEL: 'error' });
+    // Read the lines pino writes, after its serializers and redaction have run.
+    const streamKey = Object.getOwnPropertySymbols(app.log).find(
+      (key) => key.description === 'pino.stream',
+    );
+    const stream = (app.log as unknown as Record<symbol, { write(line: string): boolean }>)[
+      streamKey!
+    ]!;
     const lines: string[] = [];
-    vi.spyOn(console, 'error').mockImplementation((line: unknown) => {
-      lines.push(String(line));
+    vi.spyOn(stream, 'write').mockImplementation((line: string) => {
+      lines.push(line);
+      return true;
     });
-    const app = probeServer();
     const response = await app.inject({ method: 'GET', url: '/api/v0/probe-failure?x=private' });
     expect(response.statusCode).toBe(500);
     expect(response.json().error).toEqual({

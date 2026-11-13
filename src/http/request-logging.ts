@@ -39,8 +39,7 @@ export function serializeRequest(request: RawRequestLike): {
 }
 
 /**
- * Pino `err` serializer and the console failure line share this shape: the error's
- * name, its code (a Fastify code or a pg SQLSTATE) and stack frames, never its message,
+ * Pino `err` serializer: the error's name, its code (a Fastify code or a pg SQLSTATE) and stack frames, never its message,
  * which may quote input, nor any driver field such as `detail`.
  */
 export function serializeError(error: unknown): {
@@ -61,12 +60,7 @@ export function serializeError(error: unknown): {
   };
 }
 
-/** One structured line for an unhandled 5xx, usable where pino is off (Worker isolates). */
-export function failureLogLine(request: FastifyRequest, error: unknown): string {
-  return JSON.stringify({
-    level: 'error',
-    msg: 'unhandled_request_failure',
-    route: request.routeOptions.url ?? pathWithoutQuery(request.url),
-    ...serializeError(error),
-  });
+/** The route pattern of a failed request, or its path without the query string. */
+export function failureRoute(request: FastifyRequest): string {
+  return request.routeOptions.url ?? pathWithoutQuery(request.url);
 }
