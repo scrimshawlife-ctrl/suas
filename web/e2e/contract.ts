@@ -65,14 +65,16 @@ const pointer = (op: Operation, status: string): string | undefined => {
 };
 
 /**
- * Checks one response. Returns undefined for anything outside the contract (assets, dev
- * routes), else the operation, the `{command}` path value if any, and a problem if it breaks.
+ * Checks one response. Returns undefined for anything outside the contract (assets, dev and
+ * mocked routes), else the operation, the `{command}` path value if any, and any problem.
  */
 export async function checkResponse(
   response: Response,
 ): Promise<{ operationId: string; command?: string; problem?: string } | undefined> {
   const { pathname } = new URL(response.url());
   if (!pathname.startsWith('/api/v0/') || pathname.startsWith('/api/v0/dev/')) return undefined;
+  // A `page.route` fulfilment has no server address: it is a mock, not the real backend.
+  if ((await response.serverAddr()) === null) return undefined;
   const method = response.request().method();
   const label = `${method} ${pathname} ${String(response.status())}`;
   const op = operations.find((o) => o.method === method && o.pattern.test(pathname));

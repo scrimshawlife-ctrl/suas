@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { newPerson, newVerifiedVeteran, requestHelp, shoot, signUp, uniqueEmail } from './helpers';
 
 /** Records the WebSockets a page opens and the text of every frame it receives. */
