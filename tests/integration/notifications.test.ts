@@ -522,6 +522,36 @@ describe('NOTIFICATIONS.md §5 — durable execution and attempt history', () =>
     expect(visible.map((item) => item.notificationId)).toContain(notification.notificationId);
   });
 
+  it('settles a non-retryable refusal UNDELIVERABLE at once, with the reason audited (R11.2)', async () => {
+    const { tenantId, notification, disclosure } = await queued();
+    // An ambiguous SMTP acknowledgement: the message may be out, so no blind retry.
+    const ambiguous: NotificationChannelPort = {
+      channel: 'EMAIL',
+      mode: 'gmail_smtp',
+      implementation: 'gmail_smtp',
+      send: () =>
+        Promise.resolve({ accepted: false, retryable: false, failureReason: 'smtp_ambiguous_ack' }),
+    };
+
+    const result = await attemptSend(pool, new Map([['EMAIL', ambiguous]]), {
+      tenantId,
+      notificationId: notification.notificationId,
+      disclosure,
+    });
+
+    expect(result.notification).toMatchObject({ deliveryStatus: 'UNDELIVERABLE', attemptCount: 1 });
+    const visible = await listUndeliverable(pool, tenantId);
+    expect(visible.map((item) => item.notificationId)).toContain(notification.notificationId);
+    const audits = await pool.query<{ event_type: string; payload: Record<string, unknown> }>(
+      `SELECT event_type, payload FROM audit_events WHERE target_id = $1 ORDER BY event_type`,
+      [notification.notificationId],
+    );
+    expect(audits.rows.map((row) => [row.event_type, row.payload.failure_reason])).toEqual([
+      ['NOTIFICATION_SEND_ATTEMPTED', 'smtp_ambiguous_ack'],
+      ['NOTIFICATION_UNDELIVERABLE', 'smtp_ambiguous_ack'],
+    ]);
+  });
+
   it('does not send twice when a worker delivers the job again', async () => {
     const { tenantId, notification, disclosure } = await queued();
     const registry = channelRegistry();

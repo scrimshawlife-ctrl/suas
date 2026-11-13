@@ -1,6 +1,6 @@
 /**
  * The STAGING backend (synthetic data only): network, database, the API, the scheduled
- * job worker, the migrate function, and the assets bucket. Inference stays disabled
+ * job worker, the migrate function, the SMTP relay, and the assets bucket. Inference stays disabled
  * (R2.15 is not approved) and chat push stays off (R6.12 is not accepted). The Bedrock
  * and API Gateway push adapters remain in src/ and are not selected here.
  *
@@ -37,12 +37,11 @@ import type { Construct } from 'constructs';
 import { RELEASE_MANIFEST, SPEC_VERSION } from '../../src/release/pins.js';
 import { REGION, type EnvironmentConfig } from './config.js';
 import { RDS_CA_BUNDLE_FILE, suasLambdaCode } from './lambda-code.js';
+import { SmtpRelay } from './smtp-relay.js';
 
 export interface BackendStackProps extends StackProps {
   readonly config: EnvironmentConfig;
   readonly zone: route53.IHostedZone;
-  /** SES domain identity ARN (from the DNS stack). */
-  readonly sesIdentityArn: string;
 }
 
 const DB_NAME = 'suas';
@@ -130,10 +129,10 @@ export class BackendStack extends Stack {
 
     vpc.addGatewayEndpoint('S3Endpoint', { service: ec2.GatewayVpcEndpointAwsService.S3 });
     // One interface endpoint per AWS service the code calls (see README for the source files).
-    // SES only. Bedrock Runtime and execute-api are not endpoints while inference
-    // and chat push stay off.
+    // Lambda only, to invoke the SMTP relay (R11.2). Bedrock Runtime and execute-api are not
+    // endpoints while inference and chat push stay off.
     const interfaceEndpoints: ReadonlyArray<readonly [string, ec2.InterfaceVpcEndpointAwsService]> =
-      [['SesApiEndpoint', ec2.InterfaceVpcEndpointAwsService.EMAIL]];
+      [['LambdaEndpoint', ec2.InterfaceVpcEndpointAwsService.LAMBDA]];
     for (const [endpointId, service] of interfaceEndpoints) {
       vpc.addInterfaceEndpoint(endpointId, {
         service,
@@ -338,6 +337,13 @@ export class BackendStack extends Stack {
       });
     };
 
+    // R11.2: Gmail SMTP from outside the VPC. The API and worker hand it rendered messages.
+    const smtpRelay = new SmtpRelay(this, 'SmtpRelay', { code, logRetention: LOG_RETENTION });
+    const viaSmtpRelay: Env = {
+      SUAS_EMAIL_MODE: 'gmail_smtp',
+      SUAS_SMTP_RELAY_FUNCTION: smtpRelay.function.functionName,
+    };
+
     const webAdapterLayer = lambda.LayerVersion.fromLayerVersionArn(
       this,
       'WebAdapterLayer',
@@ -361,8 +367,7 @@ export class BackendStack extends Stack {
         // R11.3 (D-038): the v1 web client's origin, which calls this API with Bearer. A
         // non-empty allowlist makes the /app session cookie SameSite=None (src/http/routes/ui.ts).
         SUAS_CORS_ALLOWED_ORIGINS: `https://${config.webHostname}`,
-        SUAS_EMAIL_MODE: 'ses',
-        SUAS_EMAIL_FROM: config.emailFrom,
+        ...viaSmtpRelay,
         // R2.15 is not approved. The Bedrock adapter is not selected.
         SUAS_MODEL_INFERENCE_MODE: 'disabled',
         SUAS_OBJECT_STORAGE_MODE: 's3',
@@ -388,8 +393,7 @@ export class BackendStack extends Stack {
       env: {
         ...baseEnv,
         ...viaProxy,
-        SUAS_EMAIL_MODE: 'ses',
-        SUAS_EMAIL_FROM: config.emailFrom,
+        ...viaSmtpRelay,
         // The licence read job reads the images and deletes them when it settles a review.
         SUAS_OBJECT_STORAGE_MODE: 's3',
         SUAS_S3_BUCKET: assetsBucket.bucketName,
@@ -415,13 +419,9 @@ export class BackendStack extends Stack {
     });
 
     // ------------------------------------------------------- IAM (least privilege)
-    // SES: send from the one domain identity. No bedrock:InvokeModel: inference is disabled.
-    const sendEmail = new iam.PolicyStatement({
-      actions: ['ses:SendEmail'],
-      resources: [props.sesIdentityArn],
-    });
-    apiFunction.addToRolePolicy(sendEmail);
-    jobWorkerFunction.addToRolePolicy(sendEmail);
+    // Email: invoke the SMTP relay and nothing else. No bedrock:InvokeModel: inference is disabled.
+    smtpRelay.function.grantInvoke(apiFunction);
+    smtpRelay.function.grantInvoke(jobWorkerFunction);
     apiFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
@@ -568,5 +568,9 @@ export class BackendStack extends Stack {
       value: migrateFunction.functionName,
     });
     new CfnOutput(this, 'DatabaseSecretName', { value: dbSecret.secretName });
+    new CfnOutput(this, 'SmtpCredentialsSecretName', {
+      description: 'Put the Gmail address and app password here by hand (see infra/README.md).',
+      value: smtpRelay.secret.secretName,
+    });
   }
 }

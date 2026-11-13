@@ -9,15 +9,16 @@
  *   statuses must not leak into product contracts)
  * - SUAS-specs ARCHITECTURE.md §11 (`EmailPort`, `SmsPort`)
  * - SUAS-specs ENVIRONMENT.md §3 (`SUAS_EMAIL_MODE` adds D-004 `resend`;
- *   `SUAS_SMS_MODE` remains `disabled|fake|sink`.)
+ *   `SUAS_SMS_MODE` remains `disabled|fake|sink`.) suas-specs #75 R11.2 (proposal,
+ *   not released) adds `gmail_smtp` for v1 STAGING.
  *
  * IN_APP is internal and always available: it writes to SUAS's own store rather
  * than contacting a provider, so no vendor decision gates it.
  */
 
 import type { CommunicationMode, SuasConfig } from '../config/index.js';
+import { createGmailSmtpEmailChannel, type GmailSmtpEmailLogRecord } from './gmail-smtp-email.js';
 import { createResendEmailChannel, type ResendEmailLogRecord } from './resend-email.js';
-import { createSesEmailChannel, type SesEmailLogRecord } from './ses-email.js';
 
 export const NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'IN_APP'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
@@ -92,14 +93,18 @@ export interface SendAcknowledgement {
   /** Opaque provider reference when one exists. */
   readonly providerReference?: string;
   readonly failureReason?: string;
+  /**
+   * `false` when a retry cannot help or could send twice (a permanent refusal, an
+   * ambiguous acknowledgement): the send settles UNDELIVERABLE now. Absent means retryable.
+   */
+  readonly retryable?: boolean;
 }
 
 /**
- * Runtime mode on a port. `resend` and `ses` are adapter identities. `resend`
- * is not a released `SUAS_EMAIL_MODE` value (ENVIRONMENT.md §3); `ses` is the
- * v1 plan's replacement (V1_PROJECT_PLAN.md §4.1).
+ * Runtime mode on a port. `resend` and `gmail_smtp` are adapter identities. `resend`
+ * is D-004's provider; `gmail_smtp` replaces it on v1 STAGING (suas-specs #75 R11.2).
  */
-export type ChannelRuntimeMode = CommunicationMode | 'internal' | 'resend' | 'ses';
+export type ChannelRuntimeMode = CommunicationMode | 'internal' | 'resend' | 'gmail_smtp';
 
 export interface NotificationChannelPort {
   readonly channel: NotificationChannel;
@@ -169,7 +174,7 @@ export class InternalChannel implements NotificationChannelPort {
 }
 
 /** Content-free email outcome log (implementation, accepted, outcome); NOTIFICATIONS.md §5, §10. */
-function logEmailSend(record: ResendEmailLogRecord | SesEmailLogRecord): void {
+function logEmailSend(record: ResendEmailLogRecord | GmailSmtpEmailLogRecord): void {
   console.log(JSON.stringify({ msg: 'email_send', ...record }));
 }
 
@@ -195,10 +200,10 @@ export class FailingChannel implements NotificationChannelPort {
  * port at all, so the caller reports the channel unavailable instead of faking a
  * send. IN_APP is internal and always present.
  *
- * D-004 selects Resend as the sole external EMAIL provider. Fake and sink stay
- * recording-only; `resend` and `ses` construct their adapters with validated
- * configuration. SES takes its region from `config.aws` and its credentials from
- * the AWS default provider chain.
+ * D-004 selects Resend as the external EMAIL provider; R11.2 (proposal) replaces it
+ * with `gmail_smtp` on v1 STAGING. Fake and sink stay recording-only; `resend` and
+ * `gmail_smtp` construct their adapters with validated configuration. `gmail_smtp`
+ * sends through the relay function when one is configured, else directly.
  */
 export function createChannelRegistry(
   config: SuasConfig,
@@ -214,12 +219,14 @@ export function createChannelRegistry(
         logger: logEmailSend,
       }),
     );
-  } else if (config.notifications.email === 'ses') {
+  } else if (config.notifications.email === 'gmail_smtp') {
     registry.set(
       'EMAIL',
-      createSesEmailChannel({
+      createGmailSmtpEmailChannel({
+        user: config.notifications.smtp.user,
+        appPassword: config.notifications.smtp.appPassword,
+        relayFunction: config.notifications.smtp.relayFunction,
         region: config.aws.region,
-        fromAddress: config.notifications.emailFrom,
         logger: logEmailSend,
       }),
     );

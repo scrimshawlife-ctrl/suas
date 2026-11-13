@@ -55,7 +55,6 @@
     "@aws-sdk/client-lambda": "^3.1162.0",
     "@aws-sdk/client-s3": "^3.1162.0",
     "@aws-sdk/client-secrets-manager": "^3.1162.0",
-    "@aws-sdk/client-sesv2": "^3.1162.0",
     "@zxing/library": "0.21.3",
     "fastify": "^5.2.1",
     "jpeg-js": "^0.4.4",

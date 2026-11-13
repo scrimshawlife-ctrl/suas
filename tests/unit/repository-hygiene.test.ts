@@ -61,6 +61,8 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
     expect(example).toMatch(/^SUAS_SESSION_SECRET=\s*$/m);
     expect(example).toMatch(/^RESEND_API_KEY=\s*$/m);
     expect(example).toMatch(/^SUAS_EMAIL_FROM=\s*$/m);
+    expect(example).toMatch(/^SUAS_SMTP_USER=\s*$/m);
+    expect(example).toMatch(/^SUAS_SMTP_APP_PASSWORD=\s*$/m);
   });
 
   it('does not track a .env file or key material', () => {

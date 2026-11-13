@@ -28,16 +28,15 @@ export {
   type ResendSendOutcome,
 } from './resend-email.js';
 export {
-  createSesEmailChannel,
-  SES_IMPLEMENTATION,
-  SesEmailChannel,
-  SesEmailMisconfiguredError,
-  type SesClientLike,
-  type SesEmailChannelOptions,
-  type SesEmailLogRecord,
-  type SesEmailLogger,
-  type SesSendOutcome,
-} from './ses-email.js';
+  createGmailSmtpEmailChannel,
+  GMAIL_SMTP_FAILURE_REASONS,
+  GMAIL_SMTP_IMPLEMENTATION,
+  GmailSmtpEmailChannel,
+  GmailSmtpEmailMisconfiguredError,
+  type GmailSmtpEmailChannelOptions,
+  type GmailSmtpEmailLogRecord,
+  type GmailSmtpEmailLogger,
+} from './gmail-smtp-email.js';
 export {
   EMAIL_TEMPLATE_CATALOG_VERSION,
   EMAIL_TEMPLATE_KEYS,

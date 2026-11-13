@@ -46,13 +46,17 @@ describe('network', () => {
     const endpoints = ofType(s.backend, 'AWS::EC2::VPCEndpoint').map(([, r]) => r.Properties);
     const byService = Object.fromEntries(
       endpoints.map((p) => [
-        JSON.stringify(p?.ServiceName).replace(/.*(bedrock-runtime|email|execute-api|s3).*/, '$1'),
+        JSON.stringify(p?.ServiceName).replace(
+          /.*(bedrock-runtime|email|execute-api|lambda|s3).*/,
+          '$1',
+        ),
         p,
       ]),
     );
-    expect(Object.keys(byService).sort()).toEqual(['email', 's3']);
+    // Lambda, to invoke the SMTP relay (R11.2). No SES endpoint.
+    expect(Object.keys(byService).sort()).toEqual(['lambda', 's3']);
     expect(byService.s3?.VpcEndpointType).toBe('Gateway');
-    for (const name of ['email']) {
+    for (const name of ['lambda']) {
       expect(byService[name]?.VpcEndpointType).toBe('Interface');
       expect(byService[name]?.PrivateDnsEnabled).toBe(true);
     }
@@ -237,7 +241,8 @@ describe('functions', () => {
       expect(result.ok ? [] : result.issues, name).toEqual([]);
       if (result.ok && fn.Properties?.Handler === 'run.sh') {
         expect(result.config.environment).toBe('STAGING');
-        expect(result.config.notifications.email).toBe('ses');
+        expect(result.config.notifications.email).toBe('gmail_smtp');
+        expect(result.config.notifications.smtp.relayFunction).toBeDefined();
         expect(result.config.modelInference.mode).toBe('disabled');
         expect(result.config.modelInference.bedrockModelId).toBeUndefined();
         expect(result.config.idVerification.mode).toBe('disabled');
@@ -329,25 +334,89 @@ describe('IAM', () => {
     }
   });
 
-  it('never uses a wildcard resource for SES, and does not grant Bedrock', () => {
-    const sensitive = statements(s.backend).filter((st) =>
-      [st.Action].flat().some((a) => /^(bedrock|ses):/.test(a)),
-    );
-    expect(sensitive.length).toBeGreaterThanOrEqual(1);
+  it('grants neither SES nor Bedrock', () => {
     expect(
-      statements(s.backend).some((st) => [st.Action].flat().some((a) => a.startsWith('bedrock:'))),
+      statements(s.backend).some((st) => [st.Action].flat().some((a) => /^(bedrock|ses):/.test(a))),
     ).toBe(false);
-    for (const st of sensitive) {
-      for (const resource of [st.Resource].flat()) {
-        expect(resource).not.toBe('*');
-        expect(JSON.stringify(resource)).not.toMatch(/^"\*"$/);
+  });
+});
+
+describe('SMTP relay (R11.2)', () => {
+  type Policy = { Roles: Array<{ Ref: string }>; Statement: Array<Record<string, any>> };
+  const policies = (): Policy[] =>
+    ofType(s.backend, 'AWS::IAM::Policy').map(([, p]) => ({
+      Roles: p.Properties?.Roles,
+      Statement: p.Properties?.PolicyDocument.Statement,
+    }));
+  const relay = (): [string, Resource] => {
+    const found = ofType(s.backend, 'AWS::Lambda::Function').find(
+      ([, r]) => r.Properties?.Handler === 'smtp-relay.handler',
+    );
+    if (found === undefined) throw new Error('no relay function');
+    return found;
+  };
+  const roleOf = (handler: string): string => {
+    const fn = ofType(s.backend, 'AWS::Lambda::Function').find(
+      ([, r]) => r.Properties?.Handler === handler,
+    );
+    return String(fn?.[1].Properties?.Role['Fn::GetAtt'][0]);
+  };
+
+  it('runs outside the VPC, with no database setting and only its secret id', () => {
+    const [, fn] = relay();
+    expect(fn.Properties?.VpcConfig).toBeUndefined();
+    expect(Object.keys(fn.Properties?.Environment.Variables)).toEqual(['SUAS_SMTP_SECRET_ID']);
+    expect(JSON.stringify(fn.Properties?.Environment.Variables)).toContain('SmtpRelayCredentials');
+    expect(JSON.stringify(fn)).not.toMatch(/DATABASE_URL|ProxySg|DatabaseSg|LambdaSg/);
+  });
+
+  it('lets only the relay role read its secret, and the relay role nothing else', () => {
+    const relayRole = roleOf('smtp-relay.handler');
+    const reads = policies().filter((p) =>
+      p.Statement.some((st) => JSON.stringify(st.Resource).includes('SmtpRelayCredentials')),
+    );
+    expect(reads.map((p) => p.Roles.map((r) => r.Ref))).toEqual([[relayRole]]);
+    const relayPolicies = policies().filter((p) => p.Roles.some((r) => r.Ref === relayRole));
+    expect(relayPolicies).toHaveLength(1);
+    for (const st of relayPolicies[0]?.Statement ?? []) {
+      const actions = [st.Action].flat() as string[];
+      expect(actions.every((a) => /^(secretsmanager|logs):/.test(a))).toBe(true);
+      if (actions.some((a) => a.startsWith('secretsmanager:'))) {
+        expect(JSON.stringify(st.Resource)).toContain('SmtpRelayCredentials');
+        expect(st.Resource).not.toBe('*');
       }
     }
   });
 
-  it('scopes SES to the domain identity', () => {
-    const ses = statements(s.backend).find((st) => [st.Action].flat().includes('ses:SendEmail'));
-    expect(JSON.stringify(ses?.Resource)).toContain('identity/suasqrf.com');
+  it('lets the API and job worker invoke only the relay, and the relay invoke nothing', () => {
+    const invokesRelay = (p: Policy): boolean =>
+      p.Statement.some(
+        (st) =>
+          [st.Action].flat().includes('lambda:InvokeFunction') &&
+          JSON.stringify(st.Resource).includes('SmtpRelayFunction'),
+      );
+    const invokers = policies().filter(invokesRelay);
+    expect(invokers.flatMap((p) => p.Roles.map((r) => r.Ref)).sort()).toEqual(
+      [roleOf('run.sh'), roleOf('job-worker.handler')].sort(),
+    );
+    // Those roles invoke nothing but the relay (the scheduler's own role invokes the worker).
+    for (const policy of invokers) {
+      for (const st of policy.Statement.filter((x) =>
+        [x.Action].flat().includes('lambda:InvokeFunction'),
+      )) {
+        for (const resource of [st.Resource].flat()) {
+          expect(JSON.stringify(resource)).toContain('SmtpRelayFunction');
+        }
+      }
+    }
+  });
+
+  it('keeps the app password out of every function environment', () => {
+    for (const [, fn] of ofType(s.backend, 'AWS::Lambda::Function')) {
+      const variables = (fn.Properties?.Environment?.Variables ?? {}) as Record<string, unknown>;
+      expect(variables).not.toHaveProperty('SUAS_SMTP_APP_PASSWORD');
+      expect(variables).not.toHaveProperty('SUAS_EMAIL_FROM');
+    }
   });
 });
 
@@ -478,13 +547,11 @@ describe('DNS and email', () => {
       Properties: { Name: 'suasqrf.com.' },
       DeletionPolicy: 'Retain',
     });
-    const records = ofType(s.dns, 'AWS::Route53::RecordSet').map(([, r]) => r.Properties);
-    const dkim = records.filter((r) => JSON.stringify(r?.Name).includes('DkimDNSTokenName'));
-    expect(dkim).toHaveLength(3);
-    for (const record of dkim) expect(record?.Type).toBe('CNAME');
-    // The rest are the mail records carried over from Cloudflare, all on subdomains.
-    const others = records.filter((r) => !dkim.includes(r)).map((r) => `${r?.Type} ${r?.Name}`);
-    expect(others.sort()).toEqual([
+    // Only the mail records carried over from Cloudflare, all on subdomains.
+    const records = ofType(s.dns, 'AWS::Route53::RecordSet').map(
+      ([, r]) => `${r.Properties?.Type} ${r.Properties?.Name}`,
+    );
+    expect(records.sort()).toEqual([
       'MX send.suasqrf.com.',
       'TXT resend._domainkey.suasqrf.com.',
       'TXT send.suasqrf.com.',
@@ -492,8 +559,8 @@ describe('DNS and email', () => {
     s.dns.hasOutput('NameServers', Match.anyValue());
   });
 
-  it('has a DKIM-signed SES domain identity', () => {
-    s.dns.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'suasqrf.com' });
+  it('has no SES identity (R11.2 sends through Gmail)', () => {
+    s.dns.resourceCountIs('AWS::SES::EmailIdentity', 0);
   });
 
   it('points only the staging hostnames at AWS', () => {
