@@ -11,7 +11,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { authenticate } from '../authenticate.js';
-import { consumeRateLimit, enforceRateLimit } from '../../auth/index.js';
+import { enforceRateLimit } from '../../auth/index.js';
 import {
   INVITE_LIMIT_PER_VETERAN,
   INVITE_LIMIT_PER_ADDRESS,
@@ -36,11 +36,7 @@ import { withTransaction } from '../../db/index.js';
 import { appendDomainEvent } from '../../events/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import type { DurableJobQueuePort } from '../../jobs/index.js';
-import {
-  buildNotificationSendPayload,
-  enqueueNotification,
-  settleUndeliverable,
-} from '../../notifications/index.js';
+import { buildNotificationSendPayload, enqueueNotification } from '../../notifications/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 
@@ -82,8 +78,8 @@ async function deliverInvite(
     purpose: 'Send the Trusted Contact invite the Veteran asked for',
     systemBasis: 'SYSTEM_INTERNAL_PROCESSING',
   } as const;
-  // No job yet: a fresh send first passes the recipient cap below.
-  const { notification, deduplicated } = await enqueueNotification(deps.pool, {
+  // Admission and any suppression commit with the notification before a replay can see it.
+  const { notification } = await enqueueNotification(deps.pool, {
     tenantId: input.tenantId,
     destination,
     reason: TRUSTED_CONTACT_INVITE_REASON,
@@ -94,22 +90,12 @@ async function deliverInvite(
     subjectId: input.trustedContactId,
     disclosure,
     correlationId: input.correlationId,
+    recipientLimit: {
+      policy: INVITE_EMAIL_CAP_PER_RECIPIENT,
+      subject: `${input.tenantId}:${destination}`,
+      failureReason: INVITE_EMAIL_SUPPRESSED,
+    },
   });
-  if (!deduplicated) {
-    const recipient = await consumeRateLimit(
-      deps.pool,
-      INVITE_EMAIL_CAP_PER_RECIPIENT,
-      `${input.tenantId}:${destination}`,
-    );
-    if (!recipient.allowed) {
-      await settleUndeliverable(deps.pool, {
-        tenantId: input.tenantId,
-        notificationId: notification.notificationId,
-        failureReason: INVITE_EMAIL_SUPPRESSED,
-      });
-      return;
-    }
-  }
   // Fresh, or a replay whose send job may never have been enqueued: the job is keyed by the
   // Notification, so enqueuing again is safe. Settled or suppressed rows need nothing.
   if (
