@@ -3,21 +3,8 @@ import { paths } from '../../app/paths';
 
 export type Notification = Schemas['Notification'];
 
-/** Plain words for notification reason codes. Unknown codes get a neutral line. */
-const REASON_TEXT: Record<string, string> = {
-  service_request_update: 'A request you can see was updated',
-  followup_due: 'A follow-up is due',
-  'qrf.responder_notified': 'Someone was told about a request',
-  trusted_contact_alert: 'A trusted contact alert',
-  service_request_expired: 'Your request expired 72 hours after you sent it',
-  service_request_released: 'The helper released your request. It is back on the open list',
-};
-
-const FALLBACK_TEXT = 'You have a new update';
-
-export function alertText(reason: string): string {
-  return REASON_TEXT[reason] ?? FALLBACK_TEXT;
-}
+/** The Alerts card words reasons with the same map as the Notifications page. */
+export { describeReason as alertText } from '../support/notification-reasons';
 
 /** Sign-in codes and cancelled messages are not alerts. */
 function isAlert(notification: Notification): boolean {

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { describeReason } from '../support/notification-reasons';
 import { alertSubjectPath, alertText, type Notification } from './alerts';
 
 function alert(overrides: Partial<Notification> = {}): Notification {
   return {
     notification_id: '00000000-0000-4000-8000-000000000001',
-    reason: 'service_request_update',
+    reason: 'trusted_contact_alert',
     channel: 'IN_APP',
     delivery_status: 'SENT',
     attempt_count: 1,
@@ -42,10 +43,11 @@ describe('alertSubjectPath', () => {
 });
 
 describe('alertText', () => {
-  it('words the expiry and release notices', () => {
+  it('words the expiry and release notices as the Notifications page does', () => {
     // True whether or not someone accepted and then released it: release keeps the clock (R8.4).
+    expect(alertText('service_request_expired')).toBe(describeReason('service_request_expired'));
     expect(alertText('service_request_expired')).toBe(
-      'Your request expired 72 hours after you sent it',
+      'Your request expired 72 hours after you sent it.',
     );
     expect(alertText('service_request_expired')).not.toMatch(/No one accepted/);
     expect(alertText('service_request_released')).toMatch(/^The helper released your request\./);

@@ -1,15 +1,15 @@
 import type { NotificationItem } from './api';
 
 /**
- * Plain sentence for each `reason` in src/notifications/templates.ts. The two `auth.*`
- * sign-in code reasons are not listed because the screen hides them.
+ * Plain sentence for each `reason` the server sends: src/notifications/templates.ts and
+ * src/coordination/request-notices.ts. The one map for both the Notifications page and the
+ * Serve Alerts card. The `auth.*` sign-in codes are not listed because both screens hide them.
  */
 export const REASON_TEXT: Readonly<Record<string, string>> = {
   trusted_contact_alert:
     'Someone who named you as a trusted contact asked SUAS to send you this notice. This notice does not describe their situation.',
-  followup_due: 'A follow-up is due.',
-  'qrf.responder_notified': 'You were told about a request that needs help.',
-  service_request_update: 'A request you can see was updated.',
+  trusted_contact_invited:
+    'A Veteran named you as a trusted contact. Open Invitations to see who and to accept.',
   service_request_expired: 'Your request expired 72 hours after you sent it.',
   service_request_released: 'The helper released your request. It is back on the open list.',
 };
