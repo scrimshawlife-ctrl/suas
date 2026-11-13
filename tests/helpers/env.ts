@@ -31,9 +31,16 @@ export function validEnv(overrides: ConfigSource = {}): ConfigSource {
     SUAS_SAFETY_COPY_MODE: 'placeholder_test_only',
     SUAS_SENSITIVE_AGGREGATE_REPORTING: 'disabled',
     SUAS_SESSION_SECRET: 'test-session-secret-please-do-not-use-outside-tests',
+    SUAS_FINGERPRINT_KEY: TEST_FINGERPRINT_KEY,
+    SUAS_FINGERPRINT_KEY_ID: TEST_FINGERPRINT_KEY_ID,
     ...overrides,
   };
 }
+
+/** Synthetic fingerprint key (base64) and key id used by the suite. Never a real secret. */
+export const TEST_FINGERPRINT_KEY =
+  'dGVzdC1maW5nZXJwcmludC1rZXktcGxlYXNlLWRvLW5vdC11c2Utb3V0c2lkZS10ZXN0cw==';
+export const TEST_FINGERPRINT_KEY_ID = 'test-k1';
 
 /** Synthetic session secret used by the suite. Never a real secret. */
 export const TEST_SESSION_SECRET = 'test-session-secret-please-do-not-use-outside-tests';

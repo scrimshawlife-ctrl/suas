@@ -24,6 +24,8 @@ export function resourceKeys<Filters = unknown>(resource: string): ResourceKeys<
 export const queryKeys = {
   /** The signed-in person: GET /veterans/me. */
   me: ['me'] as const,
+  /** The person's licence review: GET /veterans/me/verification/licence (R10.1 proposal). */
+  licence: ['licence'] as const,
   serviceRequests: resourceKeys('service-requests'),
   /** The live thread's messages; a named (closed) thread adds its id. */
   chatMessages: (serviceRequestId: string, threadId?: string) =>
@@ -36,4 +38,6 @@ export const queryKeys = {
   resources: resourceKeys('resources'),
   adminDrafts: resourceKeys('admin-resource-drafts'),
   adminConsentTemplates: resourceKeys('admin-consent-templates'),
+  /** Admin licence reviews (R10.1 proposal); detail also keys its images. */
+  adminLicenceReviews: resourceKeys('admin-licence-reviews'),
 };

@@ -62,6 +62,18 @@ export function resolveForValidation(
     return `${String((node['Fn::GetAtt'] as string[])[0]).toLowerCase()}.example.invalid`;
   if ('Fn::Join' in node) {
     const [sep, parts] = node['Fn::Join'] as [string, Json[]];
+    const secretRef = parts[1] as Record<string, Json> | undefined;
+    if (
+      parts.length === 3 &&
+      parts[0] === '{{resolve:secretsmanager:' &&
+      parts[2] === ':SecretString:::}}' &&
+      secretRef !== undefined &&
+      'Ref' in secretRef
+    ) {
+      // A whole generated secret: 64 letters and digits, distinct per secret, like the real one.
+      const seed = String(secretRef.Ref).replace(/[^A-Za-z0-9]/g, '');
+      return seed.repeat(Math.ceil(64 / seed.length)).slice(0, 64);
+    }
     return parts.map((part) => resolveForValidation(part, resources)).join(sep);
   }
   throw new Error(`Unhandled intrinsic: ${JSON.stringify(value)}`);

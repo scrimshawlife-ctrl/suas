@@ -1,0 +1,107 @@
+{
+  "artifact": "D035_VA_CONFIRMATION_PROJECTION",
+  "contract": "D035_VA_CONFIRMATION_ADAPTER.md §7",
+  "projection_id": "VA_CONFIRMATION_V1_REQUIRED_ONLY",
+  "projection_version": 1,
+  "purpose": "VETERAN_STATUS_VERIFICATION",
+  "provider_contract": "VA Veteran Confirmation API v1, POST /status (OpenAPI read 2026-11-10)",
+  "environments": {
+    "LOCAL": "fixture, or sandbox with an LLC-owned sandbox key",
+    "TEST": "fixture only",
+    "STAGING": "sandbox only, synthetic VA test identities only",
+    "PRODUCTION": "disabled; no request may be sent"
+  },
+  "allowed_field_names": [
+    "firstName",
+    "lastName",
+    "birthDate",
+    "streetAddressLine1",
+    "city",
+    "state",
+    "country",
+    "zipCode"
+  ],
+  "fields": {
+    "firstName": {
+      "required": true,
+      "source": "typed by the Veteran on the Verify form for this attempt; not read from the profile",
+      "normalization": "trim; curly apostrophe to straight apostrophe; nothing else rewritten",
+      "validation": "1-256 characters; VA name pattern ^[A-Za-z]+([-'/\\\\\\s][A-Za-z]+){0,9}$"
+    },
+    "lastName": {
+      "required": true,
+      "source": "typed by the Veteran on the Verify form for this attempt; not read from the profile",
+      "normalization": "trim; curly apostrophe to straight apostrophe; nothing else rewritten",
+      "validation": "1-256 characters; VA name pattern ^[A-Za-z]+([-'/\\\\\\s][A-Za-z]+){0,9}$"
+    },
+    "birthDate": {
+      "required": true,
+      "source": "typed by the Veteran on the Verify form (month, day, year) for this attempt",
+      "normalization": "ISO YYYY-MM-DD",
+      "validation": "a real calendar date strictly before today (UTC)"
+    },
+    "streetAddressLine1": {
+      "required": true,
+      "source": "typed by the Veteran on the Verify form: current address or where they get mail",
+      "normalization": "trim",
+      "validation": "1-256 characters; VA street pattern ^[a-zA-Z0-9\\s,'#.\\-/\\\\]*$"
+    },
+    "city": {
+      "required": true,
+      "source": "typed by the Veteran on the Verify form",
+      "normalization": "trim",
+      "validation": "1-256 characters; VA city pattern ^[a-zA-Z0-9\\s,'.\\-/\\\\]+$"
+    },
+    "state": {
+      "required": true,
+      "source": "chosen by the Veteran on the Verify form",
+      "normalization": "two-letter postal code from the web list: the 50 states, DC and five territories; no APO/FPO/DPO codes (contributor default, owner question in V1_MVP_PROPOSAL.md R9.1 details item 10)",
+      "validation": "1-256 characters; VA region pattern ^[a-zA-Z]+(?:[\\s-][a-zA-Z]+){0,9}$"
+    },
+    "country": {
+      "required": true,
+      "source": "fixed by SUAS; never typed",
+      "normalization": "always USA",
+      "validation": "must equal USA if the client sends it"
+    },
+    "zipCode": {
+      "required": true,
+      "source": "typed by the Veteran on the Verify form",
+      "normalization": "trim",
+      "validation": "VA zip pattern ^[A-Za-z0-9 -]{1,16}$"
+    }
+  },
+  "prohibited_fields": [
+    "SSN or any part of it",
+    "middleName",
+    "gender",
+    "mothersMaidenName",
+    "phone",
+    "streetAddressLine2",
+    "streetAddressLine3",
+    "birthPlaceCity",
+    "birthPlaceState",
+    "birthPlaceCountry",
+    "any field not in allowed_field_names (the request is refused, not forwarded)",
+    "any value enriched from Case, Check-In, Trusted Circle, clinical, benefits or provider data"
+  ],
+  "transience": "Held in server memory for one attempt only, then dropped. Never stored, logged, traced, put in a Domain Event, Audit Event payload, notification, idempotency record, error text, browser storage, URL or client cache. The browser holds the values in page memory only and clears them on VERIFIED.",
+  "derived_values_kept": {
+    "identity_hash": "HMAC-SHA256 under SUAS_FINGERPRINT_KEY, label suas/identity/v1, over identity_canonical_form; stored with identity_key_id on every attempt VA answered (VA_CONFIRMATION_FLOW.md §2.2)",
+    "idempotency_fingerprint": "HMAC-SHA256 under SUAS_FINGERPRINT_KEY over the projection and the caller id; stored with its key id; expires after 24 hours (VA_CONFIRMATION_FLOW.md §2.1)"
+  },
+  "retention": "Result rows: D-007, not decided; no duration invented. Projection values: none kept.",
+  "identity_canonical_form": {
+    "rule": "Name: first name followed directly by last name, as one string. Lowercase; Unicode NFKD; strip combining marks; fold letters NFKD keeps whole (ß→ss, æ→ae, œ→oe, ø→o, ł→l, đ→d, ð→d, þ→th, ı→i, ŋ→n); then remove every character outside a-z. Birth date as ISO YYYY-MM-DD. Join name|birth_date with the character |. The name is one string so that a name split differently between the first and last fields (\"Mary Jane\" + \"Smith\" or \"Mary\" + \"Jane Smith\") gives the same value.",
+    "examples": {
+      "Mary-Jane, Mary Jane, MaryJane": "maryjane",
+      "O'Brien, OBrien": "obrien",
+      "José, Jose": "jose",
+      "Straße, Strasse": "strasse",
+      "Østby, Ostby": "ostby",
+      "first Mary Jane, last Smith; or first Mary, last Jane Smith": "maryjanesmith",
+      "first Mary-Jane, last O'Brien, born 1950-02-03": "maryjaneobrien|1950-02-03"
+    }
+  },
+  "approval_record": "evidence/d035/va-confirmation-v1-required-only.approval.json (holds the approver, the time and this file's SHA-256; this file holds no approval fields)"
+}

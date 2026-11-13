@@ -1,9 +1,10 @@
 /**
  * The reusable authorization checks for requesting help.
  *
- * Plan citations: V1_PROJECT_PLAN.md §2.1 ("Every Veteran must pass ID scan +
- * selfie before requesting help"; "a signed-in person can only help others" until
- * then) and §4.3 F10.
+ * Plan citations: V1_PROJECT_PLAN.md §2.1 ("a signed-in person can only help others"
+ * until verified) and §4.3 F10. suas-specs #72 R9.1 replaces the ID scan + selfie: the
+ * gate opens on a VERIFIED VA Veteran Confirmation, manual review or D-016
+ * self-attestation, and a REVOKED row outranks all three.
  *
  * `requireVerifiedVeteran` guards every route that is the Veteran's own: requesting
  * help, Resources, Check-Ins, Trusted Contacts, Consent Grants. Routes where a
@@ -11,14 +12,14 @@
  * accepter) and the crisis screen must not call it. `requireCounty` guards routes
  * that match by county: requesting help and the helper list.
  *
- * Both read current state on every call (AUTH.md §5), so a revoked scan stops
+ * Both read current state on every call (AUTH.md §5), so a revoked standing stops
  * working at once. Both accept a pool or a transaction client.
  */
 
 import type { AuthContext } from '../authz/context.js';
 import type { Queryable } from '../db/transaction.js';
 import { CountyRequiredError } from '../coordination/open-requests.js';
-import { hasPassedIdScan } from './id-scan.js';
+import { hasConfirmedVeteranStatus } from './va-confirmation-store.js';
 import { findUserById } from './users.js';
 
 export class VeteranVerificationRequiredError extends Error {
@@ -26,14 +27,14 @@ export class VeteranVerificationRequiredError extends Error {
   readonly httpStatus = 403;
 
   constructor() {
-    super('Verify your ID with a scan and selfie before using this.');
+    super('Confirm your Veteran status before using this.');
     this.name = 'VeteranVerificationRequiredError';
   }
 }
 
-/** Deny unless the signed-in person has a passed ID scan + selfie check. */
+/** Deny unless the person's standing is VERIFIED (see `readVeteranConfirmation`). */
 export async function requireVerifiedVeteran(db: Queryable, context: AuthContext): Promise<void> {
-  if (!(await hasPassedIdScan(db, context.tenantId, context.userId))) {
+  if (!(await hasConfirmedVeteranStatus(db, context.tenantId, context.userId))) {
     throw new VeteranVerificationRequiredError();
   }
 }
