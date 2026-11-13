@@ -59,7 +59,7 @@ describe('EditRequestForm', () => {
     expect(screen.queryByLabelText(/Where are you going/)).not.toBeInTheDocument();
   });
 
-  it('sends only the changed fields, null for a cleared one, with an Idempotency-Key', async () => {
+  it('sends only the changed fields, null for a cleared one, the loaded status and an Idempotency-Key', async () => {
     open();
     await replaceText('Short summary', 'A ride at 9 am');
     await replaceText(/Where are you going/, '');
@@ -69,7 +69,11 @@ describe('EditRequestForm', () => {
     expect(editCalls()).toHaveLength(1);
     const [path, options] = editCalls()[0] ?? ['', { headers: {}, body: null }];
     expect(path).toBe(EDIT_PATH);
-    expect(options.body).toEqual({ summary: 'A ride at 9 am', destination: null });
+    expect(options.body).toEqual({
+      summary: 'A ride at 9 am',
+      destination: null,
+      expected_status: 'MATCHING',
+    });
     expect(options.headers['Idempotency-Key']).toBeTruthy();
   });
 
@@ -90,14 +94,17 @@ describe('EditRequestForm', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('says so on a 409 and stays open', async () => {
-    post.mockRejectedValue(new ApiError(409, 'ILLEGAL_TRANSITION', 'Accepted already.'));
+  it.each([
+    ['STALE_STATE', 'This request changed while you were editing'],
+    ['ILLEGAL_TRANSITION', 'This request can no longer be edited'],
+  ])('says the request moved on on a 409 %s and stays open', async (code, text) => {
+    post.mockRejectedValue(new ApiError(409, code, 'Accepted already.'));
     open();
     await replaceText('Short summary', 'Changed');
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This changed while you were looking',
-    );
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(text);
+    expect(alert).toHaveTextContent('Your changes were not saved.');
     expect(onDone).not.toHaveBeenCalled();
   });
 

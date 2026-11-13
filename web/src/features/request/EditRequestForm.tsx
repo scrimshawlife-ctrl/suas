@@ -19,6 +19,21 @@ import {
 
 const MEETING_PLACE_REJECTED = /meeting[_ ]place/i;
 
+/** The 409s an edit gets when the request moved on (accepted, closed) after the form loaded. */
+const MOVED_ON: Readonly<Record<string, string>> = {
+  STALE_STATE:
+    'This request changed while you were editing. Someone may have accepted it. Your changes were not saved.',
+  ILLEGAL_TRANSITION:
+    'This request can no longer be edited: someone accepted it or it closed. Your changes were not saved.',
+};
+
+function editErrorMessage(error: unknown): string {
+  if (isApiError(error) && error.status === 409 && Object.hasOwn(MOVED_ON, error.code)) {
+    return MOVED_ON[error.code]!;
+  }
+  return requestErrorMessage(error);
+}
+
 export interface EditRequestFormProps {
   request: ServiceRequestDetail;
   onDone: () => void;
@@ -51,14 +66,16 @@ export function EditRequestForm({ request, onDone }: EditRequestFormProps) {
       onDone();
       return;
     }
+    // The status the form was loaded with: the server refuses the edit (409) if it moved on.
+    const body = { ...changes, expected_status: request.status };
     // A retry of the same content reuses the key; changed content is a new action.
-    const payload = JSON.stringify(changes);
+    const payload = JSON.stringify(body);
     if (payload !== lastPayload.current) key.renew();
     lastPayload.current = payload;
 
     flight(() =>
       edit.mutateAsync(
-        { edit: changes, idempotencyKey: key.current() },
+        { edit: body, idempotencyKey: key.current() },
         {
           onSuccess: () => {
             key.renew();
@@ -93,7 +110,7 @@ export function EditRequestForm({ request, onDone }: EditRequestFormProps) {
         categoryLocked
         onChange={(patch) => setFields((current) => mergeFields(current, patch))}
       />
-      {edit.isError ? <InlineError>{requestErrorMessage(edit.error)}</InlineError> : null}
+      {edit.isError ? <InlineError>{editErrorMessage(edit.error)}</InlineError> : null}
       <div className="flex flex-wrap gap-3">
         <Button type="submit" size="form" disabled={edit.isPending}>
           {edit.isPending ? 'Saving…' : 'Save changes'}
