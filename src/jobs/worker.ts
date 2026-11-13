@@ -12,6 +12,11 @@ import {
   CHALLENGE_VERIFY_WINDOW_SECONDS,
   pruneRateLimits,
 } from '../auth/index.js';
+import {
+  INVITE_LIMIT_PER_VETERAN,
+  INVITE_LIMIT_PER_ADDRESS,
+  INVITE_EMAIL_CAP_PER_RECIPIENT,
+} from '../consent/invite-limits.js';
 import type { SuasConfig } from '../config/index.js';
 import { expireDueGrants } from '../consent/index.js';
 import { expireDueRequests } from '../coordination/expiry.js';
@@ -50,11 +55,14 @@ export interface JobWorkerOptions {
 
 const IDLE_POLL_MS = 2000;
 
-/** Counters older than the longest rate-limit window can no longer limit anything. */
-const RATE_LIMIT_RETENTION_SECONDS = Math.max(
-  CHALLENGE_ISSUE_WINDOW_SECONDS.value,
-  CHALLENGE_VERIFY_WINDOW_SECONDS.value,
-);
+// Unknown buckets are retained until their policy is registered here.
+const RATE_LIMIT_WINDOWS = [
+  { bucket: 'auth.challenge.issue', windowSeconds: CHALLENGE_ISSUE_WINDOW_SECONDS.value },
+  { bucket: 'auth.challenge.verify', windowSeconds: CHALLENGE_VERIFY_WINDOW_SECONDS.value },
+  INVITE_LIMIT_PER_VETERAN,
+  INVITE_LIMIT_PER_ADDRESS,
+  INVITE_EMAIL_CAP_PER_RECIPIENT,
+];
 
 function log(record: Record<string, unknown>): void {
   console.log(JSON.stringify(record));
@@ -164,7 +172,10 @@ const SWEEPS: readonly Sweep[] = [
   {
     name: 'rate_limit_prune',
     run: async (pool) => {
-      const pruned = await pruneRateLimits(pool, RATE_LIMIT_RETENTION_SECONDS);
+      let pruned = 0;
+      for (const policy of RATE_LIMIT_WINDOWS) {
+        pruned += await pruneRateLimits(pool, policy.windowSeconds, [policy.bucket]);
+      }
       if (pruned > 0) log({ msg: 'rate_limits_pruned', count: pruned });
     },
   },
