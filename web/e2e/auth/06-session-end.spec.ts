@@ -67,7 +67,14 @@ test('a person suspended mid-session is sent to sign in on their next read and c
     db.query(`UPDATE users SET status = 'SUSPENDED' WHERE lower(email) = lower($1)`, [email]),
   );
 
-  const refused = nextResponse(page, 'GET', /\/api\/v0\//);
+  // The first read sent after the suspension: one already in flight may still answer 200.
+  const suspendedAt = Date.now();
+  const refused = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'GET' &&
+      /\/api\/v0\//.test(r.url()) &&
+      r.request().timing().startTime >= suspendedAt,
+  );
   await page.getByRole('link', { name: 'Serve' }).first().click();
   const response = await refused;
   expect(response.status()).toBe(401);
