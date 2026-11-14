@@ -33,23 +33,26 @@ const isTransportOutage = (result: VeteranConfirmationResult | undefined): boole
  * May this request call VA now? `closed`: yes. `probe`: yes, as the one probe after the
  * cooldown. `open`: no.
  */
-export async function acquireVaCall(db: Queryable): Promise<'closed' | 'probe' | 'open'> {
-  const probe = await db.query(
+export type VaCallAdmission = { kind: 'closed' | 'open' } | { kind: 'probe'; token: string };
+
+export async function acquireVaCall(db: Queryable): Promise<VaCallAdmission> {
+  const probe = await db.query<{ token: string }>(
     `UPDATE va_outage_cooldown
         SET probe_started_at = now(), updated_at = now()
       WHERE cooldown_id = $1 AND opened_at IS NOT NULL
         AND opened_at <= now() - make_interval(secs => $2)
         AND (probe_started_at IS NULL OR probe_started_at < now() - make_interval(secs => $3))
-      RETURNING 1`,
+      RETURNING probe_started_at::text AS token`,
     [ID, VA_OUTAGE_COOLDOWN_SECONDS, PROBE_STALE_SECONDS],
   );
-  if ((probe.rowCount ?? 0) > 0) return 'probe';
+  const token = probe.rows[0]?.token;
+  if (token !== undefined) return { kind: 'probe', token };
   const state = await db.query<{ opened_at: Date | null }>(
     `SELECT opened_at FROM va_outage_cooldown WHERE cooldown_id = $1`,
     [ID],
   );
   const openedAt = state.rows[0]?.opened_at;
-  return openedAt === undefined || openedAt === null ? 'closed' : 'open';
+  return { kind: openedAt === undefined || openedAt === null ? 'closed' : 'open' };
 }
 
 /**
@@ -60,11 +63,14 @@ export async function acquireVaCall(db: Queryable): Promise<'closed' | 'probe' |
 export async function recordVaCallOutcome(
   db: Queryable,
   result: VeteranConfirmationResult | undefined,
-  probe: boolean,
+  admission: VaCallAdmission,
 ): Promise<void> {
+  if (admission.kind === 'open') return;
+  const probe = admission.kind === 'probe';
   const answered = result?.status === 'VERIFIED' || result?.status === 'NOT_CONFIRMED';
   const outage = isTransportOutage(result);
   if (!answered && !outage && !probe) return;
+  // Only the current probe may settle an open cooldown. Older calls cannot release its lease.
   await db.query(
     `UPDATE va_outage_cooldown
         SET consecutive_failures = CASE WHEN $2 THEN consecutive_failures + 1
@@ -74,7 +80,16 @@ export async function recordVaCallOutcome(
               WHEN $3 THEN NULL
               ELSE opened_at END,
             probe_started_at = NULL, updated_at = now()
-      WHERE cooldown_id = $1`,
-    [ID, outage, answered, probe, VA_OUTAGE_THRESHOLD],
+      WHERE cooldown_id = $1
+        AND (($4 AND probe_started_at::text = $6)
+          OR (NOT $4 AND opened_at IS NULL))`,
+    [
+      ID,
+      outage,
+      answered,
+      probe,
+      VA_OUTAGE_THRESHOLD,
+      admission.kind === 'probe' ? admission.token : null,
+    ],
   );
 }

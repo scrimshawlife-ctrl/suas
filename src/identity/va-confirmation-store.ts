@@ -569,7 +569,7 @@ export async function confirmVeteranStatus(
   input: VaAttemptInput,
 ): Promise<VeteranConfirmationStanding> {
   const admission = await acquireVaCall(pool);
-  if (admission === 'open') return VA_COOLING_DOWN;
+  if (admission.kind === 'open') return VA_COOLING_DOWN;
   let result: VeteranConfirmationResult | undefined;
   try {
     const start = await beginVaAttempt(pool, keyring, input);
@@ -581,7 +581,7 @@ export async function confirmVeteranStatus(
     }
     return await settleVaAttempt(pool, keyring, input, start.verificationId, result);
   } finally {
-    await recordVaCallOutcome(pool, result, admission === 'probe');
+    await recordVaCallOutcome(pool, result, admission);
   }
 }
 

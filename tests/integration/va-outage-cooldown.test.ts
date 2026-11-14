@@ -18,6 +18,8 @@ import {
   type VeteranConfirmationResult,
 } from '../../src/identity/index.js';
 import {
+  acquireVaCall,
+  recordVaCallOutcome,
   VA_OUTAGE_COOLDOWN_SECONDS,
   VA_OUTAGE_THRESHOLD,
 } from '../../src/identity/va-outage-cooldown.js';
@@ -310,4 +312,54 @@ describe('VA outage cooldown (AT09)', () => {
     expect(await attempts()).toBe(4 * VA_CONFIRMATION_MAX_ATTEMPTS);
     expect(calls).toBe(await attempts());
   });
+});
+
+describe('VA recovery probe ownership', () => {
+  const state = async () =>
+    (
+      await app.pool!.query<{
+        consecutive_failures: number;
+        opened_at: string | null;
+        probe_started_at: string | null;
+      }>(
+        'SELECT consecutive_failures, opened_at::text, probe_started_at::text FROM va_outage_cooldown',
+      )
+    ).rows[0];
+
+  it.each([OUTAGE, NOT_FOUND])(
+    'ignores a late ordinary call while a recovery probe owns the lease (%j)',
+    async (lateResult) => {
+      const ordinary = await acquireVaCall(app.pool!);
+      expect(ordinary.kind).toBe('closed');
+      await pause();
+      await expire();
+      const probe = await acquireVaCall(app.pool!);
+      expect(probe.kind).toBe('probe');
+      const before = await state();
+      await recordVaCallOutcome(app.pool!, lateResult, ordinary);
+      expect(await state()).toEqual(before);
+      expect((await acquireVaCall(app.pool!)).kind).toBe('open');
+      await recordVaCallOutcome(app.pool!, NOT_FOUND, probe);
+      expect((await acquireVaCall(app.pool!)).kind).toBe('closed');
+    },
+  );
+
+  it.each([OUTAGE, NOT_FOUND, undefined])(
+    'ignores a replaced probe outcome (%j)',
+    async (lateResult) => {
+      await pause();
+      await expire();
+      const stale = await acquireVaCall(app.pool!);
+      expect(stale.kind).toBe('probe');
+      await cooldown("probe_started_at = now() - interval '121 seconds'");
+      const current = await acquireVaCall(app.pool!);
+      expect(current.kind).toBe('probe');
+      const before = await state();
+      await recordVaCallOutcome(app.pool!, lateResult, stale);
+      expect(await state()).toEqual(before);
+      expect((await acquireVaCall(app.pool!)).kind).toBe('open');
+      await recordVaCallOutcome(app.pool!, NOT_FOUND, current);
+      expect((await acquireVaCall(app.pool!)).kind).toBe('closed');
+    },
+  );
 });
