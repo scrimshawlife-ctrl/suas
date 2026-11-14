@@ -6,7 +6,7 @@ import { AlertCircleIcon, CheckIcon } from '../../components/icons';
 import type { VerifyView } from '../public/verify-status';
 import { LICENCE_APPROVED_TEXT } from '../licence/licence-status';
 
-// Wording: VA_CONFIRMATION_FLOW.md §4 (suas-specs #72, contributor proposal); the
+// Wording: VA_CONFIRMATION_FLOW.md §4 (suas-specs #72, released in 0.10.0); the
 // self-attestation step is DECISION_PENDING owner copy, as no released D-016 wording exists.
 
 function Heading({ children }: { children: ReactNode }) {
@@ -92,7 +92,7 @@ export function SelfAttestButton({ onChoose }: { onChoose: () => void }) {
   );
 }
 
-/** The text beside the licence choice (SCRY_LICENCE_FALLBACK.md L1.2, suas-specs #73 proposal). */
+/** The text beside the licence choice (SCRY_LICENCE_FALLBACK.md L1.2, suas-specs #73, released in 0.10.0). */
 export const LICENCE_OFFER_TEXT =
   'Some states print "Veteran" on the driver licence or state ID. You can send photos of yours, and a SUAS admin will look at them.';
 

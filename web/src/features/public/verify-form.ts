@@ -1,6 +1,6 @@
 import type { components } from '../../api/schema';
 
-/** The VA_CONFIRMATION_V1_REQUIRED_ONLY body (suas-specs #72 R9.1, proposal). */
+/** The VA_CONFIRMATION_V1_REQUIRED_ONLY body (suas-specs #72 R9.1, released in 0.10.0). */
 export type VaConfirmBody = components['schemas']['VaConfirmationRequest'];
 
 /**

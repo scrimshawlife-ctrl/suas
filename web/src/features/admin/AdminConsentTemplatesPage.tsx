@@ -136,7 +136,7 @@ function TemplateItem({
 }
 
 /**
- * Consent templates (R9.3, contributor proposal, specs #72; CONSENT.md §6). A SUAS admin with
+ * Consent templates (R9.3, specs #72, released in 0.10.0; CONSENT.md §6). A SUAS admin with
  * MFA writes a version, then publishes it; the key's earlier version is replaced for new
  * consents, and both steps are audited.
  */

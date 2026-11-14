@@ -27,7 +27,7 @@ function renderVerify(from?: string) {
   return { queryClient, router };
 }
 
-// The standing is read from GET /veterans/me (suas-specs #72 R9.1, proposal).
+// The standing is read from GET /veterans/me (suas-specs #72 R9.1, released in 0.10.0).
 const me = (status: string, reason: string | null = null) => ({
   data: {
     id_verification: {
@@ -617,7 +617,7 @@ describe('Verify self-attestation (D-016 fallback)', () => {
   });
 });
 
-describe('Verify licence choice (suas-specs #73 R10.1 proposal, L1)', () => {
+describe('Verify licence choice (suas-specs #73 R10.1, released in 0.10.0, L1)', () => {
   const LICENCE = '/api/v0/veterans/me/verification/licence';
   function serve(standing: ReturnType<typeof me>, offered: boolean, review: unknown = null) {
     client.GET.mockImplementation((path: string) =>

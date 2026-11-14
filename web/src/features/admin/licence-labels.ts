@@ -2,7 +2,7 @@ import { isApiError } from '../../api/errors';
 import type { StatusKind } from '../../components/StatusChip';
 
 /**
- * The words the licence reviewer sees (suas-specs #73 R10.1 proposal, SCRY_LICENCE_FALLBACK.md
+ * The words the licence reviewer sees (suas-specs #73 R10.1, released in 0.10.0, SCRY_LICENCE_FALLBACK.md
  * L5). Codes never reach the page; field values only appear in the review's reading section.
  */
 

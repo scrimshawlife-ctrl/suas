@@ -4,7 +4,7 @@ import { isApiError, type ApiError } from '../../api/errors';
  * What the Verify screen shows (VA_CONFIRMATION_FLOW §4.4). `start`, `not_found`,
  * `request_invalid` and `name_mismatch` show the notice and the form; `self_attest` is the
  * "Tell us you served" step; `verified`, `licence_verified` (an admin approved a licence, suas-specs
- * #73 R10.1 proposal) and `attested` are the ways the gate opens.
+ * #73 R10.1, released in 0.10.0) and `attested` are the ways the gate opens.
  */
 export type VerifyView =
   | 'start'
