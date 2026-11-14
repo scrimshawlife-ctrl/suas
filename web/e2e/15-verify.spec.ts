@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { shoot, signUp, uniqueEmail } from './helpers';
 
 /**
@@ -120,7 +121,10 @@ test('a VA outage is not counted and offers the crisis screen; a VA 400 is corre
 test('a typed name that is not the account name is refused before VA', async ({
   page,
   request,
+  allow,
 }) => {
+  // The refusal is the 409 VA_NAME_MISMATCH this test provokes on purpose.
+  allow.push(/status of 409/);
   const person = await signedUpOnVerify(page, request, 'verify-name');
   await fillDetails(page, { ...person, first: 'Robin' }, '00001');
   await sendToVa(page);
