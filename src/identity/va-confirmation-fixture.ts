@@ -1,7 +1,7 @@
 /**
  * Deterministic VA confirmation fixture (LOCAL and TEST only): no network, no key.
  *
- * suas-specs #72 R9.1 (proposal) `fixture` mode and D035_VA_CONFIRMATION_ADAPTER.md §15
+ * suas-specs #72 R9.1 (released in 0.10.0) `fixture` mode and D035_VA_CONFIRMATION_ADAPTER.md §15
  * (synthetic vectors, clearly labeled, never production evidence). The outcome depends
  * only on `zipCode`, so tests and web e2e can pick a result with a synthetic person. An
  * unlisted ZIP fails closed as NOT_CONFIRMED PERSON_NOT_FOUND, never VERIFIED.

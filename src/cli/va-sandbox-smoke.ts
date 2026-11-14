@@ -1,5 +1,5 @@
 /**
- * Manual VA sandbox smoke test (suas-specs #72 R9.1, proposal): one confirm call with the
+ * Manual VA sandbox smoke test (suas-specs #72 R9.1, released in 0.10.0): one confirm call with the
  * developer's own sandbox key and a VA sandbox test identity. Not run in CI.
  *
  * Reads SUAS_VA_CONFIRMATION_* from the environment and refuses unless the mode is

@@ -1,6 +1,6 @@
 /**
- * VA Veteran Confirmation port: the v1 request gate proposed by suas-specs #72 R9.1
- * (proposal, not released) under D-035 (D035_VA_CONFIRMATION_ADAPTER.md §4–§15).
+ * VA Veteran Confirmation port: the v1 request gate of suas-specs #72 R9.1
+ * (released in 0.10.0) under D-035 (D035_VA_CONFIRMATION_ADAPTER.md §4–§15).
  *
  * SUAS sends one demographic projection, `VA_CONFIRMATION_V1_REQUIRED_ONLY`, and keeps
  * only the normalized result. The projection values never leave this boundary as

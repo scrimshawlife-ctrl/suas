@@ -1,6 +1,6 @@
 /**
- * The shared VA outage cooldown (suas #287, AT09; the delegated choice in the 2026-11-13
- * packet, proposal), kept in the database because API and worker Lambdas share no memory.
+ * The shared VA outage cooldown (suas #287, AT09; released in 0.10.0 as VA_CONFIRMATION_FLOW
+ * W6 item 7 and D035 §19), kept in the database because API and worker Lambdas share no memory.
  * 3 transport outages in a row close VA for 60 seconds; then one request is the probe: a VA
  * answer closes the cooldown, another outage opens it again. Modelled on the licence breaker.
  */

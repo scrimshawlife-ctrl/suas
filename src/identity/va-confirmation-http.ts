@@ -1,7 +1,7 @@
 /**
  * HTTP adapter for the VA Veteran Confirmation API (`POST {base}/status`, `apikey` header).
  *
- * suas-specs #72 R9.1 (proposal) and D035_VA_CONFIRMATION_ADAPTER.md §4 (HTTP contract),
+ * suas-specs #72 R9.1 (released in 0.10.0) and D035_VA_CONFIRMATION_ADAPTER.md §4 (HTTP contract),
  * §6 (secret), §10–§11 (normalization and failure classes), §13 (telemetry). Provider
  * payloads stay here: callers get only a `VeteranConfirmationResult`. Logs carry no
  * projection value, key or body, and the adapter never throws for a provider failure.

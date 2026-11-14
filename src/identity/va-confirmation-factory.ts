@@ -1,9 +1,9 @@
 /**
- * Builds the VA confirmation port for this configuration (suas-specs #72 R9.1, proposal).
+ * Builds the VA confirmation port for this configuration (suas-specs #72 R9.1, released in 0.10.0).
  * Undefined when disabled, so the confirm route answers 503. The fixture is LOCAL and TEST
  * only and the sandbox STAGING and LOCAL only, even if a caller builds a config the
  * startup schema would already have refused (D035 §5 "environment mismatch fails closed").
- * The sandbox also needs the approved projection (A27), so it refuses to start until then.
+ * The sandbox also needs the approved projection (A27) and refuses to start without it.
  */
 
 import type { SuasConfig } from '../config/index.js';
