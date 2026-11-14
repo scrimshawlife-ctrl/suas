@@ -30,6 +30,7 @@ import {
   type VaProviderEnvironment,
   type VeteranConfirmationResult,
 } from './va-confirmation.js';
+import { acquireVaCall, recordVaCallOutcome } from './va-outage-cooldown.js';
 import {
   identityHash,
   identityHashCandidates,
@@ -547,9 +548,19 @@ export async function settleVaAttempt(
 /** Signature of the port call, so tests can hold it open between the two transactions. */
 export type AskVa = (projection: VaConfirmationProjection) => Promise<VeteranConfirmationResult>;
 
+/** What a request held back by the outage cooldown is told: the answer a VA 5xx gives. */
+const VA_COOLING_DOWN: VeteranConfirmationStanding = {
+  method: 'VA_VETERAN_STATUS',
+  status: 'UNAVAILABLE',
+  notConfirmedReason: undefined,
+  verifiedAt: undefined,
+  failureClass: 'PROVIDER_UNAVAILABLE',
+};
+
 /**
- * One VA attempt end to end: begin, ask VA with no transaction open, settle. A port that
- * throws (it should not) settles as UNAVAILABLE NETWORK_ERROR.
+ * One VA attempt end to end: the outage cooldown admits it (while VA cools down: the outage
+ * answer, no call and no attempt), then begin, ask VA with no transaction open, settle. A
+ * port that throws (it should not) settles as UNAVAILABLE NETWORK_ERROR.
  */
 export async function confirmVeteranStatus(
   pool: Pool,
@@ -557,15 +568,21 @@ export async function confirmVeteranStatus(
   ask: AskVa,
   input: VaAttemptInput,
 ): Promise<VeteranConfirmationStanding> {
-  const start = await beginVaAttempt(pool, keyring, input);
-  if (start.kind === 'answered') return start.result;
-  let result: VeteranConfirmationResult;
+  const admission = await acquireVaCall(pool);
+  if (admission.kind === 'open') return VA_COOLING_DOWN;
+  let result: VeteranConfirmationResult | undefined;
   try {
-    result = await ask(input.projection);
-  } catch {
-    result = { status: 'UNAVAILABLE', failureClass: 'NETWORK_ERROR' };
+    const start = await beginVaAttempt(pool, keyring, input);
+    if (start.kind === 'answered') return start.result;
+    try {
+      result = await ask(input.projection);
+    } catch {
+      result = { status: 'UNAVAILABLE', failureClass: 'NETWORK_ERROR' };
+    }
+    return await settleVaAttempt(pool, keyring, input, start.verificationId, result);
+  } finally {
+    await recordVaCallOutcome(pool, result, admission);
   }
-  return settleVaAttempt(pool, keyring, input, start.verificationId, result);
 }
 
 /** Contract version recorded on a self-attestation row (D-016 fallback). */
