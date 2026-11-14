@@ -14,7 +14,7 @@ export type LicenceVerification = Schemas['LicenceVerification'];
 export type LicenceReviewView = Schemas['LicenceReviewView'];
 
 /**
- * GET /veterans/me/verification/licence (suas-specs #73 R10.1 proposal): whether the licence
+ * GET /veterans/me/verification/licence (suas-specs #73 R10.1, released in 0.10.0): whether the licence
  * path is offered, and the newest review. Polls while the review is reading or with admins.
  */
 export function useLicenceReview(enabled = true) {

@@ -3,8 +3,8 @@ export const LICENCE_NOTICE_VERSION = 'licence-notice-v1' as const;
 
 /**
  * `licence-notice-v1` (constant LICENCE_NOTICE_V1), shown above the captures every time they open.
- * The wording is a contributor draft built from the SCRY_LICENCE_FALLBACK.md L2.1 bullets. Exact
- * copy is the owner's call: DECISION_PENDING (suas-specs #73 R10.1 proposal).
+ * The wording is the exact notice in SCRY_LICENCE_FALLBACK.md §9 (suas-specs #73 R10.1, released
+ * in 0.10.0); change it only with a new notice version.
  */
 export function LicenceNotice() {
   return (

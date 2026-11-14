@@ -8,7 +8,7 @@ import { sentAgo, statusChip } from './licence-labels';
 import { QueryNotice } from './QueryNotice';
 
 /**
- * The licence review queue (suas-specs #73 R10.1 proposal, L5.1): open reviews oldest first, each
+ * The licence review queue (suas-specs #73 R10.1, released in 0.10.0, L5.1): open reviews oldest first, each
  * with its age, state and a dispute marker only, never a name.
  */
 export default function AdminLicenceReviewsPage() {

@@ -1,5 +1,5 @@
 /**
- * What the Veteran's licence page shows, from the licence review (suas-specs #73 R10.1 proposal,
+ * What the Veteran's licence page shows, from the licence review (suas-specs #73 R10.1, released in 0.10.0,
  * SCRY_LICENCE_FALLBACK.md L2 to L8). Raw states, failure classes and reason codes never reach
  * the page; each maps to a view with its own heading.
  */

@@ -190,7 +190,7 @@ export type LicenceImageSide = 'front' | 'back' | 'selfie';
 const licenceKeys = queryKeys.adminLicenceReviews;
 
 /**
- * Open licence reviews, oldest first (suas-specs #73 R10.1 proposal, L5.1). The server leaves
+ * Open licence reviews, oldest first (suas-specs #73 R10.1, released in 0.10.0, L5.1). The server leaves
  * out the admin's own reviews, recusals and disputes of reviews they decided; rows carry no names.
  */
 export function useLicenceReviews() {

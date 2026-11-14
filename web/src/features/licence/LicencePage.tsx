@@ -61,7 +61,7 @@ export interface LicencePageProps {
 }
 
 /**
- * The licence review page (suas-specs #73 R10.1 proposal, L2 to L8): the notice and three
+ * The licence review page (suas-specs #73 R10.1, released in 0.10.0, L2 to L8): the notice and three
  * captures, then the review followed to an admin's decision. The crisis strip and footer come
  * from the layout; the crisis card sits beside every state (L10).
  */

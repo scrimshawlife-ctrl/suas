@@ -1,6 +1,6 @@
 /**
  * Licence photos and the selfie as the API takes them: a JPEG at most 2000 px on the long side
- * (suas-specs #73 R10.1 proposal, SCRY_LICENCE_FALLBACK.md L2.2, L3.1). All three go in one
+ * (suas-specs #73 R10.1, released in 0.10.0, SCRY_LICENCE_FALLBACK.md L2.2, L3.1). All three go in one
  * request, as base64 (about 1.33 times the bytes), under the API's 4,500,000-byte body cap, so each
  * is kept at most 1,000,000 bytes (coordinator decision, 2026-11-11). The server re-encodes each
  * image and strips its metadata.
