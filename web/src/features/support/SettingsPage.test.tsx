@@ -7,7 +7,7 @@ import { ApiError } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
 import { tokenStore } from '../../api/token-store';
 import type { Me } from '../../api/types';
-import SettingsPage from './SettingsPage';
+import SettingsPage, { countyChangeText } from './SettingsPage';
 
 /** R12.2: Settings changes the display name and county with the Welcome validation. */
 const client = vi.hoisted(() => ({ GET: vi.fn(), PUT: vi.fn() }));
@@ -56,6 +56,30 @@ beforeEach(() => {
 });
 
 describe('Settings', () => {
+  // #293 (r250 F1), recommended option: say what a county change moves before sending it.
+  it('says that unaccepted requests move before it sends a new county, and Cancel sends nothing', async () => {
+    renderSettings();
+    await userEvent.selectOptions(screen.getByLabelText('County'), 'MERCED');
+    await save();
+    const dialog = await screen.findByRole('dialog', { name: 'Change your county to Merced?' });
+    expect(dialog).toHaveTextContent(countyChangeText('MERCED'));
+    expect(dialog).toHaveTextContent('nobody has accepted yet will move to the Merced County list');
+    expect(client.PUT).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(client.PUT).not.toHaveBeenCalled();
+    expect(screen.queryByText('Saved.')).toBeNull();
+  });
+
+  it('asks nothing when the county did not change', async () => {
+    renderSettings();
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Mark T.');
+    await save();
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('starts from the current name and county', () => {
     renderSettings();
     expect(nameField()).toHaveValue('Marcus T.');
@@ -66,6 +90,7 @@ describe('Settings', () => {
     renderSettings();
     await userEvent.selectOptions(screen.getByLabelText('County'), 'MERCED');
     await save();
+    await userEvent.click(await screen.findByRole('button', { name: 'Change county' }));
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
     expect(client.PUT).toHaveBeenCalledTimes(1);
     expect(client.PUT).toHaveBeenCalledWith('/api/v0/veterans/me/county', {
@@ -99,6 +124,7 @@ describe('Settings', () => {
     renderSettings();
     await userEvent.selectOptions(screen.getByLabelText('County'), 'MERCED');
     await save();
+    await userEvent.click(await screen.findByRole('button', { name: 'Change county' }));
     expect(
       await screen.findByText('We could not save that. Check your connection and try again.'),
     ).toBeInTheDocument();

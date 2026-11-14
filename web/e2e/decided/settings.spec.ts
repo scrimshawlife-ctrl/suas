@@ -26,6 +26,12 @@ test('a person changes their display name and county in Settings, from either mo
   await name.fill('Rachel M.');
   await county.selectOption({ label: 'Alameda' });
   await page.getByRole('button', { name: 'Save changes' }).click();
+  // #293: the move of unaccepted requests is said before the new county is sent.
+  const confirm = page.getByRole('dialog', { name: 'Change your county to Alameda?' });
+  await expect(confirm).toContainText(
+    'nobody has accepted yet will move to the Alameda County list',
+  );
+  await confirm.getByRole('button', { name: 'Change county' }).click();
   await expect(page.getByText('Saved.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Account and sign out for Rachel' })).toBeVisible();
 
