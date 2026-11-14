@@ -345,6 +345,26 @@ describe('Follow-Ups', () => {
     });
     expect(response.statusCode).toBe(403);
   });
+
+  // R12.8: the documented 404 for a Case the caller cannot reach, same as a missing one.
+  it('answers 404 to someone who has not accepted, and for a missing Case', async () => {
+    const { tenantId, supportCase } = await openRedCase();
+    const { accepter: outsider, headers } = await accepterFor(tenantId);
+    for (const caseId of [supportCase.caseId, randomUUID()]) {
+      const response = await app.server.inject({
+        method: 'POST',
+        url: '/api/v0/follow-ups',
+        headers: { ...headers, 'idempotency-key': `fu-out-${randomUUID()}` },
+        payload: {
+          case_id: caseId,
+          due_at: new Date(Date.now() + 3_600_000).toISOString(),
+          responsible_type: 'USER',
+          responsible_id: outsider.userId,
+        },
+      });
+      expect(response.statusCode, caseId).toBe(404);
+    }
+  });
 });
 
 describe('Notifications', () => {

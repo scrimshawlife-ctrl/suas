@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
+import type { APIRequestContext, Browser, Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { newPerson, shoot, signInWithCode, signUp, uniqueEmail, withDb } from './helpers';
 
 /**

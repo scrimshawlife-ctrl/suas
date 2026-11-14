@@ -355,7 +355,8 @@ describe('GET /api/v0/resources/:id', () => {
     expect(leak.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
   });
 
-  it('returns 404 for inactive resources in the same tenant', async () => {
+  // R12.5 / owner Q1: detail stays API-only; inactive must not be told apart from missing.
+  it('returns the same 404 for an inactive resource as for a missing one', async () => {
     const { tenantId, headers } = await veteranInTenant();
     const pool = app.pool;
     if (pool === undefined) throw new Error('no pool');
@@ -364,12 +365,22 @@ describe('GET /api/v0/resources/:id', () => {
       serviceName: 'Closed Shelter Slot',
       category: 'SHELTER',
     });
+    const detail = (id: string) =>
+      app.server.inject({ method: 'GET', url: `/api/v0/resources/${id}`, headers });
+    const inactive = await detail(resource.resourceId);
+    const missing = await detail(randomUUID());
+    expect(inactive.statusCode).toBe(404);
+    expect(missing.statusCode).toBe(404);
+    expect(inactive.json()).toEqual(missing.json());
+  });
+
+  it('requires authentication', async () => {
     const response = await app.server.inject({
       method: 'GET',
-      url: `/api/v0/resources/${resource.resourceId}`,
-      headers,
+      url: `/api/v0/resources/${randomUUID()}`,
     });
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
   });
 });
 

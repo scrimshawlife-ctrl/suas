@@ -100,6 +100,32 @@ describe('POST /api/v0/check-ins', () => {
     const response = await app.server.inject({ method: 'POST', url: '/api/v0/check-ins' });
     expect(response.statusCode).toBe(401);
   });
+
+  // R12.8: the documented 422. Test files run one at a time, so the global version is
+  // briefly unpublished here and restored whatever the outcome.
+  it('answers 422 UNPROCESSABLE when no questionnaire version is published', async () => {
+    const { headers } = await veteranSession();
+    const pool = app.pool!;
+    const unpublished = await pool.query<{ questionnaire_version: string }>(
+      `UPDATE questionnaire_versions SET status = 'SUPERSEDED'
+        WHERE tenant_id IS NULL AND status = 'PUBLISHED'
+        RETURNING questionnaire_version`,
+    );
+    try {
+      const response = await app.server.inject({
+        method: 'POST',
+        url: '/api/v0/check-ins',
+        headers,
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('UNPROCESSABLE');
+    } finally {
+      await pool.query(
+        `UPDATE questionnaire_versions SET status = 'PUBLISHED' WHERE questionnaire_version = ANY($1)`,
+        [unpublished.rows.map((row) => row.questionnaire_version)],
+      );
+    }
+  });
 });
 
 describe('Check-In answer and complete', () => {
