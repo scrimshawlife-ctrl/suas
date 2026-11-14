@@ -1,5 +1,5 @@
 /**
- * Licence images: upload hardening and object storage (suas-specs R10.1, proposal; L3, §2.3).
+ * Licence images: upload hardening and object storage (suas-specs R10.1, released in 0.10.0; L3, §2.3).
  *
  * Every image is checked from its JPEG header before any decode, decoded with pixel and
  * memory limits, and re-encoded to a fresh baseline JPEG. Only that copy is kept, so EXIF

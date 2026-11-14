@@ -1,5 +1,5 @@
 /**
- * Licence review, the Veteran's side and the read job (suas-specs R10.1, proposal; L1–L4,
+ * Licence review, the Veteran's side and the read job (suas-specs R10.1, released in 0.10.0; L1–L4,
  * L7.3, L8, §2.3). The admin decisions live in licence-review-admin.ts.
  *
  * Photos, the selfie and the reading live only while a review is open. Only the reader's

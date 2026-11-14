@@ -1,5 +1,5 @@
 /**
- * SUAS Admin licence review routes (suas-specs R10.1, proposal; L5, L7.1–L7.3; ADMIN.md §2
+ * SUAS Admin licence review routes (suas-specs R10.1, released in 0.10.0; L5, L7.1–L7.3; ADMIN.md §2
  * as amended). Every route needs the SUAS Admin role and MFA elevation; every command is
  * audited and takes an Idempotency-Key. The idempotency record keeps only the review id
  * and state, and the page is re-read for each answer, so no licence field is stored there.

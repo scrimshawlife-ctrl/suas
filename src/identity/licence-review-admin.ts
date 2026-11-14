@@ -1,5 +1,5 @@
 /**
- * Licence review, the SUAS Admin's side (suas-specs R10.1, proposal; L5, L7.1–L7.3):
+ * Licence review, the SUAS Admin's side (suas-specs R10.1, released in 0.10.0; L5, L7.1–L7.3):
  * the queue, the review page, two-admin approval, decline, recuse and revoke.
  *
  * An admin never reviews their own submission, a review they recused from, or a dispute

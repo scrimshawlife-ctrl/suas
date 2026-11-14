@@ -105,7 +105,7 @@ export function supportSignalComputeHandler(
 }
 
 /**
- * Reads one licence review (suas-specs R10.1, proposal; L4). Outside LOCAL and TEST the
+ * Reads one licence review (suas-specs R10.1, released in 0.10.0; L4). Outside LOCAL and TEST the
  * back must carry the synthetic IIN before anything is sent. A reader-unavailable answer
  * before the last try throws, so the outbox retries on a later pass. An inline run passes
  * the API's own ports, so it reads the images that process stored.

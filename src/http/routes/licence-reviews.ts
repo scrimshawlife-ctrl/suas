@@ -1,5 +1,5 @@
 /**
- * The Veteran's licence review routes (suas-specs R10.1, proposal; L1, L2, L6, L7.3).
+ * The Veteran's licence review routes (suas-specs R10.1, released in 0.10.0; L1, L2, L6, L7.3).
  *
  * Any signed-in person may call them; whether the path is offered is decided by the VA
  * answer. Responses carry states, reasons and times only, never a licence field, and a
