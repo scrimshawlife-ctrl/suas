@@ -1,6 +1,13 @@
 import { expect, test } from '../fixtures';
 import type { Response } from '@playwright/test';
-import { newPerson, readSignInCode, shoot, uniqueEmail, withDb } from '../helpers';
+import {
+  newPerson,
+  readSignInChallenge,
+  readSignInCode,
+  shoot,
+  uniqueEmail,
+  withDb,
+} from '../helpers';
 import {
   askForCode,
   countRequests,
@@ -138,7 +145,8 @@ test('asking again for a code makes the earlier code stop working', async ({
   const page = await newPerson(browser);
   const email = uniqueEmail('resend');
   await askForCode(page, email);
-  const firstCode = await readSignInCode(request, email);
+  const first = await readSignInChallenge(request, email);
+  const firstCode = first.code;
 
   // There is no "send a new code" button; "Use a different email" is the way back.
   await expect(page.getByRole('button', { name: /resend|new code|send again/i })).toHaveCount(0);
@@ -148,8 +156,17 @@ test('asking again for a code makes the earlier code stop working', async ({
   await page.getByLabel('Email address').fill(email);
   await page.getByRole('button', { name: 'Send sign-in code' }).click();
   await expect(page).toHaveURL(/\/sign-in\/code$/);
-  const secondCode = await readSignInCode(request, email);
-  test.skip(firstCode === secondCode, 'the two random codes happen to match');
+  let second = await readSignInChallenge(request, email);
+  // A new delivery, not the first code read twice: a stale read must fail, not skip.
+  expect(second.expiresAt).toBeGreaterThan(first.expiresAt);
+  // Two random six-digit codes can match (one in a million); then ask once more (the third of
+  // three codes allowed in 15 minutes) instead of skipping the check.
+  if (second.code === firstCode) {
+    await askForCode(page, email);
+    second = await readSignInChallenge(request, email);
+  }
+  const secondCode = second.code;
+  expect(secondCode).not.toBe(firstCode);
 
   await enterCode(page, firstCode);
   await expect(page.getByText(WRONG_CODE)).toBeVisible();
@@ -164,13 +181,21 @@ test('a code that was already used does not sign in again', async ({ browser, re
     label: 'used-code',
     name: 'Uma V.',
   });
-  const usedCode = await readSignInCode(request, email);
+  const used = await readSignInChallenge(request, email);
+  const usedCode = used.code;
   await signOutFromAvatar(page, 'Uma');
   await expect(page).toHaveURL(/:\d+\/$/);
 
   await askForCode(page, email);
-  const fresh = await readSignInCode(request, email);
-  test.skip(fresh === usedCode, 'the two random codes happen to match');
+  let fresh = await readSignInChallenge(request, email);
+  // A new delivery, not the used code read again: a stale read must fail, not skip.
+  expect(fresh.expiresAt).toBeGreaterThan(used.expiresAt);
+  // A one-in-a-million match: ask once more (the third code in 15 minutes) instead of skipping.
+  if (fresh.code === usedCode) {
+    await askForCode(page, email);
+    fresh = await readSignInChallenge(request, email);
+  }
+  expect(fresh.code).not.toBe(usedCode);
   await enterCode(page, usedCode);
   await expect(page.getByText(WRONG_CODE)).toBeVisible();
 });

@@ -7,13 +7,17 @@ import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
 import { ShowMoreButton } from '../../components/ShowMoreButton';
 import { RequestRow } from './home/RequestRow';
+import { uniqueBy } from '../../lib/unique-by';
 
 /** /requests: every request the caller made, newest first, reached from Home "See all". */
 export default function RequestsPage() {
   const requests = useInfiniteServiceRequests('requested');
   if (requests.isPending) return <LoadingScreen />;
 
-  const items = requests.data?.pages.flatMap((page) => page.service_requests) ?? [];
+  const items = uniqueBy(
+    requests.data?.pages.flatMap((page) => page.service_requests) ?? [],
+    (item) => item.service_request_id,
+  );
   return (
     <Page>
       <title>Your requests · SUAS</title>

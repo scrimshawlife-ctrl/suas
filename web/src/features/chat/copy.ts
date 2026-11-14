@@ -47,8 +47,11 @@ export function isPermanentConversationError(error: unknown): boolean {
 }
 
 /**
- * A send the server refused for good: a 4xx other than 408 (timed out) and 429 (too many tries),
- * which sending the same message again cannot fix.
+ * A send the server refused for good: a 4xx other than 408 (timed out), 429 (too many tries) and
+ * 409 IDEMPOTENCY_CONFLICT, which sending the same message again cannot fix. The outbox resends
+ * with the same key and body, so that 409 only means the first try is still being stored
+ * (`src/idempotency/run.ts`, CommandInProgressError: "Retry once the original request
+ * settles"); the next try replays its answer.
  */
 export function isFinalSendError(error: unknown): boolean {
   return (
@@ -56,7 +59,8 @@ export function isFinalSendError(error: unknown): boolean {
     error.status >= 400 &&
     error.status < 500 &&
     error.status !== 408 &&
-    error.status !== 429
+    error.status !== 429 &&
+    error.code !== 'IDEMPOTENCY_CONFLICT'
   );
 }
 

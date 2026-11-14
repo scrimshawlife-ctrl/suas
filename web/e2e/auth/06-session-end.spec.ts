@@ -63,18 +63,17 @@ test('a person suspended mid-session is sent to sign in on their next read and c
     name: 'Sol M.',
   });
   const usedCode = await readSignInCode(request, email);
+  // Home's first reads (requests, chat threads) must answer before the suspension. One still
+  // in flight could answer 200 (resolved before the UPDATE) or 401 (after it); a 401 there
+  // signs the tab out before the Serve click, which then sends no read at all.
+  await page.waitForLoadState('networkidle');
   await withDb((db) =>
     db.query(`UPDATE users SET status = 'SUSPENDED' WHERE lower(email) = lower($1)`, [email]),
   );
 
-  // The first read sent after the suspension: one already in flight may still answer 200.
-  const suspendedAt = Date.now();
-  const refused = page.waitForResponse(
-    (r) =>
-      r.request().method() === 'GET' &&
-      /\/api\/v0\//.test(r.url()) &&
-      r.request().timing().startTime >= suspendedAt,
-  );
+  // Nothing is in flight, so the next read is the first one the server resolves after the
+  // suspension, whichever screen sends it.
+  const refused = nextResponse(page, 'GET', /\/api\/v0\//);
   await page.getByRole('link', { name: 'Serve' }).first().click();
   const response = await refused;
   expect(response.status()).toBe(401);

@@ -1,4 +1,5 @@
 import createClient, { type Middleware } from 'openapi-fetch';
+import { anySignal, timeoutSignal } from './abort';
 import { ApiError, apiErrorFromResponse, GATE_CODES, TIMEOUT_CODE } from './errors';
 import type { ApiPaths } from './client-types';
 import { tokenStore as defaultTokenStore, type TokenStore } from './token-store';
@@ -88,7 +89,7 @@ export function createApiMiddleware(options: ApiClientOptions = {}): Middleware 
         request.method === 'POST' && MODEL_PATHS.has(schemaPath)
           ? MODEL_REQUEST_TIMEOUT_MS
           : REQUEST_TIMEOUT_MS;
-      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(limit)]);
+      const signal = anySignal([request.signal, timeoutSignal(limit)]);
       return new Request(request, { signal });
     },
     onError({ request }) {

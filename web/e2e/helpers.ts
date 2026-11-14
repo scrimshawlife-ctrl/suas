@@ -28,11 +28,20 @@ export async function newPerson(browser: Browser): Promise<Page> {
 
 /** Reads the fake sign-in code (LOCAL only). A person would read it from their email. */
 export async function readSignInCode(request: APIRequestContext, email: string): Promise<string> {
+  return (await readSignInChallenge(request, email)).code;
+}
+
+/** The last delivered code and when it expires; each new challenge expires later. */
+export async function readSignInChallenge(
+  request: APIRequestContext,
+  email: string,
+): Promise<{ code: string; expiresAt: number }> {
   const response = await request.get(`${API_URL}/api/v0/dev/last-challenge`, {
     params: { destination: email },
   });
   expect(response.ok(), 'the fake email store holds a code').toBe(true);
-  return ((await response.json()) as { code: string }).code;
+  const body = (await response.json()) as { code: string; expires_at: string };
+  return { code: body.code, expiresAt: Date.parse(body.expires_at) };
 }
 
 /** Queues replies for the fake model (the Intake Assistant and the catalog builder). */

@@ -1,4 +1,3 @@
-import type { Request } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { newPerson, readSignInCode, shoot, uniqueEmail } from '../helpers';
 import {
@@ -182,17 +181,13 @@ test('signing out from the chat screen header ends on the landing page', async (
   request,
 }) => {
   const { page } = await signedUpPerson(browser, request, { label: 'out-chat', name: 'Sky C.' });
-  // The chat screen reads its threads and asks for socket tickets; all must be back first.
-  const open = new Set<Request>();
-  page.on('request', (r) => {
-    if (r.url().includes('/api/v0/')) open.add(r);
-  });
-  page.on('requestfinished', (r) => open.delete(r));
-  page.on('requestfailed', (r) => open.delete(r));
+  // Chat keeps polling. Wait for its bootstrap responses, not global network silence.
   const ticket = page.waitForResponse(/\/api\/v0\/chat\/connect-tickets$/);
+  const threads = page.waitForResponse(/\/api\/v0\/chat\/threads(?:\?|$)/);
   await page.goto('/chat');
-  await ticket;
-  await expect.poll(() => open.size).toBe(0);
+  expect((await ticket).status()).toBe(201);
+  expect((await threads).status()).toBe(200);
+  await expect(page.getByRole('button', { name: 'Account and sign out for Sky' })).toBeVisible();
   await signOutFromAvatar(page, 'Sky');
   await expect(page).toHaveURL(LANDING);
   await page.goBack();

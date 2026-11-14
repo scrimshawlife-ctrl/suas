@@ -18,6 +18,8 @@ import { Construct } from 'constructs';
 export interface SmtpRelayProps {
   readonly code: lambda.Code;
   readonly logRetention: logs.RetentionDays;
+  /** SUAS_STAGING_FIXTURE_MAILBOX: the relay's own copy of the last-hop allowlist (r263 F2). */
+  readonly fixtureMailbox: string;
 }
 
 export class SmtpRelay extends Construct {
@@ -60,7 +62,10 @@ export class SmtpRelay extends Construct {
       timeout: Duration.seconds(25),
       role,
       logGroup,
-      environment: { SUAS_SMTP_SECRET_ID: this.secret.secretArn },
+      environment: {
+        SUAS_SMTP_SECRET_ID: this.secret.secretArn,
+        SUAS_STAGING_FIXTURE_MAILBOX: props.fixtureMailbox,
+      },
     });
   }
 }

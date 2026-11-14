@@ -10,6 +10,7 @@
  *   message data is retryable.
  */
 
+import { isStagingFixtureAddress } from '../auth/staging-access.js';
 import type { NotificationChannelPort, OutboundMessage, SendAcknowledgement } from './channels.js';
 import { GmailSmtpSender } from './gmail-smtp-sender.js';
 import { LambdaRelaySmtpSender } from './lambda-relay-sender.js';
@@ -23,14 +24,29 @@ export const GMAIL_SMTP_FAILURE_REASONS = {
   retryable: 'smtp_retryable_failure',
   ambiguous_ack: 'smtp_ambiguous_ack',
   invalid_message: 'invalid_message',
+  recipient_not_allowed: 'recipient_not_allowed',
 } as const;
+
+/** May the last hop send to this address? */
+export type RecipientAllowed = (to: string) => boolean;
+
+/**
+ * The STAGING last-hop allowlist (r263 F2): a synthetic address (RFC 2606/6761 reserved
+ * domains), or a `+tag` address of the configured fixture mailbox (R11.7), never the bare
+ * mailbox. With no mailbox configured, only synthetic addresses pass, so nothing real is sent.
+ * gmail_smtp is refused in LOCAL and TEST and PRODUCTION is refused as a whole, so STAGING is
+ * the only class that reaches this channel.
+ */
+export function stagingRecipientAllowed(mailbox: string | undefined): RecipientAllowed {
+  return (to) => isStagingFixtureAddress(to, mailbox);
+}
 
 /** Structured send log. Never includes addresses, subjects, bodies or server replies. */
 export interface GmailSmtpEmailLogRecord {
   readonly implementation: typeof GMAIL_SMTP_IMPLEMENTATION;
   readonly channel: 'EMAIL';
   readonly accepted: boolean;
-  readonly outcome: SmtpResultClass | 'invalid_message';
+  readonly outcome: SmtpResultClass | 'invalid_message' | 'recipient_not_allowed';
   readonly response_code?: number;
 }
 
@@ -54,6 +70,8 @@ export interface GmailSmtpEmailChannelOptions {
   /** When set, the outside-VPC relay function sends; it alone holds the app password. */
   readonly relayFunction: string | undefined;
   readonly region: string | undefined;
+  /** SUAS_STAGING_FIXTURE_MAILBOX: its `+tag` addresses may receive mail (R11.7). */
+  readonly fixtureMailbox: string | undefined;
   readonly logger?: GmailSmtpEmailLogger;
 }
 
@@ -81,7 +99,11 @@ export function createGmailSmtpEmailChannel(
     }
     sender = new GmailSmtpSender({ user: options.user, appPassword: options.appPassword });
   }
-  return new GmailSmtpEmailChannel(sender, options.logger);
+  return new GmailSmtpEmailChannel(
+    sender,
+    options.logger,
+    stagingRecipientAllowed(options.fixtureMailbox),
+  );
 }
 
 export class GmailSmtpEmailChannel implements NotificationChannelPort {
@@ -92,6 +114,8 @@ export class GmailSmtpEmailChannel implements NotificationChannelPort {
   constructor(
     private readonly sender: SmtpSender,
     private readonly logger?: GmailSmtpEmailLogger,
+    // Fail closed: with no allowlist given, only synthetic addresses pass.
+    private readonly allowRecipient: RecipientAllowed = stagingRecipientAllowed(undefined),
   ) {}
 
   async send(message: OutboundMessage): Promise<SendAcknowledgement> {
@@ -106,6 +130,17 @@ export class GmailSmtpEmailChannel implements NotificationChannelPort {
         accepted: false,
         retryable: false,
         failureReason: GMAIL_SMTP_FAILURE_REASONS.invalid_message,
+      };
+    }
+
+    // Before any SMTP or relay call: an address off the list never reaches smtp.gmail.com, and
+    // the send settles as not delivered (not retryable), never as a silent success.
+    if (!this.allowRecipient(message.destination)) {
+      this.emit('recipient_not_allowed');
+      return {
+        accepted: false,
+        retryable: false,
+        failureReason: GMAIL_SMTP_FAILURE_REASONS.recipient_not_allowed,
       };
     }
 

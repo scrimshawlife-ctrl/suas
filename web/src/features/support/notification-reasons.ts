@@ -1,3 +1,4 @@
+import { uniqueBy } from '../../lib/unique-by';
 import type { NotificationItem } from './api';
 
 /**
@@ -25,9 +26,12 @@ export function isShown(item: Pick<NotificationItem, 'reason' | 'cancelled_at'>)
   return !item.reason.startsWith('auth.') && item.cancelled_at === null;
 }
 
-/** Newest first. Notifications with no send time yet come first: they are the newest. */
+/**
+ * Newest first, each notification once (pages can overlap between polls). Notifications with no
+ * send time yet come first: they are the newest.
+ */
 export function newestFirst(items: readonly NotificationItem[]): NotificationItem[] {
-  return items.filter(isShown).sort((a, b) => {
+  return uniqueBy(items.filter(isShown), (n) => n.notification_id).sort((a, b) => {
     if (a.sent_at === b.sent_at) return 0;
     if (a.sent_at === null) return -1;
     if (b.sent_at === null) return 1;

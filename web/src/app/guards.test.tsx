@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/errors';
@@ -280,18 +280,29 @@ describe('redirects while the target route is still loading', () => {
       ],
       { initialEntries: ['/requests/22222222-2222-4222-8222-222222222222'] },
     );
-    const navigations = vi.fn();
-    router.subscribe(navigations);
+    // Each Navigate starts a navigation with a new location key; a loop starts many.
+    const navigationKeys = new Set<string>();
+    router.subscribe((state) => {
+      if (state.navigation.location) navigationKeys.add(state.navigation.location.key);
+    });
     render(
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
       </QueryClientProvider>,
     );
-    await new Promise((settle) => setTimeout(settle, 500));
+    // Hold the lazy /verify chunk while the guard re-renders (the loop showed up in this window).
+    await waitFor(() => expect(router.state.navigation.state).toBe('loading'));
+    await new Promise((settle) => setTimeout(settle, 200));
+    expect(screen.queryByText('request page')).toBeNull();
     loaded();
     expect(await screen.findByText('verify page')).toBeInTheDocument();
     expect(errors.mock.calls.flat().join(' ')).not.toContain('Maximum update depth');
-    expect(navigations.mock.calls.length).toBeLessThan(5);
+    expect(navigationKeys.size).toBe(1);
+    expect(router.state.location.pathname).toBe('/verify');
+    expect(router.state.location.state).toEqual({
+      from: '/requests/22222222-2222-4222-8222-222222222222',
+    });
+    expect(router.state.historyAction).toBe('REPLACE');
     errors.mockRestore();
   });
 });

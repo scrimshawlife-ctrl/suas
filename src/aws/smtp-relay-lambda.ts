@@ -14,6 +14,10 @@
 
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { z } from 'zod';
+import {
+  stagingRecipientAllowed,
+  type RecipientAllowed,
+} from '../notifications/gmail-smtp-email.js';
 import { GmailSmtpSender } from '../notifications/gmail-smtp-sender.js';
 import {
   fromRelayRequest,
@@ -33,12 +37,16 @@ type Credentials = z.infer<typeof credentialsSchema>;
 export interface SmtpRelayDeps {
   readonly readSecret: () => Promise<string | undefined>;
   readonly createSender: (credentials: Credentials) => SmtpSender;
+  /** The STAGING last-hop allowlist, checked again here (r263 F2). */
+  readonly allowRecipient: RecipientAllowed;
 }
 
 function defaultDeps(): SmtpRelayDeps {
   const secretId = process.env.SUAS_SMTP_SECRET_ID;
+  const mailbox = process.env.SUAS_STAGING_FIXTURE_MAILBOX?.trim().toLowerCase();
   const client = new SecretsManagerClient({});
   return {
+    allowRecipient: stagingRecipientAllowed(mailbox === '' ? undefined : mailbox),
     readSecret: async () => {
       if (secretId === undefined || secretId === '') return undefined;
       const output = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
@@ -75,6 +83,8 @@ export function createSmtpRelayHandler(
     // A malformed request cannot become sendable by retrying it.
     const request = smtpRelayRequestSchema.safeParse(event);
     if (!request.success) return { result: 'rejected' };
+    // An address off the STAGING allowlist is refused for good, before the secret is read.
+    if (!deps.allowRecipient(request.data.to)) return { result: 'rejected' };
     // Nothing was sent without credentials; a fixed secret makes a later attempt work.
     const current = await loadSender();
     if (current === undefined) return { result: 'retryable' };

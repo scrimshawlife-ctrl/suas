@@ -20,6 +20,9 @@ export default defineConfig({
   testMatch: '*.spec.ts',
   outputDir: './e2e-results/output',
   timeout: 90_000,
+  // The whole run: under the CI job's 90 min cap (.github/workflows/verify.yml), so a slow run
+  // ends here with a report and artifacts instead of a cancelled job.
+  globalTimeout: 80 * 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,

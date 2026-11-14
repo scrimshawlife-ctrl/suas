@@ -8,16 +8,32 @@ import { LoadFailedScreen, LoadingScreen } from '../../app/status-screens';
 import { BackLink } from '../../components/BackLink';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { Dialog } from '../../components/Dialog';
 import { AlertCircleIcon } from '../../components/icons';
 import { Page } from '../../components/Page';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { ProfileFields } from '../public/ProfileFields';
 import {
+  COUNTY_OPTIONS,
   isCounty,
   profileSaveError,
   validateWelcome,
   type WelcomeErrors,
 } from '../public/welcome-form';
+
+/** "Merced" for MERCED. */
+function countyName(value: string): string {
+  return COUNTY_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+/**
+ * #293 / R12.2 owner question 1, recommended option (OWNER DECISION, draft copy): a county
+ * change is said before it is sent. The open list reads the requester's current county
+ * (src/coordination/open-requests.ts), so requests nobody has accepted yet move with it.
+ */
+export function countyChangeText(to: string): string {
+  return `Requests you sent that nobody has accepted yet will move to the ${countyName(to)} County list, and the requests you see to help with will be from ${countyName(to)} County.`;
+}
 
 /** The form, seeded once from `me`. Only a value that changed is sent. */
 function SettingsForm({ me }: { me: Me }) {
@@ -30,10 +46,11 @@ function SettingsForm({ me }: { me: Me }) {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [confirmingCounty, setConfirmingCounty] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   useFocusFirstInvalid(formRef, String(attempt));
 
-  const submit = async (event: FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     setAttempt((count) => count + 1);
     const found = validateWelcome(displayName, county);
@@ -41,6 +58,17 @@ function SettingsForm({ me }: { me: Me }) {
     setSaveError(null);
     setSaved(false);
     if (Object.keys(found).length > 0 || saving || !isCounty(county)) return;
+    // A new county is sent only after the person has read what it moves.
+    if (county !== me.county) {
+      setConfirmingCounty(true);
+      return;
+    }
+    void save();
+  };
+
+  const save = async () => {
+    if (!isCounty(county)) return;
+    setConfirmingCounty(false);
     setSaving(true);
     try {
       const name = displayName.trim();
@@ -91,6 +119,21 @@ function SettingsForm({ me }: { me: Me }) {
           </Button>
         </div>
       </form>
+      {confirmingCounty ? (
+        <Dialog
+          open
+          onClose={() => setConfirmingCounty(false)}
+          title={`Change your county to ${countyName(county)}?`}
+        >
+          <p>{countyChangeText(county)}</p>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => void save()}>Change county</Button>
+            <Button variant="secondary" onClick={() => setConfirmingCounty(false)}>
+              Cancel
+            </Button>
+          </div>
+        </Dialog>
+      ) : null}
     </Card>
   );
 }

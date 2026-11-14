@@ -62,6 +62,15 @@ describe('notification reasons', () => {
     ]);
     expect(list.map((n) => n.notification_id)).toEqual(['queued', 'new', 'old']);
   });
+
+  it('shows a notification once when two loaded pages both hold it (r247 F1)', () => {
+    const list = newestFirst([
+      item('new', 'service_request_released', '2026-11-03T00:00:00Z'),
+      item('old', 'service_request_expired', '2026-11-01T00:00:00Z'),
+      item('old', 'service_request_expired', '2026-11-01T00:00:00Z'),
+    ]);
+    expect(list.map((n) => n.notification_id)).toEqual(['new', 'old']);
+  });
 });
 
 describe('notification sentences and dates', () => {
