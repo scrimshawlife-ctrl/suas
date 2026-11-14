@@ -1,7 +1,7 @@
 # What to build next
 
 **Date:** `2026-11-12`  
-**Pin:** `0.9.0` / `RELEASE_MANIFEST-0.9.0.md` (tag `v0.9.0`)  
+**Pin:** `0.10.0` / `RELEASE_MANIFEST-0.10.0.md` (tag `v0.10.0`)  
 **Still not ready:** production, pilot, `UI_CONFORMANCE`  
 **SPEC-017 status:** recorded against `0.6.0`; evidence YES on specs ([SPEC017_EVIDENCE_PACK.md](https://github.com/scrimshawlife-ctrl/suas-specs/blob/main/SPEC017_EVIDENCE_PACK.md)). SPEC-018 stays blocked; do not start it by inventing product.
 

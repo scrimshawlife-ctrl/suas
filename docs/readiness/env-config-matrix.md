@@ -5,8 +5,8 @@ Pin source: `src/release/pins.ts`. Living values must match that file.
 | Variable                           | LOCAL                                       | TEST            | STAGING                                    | PRODUCTION                               |
 | ---------------------------------- | ------------------------------------------- | --------------- | ------------------------------------------ | ---------------------------------------- |
 | `SUAS_ENV`                         | required                                    | required        | required                                   | rejected until SPEC-018 authorizes       |
-| `SUAS_SPEC_VERSION`                | `0.9.0`                                     | `0.9.0`         | `0.9.0`                                    | `0.9.0` when authorized                  |
-| `SUAS_RELEASE_MANIFEST`            | `RELEASE_MANIFEST-0.9.0.md`                 | same            | same                                       | same when authorized                     |
+| `SUAS_SPEC_VERSION`                | `0.10.0`                                    | `0.10.0`        | `0.10.0`                                   | `0.10.0` when authorized                 |
+| `SUAS_RELEASE_MANIFEST`            | `RELEASE_MANIFEST-0.10.0.md`                | same            | same                                       | same when authorized                     |
 | `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS` | false                                       | false           | false                                      | only if release authorizes               |
 | `SUAS_JOB_QUEUE`                   | in-memory fake (default) or postgres-outbox | same            | ignored: Postgres outbox (D-022 pending)   | ignored: Postgres outbox (D-022 pending) |
 | `DATABASE_QUERY_TIMEOUT_MS`        | optional, default 20000                     | same            | same                                       | same                                     |
@@ -21,7 +21,7 @@ Pin source: `src/release/pins.ts`. Living values must match that file.
 
 `SUAS_JOB_QUEUE` accepts only `in-memory-fake` or `postgres-outbox`; any other value fails startup (ENVIRONMENT.md §5). `DATABASE_QUERY_TIMEOUT_MS` must be a positive integer; it is a client-side mechanism bound (ARCHITECTURE.md §13), not an SLO.
 
-Email (suas-specs #75 R11.2, contributor proposal, not released): `gmail_smtp` sends through
+Email (suas-specs #75 R11.2, released in 0.10.0): `gmail_smtp` sends through
 `smtp.gmail.com:465` as one Google account with an app password. LOCAL and TEST reject it, like
 `resend`. On AWS STAGING the API and job worker set only `SUAS_SMTP_RELAY_FUNCTION`; the relay
 function outside the VPC reads `SUAS_SMTP_USER` and `SUAS_SMTP_APP_PASSWORD` from its Secrets

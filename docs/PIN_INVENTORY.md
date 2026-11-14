@@ -1,12 +1,12 @@
-# PIN_INVENTORY.md — SPEC-017 pin audit 2026-09-17 (re-pinned to 0.7.0 on 2026-11-02 and to 0.9.0 on 2026-11-09)
+# PIN_INVENTORY.md — SPEC-017 pin audit 2026-09-17 (re-pinned to 0.7.0 on 2026-11-02, to 0.9.0 on 2026-11-09 and to 0.10.0 on 2026-11-14)
 
 Live runtime pin from `src/release/pins.ts`:
 
 | Identity               | Value                                      |
 | ---------------------- | ------------------------------------------ |
-| `SPEC_VERSION`         | `0.9.0`                                    |
-| `RELEASE_MANIFEST`     | `RELEASE_MANIFEST-0.9.0.md`                |
-| `SPECS_COMMIT`         | `208705cfd2b6aa1ce913ac9e70a2d42a1c9487ad` |
+| `SPEC_VERSION`         | `0.10.0`                                   |
+| `RELEASE_MANIFEST`     | `RELEASE_MANIFEST-0.10.0.md`               |
+| `SPECS_COMMIT`         | `6cd437e61b11f67e04b2bd91101d33f7c09c0fce` |
 | `API_VERSION`          | `v0`                                       |
 | `EVENT_SCHEMA_VERSION` | `0.1.0`                                    |
 
@@ -19,6 +19,10 @@ These no longer advertise `0.2.0` as the current pin:
 `AGENTS.md`, `README.md` start-here, `FABLE_HANDOFF.md`, `CONTEXT.md`, `IMPLEMENTATION_BOOTSTRAP.md`, `SPEC017_PLAN.md`, `SPEC017_NEXT.md`, `docs/readiness/env-config-matrix.md`, `docs/runbooks/deployment-rollback.md`, `docs/readiness/spec-runtime-consistency-audit.md`, `src/release/pins.ts` comments.
 
 `suas-specs` STATUS “Next stage” no longer says pin `0.4.0`.
+
+## Living docs re-pinned to 0.10.0 on 2026-11-14
+
+The same pin lines as the 0.9.0 re-pin below. `SPECS_COMMIT` is the suas-specs #95 squash-merge commit that carries tag `v0.10.0`. `wrangler.jsonc` and the Worker and staging workflows were retired (R11.6), so `.env.example`, CI `verify`, `web/e2e/config.ts` and the test environment are the remaining carriers.
 
 ## Living docs re-pinned to 0.9.0 on 2026-11-09
 
