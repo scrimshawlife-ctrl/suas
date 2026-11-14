@@ -45,3 +45,12 @@ export function syntheticTenantId(): string {
 export function syntheticAggregateId(): string {
   return randomUUID();
 }
+
+/**
+ * Closes the shared VA outage cooldown (migration 0025), as if VA had recovered. Its one row
+ * serves every test file, so a suite that simulates VA outages closes it between them.
+ */
+export async function closeVaOutageCooldown(pool: Pool): Promise<void> {
+  await pool.query(`UPDATE va_outage_cooldown
+        SET consecutive_failures = 0, opened_at = NULL, probe_started_at = NULL`);
+}
