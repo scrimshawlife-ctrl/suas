@@ -197,9 +197,6 @@ test('signed in with the API down: the failed Home screen keeps the persistent f
   request,
   allow,
 }) => {
-  // Known gap, not fixed here: RequireProfile's failed screen (src/app/guards.tsx) wraps it in
-  // WithCrisisStrip only, so the SAFETY_COPY.md §2.3 footer is missing.
-  test.fail();
   const page = await failedHome(browser, request, allow);
   await expectCrisisStrings(page);
 });
