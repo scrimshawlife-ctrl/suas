@@ -4,7 +4,7 @@ import { expect, test } from './fixtures';
 import { newPerson, shoot, signInWithCode, signUp, uniqueEmail, withDb } from './helpers';
 
 /**
- * The licence fallback (suas-specs #73 R10.1, proposal) against the LOCAL fixture reader, which
+ * The licence fallback (suas-specs #73 R10.1, released in 0.10.0) against the LOCAL fixture reader, which
  * reads SYNTHETIC / VETERAN / 1970-01-02, licence CA F0000001, for a front photo of any width but
  * 601 to 607. The VA step types the same synthetic person, so identity match is YES. The selfie
  * comes from Chrome's fake camera. No real licence or face is ever used.

@@ -50,7 +50,7 @@ const API_PORT = '8080';
 const LOG_RETENTION = logs.RetentionDays.ONE_MONTH;
 /** The AWS-published Lambda Web Adapter layer lives in an AWS-owned account. */
 const WEB_ADAPTER_LAYER_PUBLISHER = '753240598075';
-/** Licence review images (suas-specs SCRY_LICENCE_FALLBACK.md §2.3, R10.1 proposal). */
+/** Licence review images (suas-specs SCRY_LICENCE_FALLBACK.md §2.3, R10.1, released in 0.10.0). */
 const LICENCE_REVIEWS_PREFIX = 'licence-reviews/';
 /**
  * Stored beside every keyed hash (VA_CONFIRMATION_FLOW.md §2.1). Change it whenever the key

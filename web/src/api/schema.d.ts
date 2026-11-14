@@ -449,7 +449,7 @@ export interface paths {
         put?: never;
         /**
          * Invite a trusted contact
-         * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). When the invite has an email, one EMAIL notification (reason trusted_contact_invited, template invite@1) goes to that address after the commit; it names nobody (TRUSTED_CIRCLE.md §3.2; R9.4, contributor proposal, specs #72, not released). A new invite to an address this Veteran already has an INVITED row for returns that invite (200, replayed false) and sends nothing again. New invites are rate limited per Veteran (10 per 24 hours) and per Veteran and invited address (3 per 24 hours); both count only the caller's own invites. 429 RATE_LIMITED with Retry-After. Past 5 invite emails to one address in a tenant in 24 hours the invite is still created and answered the same way; only its email is suppressed (the Notification settles UNDELIVERABLE for operations).
+         * @description Records the invite, emits TRUSTED_CONTACT_INVITED and writes an Audit Event (TRUSTED_CIRCLE.md §3.4, §7). A retry with the same Idempotency-Key returns the first invite (200, replayed true) instead of creating a second one (API.md §7). When the invite has an email, one EMAIL notification (reason trusted_contact_invited, template invite@1) goes to that address after the commit; it names nobody (TRUSTED_CIRCLE.md §3.2; R9.4, specs #72, released in 0.10.0). A new invite to an address this Veteran already has an INVITED row for returns that invite (200, replayed false) and sends nothing again. New invites are rate limited per Veteran (10 per 24 hours) and per Veteran and invited address (3 per 24 hours); both count only the caller's own invites. 429 RATE_LIMITED with Retry-After. Past 5 invite emails to one address in a tenant in 24 hours the invite is still created and answered the same way; only its email is suppressed (the Notification settles UNDELIVERABLE for operations).
          */
         post: operations["inviteTrustedContact"];
         delete?: never;
@@ -933,7 +933,7 @@ export interface paths {
         put?: never;
         /**
          * Confirm Veteran status with VA (one attempt; suas-specs #72 R9.1)
-         * @description Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values; the attempt row keeps the result, the notice version, a keyed request fingerprint and, when VA answered, a keyed identity hash (HMAC under SUAS_FINGERPRINT_KEY, with its key id). Any signed-in person may call it. The body must carry noticeVersion va-notice-v1, the pre-call notice the person saw (400 VA_NOTICE_VERSION_REQUIRED otherwise). The typed first and last name must match the account display name ("First Last" or "First L.", ignoring case, accents and punctuation); otherwise 409 VA_NAME_MISMATCH with no VA call and no attempt counted. A VA VERIFIED standing is returned with no VA call; a REVOKED standing is refused (403). At most 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, or an identity conflict) per person in the last 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After); UNAVAILABLE results (outages and VA 400s) never count. A backstop cap of 20 VA calls per person in the last 24 hours counts the same rows (same 429). The same Idempotency-Key within 24 hours replays an answer VA gave; after an UNAVAILABLE result, or after a fingerprint key rotation, it is a new attempt. No database lock is held during the VA call; a second attempt while one is in flight gets 409 IDEMPOTENCY_CONFLICT. NOT_CONFIRMED is not a finding that the person never served. UNAVAILABLE means VA did not answer: failure_class REQUEST_INVALID (VA refused the request, e.g. HTTP 400) means the person may correct the details and retry; other classes mean try again later. After 3 VA transport outages in a row (HTTP 5xx, timeout or network failure; a VA answer in between restarts the count) nobody's request calls VA for 60 seconds: each gets UNAVAILABLE / PROVIDER_UNAVAILABLE with no VA call and no attempt written; then one request is let through to probe VA, a VA answer ends the pause and another outage restarts it. A VA 400 or a VA answer of ERROR for one lookup never counts (suas #287, proposal). Neither UNAVAILABLE nor NOT_CONFIRMED blocks a request: the person may self-attest instead.
+         * @description Sends the VA_CONFIRMATION_V1_REQUIRED_ONLY projection to VA Veteran Confirmation once and returns only the normalized result. SUAS never stores, logs or audits the projection values; the attempt row keeps the result, the notice version, a keyed request fingerprint and, when VA answered, a keyed identity hash (HMAC under SUAS_FINGERPRINT_KEY, with its key id). Any signed-in person may call it. The body must carry noticeVersion va-notice-v1, the pre-call notice the person saw (400 VA_NOTICE_VERSION_REQUIRED otherwise). The typed first and last name must match the account display name ("First Last" or "First L.", ignoring case, accents and punctuation); otherwise 409 VA_NAME_MISMATCH with no VA call and no attempt counted. A VA VERIFIED standing is returned with no VA call; a REVOKED standing is refused (403). At most 5 VA-answered attempts (VERIFIED, NOT_CONFIRMED, or an identity conflict) per person in the last 24 hours (429 VERIFICATION_ATTEMPT_LIMIT, with Retry-After); UNAVAILABLE results (outages and VA 400s) never count. A backstop cap of 20 VA calls per person in the last 24 hours counts the same rows (same 429). The same Idempotency-Key within 24 hours replays an answer VA gave; after an UNAVAILABLE result, or after a fingerprint key rotation, it is a new attempt. No database lock is held during the VA call; a second attempt while one is in flight gets 409 IDEMPOTENCY_CONFLICT. NOT_CONFIRMED is not a finding that the person never served. UNAVAILABLE means VA did not answer: failure_class REQUEST_INVALID (VA refused the request, e.g. HTTP 400) means the person may correct the details and retry; other classes mean try again later. After 3 VA transport outages in a row (HTTP 5xx, timeout or network failure; a VA answer in between restarts the count) nobody's request calls VA for 60 seconds: each gets UNAVAILABLE / PROVIDER_UNAVAILABLE with no VA call and no attempt written; then one request is let through to probe VA, a VA answer ends the pause and another outage restarts it. A VA 400 or a VA answer of ERROR for one lookup never counts (suas #287; VA_CONFIRMATION_FLOW W6 item 7, released in 0.10.0). Neither UNAVAILABLE nor NOT_CONFIRMED blocks a request: the person may self-attest instead.
          */
         post: operations["postVeteransMeVerificationVaConfirm"];
         delete?: never;
@@ -1269,13 +1269,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Whether the licence review path is offered, and the newest review (suas-specs R10.1, proposal)
+         * Whether the licence review path is offered, and the newest review (suas-specs R10.1, released in 0.10.0)
          * @description Any signed-in person. The path is offered only after VA answered NOT_CONFIRMED (never after UNAVAILABLE, so never after a VA 400), beside self-attestation, never instead of it.
          */
         get: operations["getVeteransMeVerificationLicence"];
         put?: never;
         /**
-         * Send licence photos and a selfie for review (suas-specs R10.1, proposal)
+         * Send licence photos and a selfie for review (suas-specs R10.1, released in 0.10.0)
          * @description The server checks, in order: signed in (before the body is read), the reader is open (503), L1.4 eligibility (403), notice_version (400), no open review (409), the limit (429), then the image rules (400). It stores the three re-encoded images, records a READING review bound to the person's newest NOT_CONFIRMED VA attempt and queues the read. No Idempotency-Key: a second send while one is open gets 409 LICENCE_REVIEW_OPEN. Only reader-answered submissions count toward the limit.
          */
         post: operations["postVeteransMeVerificationLicence"];
@@ -1295,7 +1295,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Dispute an ALREADY_USED decline with new photos (suas-specs R10.1 L7.3, proposal)
+         * Dispute an ALREADY_USED decline with new photos (suas-specs R10.1 L7.3, released in 0.10.0)
          * @description Opens a new review marked as a dispute of this one, bound to the same VA attempt; the earlier images were deleted at the decision. It skips the L1.4 offer but follows the notice, limits and read. The queue routes it away from the admins who approved or confirmed the conflicting review.
          */
         post: operations["postVeteransMeVerificationLicenceDispute"];
@@ -1313,7 +1313,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Licence reviews waiting for a decision, oldest first (suas-specs R10.1, proposal)
+         * Licence reviews waiting for a decision, oldest first (suas-specs R10.1, released in 0.10.0)
          * @description AWAITING_REVIEW and AWAITING_CONFIRMATION only, without the admin's own submissions, reviews they recused from, or disputes of an approval they made or confirmed. Age, state and a dispute marker only, never names. Requires the SUAS Admin role and MFA elevation.
          */
         get: operations["getAdminLicenceReviews"];
@@ -1333,7 +1333,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * One licence review's page (suas-specs R10.1, proposal)
+         * One licence review's page (suas-specs R10.1, released in 0.10.0)
          * @description Requires the SUAS Admin role and MFA elevation.
          */
         get: operations["getAdminLicenceReview"];
@@ -1353,7 +1353,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * One stored licence image or the selfie, inline (suas-specs R10.1, proposal)
+         * One stored licence image or the selfie, inline (suas-specs R10.1, released in 0.10.0)
          * @description Served inline with Cache-Control: no-store, private; there is no download. Requires the SUAS Admin role and MFA elevation.
          */
         get: operations["getAdminLicenceReviewImage"];
@@ -1375,7 +1375,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * First approval of a licence review (suas-specs R10.1 L5.4, proposal)
+         * First approval of a licence review (suas-specs R10.1 L5.4, released in 0.10.0)
          * @description AWAITING_REVIEW to AWAITING_CONFIRMATION, recording the admin as approved_by. No VERIFIED row yet: a second, different admin must confirm. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
          */
         post: operations["postAdminLicenceReviewApprove"];
@@ -1395,7 +1395,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Second admin's confirmation (suas-specs R10.1 L5.5, proposal)
+         * Second admin's confirmation (suas-specs R10.1 L5.5, released in 0.10.0)
          * @description AWAITING_CONFIRMATION to APPROVED by an admin other than approved_by: writes a MANUAL_REVIEW VERIFIED row (source SUAS) that opens the request gate, and deletes the images and the reading. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
          */
         post: operations["postAdminLicenceReviewConfirm"];
@@ -1415,7 +1415,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Decline a licence review (suas-specs R10.1 L5.7, proposal)
+         * Decline a licence review (suas-specs R10.1 L5.7, released in 0.10.0)
          * @description From AWAITING_REVIEW or AWAITING_CONFIRMATION, by one admin. Deletes the images and the reading and clears the fingerprint. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
          */
         post: operations["postAdminLicenceReviewDecline"];
@@ -1435,7 +1435,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Recuse from a licence review (suas-specs R10.1 L5.6, proposal)
+         * Recuse from a licence review (suas-specs R10.1 L5.6, released in 0.10.0)
          * @description Hides the review from this admin and refuses their commands on it. Repeating it changes nothing. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
          */
         post: operations["postAdminLicenceReviewRecuse"];
@@ -1455,7 +1455,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Revoke a licence approval (suas-specs R10.1 L7.1, proposal)
+         * Revoke a licence approval (suas-specs R10.1 L7.1, released in 0.10.0)
          * @description APPROVED to REVOKED, freeing the fingerprint. FRAUD writes a REVOKED row, which outranks every method, blocks self-attestation and releases the VA identity. REVIEW_ERROR writes a newer MANUAL_REVIEW NOT_CONFIRMED row, so the approval stops opening the gate without barring the person. Requires the SUAS Admin role and MFA elevation; audited; Idempotency-Key required.
          */
         post: operations["postAdminLicenceReviewRevoke"];
@@ -1474,13 +1474,13 @@ export interface paths {
         };
         /**
          * List consent template versions
-         * @description SUAS administrator (MFA-elevated session) only. Every version of every template key, newest version first (CONSENT.md §6; ADMIN.md §2). R9.3 (contributor proposal, specs #72, not released).
+         * @description SUAS administrator (MFA-elevated session) only. Every version of every template key, newest version first (CONSENT.md §6; ADMIN.md §2). R9.3 (specs #72, released in 0.10.0).
          */
         get: operations["listAdminConsentTemplates"];
         put?: never;
         /**
          * Create the next DRAFT version of a consent template
-         * @description SUAS administrator (MFA-elevated session) only. The server numbers the version (1 for a new key). Audited (CONSENT_TEMPLATE_VERSION_CREATED, key and version only). A retry with the same Idempotency-Key returns the version it made (200, replayed true); a concurrent create of the same key is 409 STALE_STATE. R9.3 (contributor proposal, specs #72, not released).
+         * @description SUAS administrator (MFA-elevated session) only. The server numbers the version (1 for a new key). Audited (CONSENT_TEMPLATE_VERSION_CREATED, key and version only). A retry with the same Idempotency-Key returns the version it made (200, replayed true); a concurrent create of the same key is 409 STALE_STATE. R9.3 (specs #72, released in 0.10.0).
          */
         post: operations["createAdminConsentTemplateVersion"];
         delete?: never;
@@ -1500,7 +1500,7 @@ export interface paths {
         put?: never;
         /**
          * Publish a DRAFT consent template version
-         * @description SUAS administrator (MFA-elevated session) only; one admin publishes (R9.3 owner answer). The key's earlier PUBLISHED version becomes SUPERSEDED in the same transaction, so new grants must cite the new version. Audited (CONSENT_TEMPLATE_PUBLISHED). A version that is not a DRAFT is 409 ILLEGAL_TRANSITION. R9.3 (contributor proposal, specs #72, not released).
+         * @description SUAS administrator (MFA-elevated session) only; one admin publishes (R9.3 owner answer). The key's earlier PUBLISHED version becomes SUPERSEDED in the same transaction, so new grants must cite the new version. Audited (CONSENT_TEMPLATE_PUBLISHED). A version that is not a DRAFT is 409 ILLEGAL_TRANSITION. R9.3 (specs #72, released in 0.10.0).
          */
         post: operations["publishAdminConsentTemplateVersion"];
         delete?: never;
@@ -1518,7 +1518,7 @@ export interface paths {
         };
         /**
          * Read the current published version of a consent template
-         * @description Any signed-in person. `purpose` is the template key, for example `red-alert-trusted-contact`; the answer is the version a new grant must cite. 404 when none is published. R9.3 (contributor proposal, specs #72, not released).
+         * @description Any signed-in person. `purpose` is the template key, for example `red-alert-trusted-contact`; the answer is the version a new grant must cite. 404 when none is published. R9.3 (specs #72, released in 0.10.0).
          */
         get: operations["getPublishedConsentTemplate"];
         put?: never;
@@ -1538,7 +1538,7 @@ export interface paths {
         };
         /**
          * List invites waiting for the signed-in person
-         * @description Invites still INVITED to the caller's enrolled email, with the inviting Veteran's display name and the relationship label only; invites do not expire. Accept with POST /trusted-contacts/{id}/commands/accept. R9.4 (contributor proposal, specs #72, not released).
+         * @description Invites still INVITED to the caller's enrolled email, with the inviting Veteran's display name and the relationship label only; invites do not expire. Accept with POST /trusted-contacts/{id}/commands/accept. R9.4 (specs #72, released in 0.10.0).
          */
         get: operations["listTrustedContactInvitations"];
         put?: never;
@@ -2486,7 +2486,7 @@ export interface components {
             replayed: boolean;
         };
         /**
-         * @description suas-specs R10.1 (proposal). Open states are READING, AWAITING_REVIEW and AWAITING_CONFIRMATION; a person has at most one open review.
+         * @description suas-specs R10.1 (released in 0.10.0). Open states are READING, AWAITING_REVIEW and AWAITING_CONFIRMATION; a person has at most one open review.
          * @enum {string}
          */
         LicenceReviewStatus: "READING" | "UNREADABLE" | "AWAITING_REVIEW" | "AWAITING_CONFIRMATION" | "APPROVED" | "DECLINED" | "REVOKED";

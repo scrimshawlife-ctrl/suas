@@ -4,7 +4,7 @@ import type { ConsentGrant, GrantConsentBody } from './api';
 /**
  * Template key of the RED-alert consent, as src/consent/templates.ts names it. The grant cites
  * the version GET /consent-templates/published?purpose= returns, which a SUAS admin publishes
- * (R9.3, contributor proposal, specs #72).
+ * (R9.3, specs #72, released in 0.10.0).
  */
 export const RED_ALERT_TEMPLATE_PURPOSE = 'red-alert-trusted-contact';
 

@@ -59,7 +59,7 @@ function InvitationItem({
 }
 
 /**
- * Invitations to be someone's trusted contact (R9.4, contributor proposal, specs #72). Shows
+ * Invitations to be someone's trusted contact (R9.4, specs #72, released in 0.10.0). Shows
  * the inviting Veteran's display name and the relationship label only. Accepting shares
  * nothing by itself: the Veteran still decides what SUAS may tell this person.
  */
