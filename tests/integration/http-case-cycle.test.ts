@@ -6,6 +6,8 @@
  * - After CLOSE, a former holder has no standing on the case or its sub-resources.
  * - After REOPEN and a new accept by another helper, a former holder is refused the case
  *   commands for a cycle they never accepted.
+ * - R11.1 (CASES.md §4.3, SUAS-specs #85): standing follows the current accept record, so
+ *   a RELEASE of the only request held ends it too.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -139,6 +141,33 @@ const caseSubResources = (caseId: string) => [
   `/cases/${caseId}/service-requests`,
 ];
 
+/** Every case-level write a holder has (R11.1): the case commands, the contact log and resolve. */
+const holderWrites = (caseId: string): [string, Record<string, unknown>][] => [
+  [`/cases/${caseId}/commands/activate`, {}],
+  [`/cases/${caseId}/commands/move-to-followup`, { reason: 'check back next week' }],
+  [`/cases/${caseId}/commands/resume-active`, {}],
+  [`/cases/${caseId}/commands/escalate`, { reason: 'needs more help' }],
+  [`/cases/${caseId}/commands/close`, {}],
+  [`/cases/${caseId}/commands/log-contact-attempt`, { channel: 'PHONE' }],
+  [`/cases/${caseId}/commands/complete-contact`, { channel: 'PHONE', outcome: 'REACHED' }],
+  [
+    `/cases/${caseId}/commands/resolve`,
+    { requested: {}, occurred: {}, fulfilled: {}, unresolved: {} },
+  ],
+];
+
+/** Refused every holder write with the very answer a case that does not exist gets. */
+async function expectNoStanding(who: Person, caseId: string) {
+  const unknown = holderWrites(randomUUID());
+  for (const [index, [url, payload]] of holderWrites(caseId).entries()) {
+    const refused = await post(who, url, payload);
+    const [missingUrl, missingPayload] = unknown[index]!;
+    const missing = await post(who, missingUrl, missingPayload);
+    expect(refused.statusCode, url).toBe(404);
+    expect(refused.json(), url).toEqual(missing.json());
+  }
+}
+
 describe('holder standing ends with the case cycle', () => {
   it('gives a former holder 404 on the case and its sub-resources after CLOSE', async () => {
     const tenantId = randomUUID();
@@ -157,10 +186,7 @@ describe('holder standing ends with the case cycle', () => {
     for (const url of caseSubResources(caseId)) {
       expect((await get(helper, url)).statusCode, url).toBe(404);
     }
-    const logged = await post(helper, `/cases/${caseId}/commands/log-contact-attempt`, {
-      channel: 'PHONE',
-    });
-    expect(logged.statusCode).toBe(404);
+    await expectNoStanding(helper, caseId);
     // The same cycle rule covers the request, its commands, and its chat. Case
     // sub-resources alone do not. The requester still reads their own closed request.
     expect((await get(helper, `/service-requests/${requestId}`)).statusCode).toBe(404);
@@ -232,6 +258,43 @@ describe('holder standing ends with the case cycle', () => {
 
     // The helper who accepted in this cycle can.
     expect((await post(next, `/cases/${first.caseId}/commands/activate`)).statusCode).toBe(200);
+  });
+  it('refuses a helper who released their only request, and lets the next holder act (R11.1)', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester', true);
+    const released = await person(tenantId, 'released');
+    const next = await person(tenantId, 'next');
+    const { caseId, requestId } = await submitRequest(requester);
+    expect((await accept(released, requestId)).statusCode).toBe(200);
+    // ACTIVE, so each command below is one a holder could run.
+    expect((await post(released, `/cases/${caseId}/commands/activate`)).statusCode).toBe(200);
+    const handedBack = await post(released, `/service-requests/${requestId}/commands/RELEASE`, {
+      reason: 'cannot make it',
+    });
+    expect(handedBack.statusCode).toBe(200);
+
+    await expectNoStanding(released, caseId);
+    expect((await get(released, `/cases/${caseId}`)).statusCode).toBe(404);
+
+    // Standing is the accept record at the time of the command: the next accepter has it.
+    expect((await accept(next, requestId)).statusCode).toBe(200);
+    for (const [command, payload] of [
+      ['escalate', { reason: 'needs more help' }],
+      ['move-to-followup', { reason: 'check back next week' }],
+      ['resume-active', {}],
+    ] as const) {
+      const ran = await post(next, `/cases/${caseId}/commands/${command}`, payload);
+      expect(ran.statusCode, command).toBe(200);
+    }
+    // Holding a request gives no SUAS-admin command.
+    for (const [command, payload] of [
+      ['triage', {}],
+      ['reopen', { reason: 'recurrence' }],
+    ] as const) {
+      const refused = await post(next, `/cases/${caseId}/commands/${command}`, payload);
+      expect(refused.statusCode, command).toBe(403);
+      expect(refused.json().error.code, command).toBe('FORBIDDEN');
+    }
   });
 });
 
