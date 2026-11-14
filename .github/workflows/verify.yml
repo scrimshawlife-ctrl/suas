@@ -157,17 +157,18 @@ jobs:
       - name: Build provenance surface
         run: npm run provenance
 
-  web-e2e:
+  web-e2e-shard:
     # The web app's Playwright suite (web/e2e) against the LOCAL fake stack that
     # web/e2e/stack.ts builds: a throwaway suas_local_* database on this runner,
     # fake and sink adapters, no real external effects (ENVIRONMENT.md §2).
     runs-on: ubuntu-24.04
-    # One worker on one stack: the full suite took 47-53 min on hosted runners (#301, #303, #304
-    # on 11-13). Playwright's own globalTimeout (80 min, web/playwright.e2e.config.ts) ends a slow
-    # run first, with a report of what did not run; this cap is only the backstop for setup plus
-    # that budget. Sharding it under 20 min per job (plan D10) is the follow-up. Later PRs
-    # inherit these two numbers and do not re-edit them.
+    # Four isolated runners keep one worker per disposable database. Preserve the 80-minute
+    # Playwright budget and 90-minute job backstop; no tests or assertions are omitted.
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     permissions:
       contents: read
 
@@ -217,9 +218,9 @@ jobs:
 
       - name: Web end-to-end tests
         working-directory: web
-        run: npm run test:e2e
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/4
 
-      - name: UI coverage report
+      - name: Partial UI coverage report for this shard
         # Each /api/v0 operation against its web callers and the e2e page hits that
         # web/e2e/contract.ts logged. Report only until the gate turns on `--check`.
         if: ${{ !cancelled() }}
@@ -229,7 +230,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: web-e2e-ui-coverage
+          name: web-e2e-ui-coverage-${{ matrix.shard }}
           path: web/e2e-results/coverage/
           retention-days: 7
 
@@ -237,6 +238,18 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: web-e2e-results
+          name: web-e2e-results-${{ matrix.shard }}
           path: web/e2e-results/
           retention-days: 7
+
+  web-e2e:
+    # Preserve the existing required check name and fail closed on any failed/cancelled shard.
+    if: ${{ always() }}
+    needs: web-e2e-shard
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Require every browser shard to pass
+        env:
+          SHARD_RESULT: ${{ needs.web-e2e-shard.result }}
+        run: test "$SHARD_RESULT" = success
