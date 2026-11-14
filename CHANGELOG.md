@@ -13,6 +13,18 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- Chat keeps manual retry for in-flight idempotency conflicts with the original message and key; permanent chat refusals remain final (API.md §7.5).
+
+- SMTP relay transport loss is an ambiguous acknowledgement unless Lambda explicitly rejected execution, preventing blind resend after a lost response (NOTIFICATIONS.md §5). Gmail mode remains unreleased.
+
+- Command execution locks its reservation through the domain transaction and fences completion/failure by attempt, preserving a newer outcome after lease takeover (API.md §7, ARCHITECTURE.md §10).
+
+- Invitation recipient admission, suppression and audit now commit with the notification, so retries cannot queue a send before its cap check (NOTIFICATIONS.md §3, §5).
+
+- Rate-limit cleanup expires only registered buckets at their own window length, preserving daily invitation caps across worker sweeps (AUTH.md §3, SECURITY.md §2).
+
 ### Changed
 
 - **Cloudflare Worker and Neon staging retired (R11.6; contributor proposal, specs #75, not released).** Removed the Worker entry (`src/worker.ts`, `src/worker/**`), `wrangler.jsonc`, `.dev.vars.example`, the Fetch bridge `src/http/dispatch.ts`, the Hyperdrive pool (`createWorkerPool`), the `runtime`/`listenPort` options of `startApp` and the `logger`/`workerRuntime` options of `createServer`, the `find-my-way` patch and `patch-package`, the `worker:dev`, `staging:contract`, `evidence:preflight` and `check:staging:path-params` scripts, and the `worker-deploy`, `staging-migrate`, `cloudflare-token-preflight`, `recovery-runtime-acceptance`, `staging-path-param-check`, `staging-acceptance`, `staging-recovery-fixtures` and `synthetic-staging-soak` workflows. An unhandled 5xx is now logged once, through pino with its route (A4-23). The fixed demo code is LOCAL only (STAGING issued it only on the Worker). `npm run dev:demo` always starts the Node server. `SUAS_WORKER_BASE_URL` is gone; the local seed hint reads `SUAS_E2E_BASE_URL`. STAGING deploys and rollbacks run by hand with CDK (`docs/runbooks/deployment-rollback.md`); the Worker runbooks are deleted. Historical evidence that cites the Worker is unchanged.
@@ -65,6 +77,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
+- **Request lists follow a county change at once (#282; SUAS-specs #79 (R12.2), AT02, not released).** After `PUT /veterans/me/county` succeeds, the web app refreshes every Service Request list and detail (the open Serve list, the person's own and accepted lists), not only `GET /veterans/me`, so the open list shows the new county's requests without a reload.
 - **Check-In answers and completion (A2-02, A2-10, A5-02, A5-03, A2-25, A2-28; CHECKINS.md §4.2, §4.4, §6; SIGNAL_SCORING.md B1).** `POST /check-ins/{id}/responses` refuses a `question_id` outside the Check-In's questionnaire version, or an `answer_option_id` that is not one of that question's options, with 400 `VALIDATION_FAILED` (it was 500 for an unknown id and silently accepted a wrong option, so scoring later failed and a RED answer produced no signal). A completion replay enqueues `support-signal.compute` again under the same `support-signal:<id>` key, so a lost enqueue is recovered on retry; new `requeueUnsettledCheckIns` finds completed Check-Ins with no settled signal and no compute job and enqueues them (CHECKINS.md §6 rules 6-7). `POST /check-ins` returns the in-flight Check-In (200) instead of starting a second one. Check-In responses carry `started_at`.
 - **Idempotency reservations expire (A2-07, A2-20; API.md §7 rule 5).** A `RESERVED` command record left by a request that crashed or timed out no longer blocks its key forever: after a 120-second lease an identical retry runs the command again (the API Lambda times out at 30 seconds). The unreachable `FAILED_FINAL` path (`isFinalFailure`, `CommandFailedFinalError`) is removed; a failed command is always retryable.
 - **Case and contact commands commit with their idempotency record (A2-06, A2-08; API.md §7 rules 2, 3, 5; EVENT_MODEL.md §2.1).** `POST /cases/{id}/commands/{activate,move-to-followup,resume-active,escalate,close,triage,reopen}`, `log-contact-attempt` and `complete-contact` now run in the transaction that records the command result, so a retry after a lost response replays the original result instead of a 409. The contact event's dedupe key is scoped to the case, the caller and the command, so a reused `Idempotency-Key` on another case records that case's contact instead of returning the first case's. A Domain Event key that already belongs to another aggregate is refused with 409 `IDEMPOTENCY_CONFLICT`.

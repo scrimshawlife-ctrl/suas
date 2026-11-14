@@ -6,12 +6,12 @@
  *
  * Classification of a failed invoke: if the relay may have run (a timeout waiting for
  * its answer, or the function itself erroring), the message may already be out, so the
- * result is an ambiguous acknowledgement. If Lambda refused the call or could not be
- * reached, the send is retryable. SDK retries are off: the job outbox owns retrying.
+ * result is an ambiguous acknowledgement. Only a known pre-execution rejection is
+ * retryable. SDK retries are off: the job outbox owns retrying.
  */
 
 import { InvokeCommand, LambdaClient, type InvokeCommandOutput } from '@aws-sdk/client-lambda';
-import { isAwsTimeout } from '../aws/errors.js';
+import { awsErrorName } from '../aws/errors.js';
 import {
   smtpRelayResponseSchema,
   toRelayRequest,
@@ -19,6 +19,17 @@ import {
   type SmtpSender,
   type SmtpSendResult,
 } from './smtp.js';
+
+// These Invoke rejections occur before the function executes; transport loss is unknown.
+const INVOKE_REJECTIONS: ReadonlySet<string> = new Set([
+  'TooManyRequestsException',
+  'AccessDeniedException',
+  'ResourceNotFoundException',
+  'InvalidParameterValueException',
+  'InvalidRequestContentException',
+  'RequestTooLargeException',
+  'UnsupportedMediaTypeException',
+]);
 
 /** Above the relay's own SMTP session bound, so the relay answers first. */
 export const RELAY_INVOKE_TIMEOUT_MS = 28_000;
@@ -60,7 +71,10 @@ export class LambdaRelaySmtpSender implements SmtpSender {
         { abortSignal: AbortSignal.timeout(RELAY_INVOKE_TIMEOUT_MS) },
       );
     } catch (error: unknown) {
-      return { result: isAwsTimeout(error) ? 'ambiguous_ack' : 'retryable' };
+      const name = awsErrorName(error);
+      return {
+        result: name !== undefined && INVOKE_REJECTIONS.has(name) ? 'retryable' : 'ambiguous_ack',
+      };
     }
 
     // A function error (crash or relay timeout) can happen after the SMTP data went out.
