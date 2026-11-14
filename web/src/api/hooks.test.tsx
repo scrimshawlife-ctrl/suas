@@ -6,7 +6,7 @@ import { createQueryClient } from '../app/query-client';
 import { useChatThreads } from './chat';
 import { ApiError } from './errors';
 import { queryKeys } from './keys';
-import { useUpdateProfile } from './profile';
+import { useUpdateCounty, useUpdateProfile } from './profile';
 import { useServiceRequest, useServiceRequests } from './service-requests';
 import { tokenStore } from './token-store';
 
@@ -89,5 +89,30 @@ describe('useUpdateProfile', () => {
       body: { display_name: 'Marcus T.' },
     });
     expect(queryClient.getQueryState(queryKeys.me)?.isInvalidated).toBe(true);
+  });
+});
+
+describe('useUpdateCounty', () => {
+  // The open list and request county come from the person's current county (AT02).
+  it('sends the county and refetches the request lists and details it changes', async () => {
+    tokenStore.setToken('tok');
+    client.GET.mockResolvedValue({ data: { service_requests: [], next_cursor: null } });
+    client.PUT.mockResolvedValue({ data: { county: 'ALAMEDA' } });
+    const queryClient = new QueryClient();
+    const options = { wrapper: wrapper(queryClient) };
+    const open = renderHook(() => useServiceRequests('open'), options);
+    await waitFor(() => expect(open.result.current.isSuccess).toBe(true));
+    queryClient.setQueryData(queryKeys.serviceRequests.detail('abc'), { county: 'MERCED' });
+
+    const { result } = renderHook(() => useUpdateCounty(), options);
+    result.current.mutate('ALAMEDA');
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(client.PUT).toHaveBeenCalledWith('/api/v0/veterans/me/county', {
+      body: { county: 'ALAMEDA' },
+    });
+    await waitFor(() => expect(client.GET).toHaveBeenCalledTimes(2));
+    expect(queryClient.getQueryState(queryKeys.serviceRequests.detail('abc'))?.isInvalidated).toBe(
+      true,
+    );
   });
 });
