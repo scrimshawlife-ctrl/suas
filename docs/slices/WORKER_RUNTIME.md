@@ -6,9 +6,9 @@
 **Stage:** `SPEC-017`
 **Production/pilot readiness:** `NOT_READY` (unchanged)
 
-> **Retired (2026-11-12):** the Cloudflare Worker, `wrangler.jsonc`, the Worker and Neon workflows and their runbooks were removed (R11.6, specs #75, contributor proposal, not released). The files and runbooks this record cites no longer exist. It stays as historical evidence only.
+> **Retired (2026-11-12):** the Cloudflare Worker, `wrangler.jsonc`, the Worker and Neon workflows and their runbooks were removed (R11.6, specs #75, released in 0.10.0). The files and runbooks this record cites no longer exist. It stays as historical evidence only.
 
-> **Living pin note (2026-11-09):** runtime pin is now `0.9.0` / `RELEASE_MANIFEST-0.9.0.md` (`src/release/pins.ts`). This record was authored under `0.2.0` and remains historical evidence for the Workers host seam. It does not claim SPEC-018 or production operation.
+> **Living pin note (2026-11-14):** runtime pin is now `0.10.0` / `RELEASE_MANIFEST-0.10.0.md` (`src/release/pins.ts`). This record was authored under `0.2.0` and remains historical evidence for the Workers host seam. It does not claim SPEC-018 or production operation.
 
 Scope is the compute host for the existing Fastify app. This record does not
 close D-001–D-005, D-006, D-022, or SPEC-018. It does not claim a live Worker

@@ -4,13 +4,13 @@ Read [`FABLE_HANDOFF.md`](FABLE_HANDOFF.md) and [`CONTEXT.md`](CONTEXT.md) first
 
 ## Released spec pin
 
-Build against the released `SUAS-specs` stack named in [`src/release/pins.ts`](src/release/pins.ts): currently `SPEC_VERSION` `0.9.0`, manifest `RELEASE_MANIFEST-0.9.0.md` (tag `v0.9.0`). Draft, merged-but-untagged, and unreleased spec text is not authority. The implementation stage is `SPEC-017` (`IMPLEMENTATION_STAGE`), and `PRODUCTION_READINESS` is `NOT_READY`; SPEC-018 is blocked.
+Build against the released `SUAS-specs` stack named in [`src/release/pins.ts`](src/release/pins.ts): currently `SPEC_VERSION` `0.10.0`, manifest `RELEASE_MANIFEST-0.10.0.md` (tag `v0.10.0`). Draft, merged-but-untagged, and unreleased spec text is not authority. The implementation stage is `SPEC-017` (`IMPLEMENTATION_STAGE`), and `PRODUCTION_READINESS` is `NOT_READY`; SPEC-018 is blocked.
 
 ## Project
 
 SUAS v1 targets a proof of concept for the Mozilla Human-Scale AI Incubator. The v1 helper model is released in 0.8.0 (D-054) and described in `V1_PROJECT_PLAN.md` (proposal): a Veteran asks for help (food, rides, shelter, peer support) after an ID check, and any signed-in person can accept the request. Crisis destinations and labels come only from `SAFETY_COPY.md` at the pinned release (see Safety and environment).
 
-- This repo: Fastify JSON API `/api/v0` (`src/`), React web app (`web/`, its own package), AWS CDK infrastructure (`infra/`). STAGING runs on AWS (`infra/`), deployed by hand with CDK until a deploy workflow exists ([`docs/runbooks/deployment-rollback.md`](docs/runbooks/deployment-rollback.md)). The Cloudflare Worker and the Neon staging are retired (R11.6, proposal).
+- This repo: Fastify JSON API `/api/v0` (`src/`), React web app (`web/`, its own package), AWS CDK infrastructure (`infra/`). STAGING runs on AWS (`infra/`), deployed by hand with CDK until a deploy workflow exists ([`docs/runbooks/deployment-rollback.md`](docs/runbooks/deployment-rollback.md)). The Cloudflare Worker and the Neon staging are retired (R11.6, released in 0.10.0).
 - [`SUAS-specs`](https://github.com/scrimshawlife-ctrl/SUAS-specs) at the pinned release is the product authority, including `SAFETY.md` and `ENVIRONMENT.md`. Native clients `suas-ios` and `suas-android` consume `/api/v0`. Do not add `/api/mobile` or a second version selector; HTML `/app/*` commands are the browser surface, not the mobile contract.
 
 ## Safety and environment (non-negotiable)

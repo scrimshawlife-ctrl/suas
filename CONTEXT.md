@@ -50,9 +50,9 @@ Every SUAS repository has a `CONTEXT.md`: [suas-ios](https://github.com/scrimsha
 
 ## Released implementation contract
 
-- spec version: `0.9.0`
-- release manifest: `RELEASE_MANIFEST-0.9.0.md`
-- specs merge pin: `208705cfd2b6aa1ce913ac9e70a2d42a1c9487ad` (`src/release/pins.ts`)
+- spec version: `0.10.0`
+- release manifest: `RELEASE_MANIFEST-0.10.0.md`
+- specs merge pin: `6cd437e61b11f67e04b2bd91101d33f7c09c0fce` (`src/release/pins.ts`)
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - current implementation stage: `SPEC-018` (blocked); SPEC-017 evidence recorded against pin `0.6.0`
 - production/pilot readiness: `NOT_READY`
@@ -62,8 +62,8 @@ Use `FABLE_HANDOFF.md`, `AGENTS.md`, `SPEC017_PLAN.md`, and `SPEC017_NEXT.md` in
 
 ## Current state: 2026-11-12
 
-- Stack: the v1 web app (`web/`) and the Fastify API (`src/`) run locally against PostgreSQL ([README.md](README.md#local-development)). The AWS CDK app (`infra/`) is synthesized and tested offline only; nothing is deployed to AWS. The Cloudflare Worker and its Neon staging database were retired on 2026-11-12 (R11.6, specs #75, proposal); until an AWS deploy workflow exists, STAGING deploys are run by hand with CDK ([docs/runbooks/deployment-rollback.md](docs/runbooks/deployment-rollback.md)). No STAGING is running until that first deploy.
-- Application version: `0.2.0` (`package.json`, reported as `app_version` by build-info). Tag `v0.2.0` implements SUAS-specs `0.6.0`. `main` pins the released spec `0.9.0` (tag `v0.9.0`); its application changes since `v0.2.0` are not released yet (see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`). Tags `v0.1.0` (baseline, `e3a9a16`) and `v0.2.0` (`a68eb12`) have GitHub Releases. Versions stay below 1.0.0 while SPEC-018 is blocked (SUAS-specs `VERSIONING.md` section 8).
+- Stack: the v1 web app (`web/`) and the Fastify API (`src/`) run locally against PostgreSQL ([README.md](README.md#local-development)). The AWS CDK app (`infra/`) is synthesized and tested offline only; nothing is deployed to AWS. The Cloudflare Worker and its Neon staging database were retired on 2026-11-12 (R11.6, specs #75, released in 0.10.0); until an AWS deploy workflow exists, STAGING deploys are run by hand with CDK ([docs/runbooks/deployment-rollback.md](docs/runbooks/deployment-rollback.md)). No STAGING is running until that first deploy.
+- Application version: `0.2.0` (`package.json`, reported as `app_version` by build-info). Tag `v0.2.0` implements SUAS-specs `0.6.0`. `main` pins the released spec `0.10.0` (tag `v0.10.0`); its application changes since `v0.2.0` are not released yet (see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`). Tags `v0.1.0` (baseline, `e3a9a16`) and `v0.2.0` (`a68eb12`) have GitHub Releases. Versions stay below 1.0.0 while SPEC-018 is blocked (SUAS-specs `VERSIONING.md` section 8).
 - Release flow: record changes in [CHANGELOG.md](CHANGELOG.md), follow [RELEASING.md](RELEASING.md), tag `vX.Y.Z` on `main` only after an approved merge. `.github/workflows/release.yml` creates the GitHub Release from the CHANGELOG section. A tag never deploys.
 - LOCAL demo: `npm run dev:demo` applies migrations, loads the synthetic demo seed, and starts the Node server on `http://127.0.0.1:3000`. `npm run smoke:demo` checks the main `/api/v0` endpoints. Sign in as `demo@example.invalid` with code `123456`; `newvet@example.invalid` is enrolled with no case. The fixed code needs `SUAS_ENV=LOCAL`, `SUAS_DEMO_FIXED_CODE=enabled`, and a local database (`src/auth/demo-fixed-code.ts`). TEST and PRODUCTION reject the flag, and STAGING never issues the code. Every other account gets a random code.
 - Demo fixtures: this repo owns `contract/demo-fixtures.json` and regenerates it with `npm run demo:fixtures`. `suas-android` and `suas-ios` hold copies that are not hand-edited.

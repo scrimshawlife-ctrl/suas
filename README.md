@@ -18,15 +18,15 @@ The former `demo.html` URL remains as a compatibility redirect to the Product UI
 
 Canonical released specs:
 
-- specification stack: `0.9.0`
-- specs merge pin: `208705cfd2b6aa1ce913ac9e70a2d42a1c9487ad` (`src/release/pins.ts`)
-- manifest: `RELEASE_MANIFEST-0.9.0.md`
+- specification stack: `0.10.0`
+- specs merge pin: `6cd437e61b11f67e04b2bd91101d33f7c09c0fce` (`src/release/pins.ts`)
+- manifest: `RELEASE_MANIFEST-0.10.0.md`
 - current stage: `SPEC-018` (blocked); SPEC-017 evidence recorded against pin `0.6.0`
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - pilot readiness: `NOT_READY`
 - production readiness: `NOT_READY`
 - pin audit: [docs/PIN_INVENTORY.md](docs/PIN_INVENTORY.md)
-- application version: `0.2.0` (`package.json`). Tag `v0.2.0` implements SUAS-specs `0.6.0`. `main` pins the released spec `0.9.0` (tag `v0.9.0`); its application changes since `v0.2.0` are not released yet (see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]` and [RELEASING.md](RELEASING.md))
+- application version: `0.2.0` (`package.json`). Tag `v0.2.0` implements SUAS-specs `0.6.0`. `main` pins the released spec `0.10.0` (tag `v0.10.0`); its application changes since `v0.2.0` are not released yet (see [CHANGELOG.md](CHANGELOG.md) `[Unreleased]` and [RELEASING.md](RELEASING.md))
 - work tracking: [SUAS Product Board](https://github.com/users/scrimshawlife-ctrl/projects/6) (all four repositories)
 
 ## Product surfaces
@@ -258,7 +258,7 @@ offline. Details: [infra/README.md](infra/README.md).
 
 STAGING is the AWS CDK app above. The Cloudflare Worker and its Neon database,
 the pre-v1 STAGING host at `https://suasqrf.com`, were retired on 2026-11-12
-(R11.6, specs #75, contributor proposal, not released), together with
+(R11.6, specs #75, released in 0.10.0), together with
 `wrangler.jsonc` and the Worker and Neon workflows. Evidence recorded against
 the Worker stays under `docs/readiness/evidence/` as written. PRODUCTION remains
 rejected until SPEC-018, and no real support-provider effects are authorized.
@@ -326,7 +326,7 @@ Logical classes are `LOCAL`, `TEST`, `STAGING`, `PRODUCTION`. LOCAL/TEST/STAGING
 
 ## Release boundary
 
-v0.9.0 authorizes implementation but not production operation.
+v0.10.0 authorizes implementation but not production operation.
 
 Production-unavailable until later decision/evidence closure:
 

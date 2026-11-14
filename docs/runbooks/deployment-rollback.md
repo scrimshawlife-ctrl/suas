@@ -2,7 +2,7 @@
 
 STAGING runs on the AWS CDK app in [`infra/`](../../infra/README.md). There is no deploy
 workflow yet (plan §8 item 17), so every STAGING deploy and rollback is run by hand with CDK
-(R11.6, specs #75, contributor proposal, not released). The Cloudflare Worker and the Neon
+(R11.6, specs #75, released in 0.10.0). The Cloudflare Worker and the Neon
 staging database are retired. This runbook does not authorize PRODUCTION, a pilot, real Veteran
 data or real external effects, and a deploy is not SPEC-018 evidence.
 
@@ -11,7 +11,7 @@ data or real external effects, and a deploy is not SPEC-018 evidence.
 - The AWS account layout is decided and `CDK_DEFAULT_ACCOUNT` names it (never commit it).
   Until then, follow "Deploy order (not done yet)" in [`infra/README.md`](../../infra/README.md): nothing is deployed.
 - The commit is on `main`, CI is green, and `cd infra && npm run check` passes locally.
-- Spec pin `SUAS_SPEC_VERSION=0.9.0` and `SUAS_RELEASE_MANIFEST=RELEASE_MANIFEST-0.9.0.md` (`src/release/pins.ts`).
+- Spec pin `SUAS_SPEC_VERSION=0.10.0` and `SUAS_RELEASE_MANIFEST=RELEASE_MANIFEST-0.10.0.md` (`src/release/pins.ts`).
 - `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`; synthetic data only (`ENVIRONMENT.md` §2).
 
 ## Deploy
