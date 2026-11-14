@@ -338,7 +338,11 @@ export class BackendStack extends Stack {
     };
 
     // R11.2: Gmail SMTP from outside the VPC. The API and worker hand it rendered messages.
-    const smtpRelay = new SmtpRelay(this, 'SmtpRelay', { code, logRetention: LOG_RETENTION });
+    const smtpRelay = new SmtpRelay(this, 'SmtpRelay', {
+      code,
+      logRetention: LOG_RETENTION,
+      fixtureMailbox: fixtureParameter('fixture-mailbox'),
+    });
     const viaSmtpRelay: Env = {
       SUAS_EMAIL_MODE: 'gmail_smtp',
       SUAS_SMTP_RELAY_FUNCTION: smtpRelay.function.functionName,

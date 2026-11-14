@@ -365,7 +365,10 @@ describe('SMTP relay (R11.2)', () => {
   it('runs outside the VPC, with no database setting and only its secret id', () => {
     const [, fn] = relay();
     expect(fn.Properties?.VpcConfig).toBeUndefined();
-    expect(Object.keys(fn.Properties?.Environment.Variables)).toEqual(['SUAS_SMTP_SECRET_ID']);
+    expect(Object.keys(fn.Properties?.Environment.Variables)).toEqual([
+      'SUAS_SMTP_SECRET_ID',
+      'SUAS_STAGING_FIXTURE_MAILBOX',
+    ]);
     expect(JSON.stringify(fn.Properties?.Environment.Variables)).toContain('SmtpRelayCredentials');
     expect(JSON.stringify(fn)).not.toMatch(/DATABASE_URL|ProxySg|DatabaseSg|LambdaSg/);
   });

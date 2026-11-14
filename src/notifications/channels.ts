@@ -227,6 +227,7 @@ export function createChannelRegistry(
         appPassword: config.notifications.smtp.appPassword,
         relayFunction: config.notifications.smtp.relayFunction,
         region: config.aws.region,
+        fixtureMailbox: config.stagingFixtureMailbox,
         logger: logEmailSend,
       }),
     );

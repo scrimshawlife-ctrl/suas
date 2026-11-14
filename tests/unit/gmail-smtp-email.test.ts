@@ -12,6 +12,7 @@ import { describeConfig, loadConfig, tryLoadConfig } from '../../src/config/inde
 import { createChannelRegistry } from '../../src/notifications/channels.js';
 import {
   GmailSmtpEmailChannel,
+  stagingRecipientAllowed,
   type GmailSmtpEmailLogRecord,
 } from '../../src/notifications/gmail-smtp-email.js';
 import {
@@ -342,6 +343,7 @@ describe('relay function contract', () => {
         reads += 1;
         return Promise.resolve(secret);
       },
+      allowRecipient: () => true,
       createSender: (credentials) => {
         expect(credentials).toEqual({ SUAS_SMTP_USER: USER, SUAS_SMTP_APP_PASSWORD: PASSWORD });
         return {
@@ -371,6 +373,7 @@ describe('relay function contract', () => {
     const handler = createSmtpRelayHandler({
       readSecret: () => Promise.resolve('{}'),
       createSender: neverSends,
+      allowRecipient: () => true,
     });
     expect(await handler({ ...request, to: 'not-an-address' })).toEqual({ result: 'rejected' });
     expect(await handler({ ...request, extra: true })).toEqual({ result: 'rejected' });
@@ -378,7 +381,118 @@ describe('relay function contract', () => {
     const unset = createSmtpRelayHandler({
       readSecret: () => Promise.resolve(undefined),
       createSender: neverSends,
+      allowRecipient: () => true,
     });
     expect(await unset(request)).toEqual({ result: 'retryable' });
+  });
+});
+
+// r263 F2: a fail-closed STAGING recipient allowlist at the last hop.
+describe('STAGING last-hop recipient allowlist', () => {
+  // Routable addresses are built at run time (repository hygiene, TESTING.md §12).
+  const at = (local: string, domain: string) => [local, domain].join('@');
+  const OWNER = at('owner', 'gmail.com');
+  const OWNER_TAGGED = at('owner+suas-1', 'gmail.com');
+  const OTHER_TAGGED = at('other+suas-1', 'gmail.com');
+  const FRIEND = at('friend', 'gmail.com');
+  const MAILBOX = 'fixture.owner@example.com';
+  const outbound = (destination: string) =>
+    ({
+      channel: 'EMAIL',
+      destination,
+      templateVersion: 'invite@1',
+      subject: 'Subject line',
+      body: 'Body text',
+      idempotencyKey: 'invite:1',
+    }) as const;
+  const scripted = () => {
+    const sent: SmtpMessage[] = [];
+    const sender = {
+      implementation: 'scripted',
+      send: (message: SmtpMessage) => {
+        sent.push(message);
+        return Promise.resolve({ result: 'sent', responseCode: 250 } as const);
+      },
+    };
+    return { sender, sent };
+  };
+
+  it('admits synthetic addresses and +tag addresses of the fixture mailbox, not the bare mailbox', () => {
+    const allowed = stagingRecipientAllowed(OWNER);
+    expect(allowed('a@example.invalid')).toBe(true);
+    expect(allowed(OWNER_TAGGED)).toBe(true);
+    expect(allowed(OWNER)).toBe(false);
+    expect(allowed(OTHER_TAGGED)).toBe(false);
+    expect(allowed(FRIEND)).toBe(false);
+  });
+
+  it('fails closed with no mailbox: only synthetic addresses pass', () => {
+    const allowed = stagingRecipientAllowed(undefined);
+    expect(allowed('a@example.invalid')).toBe(true);
+    expect(allowed(OWNER_TAGGED)).toBe(false);
+    expect(allowed(FRIEND)).toBe(false);
+  });
+
+  it('a destination off the list makes no SMTP call and settles not accepted, not retryable', async () => {
+    const logs: GmailSmtpEmailLogRecord[] = [];
+    const { sender, sent } = scripted();
+    const channel = new GmailSmtpEmailChannel(
+      sender,
+      (record) => logs.push(record),
+      stagingRecipientAllowed(MAILBOX),
+    );
+    expect(await channel.send(outbound(FRIEND))).toEqual({
+      accepted: false,
+      retryable: false,
+      failureReason: 'recipient_not_allowed',
+    });
+    expect(sent).toHaveLength(0);
+    expect(JSON.stringify(logs)).not.toContain(FRIEND);
+    expect(logs).toEqual([
+      {
+        implementation: 'gmail_smtp',
+        channel: 'EMAIL',
+        accepted: false,
+        outcome: 'recipient_not_allowed',
+      },
+    ]);
+  });
+
+  it('a destination on the list is sent', async () => {
+    const { sender, sent } = scripted();
+    const channel = new GmailSmtpEmailChannel(sender, undefined, stagingRecipientAllowed(MAILBOX));
+    expect((await channel.send(outbound('fixture.owner+inv-2@example.com'))).accepted).toBe(true);
+    expect(sent.map((m) => m.to)).toEqual(['fixture.owner+inv-2@example.com']);
+  });
+
+  it('a channel built without an allowlist refuses a real address', async () => {
+    const { sender, sent } = scripted();
+    const channel = new GmailSmtpEmailChannel(sender);
+    expect((await channel.send(outbound(FRIEND))).accepted).toBe(false);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('the relay refuses an address off the list before it reads the secret', async () => {
+    let reads = 0;
+    const handler = createSmtpRelayHandler({
+      readSecret: () => {
+        reads += 1;
+        return Promise.resolve(
+          JSON.stringify({ SUAS_SMTP_USER: USER, SUAS_SMTP_APP_PASSWORD: PASSWORD }),
+        );
+      },
+      createSender: () => {
+        throw new Error('must not build a sender');
+      },
+      allowRecipient: stagingRecipientAllowed(undefined),
+    });
+    const request = {
+      to: FRIEND,
+      subject: 'Subject line',
+      text: 'Body text',
+      message_id: 'c'.repeat(32),
+    };
+    expect(await handler(request)).toEqual({ result: 'rejected' });
+    expect(reads).toBe(0);
   });
 });
