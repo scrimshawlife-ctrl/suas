@@ -1,7 +1,8 @@
 /**
  * Startup check on the approved VA projection (suas-specs #72 VA_CONFIRMATION_FLOW §3,
  * amendment A27; D035 §7, §14). `sandbox` starts only with the unchanged, approved
- * projection; `fixture` and `disabled` need neither. The approvals here are synthetic.
+ * projection; `fixture` and `disabled` need neither. The vendored record is the released
+ * 0.10.0 approval; every other approval or pending record here is synthetic.
  */
 
 import { readFileSync } from 'node:fs';
@@ -36,6 +37,11 @@ const sandbox = (SUAS_ENV: string) =>
       SUAS_VA_CONFIRMATION_API_KEY: 'synthetic-sandbox-key-1111',
     }),
   );
+const pendingApproval = approvedVaProjection({
+  status: 'DECISION_PENDING',
+  approved_by: null,
+  approval_timestamp: null,
+});
 
 describe('approved VA projection (A27)', () => {
   it('embeds the vendored files exactly (run npm run va:projection after copying them)', () => {
@@ -54,16 +60,22 @@ describe('approved VA projection (A27)', () => {
     expect(Object.keys(projectionJson.fields).sort()).toEqual(allowed);
   });
 
-  it('refuses sandbox startup while the vendored approval is pending', () => {
+  it('starts sandbox in STAGING and LOCAL on the vendored approval (released in 0.10.0)', () => {
     const approval = JSON.parse(VENDORED_VA_PROJECTION.approvalText) as Record<string, string>;
     expect(approval.projection_sha256).toBe(
       projectionSha256(VENDORED_VA_PROJECTION.projectionText),
     );
-    expect(approval.status).not.toBe('APPROVED');
+    expect(approval.status).toBe('APPROVED');
     for (const env of ['STAGING', 'LOCAL']) {
-      expect(() => createVeteranConfirmationPort(sandbox(env))).toThrow(
-        /has not approved VA_CONFIRMATION_V1_REQUIRED_ONLY \(status DECISION_PENDING\)/,
-      );
+      expect(createVeteranConfirmationPort(sandbox(env))?.providerEnvironment).toBe('SANDBOX');
+    }
+  });
+
+  it('refuses sandbox startup while an approval is pending', () => {
+    for (const env of ['STAGING', 'LOCAL']) {
+      expect(() =>
+        createVeteranConfirmationPort(sandbox(env), { projection: pendingApproval }),
+      ).toThrow(/has not approved VA_CONFIRMATION_V1_REQUIRED_ONLY \(status DECISION_PENDING\)/);
     }
   });
 
@@ -93,7 +105,7 @@ describe('approved VA projection (A27)', () => {
   });
 
   it('needs no approval for fixture or disabled, which send nothing to VA', () => {
-    const pending = { projection: VENDORED_VA_PROJECTION };
+    const pending = { projection: pendingApproval };
     const fixture = loadConfig(validEnv({ SUAS_VA_CONFIRMATION_MODE: 'fixture' }));
     expect(createVeteranConfirmationPort(fixture, pending)?.providerEnvironment).toBe('NONE');
     expect(createVeteranConfirmationPort(loadConfig(validEnv({})), pending)).toBeUndefined();

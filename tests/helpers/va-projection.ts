@@ -1,6 +1,6 @@
 /**
- * A synthetic approval of the vendored VA projection, for tests that need `sandbox` mode to
- * start. The real approval record stays DECISION_PENDING until the Privacy Owner approves.
+ * A synthetic approval record over the vendored VA projection, for tests that need their own
+ * approver or status. The vendored record is the released 0.10.0 approval (STAGING and sandbox).
  */
 
 import {

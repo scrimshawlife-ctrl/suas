@@ -93,6 +93,13 @@ describe('ENVIRONMENT.md §7 — repository files', () => {
   });
 });
 
+// Split so this file does not itself carry the number the scanner reads as a phone.
+const VENDORED_VA_REVIEW_ID = ['588630', '1842'].join('');
+const VENDORED_VA_APPROVAL_FILES = [
+  'contract/va-projection/va-confirmation-v1-required-only.approval.json',
+  'src/identity/va-projection-artifact.ts',
+];
+
 describe('TESTING.md §12 — fixtures are synthetic', () => {
   it('contains no routable contact data in tracked source, fixture, or doc files', () => {
     const scannable = repositoryFiles().filter(
@@ -114,11 +121,21 @@ describe('TESTING.md §12 — fixtures are synthetic', () => {
       // ENVIRONMENT.md §7 targets fixture and production leakage, not that mailbox.
       const publicLegalContact = ['zer0state', 'zer0state.com'].join('@');
       const isPublicLegalNotice = file.startsWith('docs/legal/');
+      // The vendored VA approval record (and its generated embed) is byte-identical to the 0.10.0
+      // release; the GitHub review id it cites is not a phone. Exempted by Badri-Rajendran, 2026-11-14.
+      const isVendoredVaApproval = VENDORED_VA_APPROVAL_FILES.includes(file);
       for (const finding of scanForNonSyntheticContactData(contents)) {
         if (
           isPublicLegalNotice &&
           finding.kind === 'email' &&
           finding.value === publicLegalContact
+        ) {
+          continue;
+        }
+        if (
+          isVendoredVaApproval &&
+          finding.kind === 'phone' &&
+          finding.value === VENDORED_VA_REVIEW_ID
         ) {
           continue;
         }

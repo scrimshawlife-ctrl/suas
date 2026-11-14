@@ -23,7 +23,7 @@ export const VENDORED_VA_PROJECTION: VaProjectionArtifact = {
   approvalText: VA_PROJECTION_APPROVAL_TEXT,
 };
 
-/** The spec does not name the approved status yet; anything else counts as not approved. */
+/** The status of the released approval record (0.10.0); anything else counts as not approved. */
 export const VA_PROJECTION_APPROVED_STATUS = 'APPROVED';
 
 const approvalSchema = z.object({
