@@ -30,6 +30,7 @@ import {
 } from './case-logic';
 import { ContactLog } from './ContactLog';
 import { ReleaseDialog } from './ReleaseDialog';
+import { uniqueBy } from '../../lib/unique-by';
 
 export default function CasePage() {
   const { id } = useParams();
@@ -292,7 +293,10 @@ function History({
 
 function CaseRequests({ request }: { request: ServiceRequestDetail }) {
   const list = useCaseServiceRequests(request.case_id);
-  const items = list.data?.pages.flatMap((page) => page.service_requests) ?? [];
+  const items = uniqueBy(
+    list.data?.pages.flatMap((page) => page.service_requests) ?? [],
+    (item) => item.service_request_id,
+  );
   return (
     <Card aria-labelledby="sr" padding="lg" className="flex flex-col gap-3 max-sm:p-5">
       <h2 id="sr" className="text-20 font-bold">

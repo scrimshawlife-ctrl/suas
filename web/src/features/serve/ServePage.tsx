@@ -28,6 +28,7 @@ import {
 } from './board';
 import { OpenRequestCard } from './OpenRequestCard';
 import { useNow } from './useNow';
+import { uniqueBy } from '../../lib/unique-by';
 
 export default function ServePage() {
   const me = useMe();
@@ -42,7 +43,10 @@ export default function ServePage() {
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
 
   const cards = useMemo(() => {
-    const items = open.data?.pages.flatMap((page) => page.service_requests) ?? [];
+    const items = uniqueBy(
+      open.data?.pages.flatMap((page) => page.service_requests) ?? [],
+      (item) => item.service_request_id,
+    );
     return items
       .filter((item) => !hidden.has(item.service_request_id))
       .map((item) => toOpenCard(item, now, me.data?.county));
@@ -183,7 +187,10 @@ function useMine() {
   const pages = mine.data?.pages ?? [];
   const list = mine.isSuccess
     ? {
-        service_requests: pages.flatMap((page) => page.service_requests),
+        service_requests: uniqueBy(
+          pages.flatMap((page) => page.service_requests),
+          (item) => item.service_request_id,
+        ),
         next_cursor: pages.at(-1)?.next_cursor ?? null,
         counts: pages[0]?.counts,
       }

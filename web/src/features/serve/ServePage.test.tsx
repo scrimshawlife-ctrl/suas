@@ -65,6 +65,47 @@ beforeEach(() => {
 });
 
 describe('Serve board', () => {
+  it('shows a helped request once when it moved onto the next page between reads (r247 F1)', async () => {
+    client.GET.mockImplementation(
+      (
+        path: string,
+        options?: { params?: { query?: { ownership?: string; cursor?: string } } },
+      ) => {
+        if (path === '/api/v0/veterans/me') {
+          return Promise.resolve({ data: { display_name: 'Dee R.', county: 'SANTA_CLARA' } });
+        }
+        if (path === '/api/v0/notifications')
+          return Promise.resolve({ data: { notifications: [] } });
+        const query = options?.params?.query;
+        if (query?.ownership === 'mine' && query.cursor === 'p2') {
+          return Promise.resolve({
+            data: {
+              service_requests: [
+                { ...open('m1', 'Ride to the clinic'), status: 'ACCEPTED' },
+                { ...open('m2', 'Firewood'), status: 'ACCEPTED' },
+              ],
+              next_cursor: null,
+            },
+          });
+        }
+        if (query?.ownership === 'mine') {
+          return Promise.resolve({
+            data: {
+              service_requests: [{ ...open('m1', 'Ride to the clinic'), status: 'ACCEPTED' }],
+              next_cursor: 'p2',
+            },
+          });
+        }
+        return Promise.resolve({ data: { service_requests: listed, next_cursor: null } });
+      },
+    );
+    renderServe();
+    expect(await screen.findByText('Ride to the clinic')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Show more' }));
+    expect(await screen.findByText('Firewood')).toBeInTheDocument();
+    expect(screen.getAllByText('Ride to the clinic')).toHaveLength(1);
+  });
+
   it('lists open requests with the category fallback and greets by first name', async () => {
     renderServe();
     expect(await screen.findByText('Groceries for two days')).toBeInTheDocument();
