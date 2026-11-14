@@ -1,7 +1,7 @@
-import type { Page } from '@playwright/test';
+import type { APIRequestContext, Browser, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { expectCrisisScreen } from '../helpers';
-import { closePeople, expectCrisisChrome, veteran, visitor } from './support';
+import { closePeople, expectCrisisChrome, serverError, veteran, visitor } from './support';
 
 test.afterEach(closePeople);
 
@@ -122,4 +122,84 @@ test('signed in: every support screen carries the crisis strings, and /crisis re
   );
   await page.getByRole('link', { name: 'Continue with SUAS support' }).click();
   await expect(page).toHaveURL(/\/home$/);
+});
+
+/** AT07 (#285): every /api/v0 call answers 503, so nothing on screen can come from the API. */
+async function failTheApi(page: Page, allow: RegExp[]): Promise<{ hits: number }> {
+  // Only the routed API answers may 503; a real backend 5xx elsewhere still fails the test.
+  allow.push(/\/api\/v0\/.* :: 503$/, /status of 503/);
+  const seen = { hits: 0 };
+  await page.route('**/api/v0/**', (route) => {
+    seen.hits += 1;
+    return route.fulfill(serverError(503));
+  });
+  return seen;
+}
+
+test('signed out with the API down: the crisis copy and destinations still show (AT07)', async ({
+  browser,
+  allow,
+}) => {
+  const page = await visitor(browser);
+  await failTheApi(page, allow);
+  for (const path of ['/', '/sign-in']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    await expectCrisisStrings(page);
+  }
+  await page.goto('/crisis');
+  await expectCrisisPage(page, '/sign-in');
+});
+
+test('signed in with the API down: /crisis keeps the crisis copy and destinations (AT07)', async ({
+  browser,
+  request,
+  allow,
+}) => {
+  const { page } = await veteran(browser, request, { name: 'Dana R.', county: 'Santa Clara' });
+  const api = await failTheApi(page, allow);
+  await page.goto('/crisis');
+  await expectCrisisPage(page, '/home');
+  expect(api.hits).toBeGreaterThan(0);
+});
+
+/** Signed in, API down: Home cannot load the account and shows its failed screen. */
+async function failedHome(browser: Browser, request: APIRequestContext, allow: RegExp[]) {
+  const { page } = await veteran(browser, request, { name: 'Lee K.', county: 'Santa Clara' });
+  await failTheApi(page, allow);
+  await page.goto('/home');
+  await expect(page.getByRole('heading', { name: 'We could not load your account.' })).toBeVisible({
+    timeout: 30_000,
+  });
+  return page;
+}
+
+test('signed in with the API down: the failed Home screen keeps the crisis band (AT07)', async ({
+  browser,
+  request,
+  allow,
+}) => {
+  const page = await failedHome(browser, request, allow);
+  const strip = page.getByRole('complementary', { name: 'Crisis support' });
+  for (const line of STRIP_LINES) await expect(strip).toContainText(line);
+  for (const [name, href] of [
+    ['Call 911', 'tel:911'],
+    ['Call 988', 'tel:988'],
+    ['Text 988', 'sms:988'],
+    ['Veterans Crisis Line: Text 838255', 'sms:838255'],
+  ] as const) {
+    await expect(strip.getByRole('link', { name })).toHaveAttribute('href', href);
+  }
+});
+
+test('signed in with the API down: the failed Home screen keeps the persistent footer (AT07)', async ({
+  browser,
+  request,
+  allow,
+}) => {
+  // Known gap, not fixed here: RequireProfile's failed screen (src/app/guards.tsx) wraps it in
+  // WithCrisisStrip only, so the SAFETY_COPY.md §2.3 footer is missing.
+  test.fail();
+  const page = await failedHome(browser, request, allow);
+  await expectCrisisStrings(page);
 });
