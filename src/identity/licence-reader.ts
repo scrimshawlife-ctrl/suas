@@ -1,5 +1,5 @@
 /**
- * Licence reader port (suas-specs R10.1, proposal; §2.1, L4). It reads the front and back
+ * Licence reader port (suas-specs R10.1, released in 0.10.0; §2.1, L4). It reads the front and back
  * photos of a state licence for a SUAS Admin; the reading never decides a standing. It
  * never receives the selfie, and it never throws for a provider outcome.
  */

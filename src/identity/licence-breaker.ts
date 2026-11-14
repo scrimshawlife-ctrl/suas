@@ -1,5 +1,5 @@
 /**
- * The licence reader's circuit breaker (suas-specs R10.1, proposal; L4.6), kept in the
+ * The licence reader's circuit breaker (suas-specs R10.1, released in 0.10.0; L4.6), kept in the
  * database because API and worker Lambdas share no memory. It opens after 5 reader-
  * unavailable outcomes in a row; while open the licence path is closed. After 15 minutes
  * the path reopens and the next read is a single probe: success closes the breaker,

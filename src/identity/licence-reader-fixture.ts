@@ -1,6 +1,6 @@
 /**
  * Deterministic licence reader fixture (LOCAL and TEST only): no network, synthetic data
- * (suas-specs R10.1, proposal). The outcome depends only on the front image's pixel width,
+ * (suas-specs R10.1, released in 0.10.0). The outcome depends only on the front image's pixel width,
  * which the server's re-encode keeps, so tests and web e2e can pick one.
  */
 

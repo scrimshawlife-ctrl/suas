@@ -1,5 +1,5 @@
 /**
- * What SUAS computes from a licence reading (suas-specs R10.1, proposal; §2.2, §3): the
+ * What SUAS computes from a licence reading (suas-specs R10.1, released in 0.10.0; §2.2, §3): the
  * keyed licence fingerprint and the identity match against the VA attempt. Both are
  * computed in the job worker, after which the licence number and birth date are dropped.
  */

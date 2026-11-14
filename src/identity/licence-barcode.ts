@@ -1,5 +1,5 @@
 /**
- * The SUAS-side synthetic check (suas-specs R10.1, proposal; L4.2). Outside LOCAL and TEST
+ * The SUAS-side synthetic check (suas-specs R10.1, released in 0.10.0; L4.2). Outside LOCAL and TEST
  * the job worker decodes the PDF417 on the back itself, before anything leaves for the
  * reader. It fails closed: across the 0°, 90° and 270° scans (the decoder adds 180°) the
  * back must show exactly one PDF417 region, the same payload in every scan that finds it,

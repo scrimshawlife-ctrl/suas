@@ -1,6 +1,6 @@
 /**
  * Scry adapter for the licence reader port: `POST {base}/api/v1/id-read`, multipart front
- * and back, bearer token (suas-specs R10.1, proposal; §2.1, L4). The response is parsed
+ * and back, bearer token (suas-specs R10.1, released in 0.10.0; §2.1, L4). The response is parsed
  * strictly: any key outside the minimized schema is PROVIDER_RESPONSE_INVALID, so a reader
  * that starts returning more than §2.1 allows is treated as unavailable, not trusted.
  */

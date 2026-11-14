@@ -1,5 +1,5 @@
 /**
- * Builds the licence reader for this configuration (suas-specs R10.1, proposal; L9.1).
+ * Builds the licence reader for this configuration (suas-specs R10.1, released in 0.10.0; L9.1).
  * Undefined when disabled, so the licence path is closed. The fixture is LOCAL and TEST
  * only and Scry LOCAL and STAGING only, even for a config the startup schema refused.
  */
