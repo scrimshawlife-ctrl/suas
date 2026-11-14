@@ -276,6 +276,31 @@ describe('profile change audit (R9.5 a)', () => {
       { event_type: 'USER_DISPLAY_NAME_CHANGED', actor_id: who.userId, payload: {} },
     ]);
   });
+
+  // AT02 / #293: the open list reads the requester's current county, so an unaccepted request moves.
+  it('lists an unaccepted request under the requester current county after a change', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, { verified: true, county: 'SANTA_CLARA' });
+    const santaClara = await person(tenantId, { county: 'SANTA_CLARA' });
+    const alameda = await person(tenantId, { county: 'ALAMEDA' });
+    const { id } = await submitForm(requester);
+    const openIds = async (who: Person) =>
+      (await getJson('/api/v0/service-requests?ownership=open', who))
+        .json<{ service_requests: { service_request_id: string }[] }>()
+        .service_requests.map((item) => item.service_request_id);
+    expect(await openIds(santaClara)).toEqual([id]);
+    expect(await openIds(alameda)).toEqual([]);
+
+    const moved = await app.server.inject({
+      method: 'PUT',
+      url: '/api/v0/veterans/me/county',
+      headers: requester.headers,
+      payload: { county: 'ALAMEDA' },
+    });
+    expect(moved.statusCode).toBe(200);
+    expect(await openIds(santaClara)).toEqual([]);
+    expect(await openIds(alameda)).toEqual([id]);
+  });
 });
 
 describe('meeting place', () => {
