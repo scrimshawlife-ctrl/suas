@@ -67,7 +67,7 @@ export interface StartedApp {
   readonly veteranConfirmation: VeteranConfirmationPort | undefined;
   /** Chat live-update push; undefined when SUAS_CHAT_PUSH_MODE=disabled. */
   readonly chatPush: ConnectionPushPort | undefined;
-  /** Licence images (R10.1, proposal); undefined when SUAS_OBJECT_STORAGE_MODE=disabled. */
+  /** Licence images (R10.1, released in 0.10.0); undefined when SUAS_OBJECT_STORAGE_MODE=disabled. */
   readonly objectStorage: ObjectStoragePort | undefined;
   readonly buildInfo: BuildInfo;
   close(): Promise<void>;
@@ -121,7 +121,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   });
   // Channel ports are shared by notification.send and authentication delivery.
   const channelRegistry = createChannelRegistry(config);
-  // Licence review (suas-specs R10.1, proposal). A durable queue leaves the slow read to
+  // Licence review (suas-specs R10.1, released in 0.10.0). A durable queue leaves the slow read to
   // the job worker; the in-memory queue (LOCAL and TEST only) has no worker, so the read
   // runs inline here, against this process's own storage.
   const objectStorage = createObjectStoragePort(config);
@@ -183,7 +183,7 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
   const modelInference = createModelInferencePort(config);
   // 5b. ID scan + selfie port: still validated at startup, no longer the gate.
   const idVerification = createIdVerificationPort(config);
-  // 5b. VA Veteran Confirmation (suas-specs #72 R9.1, proposal). Content-free logs only.
+  // 5b. VA Veteran Confirmation (suas-specs #72 R9.1, released in 0.10.0). Content-free logs only.
   const veteranConfirmation = createVeteranConfirmationPort(config, {
     logger: (record) => console.info(JSON.stringify({ msg: 'va_confirmation', ...record })),
   });

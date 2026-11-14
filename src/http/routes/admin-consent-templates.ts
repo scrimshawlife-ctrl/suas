@@ -5,7 +5,7 @@
  * - SUAS-specs CONSENT.md §6 (grants cite a published template version; copy is
  *   administrator-supplied), ADMIN.md §2 "Consent templates" (SUAS admin, MFA, audit)
  * - SUAS-specs API.md §4 (session), §6 (409 codes), §7 (Idempotency-Key on create)
- * - V1_MVP_PROPOSAL.md R9.3 (contributor proposal, specs #72, not released): the routes,
+ * - V1_MVP_PROPOSAL.md R9.3 (specs #72, released in 0.10.0): the routes,
  *   and the owner's answer that one MFA admin plus an Audit Event is enough to publish
  *
  * Templates are global (ADMIN.md §2), so the routes read no tenant from the request. The

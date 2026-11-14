@@ -187,7 +187,7 @@ const SWEEPS: readonly Sweep[] = [
       if (pruned > 0) log({ msg: 'rate_limits_pruned', count: pruned });
     },
   },
-  // Licence reviews past their photo window become PHOTOS_EXPIRED (R10.1 §2.3, proposal).
+  // Licence reviews past their photo window become PHOTOS_EXPIRED (R10.1 §2.3, released in 0.10.0).
   {
     name: 'licence_expiry',
     run: async (pool, config) => {

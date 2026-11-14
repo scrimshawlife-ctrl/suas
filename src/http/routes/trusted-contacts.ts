@@ -280,7 +280,7 @@ export function registerTrustedContactRoutes(
   });
 
   /**
-   * R9.4 (contributor proposal, specs #72): the invites waiting for the caller, matched on
+   * R9.4 (specs #72, released in 0.10.0): the invites waiting for the caller, matched on
    * their enrolled email, with the inviting Veteran's display name and the relationship
    * label only. Accepting goes through the accept command below.
    */

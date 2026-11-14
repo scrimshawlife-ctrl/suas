@@ -86,7 +86,7 @@ export interface ServerDependencies {
   readonly veteranConfirmation?: VeteranConfirmationPort;
   /** Pushes new chat messages to live connections; absent when disabled. */
   readonly chatPush?: ConnectionPushPort;
-  /** Licence reader (R10.1, proposal); absent when `SUAS_LICENCE_READER_MODE=disabled`. */
+  /** Licence reader (R10.1, released in 0.10.0); absent when `SUAS_LICENCE_READER_MODE=disabled`. */
   readonly licenceReader?: LicenceReaderPort;
   /** Object storage for licence images; absent when `SUAS_OBJECT_STORAGE_MODE=disabled`. */
   readonly objectStorage?: ObjectStoragePort;
@@ -171,12 +171,12 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
                 'req.headers.authorization',
                 'req.headers.cookie',
                 'req.headers["idempotency-key"]',
-                // suas-specs #72 R9.1 (proposal): projection values are never logged.
+                // suas-specs #72 R9.1 (released in 0.10.0): projection values are never logged.
                 ...VA_CONFIRMATION_PROJECTION_FIELDS.flatMap((field) => [
                   `body.${field}`,
                   `req.body.${field}`,
                 ]),
-                // suas-specs R10.1 (proposal): licence images are never logged.
+                // suas-specs R10.1 (released in 0.10.0): licence images are never logged.
                 ...['front', 'back', 'selfie'].flatMap((side) => [
                   `body.${side}`,
                   `req.body.${side}`,

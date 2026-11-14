@@ -1,6 +1,6 @@
 /**
  * A person changes their own county or display name, with an Audit Event when the value
- * really changed (R9.5 a, contributor proposal, specs #72; EVENT_MODEL.md §4). The payload
+ * really changed (R9.5 a, specs #72, released in 0.10.0; EVENT_MODEL.md §4). The payload
  * is empty: neither the old nor the new value goes into the audit store.
  */
 

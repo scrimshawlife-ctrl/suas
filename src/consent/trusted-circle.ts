@@ -373,7 +373,7 @@ export interface PendingInvitation {
 
 /**
  * Invites still INVITED to the caller's enrolled email, which sign-in by email code has
- * proved (R9.4, contributor proposal, specs #72). Only the inviting Veteran's display
+ * proved (R9.4, specs #72, released in 0.10.0). Only the inviting Veteran's display
  * name and the relationship label leave this read; invites do not expire.
  */
 export async function listPendingInvitations(
