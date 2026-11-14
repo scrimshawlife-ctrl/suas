@@ -1,7 +1,7 @@
 /**
  * Consent template admin API and published read (requires PostgreSQL).
  *
- * CONSENT.md §6, ADMIN.md §2, R9.3 (contributor proposal, specs #72). Proves: SUAS admin
+ * CONSENT.md §6, ADMIN.md §2, R9.3 (specs #72, released in 0.10.0). Proves: SUAS admin
  * plus MFA on the admin routes, server-numbered versions with an idempotent create,
  * publish supersedes the earlier version and is audited, a grant needs the current
  * version, and the published read for signed-in clients.

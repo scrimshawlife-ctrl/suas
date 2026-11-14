@@ -1,5 +1,5 @@
 /**
- * Licence review, the Veteran's side and the read job (suas-specs R10.1, proposal; L1–L4,
+ * Licence review, the Veteran's side and the read job (suas-specs R10.1, released in 0.10.0; L1–L4,
  * L7.3, L7.5, L8, §2.3): who is offered the path, the submit checks in order, what the
  * reader may see and what is kept, the limits, retries and breaker, and the closures.
  * Synthetic people, licences and keys only. Requires PostgreSQL.

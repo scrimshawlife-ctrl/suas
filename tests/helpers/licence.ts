@@ -1,5 +1,5 @@
 /**
- * Synthetic licence images for tests (suas-specs R10.1, proposal). Real JPEGs, so the
+ * Synthetic licence images for tests (suas-specs R10.1, released in 0.10.0). Real JPEGs, so the
  * server's bounded decode and re-encode run on them; the width picks a fixture outcome.
  */
 

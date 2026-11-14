@@ -1,5 +1,5 @@
 /**
- * The SUAS Admin licence review routes (suas-specs R10.1, proposal; L5, L7.1–L7.3): MFA
+ * The SUAS Admin licence review routes (suas-specs R10.1, released in 0.10.0; L5, L7.1–L7.3): MFA
  * admins only, no self-review, two different admins to approve, the approval refusals,
  * decline, recuse, revoke (FRAUD and REVIEW_ERROR), and dispute routing. Fixture VA and
  * licence reader; the read runs inline. Synthetic data only. Requires PostgreSQL.

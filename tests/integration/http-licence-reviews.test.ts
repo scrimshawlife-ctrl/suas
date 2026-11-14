@@ -1,5 +1,5 @@
 /**
- * The Veteran's licence routes over HTTP (suas-specs R10.1, proposal; L1.4, L1.5, L2.3,
+ * The Veteran's licence routes over HTTP (suas-specs R10.1, released in 0.10.0; L1.4, L1.5, L2.3,
  * L7.3): the named test that the path is never offered after a VA 400 (and 404, 5xx,
  * timeout), the submit check order and the answers it gives. The fixture VA adapter and
  * fixture licence reader run in TEST; the read runs inline. Synthetic data only.

@@ -1,4 +1,4 @@
-"""Synthetic licence test fixtures for suas-specs R10.1 (proposal): PDF417 backs and a JPEG
+"""Synthetic licence test fixtures for suas-specs R10.1 (released in 0.10.0): PDF417 backs and a JPEG
 with EXIF. No real licence data. Regenerate with:
 uv run --no-project --with pdf417gen --with pillow python -I tests/fixtures/licence/make_fixtures.py tests/fixtures/licence
 """

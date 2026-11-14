@@ -1247,7 +1247,7 @@ describe('0021 resource contacts and area', () => {
   });
 });
 
-// suas-specs #72 R9.1 (proposal): a VA confirmation row keeps only bounded result fields;
+// suas-specs #72 R9.1 (released in 0.10.0): a VA confirmation row keeps only bounded result fields;
 // 0023 adds the review fixes (identity binding, idempotency, one pending attempt).
 describe('0022 and 0023 VA veteran confirmation', () => {
   it('admits each confirmation result and bounds the environment and failure class', async () => {
