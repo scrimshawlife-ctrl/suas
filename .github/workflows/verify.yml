@@ -162,9 +162,12 @@ jobs:
     # web/e2e/stack.ts builds: a throwaway suas_local_* database on this runner,
     # fake and sink adapters, no real external effects (ENVIRONMENT.md §2).
     runs-on: ubuntu-24.04
-    # One worker on one stack: the full per-area suite takes about 75 min on a hosted runner
-    # (UI conformance 13-20). Sharding it under 20 min per job (plan D10) is the follow-up.
-    timeout-minutes: 120
+    # One worker on one stack: the full suite took 47-53 min on hosted runners (#301, #303, #304
+    # on 11-13). Playwright's own globalTimeout (80 min, web/playwright.e2e.config.ts) ends a slow
+    # run first, with a report of what did not run; this cap is only the backstop for setup plus
+    # that budget. Sharding it under 20 min per job (plan D10) is the follow-up. Later PRs
+    # inherit these two numbers and do not re-edit them.
+    timeout-minutes: 90
     permissions:
       contents: read
 
