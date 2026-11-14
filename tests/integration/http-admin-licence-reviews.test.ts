@@ -17,6 +17,7 @@ import {
 } from '../../src/identity/index.js';
 import { LICENCE_FIXTURE_WIDTHS } from '../../src/identity/licence-reader-fixture.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { closeVaOutageCooldown } from '../helpers/db.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { licenceSubmission } from '../helpers/licence.js';
 
@@ -34,6 +35,7 @@ beforeAll(async () => {
     listen: false,
   });
   await db().query(`UPDATE licence_reader_breaker SET consecutive_failures = 0, opened_at = NULL`);
+  await closeVaOutageCooldown(db());
 });
 
 afterAll(async () => {

@@ -1,17 +1,20 @@
 import type { ReactNode } from 'react';
 import { Button } from '../components/Button';
 import { CrisisStrip } from '../components/CrisisStrip';
+import { Footer } from '../components/Footer';
 import { Page } from '../components/Page';
 
 /**
- * The Harbor crisis band above a screen that renders outside every layout (root error,
- * hydrate fallback, guard loading), so a veteran never sees one without it.
+ * The Harbor crisis band and the SAFETY_COPY.md §2.3 persistent footer around a screen that
+ * renders outside every layout (root error, hydrate fallback, guard loading), so a veteran
+ * never sees one without them, even when the API is down (AT07).
  */
 export function WithCrisisStrip({ children }: { children: ReactNode }) {
   return (
     <>
       <CrisisStrip />
       {children}
+      <Footer />
     </>
   );
 }

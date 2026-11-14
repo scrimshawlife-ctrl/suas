@@ -18,6 +18,7 @@ import { withTransaction } from '../db/transaction.js';
 import type { JsonObject } from '../jobs/index.js';
 import {
   completeCommand,
+  lockCommandReservation,
   failCommand,
   IdempotencyConflictError,
   reserveCommand,
@@ -103,8 +104,12 @@ export async function runIdempotentCommand(
 
   try {
     return await withTransaction(pool, async (tx) => {
+      if (!(await lockCommandReservation(tx, reservation.record))) {
+        throw new CommandInProgressError(input.idempotencyKey, input.commandScope);
+      }
       const output = await execute(tx);
       const record = await completeCommand(tx, recordId, {
+        expectedAttempts: reservation.record.attempts,
         result: output.result,
         ...(output.aggregateType !== undefined ? { aggregateType: output.aggregateType } : {}),
         ...(output.aggregateId !== undefined ? { aggregateId: output.aggregateId } : {}),
@@ -115,7 +120,10 @@ export async function runIdempotentCommand(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Recorded on the pool, not the rolled-back transaction.
-    await failCommand(pool, recordId, { error: message });
+    await failCommand(pool, recordId, {
+      error: message,
+      expectedAttempts: reservation.record.attempts,
+    });
     throw error;
   }
 }

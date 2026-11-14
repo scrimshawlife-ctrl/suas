@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { createServer } from '../../src/http/server.js';
@@ -16,6 +16,7 @@ import { createVaConfirmationHttpAdapter } from '../../src/identity/va-confirmat
 import { VA_CONFIRMATION_SANDBOX_BASE_URL } from '../../src/identity/va-confirmation.js';
 import type { FetchTransport } from '../../src/identity/va-confirmation-http.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { closeVaOutageCooldown } from '../helpers/db.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { licenceSubmission } from '../helpers/licence.js';
 
@@ -45,6 +46,9 @@ beforeAll(async () => {
     `UPDATE licence_reader_breaker SET consecutive_failures = 0, opened_at = NULL`,
   );
 });
+
+// The VA outage cooldown is one shared row (suas #287); each test starts with VA reachable.
+beforeEach(() => closeVaOutageCooldown(app.pool!));
 
 afterAll(async () => {
   await disabled.close();

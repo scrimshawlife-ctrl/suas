@@ -17,6 +17,7 @@ import {
   VA_NOTICE_V1,
 } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { closeVaOutageCooldown } from '../helpers/db.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
@@ -29,6 +30,7 @@ const env = (extra: Record<string, string>) =>
 beforeAll(async () => {
   app = await startApp({ env: env({ SUAS_VA_CONFIRMATION_MODE: 'fixture' }), listen: false });
   appWithoutConfirmation = await startApp({ env: env({}), listen: false });
+  await closeVaOutageCooldown(app.pool!);
 });
 
 afterAll(async () => {

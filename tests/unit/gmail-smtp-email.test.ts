@@ -316,6 +316,14 @@ describe('relay invoke', () => {
     });
   });
 
+  it.each(['ECONNRESET', 'EPIPE', 'UND_ERR_SOCKET', 'UnknownError'])(
+    'does not blindly retry an invoke with an unknown outcome (%s)',
+    async (code) => {
+      const error = Object.assign(new Error('lost relay response'), { code });
+      expect((await relay(error).sender.send(MESSAGE)).result).toBe('ambiguous_ack');
+    },
+  );
+
   it('reads a relay crash or invoke timeout as ambiguous, and a refused invoke as retryable', async () => {
     const crashed = relay({ $metadata: {}, FunctionError: 'Unhandled' });
     expect((await crashed.sender.send(MESSAGE)).result).toBe('ambiguous_ack');

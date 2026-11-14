@@ -104,10 +104,15 @@ export async function enforceRateLimit(
  * Rate-limit counters are abuse-control state, not business facts, so pruning
  * them is not the event/record retention that D-007 governs.
  */
-export async function pruneRateLimits(db: Queryable, olderThanSeconds: number): Promise<number> {
+export async function pruneRateLimits(
+  db: Queryable,
+  olderThanSeconds: number,
+  buckets: readonly string[],
+): Promise<number> {
   const result = await db.query(
-    `DELETE FROM auth_rate_limits WHERE window_start < now() - make_interval(secs => $1)`,
-    [olderThanSeconds],
+    `DELETE FROM auth_rate_limits WHERE bucket = ANY($2::text[])
+       AND window_start < now() - make_interval(secs => $1)`,
+    [olderThanSeconds, buckets],
   );
   return result.rowCount ?? 0;
 }

@@ -1,15 +1,14 @@
 import { Button } from '../components/Button';
-import { CrisisStrip } from '../components/CrisisStrip';
 import { Page } from '../components/Page';
+import { WithCrisisStrip } from './status-screens';
 
 /**
  * Shown when a route fails to load (for example a dropped connection while fetching a screen).
- * It sits outside every layout, so it carries the crisis strip itself.
+ * It sits outside every layout, so it carries the crisis strip and footer itself.
  */
 export default function RouteErrorPage() {
   return (
-    <>
-      <CrisisStrip />
+    <WithCrisisStrip>
       <main id="main">
         <Page width="narrow">
           <title>Something went wrong · SUAS</title>
@@ -20,6 +19,6 @@ export default function RouteErrorPage() {
           </div>
         </Page>
       </main>
-    </>
+    </WithCrisisStrip>
   );
 }

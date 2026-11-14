@@ -7,7 +7,7 @@
 
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { createServer } from '../../src/http/server.js';
@@ -38,6 +38,7 @@ import {
 import { VA_CONFIRMATION_SANDBOX_BASE_URL } from '../../src/identity/va-confirmation.js';
 import { canonicalize, fingerprintRequest } from '../../src/idempotency/fingerprint.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { closeVaOutageCooldown } from '../helpers/db.js';
 import {
   TEST_FINGERPRINT_KEY,
   TEST_FINGERPRINT_KEY_ID,
@@ -56,6 +57,9 @@ beforeAll(async () => {
   app = await startApp({ env: env({ SUAS_VA_CONFIRMATION_MODE: 'fixture' }), listen: false });
   disabledApp = await startApp({ env: env({}), listen: false });
 });
+
+// The VA outage cooldown is one shared row (suas #287); each test starts with VA reachable.
+beforeEach(() => closeVaOutageCooldown(app.pool!));
 
 afterAll(async () => {
   await disabledApp.close();

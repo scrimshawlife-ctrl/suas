@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/errors';
@@ -229,10 +229,24 @@ describe('RequireAdmin loading and failed screens', () => {
     );
   }
 
+  // The band and the SAFETY_COPY.md §2.3 footer each keep their own call targets (AT07).
   const expectCrisisStrip = () => {
-    expect(screen.getByRole('complementary', { name: 'Crisis support' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Call 911' })).toHaveAttribute('href', 'tel:911');
-    expect(screen.getByRole('link', { name: 'Call 988' })).toHaveAttribute('href', 'tel:988');
+    for (const region of [
+      screen.getByRole('complementary', { name: 'Crisis support' }),
+      screen.getByRole('contentinfo'),
+    ]) {
+      expect(within(region).getByRole('link', { name: 'Call 911' })).toHaveAttribute(
+        'href',
+        'tel:911',
+      );
+      expect(within(region).getByRole('link', { name: 'Call 988' })).toHaveAttribute(
+        'href',
+        'tel:988',
+      );
+    }
+    expect(screen.getByRole('contentinfo')).toHaveTextContent(
+      'SUAS coordinates community support. It does not provide emergency medical care or emergency dispatch.',
+    );
   };
 
   it('shows the crisis strip while the account loads', () => {

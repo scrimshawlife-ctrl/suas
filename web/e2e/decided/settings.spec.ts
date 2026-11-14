@@ -1,6 +1,13 @@
 import { expect, test } from '../fixtures';
 import { API_URL } from '../config';
-import { signUp, uniqueEmail, withDb } from '../helpers';
+import {
+  newVerifiedVeteran,
+  requestHelp,
+  signUp,
+  uniqueEmail,
+  uniqueText,
+  withDb,
+} from '../helpers';
 
 /** R12.2 (contributor proposal, SUAS-specs #79): Settings changes the name and county. */
 test('a person changes their display name and county in Settings, from either mode', async ({
@@ -70,4 +77,45 @@ test('a person changes their display name and county in Settings, from either mo
   await page.getByRole('link', { name: 'Settings' }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(name).toHaveValue('Rachel M.');
+});
+
+/** AT02: the open list follows the helper's new county at once, with no reload. */
+test('after a county change the open list shows the new county without a reload', async ({
+  browser,
+  page,
+  request,
+}) => {
+  // Merced does not border Alameda (migrations/0013_peer_matching.sql, county_adjacency).
+  const requester = await newVerifiedVeteran(browser, request, {
+    name: 'Ana L.',
+    county: 'Alameda',
+    label: 'requester',
+  });
+  const summary = uniqueText('Groceries for the week');
+  await requestHelp(requester.page, request, { category: 'FOOD', summary }, 'Fruitvale BART');
+
+  await signUp(page, request, {
+    email: uniqueEmail('helper'),
+    name: 'Rae M.',
+    county: 'Merced',
+    role: 'serve',
+  });
+  const openList = page.getByRole('region', { name: 'Open requests' });
+  await expect(openList).toBeVisible();
+  await expect(openList).not.toContainText(summary);
+
+  await page.getByRole('button', { name: 'Account and sign out for Rae' }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByLabel('County').selectOption({ label: 'Alameda' });
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await page
+    .getByRole('dialog', { name: 'Change your county to Alameda?' })
+    .getByRole('button', { name: 'Change county' })
+    .click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+
+  // In-app navigation inside the 15 s stale time: only the refresh can bring it in.
+  await page.getByRole('link', { name: 'Back to home' }).click();
+  await expect(page).toHaveURL(/\/serve$/);
+  await expect(openList).toContainText(summary);
 });
