@@ -186,7 +186,7 @@ function renderTrustedContactAlert(): RenderedEmail {
 }
 
 /**
- * TRUSTED_CIRCLE.md §3.2 invite (R9.4, contributor proposal, specs #72). It names nobody:
+ * TRUSTED_CIRCLE.md §3.2 invite (R9.4, specs #72, released in 0.10.0). It names nobody:
  * who invited them is shown only after the invitee signs in with this address.
  */
 const INVITE_LINES = [

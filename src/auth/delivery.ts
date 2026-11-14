@@ -17,7 +17,7 @@
  * Challenge EMAIL/SMS uses the same notification channel port as product
  * notifications. There is no second Resend client. `createChallengeDelivery`
  * uses the provider-backed EMAIL port when D-004's `resend` or R11.2's
- * `gmail_smtp` mode (proposal) is selected.
+ * `gmail_smtp` mode (released in 0.10.0) is selected.
  */
 
 import type { CommunicationMode, SuasConfig } from '../config/index.js';

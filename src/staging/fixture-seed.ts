@@ -1,5 +1,5 @@
 /**
- * STAGING fixture seed (R11.5, contributor proposal in specs #75, not released).
+ * STAGING fixture seed (R11.5, specs #75, released in 0.10.0).
  *
  * Creates the users the fixture registry (SUAS_STAGING_FIXTURE_REGISTRY, D-052) admits and a
  * few synthetic, clearly marked Resources, so a fresh AWS STAGING has someone who can sign in

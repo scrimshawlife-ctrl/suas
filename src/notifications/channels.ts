@@ -9,8 +9,8 @@
  *   statuses must not leak into product contracts)
  * - SUAS-specs ARCHITECTURE.md §11 (`EmailPort`, `SmsPort`)
  * - SUAS-specs ENVIRONMENT.md §3 (`SUAS_EMAIL_MODE` adds D-004 `resend`;
- *   `SUAS_SMS_MODE` remains `disabled|fake|sink`.) suas-specs #75 R11.2 (proposal,
- *   not released) adds `gmail_smtp` for v1 STAGING.
+ *   `SUAS_SMS_MODE` remains `disabled|fake|sink`.) suas-specs #75 R11.2 (released
+ *   in 0.10.0) adds `gmail_smtp` for v1 STAGING.
  *
  * IN_APP is internal and always available: it writes to SUAS's own store rather
  * than contacting a provider, so no vendor decision gates it.
@@ -200,7 +200,7 @@ export class FailingChannel implements NotificationChannelPort {
  * port at all, so the caller reports the channel unavailable instead of faking a
  * send. IN_APP is internal and always present.
  *
- * D-004 selects Resend as the external EMAIL provider; R11.2 (proposal) replaces it
+ * D-004 selects Resend as the external EMAIL provider; R11.2 (released in 0.10.0) replaces it
  * with `gmail_smtp` on v1 STAGING. Fake and sink stay recording-only; `resend` and
  * `gmail_smtp` construct their adapters with validated configuration. `gmail_smtp`
  * sends through the relay function when one is configured, else directly.

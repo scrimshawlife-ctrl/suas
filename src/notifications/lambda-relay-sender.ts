@@ -1,6 +1,6 @@
 /**
  * SMTP sender that hands one rendered message to the outside-VPC relay function
- * (suas-specs #75 R11.2, proposal). The staging VPC has no internet egress, so the API
+ * (suas-specs #75 R11.2, released in 0.10.0). The staging VPC has no internet egress, so the API
  * and job worker reach Gmail only through this Lambda Invoke; the relay alone holds the
  * app password.
  *

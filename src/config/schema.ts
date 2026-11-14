@@ -53,8 +53,8 @@ export type DatabaseSslMode = (typeof DATABASE_SSL_MODES)[number];
 
 /**
  * ENVIRONMENT.md §3 "Notifications". Resend is the released EMAIL provider (D-004);
- * `gmail_smtp` replaces it on v1 STAGING (suas-specs #75 R11.2, proposal, not
- * released). SMS remains restricted to the provider-neutral test modes.
+ * `gmail_smtp` replaces it on v1 STAGING (suas-specs #75 R11.2, released
+ * in 0.10.0). SMS remains restricted to the provider-neutral test modes.
  */
 export const COMMUNICATION_MODES = ['disabled', 'fake', 'sink'] as const;
 export type CommunicationMode = (typeof COMMUNICATION_MODES)[number];
@@ -82,13 +82,13 @@ export const CHAT_PUSH_MODES = ['disabled', 'local', 'apigw'] as const;
 export type ChatPushMode = (typeof CHAT_PUSH_MODES)[number];
 export type IdVerificationMode = (typeof ID_VERIFICATION_MODES)[number];
 /**
- * VA Veteran Confirmation (suas-specs #72 R9.1, proposal): `fixture` is LOCAL and TEST
+ * VA Veteran Confirmation (suas-specs #72 R9.1, released in 0.10.0): `fixture` is LOCAL and TEST
  * only; `sandbox` is the VA sandbox, refused in PRODUCTION until D-035 settles.
  */
 export const VA_CONFIRMATION_MODES = ['disabled', 'fixture', 'sandbox'] as const;
 export type VaConfirmationMode = (typeof VA_CONFIRMATION_MODES)[number];
 /**
- * Licence reader (suas-specs R10.1, proposal; L9.1): `fixture` is LOCAL and TEST only,
+ * Licence reader (suas-specs R10.1, released in 0.10.0; L9.1): `fixture` is LOCAL and TEST only,
  * `scry` LOCAL and STAGING only, and PRODUCTION allows `disabled` alone.
  */
 export const LICENCE_READER_MODES = ['disabled', 'fixture', 'scry'] as const;
@@ -822,7 +822,7 @@ function validateAwsCapabilities(
 }
 
 /**
- * VA Veteran Confirmation modes (suas-specs #72 R9.1, proposal; D035 §5, §6, §14 items
+ * VA Veteran Confirmation modes (suas-specs #72 R9.1, released in 0.10.0; D035 §5, §6, §14 items
  * 2-4, 9-10). Every mismatch fails closed; issue text never includes the key.
  */
 function validateVaConfirmation(
@@ -872,7 +872,7 @@ function validateVaConfirmation(
 }
 
 /**
- * Licence reader modes (suas-specs R10.1, proposal; L9.1). The Scry URL and token are not
+ * Licence reader modes (suas-specs R10.1, released in 0.10.0; L9.1). The Scry URL and token are not
  * required at startup, because only the job worker calls Scry; without them a read settles
  * as a configuration failure. The synthetic IIN is required wherever L4.2 applies.
  */
@@ -1387,7 +1387,7 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
 });
 
 /**
- * `gmail_smtp` (suas-specs #75 R11.2, proposal). Refused in LOCAL and TEST like
+ * `gmail_smtp` (suas-specs #75 R11.2, released in 0.10.0). Refused in LOCAL and TEST like
  * `resend`; PRODUCTION is refused as a whole until SPEC-018. A direct send needs the
  * Gmail address and app password; with the relay set, the relay holds both and the
  * password must not also sit in this process's environment.

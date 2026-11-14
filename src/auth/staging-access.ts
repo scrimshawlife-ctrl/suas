@@ -15,8 +15,8 @@ const PLUS_TAG = /^[a-z0-9-]{1,32}$/;
 
 /**
  * May this address belong to a STAGING fixture principal? Yes if it is synthetic, or a plus
- * address `local+tag@domain` of the configured fixture mailbox (R11.7, contributor proposal,
- * specs #75, not released), so emailed codes reach the owner's inbox. The bare mailbox is not.
+ * address `local+tag@domain` of the configured fixture mailbox (R11.7, specs #75, released
+ * in 0.10.0), so emailed codes reach the owner's inbox. The bare mailbox is not.
  */
 export function isStagingFixtureAddress(email: string, mailbox: string | undefined): boolean {
   if (isSyntheticEmail(email)) return true;
