@@ -15,6 +15,7 @@
  *   jobs re-check before any not-yet-sent disclosure)
  */
 
+import { consumeRateLimit, type RateLimitPolicy } from '../auth/rate-limit.js';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
@@ -172,6 +173,12 @@ export interface EnqueueNotificationInput {
    */
   readonly disclosure: DisclosureRequest;
   readonly maxAttempts?: number;
+  /** Admission commits with the send intent, including suppression on denial. */
+  readonly recipientLimit?: {
+    readonly policy: RateLimitPolicy;
+    readonly subject: string;
+    readonly failureReason: string;
+  };
   readonly correlationId?: string;
 }
 
@@ -287,6 +294,20 @@ export async function enqueueNotification(
     );
     const row = inserted.rows[0];
     if (row === undefined) return undefined;
+    if (input.recipientLimit !== undefined) {
+      const admission = await consumeRateLimit(
+        tx,
+        input.recipientLimit.policy,
+        input.recipientLimit.subject,
+      );
+      if (!admission.allowed) {
+        const suppressed = await setStatus(tx, input.tenantId, notificationId, {
+          status: 'UNDELIVERABLE',
+        });
+        await recordUndeliverableAudit(tx, suppressed, input.recipientLimit.failureReason);
+        return suppressed;
+      }
+    }
     // IN_APP is internal: the row is the inbox entry, so it is delivered as it is created,
     // with the attempt audit, and no send job or template is involved (NOTIFICATIONS.md §2, §6).
     if (channel !== 'IN_APP') return toNotification(row);
@@ -312,7 +333,7 @@ export async function enqueueNotification(
 
   // NOTIFICATIONS.md §5: an external send is durable async work, enqueued where a
   // queue exists; otherwise the row waits for a worker to pick it up.
-  if (deps.jobQueue !== undefined && channel !== 'IN_APP') {
+  if (deps.jobQueue !== undefined && channel !== 'IN_APP' && created.deliveryStatus === 'QUEUED') {
     await deps.jobQueue.enqueue({
       jobType: 'notification.send',
       payload: buildNotificationSendPayload(notificationId, input.disclosure),

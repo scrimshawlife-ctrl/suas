@@ -7,6 +7,12 @@
  */
 
 import { execFile } from 'node:child_process';
+import { consumeRateLimit } from '../../src/auth/rate-limit.js';
+import {
+  INVITE_LIMIT_PER_VETERAN,
+  INVITE_LIMIT_PER_ADDRESS,
+  INVITE_EMAIL_CAP_PER_RECIPIENT,
+} from '../../src/consent/invite-limits.js';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
@@ -289,6 +295,24 @@ describe('job-worker --once time-driven sweeps', () => {
     );
     expect(events.rowCount).toBe(1);
   });
+
+  it.each([INVITE_LIMIT_PER_VETERAN, INVITE_LIMIT_PER_ADDRESS, INVITE_EMAIL_CAP_PER_RECIPIENT])(
+    'keeps the daily $bucket cap through a worker sweep',
+    async (policy) => {
+      const subject = `daily-${randomUUID()}`;
+      await pool.query(
+        `INSERT INTO auth_rate_limits (bucket, subject, window_start, count)
+         VALUES ($1, $2, date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', $3),
+                ($1, $2, now() - interval '25 hours', $3)`,
+        [policy.bucket, subject, policy.limit],
+      );
+      await drainOnce();
+      expect((await consumeRateLimit(pool, policy, subject)).allowed).toBe(false);
+      expect(
+        (await pool.query('SELECT 1 FROM auth_rate_limits WHERE subject = $1', [subject])).rowCount,
+      ).toBe(1);
+    },
+  );
 
   it('prunes elapsed rate-limit windows and keeps the current one (A1-15)', async () => {
     const subject = `prune-${randomUUID()}`;

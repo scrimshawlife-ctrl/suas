@@ -202,7 +202,22 @@ export async function reserveCommand(
   });
 }
 
+/** Hold ownership through the domain transaction; expired but active workers cannot be replaced. */
+export async function lockCommandReservation(
+  db: Queryable,
+  record: CommandIdempotencyRecord,
+): Promise<boolean> {
+  const locked = await db.query(
+    `SELECT 1 FROM command_idempotency_records
+     WHERE command_idempotency_id = $1 AND attempts = $2 AND state = 'RESERVED'
+     FOR UPDATE`,
+    [record.commandIdempotencyId, record.attempts],
+  );
+  return locked.rowCount === 1;
+}
+
 export interface CompleteCommandInput {
+  readonly expectedAttempts: number;
   readonly result: JsonObject;
   readonly aggregateType?: string;
   readonly aggregateId?: string;
@@ -229,7 +244,7 @@ export async function completeCommand(
     `UPDATE command_idempotency_records
        SET state = 'COMPLETED', result = $2, aggregate_type = $3, aggregate_id = $4,
            event_id = $5, completed_at = now(), updated_at = now(), last_error = NULL
-     WHERE command_idempotency_id = $1
+     WHERE command_idempotency_id = $1 AND attempts = $6 AND state = 'RESERVED'
      RETURNING ${RECORD_COLUMNS}`,
     [
       commandIdempotencyId,
@@ -237,11 +252,12 @@ export async function completeCommand(
       input.aggregateType ?? null,
       input.aggregateId ?? null,
       input.eventId ?? null,
+      input.expectedAttempts,
     ],
   );
   const row = result.rows[0];
   if (row === undefined) {
-    throw new Error(`No idempotency record ${commandIdempotencyId} to complete.`);
+    throw new Error(`Idempotency reservation ${commandIdempotencyId} is no longer owned.`);
   }
   return toRecord(row);
 }
@@ -253,20 +269,17 @@ export async function completeCommand(
 export async function failCommand(
   db: Queryable,
   commandIdempotencyId: string,
-  options: { error: string },
-): Promise<CommandIdempotencyRecord> {
+  options: { error: string; expectedAttempts: number },
+): Promise<CommandIdempotencyRecord | undefined> {
   const result = await db.query<RecordRow>(
     `UPDATE command_idempotency_records
        SET state = 'FAILED_RETRYABLE', last_error = $2, updated_at = now()
-     WHERE command_idempotency_id = $1
+     WHERE command_idempotency_id = $1 AND attempts = $3 AND state = 'RESERVED'
      RETURNING ${RECORD_COLUMNS}`,
-    [commandIdempotencyId, options.error.slice(0, 1000)],
+    [commandIdempotencyId, options.error.slice(0, 1000), options.expectedAttempts],
   );
   const row = result.rows[0];
-  if (row === undefined) {
-    throw new Error(`No idempotency record ${commandIdempotencyId} to fail.`);
-  }
-  return toRecord(row);
+  return row === undefined ? undefined : toRecord(row);
 }
 
 export async function readCommandRecord(
