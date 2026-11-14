@@ -1,7 +1,8 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
+import { REQUEST_TIMEOUT_MS } from '../../api/client';
 import { ApiError } from '../../api/errors';
-import { createOutbox } from './outbox';
+import { createOutbox, SEND_GIVE_UP_MS } from './outbox';
 import type { ChatMessage } from './messages';
 
 const sent = (body: string): ChatMessage => ({
@@ -100,6 +101,56 @@ describe('outbox', () => {
     await vi.waitFor(() => {
       expect(outbox.get('r1').map((p) => [p.body, p.status])).toEqual([['first', 'failed']]);
     });
+  });
+
+  // r268 F3: the outbox's own give-up, for a send whose promise never settles at all.
+  it('gives up on a send that never settles, so the next message in that chat still goes', async () => {
+    vi.useFakeTimers();
+    try {
+      const send = vi.fn((_id: string, body: string) =>
+        body === 'first' ? new Promise<ChatMessage>(() => undefined) : Promise.resolve(sent(body)),
+      );
+      const outbox = createOutbox(send);
+      const queryClient = new QueryClient();
+
+      outbox.send(queryClient, 'r1', 'first');
+      outbox.send(queryClient, 'r1', 'second');
+      await vi.advanceTimersByTimeAsync(SEND_GIVE_UP_MS - 1);
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(outbox.get('r1').map((p) => p.status)).toEqual(['sending', 'sending']);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send.mock.calls[1]?.[1]).toBe('second');
+      expect(outbox.get('r1').map((p) => [p.body, p.status])).toEqual([['first', 'failed']]);
+      // Only a backstop: the API client's own timeout answers first when it works.
+      expect(SEND_GIVE_UP_MS).toBeGreaterThan(REQUEST_TIMEOUT_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a send that answers after the give-up still replaces its "Not sent." bubble', async () => {
+    vi.useFakeTimers();
+    try {
+      let finish: (m: ChatMessage) => void = () => undefined;
+      const outbox = createOutbox(
+        () =>
+          new Promise<ChatMessage>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const queryClient = new QueryClient();
+      outbox.send(queryClient, 'r1', 'hi');
+      await vi.advanceTimersByTimeAsync(SEND_GIVE_UP_MS);
+      expect(outbox.get('r1')[0]?.status).toBe('failed');
+
+      finish(sent('hi'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(outbox.get('r1')).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // G5: a refusal that sending again cannot fix gets no retry; busy or timed out still can.

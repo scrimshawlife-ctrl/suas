@@ -20,6 +20,18 @@ export interface PendingMessage {
 // so later messages in the chat still go.
 type SendFn = (id: string, body: string, key: string) => Promise<ChatMessage>;
 
+/**
+ * The outbox's own give-up, a little after the API client's timeout (r268 F3). It only fires
+ * if that abort never settles the send (a fetch that ignores its signal, or a browser where the
+ * timeout could not be set up), so one hung send cannot hold back the rest of a crisis chat.
+ */
+// A literal, not REQUEST_TIMEOUT_MS + 5 s: many tests mock the client module.
+export const SEND_GIVE_UP_MS = 35_000;
+
+class SendGaveUpError extends Error {
+  override readonly name = 'SendGaveUpError';
+}
+
 const NONE: readonly PendingMessage[] = [];
 
 export interface Outbox {
@@ -60,19 +72,33 @@ export function createOutbox(send: SendFn = postChatMessage): Outbox {
 
   const attempt = async (queryClient: QueryClient, id: string, item: PendingMessage) => {
     const startedIn = epoch;
-    try {
-      const sent = await send(id, item.body, item.key);
+    const stored = (message: ChatMessage) => {
       if (startedIn !== epoch) return;
-      applyMessageToCaches(queryClient, sent, true);
+      applyMessageToCaches(queryClient, message, true);
       update(id, (list) => list.filter((p) => p.clientId !== item.clientId));
+    };
+    const sending = send(id, item.body, item.key);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const gaveUp = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new SendGaveUpError('No answer from SUAS.'));
+      }, SEND_GIVE_UP_MS);
+    });
+    try {
+      stored(await Promise.race([sending, gaveUp]));
     } catch (error) {
       if (startedIn !== epoch) return;
+      // A late answer to a send given up on still lands; "Try again" reuses the key, so the
+      // server never stores it twice.
+      if (error instanceof SendGaveUpError) sending.then(stored, () => undefined);
       const failed: Partial<PendingMessage> = isFinalSendError(error)
         ? { status: 'refused', reason: sendRefusedText(error) }
         : { status: 'failed' };
       update(id, (list) =>
         list.map((p) => (p.clientId === item.clientId ? { ...p, ...failed } : p)),
       );
+    } finally {
+      clearTimeout(timer);
     }
   };
   const enqueue = (queryClient: QueryClient, id: string, item: PendingMessage) => {
