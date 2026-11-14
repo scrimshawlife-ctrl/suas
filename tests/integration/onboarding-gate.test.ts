@@ -51,6 +51,18 @@ async function person(started: StartedApp = app) {
   return { pool, tenantId, user, headers: { authorization: `Bearer ${session.credential}` } };
 }
 
+/** A REVOKED row outranks any VERIFIED one, so the gate closes at once. */
+async function revokeStanding(pool: Pool, tenantId: string, userId: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO veteran_verifications
+       (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
+      provider_environment, projection_id, settled_at)
+     VALUES ($1, $2, $3, 'VA_VETERAN_STATUS', 'REVOKED', 'SUAS', 'test', 'NONE',
+             'VA_CONFIRMATION_V1_REQUIRED_ONLY', now())`,
+    [randomUUID(), tenantId, userId],
+  );
+}
+
 describe('county', () => {
   it('is null until chosen, can be set and changed, and rejects anything outside the seven', async () => {
     const { headers } = await person();
@@ -255,16 +267,39 @@ describe('verified-Veteran gate', () => {
   it('stops working when the standing is revoked', async () => {
     const { headers, pool, tenantId, user } = await person();
     await markVerifiedVeteran(pool, tenantId, user.userId);
-    await pool.query(
-      `INSERT INTO veteran_verifications
-         (verification_id, tenant_id, user_id, method, status, source, source_contract_version,
-        provider_environment, projection_id, settled_at)
-       VALUES ($1, $2, $3, 'VA_VETERAN_STATUS', 'REVOKED', 'SUAS', 'test', 'NONE',
-               'VA_CONFIRMATION_V1_REQUIRED_ONLY', now())`,
-      [randomUUID(), tenantId, user.userId],
-    );
+    await revokeStanding(pool, tenantId, user.userId);
     const response = await app.server.inject({ method: 'GET', url: '/api/v0/resources', headers });
     expect(response.statusCode).toBe(403);
+  });
+
+  // R12.8: of the request commands only the requester's SUBMIT needs the confirmation.
+  it('refuses the requester SUBMIT once the standing is revoked', async () => {
+    const { headers, pool, tenantId, user } = await person();
+    await markVerifiedVeteran(pool, tenantId, user.userId);
+    const keyed = () => ({ ...headers, 'idempotency-key': randomUUID() });
+    const opened = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/cases',
+      headers: keyed(),
+    });
+    const created = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/cases/${opened.json<{ case_id: string }>().case_id}/service-requests`,
+      headers: keyed(),
+      payload: { category: 'FOOD', details: { meeting_place: 'Main Street library' } },
+    });
+    expect(created.statusCode).toBe(201);
+    const requestId = created.json<{ service_request_id: string }>().service_request_id;
+    await revokeStanding(pool, tenantId, user.userId);
+
+    const submitted = await app.server.inject({
+      method: 'POST',
+      url: `/api/v0/service-requests/${requestId}/commands/SUBMIT`,
+      headers: keyed(),
+      payload: {},
+    });
+    expect(submitted.statusCode).toBe(403);
+    expect(submitted.json<{ error: { code: string } }>().error.code).toBe('VERIFICATION_REQUIRED');
   });
 });
 

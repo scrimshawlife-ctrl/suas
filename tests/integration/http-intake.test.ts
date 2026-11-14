@@ -432,6 +432,25 @@ describe('verified-Veteran gate', () => {
     expect(model.requests().every((r) => !JSON.stringify(r).includes('I need food.'))).toBe(true);
   });
 
+  // R12.8: the two submit routes document 422 COUNTY_REQUIRED for a verified Veteran.
+  it('asks a verified Veteran with no county to choose one before submitting', async () => {
+    const { tenantId, user, headers } = await veteran({ verified: false });
+    await markVerifiedVeteran(pool(), tenantId, user.userId, null);
+    const calls = [
+      post(`/api/v0/intake/drafts/${randomUUID()}/submit`, headers, {}, { 'idempotency-key': 'k' }),
+      post(
+        '/api/v0/service-requests',
+        headers,
+        { category: 'FOOD', summary: 'Food' },
+        { 'idempotency-key': 'k' },
+      ),
+    ];
+    for (const res of await Promise.all(calls)) {
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error.code).toBe('COUNTY_REQUIRED');
+    }
+  });
+
   it('requires a session', async () => {
     const res = await app.server.inject({ method: 'GET', url: '/api/v0/intake/status' });
     expect(res.statusCode).toBe(401);

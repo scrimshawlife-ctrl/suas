@@ -179,6 +179,19 @@ describe('county scoping', () => {
     expect(response.json().error.code).toBe('COUNTY_REQUIRED');
   });
 
+  // R12.8: accept documents 422 COUNTY_REQUIRED; the request stays open.
+  it('asks a person with no county to choose one before accepting', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'SANTA_CLARA', 'requester');
+    const noCounty = await person(tenantId, undefined);
+    const helper = await person(tenantId, 'SANTA_CLARA');
+    const { serviceRequestId } = await request(requester);
+    const response = await accept(noCounty, serviceRequestId);
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.code).toBe('COUNTY_REQUIRED');
+    expect(await openIds(helper)).toEqual([serviceRequestId]);
+  });
+
   it('never lists requests across tenants', async () => {
     const requester = await person(randomUUID(), 'SANTA_CLARA', 'requester');
     const elsewhere = await person(randomUUID(), 'SANTA_CLARA');
