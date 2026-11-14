@@ -113,6 +113,13 @@ describe('outbox', () => {
     ],
     ['413', new ApiError(413, 'PAYLOAD_TOO_LARGE', 'x'), 'refused', 'The message is too long.'],
     ['429', new ApiError(429, 'RATE_LIMITED', 'x'), 'failed', undefined],
+    // r268 F1: a retry while the first try is still being stored; the next retry replays it.
+    [
+      '409 IDEMPOTENCY_CONFLICT',
+      new ApiError(409, 'IDEMPOTENCY_CONFLICT', 'x'),
+      'failed',
+      undefined,
+    ],
     ['408 TIMEOUT', new ApiError(408, 'TIMEOUT', 'x'), 'failed', undefined],
     ['503', new ApiError(503, 'UNAVAILABLE', 'x'), 'failed', undefined],
     ['a dropped connection', new TypeError('Failed to fetch'), 'failed', undefined],
