@@ -115,4 +115,21 @@ describe('useUpdateCounty', () => {
       true,
     );
   });
+
+  // Regression (#307 review): a list opened after the change flashed the old county's requests.
+  it('never shows the old county list after the change; it loads afresh', async () => {
+    tokenStore.setToken('tok');
+    client.PUT.mockResolvedValue({ data: { county: 'ALAMEDA' } });
+    client.GET.mockReturnValue(new Promise(() => undefined));
+    const queryClient = new QueryClient();
+    const options = { wrapper: wrapper(queryClient) };
+    const oldList = { service_requests: [{ service_request_id: 'merced-1' }], next_cursor: null };
+    queryClient.setQueryData(queryKeys.serviceRequests.list({ ownership: 'open' }), oldList);
+
+    const { result } = renderHook(() => useUpdateCounty(), options);
+    await result.current.mutateAsync('ALAMEDA');
+    const open = renderHook(() => useServiceRequests('open'), options);
+    expect(open.result.current.data).toBeUndefined();
+    expect(open.result.current.isPending).toBe(true);
+  });
 });

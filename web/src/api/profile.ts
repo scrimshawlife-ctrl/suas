@@ -16,7 +16,8 @@ export function useUpdateProfile() {
 
 /**
  * PUT /api/v0/veterans/me/county. The open list and each request's county follow the person's
- * current county (src/coordination/open-requests.ts), so every request list and detail refreshes.
+ * current county (src/coordination/open-requests.ts). Lists are reset, not invalidated, so the
+ * old county's requests never show while they reload; details refresh in place.
  */
 export function useUpdateCounty() {
   const queryClient = useQueryClient();
@@ -27,7 +28,8 @@ export function useUpdateCounty() {
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.me }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.serviceRequests.all }),
+        queryClient.resetQueries({ queryKey: queryKeys.serviceRequests.lists() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.serviceRequests.details() }),
       ]),
   });
 }
