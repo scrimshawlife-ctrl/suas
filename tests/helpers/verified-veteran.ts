@@ -1,6 +1,6 @@
 /**
  * Test helpers: give a synthetic user a VERIFIED VA Veteran Confirmation (the request
- * gate, suas-specs #72 R9.1 proposal), as the fixture adapter would record it, and a county
+ * gate, suas-specs #72 R9.1, released in 0.10.0), as the fixture adapter would record it, and a county
  * when they have none, so tests of gated routes can reach the behavior under test.
  * A county the test already chose is never overwritten.
  */

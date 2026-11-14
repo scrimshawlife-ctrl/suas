@@ -423,7 +423,7 @@ describe('SMTP relay (R11.2)', () => {
   });
 });
 
-// suas-specs SCRY_LICENCE_FALLBACK.md (R10.1 proposal) §2.3, L4.7, L9 and
+// suas-specs SCRY_LICENCE_FALLBACK.md (R10.1, released in 0.10.0) §2.3, L4.7, L9 and
 // VA_CONFIRMATION_FLOW.md §2.1: licence images leave no copies, the worker sees only their
 // prefix, the new secrets reach only their holders, and the reader stays off with no egress.
 describe('licence review', () => {

@@ -1,5 +1,5 @@
 /**
- * Config guards for the licence reader (suas-specs R10.1, proposal; L9.1): where each mode
+ * Config guards for the licence reader (suas-specs R10.1, released in 0.10.0; L9.1): where each mode
  * may run, the fail-closed fingerprint key, and secrets kept out of config output.
  */
 

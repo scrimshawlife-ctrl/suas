@@ -1,6 +1,6 @@
 /**
  * The Scry adapter's minimized schema and failure mapping, the L3 upload hardening and the
- * L4.2 synthetic barcode check (suas-specs R10.1, proposal). All data is synthetic.
+ * L4.2 synthetic barcode check (suas-specs R10.1, released in 0.10.0). All data is synthetic.
  */
 
 import jpeg from 'jpeg-js';

@@ -1,6 +1,6 @@
 /**
  * VA confirmation HTTP adapter against a fake transport: D035_VA_CONFIRMATION_ADAPTER.md
- * §14 security tests and §15 vectors, with the suas-specs #72 R9.1 (proposal) mapping.
+ * §14 security tests and §15 vectors, with the suas-specs #72 R9.1 (released in 0.10.0) mapping.
  * All people and keys here are synthetic.
  */
 

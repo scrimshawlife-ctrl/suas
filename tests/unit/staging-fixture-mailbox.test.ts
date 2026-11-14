@@ -1,5 +1,5 @@
 /**
- * R11.7 (contributor proposal, specs #75): plus addresses of one configured STAGING mailbox
+ * R11.7 (specs #75, released in 0.10.0): plus addresses of one configured STAGING mailbox
  * count as fixture addresses, so emailed sign-in codes arrive. The bare mailbox never does.
  * Routable addresses are built at run time (repository hygiene, TESTING.md §12).
  */

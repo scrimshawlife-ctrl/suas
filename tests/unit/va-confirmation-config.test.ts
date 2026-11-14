@@ -1,5 +1,5 @@
 /**
- * Config guards for VA Veteran Confirmation (suas-specs #72 R9.1, proposal;
+ * Config guards for VA Veteran Confirmation (suas-specs #72 R9.1, released in 0.10.0;
  * D035_VA_CONFIRMATION_ADAPTER.md §5, §6, §14 items 2-4, 7, 9-10). Keys are synthetic.
  */
 
