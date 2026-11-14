@@ -3,6 +3,10 @@
     "reason": "Ops liveness probe; no person-facing screen.",
     "ref": "R12.5"
   },
+  "getResource": {
+    "reason": "Resource information and contact actions live in the catalog cards; the detail operation is API-only for v1 web (owner Q1, 2026-11-13).",
+    "ref": "suas-specs #81 decisions.md Q1; R12.5"
+  },
   "getImmediateResources": {
     "reason": "The web app shows the compiled SAFETY_COPY crisis text (SURFACES §6 fallback); only legacy /app reads this slot.",
     "ref": "R12.5; plan O3(a)"
