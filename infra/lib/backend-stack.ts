@@ -37,6 +37,7 @@ import type { Construct } from 'constructs';
 import { RELEASE_MANIFEST, SPEC_VERSION } from '../../src/release/pins.js';
 import { REGION, type EnvironmentConfig } from './config.js';
 import { RDS_CA_BUNDLE_FILE, suasLambdaCode } from './lambda-code.js';
+import { applyDeploymentMode, deploymentPipelineEnabled } from './deployment-mode.js';
 import { EmailRelay } from './email-relay.js';
 
 export interface BackendStackProps extends StackProps {
@@ -66,19 +67,29 @@ export function fixtureParameterName(environment: string, name: string): string 
 }
 
 export class BackendStack extends Stack {
+  private readonly zoneNames: string[];
+
+  /**
+   * The zones CloudFormation resolves (or the pinned context list). Overriding the getter keeps
+   * an account-bound synth lookup-free: the default asks the account for its zones.
+   */
+  override get availabilityZones(): string[] {
+    return this.zoneNames;
+  }
+
   constructor(scope: Construct, id: string, props: BackendStackProps) {
     super(scope, id, props);
     const { config, zone } = props;
-    const isolated: ec2.SubnetSelection = { subnetType: ec2.SubnetType.PRIVATE_ISOLATED };
-
-    // ---------------------------------------------------------------- network
-    const zones =
+    this.zoneNames =
       config.availabilityZones.length > 0
         ? [...config.availabilityZones]
         : [Fn.select(0, Fn.getAzs(REGION)), Fn.select(1, Fn.getAzs(REGION))];
+    const isolated: ec2.SubnetSelection = { subnetType: ec2.SubnetType.PRIVATE_ISOLATED };
+
+    // ---------------------------------------------------------------- network
     const vpc = new ec2.Vpc(this, 'Vpc', {
       ipAddresses: ec2.IpAddresses.cidr('10.20.0.0/16'),
-      availabilityZones: zones,
+      availabilityZones: this.zoneNames,
       natGateways: 0,
       subnetConfiguration: [
         { name: 'isolated', subnetType: ec2.SubnetType.PRIVATE_ISOLATED, cidrMask: 24 },
@@ -523,7 +534,7 @@ export class BackendStack extends Stack {
 
     // ------------------------------------------------------------------- jobs
     // One pass of the job worker each minute (outbox drain plus request widening).
-    new scheduler.Schedule(this, 'JobWorkerSchedule', {
+    const jobWorkerSchedule = new scheduler.Schedule(this, 'JobWorkerSchedule', {
       description: 'Runs one pass of the job worker: outbox drain and request widening',
       schedule: scheduler.ScheduleExpression.rate(Duration.minutes(1)),
       target: new schedulerTargets.LambdaInvoke(jobWorkerFunction, {
@@ -531,6 +542,14 @@ export class BackendStack extends Stack {
         retryAttempts: 0,
       }),
     });
+    if (deploymentPipelineEnabled(this)) {
+      applyDeploymentMode(this, {
+        api: apiFunction,
+        worker: jobWorkerFunction,
+        schedule: jobWorkerSchedule,
+        databaseIdentifier: database.instanceIdentifier,
+      });
+    }
 
     // ------------------------------------------------------------------ alarms
     // Count the failure messages the code logs and alarm on any in five minutes. There is no
