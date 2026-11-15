@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Deploys one verified synthetic-STAGING release (.github/workflows/staging-deploy.yml).
+#
+# Order: quiesce the deployed backend on its own template, deploy the new backend still in
+# maintenance, migrate privately, then admit the API, then one worker pass, then the schedule,
+# then the web app. Every step must pass; on failure the stack stays in its current mode and
+# nothing re-enables traffic (CI_CD_ARCHITECTURE.md §7). Never prints Lambda configuration.
+set -euo pipefail
+
+: "${CDK_OUT:?}" "${RELEASE_JSON:?}" "${SUAS_BUILD_COMMIT:?}" "${API_ORIGIN:?}" "${SCOPE:?}"
+readonly REGION=us-west-2
+readonly BACKEND=Suas-Staging-Backend
+WORK="$(mktemp -d)"
+readonly WORK
+
+cdk() { node infra/node_modules/aws-cdk/bin/cdk --app "$CDK_OUT" --no-notices --no-version-reporting "$@"; }
+release() { node --import tsx/esm scripts/ci/staging-release.ts "$@"; }
+step() { echo "::group::$*"; }
+done_step() { echo "::endgroup::"; }
+
+# One stack output, or empty when the stack does not exist yet. Any other error is fatal.
+output() {
+  local err value
+  err="$WORK/describe.err"
+  if value=$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$1" \
+    --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue | [0]" --output text 2>"$err"); then
+    [ "$value" = None ] && value=''
+    printf '%s' "$value"
+  elif grep -q 'does not exist' "$err"; then
+    printf ''
+  else
+    cat "$err" >&2
+    return 1
+  fi
+}
+
+require_stack() {
+  aws cloudformation describe-stacks --region "$2" --stack-name "$1" --query 'Stacks[0].StackStatus' \
+    --output text >/dev/null || {
+    echo "$1 ($2) must exist first: deploy it by hand (docs/runbooks/aws-staging-bootstrap.md)." >&2
+    exit 1
+  }
+}
+
+deploy_backend() {
+  cdk deploy "$BACKEND" --exclusively --require-approval never \
+    --parameters "$BACKEND:DeploymentMode=$1"
+}
+
+# Puts the deployed backend into maintenance with its current template and parameters.
+quiesce() {
+  local current
+  current=$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$BACKEND" \
+    --query "Stacks[0].Parameters[?ParameterKey=='DeploymentMode'].ParameterValue | [0]" --output text)
+  if [ "$current" = maintenance ]; then return 0; fi
+  if [ "$current" = None ]; then
+    echo "$BACKEND has no DeploymentMode parameter; it was not deployed by this pipeline." >&2
+    exit 1
+  fi
+  aws cloudformation describe-stacks --region "$REGION" --stack-name "$BACKEND" \
+    --query 'Stacks[0].Parameters[].ParameterKey' --output json |
+    node -e 'const keys = JSON.parse(require("fs").readFileSync(0, "utf8"));
+      console.log(JSON.stringify(keys.map((k) => k === "DeploymentMode"
+        ? { ParameterKey: k, ParameterValue: "maintenance" }
+        : { ParameterKey: k, UsePreviousValue: true })));' >"$WORK/quiesce-params.json"
+  aws cloudformation update-stack --region "$REGION" --stack-name "$BACKEND" --use-previous-template \
+    --parameters "file://$WORK/quiesce-params.json" \
+    --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND >/dev/null
+  aws cloudformation wait stack-update-complete --region "$REGION" --stack-name "$BACKEND"
+}
+
+invoke() {
+  aws lambda invoke --region "$REGION" --function-name "$1" --cli-binary-format raw-in-base64-out \
+    --cli-read-timeout 360 --payload '{}' "$WORK/$2.json" >"$WORK/$2.meta.json"
+}
+
+step "Verify the release artifact"
+release verify "$CDK_OUT" "$RELEASE_JSON"
+require_stack Suas-Dns "$REGION"
+require_stack Suas-Staging-WebCert us-east-1
+deployed_schema=$(output "$BACKEND" ExpectedSchemaVersion)
+done_step
+
+if [ "$SCOPE" = full ]; then
+  step "Quiesce the deployed backend"
+  release check-schema-order "$RELEASE_JSON" "$deployed_schema"
+  if [ -n "$(output "$BACKEND" ApiFunctionName)" ]; then
+    quiesce
+    drain=$(release field "$RELEASE_JSON" drainSeconds)
+    echo "Waiting ${drain}s for in-flight API and worker invocations to finish."
+    sleep "$drain"
+  fi
+  done_step
+
+  step "Deploy the backend in maintenance"
+  deploy_backend maintenance
+  done_step
+
+  step "Migrate"
+  invoke "$(output "$BACKEND" MigrateFunctionName)" migrate
+  release check-migration "$WORK/migrate.json" "$WORK/migrate.meta.json" "$RELEASE_JSON"
+  done_step
+
+  step "Admit the API"
+  deploy_backend api
+  curl --fail --silent --show-error --max-time 30 "$API_ORIGIN/api/v0/health" >"$WORK/health.json"
+  release check-health "$WORK/health.json"
+  done_step
+
+  step "Run one job worker pass"
+  deploy_backend worker
+  invoke "$(output "$BACKEND" JobWorkerFunctionName)" worker
+  release check-worker "$WORK/worker.json" "$WORK/worker.meta.json"
+  done_step
+
+  step "Enable the job worker schedule"
+  deploy_backend live
+  done_step
+else
+  expected=$(release field "$RELEASE_JSON" expectedSchemaVersion)
+  if [ "$deployed_schema" != "$expected" ]; then
+    echo "Web-only deploy needs the deployed backend at schema $expected (found '${deployed_schema}')." >&2
+    exit 1
+  fi
+fi
+
+step "Deploy the web app"
+cdk deploy Suas-Staging-Web --exclusively --require-approval never
+done_step
+
+step "Public acceptance against the deployed API"
+SUAS_E2E_BASE_URL="$API_ORIGIN" npm run test:e2e:staging:public
+done_step
+
+echo "Deployed ${SUAS_BUILD_COMMIT} (${SCOPE}). Authenticated acceptance needs synthetic sessions and is not claimed."

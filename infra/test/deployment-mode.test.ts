@@ -5,6 +5,7 @@
 
 import { rmSync } from 'node:fs';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { EXPECTED_SCHEMA_VERSION } from '../../src/db/schema-version.js';
 import { repoRoot } from '../lib/lambda-code.js';
 import { synthesize } from './helpers.js';
 
@@ -109,6 +110,7 @@ describe('deploy workflow maintenance modes', () => {
       expect(backend.Outputs[output].Value).toEqual({ Ref: fn(backend, handler)[0] });
     }
     const [dbId] = only(backend, 'AWS::RDS::DBInstance');
+    expect(backend.Outputs.ExpectedSchemaVersion.Value).toBe(String(EXPECTED_SCHEMA_VERSION));
     expect(backend.Outputs.DatabaseIdentifier.Value).toEqual({ Ref: dbId });
   });
 

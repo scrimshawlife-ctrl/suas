@@ -1,0 +1,213 @@
+# Deploys one verified main commit to synthetic STAGING on AWS.
+#
+# Manual only (CI_CD_ARCHITECTURE.md CI-05): pick a full main SHA, the full CI runs on it, the
+# app is built and synthesized once without credentials, the plan job shows the diff, and the
+# deploy job waits for the suas-synthetic-staging environment's reviewers before touching AWS.
+# AWS access is GitHub OIDC only (no stored keys). STAGING stays synthetic: no real Veteran data
+# and no real external effects (ENVIRONMENT.md §2). This is not production or SPEC-018 evidence.
+
+name: staging-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full 40-character commit SHA on main to deploy
+        required: true
+        type: string
+      scope:
+        description: full = backend (with migrations) and web; web = web app only
+        required: true
+        type: choice
+        options: [full, web]
+        default: full
+
+permissions:
+  contents: read
+
+concurrency:
+  # One mutation of STAGING at a time; never cancel a deploy that is running.
+  group: suas-synthetic-staging
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.check.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Require a commit on main and the deployment variables
+        id: check
+        env:
+          INPUT_SHA: ${{ inputs.sha }}
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          SUAS_STAGING_API_ORIGIN: ${{ vars.SUAS_STAGING_API_ORIGIN }}
+        run: |
+          [[ "$INPUT_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "sha must be 40 lowercase hex characters"; exit 1; }
+          git merge-base --is-ancestor "$INPUT_SHA" origin/main || { echo "$INPUT_SHA is not on main"; exit 1; }
+          [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "vars.AWS_ACCOUNT_ID is not set"; exit 1; }
+          for arn in "$AWS_PLAN_ROLE_ARN" "$AWS_DEPLOY_ROLE_ARN"; do
+            [[ "$arn" == "arn:aws:iam::${AWS_ACCOUNT_ID}:role/"* ]] || { echo "role vars must be roles in that account"; exit 1; }
+          done
+          [[ "$SUAS_STAGING_API_ORIGIN" =~ ^https://[a-z0-9.-]+$ ]] || { echo "vars.SUAS_STAGING_API_ORIGIN must be an https origin"; exit 1; }
+          echo "sha=$INPUT_SHA" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: gate
+    uses: ./.github/workflows/verify.yml
+    with:
+      ref: ${{ needs.gate.outputs.sha }}
+
+  build:
+    # No AWS credentials: the account id is configuration, and synth makes no lookups.
+    needs: [gate, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SUAS_BUILD_COMMIT: ${{ needs.gate.outputs.sha }}
+      CDK_DEFAULT_ACCOUNT: ${{ vars.AWS_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+            infra/package-lock.json
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix web
+          npm ci --prefix infra
+      - name: Build the web app for the STAGING API origin
+        working-directory: web
+        env:
+          VITE_SUAS_API_BASE_URL: ${{ vars.SUAS_STAGING_API_ORIGIN }}
+        run: npm run build
+      - name: Synthesize the deployable assembly
+        working-directory: infra
+        run: npm run synth:deploy
+      - name: Record the release
+        run: node --import tsx/esm scripts/ci/staging-release.ts write infra/cdk.out release.json
+      - name: Summarize the release
+        run: |
+          {
+            echo "### Release ${SUAS_BUILD_COMMIT}"
+            echo '```json'
+            node -e 'const r = require("./release.json"); delete r.migrations; console.log(JSON.stringify(r, null, 2));'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staging-release
+          path: |
+            infra/cdk.out/
+            release.json
+          if-no-files-found: error
+          retention-days: 30
+
+  plan:
+    needs: [gate, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: suas-synthetic-staging-plan
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - name: Install the pinned CDK CLI
+        run: npm ci --prefix infra
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staging-release
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          role-session-name: suas-plan-${{ github.run_id }}
+          aws-region: us-west-2
+      - name: Confirm the target account
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
+      - name: Diff the assembly against STAGING
+        # The plan role can only assume the read-only CDK lookup role, so no change set is created.
+        run: |
+          node infra/node_modules/aws-cdk/bin/cdk diff --app infra/cdk.out --no-change-set \
+            --no-notices --no-version-reporting 2>&1 | tee diff.txt
+          { echo '### cdk diff'; echo '```'; cat diff.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: [gate, plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # Required reviewers on this environment are the approval of the plan above.
+    environment:
+      name: suas-synthetic-staging
+      url: ${{ vars.SUAS_STAGING_WEB_ORIGIN }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SUAS_BUILD_COMMIT: ${{ needs.gate.outputs.sha }}
+      CDK_OUT: infra/cdk.out
+      RELEASE_JSON: release.json
+      API_ORIGIN: ${{ vars.SUAS_STAGING_API_ORIGIN }}
+      SCOPE: ${{ inputs.scope }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            infra/package-lock.json
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npm ci --prefix infra
+          npx playwright install --with-deps chromium
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staging-release
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: suas-deploy-${{ github.run_id }}
+          aws-region: us-west-2
+      - name: Confirm the target account
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
+      - name: Deploy, migrate and verify
+        run: bash scripts/ci/staging-deploy.sh
+      - name: Upload the public acceptance report
+        # Public tests only: no sessions or tokens are in these traces.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staging-public-acceptance
+          path: artifacts/playwright/
+          if-no-files-found: ignore
+          retention-days: 14

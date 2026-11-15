@@ -34,6 +34,7 @@ import * as schedulerTargets from 'aws-cdk-lib/aws-scheduler-targets';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
+import { EXPECTED_SCHEMA_VERSION } from '../../src/db/schema-version.js';
 import { RELEASE_MANIFEST, SPEC_VERSION } from '../../src/release/pins.js';
 import { REGION, type EnvironmentConfig } from './config.js';
 import { RDS_CA_BUNDLE_FILE, suasLambdaCode } from './lambda-code.js';
@@ -548,6 +549,7 @@ export class BackendStack extends Stack {
         worker: jobWorkerFunction,
         schedule: jobWorkerSchedule,
         databaseIdentifier: database.instanceIdentifier,
+        expectedSchemaVersion: EXPECTED_SCHEMA_VERSION,
       });
     }
 

@@ -19,6 +19,8 @@ export interface DeploymentModeTargets {
   readonly worker: lambda.Function;
   readonly schedule: scheduler.Schedule;
   readonly databaseIdentifier: string;
+  /** Schema the deployed code requires; the next deploy refuses to run older code against it. */
+  readonly expectedSchemaVersion: number;
 }
 
 /** True when the stack is synthesized for the deploy workflow. */
@@ -56,4 +58,5 @@ export function applyDeploymentMode(stack: Stack, targets: DeploymentModeTargets
   new CfnOutput(stack, 'ApiFunctionName', { value: targets.api.functionName });
   new CfnOutput(stack, 'JobWorkerFunctionName', { value: targets.worker.functionName });
   new CfnOutput(stack, 'DatabaseIdentifier', { value: targets.databaseIdentifier });
+  new CfnOutput(stack, 'ExpectedSchemaVersion', { value: String(targets.expectedSchemaVersion) });
 }
