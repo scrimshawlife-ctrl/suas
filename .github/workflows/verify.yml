@@ -29,7 +29,9 @@ permissions:
 
 concurrency:
   group: verify-${{ github.event_name }}-${{ inputs.ref || github.ref }}
-  cancel-in-progress: true
+  # Only a newer push to the same PR cancels an older run. Every main SHA and every reusable
+  # call finishes, so a deployed SHA always has a complete result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
@@ -81,7 +83,7 @@ jobs:
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: '22'
+          node-version: '22.22.2'
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -219,7 +221,7 @@ jobs:
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: '22'
+          node-version: '22.22.2'
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -277,22 +279,18 @@ jobs:
 
   skills:
     # The skill metadata checks from skills-validate.yml, on every PR and every reusable call
-    # rather than only when skill paths change. Same commands, so both stay in step.
+    # rather than only when skill paths change. Run through uv, as AGENTS.md asks for Python checks.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.12'
-      - name: Install metadata test dependency
-        run: python -m pip install PyYAML
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Check skill metadata
-        run: python -m unittest discover -s tests -p 'test_skill_metadata.py' -v
+        run: uv run --no-project --python 3.12 --with pyyaml python -m unittest discover -s tests -p 'test_skill_metadata.py' -v
       - name: Validate SUAS runtime skills
-        run: python scripts/validate-skills.py
+        run: uv run --no-project --python 3.12 --with pyyaml python scripts/validate-skills.py
 
 # Not run here, by design:
 # - test:e2e:staging needs a deployed STAGING origin; staging-deploy.yml runs its @public set.
