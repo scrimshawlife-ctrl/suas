@@ -120,7 +120,8 @@ export class VaConfirmationLambdaRelay implements VeteranConfirmationPort {
       return unavailable(invokeFailureClass(error));
     }
 
-    // The function never throws for a VA outcome, so an error here is a crash or its timeout.
+    // The function never throws for a VA outcome, so an error here is a crash or its timeout
+    // (PROVIDER_UNAVAILABLE: R14.5 proposal).
     if (output.FunctionError !== undefined) return unavailable('PROVIDER_UNAVAILABLE');
     const parsed = vaVerifyResponseSchema.safeParse(parsePayload(output.Payload));
     return parsed.success
@@ -131,8 +132,8 @@ export class VaConfirmationLambdaRelay implements VeteranConfirmationPort {
 
 /**
  * D035 §11 classes for an invoke that did not return: our own deployment fault is
- * CONFIGURATION_INVALID, a Lambda throttle is a 429 (PROVIDER_RATE_LIMITED), a timeout is
- * TIMEOUT, a Lambda 5xx is PROVIDER_UNAVAILABLE, and a lost connection is NETWORK_ERROR.
+ * CONFIGURATION_INVALID, a timeout is TIMEOUT, a lost connection is NETWORK_ERROR. A Lambda
+ * throttle (PROVIDER_RATE_LIMITED) and a Lambda 5xx (PROVIDER_UNAVAILABLE) are R14.5 proposal.
  */
 export function invokeFailureClass(error: unknown): VaConfirmationFailureClass {
   const name = awsErrorName(error);
