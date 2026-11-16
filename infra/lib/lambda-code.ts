@@ -8,7 +8,8 @@
  *   - `package.json`   (src/provenance/build-info.ts resolves the app version beside the bundle)
  *   - `migrations/`    (src/db/migration-files.ts resolves it beside the bundle)
  *   - `run.sh`         (Lambda Web Adapter entry for the API function)
- *   - `rds-global-bundle.crt` (public RDS CA bundle, for the migrate function's direct TLS connection)
+ *   - `rds-global-bundle.crt` (public RDS CA bundle: the in-VPC functions verify the RDS
+ *                               instance's TLS certificate with it)
  */
 
 import { cpSync, chmodSync, copyFileSync, mkdirSync } from 'node:fs';

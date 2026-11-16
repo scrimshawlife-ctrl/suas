@@ -59,12 +59,15 @@ describe('network', () => {
     for (const name of ['lambda']) {
       expect(byService[name]?.VpcEndpointType).toBe('Interface');
       expect(byService[name]?.PrivateDnsEnabled).toBe(true);
+      // R14.1 proposal: one zone, the first isolated subnet; private DNS serves both zones.
+      expect(byService[name]?.SubnetIds).toEqual([
+        { Ref: expect.stringMatching(/^VpcisolatedSubnet1Subnet/) },
+      ]);
     }
   });
 
-  it('allows only Lambda to Proxy to RDS on 5432 (plus migrate to RDS), and HTTPS to endpoints', () => {
-    const databasePort = (port: unknown): boolean =>
-      port === 5432 || JSON.stringify(port).includes('Endpoint.Port');
+  it('allows only Lambda and migrate to RDS on 5432, and HTTPS to endpoints', () => {
+    const databasePort = (port: unknown): boolean => port === 5432;
     const separate = [
       ...ofType(s.backend, 'AWS::EC2::SecurityGroupIngress'),
       ...ofType(s.backend, 'AWS::EC2::SecurityGroupEgress'),
@@ -93,6 +96,26 @@ describe('network', () => {
         });
       }
     }
+    // The database group accepts exactly the Lambda and migrate groups, and each may reach it.
+    const groupOf = (ref: unknown): string =>
+      String((ref as { 'Fn::GetAtt': [string, string] })['Fn::GetAtt'][0]).replace(
+        /[0-9A-F]{8}$/,
+        '',
+      );
+    const intoDatabase = ofType(s.backend, 'AWS::EC2::SecurityGroupIngress')
+      .map(([, r]) => r.Properties)
+      .filter((rule) => groupOf(rule?.GroupId) === 'DatabaseSg');
+    expect(intoDatabase.map((rule) => groupOf(rule?.SourceSecurityGroupId)).sort()).toEqual([
+      'LambdaSg',
+      'MigrateSg',
+    ]);
+    const toDatabase = ofType(s.backend, 'AWS::EC2::SecurityGroupEgress')
+      .map(([, r]) => r.Properties)
+      .filter((rule) => groupOf(rule?.DestinationSecurityGroupId) === 'DatabaseSg');
+    expect(toDatabase.map((rule) => groupOf(rule?.GroupId)).sort()).toEqual([
+      'LambdaSg',
+      'MigrateSg',
+    ]);
   });
 });
 
@@ -112,15 +135,31 @@ describe('database', () => {
     });
   });
 
-  it('is reached through an RDS Proxy that requires TLS and holds the generated secret', () => {
-    s.backend.hasResourceProperties('AWS::RDS::DBProxy', {
-      EngineFamily: 'POSTGRESQL',
-      RequireTLS: true,
-      Auth: [Match.objectLike({ AuthScheme: 'SECRETS' })],
+  // R14.1 proposal (lean synthetic STAGING): no RDS Proxy; TLS to the instance is verified
+  // against the shipped RDS CA bundle, and the instance refuses plain connections.
+  it('has no RDS Proxy: every in-VPC function connects to the instance with verified TLS', () => {
+    s.backend.resourceCountIs('AWS::RDS::DBProxy', 0);
+    s.backend.resourceCountIs('AWS::RDS::DBProxyTargetGroup', 0);
+    s.backend.hasResourceProperties('AWS::RDS::DBParameterGroup', {
+      Parameters: { 'rds.force_ssl': '1' },
     });
     s.backend.hasResourceProperties('AWS::SecretsManager::Secret', {
       GenerateSecretString: Match.objectLike({ SecretStringTemplate: Match.anyValue() }),
     });
+    const [databaseId] = ofType(s.backend, 'AWS::RDS::DBInstance').map(([id]) => id);
+    const poolMax = { 'run.sh': '3', 'job-worker.handler': '3', 'migrate.handler': '1' };
+    for (const [handler, pool] of Object.entries(poolMax)) {
+      const fn = ofType(s.backend, 'AWS::Lambda::Function').find(
+        ([, r]) => r.Properties?.Handler === handler,
+      );
+      const variables = fn?.[1].Properties?.Environment.Variables as Record<string, unknown>;
+      expect(JSON.stringify(variables.DATABASE_URL), handler).toContain(
+        JSON.stringify({ 'Fn::GetAtt': [databaseId, 'Endpoint.Address'] }),
+      );
+      expect(variables.DATABASE_SSL_MODE, handler).toBe('verify');
+      expect(variables.DATABASE_SSL_CA_FILE, handler).toBe('/var/task/rds-global-bundle.crt');
+      expect(variables.DATABASE_POOL_MAX, handler).toBe(pool);
+    }
   });
 
   it('names nothing the config guard would read as a production database', () => {
