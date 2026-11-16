@@ -196,6 +196,8 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           role-session-name: suas-deploy-${{ github.run_id }}
           aws-region: us-west-2
+          # A first backend deploy (RDS + Proxy) can outlast the default one hour.
+          role-duration-seconds: 7200
       - name: Confirm the target account
         env:
           AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}

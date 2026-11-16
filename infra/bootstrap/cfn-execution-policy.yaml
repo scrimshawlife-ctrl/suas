@@ -1,0 +1,109 @@
+# CloudFormation execution policy for the SUAS synthetic-STAGING CDK bootstrap.
+#
+# Passed to `cdk bootstrap --cloudformation-execution-policies` instead of the default
+# AdministratorAccess. It covers the services the four Suas-* stacks create (see the resource
+# list in infra/README.md "Stacks"). IAM is limited to roles and policies whose names start with
+# `Suas-` (CloudFormation names generated roles after the stack) and to the one AWS managed
+# policy the CDK helper functions attach. Deploy by hand: docs/runbooks/aws-staging-bootstrap.md.
+#
+# Known limit: an inline role policy written by a Suas-* stack is not content-restricted, so
+# template review plus the protected deploy environment remain the control. A permissions
+# boundary on generated roles is the planned hardening.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SUAS staging CDK execution policy (least-privilege replacement for AdministratorAccess)
+
+Resources:
+  SuasCdkExecutionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: SuasCdkExecution
+      Description: Permissions CloudFormation uses to create the SUAS synthetic-STAGING stacks
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: StackServices
+            Effect: Allow
+            Action:
+              - acm:*
+              - apigateway:*
+              - cloudfront:*
+              - cloudwatch:*
+              - ec2:*
+              - lambda:*
+              - logs:*
+              - rds:*
+              - route53:*
+              - s3:*
+              - scheduler:*
+              - secretsmanager:*
+              - ssm:*
+            Resource: '*'
+          - Sid: KmsForAwsManagedKeys
+            # RDS, Secrets Manager and Lambda use AWS managed keys; no customer key is created.
+            Effect: Allow
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ListAliases
+            Resource: '*'
+          - Sid: SuasRoles
+            Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:DeleteRole
+              - iam:GetRole
+              - iam:GetRolePolicy
+              - iam:UpdateRole
+              - iam:UpdateAssumeRolePolicy
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:PutRolePolicy
+              - iam:DeleteRolePolicy
+              - iam:ListRolePolicies
+              - iam:ListAttachedRolePolicies
+              - iam:DetachRolePolicy
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
+          - Sid: AttachOnlyLambdaBasicExecution
+            Effect: Allow
+            Action: iam:AttachRolePolicy
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
+            Condition:
+              ArnEquals:
+                iam:PolicyARN: !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - Sid: PassSuasRolesToServices
+            Effect: Allow
+            Action: iam:PassRole
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
+            Condition:
+              StringEquals:
+                iam:PassedToService:
+                  - lambda.amazonaws.com
+                  - rds.amazonaws.com
+                  - scheduler.amazonaws.com
+                  - apigateway.amazonaws.com
+          - Sid: ServiceLinkedRoles
+            Effect: Allow
+            Action: iam:CreateServiceLinkedRole
+            Resource: '*'
+            Condition:
+              StringEquals:
+                iam:AWSServiceName:
+                  - rds.amazonaws.com
+                  - ops.apigateway.amazonaws.com
+                  - lambda.amazonaws.com
+          - Sid: ReadIam
+            Effect: Allow
+            Action:
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:ListRoles
+            Resource: '*'
+
+Outputs:
+  PolicyArn:
+    Description: Pass to cdk bootstrap --cloudformation-execution-policies
+    Value: !Ref SuasCdkExecutionPolicy
