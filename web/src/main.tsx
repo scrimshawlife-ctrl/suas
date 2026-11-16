@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { RouterProvider } from 'react-router';
+import { RouterProvider } from 'react-router/dom';
 import { setMfaRequiredHandler, setUnauthorizedHandler } from './api/client';
 import { createQueryClient } from './app/query-client';
 import { createAppRouter } from './app/router';

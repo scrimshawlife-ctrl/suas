@@ -232,7 +232,9 @@ function Progress({ request }: { request: ServiceRequestDetail }) {
           onClose={() => {
             setReleasing(false);
           }}
-          onReleased={() => void navigate(paths.serve)}
+          // The URL changes before a transition renders the next screen; render /serve at once
+          // so Back right after a release cannot keep this released case mounted.
+          onReleased={() => void navigate(paths.serve, { flushSync: true })}
         />
       ) : null}
       {request.status === 'FULFILLED' ? (
