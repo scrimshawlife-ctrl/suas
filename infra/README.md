@@ -140,8 +140,12 @@ connect to the instance endpoint directly, with `DATABASE_SSL_MODE=verify` and t
 `assets/rds-global-bundle.crt` (public certificates, from `truststore.pki.rds.amazonaws.com`) and set as
 `DATABASE_SSL_CA_FILE`. The migrate function would need a direct connection anyway (the migrator holds a session
 advisory lock; plan §4.1). Each warm API or job-worker container holds up to `DATABASE_POOL_MAX=3` connections
-(migrate holds 1), and without a proxy nothing pools them across containers, so the instance's connection limit
-caps how many containers can hold connections at once. See "Known risks".
+(migrate holds 1), and without a proxy nothing pools them across containers. The account's Lambda concurrency
+limit (1000) does not bound them, so reserved concurrency does (R14.1, SUAS-specs #100): **15 on the API and 2 on
+the job worker**. Budget: 15 × 3 + 2 × 3 + 1 (migrate) = **52 connections**, under the roughly 80 usable on
+`db.t4g.micro` (`max_connections` = LEAST({DBInstanceClassMemory/9531392}, 5000), less 3 reserved for superusers).
+A test keeps the budget at 60 or less. Lambda throttles a 16th concurrent API request instead of letting it fail
+on a database connection. See "Known risks".
 
 ### Cost
 
@@ -159,11 +163,11 @@ bundle (`src/provenance/build-info.ts`, `src/db/migration-files.ts`). The AWS SD
 the runtime. Provenance (`SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`) is stamped from git at synth time
 (the commit date, so the template is stable per commit), or from `-c buildCommit=` / `-c buildTimestamp=`.
 
-| Function   | Handler                | Network SG | Notes                                                                               |
-| ---------- | ---------------------- | ---------- | ----------------------------------------------------------------------------------- |
-| API        | `run.sh` (Web Adapter) | Lambda     | Node 22, arm64, 512 MB, 30 s, behind the HTTP API. `SUAS_MIGRATIONS_MODE=validate`. |
-| Job worker | `job-worker.handler`   | Lambda     | One pass (`job-worker --once`): widening sweep, then one batch of due outbox jobs   |
-| Migrate    | `migrate.handler`      | Migrate    | `migrate apply`, direct to RDS. Invoked by hand. No custom resource.                |
+| Function   | Handler                | Network SG | Notes                                                                                                        |
+| ---------- | ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------ |
+| API        | `run.sh` (Web Adapter) | Lambda     | Node 22, arm64, 512 MB, 30 s, behind the HTTP API. `SUAS_MIGRATIONS_MODE=validate`. Reserved concurrency 15. |
+| Job worker | `job-worker.handler`   | Lambda     | One pass (`job-worker --once`): widening sweep, then one batch of due outbox jobs. Reserved concurrency 2.   |
+| Migrate    | `migrate.handler`      | Migrate    | `migrate apply`, direct to RDS. Invoked by hand. No custom resource.                                         |
 
 EventBridge Scheduler invokes the job worker every minute (the Scheduler minimum for a rate). Overlapping runs are
 safe because jobs are claimed with leases. The two handlers `src/aws/job-worker-lambda.ts` and
@@ -381,10 +385,10 @@ owner decision.
   service. If a deploy fails for that reason, pass `-c availabilityZones=us-west-2a,us-west-2b` (or other zones).
   The Lambda endpoint uses the first zone listed.
 - **Database connections without RDS Proxy.** Each warm API or job-worker container keeps up to 3 connections
-  open, including while Lambda has frozen it, until the container is retired. The instance's `max_connections` for
-  `db.t4g.micro` (a function of its memory) was not checked, and the API function has no reserved-concurrency cap,
-  so a burst of containers can exhaust it and new connections fail. Every cold container also opens TLS straight to
-  the instance.
+  open, including while Lambda has frozen it, until the container is retired. Reserved concurrency (API 15, job
+  worker 2) holds the total to 52 (see "Database"); the exact `max_connections` of the deployed instance was not
+  read. The cap also limits staging throughput: past 15 concurrent API requests, Lambda throttles. Every cold
+  container opens TLS straight to the instance.
 - **Cold starts and the API Gateway limit.** The HTTP API integration times out after 29 seconds. Inference is
   disabled, so this template does not make a Bedrock call.
 - `npm audit` reports a moderate `minimatch` issue bundled inside `aws-cdk-lib` itself; it affects build-time code

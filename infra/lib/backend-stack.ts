@@ -58,6 +58,10 @@ const LICENCE_REVIEWS_PREFIX = 'licence-reviews/';
  * changes, and move the old pair to the `_PREVIOUS` variables.
  */
 const FINGERPRINT_KEY_ID = 'staging-1';
+// R14.1 (SUAS-specs #100): with no RDS Proxy these caps bound database connections to
+// API 15 x pool 3 + worker 2 x pool 3 + migrate 1 = 52, under db.t4g.micro's ~80 usable.
+const API_RESERVED_CONCURRENCY = 15;
+const JOB_WORKER_RESERVED_CONCURRENCY = 2;
 
 type Env = Record<string, string>;
 
@@ -288,6 +292,7 @@ export class BackendStack extends Stack {
         readonly memory: number;
         readonly timeout: Duration;
         readonly layers?: lambda.ILayerVersion[];
+        readonly reservedConcurrency?: number;
       },
     ): lambda.Function => {
       const logGroup = new logs.LogGroup(this, `${fnId}Logs`, {
@@ -329,6 +334,9 @@ export class BackendStack extends Stack {
         securityGroups: [options.sg],
         environment: options.env,
         ...(options.layers !== undefined ? { layers: options.layers } : {}),
+        ...(options.reservedConcurrency !== undefined
+          ? { reservedConcurrentExecutions: options.reservedConcurrency }
+          : {}),
       });
     };
 
@@ -356,6 +364,7 @@ export class BackendStack extends Stack {
       memory: 512,
       timeout: Duration.seconds(30),
       layers: [webAdapterLayer],
+      reservedConcurrency: API_RESERVED_CONCURRENCY,
       env: {
         ...baseEnv,
         SUAS_MIGRATIONS_MODE: 'validate',
@@ -390,6 +399,7 @@ export class BackendStack extends Stack {
       sg: lambdaSg,
       memory: 512,
       timeout: Duration.minutes(2),
+      reservedConcurrency: JOB_WORKER_RESERVED_CONCURRENCY,
       env: {
         ...baseEnv,
         ...viaEmailRelay,
