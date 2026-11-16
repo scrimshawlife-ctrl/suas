@@ -28,13 +28,19 @@ const projectionJson = JSON.parse(VENDORED_VA_PROJECTION.projectionText) as {
   allowed_field_names: string[];
   fields: Record<string, unknown>;
 };
+// STAGING calls VA only through the verify function (VA_CONFIRMATION_FLOW W9 item 4); the
+// approval check runs before either adapter is built.
 const sandbox = (SUAS_ENV: string) =>
   loadConfig(
     validEnv({
       SUAS_ENV,
       SUAS_VA_CONFIRMATION_MODE: 'sandbox',
-      SUAS_VA_CONFIRMATION_BASE_URL: VA_CONFIRMATION_SANDBOX_BASE_URL,
-      SUAS_VA_CONFIRMATION_API_KEY: 'synthetic-sandbox-key-1111',
+      ...(SUAS_ENV === 'STAGING'
+        ? { SUAS_VA_CONFIRMATION_RELAY_FUNCTION: 'suas-va-verify', SUAS_AWS_REGION: 'us-west-2' }
+        : {
+            SUAS_VA_CONFIRMATION_BASE_URL: VA_CONFIRMATION_SANDBOX_BASE_URL,
+            SUAS_VA_CONFIRMATION_API_KEY: 'synthetic-sandbox-key-1111',
+          }),
     }),
   );
 const pendingApproval = approvedVaProjection({

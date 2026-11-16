@@ -21,6 +21,17 @@ const sandbox = (overrides: Record<string, string | undefined> = {}) =>
     ...overrides,
   });
 
+// STAGING reaches VA only through the outside-VPC verify function (W9 item 4).
+const viaRelay = (overrides: Record<string, string | undefined> = {}) =>
+  sandbox({
+    SUAS_ENV: 'STAGING',
+    SUAS_VA_CONFIRMATION_BASE_URL: undefined,
+    SUAS_VA_CONFIRMATION_API_KEY: undefined,
+    SUAS_VA_CONFIRMATION_RELAY_FUNCTION: 'suas-va-verify',
+    SUAS_AWS_REGION: 'us-west-2',
+    ...overrides,
+  });
+
 function issuesFor(env: Record<string, string | undefined>): string {
   const result = tryLoadConfig(env);
   expect(result.ok, 'expected configuration to be rejected').toBe(false);
@@ -108,8 +119,8 @@ describe('VA confirmation config', () => {
   });
 
   it('allows the sandbox in STAGING and LOCAL only', () => {
-    for (const env of ['STAGING', 'LOCAL']) {
-      const port = createVeteranConfirmationPort(loadConfig(sandbox({ SUAS_ENV: env })), {
+    for (const env of [viaRelay(), sandbox({ SUAS_ENV: 'LOCAL' })]) {
+      const port = createVeteranConfirmationPort(loadConfig(env), {
         projection: approvedVaProjection(),
       });
       expect(port?.providerEnvironment).toBe('SANDBOX');
@@ -120,7 +131,7 @@ describe('VA confirmation config', () => {
     expect(issuesFor(sandbox({ SUAS_ENV: 'TEST' }))).toContain(
       'SUAS_VA_CONFIRMATION_MODE=sandbox is allowed only in STAGING and LOCAL, not TEST',
     );
-    const staging = loadConfig(sandbox({ SUAS_ENV: 'STAGING' }));
+    const staging = loadConfig(viaRelay());
     for (const environment of ['PRODUCTION', 'TEST'] as const) {
       expect(() => createVeteranConfirmationPort({ ...staging, environment })).toThrow(
         `allowed only in STAGING and LOCAL, not ${environment}`,
@@ -160,6 +171,63 @@ describe('VA confirmation config', () => {
     expect(issuesFor(sandbox({ SUAS_VA_CONFIRMATION_PROJECTION_ID: 'WITH_SSN' }))).toContain(
       'SUAS_VA_CONFIRMATION_PROJECTION_ID must be VA_CONFIRMATION_V1_REQUIRED_ONLY',
     );
+  });
+
+  describe('through the verify function (W9 item 4)', () => {
+    it('selects the relay with no key or base URL in this process; LOCAL stays direct', () => {
+      const config = loadConfig(viaRelay());
+      expect(config.vaConfirmation.relayFunction).toBe('suas-va-verify');
+      expect(config.vaConfirmation.apiKey).toBeUndefined();
+      expect(describeConfig(config).va_confirmation_relay_configured).toBe(true);
+      const options = { projection: approvedVaProjection() };
+      expect(createVeteranConfirmationPort(config, options)?.implementation).toBe(
+        'va-confirmation-lambda-relay',
+      );
+      expect(createVeteranConfirmationPort(loadConfig(sandbox()), options)?.implementation).toBe(
+        'va-confirmation-http',
+      );
+    });
+
+    it('refuses a direct VA call from STAGING', () => {
+      expect(issuesFor(sandbox({ SUAS_ENV: 'STAGING' }))).toContain(
+        'SUAS_VA_CONFIRMATION_MODE=sandbox in STAGING requires SUAS_VA_CONFIRMATION_RELAY_FUNCTION',
+      );
+    });
+
+    it('refuses the key beside the relay, a wrong base URL, no region, or a bad name', () => {
+      const issues = issuesFor(
+        viaRelay({
+          SUAS_VA_CONFIRMATION_API_KEY: KEY,
+          SUAS_VA_CONFIRMATION_BASE_URL: 'https://api.va.gov/services/veteran-confirmation/v1',
+          SUAS_AWS_REGION: undefined,
+        }),
+      );
+      expect(issues).toContain(
+        'SUAS_VA_CONFIRMATION_API_KEY must not be set with SUAS_VA_CONFIRMATION_RELAY_FUNCTION',
+      );
+      expect(issues).not.toContain(KEY);
+      expect(issues).toContain('SUAS_VA_CONFIRMATION_BASE_URL must be exactly');
+      expect(issues).toContain('SUAS_AWS_REGION is required');
+      expect(issuesFor(viaRelay({ SUAS_VA_CONFIRMATION_RELAY_FUNCTION: 'not a name' }))).toContain(
+        'SUAS_VA_CONFIRMATION_RELAY_FUNCTION must be a Lambda function name or ARN',
+      );
+    });
+
+    it('accepts the relay only with sandbox mode', () => {
+      for (const mode of ['disabled', 'fixture']) {
+        expect(
+          issuesFor(
+            validEnv({
+              SUAS_VA_CONFIRMATION_MODE: mode,
+              SUAS_VA_CONFIRMATION_RELAY_FUNCTION: 'suas-va-verify',
+              SUAS_AWS_REGION: 'us-west-2',
+            }),
+          ),
+        ).toContain(
+          'SUAS_VA_CONFIRMATION_RELAY_FUNCTION is allowed only with SUAS_VA_CONFIRMATION_MODE=sandbox',
+        );
+      }
+    });
   });
 
   it('shows the key only as a configured flag', () => {
