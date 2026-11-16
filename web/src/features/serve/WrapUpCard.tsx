@@ -159,7 +159,11 @@ function CloseStep({ caseId }: { caseId: string }) {
               disabled={close.isPending}
               onClick={() => {
                 flight(() =>
-                  close.mutateAsync(undefined, { onSuccess: () => void navigate(paths.serve) }),
+                  close.mutateAsync(undefined, {
+                    // The URL changes before a transition renders the next screen; render /serve
+                    // at once so Back right after closing cannot keep this closed case mounted.
+                    onSuccess: () => void navigate(paths.serve, { flushSync: true }),
+                  }),
                 );
               }}
             >
