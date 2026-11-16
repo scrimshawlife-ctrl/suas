@@ -33,10 +33,15 @@ export function CodeInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const active = Math.min(value.length, LENGTH - 1);
 
-  // Keep the caret at the end so typing and Backspace always act on the last box.
-  const caretToEnd = () => {
+  // Keep the caret at the end so typing and Backspace always act on the last box. A range
+  // selection (select all, then delete or type over) is left alone, or it could not be cleared.
+  const caretToEnd = (force = false) => {
     const input = inputRef.current;
-    if (input) input.setSelectionRange(input.value.length, input.value.length);
+    if (!input) return;
+    const end = input.value.length;
+    if (force || (input.selectionStart === input.selectionEnd && input.selectionStart !== end)) {
+      input.setSelectionRange(end, end);
+    }
   };
 
   return (
@@ -75,10 +80,10 @@ export function CodeInput({
         onPaste={onPaste}
         onFocus={() => {
           setFocused(true);
-          caretToEnd();
+          caretToEnd(true);
         }}
         onBlur={() => setFocused(false)}
-        onSelect={caretToEnd}
+        onSelect={() => caretToEnd()}
         className="absolute inset-0 h-full w-full cursor-text bg-transparent text-transparent caret-transparent outline-none"
       />
     </div>
