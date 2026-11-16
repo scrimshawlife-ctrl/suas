@@ -30,9 +30,9 @@ const defaultTransport: FetchTransport = {
   fetch: (url, init) => fetchWithTimeout(url, init),
 };
 
-/** D035 §13 allowed telemetry only. */
+/** D035 §13 allowed telemetry only. `adapter` names the implementation (HTTP or verify relay). */
 export interface VaConfirmationLogRecord {
-  readonly adapter: typeof VA_CONFIRMATION_HTTP_IMPLEMENTATION;
+  readonly adapter: string;
   readonly adapter_version: typeof VA_CONFIRMATION_CONTRACT_VERSION;
   readonly provider_environment: VaProviderEnvironment;
   readonly projection_id: typeof VA_CONFIRMATION_PROJECTION_ID;
@@ -238,7 +238,7 @@ function isTimeoutError(error: unknown): boolean {
   return name === 'TimeoutError' || name === 'AbortError';
 }
 
-function latencyBucket(ms: number): string {
+export function latencyBucket(ms: number): string {
   if (ms < 1000) return 'lt_1s';
   if (ms < 3000) return '1s_3s';
   if (ms < 10_000) return '3s_10s';
