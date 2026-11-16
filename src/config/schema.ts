@@ -19,6 +19,7 @@ import { isStagingFixtureAddress } from '../auth/staging-access.js';
 import { parseAllowedOrigins } from './cors-origins.js';
 import {
   VA_CONFIRMATION_PROJECTION_ID,
+  VA_CONFIRMATION_API_KEY_PATTERN,
   VA_CONFIRMATION_SANDBOX_BASE_URL,
 } from '../identity/va-confirmation.js';
 import type { FingerprintKeyring } from '../identity/fingerprint-keys.js';
@@ -369,6 +370,9 @@ const rawConfigSchema = z.object({
   // Server-side secret (D035 §6): shown only as a configured flag, never its value.
   SUAS_VA_CONFIRMATION_API_KEY: optionalRaw,
   SUAS_VA_CONFIRMATION_PROJECTION_ID: optionalRaw,
+  // `sandbox` from inside the VPC (VA_CONFIRMATION_FLOW W9 item 4; name: R14.5 proposal,
+  // SUAS-specs #100): the outside-VPC verify function holds the key and base URL.
+  SUAS_VA_CONFIRMATION_RELAY_FUNCTION: optionalRaw,
   // Server-side secret keying the HMAC fingerprints of personal data (owner review of #72:
   // not the session secret). Never echoed by config output.
   SUAS_FINGERPRINT_KEY: optionalRaw,
@@ -544,6 +548,8 @@ export interface SuasConfig {
     readonly mode: VaConfirmationMode;
     readonly baseUrl: string | undefined;
     readonly apiKey: string | undefined;
+    /** When set, `sandbox` calls VA through this outside-VPC verify function. */
+    readonly relayFunction: string | undefined;
   };
   readonly licenceReader: {
     readonly mode: LicenceReaderMode;
@@ -747,7 +753,9 @@ function validateAwsCapabilities(
     }
   }
   if (
-    (awsEnabled.length > 0 || raw.SUAS_EMAIL_RELAY_FUNCTION !== undefined) &&
+    (awsEnabled.length > 0 ||
+      raw.SUAS_EMAIL_RELAY_FUNCTION !== undefined ||
+      raw.SUAS_VA_CONFIRMATION_RELAY_FUNCTION !== undefined) &&
     raw.SUAS_AWS_REGION === undefined
   ) {
     issue('SUAS_AWS_REGION is required when an AWS-backed capability mode is selected.');
@@ -839,6 +847,17 @@ function validateVaConfirmation(
       `SUAS_VA_CONFIRMATION_MODE=fixture is allowed only in LOCAL and TEST, not ${environment}.`,
     );
   }
+  const relay = raw.SUAS_VA_CONFIRMATION_RELAY_FUNCTION;
+  if (relay !== undefined) {
+    if (mode !== 'sandbox') {
+      issue(
+        'SUAS_VA_CONFIRMATION_RELAY_FUNCTION is allowed only with SUAS_VA_CONFIRMATION_MODE=sandbox.',
+      );
+    }
+    if (!LAMBDA_FUNCTION_PATTERN.test(relay)) {
+      issue('SUAS_VA_CONFIRMATION_RELAY_FUNCTION must be a Lambda function name or ARN.');
+    }
+  }
   if (mode !== 'sandbox') return;
 
   if (environment === 'PRODUCTION') {
@@ -851,15 +870,33 @@ function validateVaConfirmation(
       'SUAS_VA_CONFIRMATION_MODE=sandbox is allowed only in STAGING and LOCAL, not TEST; TEST uses fixture or disabled.',
     );
   }
-  if (raw.SUAS_VA_CONFIRMATION_BASE_URL !== VA_CONFIRMATION_SANDBOX_BASE_URL) {
+  // STAGING reaches VA only through the verify function, which holds the key and the fixed
+  // base URL (W9 item 4); the in-VPC process holds neither. A base URL set anyway must match.
+  const baseUrl = raw.SUAS_VA_CONFIRMATION_BASE_URL;
+  if (environment === 'STAGING' && relay === undefined) {
+    issue(
+      'SUAS_VA_CONFIRMATION_MODE=sandbox in STAGING requires SUAS_VA_CONFIRMATION_RELAY_FUNCTION; a direct VA call from the VPC is refused.',
+    );
+    return;
+  }
+  if (
+    baseUrl !== VA_CONFIRMATION_SANDBOX_BASE_URL &&
+    (relay === undefined || baseUrl !== undefined)
+  ) {
     issue(
       `SUAS_VA_CONFIRMATION_BASE_URL must be exactly ${VA_CONFIRMATION_SANDBOX_BASE_URL} when SUAS_VA_CONFIRMATION_MODE=sandbox.`,
     );
   }
   const key = raw.SUAS_VA_CONFIRMATION_API_KEY;
-  if (key === undefined) {
+  if (relay !== undefined) {
+    if (key !== undefined) {
+      issue(
+        'SUAS_VA_CONFIRMATION_API_KEY must not be set with SUAS_VA_CONFIRMATION_RELAY_FUNCTION; the verify function holds it.',
+      );
+    }
+  } else if (key === undefined) {
     issue('SUAS_VA_CONFIRMATION_API_KEY is required when SUAS_VA_CONFIRMATION_MODE=sandbox.');
-  } else if (!/^[\x21-\x7E]+$/.test(key)) {
+  } else if (!VA_CONFIRMATION_API_KEY_PATTERN.test(key)) {
     issue('SUAS_VA_CONFIRMATION_API_KEY is malformed: printable characters only, no spaces.');
   }
 }
@@ -1514,6 +1551,7 @@ export function shapeConfig(
       mode: raw.SUAS_VA_CONFIRMATION_MODE,
       baseUrl: raw.SUAS_VA_CONFIRMATION_BASE_URL,
       apiKey: raw.SUAS_VA_CONFIRMATION_API_KEY,
+      relayFunction: raw.SUAS_VA_CONFIRMATION_RELAY_FUNCTION,
     },
     licenceReader: {
       mode: raw.SUAS_LICENCE_READER_MODE,

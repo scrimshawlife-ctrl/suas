@@ -21,6 +21,9 @@ export const VA_CONFIRMATION_CONTRACT_VERSION = 'va-veteran-confirmation-v1' as 
 export const VA_CONFIRMATION_SANDBOX_BASE_URL =
   'https://sandbox-api.va.gov/services/veteran-confirmation/v1';
 
+/** A well-formed sandbox key (W9 item 1): printable ASCII, no spaces. */
+export const VA_CONFIRMATION_API_KEY_PATTERN = /^[\x21-\x7E]+$/;
+
 /** D035 §11 adapter failure classes; the column (0022, 0023) also admits IDENTITY_CONFLICT. */
 export const VA_CONFIRMATION_FAILURE_CLASSES = [
   'CONFIGURATION_INVALID',

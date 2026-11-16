@@ -85,6 +85,7 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     id_verification_mode: config.idVerification.mode,
     va_confirmation_mode: config.vaConfirmation.mode,
     va_confirmation_api_key_configured: config.vaConfirmation.apiKey !== undefined,
+    va_confirmation_relay_configured: config.vaConfirmation.relayFunction !== undefined,
     licence_reader_mode: config.licenceReader.mode,
     scry_base_url_configured: config.licenceReader.scryBaseUrl !== undefined,
     scry_api_token_configured: config.licenceReader.scryApiToken !== undefined,
