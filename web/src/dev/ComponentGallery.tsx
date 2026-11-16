@@ -6,10 +6,12 @@ import { BackLink } from '../components/BackLink';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { CodeInput } from '../components/CodeInput';
 import { CrisisPanel } from '../components/CrisisPanel';
 import { CrisisStrip } from '../components/CrisisStrip';
 import { Dialog } from '../components/Dialog';
 import { EnvChip } from '../components/EnvChip';
+import { FieldShell } from '../components/FieldShell';
 import { Footer } from '../components/Footer';
 import {
   AlertTriangleIcon,
@@ -49,6 +51,22 @@ import { TextField } from '../components/TextField';
  * Dev-only gallery (route /dev/components, absent from production builds). It lays out
  * every shared component and variant in the order of the Components board, for review.
  */
+
+/** A live CodeInput inside its field shell, so the gallery shows the real control. */
+function CodeSample({ label, start, error }: { label: string; start: string; error?: string }) {
+  const [value, setValue] = useState(start);
+  return (
+    <FieldShell label={label} helper="You can paste the whole code at once." error={error}>
+      {(control) => (
+        <CodeInput
+          {...control}
+          value={value}
+          onChange={(raw) => setValue(raw.replace(/\D/g, '').slice(0, 6))}
+        />
+      )}
+    </FieldShell>
+  );
+}
 
 function Block({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
@@ -351,12 +369,9 @@ export default function ComponentGallery() {
               autoFocus={false}
               className="border-service-blue"
             />
-            <TextField
-              label="6-digit code"
-              defaultValue="12345"
-              error="Enter all 6 digits."
-              helper="You can paste the whole code at once."
-            />
+            <CodeSample label="6-digit code, partly filled" start="123" />
+            <CodeSample label="6-digit code, full" start="123456" />
+            <CodeSample label="6-digit code, error" start="12345" error="Enter all 6 digits." />
             <TextArea
               label="Where should the helper meet you?"
               helper="A place or cross street. Shown only to the helper who accepts."
