@@ -47,6 +47,16 @@ deploy_backend() {
     --parameters "$BACKEND:DeploymentMode=$1"
 }
 
+# Runs one AWS CLI command as the CDK deploy role, the only identity allowed to change stacks.
+as_cdk_deploy_role() {
+  local account key secret token
+  account=$(aws sts get-caller-identity --query Account --output text)
+  read -r key secret token < <(aws sts assume-role --role-session-name "suas-quiesce-${GITHUB_RUN_ID:-local}" \
+    --role-arn "arn:aws:iam::${account}:role/cdk-hnb659fds-deploy-role-${account}-${REGION}" \
+    --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
+  AWS_ACCESS_KEY_ID="$key" AWS_SECRET_ACCESS_KEY="$secret" AWS_SESSION_TOKEN="$token" "$@"
+}
+
 # Puts the deployed backend into maintenance with its current template and parameters.
 quiesce() {
   local current
@@ -63,8 +73,11 @@ quiesce() {
       console.log(JSON.stringify(keys.map((k) => k === "DeploymentMode"
         ? { ParameterKey: k, ParameterValue: "maintenance" }
         : { ParameterKey: k, UsePreviousValue: true })));' >"$WORK/quiesce-params.json"
-  aws cloudformation update-stack --region "$REGION" --stack-name "$BACKEND" --use-previous-template \
-    --parameters "file://$WORK/quiesce-params.json" \
+  local exec_role
+  exec_role=$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$BACKEND" \
+    --query 'Stacks[0].RoleARN' --output text)
+  as_cdk_deploy_role aws cloudformation update-stack --region "$REGION" --stack-name "$BACKEND" \
+    --use-previous-template --role-arn "$exec_role" --parameters "file://$WORK/quiesce-params.json" \
     --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND >/dev/null
   aws cloudformation wait stack-update-complete --region "$REGION" --stack-name "$BACKEND"
 }

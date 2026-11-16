@@ -50,20 +50,26 @@ two roles. Each trusts one GitHub Environment through the repository's immutable
 changes that setting, update `SubjectPrefix`.
 
 ```sh
+SUBJECT=$(gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub --jq .sub_claim_prefix)
+echo "$SUBJECT"   # repo:<owner>@<id>/<repo>@<id>; immutable subjects are on for this repository
 aws cloudformation deploy --region us-west-2 --stack-name Suas-GitHub-OIDC \
-  --template-file infra/bootstrap/github-oidc.yaml --capabilities CAPABILITY_NAMED_IAM
+  --template-file infra/bootstrap/github-oidc.yaml --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides "SubjectPrefix=$SUBJECT"
 aws cloudformation update-termination-protection --region us-west-2 \
   --stack-name Suas-GitHub-OIDC --enable-termination-protection
 aws cloudformation describe-stacks --region us-west-2 --stack-name Suas-GitHub-OIDC \
   --query 'Stacks[0].Outputs' --output table
 ```
 
-| Role                      | Trusted environment           | Can                                                                                                                                 |
-| ------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `suas-gha-staging-plan`   | `suas-synthetic-staging-plan` | Assume the read-only CDK lookup roles (`cdk diff`)                                                                                  |
-| `suas-gha-staging-deploy` | `suas-synthetic-staging`      | Assume the CDK deploy and file-publishing roles; invoke `Suas-Staging-Backend-*` functions; maintenance update of the backend stack |
+| Role                      | Trusted environment           | Can                                                                                               |
+| ------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------- |
+| `suas-gha-staging-plan`   | `suas-synthetic-staging-plan` | Read `Suas-*` stack templates and the CDK bootstrap version (`cdk diff`); not the CDK lookup role |
+| `suas-gha-staging-deploy` | `suas-synthetic-staging`      | Assume the CDK deploy and file-publishing roles; invoke only the migrate and job worker functions |
 
-Neither role can read secrets or SSM values or edit IAM. IAM Access Analyzer `ValidatePolicy` reports no
+Neither role can read secrets or application SSM values, read Lambda configuration (it holds resolved secrets),
+edit IAM, or invoke the API or the email relay. Every stack change, including the workflow's maintenance step, runs
+as the CDK deploy role. On the first plan run, confirm that `cdk diff` falls back from the lookup role to the plan
+role (it prints a warning); if it does not, grant only the missing read action. IAM Access Analyzer `ValidatePolicy` reports no
 findings on the permission policies. On the trust policies it warns that a branch is recommended in `sub`:
 these subjects are environment-scoped, so the environment's branch policy (step 4) enforces `main`.
 
