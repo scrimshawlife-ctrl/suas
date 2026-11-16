@@ -249,7 +249,10 @@ separately. Override either with `TEST_DATABASE_URL` and `TEST_MIGRATIONS_DATABA
 (`V1_PROJECT_PLAN.md` §6 in SUAS-specs, a proposal). It defines a DNS stack, a
 web stack (S3 and CloudFront for `web/dist`) and a backend stack (RDS PostgreSQL
 17 behind RDS Proxy; API, job worker and migrate Lambdas; HTTP API; EventBridge
-Scheduler). Nothing is deployed and there is no deploy workflow; STAGING deploys
+Scheduler). Nothing is deployed yet. The manual, approval-gated
+[`staging-deploy.yml`](.github/workflows/staging-deploy.yml) workflow deploys a verified `main` commit through
+GitHub OIDC once the AWS foundation exists
+([docs/runbooks/aws-staging-bootstrap.md](docs/runbooks/aws-staging-bootstrap.md)); until then STAGING deploys
 are run by hand with CDK ([docs/runbooks/deployment-rollback.md](docs/runbooks/deployment-rollback.md)).
 `cd infra && npm ci && npm run check` typechecks, tests and synthesizes it
 offline. Details: [infra/README.md](infra/README.md).

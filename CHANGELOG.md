@@ -13,6 +13,11 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
+### Added
+
+- Manual synthetic-STAGING deploy workflow (`.github/workflows/staging-deploy.yml`). It takes a verified `main` SHA through the full CI, a credential-free build and synth, an OIDC plan (`cdk diff`) and an environment-approved deploy. That deploy quiesces, migrates, then admits the API, the worker and the schedule, deploys the web app and runs the public STAGING suite. Nothing is deployed by this change (`docs/runbooks/aws-staging-bootstrap.md`).
+- CI runs the skill metadata checks and the migration rehearsal on every pull request. Every workflow action is pinned to a commit SHA.
+
 ### Fixed
 
 - Chat keeps manual retry for in-flight idempotency conflicts with the original message and key; permanent chat refusals remain final (API.md §7.5).

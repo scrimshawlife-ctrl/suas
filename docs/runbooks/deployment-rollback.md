@@ -1,7 +1,11 @@
 # Deployment and rollback runbook (synthetic STAGING, AWS)
 
-STAGING runs on the AWS CDK app in [`infra/`](../../infra/README.md). There is no deploy
-workflow yet (plan §8 item 17), so every STAGING deploy and rollback is run by hand with CDK
+STAGING runs on the AWS CDK app in [`infra/`](../../infra/README.md). The preferred path is the manual
+[`staging-deploy.yml`](../../.github/workflows/staging-deploy.yml) workflow: dispatch a `main` SHA, approve the
+`suas-synthetic-staging` environment, and it deploys, migrates and smoke-tests in order (`infra/README.md`,
+"Deploy workflow"). Rolling back is the same dispatch with an older SHA; it refuses when the deployed schema
+is newer than that build expects. Until the AWS foundation in
+[`aws-staging-bootstrap.md`](aws-staging-bootstrap.md) exists, deploys are run by hand with CDK as below
 (R11.6, specs #75, released in 0.10.0). The Cloudflare Worker and the Neon
 staging database are retired. This runbook does not authorize PRODUCTION, a pilot, real Veteran
 data or real external effects, and a deploy is not SPEC-018 evidence.
