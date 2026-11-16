@@ -28,6 +28,11 @@ export interface EnvironmentConfig {
   readonly availabilityZones: readonly string[];
   readonly buildCommit: string;
   readonly buildTimestamp: string;
+  /**
+   * VA confirmation through the outside-VPC verify function (VA_CONFIRMATION_FLOW W9 item 4).
+   * Off by default: the API keeps SUAS_VA_CONFIRMATION_MODE=disabled and no verify function exists.
+   */
+  readonly vaSandbox: boolean;
 }
 
 function text(node: Node, key: string): string | undefined {
@@ -107,6 +112,11 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
     throw new Error(`Context "availabilityZones" must list at least two ${REGION} zones.`);
   }
 
+  const vaSandbox = text(node, 'vaSandbox') ?? 'false';
+  if (vaSandbox !== 'true' && vaSandbox !== 'false') {
+    throw new Error('Context "vaSandbox" must be true or false.');
+  }
+
   return {
     name: 'staging',
     suasEnv: 'STAGING',
@@ -129,6 +139,7 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
       process.env.SUAS_BUILD_TIMESTAMP ??
       git(['show', '-s', '--format=%cI', 'HEAD']) ??
       'unknown',
+    vaSandbox: vaSandbox === 'true',
   };
 }
 
