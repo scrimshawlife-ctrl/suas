@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { queryKeys } from '../../api/keys';
+import { useSignedInQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
 import { serviceRequestQueryOptions } from '../../api/service-requests';
-import { useSessionToken } from '../../api/token-store';
 import type { Schemas, ServiceCategory } from '../../api/types';
 import { REQUEST_POLL_MS } from '../../app/poll-intervals';
 import { isDraftGone, openDraft } from './open-draft';
@@ -16,14 +16,12 @@ export type IntakeDraftWithText = Schemas['IntakeDraftWithText'];
 
 /** GET /intake/status: whether to offer the assistant. */
 export function useIntakeStatus() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: queryKeys.intake.detail('status'),
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/intake/status');
       return requireData(data, 'assistant status');
     },
-    enabled: token !== null,
     staleTime: 0,
   });
 }
@@ -38,11 +36,10 @@ function dropGoneDraft(error: unknown): void {
  * and forgets the id, when the draft is gone or no longer DRAFT. Never served from cache.
  */
 export function useOpenDraft() {
-  const token = useSessionToken();
   const [draftId] = useState(() => openDraft.get());
-  return useQuery({
+  return useSignedInQuery({
     queryKey: queryKeys.intake.detail(draftId ?? ''),
-    enabled: token !== null && draftId !== null,
+    enabled: draftId !== null,
     queryFn: async (): Promise<IntakeDraftWithText | null> => {
       try {
         const { data } = await api.GET('/api/v0/intake/drafts/{id}', {
@@ -168,11 +165,10 @@ export function useCreateRequest() {
  * The read that first shows a settled status refreshes `me` too, then polling stops.
  */
 export function useRequestDetail(id: string | undefined) {
-  const token = useSessionToken();
   const queryClient = useQueryClient();
-  const query = useQuery({
+  const query = useSignedInQuery({
     ...serviceRequestQueryOptions(id ?? ''),
-    enabled: token !== null && id !== undefined && id !== '',
+    enabled: id !== undefined && id !== '',
     refetchInterval: (q) => (isSettled(q.state.data?.status) ? false : REQUEST_POLL_MS),
   });
 

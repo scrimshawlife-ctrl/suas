@@ -1,8 +1,8 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { queryKeys, resourceKeys } from '../../api/keys';
+import { cursorPages, useSignedInInfiniteQuery, useSignedInQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
-import { useSessionToken } from '../../api/token-store';
 import type { Schemas } from '../../api/types';
 import { NOTIFICATION_REFRESH_MS } from '../../app/poll-intervals';
 
@@ -29,25 +29,24 @@ const PAGE_SIZE = 10;
 
 /** GET /resources, cursor paged: `fetchNextPage` is "Show more listings". */
 export function useResources(category: Schemas['ServiceCategory'] | null, county: string | null) {
-  const token = useSessionToken();
-  return useInfiniteQuery({
-    queryKey: queryKeys.resources.list({ category, county, limit: PAGE_SIZE }),
-    enabled: token !== null && category !== null && county !== null,
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/resources', {
-        params: {
-          query: {
-            ...(category ? { category } : {}),
-            ...(county ? { county } : {}),
-            limit: PAGE_SIZE,
-            ...(pageParam ? { cursor: pageParam } : {}),
+  return useSignedInInfiniteQuery({
+    ...cursorPages({
+      queryKey: queryKeys.resources.list({ category, county, limit: PAGE_SIZE }),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/resources', {
+          params: {
+            query: {
+              ...(category ? { category } : {}),
+              ...(county ? { county } : {}),
+              limit: PAGE_SIZE,
+              ...page,
+            },
           },
-        },
-      });
-      return requireData(data, 'listings');
-    },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
+        });
+        return requireData(data, 'listings');
+      },
+    }),
+    enabled: category !== null && county !== null,
   });
 }
 
@@ -55,10 +54,9 @@ const RESUMABLE_FILTER = { status: 'IN_PROGRESS' } as const;
 
 /** GET /check-ins?status=IN_PROGRESS: the caller's unfinished Check-In (24 h), or null. */
 export function useResumableCheckIn(enabled = true) {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.checkIns.list(RESUMABLE_FILTER),
-    enabled: token !== null && enabled,
+    enabled,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/check-ins', {
         params: { query: RESUMABLE_FILTER },
@@ -70,10 +68,9 @@ export function useResumableCheckIn(enabled = true) {
 
 /** GET /check-ins/{id}: the questions and which of them already have an answer. */
 export function useCheckIn(checkInId: string | undefined) {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.checkIns.detail(checkInId ?? ''),
-    enabled: token !== null && checkInId !== undefined,
+    enabled: checkInId !== undefined,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/check-ins/{id}', {
         params: { path: { id: checkInId ?? '' } },
@@ -139,10 +136,8 @@ export function useCompleteCheckIn(checkInId: string | undefined) {
 
 /** GET /consents. */
 export function useConsents() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.consents.list(),
-    enabled: token !== null,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/consents');
       return requireData(data, 'consents').consents;
@@ -155,10 +150,8 @@ export function useConsents() {
  * none is published, which the caller shows as "not available"; it is not retried.
  */
 export function usePublishedConsentTemplate(purpose: string) {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.publishedTemplates.detail(purpose),
-    enabled: token !== null,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/consent-templates/published', {
         params: { query: { purpose } },
@@ -203,10 +196,8 @@ export function useGrantConsent() {
 
 /** GET /trusted-contacts. */
 export function useTrustedContacts() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.trustedContacts.list(),
-    enabled: token !== null,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/trusted-contacts');
       return requireData(data, 'trusted contacts').trusted_contacts;
@@ -269,10 +260,8 @@ export function useRemoveTrustedContact() {
 
 /** GET /trusted-contacts/invitations: invites waiting for the signed-in person. */
 export function useInvitations() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.invitations.list(),
-    enabled: token !== null,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/trusted-contacts/invitations');
       return requireData(data, 'invitations').invitations;
@@ -304,23 +293,16 @@ const NOTIFICATION_LIMIT = 50;
  * pushes the rest down without gaps or repeats.
  */
 export function useNotifications() {
-  const token = useSessionToken();
-  return useInfiniteQuery({
-    queryKey: queryKeys.notifications.list(),
-    enabled: token !== null,
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/notifications', {
-        params: {
-          query: {
-            limit: NOTIFICATION_LIMIT,
-            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
-          },
-        },
-      });
-      return requireData(data, 'notifications');
-    },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
+  return useSignedInInfiniteQuery({
+    ...cursorPages({
+      queryKey: queryKeys.notifications.list(),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/notifications', {
+          params: { query: { limit: NOTIFICATION_LIMIT, ...page } },
+        });
+        return requireData(data, 'notifications');
+      },
+    }),
     refetchInterval: NOTIFICATION_REFRESH_MS,
   });
 }
