@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
-import { shoot, signUp, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { shoot, signUp, uniqueEmail } from '../helpers';
 
 /**
  * A synthetic person whose typed name matches the account name (VA_NAME_MISMATCH otherwise)

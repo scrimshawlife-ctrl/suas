@@ -6,10 +6,17 @@
 
 import { withDb } from '../helpers';
 
-/** Pretends a request was sent `minutes` ago, so the widening delay has passed.
- * Defined once in `helpers.ts` (the root specs import it from there) and re-exported here so the
- * folder specs have one definition to share. */
-export { ageRequest } from '../helpers';
+/** Pretends a request was sent `minutes` ago, so the widening delay has passed. This is the one
+ * definition: every spec that moves a request's time imports it from here. */
+export async function ageRequest(serviceRequestId: string, minutes: number): Promise<void> {
+  await withDb((db) =>
+    db.query(
+      `UPDATE service_requests SET submitted_at = submitted_at - make_interval(mins => $2)
+        WHERE service_request_id = $1`,
+      [serviceRequestId, minutes],
+    ),
+  );
+}
 
 /** Every release of this request happened `minutes` earlier (R8.5 restarts the widening wait). */
 export async function ageReleases(serviceRequestId: string, minutes: number): Promise<void> {
