@@ -61,4 +61,14 @@ describe('useBodyIdempotencyKey', () => {
       keyOf(result.current.headers({ n: 2 })),
     );
   });
+
+  it('treats bodies that differ only in key order, at any depth, as the same body', () => {
+    const { result } = renderHook(() => useBodyIdempotencyKey());
+    const first = keyOf(result.current.headers({ a: 1, b: { c: [1, { x: 1, y: 2 }], d: 2 } }));
+    const reordered = keyOf(result.current.headers({ b: { d: 2, c: [1, { y: 2, x: 1 }] }, a: 1 }));
+    expect(reordered).toBe(first);
+    expect(keyOf(result.current.headers({ a: 1, b: { c: [{ x: 1, y: 2 }, 1], d: 2 } }))).not.toBe(
+      first,
+    );
+  });
 });

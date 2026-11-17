@@ -10,7 +10,7 @@ import { api } from '../../api/client';
 import { isApiError } from '../../api/errors';
 import { useCommandKey } from '../../api/idempotency';
 import { queryKeys, resourceKeys } from '../../api/keys';
-import { cursorPages } from '../../api/queries';
+import { cursorPages, useSignedInInfiniteQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
 import type { Schemas } from '../../api/types';
 import type { DraftEditRequest, ResourceDraft } from './draft-form';
@@ -174,7 +174,7 @@ const licenceKeys = queryKeys.adminLicenceReviews;
  * out the admin's own reviews, recusals and disputes of reviews they decided; rows carry no names.
  */
 export function useLicenceReviews() {
-  return useInfiniteQuery(
+  return useSignedInInfiniteQuery(
     cursorPages({
       queryKey: licenceKeys.lists(),
       fetchPage: async (page) => {
