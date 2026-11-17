@@ -3,7 +3,7 @@ import { AlertCircleIcon } from '../../components/icons';
 import { Select } from '../../components/Select';
 import { TextField } from '../../components/TextField';
 import { LIMITS, type ContactRow } from './draft-form';
-import { CONTACT_KINDS, CONTACT_KIND_LABELS, type ContactKind } from './labels';
+import { CONTACT_KINDS, CONTACT_KIND_LABELS } from './labels';
 
 const KIND_OPTIONS = CONTACT_KINDS.map((value) => ({ value, label: CONTACT_KIND_LABELS[value] }));
 
@@ -37,7 +37,7 @@ export function ContactListField({
           <Select
             label={`Contact ${index + 1} kind`}
             value={row.kind}
-            onChange={(event) => update(index, { kind: event.target.value as ContactKind })}
+            onValueChange={(kind) => update(index, { kind })}
             options={KIND_OPTIONS}
           />
           <TextField

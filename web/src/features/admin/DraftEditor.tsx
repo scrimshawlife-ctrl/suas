@@ -20,7 +20,6 @@ import {
   type ResourceDraft,
 } from './draft-form';
 import { CATEGORIES, CATEGORY_LABELS, COUNTIES, COUNTY_LABELS } from './labels';
-import type { ServiceCategory } from '../../api/types';
 
 export const PUBLISH_CONFIRM_TEXT =
   'Publishing makes this a verified Resource that veterans can see.';
@@ -119,7 +118,7 @@ export function DraftEditor({
         <Select
           label="Category"
           value={values.category}
-          onChange={(event) => set('category', event.target.value as ServiceCategory | '')}
+          onValueChange={(category) => set('category', category)}
           error={errors.category}
           placeholder="Choose a category"
           options={options(CATEGORIES, CATEGORY_LABELS)}

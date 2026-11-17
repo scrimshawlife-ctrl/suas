@@ -358,8 +358,8 @@ export default function AdminLicenceReviewPage() {
           options={DECLINE_REASONS}
           value={reason}
           error={reasonError}
-          onChange={(event) => {
-            setReason(event.target.value as DeclineReason | '');
+          onValueChange={(value) => {
+            setReason(value);
             setReasonError(undefined);
           }}
         />

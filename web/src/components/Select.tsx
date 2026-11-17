@@ -1,24 +1,31 @@
-import type { SelectHTMLAttributes } from 'react';
+import type { ChangeEvent, SelectHTMLAttributes } from 'react';
 import { cn } from '../lib/cn';
 import { FieldShell, fieldClass } from './FieldShell';
 import { ChevronDownIcon } from './icons';
 
-interface SelectOption {
-  value: string;
+interface SelectOption<T extends string> {
+  value: T;
   label: string;
 }
 
-export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children'> {
+export interface SelectProps<T extends string = string> extends Omit<
+  SelectHTMLAttributes<HTMLSelectElement>,
+  'children' | 'value'
+> {
   label: string;
   helper?: string;
   error?: string;
-  options: readonly SelectOption[];
+  options: readonly SelectOption<T>[];
+  /** The chosen option's value. With a placeholder, include '' in `T`. */
+  value?: T;
+  /** The chosen value typed as `T`, so a caller needs no cast. Called after `onChange`. */
+  onValueChange?: (value: T) => void;
   /** Adds a first, empty option with this text. */
   placeholder?: string;
 }
 
 /** Native select with the shared field look, so it keeps platform pickers on phones. */
-export function Select({
+export function Select<T extends string = string>({
   label,
   helper,
   error,
@@ -26,8 +33,17 @@ export function Select({
   className,
   options,
   placeholder,
+  onChange,
+  onValueChange,
   ...select
-}: SelectProps) {
+}: SelectProps<T>) {
+  const handleChange = onValueChange
+    ? (event: ChangeEvent<HTMLSelectElement>) => {
+        onChange?.(event);
+        // The browser only reports the value of a rendered option, and every option is a T.
+        onValueChange(event.target.value as T);
+      }
+    : onChange;
   return (
     <FieldShell label={label} helper={helper} error={error} id={id}>
       {(control) => (
@@ -36,6 +52,7 @@ export function Select({
             className={cn(fieldClass, 'appearance-none pr-12', className)}
             {...control}
             {...select}
+            onChange={handleChange}
           >
             {placeholder !== undefined ? <option value="">{placeholder}</option> : null}
             {options.map((option) => (
