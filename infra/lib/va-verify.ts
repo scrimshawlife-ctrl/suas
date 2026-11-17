@@ -18,7 +18,7 @@ import { Construct } from 'constructs';
 export interface VaVerifyProps {
   readonly code: lambda.Code;
   readonly logRetention: logs.RetentionDays;
-  /** SUAS_ENV: the function refuses outside STAGING and LOCAL. */
+  /** SUAS_ENV: the function refuses outside STAGING. */
   readonly suasEnv: 'STAGING';
 }
 

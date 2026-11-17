@@ -59,8 +59,9 @@ function vaSandbox(zip: string): Response {
 function verifyFunction(
   options: {
     environment?: string | undefined;
-    secret?: string;
-    answer?: (zip: string) => Response;
+    /** The stored SecretString, or a function giving it per read (a rotation). */
+    secret?: string | (() => string | undefined);
+    answer?: (zip: string, apikey: string) => Response;
   } = {},
 ) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -70,14 +71,16 @@ function verifyFunction(
     fetch(url, init) {
       calls.push({ url, init });
       const zip = (JSON.parse(init.body as string) as { zipCode: string }).zipCode;
-      return Promise.resolve((options.answer ?? vaSandbox)(zip));
+      const apikey = (init.headers as Record<string, string>).apikey ?? '';
+      return Promise.resolve((options.answer ?? vaSandbox)(zip, apikey));
     },
   };
   const handler = createVaVerifyHandler({
     environment: 'environment' in options ? options.environment : 'STAGING',
     readSecret: () => {
       secretReads += 1;
-      return Promise.resolve(options.secret ?? SECRET);
+      const { secret = SECRET } = options;
+      return Promise.resolve(typeof secret === 'function' ? secret() : secret);
     },
     log: (record) => logs.push(record),
     transport,
@@ -196,8 +199,9 @@ describe('VA confirmation through the verify function', () => {
     },
   );
 
-  it('refuses outside STAGING and LOCAL without reading the key or calling VA', async () => {
-    for (const environment of ['TEST', 'PRODUCTION', undefined]) {
+  // Only STAGING deploys this function; LOCAL sandbox calls VA directly (W9 items 1 and 4).
+  it('refuses outside STAGING, LOCAL included, without reading the key or calling VA', async () => {
+    for (const environment of ['LOCAL', 'TEST', 'PRODUCTION', '', undefined]) {
       const fn = verifyFunction({ environment });
       expect(await fn.handler(PERSON)).toEqual({
         status: 'UNAVAILABLE',
@@ -238,7 +242,6 @@ describe('VA confirmation through the verify function', () => {
     expect(await fn.handler(PERSON)).toEqual({ status: 'VERIFIED' });
     expect(fn.secretReads()).toBe(2);
   });
-
   it('logs no projection value, key or response body', async () => {
     const fn = verifyFunction();
     const zips = [...Object.values(VA_CONFIRMATION_FIXTURE_ZIPS), '99999'];
@@ -266,6 +269,89 @@ describe('VA confirmation through the verify function', () => {
           : ['msg', 'reason'],
       );
     }
+  });
+});
+
+/**
+ * The per-container key cache and the stored secret. Only AUTHENTICATION_REJECTED drops the cache
+ * (a rotated key is read on the next call); a malformed secret fails closed as
+ * CONFIGURATION_INVALID, is never cached, and nothing of it reaches a log, the answer or stdout.
+ */
+describe('the verify function secret', () => {
+  const OLD_KEY = 'synthetic-old-key-3333';
+  const NEW_KEY = 'synthetic-new-key-4444';
+  const SECRET_SENTINEL = 'secret-sentinel-5555';
+  const keySecret = (key: unknown) => JSON.stringify({ SUAS_VA_CONFIRMATION_API_KEY: key });
+  const apikeys = (calls: Array<{ init: RequestInit }>) =>
+    calls.map((call) => (call.init.headers as Record<string, string>).apikey);
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([401, 403])('uses the rotated key after VA refuses the cached one (%s)', async (code) => {
+    const stored = [OLD_KEY, NEW_KEY];
+    const fn = verifyFunction({
+      secret: () => keySecret(stored.shift() ?? NEW_KEY),
+      answer: (_zip, apikey) =>
+        apikey === NEW_KEY ? json(200, { veteran_status: 'confirmed' }) : json(code, {}),
+    });
+    expect(await fn.handler(PERSON)).toEqual({
+      status: 'UNAVAILABLE',
+      failure_class: 'AUTHENTICATION_REJECTED',
+    });
+    expect(await fn.handler(PERSON)).toEqual({ status: 'VERIFIED' });
+    expect(await fn.handler(PERSON)).toEqual({ status: 'VERIFIED' });
+    expect(apikeys(fn.calls)).toEqual([OLD_KEY, NEW_KEY, NEW_KEY]);
+    expect(fn.secretReads()).toBe(2);
+  });
+
+  it('keeps the cached key through every other VA failure', async () => {
+    const answers = [
+      json(429, {}),
+      json(500, {}),
+      json(400, {}),
+      json(404, {}),
+      json(200, { veteran_status: 'not confirmed', not_confirmed_reason: 'ERROR' }),
+      json(200, { unexpected: true }),
+    ];
+    const fn = verifyFunction({ answer: () => answers.shift() ?? json(500, {}) });
+    for (let call = 0; call < 6; call += 1) {
+      const result = (await fn.handler(PERSON)) as { status: string; failure_class: string };
+      expect(result.status).toBe('UNAVAILABLE');
+      expect(result.failure_class).not.toBe('AUTHENTICATION_REJECTED');
+    }
+    expect(fn.calls).toHaveLength(6);
+    expect(fn.secretReads()).toBe(1);
+  });
+
+  it.each([
+    ['invalid JSON', `{"SUAS_VA_CONFIRMATION_API_KEY": "${SECRET_SENTINEL}"`],
+    // A JSON.parse error quotes this input, so printing the error would leak the key.
+    ['a bare key, not JSON', SECRET_SENTINEL],
+    ['no SUAS_VA_CONFIRMATION_API_KEY', JSON.stringify({ api_key: SECRET_SENTINEL })],
+    ['a key VA would refuse', keySecret(`${SECRET_SENTINEL} with spaces`)],
+    ['a key that is not a string', keySecret([SECRET_SENTINEL])],
+    ['a JSON string, not an object', JSON.stringify(SECRET_SENTINEL)],
+    ['no SecretString', undefined],
+  ])('fails closed on a secret with %s, and reads it again next time', async (_label, stored) => {
+    const printed: string[] = [];
+    for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+      vi.spyOn(console, level).mockImplementation((...args) => void printed.push(String(args)));
+    }
+    let current = stored;
+    const fn = verifyFunction({ secret: () => current });
+    const result = await fn.handler(PERSON);
+    expect(result).toEqual({ status: 'UNAVAILABLE', failure_class: 'CONFIGURATION_INVALID' });
+    expect(fn.calls).toHaveLength(0);
+    expect(fn.logs).toEqual([{ msg: 'va_verify_refused', reason: 'not_configured' }]);
+    expect(JSON.stringify([result, fn.logs, printed])).not.toContain(SECRET_SENTINEL);
+    // Not cached: once the operator stores a well-formed key, the next call uses it.
+    current = SECRET;
+    const verified = { ...PERSON, zipCode: VA_CONFIRMATION_FIXTURE_ZIPS.VERIFIED };
+    expect(await fn.handler(verified)).toEqual({ status: 'VERIFIED' });
+    expect(apikeys(fn.calls)).toEqual([KEY]);
+    expect(fn.secretReads()).toBe(2);
   });
 });
 

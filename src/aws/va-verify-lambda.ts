@@ -7,7 +7,7 @@
  * It holds the fixed sandbox base URL and reads the key from one Secrets Manager secret holding
  * JSON `{"SUAS_VA_CONFIRMATION_API_KEY": "..."}`, named by `SUAS_VA_CONFIRMATION_SECRET_ID` and
  * cached per container. It logs no projection value, key or response body (D035 §13), refuses
- * outside STAGING and LOCAL, and never throws.
+ * outside STAGING, and never throws.
  */
 
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
@@ -29,8 +29,8 @@ import {
 } from '../identity/va-projection-approval.js';
 import { toVaVerifyResponse, vaVerifyRequestSchema } from '../identity/va-verify-relay.js';
 
-/** W9 item 1: sandbox runs only in STAGING and LOCAL. */
-const SANDBOX_ENVIRONMENTS: ReadonlySet<string> = new Set(['STAGING', 'LOCAL']);
+/** Only STAGING deploys this function (W9 item 4); LOCAL `sandbox` calls VA directly. */
+const VERIFY_ENVIRONMENT = 'STAGING';
 
 const secretSchema = z.object({
   SUAS_VA_CONFIRMATION_API_KEY: z.string().regex(VA_CONFIRMATION_API_KEY_PATTERN),
@@ -100,7 +100,7 @@ export function createVaVerifyHandler(
   };
 
   return async (event) => {
-    if (deps.environment === undefined || !SANDBOX_ENVIRONMENTS.has(deps.environment)) {
+    if (deps.environment !== VERIFY_ENVIRONMENT) {
       return refuse('environment', 'CONFIGURATION_INVALID');
     }
     // Same check the API ran; nothing is sent for a body VA would refuse.
