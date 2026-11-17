@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useIdempotencyKey } from '../../api/idempotency';
 import { isApiError } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
@@ -23,7 +22,6 @@ export function DraftCard({ draft, editor }: { draft: IntakeDraft; editor: Draft
   const navigate = useNavigate();
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<unknown>(null);
-  const key = useIdempotencyKey();
   const submit = useSubmitDraft();
   const [saving, setSaving] = useState(false);
   const fieldsRef = useRef<HTMLDivElement>(null);
@@ -43,11 +41,7 @@ export function DraftCard({ draft, editor }: { draft: IntakeDraft; editor: Draft
     setSaving(true);
     try {
       const saved = await editor.save();
-      const result = await submit.mutateAsync({
-        draftId: saved.draft_id,
-        idempotencyKey: key.current(),
-      });
-      key.renew();
+      const result = await submit.mutateAsync(saved.draft_id);
       void navigate(paths.requestDetail(result.service_request_id));
     } catch (error) {
       const gate = gateRedirect(error);
