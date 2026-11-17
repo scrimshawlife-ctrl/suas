@@ -1,11 +1,10 @@
 import { expect, test } from '../fixtures';
-import { runJobWorkerOnce } from '../helpers';
+import { myUserId, runJobWorkerOnce } from '../helpers';
 import {
   ALERT_SWITCH,
   closePeople,
   confirmAlert,
   contactRow,
-  myUserId,
   veteranWithNotice,
 } from '../support/support';
 import { expireGrants } from './time';
