@@ -6,6 +6,12 @@ import type { DeclineReason, RevokeReason } from './licence-labels';
 type LicenceDialog =
   'approve' | 'confirm' | 'decline' | 'recuse' | 'revoke' | 'revoke_conflict' | null;
 
+/** The admin's answer to "Can you see the Veteran designation?" (L5.2). */
+export type Designation = 'yes' | 'no';
+
+export const isDesignation = (value: string): value is Designation =>
+  value === 'yes' || value === 'no';
+
 /**
  * The licence review page's state: the review, the commands on it and on a conflicting review,
  * the designation answer, which confirm dialog is open and the reason chosen in it.
@@ -19,7 +25,7 @@ export function useLicenceDecision(id: string) {
   const conflictId = query.data?.conflicting_review?.review_id ?? '';
   const conflictCommand = useLicenceCommand(conflictId);
   const flight = useSingleFlight();
-  const [designation, setDesignation] = useState<'yes' | 'no' | null>(null);
+  const [designation, setDesignation] = useState<Designation | null>(null);
   const [dialog, setDialog] = useState<LicenceDialog>(null);
   const [reason, setReason] = useState<DeclineReason | ''>('');
   const [reasonError, setReasonError] = useState<string | undefined>(undefined);
@@ -37,11 +43,14 @@ export function useLicenceDecision(id: string) {
         await action();
         setDialog(null);
       } catch {
-        // The dialog shows the plain-words error.
+        // The mutation keeps the error and its dialog shows it (licenceCommandError); catching
+        // here only keeps that dialog open for a retry.
       }
     });
 
-  const answerDesignation = (value: string) => {
+  // Only a real 'yes' may reveal the reading, so anything else that slips past the type is ignored.
+  const answerDesignation = (value: Designation) => {
+    if (!isDesignation(value)) return;
     if (value === 'no') {
       setDesignation('no');
       setReason('NO_VETERAN_DESIGNATION');

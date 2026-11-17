@@ -21,7 +21,7 @@ import { LicenceDecisionDialogs } from './LicenceDecisionDialogs';
 import { LicenceReviewImages } from './LicenceReviewImages';
 import { ConflictingReview, formatWhen, LicenceReviewReading } from './LicenceReviewReading';
 import { QueryNotice } from './QueryNotice';
-import { useLicenceDecision } from './useLicenceDecision';
+import { isDesignation, useLicenceDecision } from './useLicenceDecision';
 
 const NO_TICKS: Record<ChecklistKey, boolean> = {
   selfie_matches: false,
@@ -156,7 +156,9 @@ export default function AdminLicenceReviewPage() {
                 { value: 'no', title: 'No', description: 'This declines the review.' },
               ]}
               value={designation ?? ''}
-              onValueChange={answerDesignation}
+              onValueChange={(value) => {
+                if (isDesignation(value)) answerDesignation(value);
+              }}
             />
           </Card>
 
