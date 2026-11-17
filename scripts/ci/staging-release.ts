@@ -39,7 +39,10 @@ export interface ReleaseRecord {
   readonly drainSeconds: number;
 }
 
-/** One digest over every file path and content, so any changed byte changes it. */
+/**
+ * One digest over every file path, executable bit and content, so any changed byte or a lost
+ * exec mode (the Lambda Web Adapter execs run.sh) changes it.
+ */
 export function assemblyDigest(dir: string): string {
   const files: string[] = [];
   const walk = (current: string) => {
@@ -52,7 +55,9 @@ export function assemblyDigest(dir: string): string {
   walk(dir);
   const hash = createHash('sha256');
   for (const file of files) {
-    hash.update(relative(dir, file)).update('\0').update(readFileSync(file)).update('\0');
+    const executable = (statSync(file).mode & 0o111) !== 0 ? 'x' : '-';
+    hash.update(relative(dir, file)).update('\0').update(executable).update('\0');
+    hash.update(readFileSync(file)).update('\0');
   }
   return hash.digest('hex');
 }

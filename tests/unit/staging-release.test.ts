@@ -3,7 +3,7 @@
  * and worker results that must match the build, and refusal of a schema-incompatible rollback.
  */
 
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -58,6 +58,7 @@ function assembly(): string {
   mkdirSync(join(dir, 'asset.abc'));
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(MANIFEST));
   writeFileSync(join(dir, 'asset.abc', 'api.mjs'), 'export {};');
+  writeFileSync(join(dir, 'asset.abc', 'run.sh'), '#!/bin/bash\n', { mode: 0o755 });
   writeFileSync(join(dir, 'Suas-Staging-Backend.template.json'), JSON.stringify(BACKEND));
   return dir;
 }
@@ -85,6 +86,14 @@ describe('release record', () => {
     writeFileSync(join(dir, 'asset.abc', 'api.mjs'), 'export const changed = 1;');
     expect(() => verifyRelease(release, dir, SHA)).toThrow(/digest/);
     expect(() => verifyRelease(release, assembly(), 'c'.repeat(40))).toThrow(/another commit/);
+  });
+
+  // The Lambda Web Adapter execs run.sh; an artifact hop that drops the mode breaks the API.
+  it('refuses an assembly whose run.sh lost its executable bit', async () => {
+    const dir = assembly();
+    const release = await writeRelease(dir, SHA, ACCOUNT);
+    chmodSync(join(dir, 'asset.abc', 'run.sh'), 0o644);
+    expect(() => verifyRelease(release, dir, SHA)).toThrow(/digest/);
   });
 
   it('refuses a backend template without maintenance controls', () => {
