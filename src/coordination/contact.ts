@@ -217,7 +217,10 @@ export async function recordContactInTx(
   return { contactAttempt: toContactAttempt(row), deduplicated: false };
 }
 
-/** A case's contact log as an API.md §5 keyset page, newest attempt first. */
+/**
+ * A case's contact log for its current cycle (a holder's standing, CASES.md §4.3), as an
+ * API.md §5 keyset page, newest first. Server `created_at`, not client `attempted_at`, decides.
+ */
 export async function listContactAttempts(
   db: Queryable,
   tenantId: string,
@@ -236,7 +239,11 @@ export async function listContactAttempts(
   const result = await db.query<ContactRow & { attempted_at_key: string }>(
     `SELECT ${CONTACT_COLUMNS}, ${timestampText('attempted_at')} AS attempted_at_key
      FROM contact_attempts
-     WHERE tenant_id = $1 AND case_id = $2 ${cursorCondition}
+     WHERE tenant_id = $1 AND case_id = $2
+       AND created_at > COALESCE(
+         (SELECT closed_at FROM support_cases WHERE tenant_id = $1 AND case_id = $2),
+         '-infinity'::timestamptz)
+       ${cursorCondition}
      ORDER BY attempted_at DESC, contact_attempt_id DESC
      LIMIT $${values.length}`,
     values,

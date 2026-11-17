@@ -205,19 +205,47 @@ export async function findCurrentSettlement(
   return row === undefined ? undefined : toSettlement(row);
 }
 
-/** Full history, oldest cycle first. Prior cycles remain independently addressable. */
+/** Which cycles a reader sees: every one, or only the case's current one (CASES.md §4.3). */
+export type SettlementCycles = 'all' | 'current';
+
+/** The current cycle's Settlements: settled after the case's last close. */
+const CURRENT_CYCLE_SETTLEMENT = `AND settled_at > COALESCE(
+  (SELECT closed_at FROM support_cases WHERE tenant_id = $1 AND case_id = $2),
+  '-infinity'::timestamptz)`;
+
+/** Settlement history, oldest cycle first. Prior cycles stay independently addressable. */
 export async function listSettlements(
   db: Queryable,
   tenantId: string,
   caseId: string,
+  cycles: SettlementCycles = 'all',
 ): Promise<Settlement[]> {
   const result = await db.query<SettlementRow>(
     `SELECT ${SETTLEMENT_COLUMNS} FROM settlements
      WHERE tenant_id = $1 AND case_id = $2
+       ${cycles === 'current' ? CURRENT_CYCLE_SETTLEMENT : ''}
      ORDER BY resolution_cycle ASC`,
     [tenantId, caseId],
   );
   return result.rows.map(toSettlement);
+}
+
+/** One Settlement of this case, when it is in the cycles the reader sees. */
+export async function findCaseSettlement(
+  db: Queryable,
+  tenantId: string,
+  caseId: string,
+  settlementId: string,
+  cycles: SettlementCycles,
+): Promise<Settlement | undefined> {
+  const result = await db.query<SettlementRow>(
+    `SELECT ${SETTLEMENT_COLUMNS} FROM settlements
+     WHERE tenant_id = $1 AND case_id = $2 AND settlement_id = $3
+       ${cycles === 'current' ? CURRENT_CYCLE_SETTLEMENT : ''}`,
+    [tenantId, caseId, settlementId],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : toSettlement(row);
 }
 
 export async function findSettlement(

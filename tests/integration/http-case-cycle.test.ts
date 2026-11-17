@@ -314,6 +314,69 @@ describe('holder standing ends with the case cycle', () => {
       expect(refused.json().error.code, command).toBe('FORBIDDEN');
     }
   });
+
+  it('keeps the previous cycle settlement and contact log from the next-cycle helper', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester', true);
+    const former = await person(tenantId, 'former');
+    const next = await person(tenantId, 'next');
+    const first = await submitRequest(requester);
+    const caseId = first.caseId;
+    expect((await accept(former, first.requestId)).statusCode).toBe(200);
+    const logged = await post(former, `/cases/${caseId}/commands/log-contact-attempt`, {
+      channel: 'PHONE',
+    });
+    expect(logged.statusCode).toBe(201);
+    await finishAndClose(requester, former, caseId, first.requestId);
+    const [cycleOne] = (await get(requester, `/cases/${caseId}/settlements`)).json()
+      .settlements as { settlement_id: string }[];
+
+    await executeCaseCommand(pool(), {
+      tenantId,
+      caseId,
+      command: 'REOPEN',
+      actorId: 'staff',
+      actorType: 'SUAS_ADMIN',
+      reason: 'new need on the same case',
+    });
+    const second = await submitRequest(requester);
+    expect((await accept(next, second.requestId)).statusCode).toBe(200);
+    expect(
+      (await post(next, `/cases/${caseId}/commands/log-contact-attempt`, { channel: 'SMS' }))
+        .statusCode,
+    ).toBe(201);
+
+    // CASES.md §4.3 (R11.1): the next helper's standing is this cycle's accept only.
+    const settlements = await get(next, `/cases/${caseId}/settlements`);
+    expect(settlements.statusCode).toBe(200);
+    expect.soft(settlements.json().settlements).toEqual([]);
+    expect
+      .soft((await get(next, `/cases/${caseId}/settlements/${cycleOne!.settlement_id}`)).statusCode)
+      .toBe(404);
+    const attempts = (await get(next, `/cases/${caseId}/contact-attempts`)).json()
+      .contact_attempts as { logged_by_user_id: string; channel: string }[];
+    expect
+      .soft(attempts.map((attempt) => [attempt.logged_by_user_id, attempt.channel]))
+      .toEqual([[next.userId, 'SMS']]);
+
+    // Resolving this cycle gives the helper this cycle's settlement, and only that one.
+    await finishAndClose(requester, next, caseId, second.requestId, { close: false });
+    const current = (await get(next, `/cases/${caseId}/settlements`)).json().settlements as {
+      resolution_cycle: number;
+      accepted_by_user_id: string;
+    }[];
+    expect(current.map((s) => [s.resolution_cycle, s.accepted_by_user_id])).toEqual([
+      [2, next.userId],
+    ]);
+    // The requester still reads every cycle of their own case.
+    const own = (await get(requester, `/cases/${caseId}/settlements`)).json().settlements as {
+      resolution_cycle: number;
+    }[];
+    expect(own.map((s) => s.resolution_cycle)).toEqual([1, 2]);
+    expect(
+      (await get(requester, `/cases/${caseId}/settlements/${cycleOne!.settlement_id}`)).statusCode,
+    ).toBe(200);
+  });
 });
 
 describe('a new request after the case is resolved or closed', () => {
