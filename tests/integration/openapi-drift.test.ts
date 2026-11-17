@@ -43,7 +43,7 @@ describe('OpenAPI /api/v0 drift', () => {
     }
 
     const registered = new Set(
-      listRegisteredApiRoutes().map(
+      listRegisteredApiRoutes(app.server).map(
         (route) => `${route.method} ${fastifyToOpenApiPath(route.path)}`,
       ),
     );

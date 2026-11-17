@@ -131,8 +131,9 @@ describe('preflight', () => {
 });
 
 describe('every /api/v0 endpoint', () => {
-  // Read after beforeAll has built the apps; at collection time the list is empty.
-  const routes = (): ReturnType<typeof listRegisteredApiRoutes> => listRegisteredApiRoutes();
+  // Read after beforeAll has built the app; at collection time it does not exist yet.
+  const routes = (): ReturnType<typeof listRegisteredApiRoutes> =>
+    listRegisteredApiRoutes(app.server);
 
   it('registered at least the released surface', () => {
     expect(routes().length).toBeGreaterThanOrEqual(50);
