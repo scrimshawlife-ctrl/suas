@@ -2,8 +2,18 @@ import AxeBuilder from '@axe-core/playwright';
 import { randomUUID } from 'node:crypto';
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { passIdCheck, readSignInCode, requestHelp, scriptModel, uniqueEmail } from '../helpers';
-import { closePeople, elevatedAdmin, helper, uniqueSummary, visitor } from '../support/support';
+import {
+  newPerson,
+  passIdCheck,
+  readSignInCode,
+  requestHelp,
+  scriptModel,
+  uniqueEmail,
+  uniqueText,
+} from '../helpers';
+import { closePeople } from '../support/support';
+import { elevatedAdmin } from '../admin/admin';
+import { newHelper } from '../people';
 
 test.afterEach(closePeople);
 
@@ -47,7 +57,7 @@ test('every routed page: no serious or critical axe violation and no sideways sc
   }
 
   // Signed out.
-  const vet = await visitor(browser);
+  const vet = await newPerson(browser);
   for (const path of ['/', '/crisis', '/no-such-page', '/sign-in']) {
     await vet.goto(path);
     await check(vet, path);
@@ -86,7 +96,7 @@ test('every routed page: no serious or critical axe violation and no sideways sc
     await vet.goto(path);
     await check(vet, path, path === '/chat' ? vet.getByRole('main') : undefined);
   }
-  const summary = uniqueSummary('Ride to the clinic');
+  const summary = uniqueText('Ride to the clinic');
   const requestId = await requestHelp(
     vet,
     request,
@@ -98,7 +108,10 @@ test('every routed page: no serious or critical axe violation and no sideways sc
   await check(vet, '/requests');
 
   // A helper: the board, the case, and the chat on both sides.
-  const serve = await helper(browser, request, { name: 'Dee R.', county: 'Santa Clara' });
+  const { page: serve } = await newHelper(browser, request, {
+    name: 'Dee R.',
+    county: 'Santa Clara',
+  });
   await check(serve, '/serve');
   await serve.getByRole('button', { name: new RegExp(`Take this request: .*${summary}`) }).click();
   await expect(serve).toHaveURL(new RegExp(`/serve/requests/${requestId}$`));

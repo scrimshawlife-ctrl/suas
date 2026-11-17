@@ -1,6 +1,7 @@
 import { expect, test } from '../fixtures';
-import { POLL_MARGIN_MS, pauseAfterPoll, requestHelp, runClock } from '../helpers';
-import { closePeople, helper, uniqueSummary, veteran } from '../support/support';
+import { pauseAfterPoll, POLL_MARGIN_MS, requestHelp, runClock, uniqueText } from '../helpers';
+import { closePeople } from '../support/support';
+import { newHelper, newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -15,9 +16,12 @@ test('T5: the request page polls every 15 s, so the requester sees the accept wi
   browser,
   request,
 }) => {
-  const requester = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
+  const requester = await newVeteran(browser, request, {
+    name: 'Marcus T.',
+    county: 'Santa Clara',
+  });
   await requester.page.clock.install();
-  const summary = uniqueSummary('Ride to the clinic');
+  const summary = uniqueText('Ride to the clinic');
   const requestId = await requestHelp(
     requester.page,
     request,
@@ -31,7 +35,10 @@ test('T5: the request page polls every 15 s, so the requester sees the accept wi
     REQUEST_POLL_MS,
   );
 
-  const taker = await helper(browser, request, { name: 'Dee R.', county: 'Santa Clara' });
+  const { page: taker } = await newHelper(browser, request, {
+    name: 'Dee R.',
+    county: 'Santa Clara',
+  });
   await taker.getByRole('button', { name: new RegExp(`Take this request: .*${summary}`) }).click();
   await expect(taker).toHaveURL(new RegExp(`/serve/requests/${requestId}$`));
 
@@ -47,7 +54,7 @@ test('T5: the open board polls every 30 s, so a new request appears with no relo
   browser,
   request,
 }) => {
-  const board = await helper(browser, request, { name: 'Sam P.', county: 'Merced' });
+  const { page: board } = await newHelper(browser, request, { name: 'Sam P.', county: 'Merced' });
   await board.clock.install();
   await board.goto('/serve');
   await expect(
@@ -57,8 +64,8 @@ test('T5: the open board polls every 30 s, so a new request appears with no relo
   ).toBeVisible();
   await pauseAfterPoll(board, isOpenList, BOARD_POLL_MS);
 
-  const requester = await veteran(browser, request, { name: 'Ana P.', county: 'Merced' });
-  const summary = uniqueSummary('Groceries');
+  const requester = await newVeteran(browser, request, { name: 'Ana P.', county: 'Merced' });
+  const summary = uniqueText('Groceries');
   await requestHelp(
     requester.page,
     request,
