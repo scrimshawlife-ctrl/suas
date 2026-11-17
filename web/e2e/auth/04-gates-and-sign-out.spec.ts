@@ -1,6 +1,6 @@
-import { expect, test } from './fixtures';
-import { API_URL } from './config';
-import { signInWithCode, signUp, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { API_URL } from '../config';
+import { signInWithCode, signUp, uniqueEmail } from '../helpers';
 
 test('signed out, /home and /request go to sign in', async ({ page }) => {
   for (const path of ['/home', '/request']) {

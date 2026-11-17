@@ -1,14 +1,8 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
 import { newPerson, shoot } from '../helpers';
-import {
-  HOME_READS,
-  LANDING,
-  ME_READ,
-  expectNoDeadControls,
-  readsAnswered,
-  signedUpPerson,
-} from './auth';
+import { HOME_READS, LANDING, ME_READ, expectNoDeadControls, readsAnswered } from './auth';
+import { newVeteran } from '../people';
 
 /** Serve's reads on arrival: the person's own requests, their alerts and the open board. */
 const SERVE_READS = [
@@ -77,7 +71,12 @@ test('a signed-in person on the landing page goes to their homes, not to sign-in
   browser,
   request,
 }) => {
-  const { page } = await signedUpPerson(browser, request, { label: 'landing-in', name: 'Lee P.' });
+  const { page } = await newVeteran(browser, request, {
+    label: 'landing-in',
+    name: 'Lee P.',
+    county: 'Alameda',
+    verified: false,
+  });
   await page.goto('/');
   // The header offers Sign out instead of Sign in.
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
