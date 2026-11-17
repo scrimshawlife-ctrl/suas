@@ -290,6 +290,8 @@ Commands:
 | Command                           | Purpose                                                |
 | --------------------------------- | ------------------------------------------------------ |
 | `npm run verify`                  | format check, lint, typecheck, and the full test suite |
+| `npm run check:all`               | `verify`, then the `web/` and `infra/` checks          |
+| `npm run deadcode`                | knip report of unused files and exports (report-only)  |
 | `npm run build`                   | compile to `dist/`                                     |
 | `npm start`                       | run the compiled build                                 |
 | `npm run dev`                     | run from source with reload                            |
