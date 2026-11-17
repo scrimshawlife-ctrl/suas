@@ -1,72 +1,35 @@
 /**
- * Steps shared by the support, cross and time scenarios: people who are closed after each
- * test, the trusted-contact form, the Check-In driver, the crisis chrome, and the few database
- * steps that move time or read what the server recorded.
+ * Steps shared by the support, cross and time scenarios: closing the people a test opened, the
+ * trusted-contact form, the Check-In driver and the crisis chrome.
  */
 
-import { expect, type APIRequestContext, type Browser, type Page } from '@playwright/test';
-import { elevatedAdmin as elevatedAdminPage } from '../admin/admin';
-export { passMfa } from '../admin/admin';
-export { myUserId, sessionToken, uniqueText as uniqueSummary } from '../helpers';
 import {
-  newPerson,
-  newVerifiedVeteran,
-  signUp,
-  uniqueEmail,
-  withDb,
-  type CountyLabel,
-} from '../helpers';
+  expect,
+  type APIRequestContext,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test';
+import { newPerson, signUp, uniqueEmail } from '../helpers';
+import { newVeteran, type Person } from '../people';
 
-/** Contexts outlive their test unless closed; each spec file closes them after every test. */
-const opened: Page[] = [];
-
-export async function closePeople(): Promise<void> {
-  await Promise.all(opened.splice(0).map((page) => page.context().close()));
-}
-
-function track(page: Page): Page {
-  opened.push(page);
-  return page;
-}
-
-/** A signed-out person with their own context. */
-export async function visitor(browser: Browser): Promise<Page> {
-  return track(await newPerson(browser));
-}
-
-export type Person = { page: Page; email: string };
-
-/** A signed-up Veteran on /home: ID-checked unless `verified` is false. */
-export async function veteran(
-  browser: Browser,
-  request: APIRequestContext,
-  options: { name: string; county: CountyLabel; verified?: boolean; label?: string },
-): Promise<Person> {
-  if (options.verified ?? true) {
-    const vet = await newVerifiedVeteran(browser, request, options);
-    track(vet.page);
-    return vet;
-  }
-  const page = track(await newPerson(browser));
-  const email = uniqueEmail(options.label ?? 'support');
-  await signUp(page, request, { email, name: options.name, county: options.county });
-  return { page, email };
-}
-
-/** A helper (Serve) in the given county, on /serve. */
-export async function helper(
-  browser: Browser,
-  request: APIRequestContext,
-  options: { name: string; county: CountyLabel },
-): Promise<Page> {
-  const page = track(await newPerson(browser));
-  await signUp(page, request, {
-    email: uniqueEmail('helper'),
-    name: options.name,
-    county: options.county,
-    role: 'serve',
-  });
-  return page;
+/**
+ * Closes every context the test opened besides its own, before the fixture's checks. Each spec
+ * file that uses it runs it after every test.
+ */
+export async function closePeople({
+  browser,
+  context,
+}: {
+  browser: Browser;
+  context: BrowserContext;
+}): Promise<void> {
+  await Promise.all(
+    browser
+      .contexts()
+      .filter((opened) => opened !== context)
+      .map((opened) => opened.close()),
+  );
 }
 
 /** R12.3: turning the RED alert on is confirmed in the consent text dialog. */
@@ -75,11 +38,6 @@ export async function confirmAlert(page: Page): Promise<void> {
     .getByRole('dialog', { name: 'Turn on this alert?' })
     .getByRole('button', { name: 'Turn on' })
     .click();
-}
-
-/** The seeded admin, signed in and stepped up (admin/admin.ts), closed after the test. */
-export async function elevatedAdmin(browser: Browser, request: APIRequestContext): Promise<Page> {
-  return track(await elevatedAdminPage(browser, request));
 }
 
 /** A 5xx in the API's error envelope, for the `page.route` failures the real stack cannot give. */
@@ -144,7 +102,7 @@ async function acceptInvite(
   email: string,
   from: string,
 ): Promise<Page> {
-  const page = track(await newPerson(browser));
+  const page = await newPerson(browser);
   await signUp(page, request, { email, name: 'Ann T.', county: 'Santa Clara' });
   await page.goto('/invitations');
   await page.getByRole('button', { name: `Accept the invitation from ${from}` }).click();
@@ -160,7 +118,7 @@ export async function veteranWithNotice(
   request: APIRequestContext,
   label: string,
 ): Promise<Person> {
-  const vet = await veteran(browser, request, { name: 'Max D.', county: 'Santa Clara' });
+  const vet = await newVeteran(browser, request, { name: 'Max D.', county: 'Santa Clara' });
   const { page } = vet;
   await page.goto('/trusted-contacts');
   const email = uniqueEmail(label.toLowerCase());
@@ -239,15 +197,4 @@ export async function answerRest(
     }
     await expect(questionHeading(page).filter({ hasNotText: prompt }).or(done)).toBeVisible();
   }
-}
-
-/** Moves every Check-In of this Veteran 25 hours back (the R8.10 resume window is 24 hours). */
-export async function ageCheckIns(userId: string): Promise<void> {
-  await withDb((db) =>
-    db.query(
-      `UPDATE check_ins SET started_at = started_at - interval '25 hours'
-        WHERE veteran_user_id = $1`,
-      [userId],
-    ),
-  );
 }
