@@ -1,11 +1,12 @@
-import { expect, test } from './fixtures';
-import { newVerifiedVeteran, shoot, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { shoot, uniqueEmail } from '../helpers';
+import { newVeteran } from '../people';
 
 test('a Veteran sends a request through the plain form shown under the Intake Assistant', async ({
   browser,
   request,
 }) => {
-  const { page } = await newVerifiedVeteran(browser, request, {
+  const { page } = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
     label: 'plain-form',
