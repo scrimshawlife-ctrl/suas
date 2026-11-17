@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Deploys one verified synthetic-STAGING release (.github/workflows/staging-deploy.yml).
 #
-# Order: quiesce the deployed backend on its own template, deploy the new backend still in
-# maintenance, migrate privately, then admit the API, then one worker pass, then the schedule,
-# then the web app. Every step must pass; on failure the stack stays in its current mode and
-# nothing re-enables traffic (CI_CD_ARCHITECTURE.md §7). Never prints Lambda configuration.
+# Order: quiesce the deployed backend on its own template and wait out its longest function
+# timeout, deploy the new backend still in maintenance, migrate privately, then admit the API,
+# then one worker pass, then the schedule, then the web app. Every step must pass; on failure
+# the stack stays in its current mode and nothing re-enables traffic (CI_CD_ARCHITECTURE.md §7).
+# Never prints Lambda configuration.
 set -euo pipefail
 
 : "${CDK_OUT:?}" "${RELEASE_JSON:?}" "${SUAS_BUILD_COMMIT:?}" "${API_ORIGIN:?}" "${SCOPE:?}"
@@ -98,8 +99,11 @@ if [ "$SCOPE" = full ]; then
   step "Quiesce the deployed backend"
   release check-schema-order "$RELEASE_JSON" "$deployed_schema"
   if [ -n "$(output "$BACKEND" ApiFunctionName)" ]; then
+    # The deployed functions hold the in-flight work, so their timeouts set the wait.
+    as_cdk_deploy_role aws cloudformation get-template --region "$REGION" --stack-name "$BACKEND" \
+      --query TemplateBody --output json >"$WORK/deployed-backend.json"
     quiesce
-    drain=$(release field "$RELEASE_JSON" drainSeconds)
+    drain=$(release drain "$RELEASE_JSON" "$WORK/deployed-backend.json")
     echo "Waiting ${drain}s for in-flight API and worker invocations to finish."
     sleep "$drain"
   fi

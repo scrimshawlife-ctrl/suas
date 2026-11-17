@@ -17,12 +17,13 @@ import { RELEASE_MANIFEST, SPEC_VERSION } from '../../src/release/pins.js';
 
 const readJson = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8'));
 
-export const STACKS = [
-  'Suas-Dns',
-  'Suas-Staging-WebCert',
-  'Suas-Staging-Backend',
-  'Suas-Staging-Web',
-] as const;
+/** Each stack and the one region it lives in (CloudFront certificates are us-east-1 only). */
+export const STACK_REGIONS = {
+  'Suas-Dns': 'us-west-2',
+  'Suas-Staging-WebCert': 'us-east-1',
+  'Suas-Staging-Backend': 'us-west-2',
+  'Suas-Staging-Web': 'us-west-2',
+} as const;
 
 export interface ReleaseRecord {
   readonly formatVersion: 1;
@@ -34,7 +35,7 @@ export interface ReleaseRecord {
   readonly account: string;
   readonly stacks: ReadonlyArray<{ readonly id: string; readonly environment: string }>;
   readonly assemblyDigest: string;
-  /** Wait after blocking admission: the longest throttled function timeout, plus margin. */
+  /** This build's longest throttled function timeout plus margin; the floor of the drain. */
   readonly drainSeconds: number;
 }
 
@@ -69,7 +70,7 @@ export function assemblyStacks(
     .filter(([, artifact]) => artifact.type === 'aws:cloudformation:stack')
     .map(([id, artifact]) => ({ id, environment: artifact.environment ?? '' }));
   const ids = stacks.map((s) => s.id).sort();
-  if (JSON.stringify(ids) !== JSON.stringify([...STACKS].sort())) {
+  if (JSON.stringify(ids) !== JSON.stringify(Object.keys(STACK_REGIONS).sort())) {
     throw new Error(`Unexpected stacks in the assembly: ${ids.join(', ')}`);
   }
   for (const stack of stacks) {
@@ -78,6 +79,10 @@ export function assemblyStacks(
     }
     if (!stack.environment.startsWith(`aws://${account}/`)) {
       throw new Error(`${stack.id} targets another account.`);
+    }
+    const region = STACK_REGIONS[stack.id as keyof typeof STACK_REGIONS];
+    if (!stack.environment.endsWith(`/${region}`)) {
+      throw new Error(`${stack.id} must target ${region}.`);
     }
   }
   return stacks;
@@ -102,6 +107,20 @@ export function drainSeconds(template: unknown): number {
   if (timeouts.length === 0)
     throw new Error('Backend template has no maintenance-controlled functions.');
   return Math.max(...timeouts) + 15;
+}
+
+/**
+ * The wait after quiesce. In-flight invocations run on the deployed functions, whose timeouts
+ * can be longer than this build's, so the deployed template (an object, or the JSON string
+ * `get-template` may return) sets the wait; it is never shorter than the release records.
+ */
+export function quiesceDrainSeconds(
+  release: Pick<ReleaseRecord, 'drainSeconds'>,
+  deployedTemplate: unknown,
+): number {
+  const template: unknown =
+    typeof deployedTemplate === 'string' ? JSON.parse(deployedTemplate) : deployedTemplate;
+  return Math.max(release.drainSeconds, drainSeconds(template));
 }
 
 export async function writeRelease(
@@ -211,6 +230,9 @@ async function main(argv: readonly string[]): Promise<void> {
       return checkWorker(readJson(args[0]!));
     case 'check-health':
       return checkHealth(readJson(args[0]!));
+    case 'drain':
+      console.log(quiesceDrainSeconds(readJson(args[0]!) as ReleaseRecord, readJson(args[1]!)));
+      return;
     case 'field': {
       // Prints one top-level field of a release record for the shell.
       const value = (readJson(args[0]!) as Record<string, unknown>)[args[1]!];

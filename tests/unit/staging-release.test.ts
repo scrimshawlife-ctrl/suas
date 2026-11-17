@@ -15,6 +15,7 @@ import {
   checkSchemaOrder,
   checkWorker,
   drainSeconds,
+  quiesceDrainSeconds,
   verifyRelease,
   writeRelease,
   type ReleaseRecord,
@@ -92,6 +93,14 @@ describe('release record', () => {
     );
   });
 
+  // In-flight work at quiesce runs on the deployed functions, so their timeouts bound the wait.
+  it('drains for the deployed timeouts when they are longer than this build', () => {
+    const deployed = { Resources: { Api: fnResource(30, true), Worker: fnResource(600, true) } };
+    expect(quiesceDrainSeconds({ drainSeconds: 135 }, deployed)).toBe(615);
+    expect(quiesceDrainSeconds({ drainSeconds: 135 }, JSON.stringify(deployed))).toBe(615);
+    expect(quiesceDrainSeconds({ drainSeconds: 135 }, BACKEND)).toBe(135);
+  });
+
   it('refuses short SHAs, other accounts and unexpected or account-less stacks', async () => {
     await expect(writeRelease(assembly(), 'main', ACCOUNT)).rejects.toThrow(/40 hex/);
     expect(() => assemblyStacks(MANIFEST, '210987654321')).toThrow(/another account/);
@@ -100,6 +109,13 @@ describe('release record', () => {
     const unbound = structuredClone(MANIFEST);
     unbound.artifacts['Suas-Dns'].environment = 'aws://unknown-account/us-west-2';
     expect(() => assemblyStacks(unbound, ACCOUNT)).toThrow(/no concrete account/);
+  });
+
+  // staging-deploy.sh reads and quiesces the backend in us-west-2 only.
+  it('refuses a stack moved to the other allowed region', () => {
+    const moved = structuredClone(MANIFEST);
+    moved.artifacts['Suas-Staging-Backend'].environment = `aws://${ACCOUNT}/us-east-1`;
+    expect(() => assemblyStacks(moved, ACCOUNT)).toThrow(/must target us-west-2/);
   });
 });
 
@@ -137,6 +153,7 @@ describe('deploy result checks', () => {
   it('refuses older code against a newer deployed schema, allows first deploys', () => {
     expect(() => checkSchemaOrder(release, '')).not.toThrow();
     expect(() => checkSchemaOrder(release, String(EXPECTED_SCHEMA_VERSION))).not.toThrow();
+    expect(() => checkSchemaOrder(release, String(EXPECTED_SCHEMA_VERSION - 1))).not.toThrow();
     expect(() => checkSchemaOrder(release, String(EXPECTED_SCHEMA_VERSION + 1))).toThrow(
       /repair forward/,
     );
