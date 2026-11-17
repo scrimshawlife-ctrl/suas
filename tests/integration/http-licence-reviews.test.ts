@@ -8,16 +8,15 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import { createServer } from '../../src/http/server.js';
-import { createUser, setUserDisplayName, VA_NOTICE_V1 } from '../../src/identity/index.js';
+import { VA_NOTICE_V1 } from '../../src/identity/index.js';
 import { FixtureLicenceReader } from '../../src/identity/licence-reader-fixture.js';
 import { createVaConfirmationHttpAdapter } from '../../src/identity/va-confirmation-http.js';
 import { VA_CONFIRMATION_SANDBOX_BASE_URL } from '../../src/identity/va-confirmation.js';
 import type { FetchTransport } from '../../src/identity/va-confirmation-http.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool, createPerson } from '../helpers/actors.js';
 import { closeVaOutageCooldown } from '../helpers/db.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { licenceSubmission } from '../helpers/licence.js';
 
 type Server = StartedApp['server'];
@@ -48,7 +47,7 @@ beforeAll(async () => {
 });
 
 // The VA outage cooldown is one shared row (suas #287); each test starts with VA reachable.
-beforeEach(() => closeVaOutageCooldown(app.pool!));
+beforeEach(() => closeVaOutageCooldown(appPool(app)));
 
 afterAll(async () => {
   await disabled.close();
@@ -58,19 +57,8 @@ afterAll(async () => {
 const LICENCE = '/api/v0/veterans/me/verification/licence';
 
 /** A signed-in person whose display name fits the fixture licence identity. */
-async function person(started: StartedApp = app) {
-  const pool = started.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const tenantId = randomUUID();
-  const user = await createUser(pool, {
-    tenantId,
-    email: syntheticEmail(`lic-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
-  await setUserDisplayName(pool, tenantId, user.userId, 'Synthetic V.');
-  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId: user.userId });
-  return { headers: { authorization: `Bearer ${session.credential}` }, userId: user.userId };
-}
+const person = (started: StartedApp = app) =>
+  createPerson(started, { label: 'lic', displayName: 'Synthetic V.' });
 
 /** One VA attempt typed with the fixture licence identity. */
 const confirm = (server: Server, headers: Record<string, string>, zipCode: string) =>
@@ -112,7 +100,7 @@ function serverWithVa(transport: FetchTransport): Server {
   return createServer({
     config: app.config,
     buildInfo: () => app.buildInfo,
-    pool: app.pool!,
+    pool: appPool(app),
     challengeDelivery: app.challengeDelivery,
     mfa: app.mfa,
     jobQueue: app.jobQueue,
