@@ -98,7 +98,9 @@ done_step
 if [ "$SCOPE" = full ]; then
   step "Quiesce the deployed backend"
   release check-schema-order "$RELEASE_JSON" "$deployed_schema"
-  if [ -n "$(output "$BACKEND" ApiFunctionName)" ]; then
+  # Assigned first so set -e stops on a failed read; inside `[ ]` it would skip quiesce.
+  deployed_api=$(output "$BACKEND" ApiFunctionName)
+  if [ -n "$deployed_api" ]; then
     # The deployed functions hold the in-flight work, so their timeouts set the wait.
     as_cdk_deploy_role aws cloudformation get-template --region "$REGION" --stack-name "$BACKEND" \
       --query TemplateBody --output json >"$WORK/deployed-backend.json"
