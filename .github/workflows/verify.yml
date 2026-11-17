@@ -19,7 +19,8 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: Full commit SHA to verify (defaults to the triggering commit)
+        # Each job checks this before checkout, so only an exact commit is verified.
+        description: Full 40-character commit SHA to verify (defaults to the triggering commit)
         type: string
         required: false
         default: ''
@@ -77,6 +78,11 @@ jobs:
       TEST_MIGRATIONS_DATABASE_URL: postgresql://suas:suas@localhost:5432/suas_migrations_test
 
     steps:
+      - name: Require a full commit SHA for inputs.ref
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          [[ -z "$REF" || "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ inputs.ref }}
@@ -215,6 +221,11 @@ jobs:
       SUAS_E2E_SAFETY_COPY_MODE: placeholder_test_only
 
     steps:
+      - name: Require a full commit SHA for inputs.ref
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          [[ -z "$REF" || "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ inputs.ref }}
@@ -283,14 +294,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Require a full commit SHA for inputs.ref
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          [[ -z "$REF" || "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Check skill metadata
-        run: uv run --no-project --python 3.12 --with pyyaml python -m unittest discover -s tests -p 'test_skill_metadata.py' -v
+        run: uv run --no-project --python 3.12 --with pyyaml==6.0.3 python -m unittest discover -s tests -p 'test_skill_metadata.py' -v
       - name: Validate SUAS runtime skills
-        run: uv run --no-project --python 3.12 --with pyyaml python scripts/validate-skills.py
+        run: uv run --no-project --python 3.12 --with pyyaml==6.0.3 python scripts/validate-skills.py
 
 # Not run here, by design:
 # - test:e2e:staging needs a deployed STAGING origin; staging-deploy.yml runs its @public set.

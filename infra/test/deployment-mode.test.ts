@@ -81,10 +81,20 @@ function evaluate(value: any, mode: string, template: Template = backend): any {
   if ('Fn::Or' in value) return value['Fn::Or'].some(ev);
   if ('Fn::If' in value) {
     const [condition, yes, no] = value['Fn::If'];
+    if (!(condition in template.Conditions)) throw new Error(`Undefined condition ${condition}`);
     return ev(ev(template.Conditions[condition]) ? yes : no);
   }
   throw new Error(`Unexpected expression ${JSON.stringify(value)}`);
 }
+
+// Every condition name an Fn::If anywhere in the template refers to.
+const conditionRefs = (value: any): string[] =>
+  typeof value !== 'object' || value === null
+    ? []
+    : [
+        ...('Fn::If' in value ? [value['Fn::If'][0] as string] : []),
+        ...Object.values(value).flatMap(conditionRefs),
+      ];
 
 const ownCap = (handler: string) =>
   fn(legacyBackend, handler)[1].Properties.ReservedConcurrentExecutions ?? NO_VALUE;
@@ -114,6 +124,17 @@ describe('deploy workflow maintenance modes', () => {
     const [, scheduleResource] = only(backend, 'AWS::Scheduler::Schedule');
     expect(evaluate(scheduleResource.Properties.State, mode)).toBe(schedule);
     expect(reserved('migrate.handler')).toBe(ownCap('migrate.handler'));
+  });
+
+  // CloudFormation resolves Fn::If by condition logical ID, so each must name a defined one.
+  it('points every Fn::If at a condition the template defines', () => {
+    const refs = conditionRefs(backend.Resources);
+    expect([...new Set(refs)].sort()).toEqual(['ApiBlocked', 'LiveMode', 'WorkerBlocked']);
+    expect(Object.keys(backend.Conditions).sort()).toEqual([
+      'ApiBlocked',
+      'LiveMode',
+      'WorkerBlocked',
+    ]);
   });
 
   it('outputs the physical names the workflow invokes', () => {
