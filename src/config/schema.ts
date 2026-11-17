@@ -250,10 +250,7 @@ function optionalEnum<const T extends readonly string[]>(
 }
 
 /** ENVIRONMENT.md §5: fail closed on invalid/unknown values, including booleans. */
-function strictBoolean(
-  varName: string,
-  guidance: string,
-): z.ZodType<boolean, unknown> {
+function strictBoolean(varName: string, guidance: string): z.ZodType<boolean, unknown> {
   return optionalRaw
     .superRefine((value, ctx) => {
       if (value === undefined || (value !== 'true' && value !== 'false')) {
