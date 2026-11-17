@@ -3,6 +3,9 @@
  * in-memory synthesized templates.
  */
 
+import { X509Certificate } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { App } from 'aws-cdk-lib';
 import { Match } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -162,6 +165,29 @@ describe('database', () => {
     }
   });
 
+  // Review of #325: DATABASE_SSL_MODE=verify only verifies if the file it names is in the code
+  // and holds the root of the CA the instance is issued from.
+  it('ships, in the function code, the RDS CA bundle holding the root of the instance certificate', () => {
+    s.backend.hasResourceProperties('AWS::RDS::DBInstance', {
+      CACertificateIdentifier: 'rds-ca-rsa2048-g1',
+    });
+    const api = ofType(s.backend, 'AWS::Lambda::Function').find(
+      ([, r]) => r.Properties?.Handler === 'run.sh',
+    )?.[1].Properties;
+    const assetHash = String(api?.Code.S3Key).replace(/\.zip$/, '');
+    const assembly = (s.stacks.backend.node.root as App).synth();
+    const bundle = readFileSync(
+      join(assembly.directory, `asset.${assetHash}`, 'rds-global-bundle.crt'),
+      'utf8',
+    );
+    const subjects = (
+      bundle.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? []
+    ).map((pem) => new X509Certificate(pem).subject);
+    expect(subjects).toContainEqual(
+      expect.stringContaining('CN=Amazon RDS us-west-2 Root CA RSA2048 G1'),
+    );
+  });
+
   // R14.1 (SUAS-specs #100): without a proxy, reserved concurrency is what bounds connections.
   it('caps API, job-worker and migrate concurrency so connections stay well under db.t4g.micro', () => {
     const props = (handler: string) =>
@@ -179,6 +205,26 @@ describe('database', () => {
       Number(p?.ReservedConcurrentExecutions) * Number(p?.Environment.Variables.DATABASE_POOL_MAX);
     expect(connections(api) + connections(worker) + connections(migrate)).toBe(52);
     expect(connections(api) + connections(worker) + connections(migrate)).toBeLessThanOrEqual(60);
+  });
+
+  // Review of #325: check the budget against the instance's real limit, not an assumed default.
+  it('pins max_connections at 80, above the connection budget of every in-VPC function', () => {
+    const [[, group] = []] = ofType(s.backend, 'AWS::RDS::DBParameterGroup');
+    const maxConnections = Number(group?.Properties?.Parameters?.max_connections);
+    expect(maxConnections).toBe(80);
+    const budget = ofType(s.backend, 'AWS::Lambda::Function')
+      .map(([, r]) => r.Properties)
+      .filter((p) => p?.VpcConfig !== undefined)
+      .reduce(
+        (sum, p) =>
+          sum +
+          Number(p?.ReservedConcurrentExecutions) *
+            Number(p?.Environment.Variables.DATABASE_POOL_MAX),
+        0,
+      );
+    expect(budget).toBe(52);
+    // superuser_reserved_connections (3) come out of max_connections first.
+    expect(budget).toBeLessThan(maxConnections - 3);
   });
 
   it('names nothing the config guard would read as a production database', () => {
@@ -332,18 +378,64 @@ describe('functions', () => {
 });
 
 describe('alarms', () => {
+  const metricFilters = (metricName: RegExp) =>
+    ofType(s.backend, 'AWS::Logs::MetricFilter')
+      .map(([, r]) => r.Properties)
+      .filter((p) => metricName.test(String(p?.MetricTransformations?.[0]?.MetricName)));
+  const alarmsOn = (metricName: RegExp) =>
+    ofType(s.backend, 'AWS::CloudWatch::Alarm')
+      .map(([, r]) => r.Properties)
+      .filter((p) => metricName.test(String(p?.MetricName)));
+
   it('counts the logged failure messages on the API and job worker logs and alarms on them', () => {
-    const filters = ofType(s.backend, 'AWS::Logs::MetricFilter').map(([, r]) => r.Properties);
+    const filters = metricFilters(/FailureMessages$/);
     expect(filters).toHaveLength(2);
     for (const filter of filters) {
       expect(filter?.FilterPattern).toBe('?"job_failed" ?"sweep_failed" ?"chat push failed"');
     }
-    const alarms = ofType(s.backend, 'AWS::CloudWatch::Alarm').map(([, r]) => r.Properties);
+    const alarms = alarmsOn(/FailureMessages$/);
+    expect(alarms).toHaveLength(2);
+    for (const alarm of alarms) expect(alarm?.Threshold).toBe(1);
+  });
+
+  // Review of #325: a lost or refused relay invoke (for example the one endpoint zone being down)
+  // settles the send UNDELIVERABLE; these make it visible. Fields: src/notifications/channels.ts
+  // logEmailSend and lambda-relay-sender.ts finish().
+  it('counts relay ambiguous acknowledgements and refused invokes on the API and job worker logs', () => {
+    const filters = metricFilters(/RelayFailures$/);
+    expect(filters).toHaveLength(2);
+    for (const filter of filters) {
+      // Terms, not a JSON selector: the Node runtime prefixes the job worker's lines with a
+      // timestamp, request id and level. Both outcomes are logged nowhere else in src/.
+      expect(filter?.FilterPattern).toBe('?"relay_ambiguous_ack" ?"relay_unavailable"');
+    }
+    const alarms = alarmsOn(/RelayFailures$/);
     expect(alarms).toHaveLength(2);
     for (const alarm of alarms) {
-      expect(alarm?.Threshold).toBe(1);
-      // No notification target yet.
-      expect(alarm?.AlarmActions).toBeUndefined();
+      expect(alarm).toMatchObject({
+        Threshold: 1,
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      });
+    }
+  });
+
+  // Review of #325: reserved concurrency bounds connections; this shows when the bound is near.
+  it('alarms on the instance at 70 database connections', () => {
+    const [databaseId] = ofType(s.backend, 'AWS::RDS::DBInstance').map(([id]) => id);
+    const [alarm, ...others] = alarmsOn(/^DatabaseConnections$/);
+    expect(others).toHaveLength(0);
+    expect(alarm).toMatchObject({
+      Namespace: 'AWS/RDS',
+      Dimensions: [{ Name: 'DBInstanceIdentifier', Value: { Ref: databaseId } }],
+      Statistic: 'Maximum',
+      Threshold: 70,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+    });
+  });
+
+  it('has no notification target on any alarm yet', () => {
+    for (const [id, alarm] of ofType(s.backend, 'AWS::CloudWatch::Alarm')) {
+      expect(alarm.Properties?.AlarmActions, id).toBeUndefined();
     }
   });
 });
