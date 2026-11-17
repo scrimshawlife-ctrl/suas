@@ -1,6 +1,7 @@
 import { expect, test } from '../fixtures';
 import { newPerson, signInWithCode, uniqueEmail } from '../helpers';
-import { closePeople, contactRow, invite, veteran } from './support';
+import { closePeople, contactRow, invite } from './support';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -9,10 +10,10 @@ test('an invitee with no profile yet sees each invitation, accepts them one by o
   request,
 }) => {
   const email = uniqueEmail('invitee');
-  const first = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
+  const first = await newVeteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
   await first.page.goto('/trusted-contacts');
   await invite(first.page, 'Sister', email);
-  const second = await veteran(browser, request, { name: 'Lee M.', county: 'Alameda' });
+  const second = await newVeteran(browser, request, { name: 'Lee M.', county: 'Alameda' });
   await second.page.goto('/trusted-contacts');
   await invite(second.page, 'Battle buddy', email);
 

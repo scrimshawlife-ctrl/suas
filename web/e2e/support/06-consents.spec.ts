@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { ALERT_SWITCH, closePeople, contactRow, veteran, veteranWithNotice } from './support';
+import { ALERT_SWITCH, closePeople, contactRow, veteranWithNotice } from './support';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -9,7 +10,7 @@ function grant(page: Page, label: string) {
 }
 
 test('with nothing shared, What you share shows the empty state', async ({ browser, request }) => {
-  const { page } = await veteran(browser, request, { name: 'Oz P.', county: 'Alameda' });
+  const { page } = await newVeteran(browser, request, { name: 'Oz P.', county: 'Alameda' });
   await page.goto('/consents');
   await expect(page).toHaveTitle('What you share · SUAS');
   await expect(page.getByText('You are not sharing anything right now.')).toBeVisible();
