@@ -1,16 +1,17 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { requestHelp } from '../helpers';
-import { fastDoubleClick, recordAlerts, recordPosts, tag, veteran } from './request';
+import { requestHelp, tag } from '../helpers';
+import { fastDoubleClick, recordAlerts, recordPosts } from './request';
+import { newVeteran } from '../people';
 
-// The 72-hour expiry is covered by 08-release-expiry.spec.ts.
+// The 72-hour expiry is covered by serve/05-release-and-expiry.spec.ts.
 const cancelledChip = (page: Page) => page.getByRole('status').filter({ hasText: 'Cancelled' });
 
 test('the cancel dialog closes three ways without cancelling, then cancels; Back and Forward keep it cancelled', async ({
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Lee C.' });
+  const { page } = await newVeteran(browser, request, { name: 'Lee C.' });
   const summary = `Someone to talk to ${tag()}`;
   const id = await requestHelp(page, request, { category: 'PEER_SUPPORT', summary }, 'Park bench');
   const dialog = page.getByRole('dialog', { name: 'Cancel this request?' });
@@ -54,7 +55,7 @@ test('double-clicking the dialog Cancel request cancels once with no error', asy
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Lee C.' });
+  const { page } = await newVeteran(browser, request, { name: 'Lee C.' });
   await requestHelp(
     page,
     request,
@@ -80,7 +81,7 @@ test('cancelling in a second tab after the first tab cancelled gets 409, explain
   allow,
 }) => {
   allow.push(/status of 409/);
-  const page = await veteran(browser, request, { name: 'Lee C.' });
+  const { page } = await newVeteran(browser, request, { name: 'Lee C.' });
   const id = await requestHelp(
     page,
     request,
