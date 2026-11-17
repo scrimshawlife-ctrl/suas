@@ -17,7 +17,7 @@ import { newHelper } from '../people';
 
 test.afterEach(closePeople);
 
-/** WCAG 2.0, 2.1 and 2.2 at levels A and AA, as in 11-a11y. */
+/** WCAG 2.0, 2.1 and 2.2 at levels A and AA, as in cross/a11y-main-screens. */
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 /** Phone (WCAG 1.4.10 reflow), common phone, desktop. */
 const WIDTHS = [320, 390, 1280] as const;
