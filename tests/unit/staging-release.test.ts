@@ -41,15 +41,25 @@ const MANIFEST = {
   },
 };
 
-const fnResource = (timeout: number, reserved: boolean) => ({
+// As synthesized: a mode-throttled function reserves Fn::If(blocked, 0, its own cap or NoValue);
+// any other reservation is a fixed cap (lean STAGING caps migrate at 1).
+const NO_VALUE = { Ref: 'AWS::NoValue' };
+const fnResource = (timeout: number, throttled: boolean, cap?: number) => ({
   Type: 'AWS::Lambda::Function',
-  Properties: { Timeout: timeout, ...(reserved ? { ReservedConcurrentExecutions: 0 } : {}) },
+  Properties: {
+    Timeout: timeout,
+    ...(throttled
+      ? { ReservedConcurrentExecutions: { 'Fn::If': ['ApiBlocked', 0, cap ?? NO_VALUE] } }
+      : cap !== undefined
+        ? { ReservedConcurrentExecutions: cap }
+        : {}),
+  },
 });
 const BACKEND = {
   Resources: {
-    Api: fnResource(30, true),
+    Api: fnResource(30, true, 15),
     Worker: fnResource(120, true),
-    Migrate: fnResource(300, false),
+    Migrate: fnResource(300, false, 1),
   },
 };
 
@@ -79,7 +89,7 @@ describe('release record', () => {
     expect(release).toMatchObject({ sourceSha: SHA, specVersion: SPEC_VERSION, account: ACCOUNT });
     expect(release.expectedSchemaVersion).toBe(EXPECTED_SCHEMA_VERSION);
     expect(release.migrations).toHaveLength(EXPECTED_SCHEMA_VERSION);
-    // The migrator is never throttled, so its five minutes do not count toward the drain.
+    // The mode never throttles the migrator, so its five minutes (and fixed cap) do not count.
     expect(release.drainSeconds).toBe(135);
     expect(() => verifyRelease(release, dir, SHA)).not.toThrow();
 
@@ -97,7 +107,7 @@ describe('release record', () => {
   });
 
   it('refuses a backend template without maintenance controls', () => {
-    expect(() => drainSeconds({ Resources: { Migrate: fnResource(300, false) } })).toThrow(
+    expect(() => drainSeconds({ Resources: { Migrate: fnResource(300, false, 1) } })).toThrow(
       /no maintenance/,
     );
   });

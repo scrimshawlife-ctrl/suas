@@ -93,7 +93,13 @@ export function assemblyStacks(
   return stacks;
 }
 
-/** Longest timeout among functions the maintenance mode throttles, from the backend template. */
+const isModeControlled = (reserved: unknown): boolean =>
+  typeof reserved === 'object' && reserved !== null && 'Fn::If' in reserved;
+
+/**
+ * Longest timeout among functions the maintenance mode throttles, from the backend template.
+ * Those reserve Fn::If(blocked, 0, ...); a fixed cap (lean STAGING's migrate 1) is not throttled.
+ */
 export function drainSeconds(template: unknown): number {
   const resources = Object.values(
     (
@@ -106,7 +112,7 @@ export function drainSeconds(template: unknown): number {
     .filter(
       (r) =>
         r.Type === 'AWS::Lambda::Function' &&
-        r.Properties?.ReservedConcurrentExecutions !== undefined,
+        isModeControlled(r.Properties?.ReservedConcurrentExecutions),
     )
     .map((r) => Number(r.Properties?.Timeout ?? 3));
   if (timeouts.length === 0)

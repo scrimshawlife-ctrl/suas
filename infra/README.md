@@ -47,20 +47,22 @@ plus three things:
 
 The plain `npm run synth` output is unchanged.
 
-| `DeploymentMode` | API function           | Job worker                       | Schedule |
-| ---------------- | ---------------------- | -------------------------------- | -------- |
-| `maintenance`    | reserved concurrency 0 | reserved concurrency 0           | disabled |
-| `api`            | no reservation         | reserved concurrency 0           | disabled |
-| `worker`         | no reservation         | no reservation (one manual pass) | disabled |
-| `live`           | no reservation         | no reservation                   | enabled  |
+| `DeploymentMode` | API function           | Job worker                            | Schedule |
+| ---------------- | ---------------------- | ------------------------------------- | -------- |
+| `maintenance`    | reserved concurrency 0 | reserved concurrency 0                | disabled |
+| `api`            | its own reservation    | reserved concurrency 0                | disabled |
+| `worker`         | its own reservation    | its own reservation (one manual pass) | disabled |
+| `live`           | its own reservation    | its own reservation                   | enabled  |
 
-The migrate function is never throttled. Normal modes remove the reservation instead of reserving a number, so
-no concurrency budget is assumed. That also means an account at the default limit (10, all unreserved) still
-deploys.
+"Its own reservation" is what the function has without the pipeline context: a fixed cap when the stack sets
+one, otherwise none (`AWS::NoValue`). The modes never add or drop a cap. The deployment mode does not touch the
+migrate function, so it keeps its own reservation in every mode. Every fixed cap still has to fit in the
+account's Lambda concurrency limit.
 
 The run takes these steps, and stops on the first failure without re-enabling traffic:
 
-1. Quiesce the deployed backend on its own template, and wait for its longest function timeout.
+1. Quiesce the deployed backend on its own template, and wait for the longest timeout among the functions it
+   throttles.
 2. Deploy the new backend in `maintenance`.
 3. Invoke the migrate function and require the build's schema and pins.
 4. Switch to `api` and check health.
