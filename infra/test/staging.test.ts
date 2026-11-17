@@ -163,19 +163,22 @@ describe('database', () => {
   });
 
   // R14.1 (SUAS-specs #100): without a proxy, reserved concurrency is what bounds connections.
-  it('caps API and job-worker concurrency so connections stay well under db.t4g.micro', () => {
+  it('caps API, job-worker and migrate concurrency so connections stay well under db.t4g.micro', () => {
     const props = (handler: string) =>
       ofType(s.backend, 'AWS::Lambda::Function').find(
         ([, r]) => r.Properties?.Handler === handler,
       )?.[1].Properties;
     const api = props('run.sh');
     const worker = props('job-worker.handler');
+    const migrate = props('migrate.handler');
     expect(api?.ReservedConcurrentExecutions).toBe(15);
     expect(worker?.ReservedConcurrentExecutions).toBe(2);
+    // The budget counts one migrate connection, so a second concurrent invoke must throttle.
+    expect(migrate?.ReservedConcurrentExecutions).toBe(1);
     const connections = (p: typeof api) =>
       Number(p?.ReservedConcurrentExecutions) * Number(p?.Environment.Variables.DATABASE_POOL_MAX);
-    // Plus the migrate function's single connection.
-    expect(connections(api) + connections(worker) + 1).toBeLessThanOrEqual(60);
+    expect(connections(api) + connections(worker) + connections(migrate)).toBe(52);
+    expect(connections(api) + connections(worker) + connections(migrate)).toBeLessThanOrEqual(60);
   });
 
   it('names nothing the config guard would read as a production database', () => {

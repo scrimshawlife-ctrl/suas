@@ -59,9 +59,10 @@ const LICENCE_REVIEWS_PREFIX = 'licence-reviews/';
  */
 const FINGERPRINT_KEY_ID = 'staging-1';
 // R14.1 (SUAS-specs #100): with no RDS Proxy these caps bound database connections to
-// API 15 x pool 3 + worker 2 x pool 3 + migrate 1 = 52, under db.t4g.micro's ~80 usable.
+// API 15 x pool 3 + worker 2 x pool 3 + migrate 1 x pool 1 = 52, under db.t4g.micro's ~80 usable.
 const API_RESERVED_CONCURRENCY = 15;
 const JOB_WORKER_RESERVED_CONCURRENCY = 2;
+const MIGRATE_RESERVED_CONCURRENCY = 1;
 
 type Env = Record<string, string>;
 
@@ -418,6 +419,7 @@ export class BackendStack extends Stack {
       sg: migrateSg,
       memory: 512,
       timeout: Duration.minutes(5),
+      reservedConcurrency: MIGRATE_RESERVED_CONCURRENCY,
       env: {
         ...baseEnv,
         SUAS_MIGRATIONS_MODE: 'apply',
