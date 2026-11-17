@@ -142,9 +142,11 @@ connect to the instance endpoint directly, with `DATABASE_SSL_MODE=verify` and t
 advisory lock; plan §4.1). Each warm API or job-worker container holds up to `DATABASE_POOL_MAX=3` connections
 (migrate holds 1), and without a proxy nothing pools them across containers. The account's Lambda concurrency
 limit (1000) does not bound them, so reserved concurrency does (R14.1, SUAS-specs #100): **15 on the API, 2 on
-the job worker and 1 on migrate**. Budget: 15 × 3 + 2 × 3 + 1 × 1 (migrate) = **52 connections**, under the roughly
-80 usable on `db.t4g.micro` (`max_connections` = LEAST({DBInstanceClassMemory/9531392}, 5000), less 3 reserved for
-superusers). A test keeps the budget at 60 or less. Lambda throttles a 16th concurrent API request instead of letting it fail
+the job worker and 1 on migrate**. Budget: 15 × 3 + 2 × 3 + 1 × 1 (migrate) = **52 connections**. The parameter
+group pins `max_connections` at **80**, below the `db.t4g.micro` default (LEAST({DBInstanceClassMemory/9531392}, 5000), at
+most 112 for 1024 MiB), so the budget is checked against the limit the instance has; 3 of those are reserved for superusers. It is a static
+parameter: changing it needs a reboot. Tests keep the budget at 60 or less and below `max_connections` less 3, and an
+alarm fires at 70 connections (see "Alarms"). Lambda throttles a 16th concurrent API request instead of letting it fail
 on a database connection. See "Known risks".
 
 ### Cost
@@ -277,7 +279,12 @@ method, path and status per request, never bodies: no code in `src/intake`, `src
 
 Each of the API and job-worker log groups has a metric filter for the messages the code logs on failure:
 `job_failed` and `sweep_failed` (`src/jobs/worker.ts`) and `chat push failed` (`src/chat/send.ts`). An alarm per
-group fires on one or more in 5 minutes. **There is no notification target yet**, so the alarms only show in the
+group fires on one or more in 5 minutes. A second filter and alarm on each of those groups count the email relay
+failures, `relay_ambiguous_ack` (the invoke's answer was lost) and `relay_unavailable` (Lambda refused the invoke),
+from the `email_send` outcome line (`src/notifications/channels.ts`); losing the one Lambda endpoint zone shows here.
+They match terms, because the Node runtime prefixes the job worker's lines. An alarm on the instance's
+`DatabaseConnections` (maximum over 5 minutes) fires at 70, between the budget of 52 and `max_connections` 80.
+**There is no notification target yet**, so the alarms only show in the
 CloudWatch console until someone picks a topic (an SNS topic and subscriber are not created here). The inline
 job dispatcher in the API logs a different message (`[suas] job <type> failed`, `src/app.ts`) that these filters
 do not match.
@@ -386,8 +393,8 @@ owner decision.
   The Lambda endpoint uses the first zone listed.
 - **Database connections without RDS Proxy.** Each warm API or job-worker container keeps up to 3 connections
   open, including while Lambda has frozen it, until the container is retired. Reserved concurrency (API 15, job
-  worker 2, migrate 1) holds the total to 52 (see "Database"); the exact `max_connections` of the deployed
-  instance was not read. The cap also limits staging throughput: past 15 concurrent API requests, Lambda throttles. Every cold
+  worker 2, migrate 1) holds the total to 52 (see "Database"); `max_connections` is pinned at 80 and an alarm fires
+  at 70. Nothing in the database limits connections per role. The cap also limits staging throughput: past 15 concurrent API requests, Lambda throttles. Every cold
   container opens TLS straight to the instance.
 - **Cold starts and the API Gateway limit.** The HTTP API integration times out after 29 seconds. Inference is
   disabled, so this template does not make a Bedrock call.

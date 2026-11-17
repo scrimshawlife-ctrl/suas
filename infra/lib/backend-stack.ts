@@ -63,6 +63,10 @@ const FINGERPRINT_KEY_ID = 'staging-1';
 const API_RESERVED_CONCURRENCY = 15;
 const JOB_WORKER_RESERVED_CONCURRENCY = 2;
 const MIGRATE_RESERVED_CONCURRENCY = 1;
+// Pinned below the memory formula's default (at most 112 on db.t4g.micro), so the budget above is
+// checked against the limit the instance really has. A static parameter: changing it needs a reboot.
+const DB_MAX_CONNECTIONS = 80;
+const DB_CONNECTIONS_ALARM = 70;
 
 type Env = Record<string, string>;
 
@@ -153,7 +157,7 @@ export class BackendStack extends Stack {
     // --------------------------------------------------------------- database
     const dbParameters = new rds.ParameterGroup(this, 'DatabaseParameters', {
       engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_17 }),
-      parameters: { 'rds.force_ssl': '1' },
+      parameters: { 'rds.force_ssl': '1', max_connections: String(DB_MAX_CONNECTIONS) },
     });
     const database = new rds.DatabaseInstance(this, 'Database', {
       instanceIdentifier: `suas-${config.name}`,
@@ -541,23 +545,28 @@ export class BackendStack extends Stack {
     // notification target yet: the alarm only shows in the console until one is chosen.
     //   job_failed, sweep_failed: src/jobs/worker.ts (job worker)
     //   chat push failed:         src/chat/send.ts (API, through pino)
+    //   relay_ambiguous_ack, relay_unavailable: the email_send outcome (src/notifications/
+    //   channels.ts, both) when a relay invoke's answer is lost or the invoke is refused, as when
+    //   the one Lambda endpoint zone is down (R14.1). Terms, because the Node runtime prefixes
+    //   the job worker's lines, so a JSON selector would not match them.
     const failureTerms = ['job_failed', 'sweep_failed', 'chat push failed'];
-    for (const [fnId, label] of [
-      ['ApiFunction', 'Api'],
-      ['JobWorkerFunction', 'JobWorker'],
-    ] as const) {
-      const logGroup = functionLogGroups.get(fnId);
-      if (logGroup === undefined) throw new Error(`No log group recorded for ${fnId}.`);
-      const metricName = `${label}FailureMessages`;
-      logGroup.addMetricFilter(`${label}FailureFilter`, {
-        filterPattern: logs.FilterPattern.anyTerm(...failureTerms),
+    const relayFailure = logs.FilterPattern.anyTerm('relay_ambiguous_ack', 'relay_unavailable');
+    const alarmOnLogMatches = (
+      logGroup: logs.LogGroup,
+      id: string,
+      metricName: string,
+      filterPattern: logs.IFilterPattern,
+      description: string,
+    ): void => {
+      logGroup.addMetricFilter(`${id}Filter`, {
+        filterPattern,
         metricNamespace: `Suas/${config.name}`,
         metricName,
         metricValue: '1',
         defaultValue: 0,
       });
-      new cloudwatch.Alarm(this, `${label}FailureAlarm`, {
-        alarmDescription: `${label}: the code logged ${failureTerms.join(', ')}. No notification target yet.`,
+      new cloudwatch.Alarm(this, `${id}Alarm`, {
+        alarmDescription: `${description} No notification target yet.`,
         metric: new cloudwatch.Metric({
           namespace: `Suas/${config.name}`,
           metricName,
@@ -569,7 +578,42 @@ export class BackendStack extends Stack {
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       });
+    };
+    for (const [fnId, label] of [
+      ['ApiFunction', 'Api'],
+      ['JobWorkerFunction', 'JobWorker'],
+    ] as const) {
+      const logGroup = functionLogGroups.get(fnId);
+      if (logGroup === undefined) throw new Error(`No log group recorded for ${fnId}.`);
+      alarmOnLogMatches(
+        logGroup,
+        `${label}Failure`,
+        `${label}FailureMessages`,
+        logs.FilterPattern.anyTerm(...failureTerms),
+        `${label}: the code logged ${failureTerms.join(', ')}.`,
+      );
+      alarmOnLogMatches(
+        logGroup,
+        `${label}RelayFailure`,
+        `${label}RelayFailures`,
+        relayFailure,
+        `${label}: an email relay invoke was refused (relay_unavailable) or its answer lost (relay_ambiguous_ack).`,
+      );
     }
+
+    // Reserved concurrency holds connections to 52; this shows when something else (a manual
+    // session, a leak, a raised cap) pushes them towards max_connections. No target yet either.
+    new cloudwatch.Alarm(this, 'DatabaseConnectionsAlarm', {
+      alarmDescription: `Database connections reached ${String(DB_CONNECTIONS_ALARM)} of max_connections ${String(DB_MAX_CONNECTIONS)}; the reserved-concurrency budget is 52. No notification target yet.`,
+      metric: database.metricDatabaseConnections({
+        statistic: 'Maximum',
+        period: Duration.minutes(5),
+      }),
+      threshold: DB_CONNECTIONS_ALARM,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
 
     new CfnOutput(this, 'ApiUrl', { value: `https://${config.apiHostname}` });
     new CfnOutput(this, 'MigrateFunctionName', {
