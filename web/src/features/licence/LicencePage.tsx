@@ -10,7 +10,7 @@ import { Card } from '../../components/Card';
 import { Page } from '../../components/Page';
 import { AlertCircleIcon, LockIcon } from '../../components/icons';
 import { useSingleFlight } from '../../lib/single-flight';
-import { useIdVerification } from '../public/api';
+import { useIdVerification } from '../verify/api';
 import { retryAtText } from '../verify/verify-status';
 import { VerifyCrisisCard } from '../verify/VerifyAside';
 import { HelpOthers, SelfAttestButton } from '../verify/VerifyViews';
