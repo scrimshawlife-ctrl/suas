@@ -13,13 +13,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession, elevateSession } from '../../src/auth/index.js';
 import { executeCaseCommand } from '../../src/coordination/index.js';
 import { deployQrf } from '../../src/ui/commands.js';
-import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
+import { appPool, createPerson, keyed } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -40,41 +37,9 @@ interface Person {
   readonly headers: Record<string, string>;
 }
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function person(
-  tenantId: string,
-  label: string,
-  verified = false,
-  admin = false,
-): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  if (verified) await markVerifiedVeteran(pool(), tenantId, user.userId);
-  if (admin) await grantSuasAdmin(pool(), user.userId, undefined);
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  // Admin case commands need an MFA-elevated session (ADMIN.md §2).
-  if (admin) await elevateSession(pool(), session.session.sessionId);
-  return {
-    tenantId,
-    userId: user.userId,
-    headers: { authorization: `Bearer ${session.credential}` },
-  };
-}
-
-function keyed(who: Person): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': randomUUID() };
-}
+/** A signed-in person in Santa Clara; an admin also gets an MFA-elevated session (ADMIN.md §2). */
+const person = (tenantId: string, label: string, verified = false, admin = false) =>
+  createPerson(app, { tenantId, label, county: 'SANTA_CLARA', verified, admin });
 
 function post(who: Person, url: string, payload: Record<string, unknown> = {}) {
   return app.server.inject({ method: 'POST', url: `/api/v0${url}`, headers: keyed(who), payload });
@@ -239,7 +204,7 @@ describe('holder standing ends with the case cycle', () => {
     expect((await accept(former, first.requestId)).statusCode).toBe(200);
     await finishAndClose(requester, former, first.caseId, first.requestId);
 
-    await executeCaseCommand(pool(), {
+    await executeCaseCommand(appPool(app), {
       tenantId,
       caseId: first.caseId,
       command: 'REOPEN',
@@ -448,7 +413,7 @@ describe('a new request after the case is resolved or closed', () => {
     await post(requester, `/service-requests/${second.requestId}/commands/CANCEL`, {
       reason: 'sorted out',
     });
-    await pool().query(
+    await appPool(app).query(
       `UPDATE support_cases SET status = 'CLOSED', closed_at = now() WHERE case_id = $1`,
       [second.caseId],
     );
@@ -482,13 +447,13 @@ describe('a new request after the case is resolved or closed', () => {
     expect(second.json().case_id).toBe(formCase);
 
     // The legacy Deploy resolves the same current case.
-    const deployed = await deployQrf(pool(), {
+    const deployed = await deployQrf(appPool(app), {
       tenantId,
       veteranUserId: requester.userId,
       correlationId: randomUUID(),
     });
     expect(deployed.serviceRequestId).toBeDefined();
-    const cases = await pool().query(
+    const cases = await appPool(app).query(
       `SELECT status FROM support_cases WHERE veteran_user_id = $1 ORDER BY created_at`,
       [requester.userId],
     );

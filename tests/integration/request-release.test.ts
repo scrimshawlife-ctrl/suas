@@ -10,7 +10,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import { expireDueRequests } from '../../src/coordination/expiry.js';
 import { repairMissedRequestNotices } from '../../src/coordination/request-notices.js';
 import { widenDueRequests } from '../../src/coordination/widening.js';
@@ -19,10 +18,8 @@ import {
   NotRequestHolderError,
 } from '../../src/coordination/index.js';
 import { listAggregateEvents } from '../../src/events/index.js';
-import { createUser } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
+import { appPool, createPerson, keyed } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -42,29 +39,9 @@ interface Person {
   readonly headers: Record<string, string>;
 }
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function person(tenantId: string, label: string): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  await markVerifiedVeteran(pool(), tenantId, user.userId, 'SANTA_CLARA');
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return { userId: user.userId, headers: { authorization: `Bearer ${session.credential}` } };
-}
-
-function keyed(who: Person): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': randomUUID() };
-}
+/** A signed-in, verified Veteran in Santa Clara. */
+const person = (tenantId: string, label: string) =>
+  createPerson(app, { tenantId, label, county: 'SANTA_CLARA', verified: true });
 
 const get = (who: Person, url: string) =>
   app.server.inject({ method: 'GET', url: `/api/v0${url}`, headers: who.headers });
@@ -148,7 +125,7 @@ describe('who may release, and why', () => {
     expect(noReason.statusCode).toBe(400);
     expect(noReason.json().error.code).toBe('VALIDATION_FAILED');
 
-    const stored = await pool().query<{ status: string }>(
+    const stored = await appPool(app).query<{ status: string }>(
       `SELECT status FROM service_requests WHERE service_request_id = $1`,
       [id],
     );
@@ -163,7 +140,7 @@ describe('who may release, and why', () => {
 
     // The service layer re-checks the holder under the row lock, past any earlier route check.
     await expect(
-      executeServiceRequestCommand(pool(), {
+      executeServiceRequestCommand(appPool(app), {
         tenantId,
         serviceRequestId: id,
         command: 'RELEASE',
@@ -173,12 +150,12 @@ describe('who may release, and why', () => {
       }),
     ).rejects.toBeInstanceOf(NotRequestHolderError);
 
-    const stored = await pool().query<{ status: string; accepted_by_user_id: string }>(
+    const stored = await appPool(app).query<{ status: string; accepted_by_user_id: string }>(
       `SELECT status, accepted_by_user_id FROM service_requests WHERE service_request_id = $1`,
       [id],
     );
     expect(stored.rows[0]).toEqual({ status: 'ACCEPTED', accepted_by_user_id: bystander.userId });
-    const live = await pool().query(
+    const live = await appPool(app).query(
       `SELECT 1 FROM chat_threads WHERE service_request_id = $1 AND released_at IS NULL`,
       [id],
     );
@@ -204,7 +181,7 @@ describe('after a release', () => {
     expect(released.json().status).toBe('SUBMITTED');
 
     expect(await openIds(bystander)).toContain(id);
-    const row = await pool().query<{
+    const row = await appPool(app).query<{
       accepted_by_user_id: string | null;
       accepted_at: Date | null;
     }>(
@@ -214,7 +191,7 @@ describe('after a release', () => {
     );
     expect(row.rows[0]).toEqual({ accepted_by_user_id: null, accepted_at: null });
 
-    const notices = await pool().query(
+    const notices = await appPool(app).query(
       `SELECT recipient_user_id, channel, delivery_status, sent_at IS NOT NULL AS sent
          FROM notifications
         WHERE subject_id = $1 AND reason = 'service_request_released'`,
@@ -231,7 +208,7 @@ describe('after a release', () => {
     ]);
 
     // The audit event carries ids, never the reason text.
-    const audit = await pool().query<{ payload: object }>(
+    const audit = await appPool(app).query<{ payload: object }>(
       `SELECT payload FROM audit_events
         WHERE event_type = 'SERVICE_REQUEST_RELEASED' AND target_id = $1`,
       [id],
@@ -245,7 +222,7 @@ describe('after a release', () => {
     const released = await command(helper, id, 'RELEASE', { reason: 'Private reason text' });
     expect(released.statusCode, released.body).toBe(200);
 
-    const events = await pool().query<{
+    const events = await appPool(app).query<{
       aggregate_type: string;
       actor_id: string;
       payload: Record<string, unknown>;
@@ -263,7 +240,7 @@ describe('after a release', () => {
     // A refused second release writes no second event.
     const again = await command(helper, id, 'RELEASE', { reason: 'Again' });
     expect(again.statusCode).not.toBe(200);
-    const after = await pool().query(
+    const after = await appPool(app).query(
       `SELECT 1 FROM domain_events
         WHERE event_type = 'SERVICE_REQUEST_RELEASED' AND aggregate_id = $1`,
       [id],
@@ -316,7 +293,7 @@ describe('accepting again', () => {
     const detail = (await get(helper, `/service-requests/${id}`)).json();
     expect(detail.status).toBe('ACCEPTED');
     expect(Date.parse(detail.accepted_at)).toBeGreaterThan(Date.parse(firstAt));
-    const threads = await pool().query<{ released_at: Date | null }>(
+    const threads = await appPool(app).query<{ released_at: Date | null }>(
       `SELECT released_at FROM chat_threads WHERE service_request_id = $1 ORDER BY created_at`,
       [id],
     );
@@ -341,7 +318,7 @@ describe('the expiry clock after a release', () => {
   it('keeps the original submitted_at through a release and a re-accept (R8.4, D-061)', async () => {
     const { helper, id } = await acceptedRequest();
     // Stand in for a request first submitted 73 hours ago.
-    const original = await pool().query<{ submitted_at: Date }>(
+    const original = await appPool(app).query<{ submitted_at: Date }>(
       `UPDATE service_requests SET submitted_at = now() - interval '73 hours'
         WHERE service_request_id = $1 RETURNING submitted_at`,
       [id],
@@ -349,7 +326,7 @@ describe('the expiry clock after a release', () => {
     const submittedAt = original.rows[0]?.submitted_at.toISOString();
     const storedSubmittedAt = async () =>
       (
-        await pool().query<{ submitted_at: Date }>(
+        await appPool(app).query<{ submitted_at: Date }>(
           `SELECT submitted_at FROM service_requests WHERE service_request_id = $1`,
           [id],
         )
@@ -364,9 +341,9 @@ describe('the expiry clock after a release', () => {
     expect(await storedSubmittedAt()).toBe(submittedAt);
 
     // Waiting again after the release, it expires on the first submit's 72-hour clock.
-    const result = await expireDueRequests(pool());
+    const result = await expireDueRequests(appPool(app));
     expect(result.expired.map((item) => item.serviceRequestId)).toContain(id);
-    const after = await pool().query<{ status: string }>(
+    const after = await appPool(app).query<{ status: string }>(
       `SELECT status FROM service_requests WHERE service_request_id = $1`,
       [id],
     );
@@ -393,9 +370,10 @@ describe('retrying a release', () => {
     const retry = await release();
     expect(retry.statusCode).toBe(200);
     expect(retry.json()).toEqual({ ...first.json(), replayed: true });
-    const notices = await pool().query(`SELECT 1 FROM notifications WHERE dedupe_key LIKE $1`, [
-      `request-released:${id}:%`,
-    ]);
+    const notices = await appPool(app).query(
+      `SELECT 1 FROM notifications WHERE dedupe_key LIKE $1`,
+      [`request-released:${id}:%`],
+    );
     expect(notices.rowCount).toBe(1);
 
     // A new key, or the same key with a different body, is a new command: the uniform 404.
@@ -415,7 +393,7 @@ describe('retrying a release', () => {
 describe('a lost release notice (A2-11)', () => {
   const releaseNotices = async (id: string) =>
     (
-      await pool().query<{ delivery_status: string }>(
+      await appPool(app).query<{ delivery_status: string }>(
         `SELECT delivery_status FROM notifications
           WHERE subject_id = $1 AND reason = 'service_request_released'`,
         [id],
@@ -428,15 +406,15 @@ describe('a lost release notice (A2-11)', () => {
       200,
     );
     // The post-commit notice write failed.
-    await pool().query('DELETE FROM notifications WHERE subject_id = $1', [id]);
+    await appPool(app).query('DELETE FROM notifications WHERE subject_id = $1', [id]);
 
     // Inside the grace window the route's own notice may still be in flight.
-    await repairMissedRequestNotices(pool());
+    await repairMissedRequestNotices(appPool(app));
     expect(await releaseNotices(id)).toEqual([]);
 
     const later = new Date(Date.now() + 10 * 60_000);
-    await repairMissedRequestNotices(pool(), { now: later });
-    await repairMissedRequestNotices(pool(), { now: later });
+    await repairMissedRequestNotices(appPool(app), { now: later });
+    await repairMissedRequestNotices(appPool(app), { now: later });
     expect(await releaseNotices(id)).toEqual([{ delivery_status: 'SENT' }]);
   });
 
@@ -444,7 +422,7 @@ describe('a lost release notice (A2-11)', () => {
     const { helper, id } = await acceptedRequest();
     await command(helper, id, 'RELEASE', { reason: 'cannot make it' });
 
-    await repairMissedRequestNotices(pool(), { now: new Date(Date.now() + 10 * 60_000) });
+    await repairMissedRequestNotices(appPool(app), { now: new Date(Date.now() + 10 * 60_000) });
     expect(await releaseNotices(id)).toHaveLength(1);
   });
 });
@@ -453,7 +431,7 @@ describe('widening after a release', () => {
   it('clears widened_at and widens again only once the delay has passed since the release', async () => {
     const { helper, id } = await acceptedRequest();
     // Stand in for a request submitted two hours ago that widened before it was accepted.
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests
           SET submitted_at = now() - interval '2 hours', widened_at = now() - interval '90 minutes'
         WHERE service_request_id = $1`,
@@ -461,7 +439,7 @@ describe('widening after a release', () => {
     );
     const widenedAt = async () =>
       (
-        await pool().query<{ widened_at: Date | null }>(
+        await appPool(app).query<{ widened_at: Date | null }>(
           `SELECT widened_at FROM service_requests WHERE service_request_id = $1`,
           [id],
         )
@@ -474,12 +452,12 @@ describe('widening after a release', () => {
     expect(await widenedAt()).toBeNull();
 
     // The first submit is two hours old, but the delay counts from the release.
-    const soon = await widenDueRequests(pool(), { now: new Date() });
+    const soon = await widenDueRequests(appPool(app), { now: new Date() });
     expect(soon.widened.map((item) => item.serviceRequestId)).not.toContain(id);
     expect(await widenedAt()).toBeNull();
 
     const later = new Date(Date.now() + (soon.delayMinutes + 1) * 60_000);
-    const due = await widenDueRequests(pool(), { now: later });
+    const due = await widenDueRequests(appPool(app), { now: later });
     expect(due.widened.map((item) => item.serviceRequestId)).toContain(id);
     expect(await widenedAt()).not.toBeNull();
   });
@@ -519,7 +497,7 @@ describe('request command path and actor rules', () => {
     expect((await command(helper, id, 'release', { reason: 'busy' })).statusCode).toBe(200);
     expect((await accept(bystander, id)).statusCode).toBe(200);
     await expect(
-      executeServiceRequestCommand(pool(), {
+      executeServiceRequestCommand(appPool(app), {
         tenantId,
         serviceRequestId: id,
         command: 'START',
@@ -534,7 +512,7 @@ describe('request command path and actor rules', () => {
     const { tenantId, helper, id } = await acceptedRequest();
     expect((await command(helper, id, 'start')).statusCode).toBe(200);
     expect((await command(helper, id, 'fulfill')).statusCode).toBe(200);
-    const events = await listAggregateEvents(pool(), {
+    const events = await listAggregateEvents(appPool(app), {
       tenantId,
       aggregateType: 'ServiceRequest',
       aggregateId: id,
