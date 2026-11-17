@@ -66,10 +66,7 @@ export function useLicenceImage(id: string, side: LicenceImageSide, enabled: boo
 }
 
 /** The by-eye checklist and the designation answer, all true, sent with approve and confirm. */
-export interface LicenceApproval {
-  designation_visible: true;
-  checklist: { selfie_matches: true; security_features: true; whole_card: true };
-}
+export type LicenceApproval = Schemas['LicenceApproval'];
 
 type LicenceCommand =
   | { name: 'approve' | 'confirm'; body: LicenceApproval }

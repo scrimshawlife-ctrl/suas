@@ -4,15 +4,16 @@ import { Select } from '../../components/Select';
 import {
   DECLINE_REASONS,
   licenceCommandError,
+  parseRevokeReason,
   REVOKE_REASONS,
-  type RevokeReason,
 } from './licence-labels';
+import type { LicenceApproval } from './licence-api';
 import type { LicenceDecision } from './useLicenceDecision';
 
 /** Approve and confirm state that the designation was seen and every by-eye check holds. */
-const APPROVAL = {
-  designation_visible: true as const,
-  checklist: { selfie_matches: true, security_features: true, whole_card: true } as const,
+const APPROVAL: LicenceApproval = {
+  designation_visible: true,
+  checklist: { selfie_matches: true, security_features: true, whole_card: true },
 };
 
 /**
@@ -167,7 +168,9 @@ export function LicenceDecisionDialogs({
               }))}
               value={revokeReason}
               onValueChange={(value) => {
-                setRevokeReason(value as RevokeReason);
+                const parsed = parseRevokeReason(value);
+                if (parsed === null) return;
+                setRevokeReason(parsed);
                 setReasonError(undefined);
               }}
             />
