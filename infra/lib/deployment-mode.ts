@@ -3,9 +3,9 @@
  *
  * A `DeploymentMode` parameter steps the backend through maintenance -> api -> worker -> live
  * so migrations run while the API and job worker admit no new work. Reserved concurrency 0 is
- * the admission barrier; the other modes remove the reservation (AWS::NoValue) rather than set
- * a number, so no concurrency budget is invented and an account at the default limit deploys.
- * The migrate function is never throttled. Without the context the template is unchanged.
+ * the admission barrier; the other modes restore the function's own reservation (its fixed cap,
+ * or AWS::NoValue when it has none), so no budget is invented and no cap is dropped. The migrate
+ * function is left as it is. Without the context the template is unchanged.
  */
 
 import { Aws, CfnCondition, CfnOutput, CfnParameter, Fn, type Stack } from 'aws-cdk-lib';
@@ -41,11 +41,13 @@ export function applyDeploymentMode(stack: Stack, targets: DeploymentModeTargets
   });
   const live = new CfnCondition(stack, 'LiveMode', { expression: is('live') });
 
-  const block = (fn: lambda.Function, condition: CfnCondition) =>
-    (fn.node.defaultChild as lambda.CfnFunction).addPropertyOverride(
+  const block = (fn: lambda.Function, condition: CfnCondition) => {
+    const cfn = fn.node.defaultChild as lambda.CfnFunction;
+    cfn.addPropertyOverride(
       'ReservedConcurrentExecutions',
-      Fn.conditionIf(condition.logicalId, 0, Aws.NO_VALUE),
+      Fn.conditionIf(condition.logicalId, 0, cfn.reservedConcurrentExecutions ?? Aws.NO_VALUE),
     );
+  };
   block(targets.api, apiBlocked);
   block(targets.worker, workerBlocked);
   (targets.schedule.node.defaultChild as scheduler.CfnSchedule).addPropertyOverride(

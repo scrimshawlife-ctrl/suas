@@ -4,7 +4,13 @@
  */
 
 import { rmSync } from 'node:fs';
+import { App, Duration, Stack } from 'aws-cdk-lib';
+import { Template as Assertions } from 'aws-cdk-lib/assertions';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as scheduler from 'aws-cdk-lib/aws-scheduler';
+import * as schedulerTargets from 'aws-cdk-lib/aws-scheduler-targets';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { applyDeploymentMode } from '../lib/deployment-mode.js';
 import { repoRoot } from '../lib/lambda-code.js';
 import { synthesize } from './helpers.js';
 
@@ -38,7 +44,12 @@ type Template = {
 const pipeline = synthesize({ deploymentPipeline: 'true' });
 const backend = pipeline.backend.toJSON() as Template;
 const legacy = synthesize();
+const legacyBackend = legacy.backend.toJSON() as Template;
 const NO_VALUE = Symbol('AWS::NoValue');
+// The function's own reservation outside the deploy workflow, absent or a fixed cap.
+const OWN_CAP = Symbol('own cap');
+// An absent property reads as AWS::NoValue: no reservation.
+const ABSENT = { Ref: 'AWS::NoValue' };
 
 const resources = (template: Template, type: string): Array<[string, Resource]> =>
   Object.entries(template.Resources).filter(([, r]) => r.Type === type);
@@ -56,22 +67,26 @@ const fn = (template: Template, handler: string): [string, Resource] => {
 };
 
 // Evaluates the emitted intrinsic functions so each mode is checked as CloudFormation sees it.
-function evaluate(value: any, mode: string): any {
+function evaluate(value: any, mode: string, template: Template = backend): any {
+  const ev = (v: any) => evaluate(v, mode, template);
   if (typeof value !== 'object' || value === null) return value;
   if (value.Ref === 'AWS::NoValue') return NO_VALUE;
   if (value.Ref === 'DeploymentMode') return mode;
-  if ('Condition' in value) return evaluate(backend.Conditions[value.Condition], mode);
+  if ('Condition' in value) return ev(template.Conditions[value.Condition]);
   if ('Fn::Equals' in value) {
     const [a, b] = value['Fn::Equals'];
-    return evaluate(a, mode) === evaluate(b, mode);
+    return ev(a) === ev(b);
   }
-  if ('Fn::Or' in value) return value['Fn::Or'].some((v: any) => evaluate(v, mode));
+  if ('Fn::Or' in value) return value['Fn::Or'].some(ev);
   if ('Fn::If' in value) {
     const [condition, yes, no] = value['Fn::If'];
-    return evaluate(evaluate(backend.Conditions[condition], mode) ? yes : no, mode);
+    return ev(ev(template.Conditions[condition]) ? yes : no);
   }
   throw new Error(`Unexpected expression ${JSON.stringify(value)}`);
 }
+
+const ownCap = (handler: string) =>
+  fn(legacyBackend, handler)[1].Properties.ReservedConcurrentExecutions ?? NO_VALUE;
 
 describe('deploy workflow maintenance modes', () => {
   it('defaults to maintenance and accepts only the four modes', () => {
@@ -82,22 +97,22 @@ describe('deploy workflow maintenance modes', () => {
     });
   });
 
-  // 0 blocks new invocations; NoValue removes the reservation, so no budget is invented.
+  // 0 blocks new invocations; an unblocked function keeps its own reservation (none, or a cap).
   it.each([
     ['maintenance', 0, 0, 'DISABLED'],
-    ['api', NO_VALUE, 0, 'DISABLED'],
-    ['worker', NO_VALUE, NO_VALUE, 'DISABLED'],
-    ['live', NO_VALUE, NO_VALUE, 'ENABLED'],
+    ['api', OWN_CAP, 0, 'DISABLED'],
+    ['worker', OWN_CAP, OWN_CAP, 'DISABLED'],
+    ['live', OWN_CAP, OWN_CAP, 'ENABLED'],
   ])('%s: api %s, worker %s, schedule %s', (mode, api, worker, schedule) => {
     const reserved = (handler: string) =>
-      evaluate(fn(backend, handler)[1].Properties.ReservedConcurrentExecutions, mode);
-    expect(reserved('run.sh')).toBe(api);
-    expect(reserved('job-worker.handler')).toBe(worker);
+      evaluate(fn(backend, handler)[1].Properties.ReservedConcurrentExecutions ?? ABSENT, mode);
+    const expected = (value: number | symbol, handler: string) =>
+      value === OWN_CAP ? ownCap(handler) : value;
+    expect(reserved('run.sh')).toBe(expected(api, 'run.sh'));
+    expect(reserved('job-worker.handler')).toBe(expected(worker, 'job-worker.handler'));
     const [, scheduleResource] = only(backend, 'AWS::Scheduler::Schedule');
     expect(evaluate(scheduleResource.Properties.State, mode)).toBe(schedule);
-    expect(fn(backend, 'migrate.handler')[1].Properties).not.toHaveProperty(
-      'ReservedConcurrentExecutions',
-    );
+    expect(reserved('migrate.handler')).toBe(ownCap('migrate.handler'));
   });
 
   it('outputs the physical names the workflow invokes', () => {
@@ -113,21 +128,65 @@ describe('deploy workflow maintenance modes', () => {
   });
 
   it('changes nothing else in the backend', () => {
-    const stripped = structuredClone(backend.Resources);
-    for (const resource of Object.values(stripped)) {
-      delete resource.Properties.ReservedConcurrentExecutions;
-      if (resource.Type === 'AWS::Scheduler::Schedule') resource.Properties.State = 'ENABLED';
-    }
-    expect(stripped).toEqual((legacy.backend.toJSON() as Template).Resources);
+    const strip = (template: Template) => {
+      const stripped = structuredClone(template.Resources);
+      for (const resource of Object.values(stripped)) {
+        delete resource.Properties.ReservedConcurrentExecutions;
+        if (resource.Type === 'AWS::Scheduler::Schedule') resource.Properties.State = 'ENABLED';
+      }
+      return stripped;
+    };
+    expect(strip(backend)).toEqual(strip(legacyBackend));
   });
 
   it('stays off unless the context is exactly true', () => {
     for (const template of [legacy.backend, synthesize({ deploymentPipeline: 'false' }).backend]) {
       const json = template.toJSON() as Template;
       expect(json.Parameters).not.toHaveProperty('DeploymentMode');
-      expect(fn(json, 'run.sh')[1].Properties).not.toHaveProperty('ReservedConcurrentExecutions');
+      const reserved = fn(json, 'run.sh')[1].Properties.ReservedConcurrentExecutions;
+      expect(typeof reserved).not.toBe('object');
       expect(resources(json, 'AWS::Scheduler::Schedule')[0]![1].Properties.State).toBe('ENABLED');
     }
+  });
+});
+
+// A minimal stack, independent of the staging stacks, so a fixed cap is covered either way.
+describe('deployment mode on capped functions', () => {
+  const stack = new Stack(new App(), 'Capped');
+  const handlerFn = (id: string, reservedConcurrentExecutions?: number) =>
+    new lambda.Function(stack, id, {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: `${id}.handler`,
+      code: lambda.Code.fromInline('export const handler = async () => ({});'),
+      ...(reservedConcurrentExecutions !== undefined ? { reservedConcurrentExecutions } : {}),
+    });
+  const api = handlerFn('api', 7);
+  const worker = handlerFn('worker');
+  applyDeploymentMode(stack, {
+    api,
+    worker,
+    schedule: new scheduler.Schedule(stack, 'Schedule', {
+      schedule: scheduler.ScheduleExpression.rate(Duration.minutes(1)),
+      target: new schedulerTargets.LambdaInvoke(worker, {}),
+    }),
+    databaseIdentifier: 'db',
+  });
+  const template = Assertions.fromStack(stack).toJSON() as Template;
+
+  it.each([
+    ['maintenance', 0, 0],
+    ['api', 7, 0],
+    ['worker', 7, NO_VALUE],
+    ['live', 7, NO_VALUE],
+  ])('%s: capped api %s, uncapped worker %s', (mode, apiReserved, workerReserved) => {
+    const reserved = (handler: string) =>
+      evaluate(
+        fn(template, handler)[1].Properties.ReservedConcurrentExecutions ?? ABSENT,
+        mode,
+        template,
+      );
+    expect(reserved('api.handler')).toBe(apiReserved);
+    expect(reserved('worker.handler')).toBe(workerReserved);
   });
 });
 
