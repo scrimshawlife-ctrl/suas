@@ -1,60 +1,15 @@
 /**
- * People and steps for the helper-side flows (serve, chat, multi-user). Ported from the QA
- * sweep's `serve/people.ts` onto the target's helpers; seeding through the API is limited to
- * volume a person could not type (paging fixtures).
+ * Steps for the helper-side flows (serve, chat, multi-user), ported from the QA sweep. People
+ * come from `e2e/people.ts`; seeding through the API is limited to volume a person could not
+ * type (paging fixtures).
  */
 
 import { randomUUID } from 'node:crypto';
-import {
-  expect,
-  type APIRequestContext,
-  type Browser,
-  type Locator,
-  type Page,
-} from '@playwright/test';
+import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { API_URL } from '../config';
-import { bearer, tag } from '../helpers';
-
-export { bearer, tag };
-import { newVerifiedVeteran, requestHelp, signUp, uniqueEmail, type CountyLabel } from '../helpers';
+import { bearer, requestHelp, tag } from '../helpers';
 
 export const PHONE = { width: 390, height: 844 };
-
-type Viewport = { width: number; height: number };
-
-/** A signed-up, ID-checked Veteran, on /home. */
-export async function newRequester(
-  browser: Browser,
-  request: APIRequestContext,
-  options: { name: string; county?: CountyLabel },
-): Promise<Page> {
-  const { page } = await newVerifiedVeteran(browser, request, {
-    name: options.name,
-    county: options.county ?? 'Santa Clara',
-    label: 'srv-req',
-  });
-  return page;
-}
-
-/** A signed-up helper (no ID check), on /serve, in their own browser context. */
-export async function newHelper(
-  browser: Browser,
-  request: APIRequestContext,
-  options: { name: string; county?: CountyLabel; viewport?: Viewport },
-): Promise<{ page: Page; email: string }> {
-  const context = await browser.newContext({
-    viewport: options.viewport ?? { width: 1280, height: 900 },
-  });
-  const page = await context.newPage();
-  const email = uniqueEmail('srv-helper');
-  await signUp(page, request, {
-    email,
-    name: options.name,
-    county: options.county ?? 'Santa Clara',
-    role: 'serve',
-  });
-  return { page, email };
-}
 
 /** The Veteran sends a transportation request through the assistant; returns its id and summary. */
 export async function sendRequest(
