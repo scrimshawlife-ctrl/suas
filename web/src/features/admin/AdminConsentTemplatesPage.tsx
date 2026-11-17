@@ -11,7 +11,7 @@ import {
   useCreateConsentTemplate,
   usePublishConsentTemplate,
   type ConsentTemplateVersion,
-} from './api';
+} from './consent-templates-api';
 import { ConfirmDialog } from './ConfirmDialog';
 import { QueryNotice } from './QueryNotice';
 

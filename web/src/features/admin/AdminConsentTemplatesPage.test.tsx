@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { tokenStore } from '../../api/token-store';
 import AdminConsentTemplatesPage from './AdminConsentTemplatesPage';
-import type { ConsentTemplateVersion } from './api';
+import type { ConsentTemplateVersion } from './consent-templates-api';
 import { renderPage } from './test-utils';
 
 const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));
