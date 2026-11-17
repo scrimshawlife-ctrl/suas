@@ -1,11 +1,12 @@
-import { expect, test } from './fixtures';
-import { newPerson, newVerifiedVeteran, shoot, signUp, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { newPerson, shoot, signUp, uniqueEmail } from '../helpers';
+import { newVeteran } from '../people';
 
 test('a Veteran edits a ride request before anyone accepts and the helper sees the edited text', async ({
   browser,
   request,
 }) => {
-  const requester = await newVerifiedVeteran(browser, request, {
+  const requester = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
     label: 'editor',
