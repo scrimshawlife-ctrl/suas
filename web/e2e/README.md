@@ -39,7 +39,7 @@ The database guard (`assertDisposableDatabase` in `config.ts`) runs whenever `co
 
 ## Layout
 
-The six plan §10 end-to-end scenarios sit at the root, `01-` to `06-` (a request through the Intake Assistant, accept and chat, widening, the RED alert, catalog publish, crisis). Root files sort before folders, so they run first; `03-widening` relies on that, because it expects the boards of other counties to be empty.
+The six plan §10 end-to-end scenarios sit at the root, `01-` to `06-` (a request through the Intake Assistant, accept and chat, widening, the RED alert, catalog publish, crisis). Playwright orders specs by relative path (byte comparison), and a digit sorts before every letter, so these run before the specs in every folder; `03-widening` relies on that, because it expects the boards of other counties to be empty. Keep that ordering: a root spec renamed so it sorts before `03-` (for example `00-setup.spec.ts`), or a folder whose name sorts before the root specs (`00-triage/`), moves other specs ahead of `03-widening` and breaks it as an apparent product bug.
 
 Every other spec lives in a folder, one folder per area. Specs in a folder are numbered in the order a reader should take them (`01-`, `02-`, ...); `multi/` and `time/` use their plan IDs instead, and `cross/` and `decided/` are unnumbered.
 
