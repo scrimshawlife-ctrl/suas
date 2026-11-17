@@ -153,6 +153,8 @@ jobs:
         run: test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
       - name: Diff the assembly against STAGING
         # The plan role can only assume the read-only CDK lookup role, so no change set is created.
+        # `shell: bash` adds pipefail, so a failed diff fails the step instead of passing through tee.
+        shell: bash
         run: |
           node infra/node_modules/aws-cdk/bin/cdk diff --app infra/cdk.out --no-change-set \
             --no-notices --no-version-reporting 2>&1 | tee diff.txt
