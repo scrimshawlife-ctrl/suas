@@ -11,10 +11,15 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import type { PoolClient } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession, elevateSession } from '../../src/auth/index.js';
-import { executeCaseCommand } from '../../src/coordination/index.js';
+import {
+  executeCaseCommand,
+  executeCaseCommandInTx,
+  recordContactInTx,
+} from '../../src/coordination/index.js';
 import { deployQrf } from '../../src/ui/commands.js';
 import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
@@ -376,6 +381,164 @@ describe('holder standing ends with the case cycle', () => {
     expect(
       (await get(requester, `/cases/${caseId}/settlements/${cycleOne!.settlement_id}`)).statusCode,
     ).toBe(200);
+  });
+});
+
+describe('a close racing a helper write keeps that write out of the next cycle', () => {
+  /** Wait until `count` sessions wait on a row lock, or until `pending` settles first. */
+  async function lockWaitersOrSettled(count: number, pending: Promise<unknown>) {
+    let settled = false;
+    void pending.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    for (let tries = 0; tries < 300 && !settled; tries += 1) {
+      const waiting = await pool().query<{ n: string }>(
+        `SELECT count(*) AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+      );
+      if (Number(waiting.rows[0]!.n) >= count) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  /** An ACTIVE case whose one request `former` accepted and finished, ready to resolve. */
+  async function readyToResolve() {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester', true);
+    const former = await person(tenantId, 'former');
+    const next = await person(tenantId, 'next');
+    const { caseId, requestId } = await submitRequest(requester);
+    expect((await accept(former, requestId)).statusCode).toBe(200);
+    for (const [who, url] of [
+      [former, `/cases/${caseId}/commands/activate`],
+      [former, `/service-requests/${requestId}/commands/START`],
+      [former, `/service-requests/${requestId}/commands/FULFILL`],
+      [requester, `/service-requests/${requestId}/commands/CONFIRM`],
+      [former, `/service-requests/${requestId}/commands/CLOSE`],
+    ] as const) {
+      expect((await post(who, url)).statusCode, url).toBe(200);
+    }
+    return { tenantId, requester, former, next, caseId };
+  }
+
+  const settlementContent = { requested: {}, occurred: {}, fulfilled: {}, unresolved: {} };
+
+  /** REOPEN, then `next` accepts a new request: what does the next-cycle helper read? */
+  async function nextCycleReads(world: Awaited<ReturnType<typeof readyToResolve>>) {
+    const { tenantId, requester, next, caseId } = world;
+    await executeCaseCommand(pool(), {
+      tenantId,
+      caseId,
+      command: 'REOPEN',
+      actorId: 'staff',
+      actorType: 'SUAS_ADMIN',
+      reason: 'new need on the same case',
+    });
+    const second = await submitRequest(requester);
+    expect((await accept(next, second.requestId)).statusCode).toBe(200);
+    return {
+      settlements: (await get(next, `/cases/${caseId}/settlements`)).json()
+        .settlements as unknown[],
+      attempts: (await get(next, `/cases/${caseId}/contact-attempts`)).json()
+        .contact_attempts as unknown[],
+    };
+  }
+
+  function closeIn(tx: PoolClient, world: { tenantId: string; caseId: string; former: Person }) {
+    return executeCaseCommandInTx(tx, {
+      tenantId: world.tenantId,
+      caseId: world.caseId,
+      command: 'CLOSE',
+      actorId: world.former.userId,
+      actorType: 'USER',
+    });
+  }
+
+  it('refuses a contact write that waited on an uncommitted CLOSE', async () => {
+    const world = await readyToResolve();
+    expect(
+      (await post(world.former, `/cases/${world.caseId}/commands/resolve`, settlementContent))
+        .statusCode,
+    ).toBe(200);
+    const closing = await pool().connect();
+    try {
+      await closing.query('BEGIN');
+      await closeIn(closing, world);
+      const write = post(world.former, `/cases/${world.caseId}/commands/log-contact-attempt`, {
+        channel: 'PHONE',
+      });
+      await lockWaitersOrSettled(1, write);
+      await closing.query('COMMIT');
+      expect((await write).statusCode).not.toBe(201);
+    } finally {
+      closing.release();
+    }
+    expect((await nextCycleReads(world)).attempts).toEqual([]);
+  });
+
+  it('keeps a contact write that held the case before a CLOSE begun earlier in the old cycle', async () => {
+    const world = await readyToResolve();
+    expect(
+      (await post(world.former, `/cases/${world.caseId}/commands/resolve`, settlementContent))
+        .statusCode,
+    ).toBe(200);
+    const closing = await pool().connect();
+    const contact = await pool().connect();
+    try {
+      // CLOSE's transaction starts first, so its now() predates the contact write.
+      await closing.query('BEGIN');
+      await closing.query('SELECT now()');
+      await contact.query('BEGIN');
+      await recordContactInTx(contact, {
+        tenantId: world.tenantId,
+        caseId: world.caseId,
+        loggedByUserId: world.former.userId,
+        command: 'log-contact-attempt',
+        channel: 'PHONE',
+        outcome: 'PENDING',
+      });
+      const closed = closeIn(closing, world);
+      await lockWaitersOrSettled(1, closed);
+      await contact.query('COMMIT');
+      await closed;
+      await closing.query('COMMIT');
+    } finally {
+      contact.release();
+      closing.release();
+    }
+    expect((await nextCycleReads(world)).attempts).toEqual([]);
+  });
+
+  it('keeps a settlement committed while an earlier-begun CLOSE waited out of the next cycle', async () => {
+    const world = await readyToResolve();
+    const blocker = await pool().connect();
+    const closing = await pool().connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT 1 FROM support_cases WHERE case_id = $1 FOR UPDATE', [
+        world.caseId,
+      ]);
+      await closing.query('BEGIN');
+      await closing.query('SELECT now()');
+      // The resolve queues on the case row first, then the CLOSE behind it.
+      const resolved = post(
+        world.former,
+        `/cases/${world.caseId}/commands/resolve`,
+        settlementContent,
+      );
+      await lockWaitersOrSettled(1, resolved);
+      const closed = closeIn(closing, world);
+      await lockWaitersOrSettled(2, closed);
+      await blocker.query('COMMIT');
+      expect((await resolved).statusCode).toBe(200);
+      await closed;
+      await closing.query('COMMIT');
+    } finally {
+      blocker.release();
+      closing.release();
+    }
+    expect((await nextCycleReads(world)).settlements).toEqual([]);
   });
 });
 

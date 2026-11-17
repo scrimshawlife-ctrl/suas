@@ -208,10 +208,13 @@ export async function findCurrentSettlement(
 /** Which cycles a reader sees: every one, or only the case's current one (CASES.md §4.3). */
 export type SettlementCycles = 'all' | 'current';
 
-/** The current cycle's Settlements: settled after the case's last close. */
-const CURRENT_CYCLE_SETTLEMENT = `AND settled_at > COALESCE(
-  (SELECT closed_at FROM support_cases WHERE tenant_id = $1 AND case_id = $2),
-  '-infinity'::timestamptz)`;
+/**
+ * The current cycle's Settlement. A cycle's one Settlement is written with its move to RESOLVED,
+ * the only state before CLOSED, so it exists exactly while the case is RESOLVED: no time race.
+ */
+const CURRENT_CYCLE_SETTLEMENT = `AND settlement_id IN (
+  SELECT current_settlement_id FROM support_cases
+   WHERE tenant_id = $1 AND case_id = $2 AND status = 'RESOLVED')`;
 
 /** Settlement history, oldest cycle first. Prior cycles stay independently addressable. */
 export async function listSettlements(

@@ -15,7 +15,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
-- After a case is closed and reopened, the next cycle's helper no longer reads the previous cycle's Settlements (`GET /cases/{id}/settlements`, `/settlements/{settlement_id}`) or contact attempts (`GET /cases/{caseId}/contact-attempts`); a helper's standing is per cycle (CASES.md §4.3, DISPATCH.md §13.2, R11.1). The requester still reads every cycle.
+- After a case is closed and reopened, the next cycle's helper no longer reads the previous cycle's Settlements (`GET /cases/{id}/settlements`, `/settlements/{settlement_id}`) or contact attempts (`GET /cases/{caseId}/contact-attempts`); a helper's standing is per cycle (CASES.md §4.3, DISPATCH.md §13.2, R11.1). The requester still reads every cycle. A helper Settlement read is scoped by the RESOLVED case's current Settlement, a contact write takes the case row lock and re-checks standing so it cannot outlast a concurrent CLOSE, and `closed_at` is the wall-clock time of the close.
 
 - U+0000 (NUL) in any string or key of an `/api/v0` body, query or path parameter is now 400 `VALIDATION_FAILED` instead of a 500 from PostgreSQL (22021 text, 22P05 jsonb); Settlement sections nest at most 16 levels, so deep content is 400 instead of a 500 (54001) (API.md §6).
 

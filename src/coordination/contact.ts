@@ -22,7 +22,12 @@ import {
 } from '../db/cursor.js';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendDomainEvent } from '../events/index.js';
-import { caseHasAcceptedRequest, NoActiveAssignmentError } from './cases.js';
+import {
+  caseHasAcceptedRequest,
+  holdsRequestInCase,
+  NoActiveAssignmentError,
+  NotAssignedError,
+} from './cases.js';
 
 /** EVENT_MODEL.md §3.3 `channel`. */
 export const CONTACT_CHANNELS = ['EMAIL', 'SMS', 'IN_APP', 'PHONE'] as const;
@@ -150,6 +155,15 @@ export async function recordContactInTx(
 
   if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
     throw new NoActiveAssignmentError(input.command);
+  }
+  // Serialise with a CLOSE (which locks the row FOR UPDATE), then re-check standing on the
+  // committed case: a write that waited out a CLOSE is refused, not filed in the next cycle.
+  await tx.query(`SELECT 1 FROM support_cases WHERE tenant_id = $1 AND case_id = $2 FOR SHARE`, [
+    input.tenantId,
+    input.caseId,
+  ]);
+  if (!(await holdsRequestInCase(tx, input.tenantId, input.caseId, input.loggedByUserId))) {
+    throw new NotAssignedError();
   }
 
   const attemptedAt = input.attemptedAt ?? new Date();
