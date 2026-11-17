@@ -395,12 +395,55 @@ function buildOutboundMessage(
   return { ...base, body: rendered.text };
 }
 
+/** A claim older than this is presumed dead; it outlasts any provider call (relay waits 28 s). */
+const SEND_CLAIM_MS = 45_000;
+
+/** Why a Notification needs no further attempt: it is settled or cancelled. */
+function skipReason(notification: Notification): string | undefined {
+  if (TERMINAL_DELIVERY_STATUSES.includes(notification.deliveryStatus)) return 'ALREADY_TERMINAL';
+  if (notification.deliveryStatus === 'SENT') return 'ALREADY_SENT';
+  if (notification.cancelledAt !== undefined) return 'CANCELLED';
+  return undefined;
+}
+
 /**
- * Attempt one external send.
- *
- * NOTIFICATIONS.md §4.2 and CONSENT.md §4: the basis is re-checked immediately
- * before the attempt. A grant revoked after enqueue cancels the send rather than
- * delivering it, which is the behavior §12 names first.
+ * Claim the next attempt in the internal claim columns, committed before the provider call
+ * so no connection is held across it. Fences the send itself; the outbox lease only fences
+ * a job, and one Notification can be reached by several jobs or a lapsed lease.
+ */
+async function claimSend(
+  pool: Pool,
+  tenantId: string,
+  notificationId: string,
+): Promise<{ notification: Notification; token: string } | undefined> {
+  const token = randomUUID();
+  const result = await pool.query<NotificationRow>(
+    `UPDATE notifications
+       SET send_claim_token = $3, send_claimed_at = now()
+     WHERE tenant_id = $1 AND notification_id = $2 AND cancelled_at IS NULL
+       AND delivery_status IN ('QUEUED', 'FAILED')
+       AND (send_claim_token IS NULL
+            OR send_claimed_at < now() - $4::int * interval '1 millisecond')
+     RETURNING ${NOTIFICATION_COLUMNS}`,
+    [tenantId, notificationId, token, SEND_CLAIM_MS],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : { notification: toNotification(row), token };
+}
+
+/** Drop a claim whose attempt threw before settling, so a retry can claim at once. */
+async function releaseSend(pool: Pool, notification: Notification, token: string): Promise<void> {
+  await pool.query(
+    `UPDATE notifications SET send_claim_token = NULL, send_claimed_at = NULL
+     WHERE tenant_id = $1 AND notification_id = $2 AND send_claim_token = $3`,
+    [notification.tenantId, notification.notificationId, token],
+  );
+}
+
+/**
+ * Attempt one external send under a send claim, so racing runners make one provider call
+ * and one SENT record (§3, §5). The basis is re-checked immediately before the attempt; a
+ * revoked grant cancels the send (§4.2, CONSENT.md §4).
  */
 export async function attemptSend(
   pool: Pool,
@@ -416,54 +459,72 @@ export async function attemptSend(
     renderBody?: (notification: Notification) => string;
   },
 ): Promise<SendAttemptResult> {
-  const notification = await findNotification(pool, input.tenantId, input.notificationId);
-  if (notification === undefined) throw new Error('No such Notification.');
+  const current = await findNotification(pool, input.tenantId, input.notificationId);
+  if (current === undefined) throw new Error('No such Notification.');
+  const skipped = skipReason(current);
+  if (skipped !== undefined) return { notification: current, outcome: 'SKIPPED', reason: skipped };
 
-  if (TERMINAL_DELIVERY_STATUSES.includes(notification.deliveryStatus)) {
-    return { notification, outcome: 'SKIPPED', reason: 'ALREADY_TERMINAL' };
+  const claim = await claimSend(pool, input.tenantId, input.notificationId);
+  if (claim === undefined) {
+    const latest = (await findNotification(pool, input.tenantId, input.notificationId)) ?? current;
+    return { notification: latest, outcome: 'SKIPPED', reason: skipReason(latest) ?? 'IN_FLIGHT' };
   }
-  if (notification.deliveryStatus === 'SENT') {
-    return { notification, outcome: 'SKIPPED', reason: 'ALREADY_SENT' };
-  }
-  if (notification.cancelledAt !== undefined) {
-    return { notification, outcome: 'SKIPPED', reason: 'CANCELLED' };
-  }
+  const { notification, token } = claim;
+  const guard = { claimToken: token };
 
-  // The re-check. This is the whole point of §4.2.
-  const decision = await evaluateDisclosure(pool, input.disclosure);
-  if (!decision.allowed) {
-    const cancelled = await withTransaction(pool, async (tx) => {
-      const updated = await setStatus(tx, input.tenantId, input.notificationId, {
-        status: 'UNDELIVERABLE',
-        cancelled: true,
-        cancelReason: 'CONSENT_REVOKED_BEFORE_SEND',
+  let acknowledgement: Awaited<ReturnType<NotificationChannelPort['send']>>;
+  try {
+    // The re-check. This is the whole point of §4.2.
+    const decision = await evaluateDisclosure(pool, input.disclosure);
+    if (!decision.allowed) {
+      const cancelled = await withTransaction(pool, async (tx) => {
+        const updated = await updateStatus(
+          tx,
+          input.tenantId,
+          input.notificationId,
+          {
+            status: 'UNDELIVERABLE',
+            cancelled: true,
+            cancelReason: 'CONSENT_REVOKED_BEFORE_SEND',
+          },
+          guard,
+        );
+        if (updated === undefined) return undefined;
+        await recordAttemptAudit(tx, notification, {
+          outcome: 'CANCELLED',
+          reason: 'CONSENT_REVOKED_BEFORE_SEND',
+        });
+        return updated;
       });
-      await recordAttemptAudit(tx, notification, {
+      if (cancelled === undefined) return claimLost(pool, input, notification);
+      return {
+        notification: cancelled,
         outcome: 'CANCELLED',
         reason: 'CONSENT_REVOKED_BEFORE_SEND',
-      });
-      return updated;
-    });
-    return { notification: cancelled, outcome: 'CANCELLED', reason: 'CONSENT_REVOKED_BEFORE_SEND' };
+      };
+    }
+
+    const port = channels.get(notification.channel);
+    if (port === undefined) {
+      // NOTIFICATIONS.md §2: report unavailable; never record a send that did not
+      // happen.
+      throw new ChannelUnavailableError(notification.channel);
+    }
+
+    const destination = notification.destination ?? notification.recipientUserId;
+    if (destination === undefined) {
+      throw new Error('Notification has no destination or recipient.');
+    }
+
+    acknowledgement = await port.send(
+      buildOutboundMessage(notification, destination, input.renderBody),
+    );
+  } catch (error) {
+    await releaseSend(pool, notification, token);
+    throw error;
   }
 
-  const port = channels.get(notification.channel);
-  if (port === undefined) {
-    // NOTIFICATIONS.md §2: report unavailable; never record a send that did not
-    // happen.
-    throw new ChannelUnavailableError(notification.channel);
-  }
-
-  const destination = notification.destination ?? notification.recipientUserId;
-  if (destination === undefined) {
-    throw new Error('Notification has no destination or recipient.');
-  }
-
-  const acknowledgement = await port.send(
-    buildOutboundMessage(notification, destination, input.renderBody),
-  );
-
-  return withTransaction(pool, async (tx) => {
+  const settled = await withTransaction(pool, async (tx) => {
     const attempts = notification.attemptCount + 1;
     const exhausted = attempts >= notification.maxAttempts;
     // §5: a refusal the adapter marks non-retryable (a permanent rejection, or an
@@ -476,12 +537,21 @@ export async function attemptSend(
         ? 'UNDELIVERABLE'
         : 'FAILED';
 
-    const updated = await setStatus(tx, input.tenantId, input.notificationId, {
-      status,
-      attemptCount: attempts,
-      recordAttempt: true,
-      ...(acknowledgement.accepted ? { sent: true } : {}),
-    });
+    // Settles only while this runner still holds the claim, so a runner whose claim
+    // went stale cannot record a second outcome over the current holder's.
+    const updated = await updateStatus(
+      tx,
+      input.tenantId,
+      input.notificationId,
+      {
+        status,
+        attemptCount: attempts,
+        recordAttempt: true,
+        ...(acknowledgement.accepted ? { sent: true } : {}),
+      },
+      guard,
+    );
+    if (updated === undefined) return undefined;
 
     // NOTIFICATIONS.md §5: every actual provider send attempt appends immutable
     // Audit Event history. There is deliberately no attempts table.
@@ -510,6 +580,17 @@ export async function attemptSend(
         : {}),
     };
   });
+  return settled ?? claimLost(pool, input, notification);
+}
+
+/** The claim went stale and another runner took the send; its outcome stands. */
+async function claimLost(
+  pool: Pool,
+  input: { tenantId: string; notificationId: string },
+  fallback: Notification,
+): Promise<SendAttemptResult> {
+  const latest = (await findNotification(pool, input.tenantId, input.notificationId)) ?? fallback;
+  return { notification: latest, outcome: 'SKIPPED', reason: 'CLAIM_LOST' };
 }
 
 export interface DeliveryCallbackInput {
@@ -593,15 +674,30 @@ async function setStatus(
   tx: Queryable,
   tenantId: string,
   notificationId: string,
-  options: {
-    status: DeliveryStatus;
-    attemptCount?: number;
-    recordAttempt?: boolean;
-    sent?: boolean;
-    cancelled?: boolean;
-    cancelReason?: string;
-  },
+  options: StatusUpdate,
 ): Promise<Notification> {
+  const updated = await updateStatus(tx, tenantId, notificationId, options);
+  if (updated === undefined) throw new Error('No such Notification.');
+  return updated;
+}
+
+interface StatusUpdate {
+  status: DeliveryStatus;
+  attemptCount?: number;
+  recordAttempt?: boolean;
+  sent?: boolean;
+  cancelled?: boolean;
+  cancelReason?: string;
+}
+
+/** With a `claimToken`, updates only while that send claim holds, and clears it. */
+async function updateStatus(
+  tx: Queryable,
+  tenantId: string,
+  notificationId: string,
+  options: StatusUpdate,
+  guard: { claimToken?: string } = {},
+): Promise<Notification | undefined> {
   const result = await tx.query<NotificationRow>(
     `UPDATE notifications
        SET delivery_status = $3::suas_delivery_status,
@@ -610,8 +706,11 @@ async function setStatus(
            sent_at = CASE WHEN $6::boolean THEN now() ELSE sent_at END,
            cancelled_at = CASE WHEN $7::boolean THEN now() ELSE cancelled_at END,
            cancel_reason = COALESCE($8, cancel_reason),
+           send_claim_token = CASE WHEN $9::uuid IS NULL THEN send_claim_token END,
+           send_claimed_at = CASE WHEN $9::uuid IS NULL THEN send_claimed_at END,
            updated_at = now()
      WHERE tenant_id = $1 AND notification_id = $2
+       AND ($9::uuid IS NULL OR send_claim_token = $9::uuid)
      RETURNING ${NOTIFICATION_COLUMNS}`,
     [
       tenantId,
@@ -622,11 +721,11 @@ async function setStatus(
       options.sent ?? false,
       options.cancelled ?? false,
       options.cancelReason ?? null,
+      guard.claimToken ?? null,
     ],
   );
   const row = result.rows[0];
-  if (row === undefined) throw new Error('No such Notification.');
-  return toNotification(row);
+  return row === undefined ? undefined : toNotification(row);
 }
 
 async function recordAttemptAudit(

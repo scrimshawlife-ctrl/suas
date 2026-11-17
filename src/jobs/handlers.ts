@@ -154,11 +154,8 @@ export function licenceCloseHandler(pool: Pool, config: SuasConfig): JobWork {
 }
 
 /**
- * Delivers one Notification. Replay-safe: `attemptSend` skips a Notification
- * that is already SENT, terminal or cancelled, so a redelivered or
- * lease-expired job cannot send twice. A refused attempt (FAILED) throws so the
- * outbox retries it; once attempts are exhausted the Notification is
- * UNDELIVERABLE, which is a settled outcome and finishes the job.
+ * Delivers one Notification. Replay-safe through `attemptSend`'s send claim. A refused
+ * attempt (FAILED) throws so the outbox retries it; UNDELIVERABLE is settled and finishes.
  */
 export function notificationSendHandler(
   pool: Pool,
@@ -174,6 +171,11 @@ export function notificationSendHandler(
       notificationId: parsed.notificationId,
       disclosure: parsed.disclosure,
     });
+    // Another runner holds the send. Retry later rather than finish the job, so a runner
+    // that died mid-send does not leave the Notification queued with no job.
+    if (result.outcome === 'SKIPPED' && result.reason === 'IN_FLIGHT') {
+      throw new RetryLaterError('notification send in flight elsewhere; retrying');
+    }
     if (result.notification.deliveryStatus === 'FAILED') {
       throw new Error(`notification send failed: ${result.reason ?? 'provider refused'}`);
     }
