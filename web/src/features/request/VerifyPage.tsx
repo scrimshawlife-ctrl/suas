@@ -27,14 +27,14 @@ import {
   type VerifyOutcome,
 } from '../public/verify-status';
 import { VerifyForm } from './VerifyForm';
-import { VerifyCrisisCard } from './VerifyAside';
+import { VerifyCrisisCard } from '../verify/VerifyAside';
 import {
   HelpOthers,
   LicenceChoiceButton,
   SelfAttestButton,
   VaNotice,
   ViewMessage,
-} from './VerifyViews';
+} from '../verify/VerifyViews';
 
 /** The send failures that are not about one field. Codes are never shown. */
 function sendErrorText(error: unknown): string {
