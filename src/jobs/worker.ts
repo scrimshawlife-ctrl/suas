@@ -36,6 +36,7 @@ import { createObjectStoragePort } from '../storage/index.js';
 import {
   claimDueJobs,
   deferJob,
+  holdJobLease,
   markJobFailed,
   markJobSucceeded,
   PostgresOutboxJobQueue,
@@ -320,14 +321,16 @@ export async function runJobWorker(options: JobWorkerOptions): Promise<void> {
 
     for (const job of claimed) {
       // The batch runs serially, so a job's claim-time lease can run out while it waits.
-      // Renewing first gives it a full lease, or finds another worker reclaimed it.
+      // Renewing first gives it a full lease, or finds another worker reclaimed it; the
+      // heartbeat then keeps it while the handler runs.
       const leaseMs = PER_PASS_JOB_LIMITS[job.jobType]?.leaseMs;
-      if (!(await renewJobLease(pool, job, leaseMs !== undefined ? { leaseMs } : {}))) {
+      const leaseOptions = leaseMs !== undefined ? { leaseMs } : {};
+      if (!(await renewJobLease(pool, job, leaseOptions))) {
         log({ msg: 'job_lease_lost', job_id: job.jobId, job_type: job.jobType });
         continue;
       }
       try {
-        await handleJob(handlers, job);
+        await holdJobLease(pool, job, () => handleJob(handlers, job), leaseOptions);
         const settled = await markJobSucceeded(pool, job);
         log({
           msg: settled ? 'job_succeeded' : 'job_lease_lost',

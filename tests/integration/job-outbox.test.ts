@@ -12,6 +12,7 @@ import {
   markJobFailed,
   markJobSucceeded,
   PostgresOutboxJobQueue,
+  holdJobLease,
   renewJobLease,
   runJobUnderLease,
 } from '../../src/jobs/index.js';
@@ -98,7 +99,7 @@ describe('PostgresOutboxJobQueue', () => {
     expect(claimed.some((job) => job.jobId === failed.jobId)).toBe(true);
   });
 
-  describe('lease ownership (S3)', () => {
+  describe('lease ownership', () => {
     async function leaseState(jobId: string) {
       const result = await pool.query<{ status: string; lease_owner: string | null }>(
         `SELECT status, lease_owner FROM job_outbox WHERE job_id = $1`,
@@ -137,6 +138,30 @@ describe('PostgresOutboxJobQueue', () => {
       const { a, b } = await reclaimedJob();
       expect(await renewJobLease(pool, a)).toBe(false);
       expect(await renewJobLease(pool, b)).toBe(true);
+    });
+
+    it('keeps the lease of a job that runs past it, so a second worker cannot reclaim it', async () => {
+      const jobType = `test.heartbeat-${randomUUID()}`;
+      await new PostgresOutboxJobQueue(pool).enqueue({
+        jobType,
+        payload: {},
+        tenantId: randomUUID(),
+      });
+      const [a] = await claimDueJobs(pool, { owner: 'worker-a', jobType, leaseMs: 300 });
+
+      let reclaimed: readonly unknown[] = [];
+      await holdJobLease(
+        pool,
+        a!,
+        async () => {
+          await new Promise((resolve) => setTimeout(resolve, 900));
+          reclaimed = await claimDueJobs(pool, { owner: 'worker-b', jobType });
+        },
+        { leaseMs: 300 },
+      );
+
+      expect(reclaimed).toHaveLength(0);
+      expect(await markJobSucceeded(pool, a!)).toBe(true);
     });
   });
 });

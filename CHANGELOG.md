@@ -19,7 +19,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 - U+0000 (NUL) in any string or key of an `/api/v0` body, query or path parameter is now 400 `VALIDATION_FAILED` instead of a 500 from PostgreSQL (22021 text, 22P05 jsonb); Settlement sections nest at most 16 levels, so deep content is 400 instead of a 500 (54001) (API.md §6).
 
-- A Notification is sent once and recorded `SENT` once when runners race: `attemptSend` claims the send before the provider call and settles only while it holds the claim; the API leases a `notification.send` outbox row before running it inline, so the job worker skips it; outbox leases are renewed before each job of a batch and settled only by their current owner (NOTIFICATIONS.md §3, §5; ARCHITECTURE.md §10).
+- A Notification is sent once and recorded `SENT` once when runners race: `attemptSend` claims the send in internal columns (migration 0026; `delivery_status` and `last_attempt_at` are untouched) and settles only while it holds the claim; a job that finds the send in flight waits without spending an attempt, and a dead-letter does not settle a send another runner holds; the API leases a `notification.send` outbox row before running it inline; outbox leases are renewed while a job runs and settled only by their current owner (NOTIFICATIONS.md §3, §5, §6; ARCHITECTURE.md §10).
 
 - Chat keeps manual retry for in-flight idempotency conflicts with the original message and key; permanent chat refusals remain final (API.md §7.5).
 

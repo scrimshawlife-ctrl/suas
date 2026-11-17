@@ -11,6 +11,7 @@ export {
   claimDueJobs,
   deferJob,
   reopenDeadLetter,
+  holdJobLease,
   markJobFailed,
   markJobSucceeded,
   renewJobLease,

@@ -215,10 +215,10 @@ export async function claimDueJobs(
  */
 async function leaseJob(
   db: Queryable,
-  input: { readonly jobId: string; readonly owner: string; readonly leaseMs?: number },
+  input: { readonly jobId: string; readonly owner: string },
 ): Promise<JobLease | undefined> {
   const now = new Date();
-  const leasedUntil = new Date(now.getTime() + (input.leaseMs ?? DEFAULT_LEASE_MS));
+  const leasedUntil = new Date(now.getTime() + DEFAULT_LEASE_MS);
   const result = await db.query<{ attempts: number }>(
     `UPDATE job_outbox
      SET status = 'LEASED', leased_until = $3, lease_owner = $2, updated_at = now()
@@ -248,6 +248,39 @@ export async function renewJobLease(
     [...leaseParams(lease), leasedUntil.toISOString()],
   );
   return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Run `work` while renewing the lease every third of `leaseMs`, so a job that runs past
+ * its lease is not reclaimed. Renewal stops once the lease is lost; the owner-checked
+ * settle then refuses this runner. A failed renewal query is retried on the next beat.
+ */
+export async function holdJobLease<T>(
+  db: Queryable,
+  lease: JobLease,
+  work: () => Promise<T>,
+  options: { readonly leaseMs?: number } = {},
+): Promise<T> {
+  const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
+  let renewing: Promise<unknown> = Promise.resolve();
+  const beat = setInterval(
+    () => {
+      renewing = renewJobLease(db, lease, { leaseMs }).then(
+        (held) => {
+          if (!held) clearInterval(beat);
+        },
+        () => undefined,
+      );
+    },
+    Math.max(1, Math.floor(leaseMs / 3)),
+  );
+  beat.unref();
+  try {
+    return await work();
+  } finally {
+    clearInterval(beat);
+    await renewing;
+  }
 }
 
 /** Put a held job back to PENDING after `delayMs`, giving back the attempt its claim took. */
@@ -301,7 +334,7 @@ export async function runJobUnderLease(
   const lease = await leaseJob(db, input);
   if (lease === undefined) return;
   try {
-    await run();
+    await holdJobLease(db, lease, run);
   } catch (error) {
     await releaseJob(db, lease);
     throw error;
