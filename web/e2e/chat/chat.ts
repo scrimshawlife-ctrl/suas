@@ -10,7 +10,8 @@ import {
   type Locator,
   type Page,
 } from '@playwright/test';
-import { newHelper, newRequester, sendRequest, take } from '../serve/serve';
+import { newHelper, newVeteran } from '../people';
+import { sendRequest, take } from '../serve/serve';
 
 export function history(page: Page): Locator {
   return page.getByRole('region', { name: 'Message history' });
@@ -34,7 +35,7 @@ export async function pair(
   request: APIRequestContext,
   options: { helperViewport?: { width: number; height: number } } = {},
 ): Promise<{ requester: Page; helper: Page; helperEmail: string; id: string; summary: string }> {
-  const requester = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: requester } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const sent = await sendRequest(requester, request);
   const helper = await newHelper(browser, request, {
     name: 'Dee R.',
