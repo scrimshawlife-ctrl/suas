@@ -15,7 +15,14 @@ import {
   type NotificationChannel,
   type NotificationChannelPort,
 } from '../../src/notifications/index.js';
-import type { DurableJobQueuePort } from '../../src/jobs/index.js';
+import {
+  claimDueJobs,
+  DispatchingJobQueue,
+  PostgresOutboxJobQueue,
+  runJobUnderLease,
+  type DurableJobQueuePort,
+} from '../../src/jobs/index.js';
+import { notificationSendHandler } from '../../src/jobs/handlers.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { createTestPool, resetKernelTables } from '../helpers/db.js';
 
@@ -184,5 +191,34 @@ describe('the send claim leaves the visible delivery record alone', () => {
 
     expect(result.outcome).toBe('CANCELLED');
     expect(await lastAttemptAt(queued.notificationId)).toBeNull();
+  });
+});
+
+describe('inline notification.send and a job worker pass', () => {
+  it('leases the job while the API sends inline, so a worker pass skips it', async () => {
+    const { sends, channels } = slowCountingEmail(300);
+    const send = notificationSendHandler(pool, channels);
+    // Wired as src/app.ts wires the API's queue over the outbox.
+    const api = new DispatchingJobQueue(
+      new PostgresOutboxJobQueue(pool),
+      { 'notification.send': send },
+      () => undefined,
+      (job, run) => runJobUnderLease(pool, { jobId: job.jobId, owner: 'api-inline' }, run),
+    );
+    const enqueueing = queuedEmail(api);
+    // A scheduled worker pass lands while the API is still waiting on the provider.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const claimed = await claimDueJobs(pool, { owner: 'worker', jobType: 'notification.send' });
+    await Promise.all(claimed.map((job) => send(job)));
+    const { notificationId } = await enqueueing;
+
+    expect(claimed).toHaveLength(0);
+    expect(sends).toHaveLength(1);
+    expect(await sentAudits(notificationId)).toBe(1);
+    const job = await pool.query<{ status: string }>(
+      `SELECT status FROM job_outbox WHERE idempotency_key = $1`,
+      [notificationId],
+    );
+    expect(job.rows[0]?.status).toBe('SUCCEEDED');
   });
 });
