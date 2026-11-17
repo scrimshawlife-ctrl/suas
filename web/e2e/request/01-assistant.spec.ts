@@ -6,7 +6,7 @@ import { newVeteran } from '../people';
 type Category = Parameters<typeof draftTurns>[0]['category'];
 
 // FOOD through the assistant (and its missing meeting place) is covered by
-// 01-request-through-assistant.spec.ts.
+// 01-request.spec.ts.
 const CASES: { category: Category; label: string; needsPlace: boolean }[] = [
   { category: 'TRANSPORTATION', label: 'Transportation', needsPlace: true },
   { category: 'SHELTER', label: 'Housing', needsPlace: true },

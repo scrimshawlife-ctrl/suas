@@ -4,7 +4,7 @@ import { requestHelp, tag } from '../helpers';
 import { fastDoubleClick, recordAlerts, recordPosts } from './request';
 import { newVeteran } from '../people';
 
-// The 72-hour expiry is covered by serve/05-release-and-expiry.spec.ts.
+// The 72-hour expiry is covered by 08-release-expiry.spec.ts.
 const cancelledChip = (page: Page) => page.getByRole('status').filter({ hasText: 'Cancelled' });
 
 test('the cancel dialog closes three ways without cancelling, then cancels; Back and Forward keep it cancelled', async ({
