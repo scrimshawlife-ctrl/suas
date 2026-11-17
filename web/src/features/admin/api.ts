@@ -6,8 +6,9 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { api } from '../../api/client';
-import { isApiError } from '../../api/errors';
+import { isApiError, isConnectionError } from '../../api/errors';
 import { useIdempotencyKey } from '../../api/idempotency';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
@@ -84,17 +85,45 @@ export function useResourceDraft(id: string) {
   });
 }
 
+/** JSON with every object's keys sorted, so key order never makes two equal bodies differ. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value ?? null, (_key, part: unknown) =>
+    part === null || typeof part !== 'object' || Array.isArray(part)
+      ? part
+      : Object.fromEntries(Object.entries(part).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
+  );
+}
+
 /**
- * One Idempotency-Key per user action. A retry after a dropped response reuses it; the key
- * is renewed once the action succeeded or the server refused it (4xx), because the next
- * attempt then has a different body.
+ * The first attempt may have run, or still be running, so only its key can replay it
+ * (API.md §7 rules 3 and 5): no answer (network error, timeout), a 5xx, or a 409
+ * IDEMPOTENCY_CONFLICT, which for the same key and body means that attempt is in flight
+ * (`src/idempotency/run.ts`). Any other 4xx refused the action, so a retry is a new one.
+ */
+function keepsKey(error: unknown): boolean {
+  return (
+    isConnectionError(error) ||
+    (isApiError(error) && (error.status >= 500 || error.code === 'IDEMPOTENCY_CONFLICT'))
+  );
+}
+
+/**
+ * One Idempotency-Key per user action, tied to the body it was sent with. A retry of that body
+ * reuses it after a failure that `keepsKey`; a success, a refusal or a changed body starts a new
+ * key, so a kept key never meets a different body (that 409 would repeat on every retry).
  */
 function useCommandKey() {
   const key = useIdempotencyKey();
+  const sentWith = useRef<string | null>(null);
   return {
-    headers: () => key.headers(),
+    headers: (body?: unknown) => {
+      const fingerprint = canonicalJson(body);
+      if (sentWith.current !== fingerprint) key.renew();
+      sentWith.current = fingerprint;
+      return key.headers();
+    },
     settle: (error?: unknown) => {
-      if (error === undefined || (isApiError(error) && error.status < 500)) key.renew();
+      if (error === undefined || !keepsKey(error)) key.renew();
     },
   };
 }
@@ -106,7 +135,7 @@ export function useExtractDrafts() {
     mutationFn: async (body: { source_text: string; source_link: string }) => {
       const { data } = await api.POST('/api/v0/admin/resource-drafts/commands/extract', {
         body,
-        headers: key.headers(),
+        headers: key.headers(body),
       });
       return requireData(data, 'drafts').drafts;
     },
@@ -126,7 +155,7 @@ function useDraftCommand<T>(
   const queryClient = useQueryClient();
   const key = useCommandKey();
   return useMutation({
-    mutationFn: (body?: DraftEditRequest) => run(key.headers(), body),
+    mutationFn: (body?: DraftEditRequest) => run(key.headers(body), body),
     onSuccess: (result) => {
       key.settle();
       queryClient.setQueryData(queryKeys.adminDrafts.detail(id), toDraft(result));
@@ -264,7 +293,7 @@ export function useLicenceCommand(id: string) {
   const key = useCommandKey();
   return useMutation({
     mutationFn: async (command: LicenceCommand) => {
-      const options = { params: { path: { id } }, headers: key.headers() };
+      const options = { params: { path: { id } }, headers: key.headers(command) };
       switch (command.name) {
         case 'approve': {
           const { data } = await api.POST('/api/v0/admin/licence-reviews/{id}/commands/approve', {
@@ -342,7 +371,7 @@ export function useCreateConsentTemplate() {
     mutationFn: async (body: { template_key: string; body: string }) => {
       const { data } = await api.POST('/api/v0/admin/consent-templates', {
         body,
-        headers: key.headers(),
+        headers: key.headers(body),
       });
       return requireData(data, 'consent template');
     },
