@@ -1,13 +1,14 @@
 import { expect, test } from '../fixtures';
 import { API_URL } from '../config';
-import { newPerson, newVerifiedVeteran, signUp, uniqueEmail, withDb } from '../helpers';
+import { newPerson, signUp, uniqueEmail, withDb } from '../helpers';
+import { newVeteran } from '../people';
 
 /** R12.3 (contributor proposal, SUAS-specs #79): the consent text is shown before the grant. */
 test('turning on the RED alert shows the published consent text and grants only on confirm', async ({
   browser,
   request,
 }) => {
-  const veteran = await newVerifiedVeteran(browser, request, {
+  const veteran = await newVeteran(browser, request, {
     name: 'Lee P.',
     county: 'Santa Clara',
     label: 'consent',
