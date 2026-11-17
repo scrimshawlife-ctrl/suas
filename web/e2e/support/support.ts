@@ -138,7 +138,7 @@ export function contactRow(page: Page, label: string) {
 }
 
 /** The invitee signs up with the invited address and accepts on /invitations. */
-export async function acceptInvite(
+async function acceptInvite(
   browser: Browser,
   request: APIRequestContext,
   email: string,
@@ -177,7 +177,7 @@ export async function veteranWithNotice(
 // --- Check-In ---------------------------------------------------------------------------
 
 /** The qv-001 prompts, in the order the API serves them (SIGNAL_SCORING.md B1). */
-export const PROMPTS = {
+const PROMPTS = {
   sleep: /how much has sleep made it harder/,
   connection: /How connected do you feel/,
   stress: /how much has stress made it harder/,
