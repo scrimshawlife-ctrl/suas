@@ -17,6 +17,7 @@ import {
 } from '../../src/identity/index.js';
 import { LICENCE_FIXTURE_WIDTHS } from '../../src/identity/licence-reader-fixture.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { closeVaOutageCooldown } from '../helpers/db.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { licenceSubmission } from '../helpers/licence.js';
@@ -34,18 +35,16 @@ beforeAll(async () => {
     }),
     listen: false,
   });
-  await db().query(`UPDATE licence_reader_breaker SET consecutive_failures = 0, opened_at = NULL`);
-  await closeVaOutageCooldown(db());
+  await appPool(app).query(
+    `UPDATE licence_reader_breaker SET consecutive_failures = 0, opened_at = NULL`,
+  );
+  await closeVaOutageCooldown(appPool(app));
 });
 
 afterAll(async () => {
   await app.close();
 });
 
-const db = () => {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-};
 const BASE = '/api/v0/admin/licence-reviews';
 const APPROVAL = {
   designation_visible: true,
@@ -54,16 +53,19 @@ const APPROVAL = {
 type Headers = Record<string, string>;
 
 async function signIn(tenantId: string, options: { admin?: boolean; elevate?: boolean } = {}) {
-  const user = await createUser(db(), {
+  const user = await createUser(appPool(app), {
     tenantId,
     email: syntheticEmail(`adm-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
   });
-  await setUserDisplayName(db(), tenantId, user.userId, 'Synthetic V.');
-  if (options.admin === true) await grantSuasAdmin(db(), user.userId, undefined);
-  const session = await createSession(db(), TEST_SESSION_SECRET, { tenantId, userId: user.userId });
+  await setUserDisplayName(appPool(app), tenantId, user.userId, 'Synthetic V.');
+  if (options.admin === true) await grantSuasAdmin(appPool(app), user.userId, undefined);
+  const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
+    tenantId,
+    userId: user.userId,
+  });
   if (options.elevate !== false && options.admin === true) {
-    await elevateSession(db(), session.session.sessionId);
+    await elevateSession(appPool(app), session.session.sessionId);
   }
   return { userId: user.userId, headers: { authorization: `Bearer ${session.credential}` } };
 }
@@ -224,10 +226,12 @@ describe('two-admin approval (L5.4, L5.5)', () => {
       'LICENCE_REVIEW_DECIDED',
     );
 
-    const events = await db().query<{ event_type: string; payload: Record<string, unknown> }>(
-      `SELECT event_type, payload FROM audit_events WHERE target_id = $1 ORDER BY occurred_at`,
-      [veteran.reviewId],
-    );
+    const events = await appPool(app).query<{
+      event_type: string;
+      payload: Record<string, unknown>;
+    }>(`SELECT event_type, payload FROM audit_events WHERE target_id = $1 ORDER BY occurred_at`, [
+      veteran.reviewId,
+    ]);
     expect(events.rows.map((row) => row.event_type)).toEqual([
       'LICENCE_REVIEW_SUBMITTED',
       'LICENCE_REVIEW_READ',
