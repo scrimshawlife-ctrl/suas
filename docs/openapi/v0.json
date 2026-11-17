@@ -3,7 +3,7 @@
   "info": {
     "title": "SUAS API",
     "version": "0.2.0",
-    "description": "Machine-readable contract for the implemented `/api/v0` surface. Authentication is an opaque Bearer credential; this API never reads cookies. Browser callers on origins listed in `SUAS_CORS_ALLOWED_ORIGINS` receive CORS headers and preflight answers (D-038, released in spec 0.7.0); other browser-originated unsafe requests receive `403 FORBIDDEN`. Paths document what the runtime registers today; draft APIS.md Plane A paths that are not yet implemented are intentionally absent. Every error uses the API.md §6 envelope. A malformed id, body or URL is 400 VALIDATION_FAILED with a short message (schema failures add error.details.issues); an oversized body is 413 and oversized headers are 431, both with code VALIDATION_FAILED."
+    "description": "Machine-readable contract for the implemented `/api/v0` surface. Authentication is an opaque Bearer credential; this API never reads cookies. Browser callers on origins listed in `SUAS_CORS_ALLOWED_ORIGINS` receive CORS headers and preflight answers (D-038, released in spec 0.7.0); other browser-originated unsafe requests receive `403 FORBIDDEN`. Paths document what the runtime registers today; draft APIS.md Plane A paths that are not yet implemented are intentionally absent. Every error uses the API.md §6 envelope. A malformed id, body or URL is 400 VALIDATION_FAILED with a short message (schema failures add error.details.issues), and so is U+0000 (NUL) in any string or key of a body, query or path parameter; an oversized body is 413 and oversized headers are 431, both with code VALIDATION_FAILED."
   },
   "servers": [
     {
@@ -6915,7 +6915,7 @@
             "enum": ["ACTIVE", "FOLLOWUP"]
           }
         },
-        "description": "The author, the accepter and the requester confirmation are derived on the server from the session (the person resolving must hold a request of the case); they are not accepted from the body."
+        "description": "The author, the accepter and the requester confirmation are derived on the server from the session (the person resolving must hold a request of the case); they are not accepted from the body. Each of requested, occurred, fulfilled and unresolved may nest at most 16 levels (400 VALIDATION_FAILED beyond)."
       },
       "ResolveCaseResult": {
         "allOf": [

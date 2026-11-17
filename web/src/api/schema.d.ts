@@ -1966,7 +1966,7 @@ export interface components {
             /** Format: date-time */
             settled_at: string;
         };
-        /** @description The author, the accepter and the requester confirmation are derived on the server from the session (the person resolving must hold a request of the case); they are not accepted from the body. */
+        /** @description The author, the accepter and the requester confirmation are derived on the server from the session (the person resolving must hold a request of the case); they are not accepted from the body. Each of requested, occurred, fulfilled and unresolved may nest at most 16 levels (400 VALIDATION_FAILED beyond). */
         ResolveCaseRequest: {
             requested: {
                 [key: string]: unknown;
