@@ -44,10 +44,7 @@ export function validationErrorBody(error: ZodError) {
   const issues = error.issues.slice(0, 20).map((issue) => ({
     path: issue.path.length === 0 ? '(body)' : issue.path.join('.'),
     code: issue.code,
-    message:
-      issue.code === 'invalid_value'
-        ? 'Invalid value.'
-        : issue.message,
+    message: issue.code === 'invalid_value' ? 'Invalid value.' : issue.message,
   }));
   const first = issues[0];
   const message =
