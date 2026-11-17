@@ -3,7 +3,6 @@ name: Skills Validate
 on:
   pull_request:
     paths:
-      - 'SKILLS.md'
       - 'skills/**'
       - 'tests/test_skill_metadata.py'
       - 'scripts/validate-skills.py'
@@ -11,7 +10,6 @@ on:
   push:
     branches: [main]
     paths:
-      - 'SKILLS.md'
       - 'skills/**'
       - 'tests/test_skill_metadata.py'
       - 'scripts/validate-skills.py'
