@@ -38,6 +38,7 @@ import {
   markJobFailed,
   markJobSucceeded,
   PostgresOutboxJobQueue,
+  renewJobLease,
   type JobOutboxRow,
 } from './postgres-outbox-queue.js';
 import {
@@ -310,18 +311,25 @@ export async function runJobWorker(options: JobWorkerOptions): Promise<void> {
     }
 
     for (const job of claimed) {
+      // The batch runs serially, so a job's claim-time lease can run out while it waits.
+      // Renewing first gives it a full lease, or finds another worker reclaimed it.
+      const leaseMs = PER_PASS_JOB_LIMITS[job.jobType]?.leaseMs;
+      if (!(await renewJobLease(pool, job, leaseMs !== undefined ? { leaseMs } : {}))) {
+        log({ msg: 'job_lease_lost', job_id: job.jobId, job_type: job.jobType });
+        continue;
+      }
       try {
         await handleJob(handlers, job);
-        await markJobSucceeded(pool, job.jobId);
+        const settled = await markJobSucceeded(pool, job);
         log({
-          msg: 'job_succeeded',
+          msg: settled ? 'job_succeeded' : 'job_lease_lost',
           job_id: job.jobId,
           job_type: job.jobType,
           attempts: job.attempts,
         });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        const status = await markJobFailed(pool, { jobId: job.jobId, error: message });
+        const status = await markJobFailed(pool, { lease: job, error: message });
         logFailure({ msg: 'job_failed', job_id: job.jobId, job_type: job.jobType, status }, error);
         if (status === 'DEAD_LETTER') await settleDeadLetter(deadLetterHandlers, job, message);
       }

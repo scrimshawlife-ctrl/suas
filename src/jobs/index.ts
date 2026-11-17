@@ -11,6 +11,9 @@ export {
   claimDueJobs,
   markJobFailed,
   markJobSucceeded,
+  renewJobLease,
+  runJobUnderLease,
+  type JobLease,
   type JobOutboxRow,
 } from './postgres-outbox-queue.js';
 export type {
