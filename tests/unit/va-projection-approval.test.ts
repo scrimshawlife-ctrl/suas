@@ -17,7 +17,9 @@ import {
 import {
   assertVaProjectionApproved,
   projectionSha256,
+  VaProjectionNotApprovedError,
   VENDORED_VA_PROJECTION,
+  type VaProjectionArtifact,
 } from '../../src/identity/va-projection-approval.js';
 import { validEnv } from '../helpers/env.js';
 import { approvedVaProjection } from '../helpers/va-projection.js';
@@ -115,5 +117,101 @@ describe('approved VA projection (A27)', () => {
     const fixture = loadConfig(validEnv({ SUAS_VA_CONFIRMATION_MODE: 'fixture' }));
     expect(createVeteranConfirmationPort(fixture, pending)?.providerEnvironment).toBe('NONE');
     expect(createVeteranConfirmationPort(loadConfig(validEnv({})), pending)).toBeUndefined();
+  });
+});
+
+/** The exact refusal, so a reworded or swapped check shows up here. */
+function refusal(artifact: VaProjectionArtifact): { name: string; message: string } | undefined {
+  try {
+    assertVaProjectionApproved(artifact);
+    return undefined;
+  } catch (error: unknown) {
+    expect(error).toBeInstanceOf(VaProjectionNotApprovedError);
+    const { name, message } = error as Error;
+    return { name, message };
+  }
+}
+const refused = (reason: string) => ({
+  name: 'VaProjectionNotApprovedError',
+  message: `SUAS_VA_CONFIRMATION_MODE=sandbox refused: ${reason}`,
+});
+const NOT_APPROVED = (status: string) =>
+  refused(
+    `the Privacy Owner has not approved VA_CONFIRMATION_V1_REQUIRED_ONLY (status ${status}); no request may be sent to VA until then.`,
+  );
+const approvalWithout = (field: string): VaProjectionArtifact => {
+  const record = JSON.parse(approvedVaProjection().approvalText) as Record<string, unknown>;
+  delete record[field];
+  return { ...approvedVaProjection(), approvalText: JSON.stringify(record) };
+};
+
+describe('assertVaProjectionApproved', () => {
+  it('passes the released vendored approval and a synthetic approved record', () => {
+    expect(refusal(VENDORED_VA_PROJECTION)).toBeUndefined();
+    expect(refusal(approvedVaProjection())).toBeUndefined();
+  });
+
+  it.each([
+    ['pending', { status: 'DECISION_PENDING' }, 'DECISION_PENDING'],
+    ['a status in another case', { status: 'approved' }, 'approved'],
+    ['no approver', { approved_by: null }, 'APPROVED'],
+    ['no approval time', { approval_timestamp: null }, 'APPROVED'],
+  ])('refuses an unapproved record (%s)', (_label, overrides, status) => {
+    expect(refusal(approvedVaProjection(overrides))).toEqual(NOT_APPROVED(status));
+  });
+
+  it.each([
+    ['an empty approval record', { ...approvedVaProjection(), approvalText: '' }],
+    ['an approval record that is not JSON', { ...approvedVaProjection(), approvalText: '{' }],
+  ])('refuses %s as not valid JSON', (_label, artifact) => {
+    expect(refusal(artifact)).toEqual(refused('the projection approval record is not valid JSON.'));
+  });
+
+  it.each(['status', 'approved_by', 'approval_timestamp', 'projection_sha256', 'projection_id'])(
+    'refuses an approval record missing %s as malformed',
+    (field) => {
+      expect(refusal(approvalWithout(field))).toEqual(
+        refused('the projection approval record is malformed.'),
+      );
+    },
+  );
+
+  it('refuses a projection_sha256 that is not 64 lowercase hex characters as malformed', () => {
+    const upper = projectionSha256(VENDORED_VA_PROJECTION.projectionText).toUpperCase();
+    expect(refusal(approvedVaProjection({ projection_sha256: upper }))).toEqual(
+      refused('the projection approval record is malformed.'),
+    );
+  });
+
+  it('refuses a missing or malformed projection file', () => {
+    expect(refusal(approvedVaProjection({}, ''))).toEqual(
+      refused('the projection file is not valid JSON.'),
+    );
+    expect(refusal(approvedVaProjection({}, '{}'))).toEqual(
+      refused('the projection file is malformed.'),
+    );
+  });
+
+  it('refuses a mismatched projection id in the approval record or the projection file', () => {
+    expect(refusal(approvedVaProjection({ projection_id: 'WITH_SSN' }))).toEqual(
+      refused('the projection is WITH_SSN, not VA_CONFIRMATION_V1_REQUIRED_ONLY.'),
+    );
+    const renamed = VENDORED_VA_PROJECTION.projectionText.replace(
+      '"VA_CONFIRMATION_V1_REQUIRED_ONLY"',
+      '"WITH_SSN"',
+    );
+    expect(renamed).not.toBe(VENDORED_VA_PROJECTION.projectionText);
+    expect(
+      refusal(approvedVaProjection({ projection_sha256: projectionSha256(renamed) }, renamed)),
+    ).toEqual(refused('the projection is WITH_SSN, not VA_CONFIRMATION_V1_REQUIRED_ONLY.'));
+  });
+
+  it('refuses projection bytes that do not match projection_sha256, even when approved', () => {
+    const tampered = VENDORED_VA_PROJECTION.projectionText.replace('"zipCode"', '"ssn"');
+    for (const projectionText of [tampered, `${VENDORED_VA_PROJECTION.projectionText}\n`]) {
+      expect(refusal(approvedVaProjection({}, projectionText))).toEqual(
+        refused('the projection file does not match projection_sha256 in its approval record.'),
+      );
+    }
   });
 });

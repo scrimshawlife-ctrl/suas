@@ -13,6 +13,7 @@ import {
 } from '../../src/identity/va-confirmation-fixture.js';
 import type { FetchTransport } from '../../src/identity/va-confirmation-http.js';
 import {
+  invokeFailureClass,
   VaConfirmationLambdaRelay,
   type LambdaInvokeClient,
 } from '../../src/identity/va-confirmation-lambda-relay.js';
@@ -184,6 +185,17 @@ describe('VA confirmation through the verify function', () => {
     }
   });
 
+  it.each(['Unhandled', 'Handled'])(
+    'reads a %s function error as PROVIDER_UNAVAILABLE, even with a VERIFIED-shaped payload',
+    async (FunctionError) => {
+      const output = answered({ status: 'VERIFIED' }, { FunctionError });
+      expect(await relay(new ScriptedLambda(output)).confirm(PERSON)).toEqual({
+        status: 'UNAVAILABLE',
+        failureClass: 'PROVIDER_UNAVAILABLE',
+      });
+    },
+  );
+
   it('refuses outside STAGING and LOCAL without reading the key or calling VA', async () => {
     for (const environment of ['TEST', 'PRODUCTION', undefined]) {
       const fn = verifyFunction({ environment });
@@ -254,6 +266,62 @@ describe('VA confirmation through the verify function', () => {
           : ['msg', 'reason'],
       );
     }
+  });
+});
+
+/**
+ * Every D035 §11 class an invoke that did not return can get. Throttle -> PROVIDER_RATE_LIMITED
+ * and Lambda 5xx -> PROVIDER_UNAVAILABLE are R14.5 proposal. The name decides before the status.
+ */
+describe('invokeFailureClass', () => {
+  it.each([
+    ['AccessDeniedException', 403],
+    ['ResourceNotFoundException', 404],
+    ['InvalidParameterValueException', 400],
+    ['InvalidRequestContentException', 400],
+    ['RequestTooLargeException', 413],
+    ['UnsupportedMediaTypeException', 415],
+  ])('a deployment fault %s (%s) is CONFIGURATION_INVALID, not an outage', (name, status) => {
+    expect(invokeFailureClass(awsError(name, status))).toBe('CONFIGURATION_INVALID');
+    expect(invokeFailureClass(awsError(name))).toBe('CONFIGURATION_INVALID');
+  });
+
+  it('a Lambda throttle is PROVIDER_RATE_LIMITED, with or without its 429', () => {
+    expect(invokeFailureClass(awsError('TooManyRequestsException', 429))).toBe(
+      'PROVIDER_RATE_LIMITED',
+    );
+    expect(invokeFailureClass(awsError('TooManyRequestsException'))).toBe('PROVIDER_RATE_LIMITED');
+  });
+
+  it.each([
+    ['TimeoutError', undefined],
+    ['AbortError', undefined],
+    ['RequestTimeout', undefined],
+    ['ModelTimeoutException', undefined],
+    ['RequestTimeoutException', 408],
+  ])('a timeout %s is TIMEOUT, even when it carries a status', (name, status) => {
+    expect(invokeFailureClass(awsError(name, status))).toBe('TIMEOUT');
+  });
+
+  it.each([
+    ['ServiceException', 500],
+    ['ResourceNotReadyException', 502],
+    ['EC2UnexpectedException', 502],
+    ['SomeFutureLambdaException', 503],
+    ['ResourceConflictException', 409],
+  ])('any other answered error %s (%s) is PROVIDER_UNAVAILABLE', (name, status) => {
+    expect(invokeFailureClass(awsError(name, status))).toBe('PROVIDER_UNAVAILABLE');
+  });
+
+  it.each([
+    ['a lost connection', awsError('ECONNRESET')],
+    ['a plain Error', new Error('socket hang up')],
+    ['a non-numeric status', { name: 'Weird', $metadata: { httpStatusCode: '500' } }],
+    ['a thrown string', 'boom'],
+    ['null', null],
+    ['undefined', undefined],
+  ])('anything without an HTTP status (%s) is NETWORK_ERROR', (_label, error) => {
+    expect(invokeFailureClass(error)).toBe('NETWORK_ERROR');
   });
 });
 
