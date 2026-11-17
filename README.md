@@ -21,7 +21,7 @@ Canonical released specs:
 - specification stack: `0.10.0`
 - specs merge pin: `6cd437e61b11f67e04b2bd91101d33f7c09c0fce` (`src/release/pins.ts`)
 - manifest: `RELEASE_MANIFEST-0.10.0.md`
-- current stage: `SPEC-018` (blocked); SPEC-017 evidence recorded against pin `0.6.0`
+- implementation stage: `SPEC-017` (`IMPLEMENTATION_STAGE` in `src/release/pins.ts`); SPEC-018 is blocked. SPEC-017 evidence was recorded against pin `0.6.0`
 - implementation authority: `RELEASED_FOR_IMPLEMENTATION`
 - pilot readiness: `NOT_READY`
 - production readiness: `NOT_READY`
@@ -33,11 +33,11 @@ Canonical released specs:
 
 `SUAS-specs` is canonical. This repository is the web and API implementation. Keep all three implementation repositories in future considerations:
 
-| Repository                                                                              | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | Fastify JSON API `/api/v0` (`src/`), React web app (`web/`), AWS CDK infrastructure (`infra/`, not deployed). The Cloudflare Worker and its Neon staging database are retired (R11.6). Legacy HTML `/app`. OpenAPI document `docs/openapi/v0.json` (not served live). `/api/v0` auth is an opaque Bearer session credential; `/app` also accepts a session cookie (`SameSite=Strict`; `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty). Cross-origin access follows `SUAS_CORS_ALLOWED_ORIGINS` (D-038, released in spec 0.7.0). Synthetic STAGING moves to `https://api.staging.suasqrf.com` (API) and `https://staging.suasqrf.com` (web) once the CDK stacks are deployed. |
-| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Repository                                                                              | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`scrimshawlife-ctrl/suas`](https://github.com/scrimshawlife-ctrl/suas) (this repo)     | Fastify JSON API `/api/v0` (`src/`), React web app (`web/`), AWS CDK infrastructure (`infra/`, not deployed). The Cloudflare Worker and its Neon staging database are retired (R11.6). Server-rendered HTML pages under `/app/*`: the browser surface from before the v1 web app, still served and still the VA sandbox OAuth return path. OpenAPI document `docs/openapi/v0.json` (not served live). `/api/v0` auth is an opaque Bearer session credential; `/app` also accepts a session cookie (`SameSite=Strict`; `SameSite=None` only when `SUAS_CORS_ALLOWED_ORIGINS` is non-empty). Cross-origin access follows `SUAS_CORS_ALLOWED_ORIGINS` (D-038, released in spec 0.7.0). Synthetic STAGING moves to `https://api.staging.suasqrf.com` (API) and `https://staging.suasqrf.com` (web) once the CDK stacks are deployed. |
+| [`scrimshawlife-ctrl/suas-ios`](https://github.com/scrimshawlife-ctrl/suas-ios)         | Native iOS client (private Swift). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| [`scrimshawlife-ctrl/suas-android`](https://github.com/scrimshawlife-ctrl/suas-android) | Native Android client (Kotlin scaffold). Consumes `/api/v0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 Native client contract: [`MOBILE_SURFACE.md`](https://github.com/scrimshawlife-ctrl/SUAS-specs/blob/main/MOBILE_SURFACE.md) (D-033).
 
@@ -45,20 +45,98 @@ Native apps consume this API. Do not add `/api/mobile` or a second version selec
 
 If you change `/api/v0`, auth, environment class, or a Veteran journey, consider both `suas-ios` and `suas-android`.
 
-## Repository layout
+## Codebase map
 
 | Path                   | What it is                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/`                 | Fastify app (`src/app.ts`), `/api/v0` routes (`src/http/routes/`), domain modules and adapters. `src/main.ts` runs it on Node.                         |
-| `src/aws/`             | AWS Lambda entries for the job worker, migrations and WebSocket push. The API Lambda runs `src/main.ts` behind the Lambda Web Adapter.                 |
-| `web/`                 | React single-page app for v1 (Vite). A separate package: see [web/README.md](web/README.md).                                                           |
+| `src/`                 | The API: a Fastify app (`src/app.ts`) with `/api/v0` routes, the HTML `/app/*` pages, domain modules and adapters. `src/main.ts` runs it on Node.      |
+| `web/`                 | React single-page app for v1 (Vite). A separate package: see [web/README.md](web/README.md) and [web/e2e/README.md](web/e2e/README.md).                |
 | `infra/`               | AWS CDK app for v1 synthetic STAGING in `us-west-2`. Synthesized and tested offline only; nothing is deployed. See [infra/README.md](infra/README.md). |
 | `migrations/`          | SQL migrations. The expected schema version is `EXPECTED_SCHEMA_VERSION` in `src/db/schema-version.ts`.                                                |
 | `docs/openapi/v0.json` | The `/api/v0` contract. `npm run openapi:check` compares it with the registered routes; `web/` generates its client types from it.                     |
+| `docs/`                | Also the GitHub Pages site (`index.html`, `app.html`, legal pages), runbooks (`docs/runbooks/`) and implementation records and evidence.               |
+| `scripts/`             | Developer and operator tooling run from source with `tsx`: launchers, smoke and drift checks, evidence harnesses. Not part of the build.               |
+| `tests/`               | Vitest suites for `src/`: `unit/` (no database), `integration/` (PostgreSQL), shared `helpers/` and `fixtures/`; `e2e/` is the staging browser suite.  |
+| `eval/`                | Scored suites for the Intake Assistant and resource extraction (`npm run eval`).                                                                       |
+| `contract/`            | Files shared with other repositories: native demo fixtures and the VA confirmation projection.                                                         |
+| `skills/`              | Runtime agent skills and their validators: see [skills/README.md](skills/README.md).                                                                   |
 
-## Local development
+`src/cli/` versus `scripts/`: a command that runs application code against a database or deployment (migrate, seeds, the job worker, provenance) lives in `src/cli/`, is compiled into `dist/` with the app, and is reached through an `npm run` script. Developer tooling that is never shipped (`dev:demo`, smoke tests, OpenAPI and UI coverage checks, soak and load harnesses) lives in `scripts/`.
 
-Requirements: Node.js 22.13 or newer and a reachable PostgreSQL 17 instance.
+### `src/` modules
+
+Each folder is one module. Most expose their public functions through an `index.ts`.
+
+| Module          | What it holds                                                                                                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`          | Sign-in challenges (email and SMS codes), sessions, MFA, rate limits, the LOCAL demo fixed code, and the STAGING fixture-principal gate.                                |
+| `authz`         | Authorization policy: role, tenant, row and consent checks, and the request's authorization context.                                                                    |
+| `aws`           | AWS Lambda entry points: job worker, migrations, the API Gateway WebSocket routes and the email relay. The API Lambda runs `src/main.ts` behind the Lambda Web Adapter. |
+| `catalog`       | Resource Drafts: model extraction from pasted source text, admin review, and the publish that makes a Resource.                                                         |
+| `chat`          | Chat threads and messages, access rules, WebSocket connect tickets and live-session checks.                                                                             |
+| `cli`           | Command-line entry points: migrate, seeds (LOCAL, demo, STAGING sessions, recovery fixtures), job worker, provenance, VA sandbox smoke.                                 |
+| `config`        | Environment variable schema, fail-closed config loading, CORS origins and the STAGING host.                                                                             |
+| `consent`       | Consent Grants and their events, consent templates, the trusted circle and invitation limits.                                                                           |
+| `coordination`  | Support Cases and Service Requests: commands, state transitions, accept, edit, widening, expiry, contact log and request notices.                                       |
+| `db`            | PostgreSQL pool, transactions, cursors, the migrator and the expected schema version.                                                                                   |
+| `events`        | Domain and audit events: envelope, store, outbox and idempotent consumers.                                                                                              |
+| `fulfillment`   | Provider Router and fulfillment adapters (manual, fake, information-only, Uber, Amadeus), attempts, referrals and the Resource catalog.                                 |
+| `http`          | Fastify server, authentication, error envelope, idempotency header, origin policy, security headers, and `routes/` (one file per area).                                 |
+| `idempotency`   | Persistent idempotent command execution and request fingerprints.                                                                                                       |
+| `identity`      | Users, admins and counties; the Veteran gate; VA Veteran Confirmation; VA sandbox OAuth; the licence review fallback; ID verification.                                  |
+| `inference`     | Model inference port with Bedrock and scripted fake adapters.                                                                                                           |
+| `intake`        | The Intake Assistant: model turns, its tools, request drafts and the submit that creates a Service Request.                                                             |
+| `jobs`          | Durable job queue port, the Postgres outbox queue, handlers, and the worker loop with its time-driven sweeps.                                                           |
+| `notifications` | Notification sends, channels (fake, sink, Resend, Lambda relay), templates and STAGING recipient rules.                                                                 |
+| `privacy`       | Minimum-necessary provider projections, export and deletion operations, the retention dry run and the deletion drill.                                                   |
+| `provenance`    | Build provenance (`build-info`): commit, spec version, manifest and environment class.                                                                                  |
+| `realtime`      | Connection push port for chat: local WebSocket server and API Gateway adapters.                                                                                         |
+| `release`       | Released-spec pins (`pins.ts`): spec version, manifest, specs commit, implementation stage.                                                                             |
+| `reporting`     | Aggregate reporting projection. It has no runtime caller; reporting stays disabled.                                                                                     |
+| `resilience`    | Failure drills, capacity and recovery targets, and bounded outbound HTTP for adapters.                                                                                  |
+| `settlement`    | Settlements and Follow-Ups.                                                                                                                                             |
+| `signals`       | Support Signals: the scoring engine, Check-Ins, the RED alert to trusted contacts and the signal compute job.                                                           |
+| `staging`       | STAGING fixture seed: synthetic users and Resources for a fresh AWS STAGING.                                                                                            |
+| `storage`       | Object storage port with in-memory and S3 adapters.                                                                                                                     |
+| `testing`       | Synthetic-data boundary checks and recovery fixtures. Production code imports it too.                                                                                   |
+| `ui`            | The server-rendered HTML `/app/*` pages: view models, surfaces, commands, theme, and the crisis copy shared with `/api/v0` and email.                                   |
+
+## Run it locally
+
+Requirements: Node.js 22.13 or newer and PostgreSQL 17. Run `npm ci` at the root (and in `web/` for the web app) after every pull: a dependency added since your last install otherwise crashes the server.
+
+Quick start, two terminals, no `.env` needed:
+
+```bash
+npm ci && npm run dev:demo         # API on http://127.0.0.1:3000, migrated and seeded
+cd web && npm ci && npm run dev    # web app on http://127.0.0.1:5123, proxying /api to 3000
+```
+
+Open http://127.0.0.1:5123 and sign in as `demo@example.invalid` with code `123456`.
+
+### Launchers
+
+All of them run `SUAS_ENV=LOCAL` with synthetic data and no real external effects.
+
+| Launcher                                         | Use it when                                                                                             | Database                                                                                                               | Ports                                                                                                         | Sign-in                                                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev:demo`                               | You want a working API from a clean clone in one command; the default for web and native-app work.      | `suas_demo` on `localhost:5432` (`SUAS_DEMO_DATABASE_URL`); created, migrated and demo-seeded. `--reset` recreates it. | API 3000 (`--port`)                                                                                           | `demo@example.invalid`, code `123456`. Other accounts: code from `/api/v0/dev/last-challenge` (fake email).                            |
+| `npm run dev`                                    | You want your own settings: it reads `.env` and reloads on change.                                      | `DATABASE_URL` in `.env` (`suas_local`). You create it, run `npm run migrate -- apply`, and optionally `npm run seed`. | API `SUAS_HTTP_PORT` (3000); chat WebSocket `SUAS_CHAT_LOCAL_WS_PORT` (3001) when `SUAS_CHAT_PUSH_MODE=local` | Random codes. With `SUAS_EMAIL_MODE=fake`, read them from `/api/v0/dev/last-challenge`; `.env.example` ships `sink`, which keeps none. |
+| `scripts/start-local.sh` (`npm run local:start`) | You want the `.env` setup plus migrations, a fresh seed and, optionally, a signed-in browser on `/app`. | `suas_local` in the `suas-postgres17-local` container, which must already exist (below). It never resets data.         | API 3000 (required)                                                                                           | `start-local.sh veteran` or `admin` opens Chromium signed in with a seeded session from `.local-secrets/seed-output.json`.             |
+| `scripts/start-local.ps1`                        | The same, on Windows PowerShell.                                                                        | Same as `start-local.sh`.                                                                                              | API 3000 (required)                                                                                           | `.\scripts\start-local.ps1 -Role veteran` (or `admin`).                                                                                |
+| `cd web && npm run dev`                          | The web app, against any of the API launchers above.                                                    | None of its own.                                                                                                       | Web 5123; proxies `/api` to `SUAS_API_PORT` (3000)                                                            | Whatever the API offers.                                                                                                               |
+
+`start-local.sh` and `.ps1` refuse to start unless `.env` has `SUAS_ENV=LOCAL`, `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS=false`, `DATABASE_URL=postgresql://suas:suas@localhost:5432/suas_local`, host `127.0.0.1` and port 3000. `dev:demo` does not read `.env`; it writes its settings to `.local-secrets/`.
+
+The PostgreSQL 17 container that `start-local` expects, and that `dev:demo` starts or creates itself when it cannot reach PostgreSQL and Docker is running:
+
+```bash
+docker run -d --name suas-postgres17-local \
+  -e POSTGRES_USER=suas -e POSTGRES_PASSWORD=suas -e POSTGRES_DB=suas_local \
+  -p 127.0.0.1:5432:5432 postgres:17
+```
+
+### Your own `.env` (`npm run dev`)
 
 ```bash
 npm ci
@@ -72,17 +150,15 @@ npm run dev
 `SUAS_SESSION_SECRET` is required in every environment class and startup fails
 closed without it. It ships empty in `.env.example` and must never be committed.
 
-After every pull, run `npm ci` again (and `cd web && npm ci` for the web app): a
-dependency added since your last install, such as a new AWS SDK client, otherwise
-crashes `npm run dev`. Startup also refuses a `.env` whose `SUAS_SPEC_VERSION` or
-`SUAS_RELEASE_MANIFEST` differs from `src/release/pins.ts`; after a re-pin, copy
-both values from `.env.example`.
+Startup refuses a `.env` whose `SUAS_SPEC_VERSION` or `SUAS_RELEASE_MANIFEST`
+differs from `src/release/pins.ts`; after a re-pin, copy both values from
+`.env.example`.
 
 ### Web app
 
-`web/` talks to this API over `/api/v0`. Start the API in LOCAL mode, then run
-`cd web && npm ci && npm run dev`. The LOCAL settings it needs are in
-[web/README.md](web/README.md).
+`web/` talks to this API over `/api/v0`. Start any API launcher above on port 3000, then run
+`cd web && npm ci && npm run dev`. The `.env` settings `npm run dev` needs for every web
+feature are in [web/README.md](web/README.md).
 
 ### One-command demo (`npm run dev:demo`)
 
@@ -111,7 +187,7 @@ local database.
 
 | Item             | Value                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------- |
-| Base URL         | `http://127.0.0.1:3000` (`/api/v0`, web `/app`)                                             |
+| Base URL         | `http://127.0.0.1:3000` (`/api/v0` and the HTML `/app/*` pages)                             |
 | Android emulator | `http://10.0.2.2:3000`                                                                      |
 | iOS Simulator    | `http://localhost:3000`                                                                     |
 | Demo sign-in     | `demo@example.invalid`, code `123456` (open case, four service requests)                    |
@@ -176,7 +252,7 @@ request.
 ### Local demo workflow
 
 The repeatable LOCAL workflow uses the isolated `suas-postgres17-local` Docker
-container, applies and validates migrations, refreshes synthetic seed sessions,
+container (create it once with the `docker run` command above), applies and validates migrations, refreshes synthetic seed sessions,
 and starts the real Fastify runtime. It never resets the database or enables
 external effects:
 
