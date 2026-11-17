@@ -58,19 +58,6 @@ export async function onWelcome(
   return { page, email };
 }
 
-/** A new person signed up with a profile, on their role's home page. */
-export async function signedUpPerson(
-  browser: Browser,
-  request: APIRequestContext,
-  options: { label: string; name: string; county?: CountyLabel; role?: 'need' | 'serve' },
-): Promise<{ page: Page; email: string }> {
-  const role = options.role ?? 'need';
-  const person = await onWelcome(browser, request, options.label, role);
-  await saveProfile(person.page, options.name, options.county ?? 'Alameda');
-  await expect(person.page).toHaveURL(role === 'need' ? /\/home$/ : /\/serve$/);
-  return person;
-}
-
 /** Opens the avatar menu and signs out. */
 export async function signOutFromAvatar(page: Page, firstName: string): Promise<void> {
   await page.getByRole('button', { name: `Account and sign out for ${firstName}` }).click();
