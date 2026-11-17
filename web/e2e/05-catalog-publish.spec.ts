@@ -1,18 +1,12 @@
 import { expect, test } from './fixtures';
-import {
-  newPerson,
-  newVerifiedVeteran,
-  scriptModel,
-  shoot,
-  signInWithCode,
-  uniqueEmail,
-} from './helpers';
+import { newPerson, scriptModel, shoot, signInWithCode, uniqueEmail } from './helpers';
+import { newVeteran } from './people';
 
 test('an admin turns a pasted source into a draft, reviews and publishes it, and a Veteran sees it', async ({
   browser,
   request,
 }) => {
-  const veteran = await newVerifiedVeteran(browser, request, {
+  const veteran = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
     label: 'reader',
