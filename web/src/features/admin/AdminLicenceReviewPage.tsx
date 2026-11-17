@@ -9,7 +9,7 @@ import { RadioCardGroup } from '../../components/RadioCardGroup';
 import { Select } from '../../components/Select';
 import { StatusChip } from '../../components/StatusChip';
 import { useSingleFlight } from '../../lib/single-flight';
-import { useAdminLicenceReview, useLicenceCommand, type AdminLicenceReview } from './api';
+import { useAdminLicenceReview, useLicenceCommand, type AdminLicenceReview } from './licence-api';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
   CHECKLIST,
