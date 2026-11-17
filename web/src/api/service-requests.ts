@@ -17,7 +17,7 @@ export interface ServiceRequestsFilters {
 }
 
 /** GET /api/v0/service-requests. The key is `[..., 'list', filters]`. */
-export function serviceRequestsQueryOptions(filters: ServiceRequestsFilters) {
+function serviceRequestsQueryOptions(filters: ServiceRequestsFilters) {
   return queryOptions({
     queryKey: queryKeys.serviceRequests.list(filters),
     queryFn: async () => {
