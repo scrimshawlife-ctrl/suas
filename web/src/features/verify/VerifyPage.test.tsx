@@ -5,7 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
 import { tokenStore } from '../../api/token-store';
-import VerifyPage from '../request/VerifyPage';
+import VerifyPage from './VerifyPage';
 
 const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));
 vi.mock('../../api/client', () => ({ api: client }));

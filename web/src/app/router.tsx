@@ -116,7 +116,7 @@ export const routes: RouteObject[] = [
                 children: [
                   {
                     path: paths.verify,
-                    ...page('Confirm you served', () => import('../features/request/VerifyPage')),
+                    ...page('Confirm you served', () => import('../features/verify/VerifyPage')),
                   },
                   {
                     path: paths.verifyLicence,
