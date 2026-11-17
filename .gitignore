@@ -63,3 +63,6 @@ web/e2e-results/
 # Local agent tooling output (Playwright MCP snapshots, Claude Code worktrees)
 .playwright-mcp/
 .claude/worktrees/
+
+# /brag launch-video output (local, regenerated)
+brag-output/
