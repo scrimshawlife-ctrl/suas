@@ -18,7 +18,10 @@ export interface SelectProps<T extends string = string> extends Omit<
   options: readonly SelectOption<T>[];
   /** The chosen option's value. With a placeholder, include '' in `T`. */
   value?: T;
-  /** The chosen value typed as `T`, so a caller needs no cast. Called after `onChange`. */
+  /**
+   * The chosen value typed as `T`, so a caller needs no cast. Called after `onChange`, and only
+   * for a value in `options` (or the placeholder's '').
+   */
   onValueChange?: (value: T) => void;
   /** Adds a first, empty option with this text. */
   placeholder?: string;
@@ -37,11 +40,14 @@ export function Select<T extends string = string>({
   onValueChange,
   ...select
 }: SelectProps<T>) {
+  // Checks the browser's string against what was rendered, since the DOM can hold options
+  // the caller never gave. The placeholder's '' counts only when there is one (`T` holds it).
+  const isOption = (value: string): value is T =>
+    options.some((option) => option.value === value) || (placeholder !== undefined && value === '');
   const handleChange = onValueChange
     ? (event: ChangeEvent<HTMLSelectElement>) => {
         onChange?.(event);
-        // The browser only reports the value of a rendered option, and every option is a T.
-        onValueChange(event.target.value as T);
+        if (isOption(event.target.value)) onValueChange(event.target.value);
       }
     : onChange;
   return (
