@@ -349,6 +349,8 @@ export interface SendAttemptResult {
   readonly notification: Notification;
   readonly outcome: 'SENT' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
   readonly reason?: string;
+  /** For `IN_FLIGHT`: wait this long, by when the holder's claim has settled or expired. */
+  readonly retryAfterMs?: number;
 }
 
 /**
@@ -467,7 +469,15 @@ export async function attemptSend(
   const claim = await claimSend(pool, input.tenantId, input.notificationId);
   if (claim === undefined) {
     const latest = (await findNotification(pool, input.tenantId, input.notificationId)) ?? current;
-    return { notification: latest, outcome: 'SKIPPED', reason: skipReason(latest) ?? 'IN_FLIGHT' };
+    const reason = skipReason(latest);
+    return reason !== undefined
+      ? { notification: latest, outcome: 'SKIPPED', reason }
+      : {
+          notification: latest,
+          outcome: 'SKIPPED',
+          reason: 'IN_FLIGHT',
+          retryAfterMs: SEND_CLAIM_MS,
+        };
   }
   const { notification, token } = claim;
   const guard = { claimToken: token };
@@ -822,30 +832,42 @@ export async function deliverQueuedInApp(pool: Pool, limit = 100): Promise<numbe
 /**
  * NOTIFICATIONS.md §5: a send whose job ran out of retries before any provider attempt
  * (channel unavailable, template error, bad payload) still settles `UNDELIVERABLE`, with
- * an audit, so it is not left `QUEUED`. A row already SENT or terminal is left alone.
+ * an audit, so it is not left `QUEUED`. A row already SENT or terminal is left alone, and
+ * one under a live send claim is `IN_FLIGHT`: the caller comes back after `retryAfterMs`.
  */
 export async function settleUndeliverable(
   pool: Pool,
   input: { tenantId: string; notificationId: string; failureReason: string },
-): Promise<Notification | undefined> {
+): Promise<SettleUndeliverableResult> {
   return withTransaction(pool, async (tx) => {
-    const current = await tx.query<NotificationRow>(
-      `SELECT ${NOTIFICATION_COLUMNS} FROM notifications
+    const current = await tx.query<NotificationRow & { claim_live: boolean }>(
+      `SELECT ${NOTIFICATION_COLUMNS},
+              (send_claim_token IS NOT NULL
+               AND send_claimed_at >= now() - $3::int * interval '1 millisecond') AS claim_live
+       FROM notifications
        WHERE tenant_id = $1 AND notification_id = $2
        FOR UPDATE`,
-      [input.tenantId, input.notificationId],
+      [input.tenantId, input.notificationId, SEND_CLAIM_MS],
     );
     const row = current.rows[0];
-    if (row === undefined) return undefined;
-    if (row.delivery_status !== 'QUEUED' && row.delivery_status !== 'FAILED') return undefined;
+    if (row === undefined) return { outcome: 'SKIPPED' } as const;
+    if (row.delivery_status !== 'QUEUED' && row.delivery_status !== 'FAILED') {
+      return { outcome: 'SKIPPED' } as const;
+    }
+    if (row.claim_live) return { outcome: 'IN_FLIGHT', retryAfterMs: SEND_CLAIM_MS } as const;
 
     const updated = await setStatus(tx, input.tenantId, input.notificationId, {
       status: 'UNDELIVERABLE',
     });
     await recordUndeliverableAudit(tx, updated, input.failureReason);
-    return updated;
+    return { outcome: 'SETTLED', notification: updated } as const;
   });
 }
+
+export type SettleUndeliverableResult =
+  | { readonly outcome: 'SETTLED'; readonly notification: Notification }
+  | { readonly outcome: 'SKIPPED' }
+  | { readonly outcome: 'IN_FLIGHT'; readonly retryAfterMs: number };
 
 /** §5: an UNDELIVERABLE settlement is visible to operations, with its reason. */
 async function recordUndeliverableAudit(

@@ -250,6 +250,35 @@ export async function renewJobLease(
   return (result.rowCount ?? 0) > 0;
 }
 
+/** Put a held job back to PENDING after `delayMs`, giving back the attempt its claim took. */
+export async function deferJob(db: Queryable, lease: JobLease, delayMs: number): Promise<boolean> {
+  const runAt = new Date(Date.now() + delayMs);
+  const result = await db.query(
+    `UPDATE job_outbox
+     SET status = 'PENDING', attempts = GREATEST(attempts - 1, 0), run_at = $4,
+         leased_until = NULL, lease_owner = NULL, updated_at = now()
+     WHERE ${LEASE_HELD}`,
+    [...leaseParams(lease), runAt.toISOString()],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Reopen a job this runner just dead-lettered, due after `delayMs`, giving back its last attempt. */
+export async function reopenDeadLetter(
+  db: Queryable,
+  job: Pick<JobOutboxRow, 'jobId' | 'attempts'>,
+  delayMs: number,
+): Promise<boolean> {
+  const runAt = new Date(Date.now() + delayMs);
+  const result = await db.query(
+    `UPDATE job_outbox
+     SET status = 'PENDING', attempts = GREATEST(attempts - 1, 0), run_at = $3, updated_at = now()
+     WHERE job_id = $1 AND status = 'DEAD_LETTER' AND attempts = $2`,
+    [job.jobId, job.attempts, runAt.toISOString()],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 /** Hand a held job back to PENDING, due now, without counting a failure. */
 async function releaseJob(db: Queryable, lease: JobLease): Promise<void> {
   await db.query(

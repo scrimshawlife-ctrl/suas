@@ -10,8 +10,10 @@ import type { DisclosureRequest } from '../../src/consent/index.js';
 import { createUser } from '../../src/identity/index.js';
 import {
   attemptSend,
+  buildNotificationSendPayload,
   enqueueNotification,
   findNotification,
+  settleUndeliverable,
   type NotificationChannel,
   type NotificationChannelPort,
 } from '../../src/notifications/index.js';
@@ -23,8 +25,11 @@ import {
   type DurableJobQueuePort,
 } from '../../src/jobs/index.js';
 import { notificationSendHandler } from '../../src/jobs/handlers.js';
+import { runJobWorker } from '../../src/jobs/worker.js';
+import { loadConfig } from '../../src/config/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { createTestPool, resetKernelTables } from '../helpers/db.js';
+import { validEnv } from '../helpers/env.js';
 
 const pool: Pool = createTestPool(10);
 
@@ -220,5 +225,121 @@ describe('inline notification.send and a job worker pass', () => {
       [notificationId],
     );
     expect(job.rows[0]?.status).toBe('SUCCEEDED');
+  });
+});
+
+describe('a send another runner holds', () => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  async function heldSend() {
+    const queued = await queuedEmail();
+    const { sends, channels } = slowCountingEmail(1_500);
+    const holder = attemptSend(pool, channels, {
+      tenantId: queued.tenantId,
+      notificationId: queued.notificationId,
+      disclosure: queued.disclosure,
+    });
+    await sleep(100);
+    return { queued, sends, holder };
+  }
+
+  it('makes a duplicate job wait without spending its attempts, and the holder SENT stands', async () => {
+    const { queued, sends, holder } = await heldSend();
+    // A second job for the same send, with two attempts to spend.
+    const duplicate = await new PostgresOutboxJobQueue(pool).enqueue({
+      jobType: 'notification.send',
+      payload: buildNotificationSendPayload(queued.notificationId, queued.disclosure),
+      tenantId: queued.tenantId,
+      maxAttempts: 2,
+    });
+    const config = loadConfig(validEnv());
+    for (let pass = 0; pass < 3; pass += 1) {
+      await pool.query(`UPDATE job_outbox SET run_at = now() WHERE job_id = $1`, [duplicate.jobId]);
+      await runJobWorker({ pool, config, owner: `worker-${pass}`, once: true, limit: 10 });
+    }
+
+    const job = await pool.query<{ status: string; attempts: number }>(
+      `SELECT status, attempts FROM job_outbox WHERE job_id = $1`,
+      [duplicate.jobId],
+    );
+    expect(job.rows[0]).toEqual({ status: 'PENDING', attempts: 0 });
+    await holder;
+    const sent = await findNotification(pool, queued.tenantId, queued.notificationId);
+    expect(sent?.deliveryStatus).toBe('SENT');
+    expect(sends).toHaveLength(1);
+    expect(await sentAudits(queued.notificationId)).toBe(1);
+  });
+
+  it('is not settled UNDELIVERABLE by a dead-lettered job while the claim is live', async () => {
+    const { queued, holder } = await heldSend();
+
+    const settled = await settleUndeliverable(pool, {
+      tenantId: queued.tenantId,
+      notificationId: queued.notificationId,
+      failureReason: 'outbox attempts exhausted',
+    });
+    expect(settled.outcome).toBe('IN_FLIGHT');
+
+    expect((await holder).outcome).toBe('SENT');
+    expect(await sentAudits(queued.notificationId)).toBe(1);
+  });
+
+  it('re-runs a dead-lettered job after a crashed holder claim expires, so the send settles', async () => {
+    const queued = await queuedEmail();
+    const hanging = new Map<NotificationChannel, NotificationChannelPort>([
+      [
+        'EMAIL',
+        {
+          channel: 'EMAIL',
+          mode: 'fake',
+          implementation: 'test-hanging',
+          send: () => new Promise(() => undefined),
+        },
+      ],
+    ]);
+    // The holder crashes mid-send: its provider call never returns and it never settles.
+    void attemptSend(pool, hanging, {
+      tenantId: queued.tenantId,
+      notificationId: queued.notificationId,
+      disclosure: queued.disclosure,
+    });
+    await sleep(100);
+    // A job that dead-letters on its only attempt (no disclosure to re-check) meets the claim.
+    const job = await new PostgresOutboxJobQueue(pool).enqueue({
+      jobType: 'notification.send',
+      payload: { notification_id: queued.notificationId },
+      tenantId: queued.tenantId,
+      maxAttempts: 1,
+    });
+    const config = loadConfig(validEnv());
+    const jobStatus = async () =>
+      (
+        await pool.query<{ status: string }>(`SELECT status FROM job_outbox WHERE job_id = $1`, [
+          job.jobId,
+        ])
+      ).rows[0]?.status;
+    const deliveryStatus = async () =>
+      (await findNotification(pool, queued.tenantId, queued.notificationId))?.deliveryStatus;
+
+    await runJobWorker({ pool, config, owner: 'worker-1', once: true, limit: 10 });
+    expect(await jobStatus()).toBe('PENDING');
+    expect(await deliveryStatus()).toBe('QUEUED');
+
+    // Time passes: the crashed holder's claim expires and the job comes due.
+    await pool.query(
+      `UPDATE notifications SET send_claimed_at = now() - interval '1 hour'
+       WHERE notification_id = $1`,
+      [queued.notificationId],
+    );
+    await pool.query(`UPDATE job_outbox SET run_at = now() WHERE job_id = $1`, [job.jobId]);
+    await runJobWorker({ pool, config, owner: 'worker-2', once: true, limit: 10 });
+
+    expect(await deliveryStatus()).toBe('UNDELIVERABLE');
+    const audits = await pool.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM audit_events
+        WHERE aggregate_id = $1 AND event_type = 'NOTIFICATION_UNDELIVERABLE'`,
+      [queued.notificationId],
+    );
+    expect(audits.rows[0]?.n).toBe(1);
   });
 });

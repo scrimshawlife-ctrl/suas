@@ -41,6 +41,16 @@ export class RetryLaterError extends Error {
     this.name = 'RetryLaterError';
   }
 }
+/** Thrown to run the job again after `delayMs` without spending one of its attempts. */
+export class DeferJobError extends Error {
+  constructor(
+    message: string,
+    readonly delayMs: number,
+  ) {
+    super(message);
+    this.name = 'DeferJobError';
+  }
+}
 export type JobWork = (job: JobToHandle) => Promise<void>;
 /** Runs once a job is dead-lettered, to settle the record it was working on. */
 export type DeadLetterWork = (job: JobToHandle, lastError: string) => Promise<void>;
@@ -70,19 +80,22 @@ export function createDeadLetterHandlers(pool: Pool): Readonly<Record<string, De
 const deadLetterNotificationPayload = z.object({ notification_id: z.string().uuid() });
 
 /**
- * NOTIFICATIONS.md §5: failures thrown before any provider attempt (channel unavailable,
- * template error) never count as attempts, so the outbox exhausts first. The Notification
- * then settles UNDELIVERABLE instead of staying QUEUED.
+ * NOTIFICATIONS.md §5: an exhausted send settles UNDELIVERABLE instead of staying QUEUED.
+ * Under another runner's live claim it defers instead, so a job remains to settle the send
+ * if that runner dies.
  */
 function notificationDeadLetterHandler(pool: Pool): DeadLetterWork {
   return async (job, lastError) => {
     const parsed = deadLetterNotificationPayload.safeParse(job.payload);
     if (!parsed.success || job.tenantId === undefined) return;
-    await settleUndeliverable(pool, {
+    const settled = await settleUndeliverable(pool, {
       tenantId: job.tenantId,
       notificationId: parsed.data.notification_id,
       failureReason: lastError,
     });
+    if (settled.outcome === 'IN_FLIGHT') {
+      throw new DeferJobError('notification send in flight elsewhere', settled.retryAfterMs);
+    }
   };
 }
 
@@ -171,10 +184,10 @@ export function notificationSendHandler(
       notificationId: parsed.notificationId,
       disclosure: parsed.disclosure,
     });
-    // Another runner holds the send. Retry later rather than finish the job, so a runner
-    // that died mid-send does not leave the Notification queued with no job.
+    // Another runner holds the send: come back once its claim has settled or expired, so
+    // a runner that died mid-send leaves a job behind, and waiting spends no attempt.
     if (result.outcome === 'SKIPPED' && result.reason === 'IN_FLIGHT') {
-      throw new RetryLaterError('notification send in flight elsewhere; retrying');
+      throw new DeferJobError('notification send in flight elsewhere', result.retryAfterMs ?? 0);
     }
     if (result.notification.deliveryStatus === 'FAILED') {
       throw new Error(`notification send failed: ${result.reason ?? 'provider refused'}`);

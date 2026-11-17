@@ -35,15 +35,18 @@ import { abandonStaleCheckIns, requeueUnsettledCheckIns } from '../signals/index
 import { createObjectStoragePort } from '../storage/index.js';
 import {
   claimDueJobs,
+  deferJob,
   markJobFailed,
   markJobSucceeded,
   PostgresOutboxJobQueue,
   renewJobLease,
+  reopenDeadLetter,
   type JobOutboxRow,
 } from './postgres-outbox-queue.js';
 import {
   createDeadLetterHandlers,
   createJobHandlers,
+  DeferJobError,
   licenceCloseHandler,
   licenceReadHandler,
   type DeadLetterWork,
@@ -246,6 +249,7 @@ async function handleJob(
 }
 
 async function settleDeadLetter(
+  pool: Pool,
   handlers: Readonly<Record<string, DeadLetterWork>>,
   job: JobOutboxRow,
   lastError: string,
@@ -255,6 +259,10 @@ async function settleDeadLetter(
   try {
     await handler(job, lastError);
   } catch (error: unknown) {
+    if (error instanceof DeferJobError && (await reopenDeadLetter(pool, job, error.delayMs))) {
+      log({ msg: 'job_deferred', job_id: job.jobId, job_type: job.jobType });
+      return;
+    }
     logFailure(
       {
         msg: 'job_failed',
@@ -328,10 +336,20 @@ export async function runJobWorker(options: JobWorkerOptions): Promise<void> {
           attempts: job.attempts,
         });
       } catch (error: unknown) {
+        if (error instanceof DeferJobError) {
+          const deferred = await deferJob(pool, job, error.delayMs);
+          log({
+            msg: deferred ? 'job_deferred' : 'job_lease_lost',
+            job_id: job.jobId,
+            job_type: job.jobType,
+          });
+          continue;
+        }
         const message = error instanceof Error ? error.message : String(error);
         const status = await markJobFailed(pool, { lease: job, error: message });
         logFailure({ msg: 'job_failed', job_id: job.jobId, job_type: job.jobType, status }, error);
-        if (status === 'DEAD_LETTER') await settleDeadLetter(deadLetterHandlers, job, message);
+        if (status === 'DEAD_LETTER')
+          await settleDeadLetter(pool, deadLetterHandlers, job, message);
       }
     }
 

@@ -9,6 +9,8 @@ export { InMemoryJobQueue, type RecordedJob } from './in-memory-queue.js';
 export {
   PostgresOutboxJobQueue,
   claimDueJobs,
+  deferJob,
+  reopenDeadLetter,
   markJobFailed,
   markJobSucceeded,
   renewJobLease,
