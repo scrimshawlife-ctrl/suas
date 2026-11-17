@@ -25,7 +25,7 @@ import {
   verifyView,
   type VerifyChoice,
   type VerifyOutcome,
-} from '../public/verify-status';
+} from './verify-status';
 import { VerifyForm } from './VerifyForm';
 import { VerifyCrisisCard } from './VerifyAside';
 import {

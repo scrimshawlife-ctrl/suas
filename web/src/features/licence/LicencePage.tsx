@@ -11,7 +11,7 @@ import { Page } from '../../components/Page';
 import { AlertCircleIcon, LockIcon } from '../../components/icons';
 import { useSingleFlight } from '../../lib/single-flight';
 import { useIdVerification } from '../public/api';
-import { retryAtText } from '../public/verify-status';
+import { retryAtText } from '../verify/verify-status';
 import { VerifyCrisisCard } from '../verify/VerifyAside';
 import { HelpOthers, SelfAttestButton } from '../verify/VerifyViews';
 import { useLicenceReview, useSubmitLicence } from './api';
