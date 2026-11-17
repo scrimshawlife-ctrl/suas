@@ -8,8 +8,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { assertAccepter, resolveCaseAccess } from '../case-access.js';
@@ -23,11 +23,6 @@ import {
 import { pageQuery } from '../../db/cursor.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
-
-export interface ContactLogRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
-}
 
 const caseIdParams = z.object({ caseId: z.string().uuid() });
 
@@ -61,7 +56,7 @@ function publicContactAttempt(attempt: ContactAttempt) {
   };
 }
 
-export function registerContactLogRoutes(app: FastifyInstance, deps: ContactLogRouteDeps): void {
+export function registerContactLogRoutes(app: FastifyInstance, deps: RouteContext): void {
   app.get(`${API_PREFIX}/cases/:caseId/contact-attempts`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { caseId } = caseIdParams.parse(request.params);

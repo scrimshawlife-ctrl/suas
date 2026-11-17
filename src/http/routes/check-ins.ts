@@ -15,6 +15,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { requireVerifiedVeteran } from '../../identity/index.js';
@@ -34,9 +35,7 @@ import {
   type QuestionWithOptions,
 } from '../../signals/index.js';
 
-export interface CheckInRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface CheckInRouteDeps extends RouteContext {
   readonly jobQueue?: DurableJobQueuePort;
 }
 
