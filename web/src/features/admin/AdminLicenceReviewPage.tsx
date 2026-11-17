@@ -254,7 +254,9 @@ export default function AdminLicenceReviewPage() {
 
       <LicenceDecisionDialogs
         decision={decision}
-        onRecused={() => void navigate(paths.adminLicenceReviews)}
+        // The URL changes before a transition renders the queue; render it at once so Back
+        // right after a recuse cannot keep this page mounted with its read turned off.
+        onRecused={() => void navigate(paths.adminLicenceReviews, { flushSync: true })}
       />
     </>
   );
