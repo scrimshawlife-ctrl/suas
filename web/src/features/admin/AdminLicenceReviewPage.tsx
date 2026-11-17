@@ -5,12 +5,12 @@ import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { RadioCardGroup } from '../../components/RadioCardGroup';
 import { Select } from '../../components/Select';
 import { StatusChip } from '../../components/StatusChip';
 import { useSingleFlight } from '../../lib/single-flight';
 import { useAdminLicenceReview, useLicenceCommand, type AdminLicenceReview } from './licence-api';
-import { ConfirmDialog } from './ConfirmDialog';
 import {
   CHECKLIST,
   DECLINE_REASONS,
