@@ -1,14 +1,7 @@
 import { expect, test } from '../fixtures';
-import { requestHelp, uniqueEmail } from '../helpers';
-import {
-  closePeople,
-  contactRow,
-  invite,
-  questionHeading,
-  startCheckIn,
-  uniqueSummary,
-  veteran,
-} from '../support/support';
+import { requestHelp, uniqueEmail, uniqueText } from '../helpers';
+import { closePeople, contactRow, invite, questionHeading, startCheckIn } from '../support/support';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -16,7 +9,7 @@ test('a Check-In resumes after refresh, after Back and Forward, and after leavin
   browser,
   request,
 }) => {
-  const { page } = await veteran(browser, request, { name: 'Bo N.', county: 'Alameda' });
+  const { page } = await newVeteran(browser, request, { name: 'Bo N.', county: 'Alameda' });
   await startCheckIn(page);
   for (const next of [2, 3]) {
     await page.getByRole('radio').first().check();
@@ -45,8 +38,8 @@ test('after sending a request, Back, Forward and refresh never send it twice', a
   browser,
   request,
 }) => {
-  const { page } = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
-  const summary = uniqueSummary('Groceries');
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
+  const summary = uniqueText('Groceries');
   const requestId = await requestHelp(
     page,
     request,
@@ -71,7 +64,7 @@ test('after removing a trusted contact, Back and Forward do not bring it back', 
   browser,
   request,
 }) => {
-  const { page } = await veteran(browser, request, { name: 'Nia S.', county: 'Santa Clara' });
+  const { page } = await newVeteran(browser, request, { name: 'Nia S.', county: 'Santa Clara' });
   await page.goto('/consents');
   await page.goto('/trusted-contacts');
   await invite(page, 'Friend', uniqueEmail('friend'));

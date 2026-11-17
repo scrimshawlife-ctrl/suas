@@ -1,14 +1,16 @@
 import { BOARD_REFRESH_MS } from '../../src/app/poll-intervals';
 import { expect, test } from '../fixtures';
 import {
-  ageRequest,
-  POLL_MARGIN_MS,
   pauseAfterPoll,
+  POLL_MARGIN_MS,
   requestHelp,
   runClock,
   runJobWorkerOnce,
+  uniqueText,
 } from '../helpers';
-import { closePeople, helper, uniqueSummary, veteran } from '../support/support';
+import { closePeople } from '../support/support';
+import { ageRequest } from './time';
+import { newHelper, newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -17,8 +19,11 @@ test('T2: a request past 72 hours leaves the open board at its next 30-second re
   request,
 }) => {
   // 08-release-expiry covers the requester's side; this is the helper's board.
-  const requester = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
-  const summary = uniqueSummary('Groceries');
+  const requester = await newVeteran(browser, request, {
+    name: 'Marcus T.',
+    county: 'Santa Clara',
+  });
+  const summary = uniqueText('Groceries');
   const requestId = await requestHelp(
     requester.page,
     request,
@@ -26,7 +31,10 @@ test('T2: a request past 72 hours leaves the open board at its next 30-second re
     'Front entrance of the library',
   );
 
-  const board = await helper(browser, request, { name: 'Dee R.', county: 'Santa Clara' });
+  const { page: board } = await newHelper(browser, request, {
+    name: 'Dee R.',
+    county: 'Santa Clara',
+  });
   await board.clock.install();
   await board.goto('/serve');
   const take = board.getByRole('button', { name: new RegExp(`Take this request: .*${summary}`) });
