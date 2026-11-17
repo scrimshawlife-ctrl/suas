@@ -34,6 +34,14 @@ describe('useCommandKey', () => {
     result.current.settle();
     expect(keyOf(result.current.headers())).not.toBe(second);
   });
+
+  it('keeps the key after a failure that is not an API answer (network error, abort)', () => {
+    const { result } = renderHook(() => useCommandKey());
+    const first = keyOf(result.current.headers());
+    result.current.settle(new TypeError('Failed to fetch'));
+    result.current.settle(new DOMException('The operation was aborted.', 'AbortError'));
+    expect(keyOf(result.current.headers())).toBe(first);
+  });
 });
 
 describe('useKeyedIdempotency', () => {
