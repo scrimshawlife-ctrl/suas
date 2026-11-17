@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { newPerson, shoot, signUp, uniqueEmail } from '../helpers';
-import { elevatedAdmin, openNewDraft, uniqueName } from './admin';
+import { newPerson, shoot, signUp, uniqueEmail, uniqueText } from '../helpers';
+import { elevatedAdmin, openNewDraft } from './admin';
 
 /**
  * Records, from the first paint, whether any admin chrome or admin heading ever appeared, so a
@@ -32,7 +32,7 @@ test('a Veteran and a helper deep-linking to any admin address are sent to /home
   // A real draft id, so the deep link points at something that exists.
   const admin = await elevatedAdmin(browser, request);
   const draftId = await openNewDraft(admin, request, {
-    service_name: uniqueName('Private Draft Pantry'),
+    service_name: uniqueText('Private Draft Pantry'),
     category: 'FOOD',
   });
   const targets = ['/admin', '/admin/drafts', `/admin/drafts/${draftId}`, '/admin/mfa'];
