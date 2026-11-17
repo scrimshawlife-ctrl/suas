@@ -13,7 +13,6 @@ import type { Pool } from 'pg';
 import type { SuasConfig } from '../config/index.js';
 import type { Queryable } from '../db/index.js';
 import type { DurableJobQueuePort, JsonObject } from '../jobs/index.js';
-import { findCurrentCase } from '../coordination/cases.js';
 import { canonicalInputFor, findCheckIn, supportSignalComputeRequest } from './check-ins.js';
 import { computeSignal } from './engine.js';
 import { alertTrustedContactsOfRed } from './red-alert.js';
@@ -131,9 +130,4 @@ export async function requeueUnsettledCheckIns(
     await jobQueue.enqueue(supportSignalComputeRequest(row.tenant_id, row.check_in_id));
   }
   return { requeued: lost.rows.length };
-}
-
-/** Convenience for tests: settled RED should have opened a non-closed case. */
-export async function caseOpenedForVeteran(pool: Pool, tenantId: string, veteranUserId: string) {
-  return findCurrentCase(pool, tenantId, veteranUserId);
 }
