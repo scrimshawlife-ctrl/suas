@@ -79,9 +79,12 @@ function useDraftCommand<T>(
     },
     onError: (error) => {
       key.settle(error);
-      // A 409 means the draft already left "to review": show what it is now.
-      if (isApiError(error) && error.status === 409)
+      // A 409 means the draft already left "to review": show what it is now, here and in the
+      // lists, which would otherwise show it from cache as still to review.
+      if (isApiError(error) && error.status === 409) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.detail(id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.lists() });
+      }
     },
   });
 }
