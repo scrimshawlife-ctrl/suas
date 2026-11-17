@@ -7,32 +7,39 @@ Stack: Vite, React, TypeScript (strict), React Router (data router), TanStack Qu
 ## Run it
 
 ```sh
-# 1. API (repo root): LOCAL mode, port 3120. Copy .env.example to a git-ignored .env, then set
-#    SUAS_ENV=LOCAL, SUAS_HTTP_PORT=3120, SUAS_EMAIL_MODE=fake, SUAS_ID_VERIFICATION_MODE=fake,
-#    SUAS_MODEL_INFERENCE_MODE=fake, SUAS_CHAT_PUSH_MODE=local, SUAS_CHAT_LOCAL_WS_PORT=3121,
-#    SUAS_SAFETY_COPY_MODE=approved, DATABASE_SSL_MODE=disable and a local DATABASE_URL.
-#    New-email sign-up also needs SUAS_BROWSER_TENANT_ID set to a tenant UUID (any UUID in LOCAL).
+# 1. API (repo root): LOCAL mode on the default port 3000. Copy .env.example to a git-ignored .env,
+#    add SUAS_SESSION_SECRET, then set SUAS_EMAIL_MODE=fake, SUAS_MODEL_INFERENCE_MODE=fake,
+#    SUAS_CHAT_PUSH_MODE=local (chat WebSocket on SUAS_CHAT_LOCAL_WS_PORT, default 3001) and
+#    SUAS_BROWSER_TENANT_ID (any UUID in LOCAL; new-email sign-up joins that tenant).
+#    The Verify step also needs SUAS_VA_CONFIRMATION_MODE=fixture with SUAS_FINGERPRINT_KEY and
+#    SUAS_FINGERPRINT_KEY_ID (see .env.example). e2e/config.ts `stackEnv` is a complete LOCAL fake set.
 npm run migrate -- apply && npm run seed && npm run dev
 
-# 2. Web (this folder): Vite on 5123, proxying /api to 127.0.0.1:${SUAS_API_PORT:-3120}
+# 2. Web (this folder): Vite on 5123, proxying /api to 127.0.0.1:${SUAS_API_PORT:-3000}
 cd web && npm ci && npm run dev
 ```
 
+`npm run dev:demo` at the repo root also serves the API on 3000, so the web app works against it with no extra settings; sign in as `demo@example.invalid` with code `123456`. The root [README](../README.md#run-it-locally) compares every launcher.
+
 Sign-in codes in fake email mode come from `GET /api/v0/dev/last-challenge?destination=`.
+
+Safety copy: `SUAS_SAFETY_COPY_MODE=approved` makes the API serve the released crisis copy (`GET /api/v0/immediate-resources` and the legacy `/app` pages); `placeholder_test_only`, the `.env.example` value and the only value TEST and CI may use, serves a labelled placeholder instead. The web app compiles its own crisis copy and does not read that endpoint, so it shows the same crisis copy in either mode.
 
 | Script              | What it does                                                    |
 | ------------------- | --------------------------------------------------------------- |
 | `npm run dev`       | Vite dev server on http://127.0.0.1:5123                        |
 | `npm run build`     | Typecheck, then production build to `dist/`                     |
+| `npm run preview`   | Serve the production build on http://127.0.0.1:5123             |
 | `npm run lint`      | ESLint (flat config, typescript-eslint, react-hooks)            |
 | `npm run typecheck` | `tsc --noEmit`                                                  |
 | `npm test`          | Vitest                                                          |
 | `npm run gen:api`   | Regenerate `src/api/schema.d.ts` from `../docs/openapi/v0.json` |
 | `npm run check`     | lint, typecheck, test, build (CI runs this)                     |
+| `npm run test:e2e`  | Playwright suite in `e2e/` against a fresh LOCAL fake stack     |
 
 ### End-to-end tests
 
-`npm run test:e2e` runs the Playwright suite in `e2e/` against the LOCAL fake stack. CI runs it in the `web-e2e` job of `.github/workflows/verify.yml` with `SUAS_E2E_SAFETY_COPY_MODE=placeholder_test_only`; it is separate from the staging suite at the repo root. It needs a Postgres on localhost:5432 (locally the Docker container `suas-postgres17-local`; `SUAS_E2E_DB_HOST_URL` points elsewhere) and Chromium (`npx playwright install chromium` once). One command builds everything from scratch: it drops and recreates the `suas_local_e2e` database, applies migrations, seeds it, starts the API on 3190 (chat WebSocket on 3191) with a random per-run session secret, and starts Vite on 5193, then stops both afterwards. No `.env` is read. It walks the plan §10 scenarios (request, accept and chat, widening, RED alert, catalog, crisis) through the real UI, including a trusted contact accepting an invite on the Invitations screen; the API is used only to read the fake sign-in code, script the fake model, read back server state after a UI step, and seed lists longer than one page so the paging ("Show more") tests have something to page through. Time-skipping updates `submitted_at` in the e2e database and runs `src/cli/job-worker.ts --once`. The licence fallback (R10.1 proposal) runs the fixture licence reader with fake object storage, so reads happen inline in the API; Chromium gets a fake camera with no permission prompt for the camera-only selfie. Set `SUAS_E2E_SHOTS_DIR` to also save 1280 px and 390 px review screenshots; `SUAS_E2E_API_PORT`, `SUAS_E2E_WS_PORT`, `SUAS_E2E_WEB_PORT` and `SUAS_E2E_DB_NAME` (must match `suas_local_*`) move the stack.
+`npm run test:e2e` runs the Playwright suite in `e2e/` against the LOCAL fake stack. It builds its own API (3190), chat WebSocket (3191), Vite (5193) and `suas_local_e2e` database, reads no `.env`, and stops everything afterwards; CI runs it in four shards. It is separate from the staging suite at the repo root. Ports, database rules, layout, helpers and the UI coverage list are in [e2e/README.md](e2e/README.md).
 
 Fonts are self-hosted through `@fontsource/public-sans` (600, 700) and `@fontsource/atkinson-hyperlegible` (400, 400 italic, 700), so the app makes no third-party requests and works under a strict CSP.
 
@@ -43,11 +50,16 @@ Optional env: `VITE_SUAS_ENV_LABEL` (shows the EnvChip, for example "Synthetic d
 ## Layout
 
 ```
-src/api/        client, token store, ApiError, query keys, useMe, auth hooks
-src/app/        router, route guards, layouts (chrome), mode store, paths
+src/api/        client, token store, ApiError, query keys, idempotency, shared hooks
+src/app/        router, route guards, layouts (chrome), mode store, paths, query client
 src/components/ shared components, one file each (see the gallery)
-src/features/   <area>/<Screen>Page.tsx: public, request, support, serve, chat, admin
+src/features/   <area>/<Screen>Page.tsx: public, request, support, serve, chat, licence, admin
+src/lib/        small framework-free helpers (class names, single-flight, unique-by)
 src/dev/        component gallery
+src/test/       Vitest setup
+e2e/            Playwright end-to-end suite (see e2e/README.md)
+scripts/        gen-api.mjs, behind npm run gen:api
+public/         icons, logos and the web manifest
 ```
 
 ### Adding or replacing a screen
@@ -63,7 +75,7 @@ Each route points at a lazy `features/<area>/<Screen>Page.tsx` with a default ex
   - on 401 for a signed-in request: clears the token and goes to `/sign-in` (a wrong sign-in code is a 401 too and is left alone).
 - Because errors throw, `const { data } = await api.GET(...)` is enough; use `isApiError` and `GATE_CODES` (`VERIFICATION_REQUIRED`, `COUNTY_REQUIRED`, `MFA_REQUIRED`, `FORBIDDEN`) to branch.
 - `src/api/types.ts` has short names for the generated schemas (`Me`, `County`, `ServiceRequestListItem`, …). After the document changes, run `npm run gen:api`; the generated `schema.d.ts` is committed.
-- Shared hooks: `useMe`, `useServiceRequests(ownership)`, `useServiceRequest(id)`, `useChatThreads()`, `useUpdateProfile()`, `useUpdateCounty()`, and the sign-in hooks in `auth.ts`. Queries stay idle while there is no session token.
+- Shared hooks: `useMe`, `useServiceRequests(ownership)`, `useInfiniteServiceRequests(ownership)`, `useServiceRequest(id)`, `useChatThreads()`, `useUpdateProfile()`, `useUpdateCounty()`, `useIdempotencyKey()`, the sign-in hooks in `auth.ts` (`useStartChallenge`, `useVerifyChallenge`, `useLogout`), and `useSessionToken()` and `useMfaElevated()` in `token-store.ts`. Queries stay idle while there is no session token.
 
 ### Writes and idempotency
 

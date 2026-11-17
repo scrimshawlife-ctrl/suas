@@ -2,7 +2,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
-const apiPort = process.env['SUAS_API_PORT'] ?? '3120';
+// The API's default SUAS_HTTP_PORT (.env.example); the e2e stack passes its own port.
+const apiPort = process.env['SUAS_API_PORT'] ?? '3000';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
