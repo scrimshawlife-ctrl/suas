@@ -7,7 +7,7 @@ import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { useSingleFlight } from '../../lib/single-flight';
 import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
-import { useDiscardDraft, useEditDraft, usePublishDraft } from './api';
+import { useDiscardDraft, useEditDraft, usePublishDraft } from './drafts-api';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ContactListField } from './ContactListField';
 import {

@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
-import { useEditDraft } from './api';
+import { useEditDraft } from './drafts-api';
 import { makeDraft } from './test-utils';
 
 const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));

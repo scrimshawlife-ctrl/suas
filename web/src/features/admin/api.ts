@@ -1,5 +1,4 @@
 import {
-  keepPreviousData,
   queryOptions,
   useInfiniteQuery,
   useMutation,
@@ -13,8 +12,6 @@ import { queryKeys, resourceKeys } from '../../api/keys';
 import { cursorPages } from '../../api/queries';
 import { requireData } from '../../api/require-data';
 import type { Schemas } from '../../api/types';
-import type { DraftEditRequest, ResourceDraft } from './draft-form';
-import type { DraftStatus } from './labels';
 
 export type AdapterCatalogEntry = Schemas['AdapterCatalogEntry'];
 export type BuildInfo = Schemas['BuildInfo'];
@@ -50,119 +47,6 @@ export function useAdapterCatalog() {
 }
 
 const PAGE_SIZE = 20;
-
-/** Drafts for one status, newest first, with a cursor for "Show more". */
-export function useResourceDrafts(status: DraftStatus) {
-  return useInfiniteQuery({
-    ...cursorPages({
-      queryKey: queryKeys.adminDrafts.list({ status }),
-      fetchPage: async (page) => {
-        const { data } = await api.GET('/api/v0/admin/resource-drafts', {
-          params: { query: { status, limit: PAGE_SIZE, ...page } },
-        });
-        return requireData(data, 'drafts');
-      },
-    }),
-    placeholderData: keepPreviousData,
-  });
-}
-
-export function useResourceDraft(id: string) {
-  return useQuery({
-    queryKey: queryKeys.adminDrafts.detail(id),
-    queryFn: async () => {
-      const { data } = await api.GET('/api/v0/admin/resource-drafts/{id}', {
-        params: { path: { id } },
-      });
-      return requireData(data, 'draft');
-    },
-  });
-}
-
-export function useExtractDrafts() {
-  const queryClient = useQueryClient();
-  const key = useCommandKey();
-  return useMutation({
-    mutationFn: async (body: { source_text: string; source_link: string }) => {
-      const { data } = await api.POST('/api/v0/admin/resource-drafts/commands/extract', {
-        body,
-        headers: key.headers(),
-      });
-      return requireData(data, 'drafts').drafts;
-    },
-    onSuccess: () => {
-      key.settle();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.all });
-    },
-    onError: key.settle,
-  });
-}
-
-function useDraftCommand<T>(
-  id: string,
-  run: (headers: Record<string, string>, body?: DraftEditRequest) => Promise<T>,
-  toDraft: (result: T) => ResourceDraft,
-) {
-  const queryClient = useQueryClient();
-  const key = useCommandKey();
-  return useMutation({
-    mutationFn: (body?: DraftEditRequest) => run(key.headers(), body),
-    onSuccess: (result) => {
-      key.settle();
-      queryClient.setQueryData(queryKeys.adminDrafts.detail(id), toDraft(result));
-      void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.lists() });
-    },
-    onError: (error) => {
-      key.settle(error);
-      // A 409 means the draft already left "to review": show what it is now.
-      if (isApiError(error) && error.status === 409)
-        void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.detail(id) });
-    },
-  });
-}
-
-export function useEditDraft(id: string) {
-  return useDraftCommand(
-    id,
-    async (headers, body) => {
-      const { data } = await api.POST('/api/v0/admin/resource-drafts/{id}/commands/edit', {
-        params: { path: { id } },
-        body: body ?? {},
-        headers,
-      });
-      return requireData(data, 'draft');
-    },
-    (draft) => draft,
-  );
-}
-
-export function usePublishDraft(id: string) {
-  return useDraftCommand(
-    id,
-    async (headers) => {
-      const { data } = await api.POST('/api/v0/admin/resource-drafts/{id}/commands/publish', {
-        params: { path: { id } },
-        headers,
-      });
-      return requireData(data, 'published draft');
-    },
-    (result) => result.draft,
-  );
-}
-
-export function useDiscardDraft(id: string) {
-  return useDraftCommand(
-    id,
-    async (headers) => {
-      const { data } = await api.POST('/api/v0/admin/resource-drafts/{id}/commands/discard', {
-        params: { path: { id } },
-        headers,
-      });
-      return requireData(data, 'draft');
-    },
-    (draft) => draft,
-  );
-}
 
 export type AdminLicenceReview = Schemas['AdminLicenceReview'];
 export type LicenceImageSide = 'front' | 'back' | 'selfie';

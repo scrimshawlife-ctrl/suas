@@ -9,7 +9,7 @@ import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { useSingleFlight } from '../../lib/single-flight';
-import { useExtractDrafts } from './api';
+import { useExtractDrafts } from './drafts-api';
 import { LIMITS, validateExtract, type ExtractErrors, type ResourceDraft } from './draft-form';
 
 export const BUILDER_UNAVAILABLE_TEXT =
