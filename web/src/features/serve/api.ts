@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { useRef } from 'react';
 import { api } from '../../api/client';
+import { useKeyedIdempotency } from '../../api/idempotency';
 import { infiniteServiceRequestsKey } from '../../api/service-requests';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { cursorPages, useSignedInInfiniteQuery, useSignedInQuery } from '../../api/queries';
@@ -34,24 +34,6 @@ export function useOpenRequests() {
     }),
     refetchInterval: BOARD_REFRESH_MS,
   });
-}
-
-/** One Idempotency-Key per user action, kept per target so a retry of the same action reuses it. */
-function useKeyedIdempotency() {
-  const keys = useRef(new Map<string, string>());
-  return {
-    headers(target: string): Record<string, string> {
-      let key = keys.current.get(target);
-      if (key === undefined) {
-        key = crypto.randomUUID();
-        keys.current.set(target, key);
-      }
-      return { 'Idempotency-Key': key };
-    },
-    renew(target: string): void {
-      keys.current.delete(target);
-    },
-  };
 }
 
 /** POST /service-requests/{id}/accept. First accept wins; the loser gets 409 ALREADY_CLAIMED. */

@@ -1,7 +1,7 @@
-import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { hasApiCode } from '../../api/errors';
+import { useBodyIdempotencyKey, useIdempotencyKey } from '../../api/idempotency';
 import { queryKeys } from '../../api/keys';
 import { meQueryOptions } from '../../api/me';
 import { useSignedInQuery } from '../../api/queries';
@@ -35,27 +35,23 @@ function useSetStanding() {
 export function useConfirmVeteranStatus() {
   const queryClient = useQueryClient();
   const setStanding = useSetStanding();
-  const last = useRef<{ body: string; key: string } | null>(null);
+  const key = useBodyIdempotencyKey();
   return useMutation({
     // Gone from the mutation cache as soon as the page resets it, so the body is not kept.
     gcTime: 0,
     mutationFn: async (body: VaConfirmBody) => {
-      const fingerprint = JSON.stringify(body);
-      if (last.current?.body !== fingerprint) {
-        last.current = { body: fingerprint, key: crypto.randomUUID() };
-      }
       const { data } = await api.POST('/api/v0/veterans/me/verification/va/confirm', {
         body,
-        params: { header: { 'Idempotency-Key': last.current.key } },
+        params: { header: key.headers(body) },
       });
       return requireData(data, 'confirmation result');
     },
     onSuccess: (result) => {
-      if (result.status !== 'NOT_CONFIRMED') last.current = null;
+      if (result.status !== 'NOT_CONFIRMED') key.renew();
       setStanding({ method: 'VA_VETERAN_STATUS', ...result });
     },
     onError: (error) => {
-      if (hasApiCode(error, 'IDEMPOTENCY_CONFLICT')) last.current = null;
+      if (hasApiCode(error, 'IDEMPOTENCY_CONFLICT')) key.renew();
     },
     onSettled: () => {
       // A VA answer decides whether the R10.1 licence path is offered.
@@ -73,18 +69,17 @@ export function useConfirmVeteranStatus() {
 export function useSelfAttest() {
   const queryClient = useQueryClient();
   const setStanding = useSetStanding();
-  const key = useRef<string | null>(null);
+  const key = useIdempotencyKey();
   return useMutation({
     mutationFn: async () => {
-      key.current ??= crypto.randomUUID();
       const { data } = await api.POST('/api/v0/veterans/me/verification/commands/self-attest', {
-        params: { header: { 'Idempotency-Key': key.current } },
+        params: { header: key.headers() },
       });
       return requireData(data, 'self-attestation result');
     },
     onSuccess: (standing) => setStanding(standing),
     onError: (error) => {
-      if (hasApiCode(error, 'IDEMPOTENCY_CONFLICT')) key.current = null;
+      if (hasApiCode(error, 'IDEMPOTENCY_CONFLICT')) key.renew();
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.me }),
   });

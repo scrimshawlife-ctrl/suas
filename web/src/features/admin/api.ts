@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { isApiError } from '../../api/errors';
-import { useIdempotencyKey } from '../../api/idempotency';
+import { useCommandKey } from '../../api/idempotency';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { cursorPages } from '../../api/queries';
 import { requireData } from '../../api/require-data';
@@ -77,21 +77,6 @@ export function useResourceDraft(id: string) {
       return requireData(data, 'draft');
     },
   });
-}
-
-/**
- * One Idempotency-Key per user action. A retry after a dropped response reuses it; the key
- * is renewed once the action succeeded or the server refused it (4xx), because the next
- * attempt then has a different body.
- */
-function useCommandKey() {
-  const key = useIdempotencyKey();
-  return {
-    headers: () => key.headers(),
-    settle: (error?: unknown) => {
-      if (error === undefined || (isApiError(error) && error.status < 500)) key.renew();
-    },
-  };
 }
 
 export function useExtractDrafts() {
