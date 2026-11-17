@@ -44,7 +44,7 @@ export async function bearer(
 
 export interface PersonOptions {
   /** Defaults to a fresh synthetic tenant. */
-  readonly tenantId?: string;
+  readonly tenantId?: string | undefined;
   /** Prefix of the synthetic email address. */
   readonly label: string;
   /** Set at sign-up; omitted leaves the user without one. */
