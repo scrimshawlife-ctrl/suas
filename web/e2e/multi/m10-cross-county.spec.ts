@@ -4,7 +4,8 @@
  */
 
 import { expect, test } from '../fixtures';
-import { newHelper, newRequester, openList, sendRequest } from '../serve/serve';
+import { openList, sendRequest } from '../serve/serve';
+import { newHelper, newVeteran } from '../people';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -16,7 +17,10 @@ test('a helper in another county gets not-found for the case and the chat of a r
   // The errors this test provokes on purpose.
   allow.push(/status of 404/);
   // Santa Cruz and Alameda share no border (migrations/0013_peer_matching.sql).
-  const requester = await newRequester(browser, request, { name: 'Rosa M.', county: 'Santa Cruz' });
+  const { page: requester } = await newVeteran(browser, request, {
+    name: 'Rosa M.',
+    county: 'Santa Cruz',
+  });
   const { id, summary } = await sendRequest(requester, request);
   const near = await newHelper(browser, request, { name: 'Dee R.', county: 'Santa Cruz' });
   await expect(openList(near.page)).toContainText(summary);
