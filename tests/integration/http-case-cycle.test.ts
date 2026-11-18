@@ -384,7 +384,7 @@ describe('holder standing ends with the case cycle', () => {
   });
 });
 
-describe('a close racing a helper write keeps that write out of the next cycle', () => {
+describe('a close racing a helper write files it only in the cycle whose standing it passed', () => {
   /** Wait until `count` sessions wait on a row lock, or until `pending` settles first. */
   async function lockWaitersOrSettled(count: number, pending: Promise<unknown>) {
     let settled = false;
@@ -475,6 +475,92 @@ describe('a close racing a helper write keeps that write out of the next cycle',
       closing.release();
     }
     expect((await nextCycleReads(world)).attempts).toEqual([]);
+  });
+
+  it('refuses a contact write that waited on CLOSE even with a REOPEN queued behind it', async () => {
+    const world = await readyToResolve();
+    expect(
+      (await post(world.former, `/cases/${world.caseId}/commands/resolve`, settlementContent))
+        .statusCode,
+    ).toBe(200);
+    const closing = await pool().connect();
+    try {
+      await closing.query('BEGIN');
+      await closeIn(closing, world);
+      const write = post(world.former, `/cases/${world.caseId}/commands/log-contact-attempt`, {
+        channel: 'PHONE',
+      });
+      await lockWaitersOrSettled(1, write);
+      // The admin REOPEN queues on the case row behind the write, so the write is granted
+      // the row first, the moment CLOSE commits, and re-checks a CLOSED case.
+      const reopened = executeCaseCommand(pool(), {
+        tenantId: world.tenantId,
+        caseId: world.caseId,
+        command: 'REOPEN',
+        actorId: 'staff',
+        actorType: 'SUAS_ADMIN',
+        reason: 'new need on the same case',
+      });
+      await lockWaitersOrSettled(2, reopened);
+      await closing.query('COMMIT');
+      const refused = await write;
+      expect([refused.statusCode, refused.json().error.code]).toEqual([403, 'FORBIDDEN']);
+      expect((await reopened).status).toBe('OPEN');
+    } finally {
+      closing.release();
+    }
+    // The same helper accepts in the new cycle; the refused write is not in it.
+    const second = await submitRequest(world.requester);
+    expect((await accept(world.former, second.requestId)).statusCode).toBe(200);
+    expect(
+      (await get(world.former, `/cases/${world.caseId}/contact-attempts`)).json().contact_attempts,
+    ).toEqual([]);
+  });
+
+  it("files a write in flight across CLOSE, REOPEN and its helper's new accept in the new cycle", async () => {
+    const world = await readyToResolve();
+    expect(
+      (await post(world.former, `/cases/${world.caseId}/commands/resolve`, settlementContent))
+        .statusCode,
+    ).toBe(200);
+    const contact = await pool().connect();
+    let written: Awaited<ReturnType<typeof recordContactInTx>>;
+    try {
+      // The write's transaction begins in the old cycle, as a slow request's would.
+      await contact.query('BEGIN');
+      await contact.query('SELECT now()');
+      expect((await post(world.former, `/cases/${world.caseId}/commands/close`)).statusCode).toBe(
+        200,
+      );
+      await executeCaseCommand(pool(), {
+        tenantId: world.tenantId,
+        caseId: world.caseId,
+        command: 'REOPEN',
+        actorId: 'staff',
+        actorType: 'SUAS_ADMIN',
+        reason: 'new need on the same case',
+      });
+      const second = await submitRequest(world.requester);
+      expect((await accept(world.former, second.requestId)).statusCode).toBe(200);
+      // CASES.md §4.3: standing is the accept record when the command runs, and the helper
+      // now holds this cycle's request, so the write stands and belongs to this cycle.
+      written = await recordContactInTx(contact, {
+        tenantId: world.tenantId,
+        caseId: world.caseId,
+        loggedByUserId: world.former.userId,
+        command: 'log-contact-attempt',
+        channel: 'PHONE',
+        outcome: 'PENDING',
+      });
+      await contact.query('COMMIT');
+    } finally {
+      contact.release();
+    }
+    const attempts = (await get(world.former, `/cases/${world.caseId}/contact-attempts`)).json()
+      .contact_attempts as { contact_attempt_id: string }[];
+    expect(attempts.map((attempt) => attempt.contact_attempt_id)).toEqual([
+      written.contactAttempt.contactAttemptId,
+    ]);
   });
 
   it('keeps a contact write that held the case before a CLOSE begun earlier in the old cycle', async () => {
