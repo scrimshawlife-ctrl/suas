@@ -27,7 +27,11 @@ import {
   type NotificationChannel,
   type NotificationChannelPort,
 } from '../../src/notifications/index.js';
-import { PRE_CALL_BUDGET_MS, PRE_SEND_RETRY_MS } from '../../src/notifications/service.js';
+import {
+  PRE_CALL_BUDGET_MS,
+  PRE_SEND_RETRY_MS,
+  SEND_CLAIM_MS,
+} from '../../src/notifications/service.js';
 import {
   claimDueJobs,
   DispatchingJobQueue,
@@ -224,6 +228,24 @@ describe('attemptSend under concurrent runners', () => {
       expect(sends).toHaveLength(1);
       expect(await sentAudits(queued.notificationId)).toBe(1);
     }
+  });
+
+  it('calls the provider once when fifty runners race for one Notification', async () => {
+    const queued = await queuedEmail();
+    const { sends, channels } = slowCountingEmail(50);
+    const input = {
+      tenantId: queued.tenantId,
+      notificationId: queued.notificationId,
+      disclosure: queued.disclosure,
+    };
+    // More runners than pool connections, so they also queue for the database.
+    const results = await Promise.all(
+      Array.from({ length: 50 }, () => attemptSend(pool, channels, input)),
+    );
+
+    expect(sends).toHaveLength(1);
+    expect(results.filter((result) => result.outcome === 'SENT')).toHaveLength(1);
+    expect(await sentAudits(queued.notificationId)).toBe(1);
   });
 
   it('lets a later runner see the in-flight send instead of sending again', async () => {
@@ -450,6 +472,73 @@ describe('a send another runner holds', () => {
     );
     expect(audits.rows[0]?.n).toBe(1);
   });
+
+  it('waits out a claim whose runner never saw it commit, then sends once', async () => {
+    const queued = await queuedEmail();
+    const { sends, channels } = slowCountingEmail(0);
+    const input = {
+      tenantId: queued.tenantId,
+      notificationId: queued.notificationId,
+      disclosure: queued.disclosure,
+    };
+    // The claim committed but the connection dropped before its answer: no runner holds it.
+    await takeClaim(queued.notificationId);
+
+    expect(await attemptSend(pool, channels, input)).toMatchObject({
+      outcome: 'SKIPPED',
+      reason: 'IN_FLIGHT',
+      retryAfterMs: SEND_CLAIM_MS,
+    });
+    expect(sends).toHaveLength(0);
+
+    await expireClaim(queued.notificationId);
+    expect((await attemptSend(pool, channels, input)).outcome).toBe('SENT');
+    expect(sends).toHaveLength(1);
+    expect(await sentAudits(queued.notificationId)).toBe(1);
+  });
+
+  it('sends once when a reopened dead-lettered job and a newly enqueued one both run', async () => {
+    const { queued, sends, holder } = await heldSend();
+    const jobs = new PostgresOutboxJobQueue(pool);
+    const config = loadConfig(validEnv());
+    const pass = (owner: string) => runJobWorker({ pool, config, owner, once: true, limit: 10 });
+    // Dead-letters on its only attempt (no disclosure to re-check), meets the live claim and
+    // is reopened.
+    const reopened = await jobs.enqueue({
+      jobType: 'notification.send',
+      payload: { notification_id: queued.notificationId },
+      tenantId: queued.tenantId,
+      maxAttempts: 1,
+    });
+    const reopening = pass('worker-1');
+    // A second job for the same send is enqueued meanwhile.
+    const fresh = await jobs.enqueue({
+      jobType: 'notification.send',
+      payload: buildNotificationSendPayload(queued.notificationId, queued.disclosure),
+      tenantId: queued.tenantId,
+      maxAttempts: 2,
+    });
+    await reopening;
+    const status = async (jobId: string) =>
+      (
+        await pool.query<{ status: string }>(`SELECT status FROM job_outbox WHERE job_id = $1`, [
+          jobId,
+        ])
+      ).rows[0]?.status;
+    expect(await status(reopened.jobId)).toBe('PENDING');
+
+    expect((await holder).outcome).toBe('SENT');
+    await pool.query(`UPDATE job_outbox SET run_at = now() WHERE job_id = ANY($1::uuid[])`, [
+      [reopened.jobId, fresh.jobId],
+    ]);
+    await pass('worker-2');
+
+    expect(await status(fresh.jobId)).toBe('SUCCEEDED');
+    const after = await findNotification(pool, queued.tenantId, queued.notificationId);
+    expect(after?.deliveryStatus).toBe('SENT');
+    expect(sends).toHaveLength(1);
+    expect(await sentAudits(queued.notificationId)).toBe(1);
+  });
 });
 
 describe('a holder that stalls between its claim and the provider call', () => {
@@ -548,12 +637,13 @@ describe('a holder that stalls between its claim and the provider call', () => {
     expect(sends).toHaveLength(0);
   });
 
-  it('skips the call and frees the claim when the renewal answers after the pre-call budget', async () => {
+  /** The holder's claim renewal answers `elapsedMs` after it was sent, on the holder's clock. */
+  async function renewalAnswersAfter(elapsedMs: number) {
     vi.useFakeTimers({ toFake: ['performance'] });
     const queued = await queuedEmail();
     const { sends, channels } = slowCountingEmail(0);
     const { stall, outcome } = await stalledHolder(queued, channels);
-    // Hold the row so the renewal waits, then let the holder's clock run past the budget.
+    // Hold the row so the renewal waits, then move the holder's clock on.
     const row = await pool.connect();
     await row.query('BEGIN');
     await row.query(`SELECT 1 FROM notifications WHERE notification_id = $1 FOR UPDATE`, [
@@ -561,13 +651,28 @@ describe('a holder that stalls between its claim and the provider call', () => {
     ]);
     await release(stall);
     await untilRenewalWaits();
-    vi.advanceTimersByTime(PRE_CALL_BUDGET_MS + 1);
+    vi.advanceTimersByTime(elapsedMs);
     await row.query('COMMIT');
     row.release();
+    return { queued, sends, result: await outcome };
+  }
 
-    expect(await outcome).toMatchObject({ ...deferred, reason: 'SEND_WINDOW_PASSED' });
+  it('skips the call and frees the claim when the renewal answers after the pre-call budget', async () => {
+    const { queued, sends, result } = await renewalAnswersAfter(PRE_CALL_BUDGET_MS + 1);
+
+    expect(result).toMatchObject({ ...deferred, reason: 'SEND_WINDOW_PASSED' });
     expect(sends).toHaveLength(0);
     expect(await claimToken(queued.notificationId)).toBeNull();
+  });
+
+  it('still calls the provider when the renewal answers at exactly the pre-call budget', async () => {
+    // Budget + provider allowance + settle margin is exactly the claim, and a claim goes
+    // stale only once strictly older than that, so the boundary itself is still safe.
+    const { queued, sends, result } = await renewalAnswersAfter(PRE_CALL_BUDGET_MS);
+
+    expect(result.outcome).toBe('SENT');
+    expect(sends).toHaveLength(1);
+    expect(await sentAudits(queued.notificationId)).toBe(1);
   });
 
   it('defers a job whose claim is lost before the call, so it never dead-letters and sends once', async () => {
