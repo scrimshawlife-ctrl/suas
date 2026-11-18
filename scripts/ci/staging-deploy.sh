@@ -49,12 +49,28 @@ deploy_backend() {
 }
 
 # Runs one AWS CLI command as the CDK deploy role, the only identity allowed to change stacks.
+# Fails closed: empty or partial keys would leave the CLI on the caller's own identity, so the
+# keys must be complete and must sign in as exactly that role before the command runs.
 as_cdk_deploy_role() {
-  local account key secret token
-  account=$(aws sts get-caller-identity --query Account --output text)
-  read -r key secret token < <(aws sts assume-role --role-session-name "suas-quiesce-${GITHUB_RUN_ID:-local}" \
-    --role-arn "arn:aws:iam::${account}:role/cdk-hnb659fds-deploy-role-${account}-${REGION}" \
+  local role session creds key secret token arn
+  role="cdk-hnb659fds-deploy-role-${CALLER_ACCOUNT}-${REGION}"
+  session="suas-quiesce-${GITHUB_RUN_ID:-local}"
+  creds=$(aws sts assume-role --role-session-name "$session" \
+    --role-arn "arn:aws:iam::${CALLER_ACCOUNT}:role/${role}" \
     --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
+  read -r key secret token <<<"$creds"
+  for value in "$key" "$secret" "$token"; do
+    if [ -z "$value" ] || [ "$value" = None ]; then
+      echo "Assuming $role returned no complete credentials; stopping." >&2
+      exit 1
+    fi
+  done
+  arn=$(AWS_ACCESS_KEY_ID="$key" AWS_SECRET_ACCESS_KEY="$secret" AWS_SESSION_TOKEN="$token" \
+    aws sts get-caller-identity --query Arn --output text)
+  if [ "$arn" != "arn:aws:sts::${CALLER_ACCOUNT}:assumed-role/${role}/${session}" ]; then
+    echo "Assumed identity $arn is not the CDK deploy role; stopping." >&2
+    exit 1
+  fi
   AWS_ACCESS_KEY_ID="$key" AWS_SECRET_ACCESS_KEY="$secret" AWS_SESSION_TOKEN="$token" "$@"
 }
 
@@ -83,13 +99,20 @@ quiesce() {
   aws cloudformation wait stack-update-complete --region "$REGION" --stack-name "$BACKEND"
 }
 
+# Invokes the backend's migrate or worker function by its full ARN in the release account and
+# region, so the result checks are about the backend's own function, not what it reports.
 invoke() {
-  aws lambda invoke --region "$REGION" --function-name "$1" --cli-binary-format raw-in-base64-out \
-    --cli-read-timeout 360 --payload '{}' "$WORK/$2.json" >"$WORK/$2.meta.json"
+  local name target
+  name=$(output "$BACKEND" "$2")
+  target=$(release invoke-target "$RELEASE_JSON" "$1" "$name" "$CALLER_ACCOUNT")
+  aws lambda invoke --region "$REGION" --function-name "$target" --cli-binary-format raw-in-base64-out \
+    --cli-read-timeout 360 --payload '{}' "$WORK/$1.json" >"$WORK/$1.meta.json"
 }
 
 step "Verify the release artifact"
 release verify "$CDK_OUT" "$RELEASE_JSON"
+CALLER_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+readonly CALLER_ACCOUNT
 require_stack Suas-Dns "$REGION"
 require_stack Suas-Staging-WebCert us-east-1
 deployed_schema=$(output "$BACKEND" ExpectedSchemaVersion)
@@ -116,7 +139,7 @@ if [ "$SCOPE" = full ]; then
   done_step
 
   step "Migrate"
-  invoke "$(output "$BACKEND" MigrateFunctionName)" migrate
+  invoke migrate MigrateFunctionName
   release check-migration "$WORK/migrate.json" "$WORK/migrate.meta.json" "$RELEASE_JSON"
   done_step
 
@@ -128,7 +151,7 @@ if [ "$SCOPE" = full ]; then
 
   step "Run one job worker pass"
   deploy_backend worker
-  invoke "$(output "$BACKEND" JobWorkerFunctionName)" worker
+  invoke worker JobWorkerFunctionName
   release check-worker "$WORK/worker.json" "$WORK/worker.meta.json"
   done_step
 
