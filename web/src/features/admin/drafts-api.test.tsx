@@ -193,7 +193,11 @@ describe('useCommandKey', () => {
   });
 });
 
-describe('a 409 on a draft command', () => {
+// A 409 (the draft moved on) or a 403 (no longer allowed) leaves the cached status stale.
+describe.each([
+  [409, 'ILLEGAL_TRANSITION'],
+  [403, 'FORBIDDEN'],
+] as const)('a %i on a draft command', (status, errorCode) => {
   it.each([
     ['publish', usePublishDraft, 'PUBLISHED'],
     ['discard', useDiscardDraft, 'REJECTED'],
@@ -201,7 +205,7 @@ describe('a 409 on a draft command', () => {
     client.GET.mockResolvedValueOnce({ data: draft }).mockResolvedValueOnce({
       data: makeDraft({ status: now }),
     });
-    client.POST.mockRejectedValue(new ApiError(409, 'ILLEGAL_TRANSITION', 'x'));
+    client.POST.mockRejectedValue(new ApiError(status, errorCode, 'x'));
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -235,7 +239,7 @@ describe('a 409 on a draft command', () => {
         next_cursor: null,
       },
     });
-    client.POST.mockRejectedValue(new ApiError(409, 'ILLEGAL_TRANSITION', 'x'));
+    client.POST.mockRejectedValue(new ApiError(status, errorCode, 'x'));
     // The app's client: a list read in the last 15 s is shown from cache unless invalidated.
     const queryClient = createQueryClient();
     const wrapper = ({ children }: { children: ReactNode }) => (
