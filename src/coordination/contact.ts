@@ -208,11 +208,14 @@ export async function recordContactInTx(
     return { contactAttempt: toContactAttempt(row), deduplicated: true };
   }
 
+  // `created_at` files the attempt in a cycle (listContactAttempts), so it is the time of the
+  // standing check under the case lock above, not the transaction start: a write that began
+  // before a CLOSE and passed on a new-cycle accept after REOPEN lands in that new cycle.
   const inserted = await tx.query<ContactRow>(
     `INSERT INTO contact_attempts
        (contact_attempt_id, tenant_id, case_id, logged_by_user_id, attempted_at,
-        channel, outcome, note)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        channel, outcome, note, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp())
      RETURNING ${CONTACT_COLUMNS}`,
     [
       contactAttemptId,
