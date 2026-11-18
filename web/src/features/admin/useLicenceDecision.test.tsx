@@ -93,6 +93,16 @@ describe('useLicenceDecision commands', () => {
     expect(result.current.command.isError).toBe(true);
   });
 
+  it('a failed command leaves a debug trace in a dev build', async () => {
+    const failure = new ApiError(409, 'LICENCE_REVIEW_DECIDED', 'x');
+    client.POST.mockRejectedValue(failure);
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    const { result } = setup();
+    await send(result, { name: 'decline', body: { reason: 'OTHER' } });
+    expect(debug).toHaveBeenCalledWith('Licence command failed', failure);
+    debug.mockRestore();
+  });
+
   it('close clears the dialog, the reason error and the last failure', async () => {
     client.POST.mockRejectedValue(new ApiError(500, 'INTERNAL', 'x'));
     const { result } = setup();
@@ -105,6 +115,22 @@ describe('useLicenceDecision commands', () => {
     await waitFor(() => expect(result.current.command.isIdle).toBe(true));
     expect(result.current.dialog).toBeNull();
     expect(result.current.reasonError).toBeUndefined();
+  });
+
+  // With no conflicting review the conflict command has no id; it must fail without a request
+  // rather than POST to /licence-reviews//commands/revoke.
+  it('the conflict command sends nothing when the review has no conflicting review', async () => {
+    const { result } = setup();
+    await waitFor(() => expect(result.current.query.isSuccess).toBe(true));
+    act(() => result.current.setDialog('revoke_conflict'));
+    act(() =>
+      result.current.run(() =>
+        result.current.conflictCommand.mutateAsync({ name: 'revoke', body: { reason: 'FRAUD' } }),
+      ),
+    );
+    await waitFor(() => expect(result.current.conflictCommand.isError).toBe(true));
+    expect(client.POST).not.toHaveBeenCalled();
+    expect(result.current.dialog).toBe('revoke_conflict');
   });
 });
 

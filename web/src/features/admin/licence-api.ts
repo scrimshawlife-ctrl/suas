@@ -78,12 +78,14 @@ type LicenceCommand =
  * POST /admin/licence-reviews/{id}/commands/{approve|confirm|decline|revoke|recuse} with one
  * Idempotency-Key per action (required by the route). A decision drops any image this page
  * holds, since the server deletes them; a 409 or 403 rereads the review to show where it is.
+ * An empty `id` (no conflicting review yet) fails before any request or key is made.
  */
 export function useLicenceCommand(id: string) {
   const queryClient = useQueryClient();
   const key = useCommandKey();
   return useMutation({
     mutationFn: async (command: LicenceCommand) => {
+      if (id === '') throw new Error(`No licence review to ${command.name}`);
       const options = { params: { path: { id } }, headers: key.headers(command) };
       switch (command.name) {
         case 'approve': {

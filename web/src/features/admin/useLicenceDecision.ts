@@ -42,9 +42,10 @@ export function useLicenceDecision(id: string) {
       try {
         await action();
         setDialog(null);
-      } catch {
+      } catch (error) {
         // The mutation keeps the error and its dialog shows it (licenceCommandError); catching
-        // here only keeps that dialog open for a retry.
+        // here only keeps that dialog open for a retry. Dev builds also log it for debugging.
+        if (import.meta.env.DEV) console.debug('Licence command failed', error);
       }
     });
 
