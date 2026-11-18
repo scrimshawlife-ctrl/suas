@@ -85,9 +85,13 @@ export function useResourceDraft(id: string) {
   });
 }
 
-/** JSON with every object's keys sorted, so key order never makes two equal bodies differ. */
+/**
+ * JSON with every object's keys sorted, so key order never makes two equal bodies differ. The
+ * plain encode first fails a body the send could not encode (a cycle) with the same TypeError.
+ */
 function canonicalJson(value: unknown): string {
-  return JSON.stringify(value ?? null, (_key, part: unknown) =>
+  const plain: unknown = JSON.parse(JSON.stringify(value ?? null));
+  return JSON.stringify(plain, (_key, part: unknown) =>
     part === null || typeof part !== 'object' || Array.isArray(part)
       ? part
       : Object.fromEntries(Object.entries(part).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
@@ -110,19 +114,24 @@ function keepsKey(error: unknown): boolean {
 /**
  * One Idempotency-Key per user action, tied to the body it was sent with. A retry of that body
  * reuses it after a failure that `keepsKey`; a success, a refusal or a changed body starts a new
- * key, so a kept key never meets a different body (that 409 would repeat on every retry).
+ * key, so a kept key never meets a different body (that 409 would repeat on every retry). Only
+ * the latest send settles the key (`body` is that send's variables), so an older overlapping
+ * send cannot renew the key a newer one may need to replay.
  */
 function useCommandKey() {
   const key = useIdempotencyKey();
   const sentWith = useRef<string | null>(null);
+  const latest = useRef<unknown>(undefined);
   return {
     headers: (body?: unknown) => {
       const fingerprint = canonicalJson(body);
       if (sentWith.current !== fingerprint) key.renew();
       sentWith.current = fingerprint;
+      latest.current = body;
       return key.headers();
     },
-    settle: (error?: unknown) => {
+    settle: (body: unknown, error?: unknown) => {
+      if (body !== latest.current) return;
       if (error === undefined || !keepsKey(error)) key.renew();
     },
   };
@@ -139,11 +148,11 @@ export function useExtractDrafts() {
       });
       return requireData(data, 'drafts').drafts;
     },
-    onSuccess: () => {
-      key.settle();
+    onSuccess: (_drafts, body) => {
+      key.settle(body);
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.all });
     },
-    onError: key.settle,
+    onError: (error, body) => key.settle(body, error),
   });
 }
 
@@ -156,13 +165,13 @@ function useDraftCommand<T>(
   const key = useCommandKey();
   return useMutation({
     mutationFn: (body?: DraftEditRequest) => run(key.headers(body), body),
-    onSuccess: (result) => {
-      key.settle();
+    onSuccess: (result, body) => {
+      key.settle(body);
       queryClient.setQueryData(queryKeys.adminDrafts.detail(id), toDraft(result));
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.lists() });
     },
-    onError: (error) => {
-      key.settle(error);
+    onError: (error, body) => {
+      key.settle(body, error);
       // A 409 means the draft already left "to review": show what it is now.
       if (isApiError(error) && error.status === 409)
         void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.detail(id) });
@@ -332,8 +341,8 @@ export function useLicenceCommand(id: string) {
           return null;
       }
     },
-    onSuccess: (review) => {
-      key.settle();
+    onSuccess: (review, command) => {
+      key.settle(command);
       if (review === null) {
         queryClient.removeQueries({ queryKey: licenceKeys.detail(id) });
       } else {
@@ -344,8 +353,8 @@ export function useLicenceCommand(id: string) {
       }
       void queryClient.invalidateQueries({ queryKey: licenceKeys.lists() });
     },
-    onError: (error) => {
-      key.settle(error);
+    onError: (error, command) => {
+      key.settle(command, error);
       if (isApiError(error) && (error.status === 409 || error.status === 403))
         void queryClient.invalidateQueries({ queryKey: licenceKeys.detail(id), exact: true });
     },
@@ -375,11 +384,11 @@ export function useCreateConsentTemplate() {
       });
       return requireData(data, 'consent template');
     },
-    onSuccess: () => {
-      key.settle();
+    onSuccess: (_template, body) => {
+      key.settle(body);
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminConsentTemplates.all });
     },
-    onError: key.settle,
+    onError: (error, body) => key.settle(body, error),
   });
 }
 

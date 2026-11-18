@@ -17,13 +17,17 @@ const keyOf = (call: number) =>
 
 beforeEach(() => client.POST.mockReset());
 
-/** Renders the draft edit hook; `run` sends one edit and waits for it to settle. */
-function renderEditDraft() {
+function renderEditDraftHook() {
   const queryClient = new QueryClient();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-  const { result } = renderHook(() => useEditDraft(draft.resource_draft_id), { wrapper });
+  return renderHook(() => useEditDraft(draft.resource_draft_id), { wrapper }).result;
+}
+
+/** Renders the draft edit hook; `run` sends one edit and waits for it to settle. */
+function renderEditDraft() {
+  const result = renderEditDraftHook();
   return async (cost = 'Free') => {
     await act(async () => {
       await result.current.mutateAsync({ cost }).catch(() => undefined);
@@ -50,15 +54,17 @@ describe('draft command idempotency key', () => {
   });
 
   // API.md §7 rules 3 and 5: only the first key can replay an action that may have run.
-  it('is reused after a timeout or a 409 IDEMPOTENCY_CONFLICT (the first attempt may still run)', async () => {
-    client.POST.mockRejectedValueOnce(new ApiError(408, TIMEOUT_CODE, 'x'))
+  it('is reused after a dropped connection, a timeout or a 409 IDEMPOTENCY_CONFLICT (the first attempt may still run)', async () => {
+    client.POST.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new ApiError(408, TIMEOUT_CODE, 'x'))
       .mockRejectedValueOnce(new ApiError(409, 'IDEMPOTENCY_CONFLICT', 'x'))
+      .mockResolvedValueOnce({ data: draft })
       .mockResolvedValueOnce({ data: draft });
     const run = renderEditDraft();
-    for (let i = 0; i < 3; i += 1) await run();
+    for (let i = 0; i < 5; i += 1) await run();
 
-    expect(keyOf(1)).toBe(keyOf(0));
-    expect(keyOf(2)).toBe(keyOf(0));
+    expect([1, 2, 3].map(keyOf)).toEqual([keyOf(0), keyOf(0), keyOf(0)]);
+    expect(keyOf(4)).not.toBe(keyOf(0)); // the success ended the action
   });
 
   it('is renewed after a business-rule 409, which the next attempt cannot replay', async () => {
@@ -80,5 +86,47 @@ describe('draft command idempotency key', () => {
     await run('Sliding scale');
 
     expect(keyOf(1)).not.toBe(keyOf(0));
+  });
+
+  // Two overlapping sends on one hook: the older one settling must not renew the newer body's key.
+  it('keeps the newer body key when an older send succeeds after it', async () => {
+    let finishFirst: (value: { data: typeof draft }) => void = () => undefined;
+    client.POST.mockReturnValueOnce(new Promise((resolve) => (finishFirst = resolve)))
+      .mockRejectedValueOnce(new ApiError(503, 'UNAVAILABLE', 'x'))
+      .mockResolvedValueOnce({ data: draft });
+    const result = renderEditDraftHook();
+
+    let first: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      first = result.current.mutateAsync({ cost: 'Free' });
+      await result.current.mutateAsync({ cost: 'Sliding scale' }).catch(() => undefined);
+    });
+    await act(async () => {
+      finishFirst({ data: draft });
+      await first;
+    });
+    await act(async () => {
+      await result.current.mutateAsync({ cost: 'Sliding scale' });
+    });
+
+    expect(keyOf(1)).not.toBe(keyOf(0));
+    expect(keyOf(2)).toBe(keyOf(1)); // the 503 retry replays the second send
+  });
+
+  // The client sends with JSON.stringify, which cannot encode a cycle either: the action fails
+  // as a rejected mutation before any request, the same way the send itself would.
+  it('rejects a body that cannot be encoded without sending it', async () => {
+    const body: Record<string, unknown> = { cost: 'Free' };
+    body.self = body;
+    const result = renderEditDraftHook();
+
+    let error: unknown;
+    await act(async () => {
+      error = await result.current.mutateAsync(body as { cost: string }).catch((e: unknown) => e);
+    });
+
+    expect(error).toBeInstanceOf(TypeError);
+    expect(client.POST).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });
