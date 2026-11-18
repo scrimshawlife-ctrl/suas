@@ -6,6 +6,10 @@
  * the admission barrier; the other modes restore the function's own reservation (its fixed cap,
  * or AWS::NoValue when it has none), so no budget is invented and no cap is dropped. The migrate
  * function is left as it is. Without the context the template is unchanged.
+ *
+ * Trust boundary: changing the mode is a stack update, so it needs `cloudformation:UpdateStack`
+ * on the backend stack. That permission already allows any change to the stack, so the parameter
+ * grants nothing new. The mode is not secret (no NoEcho): the deploy workflow reads it back.
  */
 
 import { Aws, CfnCondition, CfnOutput, CfnParameter, Fn, type Stack } from 'aws-cdk-lib';

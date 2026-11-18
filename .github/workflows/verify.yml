@@ -19,11 +19,10 @@ on:
   workflow_call:
     inputs:
       ref:
-        # Each job checks this before checkout, so only an exact commit is verified.
-        description: Full 40-character commit SHA to verify (defaults to the triggering commit)
+        # Each job checks this before checkout, so a caller verifies exactly one commit.
+        description: Full 40-character commit SHA to verify
         type: string
-        required: false
-        default: ''
+        required: true
 
 permissions:
   contents: read
@@ -81,8 +80,10 @@ jobs:
       - name: Require a full commit SHA for inputs.ref
         env:
           REF: ${{ inputs.ref }}
+          # A called workflow sees its caller's workflow_ref, so only verify.yml's own runs may omit ref.
+          WORKFLOW_REF: ${{ github.workflow_ref }}
         run: |
-          [[ -z "$REF" || "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
+          [[ "$REF" =~ ^[0-9a-f]{40}$ || ( -z "$REF" && "$WORKFLOW_REF" == */.github/workflows/verify.yml@* ) ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ inputs.ref }}
@@ -224,8 +225,10 @@ jobs:
       - name: Require a full commit SHA for inputs.ref
         env:
           REF: ${{ inputs.ref }}
+          # A called workflow sees its caller's workflow_ref, so only verify.yml's own runs may omit ref.
+          WORKFLOW_REF: ${{ github.workflow_ref }}
         run: |
-          [[ -z "$REF" || "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
+          [[ "$REF" =~ ^[0-9a-f]{40}$ || ( -z "$REF" && "$WORKFLOW_REF" == */.github/workflows/verify.yml@* ) ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ inputs.ref }}
@@ -297,8 +300,10 @@ jobs:
       - name: Require a full commit SHA for inputs.ref
         env:
           REF: ${{ inputs.ref }}
+          # A called workflow sees its caller's workflow_ref, so only verify.yml's own runs may omit ref.
+          WORKFLOW_REF: ${{ github.workflow_ref }}
         run: |
-          [[ -z "$REF" || "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
+          [[ "$REF" =~ ^[0-9a-f]{40}$ || ( -z "$REF" && "$WORKFLOW_REF" == */.github/workflows/verify.yml@* ) ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
