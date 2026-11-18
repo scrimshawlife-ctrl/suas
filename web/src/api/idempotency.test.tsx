@@ -42,6 +42,24 @@ describe('useCommandKey', () => {
     result.current.settle(undefined, new DOMException('The operation was aborted.', 'AbortError'));
     expect(keyOf(result.current.headers())).toBe(first);
   });
+
+  // `settle` matches the send by reference, but `headers` fingerprints the body's content each
+  // time, so a body changed in place after a kept-key failure still gets a new key.
+  it('gives a body changed in place after a kept-key failure a new key', () => {
+    const { result } = renderHook(() => useCommandKey());
+    const body = { cost: 'Free' };
+    const first = keyOf(result.current.headers(body));
+    result.current.settle(body, new ApiError(503, 'UNAVAILABLE', 'down'));
+    body.cost = 'Sliding scale';
+    expect(keyOf(result.current.headers(body))).not.toBe(first);
+  });
+
+  // canonicalJson fingerprints what JSON.stringify puts on the wire: an undefined field is not sent.
+  it('treats an undefined field like the body the wire carries without it', () => {
+    const { result } = renderHook(() => useCommandKey());
+    const first = keyOf(result.current.headers({ cost: 'Free' }));
+    expect(keyOf(result.current.headers({ cost: 'Free', note: undefined }))).toBe(first);
+  });
 });
 
 describe('useKeyedIdempotency', () => {
