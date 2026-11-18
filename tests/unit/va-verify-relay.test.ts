@@ -125,8 +125,8 @@ function answered(value: unknown, extra: Partial<InvokeCommandOutput> = {}): Inv
 const relay = (client: LambdaInvokeClient) =>
   new VaConfirmationLambdaRelay('suas-va-verify', { client });
 
-const awsError = (name: string, httpStatusCode?: number): Error =>
-  Object.assign(new Error(name), {
+const awsError = (name: string, httpStatusCode?: number, message = name): Error =>
+  Object.assign(new Error(message), {
     name,
     ...(httpStatusCode !== undefined ? { $metadata: { httpStatusCode } } : {}),
   });
@@ -461,14 +461,18 @@ describe('invokeFailureClass', () => {
 describe('the verify function as deployed', () => {
   const SECRET_ARN = 'arn:aws:secretsmanager:us-west-2:000000000000:secret:sentinel-arn-AbCdEf';
 
-  async function coldStart(secretId: string | undefined) {
+  /** `failures` are what GetSecretValue throws on its first reads; later reads return SECRET. */
+  async function coldStart(secretId: string | undefined, failures: Error[] = []) {
     vi.resetModules();
     const secretReads: unknown[] = [];
     vi.doMock('@aws-sdk/client-secrets-manager', () => ({
       SecretsManagerClient: class {
         send(command: { input: unknown }) {
           secretReads.push(command.input);
-          return Promise.resolve({ SecretString: SECRET });
+          const failure = failures.shift();
+          return failure !== undefined
+            ? Promise.reject(failure)
+            : Promise.resolve({ SecretString: SECRET });
         }
       },
       GetSecretValueCommand: class {
@@ -526,4 +530,38 @@ describe('the verify function as deployed', () => {
       expect(logged).not.toContain(value);
     }
   });
+
+  // R14.5 owner question: a failed read answers CONFIGURATION_INVALID today, a throttle included,
+  // not an outage class. These pin that mapping until the owner rules on it.
+  it.each([
+    ['ResourceNotFoundException', 'the secret was deleted or the id is wrong'],
+    ['ThrottlingException', 'GetSecretValue was throttled'],
+  ])(
+    'fails closed when GetSecretValue throws %s (%s), and reads it again next time',
+    async (name) => {
+      const printed: string[] = [];
+      for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+        vi.spyOn(console, level).mockImplementation((...args) => void printed.push(String(args)));
+      }
+      const vaCalls: RequestInit[] = [];
+      vi.stubGlobal('fetch', (_url: string, init: RequestInit) => {
+        vaCalls.push(init);
+        return Promise.resolve(json(200, { veteran_status: 'confirmed' }));
+      });
+      const fn = await coldStart(SECRET_ARN, [awsError(name, 400, `${name}: ${SECRET_ARN}`)]);
+
+      const result = await fn.handler(PERSON);
+      expect(result).toEqual({ status: 'UNAVAILABLE', failure_class: 'CONFIGURATION_INVALID' });
+      expect(vaCalls).toHaveLength(0);
+      expect(printed).toEqual([
+        JSON.stringify({ msg: 'va_verify_refused', reason: 'not_configured' }),
+      ]);
+      expect(JSON.stringify([result, printed])).not.toMatch(/sentinel-arn|synthetic-sandbox-key/);
+
+      // Not cached: the next call reads the secret again and reaches VA.
+      expect(await fn.handler(PERSON)).toEqual({ status: 'VERIFIED' });
+      expect(fn.secretReads).toEqual([{ SecretId: SECRET_ARN }, { SecretId: SECRET_ARN }]);
+      expect(vaCalls).toHaveLength(1);
+    },
+  );
 });

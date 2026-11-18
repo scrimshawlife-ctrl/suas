@@ -46,6 +46,23 @@ describe('VA verify function', () => {
     expect(Object.keys(off.backend.toJSON().Outputs)).not.toContain('VaVerifySecretName');
   });
 
+  // The deploy-time switch: only `vaSandbox=true` adds the construct's resources.
+  it('adds its function, role, secret and log group only with vaSandbox=true', () => {
+    const vaVerifyTypes = (t: Template) =>
+      Object.entries(resourcesOf(t))
+        .filter(([id]) => id.startsWith('VaVerify'))
+        .map(([, r]) => r.Type);
+    expect(vaVerifyTypes(off.backend)).toEqual([]);
+    expect(vaVerifyTypes(on.backend)).toEqual(
+      expect.arrayContaining([
+        'AWS::IAM::Role',
+        'AWS::Lambda::Function',
+        'AWS::Logs::LogGroup',
+        'AWS::SecretsManager::Secret',
+      ]),
+    );
+  });
+
   it('runs outside the VPC, with no database setting, only its environment class and secret id', () => {
     const [, fn] = functionByHandler(on.backend, 'va-verify.handler') ?? [];
     expect(fn?.Properties?.VpcConfig).toBeUndefined();
