@@ -3,7 +3,7 @@ import { cn } from '../lib/cn';
 import { FieldShell, fieldClass } from './FieldShell';
 import { ChevronDownIcon } from './icons';
 
-export interface SelectOption {
+interface SelectOption {
   value: string;
   label: string;
 }

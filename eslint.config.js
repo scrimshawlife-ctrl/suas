@@ -3,9 +3,9 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    // `.local-secrets/` is gitignored operator scratch space. Wrangler dry-run
-    // bundles and one-off staging audit scripts live there and are deliberately
-    // outside the TypeScript project, so repository lint must not discover them.
+    // `.local-secrets/` is gitignored operator scratch space. One-off staging audit
+    // scripts live there and are deliberately outside the TypeScript project, so
+    // repository lint must not discover them.
     // `web/` is the React app. It has its own package.json, tsconfig and ESLint
     // config (`cd web && npm run lint`), and root type-checked lint must not
     // discover its files.
@@ -21,7 +21,6 @@ export default tseslint.config(
       'node_modules/**',
       '.local-secrets/**',
       'docs/**',
-      '.wrangler/**',
       'web/**',
       'infra/**',
       '.playwright-mcp/**',

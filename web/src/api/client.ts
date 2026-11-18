@@ -69,7 +69,7 @@ export function setMfaRequiredHandler(handler: (() => void) | null): void {
     });
 }
 
-export function createApiMiddleware(options: ApiClientOptions = {}): Middleware {
+function createApiMiddleware(options: ApiClientOptions = {}): Middleware {
   const store = options.tokenStore ?? defaultTokenStore;
   const newKey = options.newIdempotencyKey ?? (() => crypto.randomUUID());
   const onUnauthorized = options.onUnauthorized ?? (() => unauthorizedHandler());

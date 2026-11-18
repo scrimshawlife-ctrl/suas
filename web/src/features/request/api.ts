@@ -6,16 +6,13 @@ import { requireData } from '../../api/require-data';
 import { serviceRequestQueryOptions } from '../../api/service-requests';
 import { useSessionToken } from '../../api/token-store';
 import type { Schemas, ServiceCategory } from '../../api/types';
+import { REQUEST_POLL_MS } from '../../app/poll-intervals';
 import { isDraftGone, openDraft } from './open-draft';
 import { isSettled } from './request-card';
 
 export type IntakeTurn = Schemas['IntakeTurn'];
 export type IntakeDraft = Schemas['IntakeDraft'];
 export type IntakeDraftWithText = Schemas['IntakeDraftWithText'];
-export type IntakeResource = Schemas['IntakeResource'];
-
-/** Detail polling while a request is open: "every ~15 s" (sprint 2 brief). */
-export const REQUEST_POLL_MS = 15_000;
 
 /** GET /intake/status: whether to offer the assistant. */
 export function useIntakeStatus() {
@@ -197,7 +194,7 @@ type OwnerCommand = 'CANCEL' | 'CONFIRM';
  * The reason sent with CANCEL, which the API requires. Fixed on purpose: a free-text reason
  * would put what the person typed into the request record.
  */
-export const CANCEL_REASON = 'Cancelled by the requester';
+const CANCEL_REASON = 'Cancelled by the requester';
 
 /** CANCEL and CONFIRM: requester-only commands on one request. */
 export function useRequestCommand(requestId: string, command: OwnerCommand) {

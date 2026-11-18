@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { chatThreadsQueryOptions } from '../../api/chat';
 import { tokenStore, useSessionToken } from '../../api/token-store';
 import type { ChatThread } from '../../api/types';
+import { UNREAD_REFETCH_MS } from '../../app/poll-intervals';
 import { allThreads, threadKey } from './threads';
 
 /**
@@ -90,9 +91,6 @@ export function countUnread(threads: readonly ChatThread[], state: SeenState): n
     return last > (state.seen[threadKey(thread)] ?? state.baseline);
   }).length;
 }
-
-/** Unread numbers stay fresh on any screen: refetch about every minute while the tab is visible. */
-export const UNREAD_REFETCH_MS = 60_000;
 
 /**
  * Number of conversations with a message newer than the last one the person opened or sent,

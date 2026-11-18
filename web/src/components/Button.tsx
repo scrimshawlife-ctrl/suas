@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { cn } from '../lib/cn';
 import { PhoneIcon } from './icons';
 
-export type ButtonVariant =
+type ButtonVariant =
   | 'primary'
   | 'secondary'
   | 'sos'
@@ -16,7 +16,7 @@ export type ButtonVariant =
   | 'icon';
 
 /** `default` is 52 px, `form` 56 px, `small` 44 px (the minimum target). */
-export type ButtonSize = 'default' | 'form' | 'small';
+type ButtonSize = 'default' | 'form' | 'small';
 
 const base =
   'inline-flex items-center justify-center gap-2.5 rounded-8 border-2 font-bold no-underline select-none';
