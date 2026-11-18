@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
@@ -88,5 +89,21 @@ describe('LicenceReviewImages object URLs', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('Try again after a failed fetch shows the image with one object URL, revoked on close', async () => {
+    client.GET.mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'x')).mockResolvedValueOnce({
+      data: new Blob(['jpeg'], { type: 'image/jpeg' }),
+    });
+    const { unmount } = renderImages();
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('img', { name: 'Front of the licence' })).toHaveAttribute(
+      'src',
+      'blob:front',
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(create).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(revoke).toHaveBeenCalledTimes(1);
   });
 });
