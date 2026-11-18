@@ -14,10 +14,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
-import { createUser, type ServiceCounty } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { type ServiceCounty } from '../../src/identity/index.js';
+import { appPool, createPerson, keyed } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
@@ -39,41 +38,14 @@ interface Person {
   readonly headers: Record<string, string>;
 }
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function person(
-  tenantId: string,
-  county: ServiceCounty | undefined,
-  label = 'person',
-): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    ...(county !== undefined ? { county } : {}),
-  });
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return {
-    tenantId,
-    userId: user.userId,
-    headers: { authorization: `Bearer ${session.credential}` },
-  };
-}
-
-function keyed(who: Person): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': randomUUID() };
-}
+/** A signed-in person, in `county` when given; no VA confirmation. */
+const person = (tenantId: string, county: ServiceCounty | undefined, label = 'person') =>
+  createPerson(app, { tenantId, label, county });
 
 /** The requester opens a case and creates a request; `submit` puts it on the open list. */
 async function request(requester: Person, options: { submit?: boolean } = {}) {
   // Requesting help needs a passed ID scan; helpers need none.
-  await markVerifiedVeteran(pool(), requester.tenantId, requester.userId);
+  await markVerifiedVeteran(appPool(app), requester.tenantId, requester.userId);
   const opened = await app.server.inject({
     method: 'POST',
     url: '/api/v0/cases',
@@ -145,7 +117,7 @@ describe('county scoping', () => {
     const { serviceRequestId } = await request(requester);
 
     expect(await openIds(bordering)).toEqual([]);
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests SET widened_at = now() WHERE service_request_id = $1`,
       [serviceRequestId],
     );
@@ -264,14 +236,14 @@ describe('accept: first wins', () => {
     expect(replayAfterStart.json()).toEqual(first.json());
 
     const caseId: string = first.json().case_id;
-    const audits = await pool().query<{ n: string }>(
+    const audits = await appPool(app).query<{ n: string }>(
       `SELECT count(*)::text AS n FROM audit_events
         WHERE tenant_id = $1 AND event_type = 'SERVICE_REQUEST_PEER_ACCEPTED'
           AND aggregate_id = $2`,
       [tenantId, serviceRequestId],
     );
     expect(audits.rows[0]?.n).toBe('1');
-    const assigned = await pool().query<{ n: string }>(
+    const assigned = await appPool(app).query<{ n: string }>(
       `SELECT count(*)::text AS n FROM domain_events
         WHERE tenant_id = $1 AND event_type = 'CASE_ASSIGNED' AND aggregate_id = $2`,
       [tenantId, caseId],
@@ -279,7 +251,10 @@ describe('accept: first wins', () => {
     expect(assigned.rows[0]?.n).toBe('1');
 
     // The chat thread is created with the accept, one per request, between the two people.
-    const threads = await pool().query<{ requester_user_id: string; accepted_by_user_id: string }>(
+    const threads = await appPool(app).query<{
+      requester_user_id: string;
+      accepted_by_user_id: string;
+    }>(
       `SELECT requester_user_id, accepted_by_user_id FROM chat_threads WHERE service_request_id = $1`,
       [serviceRequestId],
     );
@@ -553,10 +528,10 @@ describe('accepting is per request, not per case', () => {
     expect((await get(helperB, `/service-requests/${firstId}`)).statusCode).toBe(404);
 
     // The requester sees both, each with its own helper.
-    await pool().query(`UPDATE users SET display_name = 'Dee R.' WHERE user_id = $1`, [
+    await appPool(app).query(`UPDATE users SET display_name = 'Dee R.' WHERE user_id = $1`, [
       helperA.userId,
     ]);
-    await pool().query(`UPDATE users SET display_name = 'Sam K.' WHERE user_id = $1`, [
+    await appPool(app).query(`UPDATE users SET display_name = 'Sam K.' WHERE user_id = $1`, [
       helperB.userId,
     ]);
     const asRequester = async (id: string): Promise<string | null> => {
@@ -698,7 +673,7 @@ describe('GET /api/v0/service-requests?ownership=mine counts', () => {
     }
     expect((await accept(other, others.serviceRequestId)).statusCode).toBe(200);
     const setTerminal = (id: string, status: string, ago: string) =>
-      pool().query(
+      appPool(app).query(
         `UPDATE service_requests
             SET status = $2::suas_service_request_status, terminal_at = now() - $3::interval
           WHERE service_request_id = $1`,
@@ -731,13 +706,13 @@ describe('GET /api/v0/service-requests?ownership=mine counts', () => {
     for (const { serviceRequestId } of [inside, outside]) {
       expect((await accept(helper, serviceRequestId)).statusCode).toBe(200);
     }
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests SET status = 'CLOSED',
               terminal_at = now() - interval '30 days' + interval '1 minute'
         WHERE service_request_id = $1`,
       [inside.serviceRequestId],
     );
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests SET status = 'CLOSED',
               terminal_at = now() - interval '30 days' - interval '1 minute'
         WHERE service_request_id = $1`,
@@ -792,7 +767,7 @@ describe('GET /api/v0/service-requests?ownership=mine counts', () => {
     expect(close.statusCode, close.body).toBe(200);
     expect(await counts()).toEqual({ helping_now: 0, closed_last_30_days: 1 });
 
-    const stamped = await pool().query<{ terminal_at: Date | null }>(
+    const stamped = await appPool(app).query<{ terminal_at: Date | null }>(
       'SELECT terminal_at FROM service_requests WHERE service_request_id = ANY($1::uuid[])',
       [[toCancel.serviceRequestId, toClose.serviceRequestId]],
     );
@@ -815,7 +790,7 @@ describe('accepted_at', () => {
     expect((await detailOf(requester)).json().accepted_at).toBeNull();
 
     expect((await accept(accepter, serviceRequestId)).statusCode).toBe(200);
-    const stored = await pool().query<{ created_at: Date }>(
+    const stored = await appPool(app).query<{ created_at: Date }>(
       `SELECT created_at FROM chat_threads WHERE service_request_id = $1`,
       [serviceRequestId],
     );
@@ -844,7 +819,7 @@ describe('accepted_at', () => {
     const { serviceRequestId } = await request(requester);
     expect((await accept(accepter, serviceRequestId)).statusCode).toBe(200);
     // A request backfilled by migration 0017 has an accepter but no chat thread to date it.
-    await pool().query(
+    await appPool(app).query(
       'UPDATE service_requests SET accepted_at = NULL WHERE service_request_id = $1',
       [serviceRequestId],
     );

@@ -12,8 +12,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import type { SafetyCopyMode } from '../../config/index.js';
 import { authenticate } from '../authenticate.js';
 import { pageQuery } from '../../db/cursor.js';
@@ -33,9 +33,7 @@ import {
 import { API_PREFIX } from '../../release/pins.js';
 import { resolveImmediateResourceSlot } from '../../ui/safety.js';
 
-export interface ResourceRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface ResourceRouteDeps extends RouteContext {
   readonly safetyCopyMode: SafetyCopyMode;
 }
 

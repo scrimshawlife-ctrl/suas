@@ -5,7 +5,8 @@
  */
 
 import { expect, test } from '../fixtures';
-import { newHelper, newRequester, release, sendRequest, take } from './serve';
+import { release, sendRequest, take } from './serve';
+import { newHelper, newVeteran } from '../people';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -13,7 +14,7 @@ test('a release notice in the Serve Alerts card leads the Veteran to their own r
   browser,
   request,
 }) => {
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const helper = await newHelper(browser, request, { name: 'Dee R.' });
   await take(helper.page, summary, id);

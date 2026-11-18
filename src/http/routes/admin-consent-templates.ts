@@ -13,8 +13,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
 import {
   CONSENT_TEMPLATE_KEY_PATTERN,
@@ -34,11 +34,6 @@ import type { JsonObject } from '../../jobs/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
-
-export interface AdminConsentTemplateRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
-}
 
 /** Template copy is free text an admin writes; the cap keeps rows and audits bounded. */
 export const MAX_CONSENT_TEMPLATE_BODY_CHARS = 20_000;
@@ -102,10 +97,7 @@ async function auditTemplate(
   });
 }
 
-export function registerAdminConsentTemplateRoutes(
-  app: FastifyInstance,
-  deps: AdminConsentTemplateRouteDeps,
-): void {
+export function registerAdminConsentTemplateRoutes(app: FastifyInstance, deps: RouteContext): void {
   const gate = async (request: Parameters<typeof authenticate>[2], action: string) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     assertSuasAdmin(context);

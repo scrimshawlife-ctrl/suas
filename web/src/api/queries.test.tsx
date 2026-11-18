@@ -28,6 +28,24 @@ describe('useSignedInQuery', () => {
     );
     await waitFor(() => expect(result.current.data).toBe(1));
   });
+
+  it('lets a fetch in flight settle when the session ends, then sends nothing more', async () => {
+    tokenStore.setToken('tok');
+    let answer: (value: number) => void = () => undefined;
+    const queryFn = vi.fn(() => new Promise<number>((resolve) => (answer = resolve)));
+    const queryClient = new QueryClient();
+    const { result } = renderHook(() => useSignedInQuery({ queryKey: ['d'], queryFn }), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+    await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+    act(() => tokenStore.clear());
+    act(() => answer(1));
+    await waitFor(() => expect(result.current.fetchStatus).toBe('idle'));
+    await act(() => queryClient.invalidateQueries({ queryKey: ['d'] }));
+    expect(queryFn).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('cursorPages', () => {

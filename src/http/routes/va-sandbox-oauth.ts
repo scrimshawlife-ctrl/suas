@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import type { JsonWebKey } from 'node:crypto';
+import type { RouteContext } from '../route-context.js';
 import type { SuasConfig } from '../../config/index.js';
 import {
   authorizationUrl,
@@ -81,7 +81,7 @@ function enabledConfig(config: SuasConfig): EnabledVaConfig {
 /** D-035 evidence route. Call this only after the explicit config gate passes. */
 export function registerVaSandboxOAuthRoutes(
   app: FastifyInstance,
-  deps: { pool: Pool; config: SuasConfig; sessionSecret: string | undefined },
+  deps: RouteContext & { readonly config: SuasConfig },
 ): void {
   const va = enabledConfig(deps.config);
   // The configured redirect URI is passed verbatim through the whole flow. It

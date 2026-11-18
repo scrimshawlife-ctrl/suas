@@ -51,15 +51,15 @@ export function useExtractDrafts() {
     mutationFn: async (body: { source_text: string; source_link: string }) => {
       const { data } = await api.POST('/api/v0/admin/resource-drafts/commands/extract', {
         body,
-        headers: key.headers(),
+        headers: key.headers(body),
       });
       return requireData(data, 'drafts').drafts;
     },
-    onSuccess: () => {
-      key.settle();
+    onSuccess: (_drafts, body) => {
+      key.settle(body);
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.all });
     },
-    onError: key.settle,
+    onError: (error, body) => key.settle(body, error),
   });
 }
 
@@ -71,17 +71,20 @@ function useDraftCommand<T>(
   const queryClient = useQueryClient();
   const key = useCommandKey();
   return useMutation({
-    mutationFn: (body?: DraftEditRequest) => run(key.headers(), body),
-    onSuccess: (result) => {
-      key.settle();
+    mutationFn: (body?: DraftEditRequest) => run(key.headers(body), body),
+    onSuccess: (result, body) => {
+      key.settle(body);
       queryClient.setQueryData(queryKeys.adminDrafts.detail(id), toDraft(result));
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.lists() });
     },
-    onError: (error) => {
-      key.settle(error);
-      // A 409 means the draft already left "to review": show what it is now.
-      if (isApiError(error) && error.status === 409)
+    onError: (error, body) => {
+      key.settle(body, error);
+      // A 409 means the draft already left "to review": show what it is now, here and in the
+      // lists, which would otherwise show it from cache as still to review.
+      if (isApiError(error) && error.status === 409) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.detail(id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.lists() });
+      }
     },
   });
 }

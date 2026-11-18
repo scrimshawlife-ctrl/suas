@@ -1,9 +1,9 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { isApiError } from '../../api/errors';
 import { useCommandKey } from '../../api/idempotency';
 import { queryKeys } from '../../api/keys';
-import { cursorPages } from '../../api/queries';
+import { cursorPages, useSignedInInfiniteQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
 import type { Schemas } from '../../api/types';
 
@@ -19,7 +19,7 @@ const licenceKeys = queryKeys.adminLicenceReviews;
  * out the admin's own reviews, recusals and disputes of reviews they decided; rows carry no names.
  */
 export function useLicenceReviews() {
-  return useInfiniteQuery(
+  return useSignedInInfiniteQuery(
     cursorPages({
       queryKey: licenceKeys.lists(),
       fetchPage: async (page) => {
@@ -84,7 +84,7 @@ export function useLicenceCommand(id: string) {
   const key = useCommandKey();
   return useMutation({
     mutationFn: async (command: LicenceCommand) => {
-      const options = { params: { path: { id } }, headers: key.headers() };
+      const options = { params: { path: { id } }, headers: key.headers(command) };
       switch (command.name) {
         case 'approve': {
           const { data } = await api.POST('/api/v0/admin/licence-reviews/{id}/commands/approve', {
@@ -123,8 +123,8 @@ export function useLicenceCommand(id: string) {
           return null;
       }
     },
-    onSuccess: (review) => {
-      key.settle();
+    onSuccess: (review, command) => {
+      key.settle(command);
       if (review === null) {
         queryClient.removeQueries({ queryKey: licenceKeys.detail(id) });
       } else {
@@ -135,8 +135,8 @@ export function useLicenceCommand(id: string) {
       }
       void queryClient.invalidateQueries({ queryKey: licenceKeys.lists() });
     },
-    onError: (error) => {
-      key.settle(error);
+    onError: (error, command) => {
+      key.settle(command, error);
       if (isApiError(error) && (error.status === 409 || error.status === 403))
         void queryClient.invalidateQueries({ queryKey: licenceKeys.detail(id), exact: true });
     },

@@ -7,8 +7,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
@@ -24,11 +24,6 @@ import {
   RESPONSIBLE_TYPES,
   type FollowUp,
 } from '../../settlement/index.js';
-
-export interface FollowUpRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
-}
 
 const idParams = z.object({ id: z.string().uuid() });
 const caseIdParams = z.object({ caseId: z.string().uuid() });
@@ -57,7 +52,7 @@ function publicFollowUp(followUp: FollowUp) {
   };
 }
 
-export function registerFollowUpRoutes(app: FastifyInstance, deps: FollowUpRouteDeps): void {
+export function registerFollowUpRoutes(app: FastifyInstance, deps: RouteContext): void {
   app.get(`${API_PREFIX}/cases/:caseId/follow-ups`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { caseId } = caseIdParams.parse(request.params);

@@ -12,11 +12,11 @@ import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import {
   createUser,
-  setUserDisplayName,
   VA_CONFIRMATION_FIXTURE_ZIPS,
   VA_NOTICE_V1,
 } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool, createPerson } from '../helpers/actors.js';
 import { closeVaOutageCooldown } from '../helpers/db.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
@@ -30,7 +30,7 @@ const env = (extra: Record<string, string>) =>
 beforeAll(async () => {
   app = await startApp({ env: env({ SUAS_VA_CONFIRMATION_MODE: 'fixture' }), listen: false });
   appWithoutConfirmation = await startApp({ env: env({}), listen: false });
-  await closeVaOutageCooldown(app.pool!);
+  await closeVaOutageCooldown(appPool(app));
 });
 
 afterAll(async () => {
@@ -38,19 +38,10 @@ afterAll(async () => {
   await app.close();
 });
 
+/** A signed-in person with no county; the confirm route needs the typed name to match. */
 async function person(started: StartedApp = app) {
-  const pool = started.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const tenantId = randomUUID();
-  const user = await createUser(pool, {
-    tenantId,
-    email: syntheticEmail(`onb-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
-  // The confirm route needs the typed name to match the account name.
-  await setUserDisplayName(pool, tenantId, user.userId, 'Synthetic V.');
-  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId: user.userId });
-  return { pool, tenantId, user, headers: { authorization: `Bearer ${session.credential}` } };
+  const actor = await createPerson(started, { label: 'onb', displayName: 'Synthetic V.' });
+  return { ...actor, pool: appPool(started) };
 }
 
 /** A REVOKED row outranks any VERIFIED one, so the gate closes at once. */
@@ -309,17 +300,17 @@ describe('helping others needs no confirmation', () => {
   it("lets an unverified person list, and accept, a verified requester's request", async () => {
     const tenantId = randomUUID();
     const make = async (county: string | null) => {
-      const user = await createUser(app.pool!, {
+      const user = await createUser(appPool(app), {
         tenantId,
         email: syntheticEmail(`help-${randomUUID().slice(0, 8)}`),
         status: 'ACTIVE',
       });
-      const session = await createSession(app.pool!, TEST_SESSION_SECRET, {
+      const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
         tenantId,
         userId: user.userId,
       });
       if (county !== null) {
-        await app.pool!.query(
+        await appPool(app).query(
           `UPDATE users SET county = $3 WHERE tenant_id = $1 AND user_id = $2`,
           [tenantId, user.userId, county],
         );
@@ -327,7 +318,7 @@ describe('helping others needs no confirmation', () => {
       return { user, headers: { authorization: `Bearer ${session.credential}` } };
     };
     const requester = await make('SANTA_CLARA');
-    await markVerifiedVeteran(app.pool!, tenantId, requester.user.userId);
+    await markVerifiedVeteran(appPool(app), tenantId, requester.user.userId);
     const helper = await make(null);
     const keyed = { ...requester.headers, 'idempotency-key': randomUUID() };
     const opened = await app.server.inject({

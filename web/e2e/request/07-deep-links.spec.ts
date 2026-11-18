@@ -1,14 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '../fixtures';
-import {
-  newPerson,
-  newVerifiedVeteran,
-  readSignInCode,
-  requestHelp,
-  signUp,
-  uniqueEmail,
-} from '../helpers';
-import { helper, take, tag, veteran } from './request';
+import { newPerson, readSignInCode, requestHelp, signUp, tag, uniqueEmail } from '../helpers';
+import { newHelper, newVeteran } from '../people';
+import { take } from '../serve/serve';
 
 const NOT_FOUND = 'We could not find that request.';
 
@@ -18,12 +12,12 @@ test("another Veteran's request id shows not found and leaks nothing", async ({
   allow,
 }) => {
   allow.push(/status of 404/);
-  const owner = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page: owner } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Ride to the clinic ${tag()}`;
   const place = `Secret corner ${tag()}`;
   const id = await requestHelp(owner, request, { category: 'TRANSPORTATION', summary }, place);
 
-  const other = await veteran(browser, request, { name: 'Jo K.' });
+  const { page: other } = await newVeteran(browser, request, { name: 'Jo K.' });
   const statuses: number[] = [];
   const bodies: string[] = [];
   other.on('response', async (response) => {
@@ -52,7 +46,7 @@ test("another Veteran's request id shows not found and leaks nothing", async ({
 
 test('a request id that does not exist shows not found', async ({ browser, request, allow }) => {
   allow.push(/status of 404/);
-  const page = await veteran(browser, request, { name: 'Jo K.' });
+  const { page } = await newVeteran(browser, request, { name: 'Jo K.' });
   await page.goto(`/requests/${randomUUID()}`);
   await expect(page.getByRole('heading', { name: NOT_FOUND })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
@@ -65,7 +59,7 @@ test('a malformed request id is treated as not found, not as a connection proble
 }) => {
   // The API refuses a non-UUID id with 400; the page must still read it as not found.
   allow.push(/status of 400/);
-  const page = await veteran(browser, request, { name: 'Jo K.' });
+  const { page } = await newVeteran(browser, request, { name: 'Jo K.' });
   await page.goto('/requests/not-a-real-id');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(NOT_FOUND);
   await expect(page.getByText('Check your connection and try again.')).toHaveCount(0);
@@ -76,7 +70,7 @@ test('signed out, a request link goes to sign in and comes back to the request a
   browser,
   request,
 }) => {
-  const { page: owner, email } = await newVerifiedVeteran(browser, request, {
+  const { page: owner, email } = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
   });
@@ -101,10 +95,10 @@ test('the helper who accepted is sent from /requests/:id to their case page', as
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Someone to talk to ${tag()}`;
   const id = await requestHelp(page, request, { category: 'PEER_SUPPORT', summary }, 'Bench');
-  const helperPage = await helper(browser, request, { name: 'Dee R.' });
+  const { page: helperPage } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(helperPage, summary, id);
   // A helper never needs the ID check, so the guard must not stop them on /verify.
   await helperPage.goto(`/requests/${id}`);
@@ -118,7 +112,7 @@ test('a signed-in Veteran without the ID check opening a request link goes to Ve
 }) => {
   // The guard asks whether this person accepted the request; the 404 is that refusal.
   allow.push(/status of 404/);
-  const owner = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page: owner } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Talk ${tag()}`;
   const id = await requestHelp(owner, request, { category: 'PEER_SUPPORT', summary }, 'Bench');
   const unverified = await newPerson(browser);
