@@ -7,6 +7,8 @@
 import { App } from 'aws-cdk-lib';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { tryLoadConfig } from '../../src/config/index.js';
+import { VA_VERIFY_INVOKE_TIMEOUT_MS } from '../../src/identity/va-confirmation-lambda-relay.js';
+import { OUTBOUND_FETCH_TIMEOUT_MS } from '../../src/resilience/outbound-fetch.js';
 import { createStagingApp } from '../lib/staging.js';
 import { resolveForValidation, synthesize, type Synthesized } from './helpers.js';
 
@@ -130,6 +132,24 @@ describe('VA verify function', () => {
       expect(result.config.vaConfirmation.relayFunction !== undefined).toBe(api);
       expect(result.config.vaConfirmation.apiKey).toBeUndefined();
     }
+  });
+
+  // Each layer gives up after the one below it, so the verify function's own answer (or its
+  // timeout) reaches the API before the API stops waiting.
+  it('orders the timeouts: VA fetch < verify function < relay invoke < HTTP API < API function', () => {
+    const seconds = (handler: string) =>
+      Number(functionByHandler(on.backend, handler)?.[1].Properties?.Timeout) * 1000;
+    const [[, integration] = []] = ofType(on.backend, 'AWS::ApiGatewayV2::Integration');
+    const chain = [
+      OUTBOUND_FETCH_TIMEOUT_MS,
+      seconds('va-verify.handler'),
+      VA_VERIFY_INVOKE_TIMEOUT_MS,
+      Number(integration?.Properties?.TimeoutInMillis),
+      seconds('run.sh'),
+    ];
+    chain.slice(1).forEach((later, i) => {
+      expect(chain[i], `step ${String(i + 1)} of ${chain.join(' < ')}`).toBeLessThan(later);
+    });
   });
 
   it('refuses a vaSandbox value other than true or false', () => {

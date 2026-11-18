@@ -62,6 +62,8 @@ function verifyFunction(
     /** The stored SecretString, or a function giving it per read (a rotation). */
     secret?: string | (() => string | undefined);
     answer?: (zip: string, apikey: string) => Response;
+    /** The function's clock, in ms; the real clock when absent. */
+    now?: () => number;
   } = {},
 ) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -84,6 +86,7 @@ function verifyFunction(
     },
     log: (record) => logs.push(record),
     transport,
+    ...(options.now !== undefined ? { now: options.now } : {}),
   });
   return { handler, calls, logs, secretReads: () => secretReads };
 }
@@ -159,6 +162,24 @@ describe('VA confirmation through the verify function', () => {
       status: 'UNAVAILABLE',
       failureClass,
     });
+  });
+
+  it('stops waiting for the verify function after 18 s, as TIMEOUT', async () => {
+    const deadline = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const hanging: LambdaInvokeClient = {
+      send: (_command, options) =>
+        new Promise((_resolve, reject) => {
+          options?.abortSignal?.addEventListener('abort', () => {
+            reject(options.abortSignal?.reason as Error);
+          });
+        }),
+    };
+    const answer = relay(hanging).confirm(PERSON);
+    expect(timeout).toHaveBeenCalledWith(18_000);
+    deadline.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+    expect(await answer).toEqual({ status: 'UNAVAILABLE', failureClass: 'TIMEOUT' });
+    timeout.mockRestore();
   });
 
   it('never reads a crashed, empty or malformed answer as a more definite one', async () => {
@@ -273,8 +294,8 @@ describe('VA confirmation through the verify function', () => {
 });
 
 /**
- * The per-container key cache and the stored secret. Only AUTHENTICATION_REJECTED drops the cache
- * (a rotated key is read on the next call); a malformed secret fails closed as
+ * The per-container key cache and the stored secret. The cache lasts five minutes, and among VA
+ * answers only AUTHENTICATION_REJECTED drops it sooner; a malformed secret fails closed as
  * CONFIGURATION_INVALID, is never cached, and nothing of it reaches a log, the answer or stdout.
  */
 describe('the verify function secret', () => {
@@ -303,6 +324,28 @@ describe('the verify function secret', () => {
     expect(await fn.handler(PERSON)).toEqual({ status: 'VERIFIED' });
     expect(await fn.handler(PERSON)).toEqual({ status: 'VERIFIED' });
     expect(apikeys(fn.calls)).toEqual([OLD_KEY, NEW_KEY, NEW_KEY]);
+    expect(fn.secretReads()).toBe(2);
+  });
+
+  // A stored rotation reaches a warm container even while VA still takes the old key.
+  it('reads the secret again once the cached key is five minutes old', async () => {
+    let clock = 1_000_000;
+    let stored = OLD_KEY;
+    const fn = verifyFunction({
+      secret: () => keySecret(stored),
+      now: () => clock,
+      answer: () => json(200, { veteran_status: 'confirmed' }),
+    });
+    const start = clock;
+    expect(await fn.handler(PERSON)).toEqual({ status: 'VERIFIED' });
+    stored = NEW_KEY;
+    clock = start + 299_999;
+    await fn.handler(PERSON);
+    clock = start + 300_000;
+    await fn.handler(PERSON);
+    clock = start + 300_000 + 299_999;
+    await fn.handler(PERSON);
+    expect(apikeys(fn.calls)).toEqual([OLD_KEY, OLD_KEY, NEW_KEY, NEW_KEY]);
     expect(fn.secretReads()).toBe(2);
   });
 

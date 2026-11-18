@@ -6,8 +6,8 @@
  *
  * It holds the fixed sandbox base URL and reads the key from one Secrets Manager secret holding
  * JSON `{"SUAS_VA_CONFIRMATION_API_KEY": "..."}`, named by `SUAS_VA_CONFIRMATION_SECRET_ID` and
- * cached per container. It logs no projection value, key or response body (D035 §13), refuses
- * outside STAGING, and never throws.
+ * cached per container for at most five minutes. It logs no projection value, key or response
+ * body (D035 §13), refuses outside STAGING, and never throws.
  */
 
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
@@ -32,6 +32,9 @@ import { toVaVerifyResponse, vaVerifyRequestSchema } from '../identity/va-verify
 /** Only STAGING deploys this function (W9 item 4); LOCAL `sandbox` calls VA directly. */
 const VERIFY_ENVIRONMENT = 'STAGING';
 
+/** A key stored by `put-secret-value` reaches a warm container within this long. */
+export const VA_KEY_CACHE_TTL_MS = 5 * 60_000;
+
 const secretSchema = z.object({
   SUAS_VA_CONFIRMATION_API_KEY: z.string().regex(VA_CONFIRMATION_API_KEY_PATTERN),
 });
@@ -48,6 +51,8 @@ export interface VaVerifyDeps {
   readonly readSecret: () => Promise<string | undefined>;
   readonly log: (record: VaVerifyLogRecord) => void;
   readonly transport?: FetchTransport;
+  /** Clock for the key cache; `Date.now` when absent. */
+  readonly now?: () => number;
 }
 
 function defaultDeps(): VaVerifyDeps {
@@ -72,6 +77,8 @@ export function createVaVerifyHandler(
   deps: VaVerifyDeps = defaultDeps(),
 ): (event: unknown) => Promise<unknown> {
   let adapter: VeteranConfirmationPort | undefined;
+  let loadedAt = 0;
+  const now = deps.now ?? Date.now;
 
   const refuse = (reason: string, failureClass: VaConfirmationFailureClass): unknown => {
     deps.log({ msg: 'va_verify_refused', reason });
@@ -79,13 +86,14 @@ export function createVaVerifyHandler(
   };
 
   const loadAdapter = async (): Promise<VeteranConfirmationPort | undefined> => {
-    if (adapter !== undefined) return adapter;
+    if (adapter !== undefined && now() - loadedAt < VA_KEY_CACHE_TTL_MS) return adapter;
     try {
       // The sandbox sends nothing until the vendored projection is the approved one (A27).
       assertVaProjectionApproved(VENDORED_VA_PROJECTION);
       const raw = await deps.readSecret();
       const parsed = secretSchema.safeParse(raw === undefined ? undefined : JSON.parse(raw));
       if (!parsed.success) return undefined;
+      loadedAt = now();
       adapter = createVaConfirmationHttpAdapter({
         baseUrl: VA_CONFIRMATION_SANDBOX_BASE_URL,
         apiKey: parsed.data.SUAS_VA_CONFIRMATION_API_KEY,

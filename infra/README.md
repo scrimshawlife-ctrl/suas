@@ -98,10 +98,10 @@ only the normalized result and failure class (`src/identity/va-confirmation-lamb
   group and read its one secret, nothing else. Only the API role may invoke it; the job worker may not.
 - It holds the fixed sandbox base URL (`https://sandbox-api.va.gov/services/veteran-confirmation/v1`, a
   constant, not a setting) and reads the key at run time from the secret named by the `VaVerifySecretName`
-  output, cached per container and read again after VA refuses the key. The key is not in the template, any
-  Lambda environment or any log. The API holds neither the key nor the base URL.
-- It refuses outside `STAGING` and `LOCAL`, and before sending anything it checks the vendored projection is the
-  approved one. It logs only the D035 §13 telemetry (status, failure class, latency bucket), never a projection
+  output, cached per container for at most five minutes and read again sooner if VA refuses the key. The key
+  is not in the template, any Lambda environment or any log. The API holds neither the key nor the base URL.
+- It refuses outside `STAGING` (LOCAL `sandbox` calls VA directly), and before sending anything it checks the
+  vendored projection is the approved one. It logs only the D035 §13 telemetry (status, failure class, latency bucket), never a projection
   value or a VA response body.
 - Its own egress is not host-filtered: the control is what it holds, not the network path (W9 item 4).
 - Until the secret holds the real key, every confirm answers `UNAVAILABLE` / `CONFIGURATION_INVALID`, which
@@ -401,7 +401,8 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pas
       stays out of files; a leading space keeps it out of shell history in most shells:
       ` aws secretsmanager put-secret-value --secret-id <VaVerifySecretName> --secret-string '{"SUAS_VA_CONFIRMATION_API_KEY":"<key>"}'`
    4. No redeploy is needed: until a valid key is stored the function reads the secret on every call, and after
-      that again on a cold start or when VA refuses the key. To rotate, `put-secret-value` again with the new key.
+      that again on a cold start, every five minutes, or when VA refuses the key. To rotate, `put-secret-value` again
+      with the new key; every warm container uses it within five minutes.
    5. To turn it off, deploy without `vaSandbox` (or `-c vaSandbox=false`): the API returns to `disabled`, and
       the function and its secret are deleted.
 
