@@ -7,7 +7,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import { newPerson, scriptModel, signInWithCode } from '../helpers';
-export { duplicateTab, uniqueText as uniqueName } from '../helpers';
 import { resetSignInLimits } from '../auth/auth';
 
 export const ADMIN_EMAIL = 'admin@example.invalid';

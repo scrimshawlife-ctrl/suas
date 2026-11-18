@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '../fixtures';
 import type { Page } from '@playwright/test';
-import { newVerifiedVeteran, shoot, withDb } from '../helpers';
+import { duplicateTab, shoot, uniqueText, withDb } from '../helpers';
 import { errorCode, expectNoDeadControls, nextResponse, sidewaysScroll } from '../auth/auth';
-import { duplicateTab, elevatedAdmin, openNewDraft, uniqueName } from './admin';
+import { elevatedAdmin, openNewDraft } from './admin';
+import { newVeteran } from '../people';
 
 const saveButton = (page: Page) => page.getByRole('button', { name: 'Save changes' });
 const publishButton = (page: Page) => page.getByRole('button', { name: 'Publish', exact: true });
@@ -11,19 +12,20 @@ const discardButton = (page: Page) => page.getByRole('button', { name: 'Discard'
 const PUBLISHED = /^Published as a verified Resource\./;
 const EDIT = /\/api\/v0\/admin\/resource-drafts\/[0-9a-f-]{36}\/commands\/edit$/;
 
-// A superset of 05-catalog.spec.ts (QA port): every field, contacts, confirm dialog, reload.
+// A superset of 05-catalog-publish.spec.ts (QA port): every field, contacts, confirm dialog,
+// reload.
 test('an admin edits every field, publishes after a confirm, and a Veteran sees the edited listing', async ({
   browser,
   request,
 }) => {
-  const veteran = await newVerifiedVeteran(browser, request, {
+  const veteran = await newVeteran(browser, request, {
     name: 'Rosa D.',
     county: 'Santa Clara',
     label: 'admin-reader',
   });
   const page = await elevatedAdmin(browser, request);
-  const extracted = uniqueName('Coyote Valley Shelter');
-  const name = uniqueName('Coyote Valley Food Closet');
+  const extracted = uniqueText('Coyote Valley Shelter');
+  const name = uniqueText('Coyote Valley Food Closet');
   await openNewDraft(page, request, {
     service_name: extracted,
     category: 'SHELTER',
@@ -151,7 +153,7 @@ test('after publishing, Back and Forward never bring back an editable draft or p
   request,
 }) => {
   const page = await elevatedAdmin(browser, request);
-  const name = uniqueName('Back Button Pantry');
+  const name = uniqueText('Back Button Pantry');
   const publishes: string[] = [];
   page.on('request', (r) => {
     if (r.url().endsWith('/commands/publish')) publishes.push(r.url());
@@ -189,13 +191,13 @@ test('discarding asks first; Keep draft changes nothing; a discarded draft never
   browser,
   request,
 }) => {
-  const veteran = await newVerifiedVeteran(browser, request, {
+  const veteran = await newVeteran(browser, request, {
     name: 'Abe K.',
     county: 'Alameda',
     label: 'admin-discard',
   });
   const page = await elevatedAdmin(browser, request);
-  const name = uniqueName('Discard Me Shelter');
+  const name = uniqueText('Discard Me Shelter');
   await openNewDraft(page, request, {
     service_name: name,
     category: 'SHELTER',
@@ -231,7 +233,7 @@ test('the editor refuses an empty name, an empty contact row and a crisis number
   // Provoked on purpose: the browser logs each refused load.
   allow.push(/status of 400/);
   const page = await elevatedAdmin(browser, request);
-  const name = uniqueName('Validation Pantry');
+  const name = uniqueText('Validation Pantry');
   await openNewDraft(page, request, { service_name: name, category: 'FOOD' });
   const edits: string[] = [];
   page.on('request', (r) => {
@@ -282,7 +284,7 @@ test('double-clicking Save sends one edit; a refresh with unsaved edits shows th
     if (EDIT.test(new URL(r.url()).pathname)) edits.push(r.url());
   });
   await openNewDraft(page, request, {
-    service_name: uniqueName('Save Twice'),
+    service_name: uniqueText('Save Twice'),
     category: 'FOOD',
     hours: 'Mon',
   });
@@ -307,7 +309,7 @@ test('a publish that fails says so inside the dialog, and trying again publishes
   allow.push(/commands\/publish :: 500$/, /status of 500/);
   const page = await elevatedAdmin(browser, request);
   await openNewDraft(page, request, {
-    service_name: uniqueName('Flaky Publish'),
+    service_name: uniqueText('Flaky Publish'),
     category: 'FOOD',
   });
   // A 5xx cannot be reached on the real stack, so it is routed.
@@ -336,7 +338,7 @@ test('two admin tabs on one draft: the stale tab saves, gets 409 and shows the c
   allow.push(/status of 409/);
   const page = await elevatedAdmin(browser, request);
   const id = await openNewDraft(page, request, {
-    service_name: uniqueName('Two Tabs Pantry'),
+    service_name: uniqueText('Two Tabs Pantry'),
     category: 'FOOD',
   });
   const other = await duplicateTab(page, `/admin/drafts/${id}`);
@@ -392,7 +394,7 @@ test('a draft at phone width: the contact editor and the dialog fit without side
   const page = await elevatedAdmin(browser, request);
   await page.setViewportSize({ width: 390, height: 844 });
   await openNewDraft(page, request, {
-    service_name: uniqueName('Phone Width Pantry With A Fairly Long Service Name'),
+    service_name: uniqueText('Phone Width Pantry With A Fairly Long Service Name'),
     category: 'FOOD',
     contacts: [
       { kind: 'PHONE', value: '(408) 555-0100' },

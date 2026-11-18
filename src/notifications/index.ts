@@ -56,6 +56,7 @@ export {
   NotificationConsentDeniedError,
   setChannelPreference,
   settleUndeliverable,
+  type SettleUndeliverableResult,
   TERMINAL_DELIVERY_STATUSES,
   type DeliveryCallbackResult,
   type DeliveryStatus,

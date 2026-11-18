@@ -238,6 +238,9 @@ Seeded for the demo Veteran: one open case with TRANSPORTATION (MATCHING), FOOD
 (FULFILLED, ready to confirm), SHELTER (CANCELLED) and PEER_SUPPORT (CREATED)
 requests; synthetic resources in all four categories; an ACTIVE consent grant,
 a trusted contact, notifications, a completed Check-In and a Veteran follow-up.
+The demo Veteran is not seeded as verified: self-attest on the Verify page (or
+`POST /api/v0/veterans/me/verification/commands/self-attest`) before requesting
+help, Resources, Consents, Trusted Contacts or Check-Ins, as the smoke does.
 The legacy `/app/chat` page shows its unavailable state and nothing is seeded
 for chat; v1 chat is in `/api/v0` (`src/http/routes/chat.ts`) and `web/`.
 
@@ -246,8 +249,8 @@ seeded `/api/v0` responses into the deterministic fixture file the iOS and
 Android no-server demo modes load. Identifiers and timestamps are rewritten,
 and the script refuses any non-synthetic email or phone number. Export from a
 fresh seed (`npm run dev:demo -- --reset`, then `npm run demo:fixtures` before
-`npm run smoke:demo`), because the smoke test creates and cancels an extra
-request.
+`npm run smoke:demo`), because the smoke test self-attests the demo Veteran
+and creates and cancels an extra request.
 
 ### Local demo workflow
 

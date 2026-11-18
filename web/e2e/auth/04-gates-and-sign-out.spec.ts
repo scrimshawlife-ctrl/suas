@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
-import { API_URL } from './config';
-import { signInWithCode, signUp, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { API_URL } from '../config';
+import { signInWithCode, signUp, uniqueEmail } from '../helpers';
 
 /** The request, case and notification reads a page makes; a guard must redirect before any. */
 function caseReads(page: Page): string[] {

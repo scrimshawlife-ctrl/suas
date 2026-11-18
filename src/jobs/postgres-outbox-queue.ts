@@ -6,7 +6,9 @@
  * - Decision packet D-022 (Postgres outbox / SKIP LOCKED; DECISION_PENDING)
  *
  * Enqueue writes a row that survives process restart. Workers claim due rows
- * with `FOR UPDATE SKIP LOCKED` via {@link claimDueJobs}.
+ * with `FOR UPDATE SKIP LOCKED` via {@link claimDueJobs}. A claim is a lease held by
+ * one owner; only the current holder may renew or settle it, so a worker whose lease
+ * ran out and was reclaimed cannot run or settle the job again.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -23,6 +25,18 @@ import type {
 const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_LEASE_MS = 60_000;
 
+/**
+ * The longest a deferred job waits. Today's deferrals are one send-claim window (45 s) or
+ * less; the cap keeps a buggy delay from parking a job for years or overflowing the date.
+ */
+const MAX_DEFER_MS = 15 * 60_000;
+
+/** When a deferred job is due: `delayMs` from now, held to 0..MAX_DEFER_MS (NaN counts as 0). */
+function deferredRunAt(delayMs: number): string {
+  const delay = Number.isNaN(delayMs) ? 0 : Math.min(Math.max(delayMs, 0), MAX_DEFER_MS);
+  return new Date(Date.now() + delay).toISOString();
+}
+
 export interface JobOutboxRow {
   readonly jobId: string;
   readonly tenantId: string | undefined;
@@ -33,6 +47,18 @@ export interface JobOutboxRow {
   readonly attempts: number;
   readonly maxAttempts: number;
   readonly runAt: Date;
+  /** Who holds the lease on a claimed row. */
+  readonly leaseOwner: string;
+}
+
+/** A held lease. Owner and attempt number together fence it: a reclaim changes both. */
+export type JobLease = Pick<JobOutboxRow, 'jobId' | 'leaseOwner' | 'attempts'>;
+
+/** Matches the row only while `$2` (owner) and `$3` (attempts) still hold its lease. */
+const LEASE_HELD = `job_id = $1 AND status = 'LEASED' AND lease_owner = $2 AND attempts = $3`;
+
+function leaseParams(lease: JobLease): [string, string, number] {
+  return [lease.jobId, lease.leaseOwner, lease.attempts];
 }
 
 export class PostgresOutboxJobQueue implements DurableJobQueuePort {
@@ -181,6 +207,7 @@ export async function claimDueJobs(
         attempts: row.attempts + 1,
         maxAttempts: row.max_attempts,
         runAt: row.run_at instanceof Date ? row.run_at : new Date(row.run_at),
+        leaseOwner: input.owner,
       });
     }
     await client.query('COMMIT');
@@ -193,64 +220,198 @@ export async function claimDueJobs(
   }
 }
 
-export async function markJobSucceeded(db: Queryable, jobId: string): Promise<void> {
+/**
+ * Lease one PENDING job for an inline run in the process that enqueued it, so workers
+ * skip it meanwhile. Undefined when a worker already took it. An inline run is not an
+ * outbox attempt, so `attempts` is unchanged.
+ */
+async function leaseJob(
+  db: Queryable,
+  input: { readonly jobId: string; readonly owner: string },
+): Promise<JobLease | undefined> {
+  const now = new Date();
+  const leasedUntil = new Date(now.getTime() + DEFAULT_LEASE_MS);
+  const result = await db.query<{ attempts: number }>(
+    `UPDATE job_outbox
+     SET status = 'LEASED', leased_until = $3, lease_owner = $2, updated_at = now()
+     WHERE job_id = $1 AND status = 'PENDING' AND run_at <= $4
+     RETURNING attempts`,
+    [input.jobId, input.owner, leasedUntil.toISOString(), now.toISOString()],
+  );
+  const row = result.rows[0];
+  return row === undefined
+    ? undefined
+    : { jobId: input.jobId, leaseOwner: input.owner, attempts: row.attempts };
+}
+
+/**
+ * Restart a held lease's clock just before its job runs, so a job that waited behind
+ * others in a batch starts with a full lease. False when another worker reclaimed it:
+ * the caller must then skip the job.
+ */
+export async function renewJobLease(
+  db: Queryable,
+  lease: JobLease,
+  options: { readonly leaseMs?: number } = {},
+): Promise<boolean> {
+  const leasedUntil = new Date(Date.now() + (options.leaseMs ?? DEFAULT_LEASE_MS));
+  const result = await db.query(
+    `UPDATE job_outbox SET leased_until = $4, updated_at = now() WHERE ${LEASE_HELD}`,
+    [...leaseParams(lease), leasedUntil.toISOString()],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Run `work` while renewing the lease every third of `leaseMs`, so a job that runs past
+ * its lease is not reclaimed. Renewal stops once the lease is lost; the owner-checked
+ * settle then refuses this runner. A failed renewal query is retried on the next beat.
+ */
+export async function holdJobLease<T>(
+  db: Queryable,
+  lease: JobLease,
+  work: () => Promise<T>,
+  options: { readonly leaseMs?: number } = {},
+): Promise<T> {
+  const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
+  let renewing: Promise<unknown> = Promise.resolve();
+  const beat = setInterval(
+    () => {
+      renewing = renewJobLease(db, lease, { leaseMs }).then(
+        (held) => {
+          if (!held) clearInterval(beat);
+        },
+        () => undefined,
+      );
+    },
+    Math.max(1, Math.floor(leaseMs / 3)),
+  );
+  beat.unref();
+  try {
+    return await work();
+  } finally {
+    clearInterval(beat);
+    await renewing;
+  }
+}
+
+/** Put a held job back to PENDING after `delayMs`, giving back the attempt its claim took. */
+export async function deferJob(db: Queryable, lease: JobLease, delayMs: number): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE job_outbox
+     SET status = 'PENDING', attempts = GREATEST(attempts - 1, 0), run_at = $4,
+         leased_until = NULL, lease_owner = NULL, updated_at = now()
+     WHERE ${LEASE_HELD}`,
+    [...leaseParams(lease), deferredRunAt(delayMs)],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Reopen a job this runner just dead-lettered, due after `delayMs`, giving back its last attempt. */
+export async function reopenDeadLetter(
+  db: Queryable,
+  job: Pick<JobOutboxRow, 'jobId' | 'attempts'>,
+  delayMs: number,
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE job_outbox
+     SET status = 'PENDING', attempts = GREATEST(attempts - 1, 0), run_at = $3, updated_at = now()
+     WHERE job_id = $1 AND status = 'DEAD_LETTER' AND attempts = $2`,
+    [job.jobId, job.attempts, deferredRunAt(delayMs)],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Hand a held job back to PENDING, due now, without counting a failure. */
+async function releaseJob(db: Queryable, lease: JobLease): Promise<void> {
   await db.query(
+    `UPDATE job_outbox
+     SET status = 'PENDING', leased_until = NULL, lease_owner = NULL, updated_at = now()
+     WHERE ${LEASE_HELD}`,
+    leaseParams(lease),
+  );
+}
+
+/**
+ * Run a just-enqueued job inline under a lease: done on success, released for a worker
+ * on failure (the error is rethrown). Skipped when a worker holds it already.
+ */
+export async function runJobUnderLease(
+  db: Queryable,
+  input: { readonly jobId: string; readonly owner: string },
+  run: () => Promise<void>,
+): Promise<void> {
+  const lease = await leaseJob(db, input);
+  if (lease === undefined) return;
+  try {
+    await holdJobLease(db, lease, run);
+  } catch (error) {
+    await releaseJob(db, lease);
+    throw error;
+  }
+  await markJobSucceeded(db, lease);
+}
+
+/** Settle a held job as done. False when the lease was lost: the new holder settles it. */
+export async function markJobSucceeded(db: Queryable, lease: JobLease): Promise<boolean> {
+  const result = await db.query(
     `UPDATE job_outbox
      SET status = 'SUCCEEDED',
          leased_until = NULL,
          lease_owner = NULL,
          last_error = NULL,
          updated_at = now()
-     WHERE job_id = $1`,
-    [jobId],
+     WHERE ${LEASE_HELD}`,
+    leaseParams(lease),
   );
+  return (result.rowCount ?? 0) > 0;
 }
 
+/** Settle a held job as failed: retried with backoff, or dead-lettered once exhausted. */
 export async function markJobFailed(
   db: Queryable,
   input: {
-    readonly jobId: string;
+    readonly lease: JobLease;
     readonly error: string;
     readonly retryDelayMs?: number;
     readonly now?: Date;
   },
-): Promise<'PENDING' | 'DEAD_LETTER'> {
+): Promise<'PENDING' | 'DEAD_LETTER' | 'LEASE_LOST'> {
   const now = input.now ?? new Date();
+  const params = leaseParams(input.lease);
   const current = await db.query<{ attempts: number; max_attempts: number }>(
-    `SELECT attempts, max_attempts FROM job_outbox WHERE job_id = $1`,
-    [input.jobId],
+    `SELECT attempts, max_attempts FROM job_outbox WHERE ${LEASE_HELD}`,
+    params,
   );
   const row = current.rows[0];
-  if (row === undefined) {
-    throw new Error(`job_outbox row not found: ${input.jobId}`);
-  }
+  if (row === undefined) return 'LEASE_LOST';
 
   if (row.attempts >= row.max_attempts) {
-    await db.query(
+    const dead = await db.query(
       `UPDATE job_outbox
        SET status = 'DEAD_LETTER',
            leased_until = NULL,
            lease_owner = NULL,
-           last_error = $2,
+           last_error = $4,
            updated_at = now()
-       WHERE job_id = $1`,
-      [input.jobId, input.error.slice(0, 2000)],
+       WHERE ${LEASE_HELD}`,
+      [...params, input.error.slice(0, 2000)],
     );
-    return 'DEAD_LETTER';
+    return (dead.rowCount ?? 0) > 0 ? 'DEAD_LETTER' : 'LEASE_LOST';
   }
 
   const delay = input.retryDelayMs ?? Math.min(60_000, 1000 * 2 ** Math.max(0, row.attempts - 1));
   const runAt = new Date(now.getTime() + delay);
-  await db.query(
+  const retried = await db.query(
     `UPDATE job_outbox
      SET status = 'PENDING',
-         run_at = $2,
+         run_at = $4,
          leased_until = NULL,
          lease_owner = NULL,
-         last_error = $3,
+         last_error = $5,
          updated_at = now()
-     WHERE job_id = $1`,
-    [input.jobId, runAt.toISOString(), input.error.slice(0, 2000)],
+     WHERE ${LEASE_HELD}`,
+    [...params, runAt.toISOString(), input.error.slice(0, 2000)],
   );
-  return 'PENDING';
+  return (retried.rowCount ?? 0) > 0 ? 'PENDING' : 'LEASE_LOST';
 }

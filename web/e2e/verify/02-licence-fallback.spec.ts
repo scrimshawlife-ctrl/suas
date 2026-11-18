@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { APIRequestContext, Browser, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
-import { newPerson, shoot, signInWithCode, signUp, uniqueEmail, withDb } from './helpers';
+import { expect, test } from '../fixtures';
+import { newPerson, shoot, signInWithCode, signUp, uniqueEmail, withDb } from '../helpers';
 
 /**
  * The licence fallback (suas-specs #73 R10.1, released in 0.10.0) against the LOCAL fixture reader, which

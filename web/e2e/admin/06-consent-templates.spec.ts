@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from './fixtures';
-import { API_URL } from './config';
-import { newPerson, shoot, signInWithCode, uniqueEmail, withDb } from './helpers';
+import { expect, test } from '../fixtures';
+import { API_URL } from '../config';
+import { newPerson, shoot, signInWithCode, uniqueEmail, withDb } from '../helpers';
 
 test('an admin saves a consent template version and publishes it; clients read it (R9.3)', async ({
   browser,

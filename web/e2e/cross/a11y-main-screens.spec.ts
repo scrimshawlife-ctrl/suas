@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
-import { newPerson, newVerifiedVeteran, requestHelp, signUp, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { newPerson, requestHelp, signUp, uniqueEmail } from '../helpers';
+import { newVeteran } from '../people';
 
 /** WCAG 2.0, 2.1 and 2.2 at levels A and AA. */
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -39,7 +40,7 @@ test('the main screens have no serious or critical WCAG A/AA violations', async 
   );
 
   // A verified Veteran: Home, Request help, Resources; then a request for the helper.
-  const veteran = await newVerifiedVeteran(browser, request, {
+  const veteran = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
     label: 'a11y-vet',

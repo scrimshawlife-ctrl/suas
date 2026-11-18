@@ -1,12 +1,6 @@
 import { expect, test } from '../fixtures';
-import {
-  answerRest,
-  closePeople,
-  DONE_HEADING,
-  serverError,
-  startCheckIn,
-  veteran,
-} from './support';
+import { answerRest, closePeople, DONE_HEADING, serverError, startCheckIn } from './support';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -14,7 +8,7 @@ test('a Check-In: Save waits for a choice, Previous keeps the saved answer, opti
   browser,
   request,
 }) => {
-  const { page } = await veteran(browser, request, { name: 'Rae K.', county: 'Alameda' });
+  const { page } = await newVeteran(browser, request, { name: 'Rae K.', county: 'Alameda' });
   await startCheckIn(page);
   await expect(page).toHaveTitle('Check-In · SUAS');
   await expect(page.getByText('Question 1 of 9')).toBeVisible();
@@ -59,7 +53,7 @@ test('when saving an answer fails, the page says so, keeps the choice, and the n
   // The 500 is the one this test returns on purpose.
   // Only the routed answer save may 500; a real backend 500 still fails the test.
   allow.push(/\/check-ins\/[^/]+\/responses :: 500$/, /status of 500/);
-  const { page } = await veteran(browser, request, { name: 'Di F.', county: 'Alameda' });
+  const { page } = await newVeteran(browser, request, { name: 'Di F.', county: 'Alameda' });
   await startCheckIn(page);
   await page.route('**/api/v0/check-ins/*/responses', (route) => route.fulfill(serverError()));
   await page.getByRole('radio').first().check();

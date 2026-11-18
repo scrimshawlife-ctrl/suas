@@ -15,7 +15,15 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
+- After a case is closed and reopened, the next cycle's helper no longer reads the previous cycle's Settlements (`GET /cases/{id}/settlements`, `/settlements/{settlement_id}`) or contact attempts (`GET /cases/{caseId}/contact-attempts`); a helper's standing is per cycle (CASES.md §4.3, DISPATCH.md §13.2, R11.1). The requester still reads every cycle. A helper Settlement read is scoped by the RESOLVED case's current Settlement, a contact write takes the case row lock and re-checks standing so it cannot outlast a concurrent CLOSE, and `closed_at` is the wall-clock time of the close. A contact attempt's `created_at` is the time of that re-check, so a write that outlasts CLOSE and REOPEN stands only on a new-cycle accept and is filed in that cycle.
+
 - U+0000 (NUL) in any string or key of a body, query or path parameter, on `/api/v0` and the `/app` form routes alike, is now 400 `VALIDATION_FAILED` instead of a 500 from PostgreSQL (22021 text, 22P05 jsonb); a NUL in a header value was already 400 from Node's HTTP parser; Settlement sections nest at most 16 levels, so deep content is 400 instead of a 500 (54001) (API.md §6).
+
+- A Notification is sent once and recorded `SENT` once when runners race: `attemptSend` claims the send in internal columns (migration 0026; `delivery_status` and `last_attempt_at` are untouched) and settles only while it holds the claim; a job that finds the send in flight waits without spending an attempt, and a dead-letter does not settle a send another runner holds; the API leases a `notification.send` outbox row before running it inline; outbox leases are renewed while a job runs and settled only by their current owner (NOTIFICATIONS.md §3, §5, §6; ARCHITECTURE.md §10).
+
+- `npm run load:synthetic` self-attests its synthetic Veteran before reading Resources, so the R9.1 request gate no longer answers every sample with `403 VERIFICATION_REQUIRED`. Any failed sample now sets `observed_p95_within_target` to `false` and exits non-zero (VETERAN_VERIFICATION.md §21).
+
+- `npm run smoke:demo` self-attests the demo Veteran after sign-in and sends `summary`, `meeting_place` and `destination` (the `draftDetailsInput` fields) instead of the refused `details.purpose`, so the R9.1 gate, the strict draft schema and the ride meeting-place rule on SUBMIT no longer fail nine steps.
 
 - Chat keeps manual retry for in-flight idempotency conflicts with the original message and key; permanent chat refusals remain final (API.md §7.5).
 

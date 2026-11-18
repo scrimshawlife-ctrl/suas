@@ -1,7 +1,8 @@
 import { expect, test } from '../fixtures';
-import { readSignInCode, uniqueEmail } from '../helpers';
-import { closePeople, myUserId, veteran } from '../support/support';
+import { myUserId, readSignInCode, uniqueEmail } from '../helpers';
+import { closePeople } from '../support/support';
 import { expireSessions, idleSessions } from './time';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -12,7 +13,7 @@ test('T6: past the absolute session end, the next action goes to sign in and the
 }) => {
   // The expired session is refused on purpose.
   allow.push(/status of 401/);
-  const vet = await veteran(browser, request, { name: 'Rae M.', county: 'Santa Clara' });
+  const vet = await newVeteran(browser, request, { name: 'Rae M.', county: 'Santa Clara' });
   const { page } = vet;
   // The page's reads finish before the session ends, so the write is what gets the 401.
   const consents = page.waitForResponse((r) => r.url().endsWith('/api/v0/consents'));
@@ -49,7 +50,7 @@ test('T6: after two idle hours, opening a page goes to sign in', async ({
 }) => {
   // The idle session is refused on purpose.
   allow.push(/status of 401/);
-  const { page } = await veteran(browser, request, { name: 'Lee I.', county: 'Santa Clara' });
+  const { page } = await newVeteran(browser, request, { name: 'Lee I.', county: 'Santa Clara' });
   await page.goto('/consents');
   await expect(page.getByRole('heading', { level: 1, name: 'What you share' })).toBeVisible();
   await idleSessions(await myUserId(page, request));

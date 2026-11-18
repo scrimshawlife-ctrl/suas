@@ -19,8 +19,8 @@ import {
   resetSignInLimits,
   saveProfile,
   signOutFromAvatar,
-  signedUpPerson,
 } from './auth';
+import { newHelper, newVeteran } from '../people';
 
 const CHALLENGES = /\/api\/v0\/auth\/challenges$/;
 const VERIFY = /\/api\/v0\/auth\/challenges\/commands\/verify$/;
@@ -85,7 +85,12 @@ test('the sign-in screen checks the email before asking for a code', async ({ br
 });
 
 test('a returning person signs in as a helper and lands on Serve', async ({ browser, request }) => {
-  const first = await signedUpPerson(browser, request, { label: 'returning', name: 'Ira S.' });
+  const first = await newVeteran(browser, request, {
+    label: 'returning',
+    name: 'Ira S.',
+    county: 'Alameda',
+    verified: false,
+  });
 
   const page = await newPerson(browser);
   await askForCode(page, first.email, 'serve');
@@ -204,9 +209,11 @@ test('asking again for a code makes the earlier code stop working', async ({
 test('a code that was already used does not sign in again', async ({ browser, request, allow }) => {
   // Provoked on purpose: the browser logs each refused load.
   allow.push(/status of 401/);
-  const { page, email } = await signedUpPerson(browser, request, {
+  const { page, email } = await newVeteran(browser, request, {
     label: 'used-code',
     name: 'Uma V.',
+    county: 'Alameda',
+    verified: false,
   });
   const usedCode = await readSignInCode(request, email);
   await signOutFromAvatar(page, 'Uma');
@@ -328,10 +335,10 @@ test('a signed-in person who opens sign-in again goes to their home', async ({
   browser,
   request,
 }) => {
-  const { page } = await signedUpPerson(browser, request, {
+  const { page } = await newHelper(browser, request, {
     label: 'again',
     name: 'Bo K.',
-    role: 'serve',
+    county: 'Alameda',
   });
   for (const path of ['/sign-in', '/sign-in?role=need', '/sign-in/code']) {
     await page.goto(path);

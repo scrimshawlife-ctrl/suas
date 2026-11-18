@@ -1,18 +1,23 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { draftTurns, readSignInCode, requestHelp, scriptModel, uniqueEmail } from '../helpers';
+import {
+  draftTurns,
+  newPerson,
+  readSignInCode,
+  requestHelp,
+  scriptModel,
+  uniqueEmail,
+  uniqueText,
+} from '../helpers';
 import {
   closePeople,
   contactRow,
-  elevatedAdmin,
-  helper,
   invite,
   startCheckIn,
-  uniqueSummary,
-  veteran,
   veteranWithNotice,
-  visitor,
 } from '../support/support';
+import { elevatedAdmin } from '../admin/admin';
+import { newHelper, newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -32,7 +37,7 @@ test('onboarding, a request, a trusted contact and a Check-In answer each send o
   browser,
   request,
 }) => {
-  const page = await visitor(browser);
+  const page = await newPerson(browser);
   const email = uniqueEmail('dbl');
 
   await page.goto('/sign-in');
@@ -67,7 +72,7 @@ test('onboarding, a request, a trusted contact and a Check-In answer each send o
   expect(attests()).toBe(1);
 
   // The draft card's Send request submits the draft once and makes one request.
-  await scriptModel(request, draftTurns({ category: 'FOOD', summary: uniqueSummary('Groceries') }));
+  await scriptModel(request, draftTurns({ category: 'FOOD', summary: uniqueText('Groceries') }));
   await page.goto('/request');
   await page.getByLabel('Tell us what you need').fill('I need food help this week.');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -99,15 +104,18 @@ test('Take, case commands, chat Send, Release and Cancel each send one write per
   browser,
   request,
 }) => {
-  const requester = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
-  const summary = uniqueSummary('Ride to the clinic');
+  const requester = await newVeteran(browser, request, {
+    name: 'Marcus T.',
+    county: 'Santa Clara',
+  });
+  const summary = uniqueText('Ride to the clinic');
   const requestId = await requestHelp(
     requester.page,
     request,
     { category: 'TRANSPORTATION', summary, timing: 'Tomorrow at 9 am' },
     'Front entrance of the library',
   );
-  const page = await helper(browser, request, { name: 'Dee R.', county: 'Santa Clara' });
+  const { page } = await newHelper(browser, request, { name: 'Dee R.', county: 'Santa Clara' });
 
   const accepts = writes(page, new RegExp(`/service-requests/${requestId}/accept$`));
   await page
@@ -123,7 +131,7 @@ test('Take, case commands, chat Send, Release and Cancel each send one write per
   expect(commands()).toBe(1);
 
   await page.goto(`/chat/${requestId}`);
-  const text = `On my way ${uniqueSummary('m')}`;
+  const text = `On my way ${uniqueText('m')}`;
   await page.getByLabel('Message Marcus T.').fill(text);
   const messages = writes(page, /\/chat\/messages$/);
   await page.getByRole('button', { name: 'Send', exact: true }).dblclick();
@@ -132,7 +140,7 @@ test('Take, case commands, chat Send, Release and Cancel each send one write per
   expect(messages()).toBe(1);
 
   // Release on a second request the helper has only taken (started cases cannot be released).
-  const second = uniqueSummary('Groceries');
+  const second = uniqueText('Groceries');
   const secondId = await requestHelp(
     requester.page,
     request,
@@ -174,7 +182,7 @@ test('Accept an invitation, Stop sharing and Remove each send one write per doub
   const email = uniqueEmail('cousin');
   await invite(page, 'Cousin', email);
   // The invitee signs in with the invited address; no profile is needed to accept.
-  const cousin = await visitor(browser);
+  const cousin = await newPerson(browser);
   await cousin.goto('/sign-in');
   await cousin.getByRole('radio', { name: /I need support/ }).check();
   await cousin.getByLabel('Email address').fill(email);

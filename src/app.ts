@@ -11,6 +11,7 @@
  *   harness, durable job abstraction, build provenance)
  */
 
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { describeConfig, loadConfig, type ConfigSource, type SuasConfig } from './config/index.js';
@@ -18,7 +19,7 @@ import { createPool, EXPECTED_SCHEMA_VERSION, runMigrations } from './db/index.j
 import {
   createJobQueue,
   DispatchingJobQueue,
-  markJobSucceeded,
+  runJobUnderLease,
   type DurableJobQueuePort,
 } from './jobs/index.js';
 import { createJobHandlers, licenceReadHandler } from './jobs/handlers.js';
@@ -135,6 +136,8 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
           }),
         }
       : {};
+  // This process's lease owner for inline runs, unique so its leases fence apart.
+  const inlineOwner = `api-inline:${randomUUID()}`;
   // The compute handler enqueues notification.send on the queue that wraps it,
   // so it reads that queue lazily.
   const jobQueue: DurableJobQueuePort =
@@ -162,9 +165,9 @@ export async function startApp(options: StartAppOptions): Promise<StartedApp> {
               }),
             );
           },
-          // A handled outbox row is marked done so the job worker skips it.
+          // An outbox row is leased while it runs inline, so the job worker skips it.
           innerQueue.implementation === 'postgres-outbox'
-            ? (job) => markJobSucceeded(pool, job.jobId)
+            ? (job, run) => runJobUnderLease(pool, { jobId: job.jobId, owner: inlineOwner }, run)
             : undefined,
         );
 

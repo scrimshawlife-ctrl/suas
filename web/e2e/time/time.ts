@@ -6,7 +6,8 @@
 
 import { withDb } from '../helpers';
 
-/** Pretends a request was sent `minutes` ago, so the widening delay has passed. */
+/** Pretends a request was sent `minutes` ago, so the widening delay has passed. This is the one
+ * definition: every spec that moves a request's time imports it from here. */
 export async function ageRequest(serviceRequestId: string, minutes: number): Promise<void> {
   await withDb((db) =>
     db.query(

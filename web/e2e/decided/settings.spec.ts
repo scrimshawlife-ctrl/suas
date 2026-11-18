@@ -1,13 +1,7 @@
 import { expect, test } from '../fixtures';
 import { API_URL } from '../config';
-import {
-  newVerifiedVeteran,
-  requestHelp,
-  signUp,
-  uniqueEmail,
-  uniqueText,
-  withDb,
-} from '../helpers';
+import { requestHelp, signUp, uniqueEmail, uniqueText, withDb } from '../helpers';
+import { newVeteran } from '../people';
 
 /** R12.2 (contributor proposal, SUAS-specs #79): Settings changes the name and county. */
 test('a person changes their display name and county in Settings, from either mode', async ({
@@ -86,7 +80,7 @@ test('after a county change the open list shows the new county without a reload'
   request,
 }) => {
   // Merced does not border Alameda (migrations/0013_peer_matching.sql, county_adjacency).
-  const requester = await newVerifiedVeteran(browser, request, {
+  const requester = await newVeteran(browser, request, {
     name: 'Ana L.',
     county: 'Alameda',
     label: 'requester',

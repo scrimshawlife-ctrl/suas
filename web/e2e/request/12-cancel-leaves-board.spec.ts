@@ -1,11 +1,12 @@
-import { expect, test } from './fixtures';
-import { newPerson, newVerifiedVeteran, requestHelp, signUp, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { newPerson, requestHelp, signUp, uniqueEmail } from '../helpers';
+import { newVeteran } from '../people';
 
 test('a Veteran cancels a sent request and it leaves the open list for helpers', async ({
   browser,
   request,
 }) => {
-  const requester = await newVerifiedVeteran(browser, request, {
+  const requester = await newVeteran(browser, request, {
     name: 'Lee C.',
     county: 'Alameda',
     label: 'canceller',

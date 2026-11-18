@@ -3,7 +3,8 @@ import { commandScope, fingerprintRequest } from '../../src/idempotency/fingerpr
 import { withDb } from './helpers';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { newPerson, newVerifiedVeteran, requestHelp, shoot, signUp, uniqueEmail } from './helpers';
+import { newPerson, requestHelp, shoot, signUp, uniqueEmail } from './helpers';
+import { newVeteran } from './people';
 
 /** Records the WebSockets a page opens and the text of every frame it receives. */
 function recordSocket(page: Page): { opened: () => number; frames: string[] } {
@@ -21,7 +22,7 @@ test('a second account accepts the request, sees the meeting place and chats liv
   request,
   allow,
 }) => {
-  const requester = await newVerifiedVeteran(browser, request, {
+  const requester = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
     label: 'requester',

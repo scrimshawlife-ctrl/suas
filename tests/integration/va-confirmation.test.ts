@@ -135,11 +135,16 @@ function confirm(
   });
 }
 
-function selfAttest(headers: Record<string, string>, started: StartedApp = app, payload?: object) {
+function selfAttest(
+  headers: Record<string, string>,
+  started: StartedApp = app,
+  payload?: object,
+  key: string = randomUUID(),
+) {
   return started.server.inject({
     method: 'POST',
     url: '/api/v0/veterans/me/verification/commands/self-attest',
-    headers: { ...headers, 'idempotency-key': randomUUID() },
+    headers: { ...headers, 'idempotency-key': key },
     ...(payload !== undefined ? { payload } : {}),
   });
 }
@@ -636,6 +641,52 @@ describe('self-attestation (D-016 fallback, R9.1 D1)', () => {
     await revoke(attestedFirst.pool, attestedFirst.tenantId, attestedFirst.user.userId);
     expect((await resources(attestedFirst.headers)).statusCode).toBe(403);
     expect(await me(attestedFirst.headers)).toMatchObject({ status: 'REVOKED' });
+  });
+
+  it('attests only the signed-in person, whose gate opens while another stays closed', async () => {
+    const a = await person();
+    const b = await person(app, { tenantId: a.tenantId });
+    for (const { headers } of [a, b]) {
+      const gated = await resources(headers);
+      expect(gated.statusCode).toBe(403);
+      expect(errorCode(gated)).toBe('VERIFICATION_REQUIRED');
+    }
+
+    const key = randomUUID();
+    expect((await selfAttest(a.headers, app, undefined, key)).statusCode).toBe(200);
+    expect((await resources(a.headers)).statusCode).toBe(200);
+    expect(errorCode(await resources(b.headers))).toBe('VERIFICATION_REQUIRED');
+    expect(await me(b.headers)).toMatchObject({ status: 'NOT_STARTED' });
+
+    // The key is scoped to its subject: B reusing it attests B, never replays A's result.
+    expect((await selfAttest(b.headers, app, undefined, key)).statusCode).toBe(200);
+    const attested = await a.pool.query<{ user_id: string }>(
+      `SELECT user_id FROM veteran_verifications
+        WHERE tenant_id = $1 AND method = 'SELF_ATTESTATION' ORDER BY user_id`,
+      [a.tenantId],
+    );
+    expect(attested.rows.map((row) => row.user_id)).toEqual([a.user.userId, b.user.userId].sort());
+  });
+
+  it('replays a reused Idempotency-Key with the same answer and one attestation', async () => {
+    const { headers, pool, tenantId, user } = await person();
+    const key = randomUUID();
+    const first = await selfAttest(headers, app, undefined, key);
+    const replay = await selfAttest(headers, app, undefined, key);
+
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(first.json());
+    const count = await pool.query(
+      `SELECT 1 FROM command_idempotency_records WHERE tenant_id = $1 AND idempotency_key = $2`,
+      [tenantId, key],
+    );
+    expect(count.rowCount).toBe(1);
+    const rows = await pool.query(
+      `SELECT 1 FROM veteran_verifications
+        WHERE tenant_id = $1 AND user_id = $2 AND method = 'SELF_ATTESTATION'`,
+      [tenantId, user.userId],
+    );
+    expect(rows.rowCount).toBe(1);
   });
 
   it('needs an Idempotency-Key and takes no fields', async () => {

@@ -1,5 +1,6 @@
-import { expect, test } from './fixtures';
-import { newPerson, newVerifiedVeteran, signUp, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { newPerson, signUp, uniqueEmail } from '../helpers';
+import { newVeteran } from '../people';
 
 // G20: the edit carries the status the form loaded, so an accept that lands while the
 // requester is editing is refused (409 STALE_STATE) and the requester is told why.
@@ -10,7 +11,7 @@ test('a helper accepts while the requester edits: the edit is refused with a pla
 }) => {
   // Provoked on purpose: the stale edit is refused.
   allow.push(/status of 409/);
-  const requester = await newVerifiedVeteran(browser, request, {
+  const requester = await newVeteran(browser, request, {
     name: 'Rosa M.',
     county: 'San Benito',
     label: 'stale-editor',

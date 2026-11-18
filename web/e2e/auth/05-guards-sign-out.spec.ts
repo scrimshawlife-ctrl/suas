@@ -7,10 +7,11 @@ import {
   onWelcome,
   saveProfile,
   signOutFromAvatar,
-  signedUpPerson,
 } from './auth';
+import { newHelper, newVeteran } from '../people';
 
-// A superset of 14-guards-sign-out.spec.ts (QA port): every private route, and return paths.
+// A superset of auth/04-gates-and-sign-out.spec.ts (QA port): every private route, and return
+// paths.
 const PROTECTED = [
   '/home',
   '/request',
@@ -88,7 +89,12 @@ test('a returning person sent to sign in from Serve comes back to Serve, even if
   browser,
   request,
 }) => {
-  const first = await signedUpPerson(browser, request, { label: 'return-serve', name: 'Jo L.' });
+  const first = await newVeteran(browser, request, {
+    label: 'return-serve',
+    name: 'Jo L.',
+    county: 'Alameda',
+    verified: false,
+  });
   const page = await newPerson(browser);
   await page.goto('/serve');
   await expect(page).toHaveURL(/\/sign-in$/);
@@ -125,7 +131,12 @@ test('not confirmed: Veteran-only pages go to /verify; Home, Serve, chat, notifi
   browser,
   request,
 }) => {
-  const { page } = await signedUpPerson(browser, request, { label: 'unverified', name: 'Pat E.' });
+  const { page } = await newVeteran(browser, request, {
+    label: 'unverified',
+    name: 'Pat E.',
+    county: 'Alameda',
+    verified: false,
+  });
   for (const path of VETERAN_ONLY) {
     await page.goto(path);
     await expect(page, `${path} before the ID check`).toHaveURL(/\/verify$/);
@@ -140,7 +151,12 @@ test('signing out from the Need support header, then Back, shows no private page
   browser,
   request,
 }) => {
-  const { page } = await signedUpPerson(browser, request, { label: 'out-home', name: 'Quinn A.' });
+  const { page } = await newVeteran(browser, request, {
+    label: 'out-home',
+    name: 'Quinn A.',
+    county: 'Alameda',
+    verified: false,
+  });
   await expect(page.getByText(/Good (morning|afternoon|evening), Quinn\./)).toBeVisible();
   // Sign out only after the page's own read is back, so no read is in flight.
   const read = page.waitForResponse(/\/api\/v0\/notifications/);
@@ -161,10 +177,10 @@ test('signing out from the Serve header, then Back, shows no private page', asyn
   browser,
   request,
 }) => {
-  const { page } = await signedUpPerson(browser, request, {
+  const { page } = await newHelper(browser, request, {
     label: 'out-serve',
     name: 'Rory B.',
-    role: 'serve',
+    county: 'Alameda',
   });
   const read = page.waitForResponse(/\/api\/v0\/service-requests\?ownership=open/);
   await page.reload();
@@ -180,7 +196,12 @@ test('signing out from the chat screen header ends on the landing page', async (
   browser,
   request,
 }) => {
-  const { page } = await signedUpPerson(browser, request, { label: 'out-chat', name: 'Sky C.' });
+  const { page } = await newVeteran(browser, request, {
+    label: 'out-chat',
+    name: 'Sky C.',
+    county: 'Alameda',
+    verified: false,
+  });
   // Chat keeps polling. Wait for its bootstrap responses, not global network silence.
   const ticket = page.waitForResponse(/\/api\/v0\/chat\/connect-tickets$/);
   const threads = page.waitForResponse(/\/api\/v0\/chat\/threads(?:\?|$)/);
@@ -223,10 +244,10 @@ test('signing out while a page is still loading ends on the landing page', async
 }) => {
   // Provoked on purpose: the browser logs each refused load.
   allow.push(/status of 401/);
-  const { page } = await signedUpPerson(browser, request, {
+  const { page } = await newHelper(browser, request, {
     label: 'out-race',
     name: 'Val H.',
-    role: 'serve',
+    county: 'Alameda',
   });
   let loggedOut: () => void = () => undefined;
   const logout = new Promise<void>((resolve) => {
@@ -265,7 +286,12 @@ test('an unknown address shows a not-found page with a working way to the start'
   await visitor.getByRole('link', { name: 'Go to the start' }).click();
   await expect(visitor).toHaveURL(LANDING);
 
-  const { page } = await signedUpPerson(browser, request, { label: 'not-found', name: 'Wes J.' });
+  const { page } = await newVeteran(browser, request, {
+    label: 'not-found',
+    name: 'Wes J.',
+    county: 'Alameda',
+    verified: false,
+  });
   await page.goto('/nothing-here');
   await expect(page.getByRole('heading', { name: 'We could not find that page.' })).toBeVisible();
   await page.getByRole('link', { name: 'Go to the start' }).click();
