@@ -3,7 +3,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, TIMEOUT_CODE } from '../../api/errors';
-import { useEditDraft } from './api';
+import { useCommandKey } from '../../api/idempotency';
+import { useCreateConsentTemplate, useEditDraft, useLicenceCommand } from './api';
 import { makeDraft } from './test-utils';
 
 const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));
@@ -17,12 +18,15 @@ const keyOf = (call: number) =>
 
 beforeEach(() => client.POST.mockReset());
 
-function renderEditDraftHook() {
+function makeWrapper() {
   const queryClient = new QueryClient();
-  const wrapper = ({ children }: { children: ReactNode }) => (
+  return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-  return renderHook(() => useEditDraft(draft.resource_draft_id), { wrapper }).result;
+}
+
+function renderEditDraftHook() {
+  return renderHook(() => useEditDraft(draft.resource_draft_id), { wrapper: makeWrapper() }).result;
 }
 
 /** Renders the draft edit hook; `run` sends one edit and waits for it to settle. */
@@ -73,6 +77,41 @@ describe('draft command idempotency key', () => {
     ).mockResolvedValueOnce({ data: draft });
     const run = renderEditDraft();
     for (let i = 0; i < 2; i += 1) await run();
+
+    expect(keyOf(1)).not.toBe(keyOf(0));
+  });
+
+  // The other 409s the admin command routes send (src/catalog/drafts.ts, src/consent/templates.ts,
+  // src/identity/licence-review-admin.ts) refuse the action, so none of them keeps the key.
+  it.each([
+    ['consent template create', 'STALE_STATE'],
+    ['consent template create', 'ILLEGAL_TRANSITION'],
+    ['licence command', 'LICENCE_REVIEW_DECIDED'],
+    ['licence command', 'LICENCE_REVIEW_NOT_READY'],
+    ['licence command', 'LICENCE_FINGERPRINT_MISSING'],
+    ['licence command', 'LICENCE_ALREADY_USED'],
+    ['licence command', 'LICENCE_IDENTITY_MISMATCH'],
+  ])('%s: is renewed after a 409 %s', async (hook, code) => {
+    client.POST.mockRejectedValueOnce(new ApiError(409, code, 'x')).mockRejectedValueOnce(
+      new ApiError(409, code, 'x'),
+    );
+    const wrapper = makeWrapper();
+    const send =
+      hook === 'licence command'
+        ? renderHook(() => useLicenceCommand('review-1'), { wrapper }).result
+        : renderHook(() => useCreateConsentTemplate(), { wrapper }).result;
+    const input =
+      hook === 'licence command'
+        ? ({ name: 'recuse', body: {} } as const)
+        : { template_key: 'k', body: 'b' };
+    for (let i = 0; i < 2; i += 1) {
+      await act(async () => {
+        // Each hook takes its own input; the cast only joins the two branches above.
+        await (send.current.mutateAsync as (v: typeof input) => Promise<unknown>)(input).catch(
+          () => undefined,
+        );
+      });
+    }
 
     expect(keyOf(1)).not.toBe(keyOf(0));
   });
@@ -128,5 +167,16 @@ describe('draft command idempotency key', () => {
     expect(error).toBeInstanceOf(TypeError);
     expect(client.POST).not.toHaveBeenCalled();
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe('useCommandKey', () => {
+  // canonicalJson fingerprints what JSON.stringify sends, so a Date is its ISO string.
+  it('treats a Date like the ISO string JSON.stringify sends for it', () => {
+    const at = new Date('2026-11-18T04:34:25Z');
+    const { result } = renderHook(() => useCommandKey());
+    const first = result.current.headers({ at });
+    expect(result.current.headers({ at: at.toISOString() })).toEqual(first);
+    expect(result.current.headers({ at: '2026-11-19T00:00:00.000Z' })).not.toEqual(first);
   });
 });

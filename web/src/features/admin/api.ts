@@ -6,10 +6,9 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useRef } from 'react';
 import { api } from '../../api/client';
-import { isApiError, isConnectionError } from '../../api/errors';
-import { useIdempotencyKey } from '../../api/idempotency';
+import { isApiError } from '../../api/errors';
+import { useCommandKey } from '../../api/idempotency';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import type { Schemas } from '../../api/types';
@@ -83,58 +82,6 @@ export function useResourceDraft(id: string) {
       return requireData(data, 'draft');
     },
   });
-}
-
-/**
- * JSON with every object's keys sorted, so key order never makes two equal bodies differ. The
- * plain encode first fails a body the send could not encode (a cycle) with the same TypeError.
- */
-function canonicalJson(value: unknown): string {
-  const plain: unknown = JSON.parse(JSON.stringify(value ?? null));
-  return JSON.stringify(plain, (_key, part: unknown) =>
-    part === null || typeof part !== 'object' || Array.isArray(part)
-      ? part
-      : Object.fromEntries(Object.entries(part).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
-  );
-}
-
-/**
- * The first attempt may have run, or still be running, so only its key can replay it
- * (API.md §7 rules 3 and 5): no answer (network error, timeout), a 5xx, or a 409
- * IDEMPOTENCY_CONFLICT, which for the same key and body means that attempt is in flight
- * (`src/idempotency/run.ts`). Any other 4xx refused the action, so a retry is a new one.
- */
-function keepsKey(error: unknown): boolean {
-  return (
-    isConnectionError(error) ||
-    (isApiError(error) && (error.status >= 500 || error.code === 'IDEMPOTENCY_CONFLICT'))
-  );
-}
-
-/**
- * One Idempotency-Key per user action, tied to the body it was sent with. A retry of that body
- * reuses it after a failure that `keepsKey`; a success, a refusal or a changed body starts a new
- * key, so a kept key never meets a different body (that 409 would repeat on every retry). Only
- * the latest send settles the key (`body` is that send's variables), so an older overlapping
- * send cannot renew the key a newer one may need to replay.
- */
-function useCommandKey() {
-  const key = useIdempotencyKey();
-  const sentWith = useRef<string | null>(null);
-  const latest = useRef<unknown>(undefined);
-  return {
-    headers: (body?: unknown) => {
-      const fingerprint = canonicalJson(body);
-      if (sentWith.current !== fingerprint) key.renew();
-      sentWith.current = fingerprint;
-      latest.current = body;
-      return key.headers();
-    },
-    settle: (body: unknown, error?: unknown) => {
-      if (body !== latest.current) return;
-      if (error === undefined || !keepsKey(error)) key.renew();
-    },
-  };
 }
 
 export function useExtractDrafts() {
