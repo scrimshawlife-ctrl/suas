@@ -1,8 +1,8 @@
-import { queryOptions, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { queryOptions } from '@tanstack/react-query';
 import { api } from './client';
 import { queryKeys } from './keys';
+import { cursorPages, useSignedInInfiniteQuery, useSignedInQuery } from './queries';
 import { requireData } from './require-data';
-import { useSessionToken } from './token-store';
 
 /**
  * `open`: requests the caller can accept (their county, plus bordering once widened).
@@ -33,11 +33,7 @@ export function useServiceRequests(
   ownership: Ownership,
   options: { limit?: number; cursor?: string } = {},
 ) {
-  const token = useSessionToken();
-  return useQuery({
-    ...serviceRequestsQueryOptions({ ownership, ...options }),
-    enabled: token !== null,
-  });
+  return useSignedInQuery(serviceRequestsQueryOptions({ ownership, ...options }));
 }
 
 /** GET /api/v0/service-requests/{id}: requester or accepter only. */
@@ -54,10 +50,9 @@ export function serviceRequestQueryOptions(id: string) {
 }
 
 export function useServiceRequest(id: string | undefined) {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     ...serviceRequestQueryOptions(id ?? ''),
-    enabled: token !== null && id !== undefined && id !== '',
+    enabled: id !== undefined && id !== '',
   });
 }
 
@@ -70,23 +65,15 @@ export function infiniteServiceRequestsKey(ownership: Ownership) {
 
 /** The same list as `useServiceRequests`, paged by `next_cursor` for a "Show more" button. */
 export function useInfiniteServiceRequests(ownership: Ownership) {
-  const token = useSessionToken();
-  return useInfiniteQuery({
-    queryKey: infiniteServiceRequestsKey(ownership),
-    enabled: token !== null,
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/service-requests', {
-        params: {
-          query: {
-            ownership,
-            limit: PAGE_SIZE,
-            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
-          },
-        },
-      });
-      return requireData(data, 'requests');
-    },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
-  });
+  return useSignedInInfiniteQuery(
+    cursorPages({
+      queryKey: infiniteServiceRequestsKey(ownership),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/service-requests', {
+          params: { query: { ownership, limit: PAGE_SIZE, ...page } },
+        });
+        return requireData(data, 'requests');
+      },
+    }),
+  );
 }

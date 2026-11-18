@@ -76,15 +76,17 @@ Each route points at a lazy `features/<area>/<Screen>Page.tsx` with a default ex
 - Because errors throw, `const { data } = await api.GET(...)` is enough; use `isApiError` and `GATE_CODES` (`VERIFICATION_REQUIRED`, `COUNTY_REQUIRED`, `MFA_REQUIRED`, `FORBIDDEN`) to branch.
 - `src/api/types.ts` has short names for the generated schemas (`Me`, `County`, `ServiceRequestListItem`, …). After the document changes, run `npm run gen:api`; the generated `schema.d.ts` is committed.
 - Shared hooks: `useMe`, `useServiceRequests(ownership)`, `useInfiniteServiceRequests(ownership)`, `useServiceRequest(id)`, `useChatThreads()`, `useUpdateProfile()`, `useUpdateCounty()`, `useIdempotencyKey()`, the sign-in hooks in `auth.ts` (`useStartChallenge`, `useVerifyChallenge`, `useLogout`), and `useSessionToken()` and `useMfaElevated()` in `token-store.ts`. Queries stay idle while there is no session token.
+- `src/api/queries.ts`: `useSignedInQuery` and `useSignedInInfiniteQuery` keep a query idle until someone is signed in, and `cursorPages({ queryKey, fetchPage })` pages a list by `next_cursor` (spread its `page` argument into the request's query).
 
 ### Writes and idempotency
 
 Every POST, PUT and PATCH carries an `Idempotency-Key`. If the caller passes none, the client adds a random one per request, which only protects a single request.
 
-A screen that creates something must make one user action map to one key:
+A write that creates something must make one user action map to one key. The mutation hook owns the key, so a screen only calls `mutate`:
 
-- Hold one key per submit with `useIdempotencyKey()` (`src/api/idempotency.ts`) and pass `headers: key.headers()` to `api.POST(...)`.
-- Call `key.renew()` only after the action succeeded. A retry after an error or a dropped response reuses the same key, so the server replays instead of creating twice.
+- In the hook, hold a key from `src/api/idempotency.ts` and pass `headers: key.headers()` to `api.POST(...)`. The variants are `useIdempotencyKey` (one per action), `useBodyIdempotencyKey` (one per body sent), `useKeyedIdempotency` (one per target) and `useCommandKey` (also renewed after a 4xx).
+- Renew only after the action succeeded, unless the hook's comment says otherwise. A retry after an error or a dropped response reuses the same key, so the server replays instead of creating twice.
+- Each hook states its renew rule in its comment. The rules differ today; one rule for every hook is the owner's call.
 - Disable the submit button while the mutation is pending (`isPending`), so a double click cannot start a second action.
 
 ## Query keys

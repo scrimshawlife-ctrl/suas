@@ -1,16 +1,10 @@
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type InfiniteData,
-} from '@tanstack/react-query';
-import { useRef } from 'react';
+import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { useKeyedIdempotency } from '../../api/idempotency';
 import { infiniteServiceRequestsKey } from '../../api/service-requests';
 import { queryKeys, resourceKeys } from '../../api/keys';
+import { cursorPages, useSignedInInfiniteQuery, useSignedInQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
-import { useSessionToken } from '../../api/token-store';
 import { latestAlerts } from './alerts';
 import type { Schemas } from '../../api/types';
 import { BOARD_REFRESH_MS } from '../../app/poll-intervals';
@@ -28,44 +22,18 @@ const BOARD_PAGE_SIZE = 20;
 
 /** GET /service-requests?ownership=open, paged by `next_cursor`. */
 export function useOpenRequests() {
-  const token = useSessionToken();
-  return useInfiniteQuery({
-    queryKey: queryKeys.serviceRequests.list({ ownership: 'open', board: true }),
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/service-requests', {
-        params: {
-          query: {
-            ownership: 'open',
-            limit: BOARD_PAGE_SIZE,
-            ...(pageParam === undefined ? {} : { cursor: pageParam }),
-          },
-        },
-      });
-      return requireData(data, 'requests');
-    },
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
+  return useSignedInInfiniteQuery({
+    ...cursorPages({
+      queryKey: queryKeys.serviceRequests.list({ ownership: 'open', board: true }),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/service-requests', {
+          params: { query: { ownership: 'open', limit: BOARD_PAGE_SIZE, ...page } },
+        });
+        return requireData(data, 'requests');
+      },
+    }),
     refetchInterval: BOARD_REFRESH_MS,
-    enabled: token !== null,
   });
-}
-
-/** One Idempotency-Key per user action, kept per target so a retry of the same action reuses it. */
-function useKeyedIdempotency() {
-  const keys = useRef(new Map<string, string>());
-  return {
-    headers(target: string): Record<string, string> {
-      let key = keys.current.get(target);
-      if (key === undefined) {
-        key = crypto.randomUUID();
-        keys.current.set(target, key);
-      }
-      return { 'Idempotency-Key': key };
-    },
-    renew(target: string): void {
-      keys.current.delete(target);
-    },
-  };
 }
 
 /** POST /service-requests/{id}/accept. First accept wins; the loser gets 409 ALREADY_CLAIMED. */
@@ -92,8 +60,7 @@ const ALERT_SOURCE_LIMIT = 50;
 
 /** GET /notifications for the Alerts card: the latest few, in plain words. */
 export function useAlerts() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: queryKeys.notifications.list({ surface: 'serve-alerts' }),
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/notifications', {
@@ -102,7 +69,6 @@ export function useAlerts() {
       return latestAlerts(requireData(data, 'alerts').notifications);
     },
     refetchInterval: BOARD_REFRESH_MS,
-    enabled: token !== null,
   });
 }
 
@@ -111,47 +77,33 @@ const CASE_LIST_LIMIT = 50;
 
 /** GET /cases/{caseId}/contact-attempts: the accepter only (403 for anyone else). */
 export function useContactAttempts(caseId: string | undefined) {
-  const token = useSessionToken();
-  return useInfiniteQuery({
-    queryKey: caseKeys.contactAttempts.list({ caseId }),
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/cases/{caseId}/contact-attempts', {
-        params: {
-          path: { caseId: caseId ?? '' },
-          query: {
-            limit: CASE_LIST_LIMIT,
-            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
-          },
-        },
-      });
-      return requireData(data, 'contact attempts');
-    },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
-    enabled: token !== null && caseId !== undefined,
+  return useSignedInInfiniteQuery({
+    ...cursorPages({
+      queryKey: caseKeys.contactAttempts.list({ caseId }),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/cases/{caseId}/contact-attempts', {
+          params: { path: { caseId: caseId ?? '' }, query: { limit: CASE_LIST_LIMIT, ...page } },
+        });
+        return requireData(data, 'contact attempts');
+      },
+    }),
+    enabled: caseId !== undefined,
   });
 }
 
 /** GET /cases/{caseId}/service-requests. */
 export function useCaseServiceRequests(caseId: string | undefined) {
-  const token = useSessionToken();
-  return useInfiniteQuery({
-    queryKey: caseKeys.serviceRequests.list({ caseId }),
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/cases/{caseId}/service-requests', {
-        params: {
-          path: { caseId: caseId ?? '' },
-          query: {
-            limit: CASE_LIST_LIMIT,
-            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
-          },
-        },
-      });
-      return requireData(data, 'case requests');
-    },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
-    enabled: token !== null && caseId !== undefined,
+  return useSignedInInfiniteQuery({
+    ...cursorPages({
+      queryKey: caseKeys.serviceRequests.list({ caseId }),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/cases/{caseId}/service-requests', {
+          params: { path: { caseId: caseId ?? '' }, query: { limit: CASE_LIST_LIMIT, ...page } },
+        });
+        return requireData(data, 'case requests');
+      },
+    }),
+    enabled: caseId !== undefined,
   });
 }
 
@@ -275,14 +227,12 @@ export function useReleaseRequest(serviceRequestId: string) {
 
 /** GET /cases/{id}: the Case status the Wrap up card works from (owner or holder only). */
 export function useSupportCase(caseId: string) {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: caseKeys.cases.detail(caseId),
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/cases/{id}', { params: { path: { id: caseId } } });
       return requireData(data, 'case');
     },
-    enabled: token !== null,
   });
 }
 

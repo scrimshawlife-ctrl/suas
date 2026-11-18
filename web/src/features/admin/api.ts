@@ -10,6 +10,7 @@ import { api } from '../../api/client';
 import { isApiError } from '../../api/errors';
 import { useCommandKey } from '../../api/idempotency';
 import { queryKeys, resourceKeys } from '../../api/keys';
+import { cursorPages, useSignedInInfiniteQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
 import type { Schemas } from '../../api/types';
 import type { DraftEditRequest, ResourceDraft } from './draft-form';
@@ -53,21 +54,15 @@ const PAGE_SIZE = 20;
 /** Drafts for one status, newest first, with a cursor for "Show more". */
 export function useResourceDrafts(status: DraftStatus) {
   return useInfiniteQuery({
-    queryKey: queryKeys.adminDrafts.list({ status }),
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/admin/resource-drafts', {
-        params: {
-          query: {
-            status,
-            limit: PAGE_SIZE,
-            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
-          },
-        },
-      });
-      return requireData(data, 'drafts');
-    },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    ...cursorPages({
+      queryKey: queryKeys.adminDrafts.list({ status }),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/admin/resource-drafts', {
+          params: { query: { status, limit: PAGE_SIZE, ...page } },
+        });
+        return requireData(data, 'drafts');
+      },
+    }),
     placeholderData: keepPreviousData,
   });
 }
@@ -179,19 +174,17 @@ const licenceKeys = queryKeys.adminLicenceReviews;
  * out the admin's own reviews, recusals and disputes of reviews they decided; rows carry no names.
  */
 export function useLicenceReviews() {
-  return useInfiniteQuery({
-    queryKey: licenceKeys.lists(),
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/admin/licence-reviews', {
-        params: {
-          query: { limit: PAGE_SIZE, ...(pageParam !== undefined ? { cursor: pageParam } : {}) },
-        },
-      });
-      return requireData(data, 'licence reviews');
-    },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
-  });
+  return useSignedInInfiniteQuery(
+    cursorPages({
+      queryKey: licenceKeys.lists(),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/admin/licence-reviews', {
+          params: { query: { limit: PAGE_SIZE, ...page } },
+        });
+        return requireData(data, 'licence reviews');
+      },
+    }),
+  );
 }
 
 export function useAdminLicenceReview(id: string, enabled = true) {

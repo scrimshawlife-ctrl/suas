@@ -1,8 +1,10 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { hasApiCode } from '../../api/errors';
+import { useIdempotencyKey, type IdempotencyKey } from '../../api/idempotency';
 import { queryKeys, resourceKeys } from '../../api/keys';
+import { cursorPages, useSignedInInfiniteQuery, useSignedInQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
-import { useSessionToken } from '../../api/token-store';
 import type { Schemas } from '../../api/types';
 import { NOTIFICATION_REFRESH_MS } from '../../app/poll-intervals';
 
@@ -29,25 +31,24 @@ const PAGE_SIZE = 10;
 
 /** GET /resources, cursor paged: `fetchNextPage` is "Show more listings". */
 export function useResources(category: Schemas['ServiceCategory'] | null, county: string | null) {
-  const token = useSessionToken();
-  return useInfiniteQuery({
-    queryKey: queryKeys.resources.list({ category, county, limit: PAGE_SIZE }),
-    enabled: token !== null && category !== null && county !== null,
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/resources', {
-        params: {
-          query: {
-            ...(category ? { category } : {}),
-            ...(county ? { county } : {}),
-            limit: PAGE_SIZE,
-            ...(pageParam ? { cursor: pageParam } : {}),
+  return useSignedInInfiniteQuery({
+    ...cursorPages({
+      queryKey: queryKeys.resources.list({ category, county, limit: PAGE_SIZE }),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/resources', {
+          params: {
+            query: {
+              ...(category ? { category } : {}),
+              ...(county ? { county } : {}),
+              limit: PAGE_SIZE,
+              ...page,
+            },
           },
-        },
-      });
-      return requireData(data, 'listings');
-    },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
+        });
+        return requireData(data, 'listings');
+      },
+    }),
+    enabled: category !== null && county !== null,
   });
 }
 
@@ -55,10 +56,9 @@ const RESUMABLE_FILTER = { status: 'IN_PROGRESS' } as const;
 
 /** GET /check-ins?status=IN_PROGRESS: the caller's unfinished Check-In (24 h), or null. */
 export function useResumableCheckIn(enabled = true) {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.checkIns.list(RESUMABLE_FILTER),
-    enabled: token !== null && enabled,
+    enabled,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/check-ins', {
         params: { query: RESUMABLE_FILTER },
@@ -70,10 +70,9 @@ export function useResumableCheckIn(enabled = true) {
 
 /** GET /check-ins/{id}: the questions and which of them already have an answer. */
 export function useCheckIn(checkInId: string | undefined) {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.checkIns.detail(checkInId ?? ''),
-    enabled: token !== null && checkInId !== undefined,
+    enabled: checkInId !== undefined,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/check-ins/{id}', {
         params: { path: { id: checkInId ?? '' } },
@@ -139,10 +138,8 @@ export function useCompleteCheckIn(checkInId: string | undefined) {
 
 /** GET /consents. */
 export function useConsents() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.consents.list(),
-    enabled: token !== null,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/consents');
       return requireData(data, 'consents').consents;
@@ -155,10 +152,8 @@ export function useConsents() {
  * none is published, which the caller shows as "not available"; it is not retried.
  */
 export function usePublishedConsentTemplate(purpose: string) {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.publishedTemplates.detail(purpose),
-    enabled: token !== null,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/consent-templates/published', {
         params: { query: { purpose } },
@@ -168,45 +163,56 @@ export function usePublishedConsentTemplate(purpose: string) {
   });
 }
 
-/** Headers from the caller's `useIdempotencyKey()`: one key per user action. */
-type KeyHeaders = Record<string, string>;
-
-/** POST /consents/{id}/commands/revoke. */
-export function useRevokeConsent() {
+/**
+ * POST /consents/{id}/commands/revoke. Key: one per caller (or the caller's `shared` key), kept
+ * across retries and renewed only after a success.
+ */
+export function useRevokeConsent(shared?: IdempotencyKey) {
   const queryClient = useQueryClient();
+  const own = useIdempotencyKey();
+  const key = shared ?? own;
   return useMutation({
-    mutationFn: async (input: { consentGrantId: string; headers: KeyHeaders }) => {
+    mutationFn: async (consentGrantId: string) => {
       const { data } = await api.POST('/api/v0/consents/{id}/commands/revoke', {
-        params: { path: { id: input.consentGrantId } },
-        headers: input.headers,
+        params: { path: { id: consentGrantId } },
+        headers: key.headers(),
       });
       return requireData(data, 'consent');
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: supportKeys.consents.all }),
+    onSuccess: () => {
+      key.renew();
+      return queryClient.invalidateQueries({ queryKey: supportKeys.consents.all });
+    },
   });
 }
 
-/** POST /consents. */
-export function useGrantConsent() {
+/**
+ * POST /consents. Key: one per caller (or `shared`), renewed after a success or a superseded
+ * template (CONSENT_TEMPLATE_UNAVAILABLE), since the retry then cites a new version.
+ */
+export function useGrantConsent(shared?: IdempotencyKey) {
   const queryClient = useQueryClient();
+  const own = useIdempotencyKey();
+  const key = shared ?? own;
   return useMutation({
-    mutationFn: async (input: { body: GrantConsentBody; headers: KeyHeaders }) => {
-      const { data } = await api.POST('/api/v0/consents', {
-        body: input.body,
-        headers: input.headers,
-      });
+    mutationFn: async (body: GrantConsentBody) => {
+      const { data } = await api.POST('/api/v0/consents', { body, headers: key.headers() });
       return requireData(data, 'consent');
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: supportKeys.consents.all }),
+    onSuccess: () => {
+      key.renew();
+      return queryClient.invalidateQueries({ queryKey: supportKeys.consents.all });
+    },
+    onError: (error) => {
+      if (hasApiCode(error, 'CONSENT_TEMPLATE_UNAVAILABLE')) key.renew();
+    },
   });
 }
 
 /** GET /trusted-contacts. */
 export function useTrustedContacts() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.trustedContacts.list(),
-    enabled: token !== null,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/trusted-contacts');
       return requireData(data, 'trusted contacts').trusted_contacts;
@@ -214,50 +220,51 @@ export function useTrustedContacts() {
   });
 }
 
-/** POST /trusted-contacts. */
+/** POST /trusted-contacts. Key: one per form, kept across retries and renewed only after a success. */
 export function useInviteTrustedContact() {
   const queryClient = useQueryClient();
+  const key = useIdempotencyKey();
   return useMutation({
-    mutationFn: async (input: {
-      relationshipLabel: string;
-      email: string;
-      headers: KeyHeaders;
-    }) => {
+    mutationFn: async (input: { relationshipLabel: string; email: string }) => {
       const { data } = await api.POST('/api/v0/trusted-contacts', {
         body: { relationship_label: input.relationshipLabel, invite_email: input.email },
-        headers: input.headers,
+        headers: key.headers(),
       });
       return requireData(data, 'invitation');
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: supportKeys.trustedContacts.all }),
+    onSuccess: () => {
+      key.renew();
+      return queryClient.invalidateQueries({ queryKey: supportKeys.trustedContacts.all });
+    },
   });
 }
 
 /**
- * Remove a trusted contact. An ACTIVE RED-alert grant to them is revoked first (its own key),
- * then the contact is removed. Both lists are refreshed even after a partial failure, so a
- * retry sees the grant already revoked.
+ * Remove a trusted contact. An ACTIVE RED-alert grant to them is revoked first, then the contact
+ * is removed. Both lists are refreshed even after a partial failure, so a retry sees the grant
+ * already revoked. Keys: one per step, kept across retries and both renewed only after a success.
  */
 export function useRemoveTrustedContact() {
   const queryClient = useQueryClient();
+  const revokeKey = useIdempotencyKey();
+  const removeKey = useIdempotencyKey();
   return useMutation({
-    mutationFn: async (input: {
-      trustedContactId: string;
-      redGrantId: string | undefined;
-      revokeHeaders: KeyHeaders;
-      removeHeaders: KeyHeaders;
-    }) => {
+    mutationFn: async (input: { trustedContactId: string; redGrantId: string | undefined }) => {
       if (input.redGrantId !== undefined) {
         await api.POST('/api/v0/consents/{id}/commands/revoke', {
           params: { path: { id: input.redGrantId } },
-          headers: input.revokeHeaders,
+          headers: revokeKey.headers(),
         });
       }
       const { data } = await api.POST('/api/v0/trusted-contacts/{id}/commands/remove', {
         params: { path: { id: input.trustedContactId } },
-        headers: input.removeHeaders,
+        headers: removeKey.headers(),
       });
       return requireData(data, 'trusted contact');
+    },
+    onSuccess: () => {
+      revokeKey.renew();
+      removeKey.renew();
     },
     onSettled: () =>
       Promise.all([
@@ -269,10 +276,8 @@ export function useRemoveTrustedContact() {
 
 /** GET /trusted-contacts/invitations: invites waiting for the signed-in person. */
 export function useInvitations() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: supportKeys.invitations.list(),
-    enabled: token !== null,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/trusted-contacts/invitations');
       return requireData(data, 'invitations').invitations;
@@ -280,17 +285,22 @@ export function useInvitations() {
   });
 }
 
-/** POST /trusted-contacts/{id}/commands/accept, as the invitee. */
+/**
+ * POST /trusted-contacts/{id}/commands/accept, as the invitee. Key: one per invitation row, kept
+ * across retries and renewed only after a success.
+ */
 export function useAcceptInvitation() {
   const queryClient = useQueryClient();
+  const key = useIdempotencyKey();
   return useMutation({
-    mutationFn: async (input: { trustedContactId: string; headers: KeyHeaders }) => {
+    mutationFn: async (trustedContactId: string) => {
       const { data } = await api.POST('/api/v0/trusted-contacts/{id}/commands/accept', {
-        params: { path: { id: input.trustedContactId } },
-        headers: input.headers,
+        params: { path: { id: trustedContactId } },
+        headers: key.headers(),
       });
       return requireData(data, 'invitation');
     },
+    onSuccess: () => key.renew(),
     onSettled: () => queryClient.invalidateQueries({ queryKey: supportKeys.invitations.all }),
   });
 }
@@ -304,23 +314,16 @@ const NOTIFICATION_LIMIT = 50;
  * pushes the rest down without gaps or repeats.
  */
 export function useNotifications() {
-  const token = useSessionToken();
-  return useInfiniteQuery({
-    queryKey: queryKeys.notifications.list(),
-    enabled: token !== null,
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET('/api/v0/notifications', {
-        params: {
-          query: {
-            limit: NOTIFICATION_LIMIT,
-            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
-          },
-        },
-      });
-      return requireData(data, 'notifications');
-    },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
+  return useSignedInInfiniteQuery({
+    ...cursorPages({
+      queryKey: queryKeys.notifications.list(),
+      fetchPage: async (page) => {
+        const { data } = await api.GET('/api/v0/notifications', {
+          params: { query: { limit: NOTIFICATION_LIMIT, ...page } },
+        });
+        return requireData(data, 'notifications');
+      },
+    }),
     refetchInterval: NOTIFICATION_REFRESH_MS,
   });
 }

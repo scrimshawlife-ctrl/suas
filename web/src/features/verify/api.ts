@@ -1,19 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useCommandKey } from '../../api/idempotency';
 import { queryKeys } from '../../api/keys';
 import { meQueryOptions } from '../../api/me';
+import { useSignedInQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
-import { useSessionToken } from '../../api/token-store';
 import type { Me } from '../../api/types';
 import type { VaConfirmBody } from './verify-form';
 
 /** The person's VA confirmation standing, read from GET /veterans/me (suas-specs #72 R9.1). */
 export function useIdVerification() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     ...meQueryOptions(),
-    enabled: token !== null,
     select: (me) => me.id_verification,
   });
 }

@@ -1,19 +1,13 @@
 import { useRef } from 'react';
 import { isApiError, isConnectionError } from './errors';
 
-/**
- * One `Idempotency-Key` per user action. The client adds a random key to every write as a
- * fallback, but a fresh key per request means a double click or a retry after a dropped
- * response can create twice. A screen that submits holds one key per submit instead:
- *
- *   const key = useIdempotencyKey();
- *   const create = useMutation({
- *     mutationFn: (input: Input) => api.POST(path, { body: input, headers: key.headers() }),
- *     onSuccess: key.renew,
- *   });
- *
- * The key stays the same across retries of the same action and changes after a success.
+/*
+ * Idempotency-Key holders for mutation hooks, so a retry of one action reuses its key (the
+ * client's random per-request fallback cannot). Each variant is a renew policy in use today;
+ * one policy for every hook is an owner call, so each hook keeps the one it has.
  */
+
+/** One key per user action: the same key across retries, a new one after `renew()`. */
 export function useIdempotencyKey() {
   const ref = useRef<string | null>(null);
   return {
@@ -27,9 +21,29 @@ export function useIdempotencyKey() {
       ref.current ??= crypto.randomUUID();
       return { 'Idempotency-Key': ref.current };
     },
-    /** Call after the action succeeded so the next action gets a new key. */
+    /** Drops the key so the next action gets a new one. */
     renew(): void {
       ref.current = null;
+    },
+  };
+}
+
+export type IdempotencyKey = ReturnType<typeof useIdempotencyKey>;
+
+/** One key per target (a request id, a command, a body), so a retry of that target reuses it. */
+export function useKeyedIdempotency() {
+  const keys = useRef(new Map<string, string>());
+  return {
+    headers(target: string): Record<string, string> {
+      let key = keys.current.get(target);
+      if (key === undefined) {
+        key = crypto.randomUUID();
+        keys.current.set(target, key);
+      }
+      return { 'Idempotency-Key': key };
+    },
+    renew(target: string): void {
+      keys.current.delete(target);
     },
   };
 }
@@ -87,6 +101,26 @@ export function useCommandKey() {
       key.renew();
       sentWith.current = null;
       latest.current = undefined;
+    },
+  };
+}
+
+/**
+ * One key for the last body sent: the same body again reuses it, a changed body gets a new one.
+ * Only the last body is kept, so going back to an earlier body is a new action.
+ */
+export function useBodyIdempotencyKey() {
+  const last = useRef<{ body: string; key: string } | null>(null);
+  return {
+    headers(body: unknown): Record<string, string> {
+      const fingerprint = canonicalJson(body);
+      if (last.current?.body !== fingerprint) {
+        last.current = { body: fingerprint, key: crypto.randomUUID() };
+      }
+      return { 'Idempotency-Key': last.current.key };
+    },
+    renew(): void {
+      last.current = null;
     },
   };
 }
