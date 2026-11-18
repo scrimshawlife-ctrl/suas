@@ -34,6 +34,14 @@ describe('useCommandKey', () => {
     result.current.settle();
     expect(keyOf(result.current.headers())).not.toBe(second);
   });
+
+  it('keeps the key after a failure that is not an API answer (network error, abort)', () => {
+    const { result } = renderHook(() => useCommandKey());
+    const first = keyOf(result.current.headers());
+    result.current.settle(new TypeError('Failed to fetch'));
+    result.current.settle(new DOMException('The operation was aborted.', 'AbortError'));
+    expect(keyOf(result.current.headers())).toBe(first);
+  });
 });
 
 describe('useKeyedIdempotency', () => {
@@ -59,6 +67,16 @@ describe('useBodyIdempotencyKey', () => {
     result.current.renew();
     expect(keyOf(result.current.headers({ n: 1 }))).not.toBe(
       keyOf(result.current.headers({ n: 2 })),
+    );
+  });
+
+  it('treats bodies that differ only in key order, at any depth, as the same body', () => {
+    const { result } = renderHook(() => useBodyIdempotencyKey());
+    const first = keyOf(result.current.headers({ a: 1, b: { c: [1, { x: 1, y: 2 }], d: 2 } }));
+    const reordered = keyOf(result.current.headers({ b: { d: 2, c: [1, { y: 2, x: 1 }] }, a: 1 }));
+    expect(reordered).toBe(first);
+    expect(keyOf(result.current.headers({ a: 1, b: { c: [{ x: 1, y: 2 }, 1], d: 2 } }))).not.toBe(
+      first,
     );
   });
 });

@@ -63,6 +63,15 @@ export function useKeyedIdempotency() {
   };
 }
 
+/** JSON with every object's keys sorted, so key order never makes two equal bodies differ. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, part: unknown) =>
+    part === null || typeof part !== 'object' || Array.isArray(part)
+      ? part
+      : Object.fromEntries(Object.entries(part).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
+  );
+}
+
 /**
  * One key for the last body sent: the same body again reuses it, a changed body gets a new one.
  * Only the last body is kept, so going back to an earlier body is a new action.
@@ -71,7 +80,7 @@ export function useBodyIdempotencyKey() {
   const last = useRef<{ body: string; key: string } | null>(null);
   return {
     headers(body: unknown): Record<string, string> {
-      const fingerprint = JSON.stringify(body);
+      const fingerprint = canonicalJson(body);
       if (last.current?.body !== fingerprint) {
         last.current = { body: fingerprint, key: crypto.randomUUID() };
       }
