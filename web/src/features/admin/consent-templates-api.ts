@@ -26,15 +26,15 @@ export function useCreateConsentTemplate() {
     mutationFn: async (body: { template_key: string; body: string }) => {
       const { data } = await api.POST('/api/v0/admin/consent-templates', {
         body,
-        headers: key.headers(),
+        headers: key.headers(body),
       });
       return requireData(data, 'consent template');
     },
-    onSuccess: () => {
-      key.settle();
+    onSuccess: (_template, body) => {
+      key.settle(body);
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminConsentTemplates.all });
     },
-    onError: key.settle,
+    onError: (error, body) => key.settle(body, error),
   });
 }
 

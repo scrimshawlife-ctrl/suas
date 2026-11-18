@@ -16,8 +16,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
@@ -50,9 +50,7 @@ import { CATEGORY_CARDS } from '../../ui/categories.js';
 import { presentQrfState } from '../../ui/qrf.js';
 import { readActiveQrf } from '../../ui/read.js';
 
-export interface VeteranRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface VeteranRouteDeps extends RouteContext {
   /** Undefined when VA confirmation is disabled; the confirm route then answers 503. */
   readonly veteranConfirmation?: VeteranConfirmationPort;
   /** `SUAS_FINGERPRINT_KEY`; startup requires it whenever VA confirmation is on. */

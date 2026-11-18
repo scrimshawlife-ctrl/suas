@@ -87,7 +87,7 @@ export function useLicenceCommand(id: string) {
   const key = useCommandKey();
   return useMutation({
     mutationFn: async (command: LicenceCommand) => {
-      const options = { params: { path: { id } }, headers: key.headers() };
+      const options = { params: { path: { id } }, headers: key.headers(command) };
       switch (command.name) {
         case 'approve': {
           const { data } = await api.POST('/api/v0/admin/licence-reviews/{id}/commands/approve', {
@@ -126,8 +126,8 @@ export function useLicenceCommand(id: string) {
           return null;
       }
     },
-    onSuccess: (review) => {
-      key.settle();
+    onSuccess: (review, command) => {
+      key.settle(command);
       if (review === null) {
         queryClient.removeQueries({ queryKey: licenceKeys.detail(id) });
       } else {
@@ -138,8 +138,8 @@ export function useLicenceCommand(id: string) {
       }
       void queryClient.invalidateQueries({ queryKey: licenceKeys.lists() });
     },
-    onError: (error) => {
-      key.settle(error);
+    onError: (error, command) => {
+      key.settle(command, error);
       if (isApiError(error) && (error.status === 409 || error.status === 403))
         void queryClient.invalidateQueries({ queryKey: licenceKeys.detail(id), exact: true });
     },

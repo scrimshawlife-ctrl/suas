@@ -8,8 +8,8 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import type { AuthContext } from '../../authz/index.js';
 import {
   LICENCE_IMAGE_SIDES,
@@ -33,9 +33,7 @@ import { API_PREFIX } from '../../release/pins.js';
 import type { ObjectStoragePort } from '../../storage/index.js';
 import { authenticate } from '../authenticate.js';
 
-export interface LicenceReviewRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface LicenceReviewRouteDeps extends RouteContext {
   /** False when SUAS_LICENCE_READER_MODE=disabled; the path is then closed (503). */
   readonly readerConfigured: boolean;
   readonly storage?: ObjectStoragePort;

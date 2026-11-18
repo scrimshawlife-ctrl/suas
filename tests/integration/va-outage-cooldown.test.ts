@@ -7,11 +7,8 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import { createServer } from '../../src/http/server.js';
 import {
-  createUser,
-  setUserDisplayName,
   VA_CONFIRMATION_MAX_ATTEMPTS,
   VA_NOTICE_V1,
   type VeteranConfirmationPort,
@@ -23,9 +20,9 @@ import {
   VA_OUTAGE_COOLDOWN_SECONDS,
   VA_OUTAGE_THRESHOLD,
 } from '../../src/identity/va-outage-cooldown.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool, createPerson } from '../helpers/actors.js';
 import { closeVaOutageCooldown } from '../helpers/db.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 let server: StartedApp['server'];
@@ -74,7 +71,7 @@ beforeAll(async () => {
   server = createServer({
     config: app.config,
     buildInfo: () => app.buildInfo,
-    pool: app.pool!,
+    pool: appPool(app),
     challengeDelivery: app.challengeDelivery,
     mfa: app.mfa,
     veteranConfirmation: port,
@@ -89,25 +86,21 @@ afterAll(async () => {
 beforeEach(async () => {
   calls = 0;
   answer = answers(NOT_FOUND);
-  await closeVaOutageCooldown(app.pool!);
+  await closeVaOutageCooldown(appPool(app));
 });
 
-const cooldown = (set: string) => app.pool!.query(`UPDATE va_outage_cooldown SET ${set}`);
+const cooldown = (set: string) => appPool(app).query(`UPDATE va_outage_cooldown SET ${set}`);
 /** Moves the clock past the cooldown. */
 const expire = () =>
   cooldown(`opened_at = now() - make_interval(secs => ${VA_OUTAGE_COOLDOWN_SECONDS + 1})`);
 
 /** A signed-in person whose display name matches the typed name. */
 async function person() {
-  const pool = app.pool!;
-  const tenantId = randomUUID();
-  const user = await createUser(pool, {
-    tenantId,
-    email: syntheticEmail(`vaoc-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
+  const pool = appPool(app);
+  const { tenantId, user, headers } = await createPerson(app, {
+    label: 'vaoc',
+    displayName: 'Testfirst T.',
   });
-  await setUserDisplayName(pool, tenantId, user.userId, 'Testfirst T.');
-  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId: user.userId });
   const attempts = async () =>
     (
       await pool.query(
@@ -116,7 +109,7 @@ async function person() {
         [tenantId, user.userId],
       )
     ).rowCount;
-  return { headers: { authorization: `Bearer ${session.credential}` }, attempts };
+  return { headers, attempts };
 }
 
 const confirm = (headers: Record<string, string>) =>
@@ -297,7 +290,7 @@ describe('VA outage cooldown (AT09)', () => {
       for (let i = 0; i < VA_CONFIRMATION_MAX_ATTEMPTS; i += 1) {
         expect((await confirm(headers)).json()).toMatchObject({ status: 'UNAVAILABLE' });
         // Keep VA reachable: this test is about the tries, not the pause.
-        await closeVaOutageCooldown(app.pool!);
+        await closeVaOutageCooldown(appPool(app));
       }
     }
 
@@ -317,7 +310,7 @@ describe('VA outage cooldown (AT09)', () => {
 describe('VA recovery probe ownership', () => {
   const state = async () =>
     (
-      await app.pool!.query<{
+      await appPool(app).query<{
         consecutive_failures: number;
         opened_at: string | null;
         probe_started_at: string | null;
@@ -329,18 +322,18 @@ describe('VA recovery probe ownership', () => {
   it.each([OUTAGE, NOT_FOUND])(
     'ignores a late ordinary call while a recovery probe owns the lease (%j)',
     async (lateResult) => {
-      const ordinary = await acquireVaCall(app.pool!);
+      const ordinary = await acquireVaCall(appPool(app));
       expect(ordinary.kind).toBe('closed');
       await pause();
       await expire();
-      const probe = await acquireVaCall(app.pool!);
+      const probe = await acquireVaCall(appPool(app));
       expect(probe.kind).toBe('probe');
       const before = await state();
-      await recordVaCallOutcome(app.pool!, lateResult, ordinary);
+      await recordVaCallOutcome(appPool(app), lateResult, ordinary);
       expect(await state()).toEqual(before);
-      expect((await acquireVaCall(app.pool!)).kind).toBe('open');
-      await recordVaCallOutcome(app.pool!, NOT_FOUND, probe);
-      expect((await acquireVaCall(app.pool!)).kind).toBe('closed');
+      expect((await acquireVaCall(appPool(app))).kind).toBe('open');
+      await recordVaCallOutcome(appPool(app), NOT_FOUND, probe);
+      expect((await acquireVaCall(appPool(app))).kind).toBe('closed');
     },
   );
 
@@ -349,17 +342,17 @@ describe('VA recovery probe ownership', () => {
     async (lateResult) => {
       await pause();
       await expire();
-      const stale = await acquireVaCall(app.pool!);
+      const stale = await acquireVaCall(appPool(app));
       expect(stale.kind).toBe('probe');
       await cooldown("probe_started_at = now() - interval '121 seconds'");
-      const current = await acquireVaCall(app.pool!);
+      const current = await acquireVaCall(appPool(app));
       expect(current.kind).toBe('probe');
       const before = await state();
-      await recordVaCallOutcome(app.pool!, lateResult, stale);
+      await recordVaCallOutcome(appPool(app), lateResult, stale);
       expect(await state()).toEqual(before);
-      expect((await acquireVaCall(app.pool!)).kind).toBe('open');
-      await recordVaCallOutcome(app.pool!, NOT_FOUND, current);
-      expect((await acquireVaCall(app.pool!)).kind).toBe('closed');
+      expect((await acquireVaCall(appPool(app))).kind).toBe('open');
+      await recordVaCallOutcome(appPool(app), NOT_FOUND, current);
+      expect((await acquireVaCall(appPool(app))).kind).toBe('closed');
     },
   );
 });

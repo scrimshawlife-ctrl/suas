@@ -4,7 +4,8 @@
  */
 
 import { expect, test } from '../fixtures';
-import { newHelper, newRequester, progress, sendRequest, take } from './serve';
+import { progress, sendRequest, take } from './serve';
+import { newHelper, newVeteran } from '../people';
 
 // Two people sign up.
 test.describe.configure({ timeout: 180_000 });
@@ -16,7 +17,7 @@ test('the helper wraps up and closes the case, then can no longer open it', asyn
 }) => {
   // The case page read after close answers 404 on purpose.
   allow.push(/status of 404/);
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(page, summary, id);

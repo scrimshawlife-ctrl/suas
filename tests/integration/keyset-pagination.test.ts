@@ -10,12 +10,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import { readHelperRequestCounts } from '../../src/coordination/index.js';
 import { createResource, searchResources } from '../../src/fulfillment/index.js';
-import { createUser } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { appPool, createPerson } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { holdRequest } from '../helpers/hold-case.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
@@ -32,38 +30,19 @@ afterAll(async () => {
   await app.close();
 });
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
 interface Person {
   readonly tenantId: string;
   readonly userId: string;
   readonly headers: Record<string, string>;
 }
 
-async function person(tenantId: string, label: string): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return {
-    tenantId,
-    userId: user.userId,
-    headers: { authorization: `Bearer ${session.credential}` },
-  };
-}
+/** A signed-in person in Santa Clara. */
+const person = (tenantId: string, label: string) =>
+  createPerson(app, { tenantId, label, county: 'SANTA_CLARA' });
 
 /** A submitted FOOD request from `requester`, on the open list of their county. */
 async function submittedRequest(requester: Person): Promise<string> {
-  await markVerifiedVeteran(pool(), requester.tenantId, requester.userId);
+  await markVerifiedVeteran(appPool(app), requester.tenantId, requester.userId);
   const call = (url: string, payload?: object) =>
     app.server.inject({
       method: 'POST',
@@ -122,7 +101,7 @@ describe('sub-millisecond rows are never skipped between pages (A4-09)', () => {
     const ids: string[] = [];
     for (const at of SAME_MS) {
       const id = await submittedRequest(await person(tenantId, 'requester'));
-      await pool().query(
+      await appPool(app).query(
         `UPDATE service_requests SET created_at = $2 WHERE service_request_id = $1`,
         [id, at],
       );
@@ -141,12 +120,12 @@ describe('sub-millisecond rows are never skipped between pages (A4-09)', () => {
     const tenantId = randomUUID();
     const ids: string[] = [];
     for (const at of SAME_MS) {
-      const created = await createResource(pool(), {
+      const created = await createResource(appPool(app), {
         tenantId,
         serviceName: `Pantry ${at}`,
         category: 'FOOD',
       });
-      await pool().query(
+      await appPool(app).query(
         `UPDATE resources SET active = true, last_verified_at = $2, verification_source = 'synthetic-test'
           WHERE resource_id = $1`,
         [created.resourceId, at],
@@ -157,7 +136,7 @@ describe('sub-millisecond rows are never skipped between pages (A4-09)', () => {
     let cursor: string | undefined;
     for (let page = 0; page < 10; page += 1) {
       const result = await searchResources(
-        pool(),
+        appPool(app),
         tenantId,
         { activeOnly: true },
         { limit: 1, ...(cursor !== undefined ? { cursor } : {}) },
@@ -182,7 +161,7 @@ describe('GET /api/v0/notifications paging (C-09)', () => {
         index < 19
           ? `2026-10-${String(10 + index).padStart(2, '0')}T09:00:00Z`
           : SAME_MS[21 - index];
-      await pool().query(
+      await appPool(app).query(
         `INSERT INTO notifications
            (notification_id, tenant_id, recipient_user_id, reason, channel, consent_basis,
             template_version, created_at)
@@ -227,11 +206,15 @@ describe('GET /api/v0/chat/threads paging (C-09)', () => {
     const requestIds: string[] = [];
     for (const at of SAME_MS) {
       const serviceRequestId = await submittedRequest(requester);
-      await holdRequest(pool(), { tenantId, serviceRequestId, acceptedByUserId: helper.userId });
-      await pool().query(`UPDATE chat_threads SET created_at = $2 WHERE service_request_id = $1`, [
+      await holdRequest(appPool(app), {
+        tenantId,
         serviceRequestId,
-        at,
-      ]);
+        acceptedByUserId: helper.userId,
+      });
+      await appPool(app).query(
+        `UPDATE chat_threads SET created_at = $2 WHERE service_request_id = $1`,
+        [serviceRequestId, at],
+      );
       requestIds.push(serviceRequestId);
     }
 
@@ -264,10 +247,14 @@ describe('closed_last_30_days ignores the session time zone (A2-18)', () => {
     const inside = await submittedRequest(await person(tenantId, 'requester-a'));
     const outside = await submittedRequest(await person(tenantId, 'requester-b'));
     for (const serviceRequestId of [inside, outside]) {
-      await holdRequest(pool(), { tenantId, serviceRequestId, acceptedByUserId: helper.userId });
+      await holdRequest(appPool(app), {
+        tenantId,
+        serviceRequestId,
+        acceptedByUserId: helper.userId,
+      });
     }
     const close = (id: string, ago: string) =>
-      pool().query(
+      appPool(app).query(
         `UPDATE service_requests SET status = 'CLOSED', terminal_at = now() - $2::interval
           WHERE service_request_id = $1`,
         [id, ago],
@@ -278,7 +265,7 @@ describe('closed_last_30_days ignores the session time zone (A2-18)', () => {
     // A synthetic zone that moved its clocks forward 15 days ago: there, "30 days" is 719 h.
     const day = 86_400_000;
     const zone = `AAA0BBB,J${julianDay(new Date(Date.now() - 15 * day))}/0,J${julianDay(new Date(Date.now() + 15 * day))}/0`;
-    const client = await pool().connect();
+    const client = await appPool(app).connect();
     try {
       await client.query(`SET TIME ZONE '${zone}'`);
       const shift = await client.query<{ hours: number }>(
@@ -301,7 +288,7 @@ describe('case request list and contact log paging (A2-24)', () => {
     const tenantId = randomUUID();
     const requester = await person(tenantId, 'requester');
     const helper = await person(tenantId, 'helper');
-    await markVerifiedVeteran(pool(), tenantId, requester.userId);
+    await markVerifiedVeteran(appPool(app), tenantId, requester.userId);
     const post = (url: string, payload?: object) =>
       app.server.inject({
         method: 'POST',
@@ -318,7 +305,7 @@ describe('case request list and contact log paging (A2-24)', () => {
           details: { meeting_place: 'Main Street library' },
         })
       ).json().service_request_id;
-      await pool().query(
+      await appPool(app).query(
         `UPDATE service_requests SET created_at = $2 WHERE service_request_id = $1`,
         [id, at],
       );
@@ -334,7 +321,7 @@ describe('case request list and contact log paging (A2-24)', () => {
     expect(all.pages.flat()).toEqual(requestIds);
 
     // A helper still sees only the request they hold.
-    await holdRequest(pool(), {
+    await holdRequest(appPool(app), {
       tenantId,
       serviceRequestId: requestIds[1]!,
       acceptedByUserId: helper.userId,
@@ -345,7 +332,7 @@ describe('case request list and contact log paging (A2-24)', () => {
     const attemptIds: string[] = [];
     for (const at of SAME_MS) {
       const id = randomUUID();
-      await pool().query(
+      await appPool(app).query(
         `INSERT INTO contact_attempts
            (contact_attempt_id, tenant_id, case_id, logged_by_user_id, attempted_at, channel, outcome)
          VALUES ($1, $2, $3, $4, $5, 'PHONE', 'PENDING')`,

@@ -14,6 +14,7 @@ import { openCase, createServiceRequest } from '../../src/coordination/index.js'
 import { withTransaction } from '../../src/db/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
@@ -57,8 +58,7 @@ afterAll(async () => {
 describe('POST /api/v0/dev/model-inference/turns', () => {
   it('queues scripted turns so the Intake Assistant answers in LOCAL', async () => {
     const local = await start({ SUAS_ENV: 'LOCAL', SUAS_MODEL_INFERENCE_MODE: 'fake' });
-    const pool = local.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(local);
     const tenantId = randomUUID();
     const user = await createUser(pool, {
       tenantId,
@@ -113,8 +113,7 @@ describe('POST /api/v0/dev/model-inference/turns', () => {
 
   it('answers the simulate step with a clear 422 when the meeting place is missing', async () => {
     const local = await start({ SUAS_ENV: 'LOCAL' });
-    const pool = local.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(local);
     const tenantId = randomUUID();
     const user = await createUser(pool, {
       tenantId,

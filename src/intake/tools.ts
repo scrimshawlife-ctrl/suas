@@ -46,12 +46,10 @@ export const draftDetailsInput = z
     destination: z.string().trim().min(1).max(DESTINATION_MAX).optional(),
   })
   .strict();
-export type DraftDetails = z.infer<typeof draftDetailsInput>;
 
 export const draftServiceRequestInput = draftDetailsInput
   .extend({ category: z.enum(INTAKE_CATEGORIES) })
   .strict();
-export type DraftServiceRequestInput = z.infer<typeof draftServiceRequestInput>;
 
 export function isIntakeCategory(value: unknown): value is IntakeCategory {
   return typeof value === 'string' && (INTAKE_CATEGORIES as readonly string[]).includes(value);

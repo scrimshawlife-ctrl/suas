@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { isApiError } from './errors';
+import { isApiError, isConnectionError } from './errors';
 
 /*
  * Idempotency-Key holders for mutation hooks, so a retry of one action reuses its key (the
@@ -17,7 +17,7 @@ export function useIdempotencyKey() {
       return ref.current;
     },
     /** `headers` option for the API client: `api.POST(path, { body, headers: key.headers() })`. */
-    headers(): Record<string, string> {
+    headers(): { 'Idempotency-Key': string } {
       ref.current ??= crypto.randomUUID();
       return { 'Idempotency-Key': ref.current };
     },
@@ -29,21 +29,6 @@ export function useIdempotencyKey() {
 }
 
 export type IdempotencyKey = ReturnType<typeof useIdempotencyKey>;
-
-/**
- * One key per action, renewed after a success or a refusal (4xx), since the next attempt then
- * has a different body. A 5xx or a dropped response keeps it for the retry.
- */
-export function useCommandKey() {
-  const key = useIdempotencyKey();
-  return {
-    headers: () => key.headers(),
-    /** Call with no error after a success, or with the error after a failure. */
-    settle: (error?: unknown) => {
-      if (error === undefined || (isApiError(error) && error.status < 500)) key.renew();
-    },
-  };
-}
 
 /** One key per target (a request id, a command, a body), so a retry of that target reuses it. */
 export function useKeyedIdempotency() {
@@ -63,13 +48,61 @@ export function useKeyedIdempotency() {
   };
 }
 
-/** JSON with every object's keys sorted, so key order never makes two equal bodies differ. */
+/**
+ * JSON with every object's keys sorted, so key order never makes two equal bodies differ. The
+ * plain encode first fails a body the send could not encode (a cycle) with the same TypeError.
+ * Takes JSON-safe request bodies only: it fingerprints what JSON.stringify sends (a Date as
+ * its ISO string), so a Map, Set or Symbol is as lost here as on the wire.
+ */
 function canonicalJson(value: unknown): string {
-  return JSON.stringify(value, (_key, part: unknown) =>
+  const plain: unknown = JSON.parse(JSON.stringify(value ?? null));
+  return JSON.stringify(plain, (_key, part: unknown) =>
     part === null || typeof part !== 'object' || Array.isArray(part)
       ? part
       : Object.fromEntries(Object.entries(part).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
   );
+}
+
+/**
+ * The first attempt may have run, or still be running, so only its key can replay it
+ * (API.md §7 rules 3 and 5): no answer (network error, timeout), a 5xx, or a 409
+ * IDEMPOTENCY_CONFLICT, which for the same key and body means that attempt is in flight
+ * (`src/idempotency/run.ts`). Any other 4xx refused the action, so a retry is a new one.
+ */
+function keepsKey(error: unknown): boolean {
+  return (
+    isConnectionError(error) ||
+    (isApiError(error) && (error.status >= 500 || error.code === 'IDEMPOTENCY_CONFLICT'))
+  );
+}
+
+/**
+ * One Idempotency-Key per user action, tied to the body it was sent with. A retry of that body
+ * reuses it after a failure that `keepsKey`; a success, a refusal or a changed body starts a new
+ * key, so a kept key never meets a different body (that 409 would repeat on every retry). Only
+ * the latest send settles the key (`body` is that send's variables), so an older overlapping
+ * send cannot renew the key a newer one may need to replay.
+ */
+export function useCommandKey() {
+  const key = useIdempotencyKey();
+  const sentWith = useRef<string | null>(null);
+  const latest = useRef<unknown>(undefined);
+  return {
+    headers: (body?: unknown) => {
+      const fingerprint = canonicalJson(body);
+      if (sentWith.current !== fingerprint) key.renew();
+      sentWith.current = fingerprint;
+      latest.current = body;
+      return key.headers();
+    },
+    settle: (body: unknown, error?: unknown) => {
+      if (body !== latest.current || (error !== undefined && keepsKey(error))) return;
+      // Forget the body too: the Verify page must not hold VA details past the answer.
+      key.renew();
+      sentWith.current = null;
+      latest.current = undefined;
+    },
+  };
 }
 
 /**

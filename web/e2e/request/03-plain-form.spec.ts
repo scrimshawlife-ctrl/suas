@@ -1,11 +1,13 @@
 import { expect, test } from '../fixtures';
-import { idFromUrl, requestRows, tag, veteran } from './request';
+import { idFromUrl, requestRows } from './request';
+import { tag } from '../helpers';
+import { newVeteran } from '../people';
 
 test('the plain form explains every missing field and sends a Housing request', async ({
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   await page.goto('/request');
   const form = page.getByRole('form', { name: 'Request form' });
 
@@ -65,7 +67,7 @@ for (const [category, label, place] of [
     browser,
     request,
   }) => {
-    const page = await veteran(browser, request, { name: 'Rory Q.' });
+    const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
     await page.goto(`/request?category=${category}`);
     await expect(page).toHaveTitle('Request help · SUAS');
     const form = page.getByRole('form', { name: 'Request form' });
@@ -87,7 +89,7 @@ for (const [category, label, place] of [
 }
 
 test('an unknown ?category leaves the choice empty', async ({ browser, request }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   await page.goto('/request?category=BENEFITS');
   await expect(
     page.getByRole('form', { name: 'Request form' }).getByLabel('What kind of help do you need?'),
@@ -95,7 +97,7 @@ test('an unknown ?category leaves the choice empty', async ({ browser, request }
 });
 
 test('double-clicking the form Send request makes one request', async ({ browser, request }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   await page.goto('/request?category=PEER_SUPPORT');
   const form = page.getByRole('form', { name: 'Request form' });
   await form.getByLabel('Short summary').fill(`Someone to talk to ${tag()}`);
@@ -111,7 +113,7 @@ test('a lost answer says so, keeps the form filled, and the retry makes one requ
   allow,
 }) => {
   allow.push(/service-requests :: 502/, /status of 502/);
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   let fail = true;
   await page.route('**/api/v0/service-requests', async (route) => {
     if (route.request().method() === 'POST' && fail) {
@@ -147,7 +149,7 @@ test('Back from a request sent by the form shows an empty form and does not rese
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   await page.goto('/request?category=PEER_SUPPORT');
   const form = page.getByRole('form', { name: 'Request form' });
   await form.getByLabel('Short summary').fill(`Someone to talk to ${tag()}`);

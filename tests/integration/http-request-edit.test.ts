@@ -9,10 +9,8 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
-import { createUser } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { appPool, createPerson, keyed } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
@@ -34,36 +32,13 @@ interface Person {
   readonly headers: Record<string, string>;
 }
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function person(tenantId: string, label: string): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return {
-    tenantId,
-    userId: user.userId,
-    headers: { authorization: `Bearer ${session.credential}` },
-  };
-}
-
-function keyed(who: Person, key: string = randomUUID()): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': key };
-}
+/** A signed-in person in Santa Clara. */
+const person = (tenantId: string, label: string) =>
+  createPerson(app, { tenantId, label, county: 'SANTA_CLARA' });
 
 /** The requester submits through the plain form, which leaves the request SUBMITTED. */
 async function submit(requester: Person, payload: Record<string, unknown>) {
-  await markVerifiedVeteran(pool(), requester.tenantId, requester.userId);
+  await markVerifiedVeteran(appPool(app), requester.tenantId, requester.userId);
   const response = await app.server.inject({
     method: 'POST',
     url: '/api/v0/service-requests',
@@ -165,7 +140,7 @@ describe('requester edit before accept (R8.1)', () => {
     expect(again.statusCode).toBe(200);
     expect(again.json()).toMatchObject({ replayed: true, summary: 'Secret groceries text' });
 
-    const events = await pool().query<{ payload: unknown }>(
+    const events = await appPool(app).query<{ payload: unknown }>(
       `SELECT payload FROM audit_events
         WHERE target_id = $1 AND event_type = 'SERVICE_REQUEST_EDITED'`,
       [id],
