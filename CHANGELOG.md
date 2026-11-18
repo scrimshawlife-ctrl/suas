@@ -15,7 +15,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
-- U+0000 (NUL) in any string or key of an `/api/v0` body, query or path parameter is now 400 `VALIDATION_FAILED` instead of a 500 from PostgreSQL (22021 text, 22P05 jsonb); Settlement sections nest at most 16 levels, so deep content is 400 instead of a 500 (54001) (API.md §6).
+- U+0000 (NUL) in any string or key of a body, query or path parameter, on `/api/v0` and the `/app` form routes alike, is now 400 `VALIDATION_FAILED` instead of a 500 from PostgreSQL (22021 text, 22P05 jsonb); a NUL in a header value was already 400 from Node's HTTP parser; Settlement sections nest at most 16 levels, so deep content is 400 instead of a 500 (54001) (API.md §6).
 
 - Chat keeps manual retry for in-flight idempotency conflicts with the original message and key; permanent chat refusals remain final (API.md §7.5).
 
