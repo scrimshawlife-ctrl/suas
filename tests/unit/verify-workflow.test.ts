@@ -4,8 +4,8 @@
  * commit SHA: the deploy then verifies exactly the commit it ships, never a branch or tag that
  * can move, and a caller cannot leave it empty. Only verify.yml's own push, pull_request and
  * dispatch runs check out their triggering commit. Python packages the workflows install are
- * pinned to an exact version for the same reason. Reads the workflows as text (no network) and
- * runs the guard's own shell line with bash.
+ * pinned to an exact version for the same reason, and secrets reach only the step that reads
+ * them. Reads the workflows as text (no network) and runs the guard's own shell line with bash.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -73,5 +73,33 @@ describe('workflow Python packages', () => {
   it('pins every installed package to an exact version', () => {
     expect(installs.length).toBeGreaterThan(0);
     expect(installs.filter((install) => !/==\d+(\.\d+)*$/.test(install))).toEqual([]);
+  });
+});
+
+describe('workflow secrets', () => {
+  // A secret in workflow or job env reaches every step, including `npm ci` install scripts and
+  // third-party actions. Each secret is read only inside the step that needs it.
+  const indent = (line: string) => line.length - line.trimStart().length;
+  const outsideSteps = readdirSync(WORKFLOWS)
+    .filter((name) => name.endsWith('.yml'))
+    .flatMap((name) => {
+      const lines = read(name).split('\n');
+      return lines.flatMap((line, at) => {
+        if (!line.includes('secrets.')) return [];
+        // Walk the YAML ancestors; a step is a list item under `steps:`.
+        let depth = indent(line);
+        for (let i = at - 1; i >= 0; i -= 1) {
+          const parent = lines[i]!;
+          if (parent.trim() === '' || parent.trimStart().startsWith('#')) continue;
+          if (indent(parent) >= depth) continue;
+          if (parent.trimStart().startsWith('- ')) return [];
+          depth = indent(parent);
+        }
+        return [`${name}:${at + 1}: ${line.trim()}`];
+      });
+    });
+
+  it('exposes each secret only to the step that uses it', () => {
+    expect(outsideSteps).toEqual([]);
   });
 });
