@@ -155,6 +155,55 @@ describe('a requester is not a holder', () => {
       expect(refused.json().error.code, url).toBe('FORBIDDEN');
     }
   });
+
+  it('refuses the requester the contact log, to read or write, with 403', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester', true);
+    const helper = await person(tenantId, 'helper');
+    const { caseId, requestId } = await submitRequest(requester);
+    expect((await accept(helper, requestId)).statusCode).toBe(200);
+
+    const read = await get(requester, `/cases/${caseId}/contact-attempts`);
+    expect(read.statusCode).toBe(403);
+    expect(read.json().error.code).toBe('FORBIDDEN');
+    for (const [url, payload] of holderWrites(caseId).filter(([path]) => /contact/.test(path))) {
+      const refused = await post(requester, url, payload);
+      expect(refused.statusCode, url).toBe(403);
+      expect(refused.json().error.code, url).toBe('FORBIDDEN');
+    }
+  });
+});
+
+describe('a person outside the case', () => {
+  it('gets the same 404 for its settlements as for a case that does not exist', async () => {
+    const tenantId = randomUUID();
+    const requester = await person(tenantId, 'requester', true);
+    const helper = await person(tenantId, 'helper');
+    const outsider = await person(tenantId, 'outsider');
+    const { caseId, requestId } = await submitRequest(requester);
+    expect((await accept(helper, requestId)).statusCode).toBe(200);
+    await finishAndClose(requester, helper, caseId, requestId, { close: false });
+    const [settlement] = (await get(requester, `/cases/${caseId}/settlements`)).json()
+      .settlements as { settlement_id: string }[];
+    const settlementId = settlement!.settlement_id;
+    // The helper still reads it, so the outsider's 404 below comes from their standing.
+    expect((await get(helper, `/cases/${caseId}/settlements/${settlementId}`)).statusCode).toBe(
+      200,
+    );
+
+    const missingCase = randomUUID();
+    for (const [url, missingUrl] of [
+      [`/cases/${caseId}/settlements`, `/cases/${missingCase}/settlements`],
+      [
+        `/cases/${caseId}/settlements/${settlementId}`,
+        `/cases/${missingCase}/settlements/${settlementId}`,
+      ],
+    ] as const) {
+      const hidden = await get(outsider, url);
+      expect(hidden.statusCode, url).toBe(404);
+      expect(hidden.json(), url).toEqual((await get(outsider, missingUrl)).json());
+    }
+  });
 });
 
 describe('holder standing ends with the case cycle', () => {
@@ -379,6 +428,9 @@ describe('holder standing ends with the case cycle', () => {
 
     expect((await post(helper, `/cases/${caseId}/commands/close`)).statusCode).toBe(200);
     expect(await stored()).toEqual({ status: 'CLOSED', current_settlement_id: cycleOne });
+    // CLOSE ends the helper's standing, so a CLOSED case shows them no settlement at all.
+    expect((await get(helper, `/cases/${caseId}/settlements`)).statusCode).toBe(404);
+    expect((await get(helper, `/cases/${caseId}/settlements/${cycleOne}`)).statusCode).toBe(404);
     await executeCaseCommand(appPool(app), {
       tenantId,
       caseId,
