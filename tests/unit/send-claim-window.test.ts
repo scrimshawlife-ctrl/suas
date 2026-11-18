@@ -1,7 +1,8 @@
 /**
  * The send claim must outlast every provider call it fences (NOTIFICATIONS.md §3, §5). A
- * runner calls only within PRE_CALL_BUDGET_MS of claiming, so the claim has to cover that
- * budget, the longest bounded provider call and the settle. If a provider timeout grows past
+ * runner renews its claim just before the call and calls only within PRE_CALL_BUDGET_MS of
+ * that, so the claim has to cover that budget, the longest bounded provider call and the
+ * settle. If a provider timeout grows past
  * PROVIDER_CALL_MAX_MS, a second runner could retake the claim mid-call and send twice; this
  * pins the values so they cannot drift apart.
  */

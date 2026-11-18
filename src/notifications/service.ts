@@ -349,7 +349,10 @@ export interface SendAttemptResult {
   readonly notification: Notification;
   readonly outcome: 'SENT' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
   readonly reason?: string;
-  /** For `IN_FLIGHT`: wait this long, by when the holder's claim has settled or expired. */
+  /**
+   * Set on a SKIPPED attempt that made no provider call and should run again after this
+   * long: another runner holds the send, or the claim was lost or ran short before the call.
+   */
   readonly retryAfterMs?: number;
 }
 
@@ -407,20 +410,15 @@ export const PROVIDER_CALL_MAX_MS = 30_000;
 export const SETTLE_MARGIN_MS = 10_000;
 
 /**
- * Longest a runner may take from claiming to calling the provider, so the call and the settle
- * still end inside the claim. Measured on this process's monotonic clock, so the check needs
- * no database read between the consent re-check and the call. Pinned by
+ * Longest a runner may take from starting its claim renewal to calling the provider, so the
+ * call and the settle still end inside the renewed claim. An extra local check on this
+ * process's monotonic clock; the renewal itself is the fence. Pinned by
  * tests/unit/send-claim-window.test.ts.
  */
 export const PRE_CALL_BUDGET_MS = SEND_CLAIM_MS - PROVIDER_CALL_MAX_MS - SETTLE_MARGIN_MS;
 
-/** The claim aged past `PRE_CALL_BUDGET_MS` before the provider call, so no call was made. */
-export class SendClaimWindowPassedError extends Error {
-  constructor() {
-    super('send claim window passed before the provider call; nothing was sent');
-    this.name = 'SendClaimWindowPassedError';
-  }
-}
+/** A send that lost its claim or ran short before the provider call runs again this soon. */
+export const PRE_SEND_RETRY_MS = 1_000;
 
 /** Why a Notification needs no further attempt: it is settled or cancelled. */
 function skipReason(notification: Notification): string | undefined {
@@ -455,6 +453,21 @@ async function claimSend(
   return row === undefined ? undefined : { notification: toNotification(row), token };
 }
 
+/**
+ * The fence just before the provider call: restart the claim's clock only while this runner
+ * holds it on a claimable row. False when another runner took the claim or the row was
+ * cancelled or settled meanwhile, so this runner must not call.
+ */
+async function renewSend(pool: Pool, notification: Notification, token: string): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE notifications SET send_claimed_at = now()
+     WHERE tenant_id = $1 AND notification_id = $2 AND send_claim_token = $3
+       AND cancelled_at IS NULL AND delivery_status IN ('QUEUED', 'FAILED')`,
+    [notification.tenantId, notification.notificationId, token],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 /** Drop a claim whose attempt threw before settling, so a retry can claim at once. */
 async function releaseSend(pool: Pool, notification: Notification, token: string): Promise<void> {
   await pool.query(
@@ -467,7 +480,8 @@ async function releaseSend(pool: Pool, notification: Notification, token: string
 /**
  * Attempt one external send under a send claim, so racing runners make one provider call
  * and one SENT record (§3, §5). The basis is re-checked after the claim and is the last
- * database read before the attempt; a revoked grant cancels the send (§4.2, CONSENT.md §4).
+ * decision before the attempt; a revoked grant cancels the send (§4.2, CONSENT.md §4). The
+ * claim renewal after it only re-asserts that the row is still held and claimable.
  */
 export async function attemptSend(
   pool: Pool,
@@ -488,7 +502,6 @@ export async function attemptSend(
   const skipped = skipReason(current);
   if (skipped !== undefined) return { notification: current, outcome: 'SKIPPED', reason: skipped };
 
-  const claimStarted = performance.now();
   const claim = await claimSend(pool, input.tenantId, input.notificationId);
   if (claim === undefined) {
     const latest = (await findNotification(pool, input.tenantId, input.notificationId)) ?? current;
@@ -529,7 +542,7 @@ export async function attemptSend(
         });
         return updated;
       });
-      if (cancelled === undefined) return claimLost(pool, input, notification);
+      if (cancelled === undefined) return claimLost(pool, input, notification, PRE_SEND_RETRY_MS);
       return {
         notification: cancelled,
         outcome: 'CANCELLED',
@@ -549,9 +562,19 @@ export async function attemptSend(
       throw new Error('Notification has no destination or recipient.');
     }
 
-    // A slow re-check may have aged the claim until another runner could take it.
-    if (performance.now() - claimStarted > PRE_CALL_BUDGET_MS) {
-      throw new SendClaimWindowPassedError();
+    // A slow re-check may have let the claim lapse and another runner take it.
+    const renewStarted = performance.now();
+    if (!(await renewSend(pool, notification, token))) {
+      return await claimLost(pool, input, notification, PRE_SEND_RETRY_MS);
+    }
+    if (performance.now() - renewStarted > PRE_CALL_BUDGET_MS) {
+      await releaseSend(pool, notification, token);
+      return {
+        notification,
+        outcome: 'SKIPPED',
+        reason: 'SEND_WINDOW_PASSED',
+        retryAfterMs: PRE_SEND_RETRY_MS,
+      };
     }
     acknowledgement = await port.send(
       buildOutboundMessage(notification, destination, input.renderBody),
@@ -588,11 +611,9 @@ export async function attemptSend(
       },
       guard,
     );
-    if (updated === undefined) return undefined;
-
     // NOTIFICATIONS.md §5: every actual provider send attempt appends immutable
     // Audit Event history. There is deliberately no attempts table.
-    await recordAttemptAudit(tx, updated, {
+    const attempt = {
       outcome: acknowledgement.accepted ? 'SENT' : 'FAILED',
       ...(acknowledgement.failureReason !== undefined
         ? { reason: acknowledgement.failureReason }
@@ -600,7 +621,17 @@ export async function attemptSend(
       ...(acknowledgement.providerReference !== undefined
         ? { providerReference: acknowledgement.providerReference }
         : {}),
-    });
+    };
+    if (updated === undefined) {
+      // Settled or taken meanwhile: the call still happened, so record it without
+      // touching the status another writer set.
+      const recorded = await recordAttemptOnly(tx, input, token, acknowledgement.accepted);
+      if (recorded === undefined) throw new Error('No such Notification.');
+      await recordAttemptAudit(tx, recorded, attempt);
+      return { notification: recorded, outcome: 'SKIPPED' as const, reason: 'CLAIM_LOST' };
+    }
+
+    await recordAttemptAudit(tx, updated, attempt);
     if (status === 'UNDELIVERABLE') {
       await recordUndeliverableAudit(
         tx,
@@ -617,17 +648,46 @@ export async function attemptSend(
         : {}),
     };
   });
-  return settled ?? claimLost(pool, input, notification);
+  return settled;
 }
 
-/** The claim went stale and another runner took the send; its outcome stands. */
+/**
+ * Count a provider attempt whose claim-guarded settle matched no row, and drop this runner's
+ * claim if it still has one. The status is left alone, so a terminal one is never regressed.
+ */
+async function recordAttemptOnly(
+  tx: Queryable,
+  input: { tenantId: string; notificationId: string },
+  token: string,
+  accepted: boolean,
+): Promise<Notification | undefined> {
+  const result = await tx.query<NotificationRow>(
+    `UPDATE notifications
+       SET attempt_count = attempt_count + 1,
+           last_attempt_at = now(),
+           sent_at = CASE WHEN $4::boolean THEN COALESCE(sent_at, now()) ELSE sent_at END,
+           send_claim_token = CASE WHEN send_claim_token = $3::uuid THEN NULL
+                                   ELSE send_claim_token END,
+           send_claimed_at = CASE WHEN send_claim_token = $3::uuid THEN NULL
+                                  ELSE send_claimed_at END,
+           updated_at = now()
+     WHERE tenant_id = $1 AND notification_id = $2
+     RETURNING ${NOTIFICATION_COLUMNS}`,
+    [input.tenantId, input.notificationId, token, accepted],
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : toNotification(row);
+}
+
+/** The claim was lost before any provider call; another runner's outcome stands. */
 async function claimLost(
   pool: Pool,
   input: { tenantId: string; notificationId: string },
   fallback: Notification,
+  retryAfterMs: number,
 ): Promise<SendAttemptResult> {
   const latest = (await findNotification(pool, input.tenantId, input.notificationId)) ?? fallback;
-  return { notification: latest, outcome: 'SKIPPED', reason: 'CLAIM_LOST' };
+  return { notification: latest, outcome: 'SKIPPED', reason: 'CLAIM_LOST', retryAfterMs };
 }
 
 export interface DeliveryCallbackInput {
@@ -727,10 +787,15 @@ interface StatusUpdate {
   cancelReason?: string;
 }
 
+/** An unguarded update that settles the row clears a claim only once it has gone stale. */
+const SETTLES_STALE_CLAIM = `($3::suas_delivery_status NOT IN ('QUEUED', 'FAILED')
+  AND send_claimed_at < now() - $10::int * interval '1 millisecond')`;
+
 /**
  * With a `claimToken`, updates only while that send claim holds on a claimable row, so it
- * never overwrites a settled or cancelled one. Any update that settles the row clears the
- * claim, so a stale holder cannot settle over it.
+ * never overwrites a settled or cancelled one, and clears the claim. Without one (callbacks,
+ * dead-letter settles) a live claim is left to its holder, whose attempt is then still
+ * recorded by `recordAttemptOnly`.
  */
 async function updateStatus(
   tx: Queryable,
@@ -747,10 +812,10 @@ async function updateStatus(
            sent_at = CASE WHEN $6::boolean THEN now() ELSE sent_at END,
            cancelled_at = CASE WHEN $7::boolean THEN now() ELSE cancelled_at END,
            cancel_reason = COALESCE($8, cancel_reason),
-           send_claim_token = CASE WHEN $9::uuid IS NULL AND $3::suas_delivery_status
-                                        IN ('QUEUED', 'FAILED') THEN send_claim_token END,
-           send_claimed_at = CASE WHEN $9::uuid IS NULL AND $3::suas_delivery_status
-                                       IN ('QUEUED', 'FAILED') THEN send_claimed_at END,
+           send_claim_token = CASE WHEN $9::uuid IS NOT NULL OR ${SETTLES_STALE_CLAIM}
+                                   THEN NULL ELSE send_claim_token END,
+           send_claimed_at = CASE WHEN $9::uuid IS NOT NULL OR ${SETTLES_STALE_CLAIM}
+                                  THEN NULL ELSE send_claimed_at END,
            updated_at = now()
      WHERE tenant_id = $1 AND notification_id = $2
        AND ($9::uuid IS NULL
@@ -767,6 +832,7 @@ async function updateStatus(
       options.cancelled ?? false,
       options.cancelReason ?? null,
       guard.claimToken ?? null,
+      SEND_CLAIM_MS,
     ],
   );
   const row = result.rows[0];
@@ -852,8 +918,10 @@ export async function deliverQueuedInApp(pool: Pool, limit = 100): Promise<numbe
                last_attempt_at = now(), sent_at = now(), updated_at = now(),
                send_claim_token = NULL, send_claimed_at = NULL
          WHERE tenant_id = $1 AND notification_id = $2 AND delivery_status = 'QUEUED'
+           AND (send_claim_token IS NULL
+                OR send_claimed_at < now() - $3::int * interval '1 millisecond')
          RETURNING ${NOTIFICATION_COLUMNS}`,
-        [row.tenant_id, row.notification_id],
+        [row.tenant_id, row.notification_id, SEND_CLAIM_MS],
       );
       const updatedRow = updated.rows[0];
       if (updatedRow === undefined) return false;

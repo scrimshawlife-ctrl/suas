@@ -18,6 +18,7 @@ import {
 } from '../../src/consent/index.js';
 import { createUser } from '../../src/identity/index.js';
 import {
+  applyDeliveryCallback,
   attemptSend,
   buildNotificationSendPayload,
   enqueueNotification,
@@ -25,9 +26,8 @@ import {
   settleUndeliverable,
   type NotificationChannel,
   type NotificationChannelPort,
-  type SendAttemptResult,
 } from '../../src/notifications/index.js';
-import { SEND_CLAIM_MS, SendClaimWindowPassedError } from '../../src/notifications/service.js';
+import { PRE_CALL_BUDGET_MS, PRE_SEND_RETRY_MS } from '../../src/notifications/service.js';
 import {
   claimDueJobs,
   DispatchingJobQueue,
@@ -160,6 +160,53 @@ async function sentAudits(notificationId: string): Promise<number> {
     [notificationId],
   );
   return result.rows[0]?.n ?? 0;
+}
+
+async function claimToken(notificationId: string): Promise<string | null> {
+  const result = await pool.query<{ token: string | null }>(
+    `SELECT send_claim_token AS token FROM notifications WHERE notification_id = $1`,
+    [notificationId],
+  );
+  return result.rows[0]?.token ?? null;
+}
+
+async function untilClaimed(notificationId: string): Promise<void> {
+  while ((await claimToken(notificationId)) === null) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+/** Another runner claims the send, as it may once the holder's claim has lapsed. */
+async function takeClaim(notificationId: string): Promise<string> {
+  const token = randomUUID();
+  await pool.query(
+    `UPDATE notifications SET send_claim_token = $2, send_claimed_at = now()
+     WHERE notification_id = $1`,
+    [notificationId, token],
+  );
+  return token;
+}
+
+/** The holder took longer than the claim, so the claim has gone stale. */
+async function expireClaim(notificationId: string): Promise<void> {
+  await pool.query(
+    `UPDATE notifications SET send_claimed_at = now() - interval '1 hour'
+     WHERE notification_id = $1`,
+    [notificationId],
+  );
+}
+
+/** Wait until a claim renewal is blocked on a row lock. */
+async function untilRenewalWaits(): Promise<void> {
+  for (;;) {
+    const waiting = await pool.query(
+      `SELECT 1 FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'
+          AND query LIKE 'UPDATE notifications SET send_claimed_at = now()%'`,
+    );
+    if ((waiting.rowCount ?? 0) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 }
 
 describe('attemptSend under concurrent runners', () => {
@@ -416,45 +463,19 @@ describe('a holder that stalls between its claim and the provider call', () => {
     return stall;
   }
 
-  async function claimToken(db: Pool | PoolClient, notificationId: string): Promise<string | null> {
-    const result = await db.query<{ token: string | null }>(
-      `SELECT send_claim_token AS token FROM notifications WHERE notification_id = $1`,
-      [notificationId],
-    );
-    return result.rows[0]?.token ?? null;
-  }
-
   /** Start a send that stalls in its re-check, and return once it holds the claim. */
   async function stalledHolder(
     queued: Awaited<ReturnType<typeof queuedEmail>>,
     channels: Map<NotificationChannel, NotificationChannelPort>,
   ) {
-    vi.useFakeTimers({ toFake: ['performance'] });
     const stall = await stallReCheck();
-    const holder = attemptSend(pool, channels, {
+    const outcome = attemptSend(pool, channels, {
       tenantId: queued.tenantId,
       notificationId: queued.notificationId,
       disclosure: queued.disclosure,
     });
-    // Observe the outcome now so a rejection is not reported as unhandled meanwhile.
-    const outcome: Promise<{ result?: SendAttemptResult; error?: unknown }> = holder.then(
-      (result) => ({ result }),
-      (error: unknown) => ({ error }),
-    );
-    while ((await claimToken(stall, queued.notificationId)) === null) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
+    await untilClaimed(queued.notificationId);
     return { stall, outcome };
-  }
-
-  /** The stall outlasts the claim: the database and the holder's clock both move on. */
-  async function expireClaim(notificationId: string): Promise<void> {
-    await pool.query(
-      `UPDATE notifications SET send_claimed_at = now() - interval '1 hour'
-       WHERE notification_id = $1`,
-      [notificationId],
-    );
-    vi.advanceTimersByTime(SEND_CLAIM_MS);
   }
 
   async function release(stall: PoolClient): Promise<void> {
@@ -462,22 +483,34 @@ describe('a holder that stalls between its claim and the provider call', () => {
     stall.release();
   }
 
+  const deferred = { outcome: 'SKIPPED', retryAfterMs: PRE_SEND_RETRY_MS };
+
   it('does not call the provider once another runner has taken the expired claim', async () => {
     const queued = await queuedEmail();
     const { sends, channels } = slowCountingEmail(0);
     const { stall, outcome } = await stalledHolder(queued, channels);
-    await expireClaim(queued.notificationId);
-    const other = randomUUID();
+    const other = await takeClaim(queued.notificationId);
+    await release(stall);
+
+    expect(await outcome).toMatchObject({ ...deferred, reason: 'CLAIM_LOST' });
+    expect(sends).toHaveLength(0);
+    expect(await claimToken(queued.notificationId)).toBe(other);
+  });
+
+  it('does not call the provider for a Notification cancelled while it re-checked consent', async () => {
+    const queued = await queuedEmail();
+    const { sends, channels } = slowCountingEmail(0);
+    const { stall, outcome } = await stalledHolder(queued, channels);
     await pool.query(
-      `UPDATE notifications SET send_claim_token = $2, send_claimed_at = now()
+      `UPDATE notifications
+         SET delivery_status = 'UNDELIVERABLE', cancelled_at = now(), cancel_reason = 'TEST'
        WHERE notification_id = $1`,
-      [queued.notificationId, other],
+      [queued.notificationId],
     );
     await release(stall);
 
-    expect((await outcome).error).toBeInstanceOf(SendClaimWindowPassedError);
+    expect(await outcome).toMatchObject({ ...deferred, reason: 'CLAIM_LOST' });
     expect(sends).toHaveLength(0);
-    expect(await claimToken(pool, queued.notificationId)).toBe(other);
   });
 
   it('does not send a Notification a dead-lettered job settled while the holder stalled', async () => {
@@ -491,11 +524,11 @@ describe('a holder that stalls between its claim and the provider call', () => {
       failureReason: 'outbox attempts exhausted',
     });
     expect(settled.outcome).toBe('SETTLED');
-    // Settling ends the claim, so no stale holder can settle over it.
-    expect(await claimToken(stall, queued.notificationId)).toBeNull();
+    // A settle clears a claim once it has gone stale.
+    expect(await claimToken(queued.notificationId)).toBeNull();
     await release(stall);
 
-    expect((await outcome).error).toBeInstanceOf(SendClaimWindowPassedError);
+    expect(await outcome).toMatchObject({ ...deferred, reason: 'CLAIM_LOST' });
     expect(sends).toHaveLength(0);
     const after = await findNotification(pool, queued.tenantId, queued.notificationId);
     expect(after?.deliveryStatus).toBe('UNDELIVERABLE');
@@ -508,16 +541,85 @@ describe('a holder that stalls between its claim and the provider call', () => {
     await revokeConsent(stall, granted.tenantId, granted.grantId);
     await release(stall);
 
-    expect((await outcome).result).toMatchObject({
+    expect(await outcome).toMatchObject({
       outcome: 'CANCELLED',
       reason: 'CONSENT_REVOKED_BEFORE_SEND',
     });
     expect(sends).toHaveLength(0);
   });
+
+  it('skips the call and frees the claim when the renewal answers after the pre-call budget', async () => {
+    vi.useFakeTimers({ toFake: ['performance'] });
+    const queued = await queuedEmail();
+    const { sends, channels } = slowCountingEmail(0);
+    const { stall, outcome } = await stalledHolder(queued, channels);
+    // Hold the row so the renewal waits, then let the holder's clock run past the budget.
+    const row = await pool.connect();
+    await row.query('BEGIN');
+    await row.query(`SELECT 1 FROM notifications WHERE notification_id = $1 FOR UPDATE`, [
+      queued.notificationId,
+    ]);
+    await release(stall);
+    await untilRenewalWaits();
+    vi.advanceTimersByTime(PRE_CALL_BUDGET_MS + 1);
+    await row.query('COMMIT');
+    row.release();
+
+    expect(await outcome).toMatchObject({ ...deferred, reason: 'SEND_WINDOW_PASSED' });
+    expect(sends).toHaveLength(0);
+    expect(await claimToken(queued.notificationId)).toBeNull();
+  });
+
+  it('defers a job whose claim is lost before the call, so it never dead-letters and sends once', async () => {
+    // A trusted-contact send: its re-check audits the disclosure, which the stall below holds
+    // up after the worker's sweeps have run.
+    const queued = await grantedEmail();
+    const job = await new PostgresOutboxJobQueue(pool).enqueue({
+      jobType: 'notification.send',
+      payload: buildNotificationSendPayload(queued.notificationId, queued.disclosure),
+      tenantId: queued.tenantId,
+      maxAttempts: 1,
+    });
+    const config = loadConfig(validEnv());
+    const pass = (owner: string) => runJobWorker({ pool, config, owner, once: true, limit: 10 });
+    const jobRow = async () =>
+      (
+        await pool.query<{ status: string; attempts: number }>(
+          `SELECT status, attempts FROM job_outbox WHERE job_id = $1`,
+          [job.jobId],
+        )
+      ).rows[0];
+
+    for (let round = 0; round < 3; round += 1) {
+      await pool.query(`UPDATE job_outbox SET run_at = now() WHERE job_id = $1`, [job.jobId]);
+      const stall = await pool.connect();
+      await stall.query('BEGIN');
+      await stall.query('LOCK TABLE audit_events IN SHARE MODE');
+      const running = pass(`worker-${round}`);
+      await untilClaimed(queued.notificationId);
+      await takeClaim(queued.notificationId);
+      await release(stall);
+      await running;
+      expect(await jobRow()).toEqual({ status: 'PENDING', attempts: 0 });
+      // The other runner gives the send back without sending.
+      await pool.query(
+        `UPDATE notifications SET send_claim_token = NULL, send_claimed_at = NULL
+         WHERE notification_id = $1`,
+        [queued.notificationId],
+      );
+    }
+
+    await pool.query(`UPDATE job_outbox SET run_at = now() WHERE job_id = $1`, [job.jobId]);
+    await pass('worker-final');
+    expect((await jobRow())?.status).toBe('SUCCEEDED');
+    const sent = await findNotification(pool, queued.tenantId, queued.notificationId);
+    expect(sent?.deliveryStatus).toBe('SENT');
+    expect(await sentAudits(queued.notificationId)).toBe(1);
+  });
 });
 
-describe('a settlement made while the provider call runs', () => {
-  it('is not overwritten by the holder that comes back after its claim expired', async () => {
+describe('a provider call another writer settles around', () => {
+  it('keeps a settlement made during the call, and still audits the attempt once', async () => {
     const queued = await queuedEmail();
     const { sends, channels } = slowCountingEmail(500);
     const holder = attemptSend(pool, channels, {
@@ -526,11 +628,7 @@ describe('a settlement made while the provider call runs', () => {
       disclosure: queued.disclosure,
     });
     while (sends.length === 0) await new Promise((resolve) => setTimeout(resolve, 10));
-    await pool.query(
-      `UPDATE notifications SET send_claimed_at = now() - interval '1 hour'
-       WHERE notification_id = $1`,
-      [queued.notificationId],
-    );
+    await expireClaim(queued.notificationId);
     const settled = await settleUndeliverable(pool, {
       tenantId: queued.tenantId,
       notificationId: queued.notificationId,
@@ -540,7 +638,34 @@ describe('a settlement made while the provider call runs', () => {
 
     expect(await holder).toMatchObject({ outcome: 'SKIPPED', reason: 'CLAIM_LOST' });
     const after = await findNotification(pool, queued.tenantId, queued.notificationId);
-    expect(after?.deliveryStatus).toBe('UNDELIVERABLE');
-    expect(await sentAudits(queued.notificationId)).toBe(0);
+    expect(after).toMatchObject({ deliveryStatus: 'UNDELIVERABLE', attemptCount: 1 });
+    expect(await sentAudits(queued.notificationId)).toBe(1);
+  });
+
+  it('keeps a delivery callback that lands mid-send, and audits the attempt once', async () => {
+    const queued = await queuedEmail();
+    const { sends, channels } = slowCountingEmail(500);
+    const holder = attemptSend(pool, channels, {
+      tenantId: queued.tenantId,
+      notificationId: queued.notificationId,
+      disclosure: queued.disclosure,
+    });
+    while (sends.length === 0) await new Promise((resolve) => setTimeout(resolve, 10));
+    const callback = await applyDeliveryCallback(pool, {
+      tenantId: queued.tenantId,
+      notificationId: queued.notificationId,
+      providerEventId: `evt-${randomUUID()}`,
+      reportedStatus: 'DELIVERED',
+    });
+    expect(callback.applied).toBe(true);
+    // The callback leaves the live claim to its holder.
+    expect(await claimToken(queued.notificationId)).not.toBeNull();
+
+    expect(await holder).toMatchObject({ outcome: 'SKIPPED', reason: 'CLAIM_LOST' });
+    const after = await findNotification(pool, queued.tenantId, queued.notificationId);
+    expect(after).toMatchObject({ deliveryStatus: 'DELIVERED', attemptCount: 1 });
+    expect(after?.sentAt).toBeDefined();
+    expect(await sentAudits(queued.notificationId)).toBe(1);
+    expect(await claimToken(queued.notificationId)).toBeNull();
   });
 });
