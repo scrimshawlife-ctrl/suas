@@ -251,6 +251,9 @@ describe('two-admin approval (L5.4, L5.5)', () => {
     expect(code(await run(reviewer.headers, unnumbered.reviewId, 'approve', APPROVAL))).toBe(
       'LICENCE_FINGERPRINT_MISSING',
     );
+    expect(
+      code(await run(reviewer.headers, mismatch.reviewId, 'decline', { reason: 'NOT_A_REASON' })),
+    ).toBe('VALIDATION_FAILED');
     const declined = await run(reviewer.headers, mismatch.reviewId, 'decline', {
       reason: 'IDENTITY_MISMATCH',
     });
