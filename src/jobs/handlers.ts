@@ -184,10 +184,12 @@ export function notificationSendHandler(
       notificationId: parsed.notificationId,
       disclosure: parsed.disclosure,
     });
-    // Another runner holds the send: come back once its claim has settled or expired, so
-    // a runner that died mid-send leaves a job behind, and waiting spends no attempt.
-    if (result.outcome === 'SKIPPED' && result.reason === 'IN_FLIGHT') {
-      throw new DeferJobError('notification send in flight elsewhere', result.retryAfterMs ?? 0);
+    // No provider call was made and the send should run again: another runner holds it
+    // (come back once its claim settles or expires, so a runner that died mid-send leaves a
+    // job behind), or the claim was lost or ran short before the call. Waiting spends no
+    // attempt, so it can never dead-letter a send that was never tried.
+    if (result.outcome === 'SKIPPED' && result.retryAfterMs !== undefined) {
+      throw new DeferJobError(`notification send deferred: ${result.reason}`, result.retryAfterMs);
     }
     if (result.notification.deliveryStatus === 'FAILED') {
       throw new Error(`notification send failed: ${result.reason ?? 'provider refused'}`);
