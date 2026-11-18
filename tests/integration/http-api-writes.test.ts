@@ -8,12 +8,10 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
-import { findCurrentCase } from '../../src/coordination/index.js';
 import { createUser } from '../../src/identity/index.js';
-import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool, openRedCase } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
 
@@ -28,72 +26,9 @@ afterAll(async () => {
   await app.close();
 });
 
-const A0: Readonly<Record<string, string>> = {
-  sleep_manage_7d: 'NOT_AT_ALL',
-  reliable_connection_now: 'WELL_CONNECTED',
-  stress_manage_7d: 'NOT_AT_ALL',
-  basic_needs_48h: 'SECURE',
-  coping_24h: 'ABLE',
-  safe_now: 'YES',
-};
-
-interface QuestionJson {
-  question_id: string;
-  question_key: string;
-  options: { answer_option_id: string; option_key: string }[];
-}
-
-async function openRedCase() {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const tenantId = randomUUID();
-  const user = await createVerifiedUser(pool, {
-    tenantId,
-    email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  await ensurePublishedQv001(pool, user.userId);
-  const session = await createSession(pool, TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  const headers = { authorization: `Bearer ${session.credential}` };
-  const started = await app.server.inject({ method: 'POST', url: '/api/v0/check-ins', headers });
-  expect(started.statusCode).toBe(201);
-  const checkIn: { check_in_id: string; questions: QuestionJson[] } = started.json();
-  for (const question of checkIn.questions) {
-    const optionKey =
-      question.question_key === 'safe_now' ? 'NO_IMMEDIATE_HELP' : A0[question.question_key];
-    if (optionKey === undefined) continue;
-    const option = question.options.find((entry) => entry.option_key === optionKey);
-    if (option === undefined) throw new Error(`missing ${optionKey}`);
-    const saved = await app.server.inject({
-      method: 'POST',
-      url: `/api/v0/check-ins/${checkIn.check_in_id}/responses`,
-      headers,
-      payload: {
-        question_id: question.question_id,
-        answer_option_id: option.answer_option_id,
-      },
-    });
-    expect(saved.statusCode).toBe(200);
-  }
-  const completed = await app.server.inject({
-    method: 'POST',
-    url: `/api/v0/check-ins/${checkIn.check_in_id}/commands/complete`,
-    headers,
-  });
-  expect(completed.statusCode).toBe(200);
-  const supportCase = await findCurrentCase(pool, tenantId, user.userId);
-  if (supportCase === undefined) throw new Error('expected RED case');
-  return { pool, tenantId, user, headers, supportCase };
-}
-
 /** A signed-in person in the launch county who can accept requests. */
 async function accepterFor(tenantId: string) {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
+  const pool = appPool(app);
   const accepter = await createUser(pool, {
     tenantId,
     email: syntheticEmail(`acc-${randomUUID().slice(0, 8)}`),
@@ -121,7 +56,7 @@ async function acceptRequest(headers: Record<string, string>, srId: string) {
 
 describe('Service Request create + SUBMIT', () => {
   it('creates and submits for the veteran owner with idempotent replay', async () => {
-    const { headers, supportCase } = await openRedCase();
+    const { headers, supportCase } = await openRedCase(app);
     const key = `sr-create-${randomUUID()}`;
     const created = await app.server.inject({
       method: 'POST',
@@ -164,8 +99,8 @@ describe('Service Request create + SUBMIT', () => {
   });
 
   it('hides create against another tenant case', async () => {
-    const a = await openRedCase();
-    const b = await openRedCase();
+    const a = await openRedCase(app);
+    const b = await openRedCase(app);
     const response = await app.server.inject({
       method: 'POST',
       url: `/api/v0/cases/${a.supportCase.caseId}/service-requests`,
@@ -191,7 +126,7 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
   }
 
   async function submittedRequest() {
-    const opened = await openRedCase();
+    const opened = await openRedCase(app);
     const created = await app.server.inject({
       method: 'POST',
       url: `/api/v0/cases/${opened.supportCase.caseId}/service-requests`,
@@ -230,7 +165,7 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
   });
 
   it('refuses a helper creating a request on the case, so SUBMIT stays with the requester', async () => {
-    const { tenantId, supportCase, headers } = await openRedCase();
+    const { tenantId, supportCase, headers } = await openRedCase(app);
     const first = await app.server.inject({
       method: 'POST',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
@@ -271,7 +206,7 @@ describe('DISPATCH.md §4 — accepter commands need the person who accepted', (
 
 describe('Follow-Ups', () => {
   it('lets the accepter create and complete a follow-up', async () => {
-    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase(app);
     const { accepter: responder, headers } = await accepterFor(tenantId);
     const sr = await app.server.inject({
       method: 'POST',
@@ -331,7 +266,7 @@ describe('Follow-Ups', () => {
   });
 
   it('forbids the requester from creating follow-ups', async () => {
-    const { headers, supportCase, user } = await openRedCase();
+    const { headers, supportCase, veteran: user } = await openRedCase(app);
     const response = await app.server.inject({
       method: 'POST',
       url: '/api/v0/follow-ups',
@@ -348,7 +283,7 @@ describe('Follow-Ups', () => {
 
   // R12.8: the documented 404 for a Case the caller cannot reach, same as a missing one.
   it('answers 404 to someone who has not accepted, and for a missing Case', async () => {
-    const { tenantId, supportCase } = await openRedCase();
+    const { tenantId, supportCase } = await openRedCase(app);
     const { accepter: outsider, headers } = await accepterFor(tenantId);
     for (const caseId of [supportCase.caseId, randomUUID()]) {
       const response = await app.server.inject({
@@ -369,7 +304,7 @@ describe('Follow-Ups', () => {
 
 describe('Notifications', () => {
   it('lists an empty inbox and sets channel preferences', async () => {
-    const { headers } = await openRedCase();
+    const { headers } = await openRedCase(app);
     const listed = await app.server.inject({
       method: 'GET',
       url: '/api/v0/notifications',

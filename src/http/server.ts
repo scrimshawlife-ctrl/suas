@@ -71,6 +71,7 @@ import {
 } from './error-envelope.js';
 import { failureRoute, serializeError, serializeRequest } from './request-logging.js';
 import { registerOriginPolicy } from './origin-policy.js';
+import { registerNulGuard } from './json-input.js';
 import { demoFixedCodeFor } from '../auth/demo-fixed-code.js';
 
 export interface ServerDependencies {
@@ -171,6 +172,8 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
     allowlist: new Set(deps.config.corsAllowedOrigins),
     environment: deps.config.environment,
   });
+  // API.md §6: U+0000 in any parsed input is a malformed request on every route.
+  registerNulGuard(app);
   registerErrorHandlers(app);
 
   if (deps.pool !== undefined && deps.config.vaSandboxOAuth.enabled) {

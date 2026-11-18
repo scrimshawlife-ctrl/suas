@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { RadioCard } from './RadioCard';
 
-export interface RadioCardOption {
+interface RadioCardOption {
   value: string;
   title: ReactNode;
   description?: ReactNode;

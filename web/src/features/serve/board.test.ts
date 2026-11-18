@@ -7,11 +7,11 @@ import {
   activeHelping,
   boardSubtitle,
   classifyAcceptError,
-  firstName,
   helpingNowCount,
   relativeTime,
   toOpenCard,
 } from './board';
+import { firstName } from '../../lib/people';
 
 const NOW = Date.parse('2026-11-04T12:00:00Z');
 

@@ -13,6 +13,7 @@ import { requireData } from '../../api/require-data';
 import { useSessionToken } from '../../api/token-store';
 import { latestAlerts } from './alerts';
 import type { Schemas } from '../../api/types';
+import { BOARD_REFRESH_MS } from '../../app/poll-intervals';
 import type { ContactSave, NextStep } from './case-logic';
 
 /** Serve-only resources. They live here because the shared key file is not ours to edit. */
@@ -24,8 +25,6 @@ const caseKeys = {
 };
 
 const BOARD_PAGE_SIZE = 20;
-/** The open board refreshes about every 30 seconds so taken requests drop off. */
-const BOARD_REFRESH_MS = 30_000;
 
 /** GET /service-requests?ownership=open, paged by `next_cursor`. */
 export function useOpenRequests() {

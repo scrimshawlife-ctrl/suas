@@ -1,11 +1,13 @@
 import { expect, test } from '../fixtures';
-import { requestRows, seedRequests, sendPeerRequest, tag, veteran } from './request';
+import { requestRows, seedRequests, sendPeerRequest } from './request';
+import { tag } from '../helpers';
+import { newVeteran } from '../people';
 
 test("Home's Your requests matches the full list, links to each request, and See all opens the list", async ({
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
 
   // No requests yet: Home says so, and there is no See all.
   const region = page.getByRole('region', { name: 'Your requests' });
@@ -67,7 +69,7 @@ test('/requests pages past 20 requests with Show more, newest first, without rep
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const run = tag();
   const summaries = Array.from({ length: 23 }, (_, n) => `Paged ${run} #${String(n + 1)}`);
   await seedRequests(page, request, summaries);
@@ -101,7 +103,7 @@ test('a cancelled request changes its chip on Home and in the list at the same t
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const kept = `Keep this one ${tag()}`;
   const dropped = `Cancel this one ${tag()}`;
   await sendPeerRequest(page, kept);
@@ -129,7 +131,7 @@ test('when the list cannot load, /requests says so and Try again recovers', asyn
   allow,
 }) => {
   allow.push(/service-requests\?.* :: 500/, /status of 500/);
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Someone to talk to ${tag()}`;
   await sendPeerRequest(page, summary);
   let fail = true;
@@ -155,7 +157,7 @@ test('when the list cannot load, /requests says so and Try again recovers', asyn
 });
 
 test("Home's active request card cancels the request in place", async ({ browser, request }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Someone to talk to ${tag()}`;
   await sendPeerRequest(page, summary);
   await page.getByRole('link', { name: 'Back to home' }).click();
