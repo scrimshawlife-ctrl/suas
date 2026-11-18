@@ -247,6 +247,36 @@ describe('two-admin approval (L5.4, L5.5)', () => {
     expect(events.rows[2]?.payload).toEqual({ outcome: 'APPROVAL_PROPOSED', decline_reason: null });
   });
 
+  // The checks are by eye (L5.3), so the body is the admin's attestation: the route takes it
+  // only with every answer true (approvalBody), and a partial one changes nothing.
+  it('refuses an approve or confirm whose checklist is not all true, and decides nothing', async () => {
+    const tenantId = randomUUID();
+    const veteran = await submitted(tenantId);
+    const first = await admin(tenantId);
+    const second = await admin(tenantId);
+    const partial = [
+      { ...APPROVAL, checklist: { ...APPROVAL.checklist, selfie_matches: false } },
+      { ...APPROVAL, checklist: { ...APPROVAL.checklist, security_features: false } },
+      { ...APPROVAL, checklist: { ...APPROVAL.checklist, whole_card: false } },
+      { ...APPROVAL, checklist: { selfie_matches: true, security_features: true } },
+      { designation_visible: true },
+    ];
+
+    for (const body of partial)
+      expect(code(await run(first.headers, veteran.reviewId, 'approve', body))).toBe(
+        'VALIDATION_FAILED',
+      );
+    const detail = () => get(second.headers, `${BASE}/${veteran.reviewId}`);
+    expect((await detail()).json()).toMatchObject({ status: 'AWAITING_REVIEW', approved_by: null });
+
+    expect((await run(first.headers, veteran.reviewId, 'approve', APPROVAL)).statusCode).toBe(200);
+    for (const body of partial)
+      expect(code(await run(second.headers, veteran.reviewId, 'confirm', body))).toBe(
+        'VALIDATION_FAILED',
+      );
+    expect((await detail()).json()).toMatchObject({ status: 'AWAITING_CONFIRMATION' });
+  });
+
   it('refuses approval without YES identity or a fingerprint, but allows a decline', async () => {
     const tenantId = randomUUID();
     const reviewer = await admin(tenantId);

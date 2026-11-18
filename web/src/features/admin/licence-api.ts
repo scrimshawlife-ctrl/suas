@@ -66,10 +66,7 @@ export function useLicenceImage(id: string, side: LicenceImageSide, enabled: boo
 }
 
 /** The by-eye checklist and the designation answer, all true, sent with approve and confirm. */
-export interface LicenceApproval {
-  designation_visible: true;
-  checklist: { selfie_matches: true; security_features: true; whole_card: true };
-}
+export type LicenceApproval = Schemas['LicenceApproval'];
 
 type LicenceCommand =
   | { name: 'approve' | 'confirm'; body: LicenceApproval }
@@ -81,12 +78,14 @@ type LicenceCommand =
  * POST /admin/licence-reviews/{id}/commands/{approve|confirm|decline|revoke|recuse} with one
  * Idempotency-Key per action (required by the route). A decision drops any image this page
  * holds, since the server deletes them; a 409 or 403 rereads the review to show where it is.
+ * An empty `id` (no conflicting review yet) fails before any request or key is made.
  */
 export function useLicenceCommand(id: string) {
   const queryClient = useQueryClient();
   const key = useCommandKey();
   return useMutation({
     mutationFn: async (command: LicenceCommand) => {
+      if (id === '') throw new Error(`No licence review to ${command.name}`);
       const options = { params: { path: { id } }, headers: key.headers(command) };
       switch (command.name) {
         case 'approve': {

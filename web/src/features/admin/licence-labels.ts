@@ -121,6 +121,11 @@ export const REVOKE_REASONS = [
 
 export type RevokeReason = (typeof REVOKE_REASONS)[number]['value'];
 
+/** A revoke reason from untyped input, or null when it is not one of REVOKE_REASONS. */
+export function parseRevokeReason(value: string): RevokeReason | null {
+  return REVOKE_REASONS.find((reason) => reason.value === value)?.value ?? null;
+}
+
 export function revokeReasonLabel(reason: string | null): string {
   return REVOKE_REASONS.find(({ value }) => value === reason)?.label ?? 'Not stated';
 }
