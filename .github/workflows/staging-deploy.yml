@@ -118,6 +118,7 @@ jobs:
           name: staging-release
           path: staging-release.tar
           if-no-files-found: error
+          # The deploy job may wait up to 30 days for approval, or be re-run, in this same run.
           retention-days: 30
 
   plan:
