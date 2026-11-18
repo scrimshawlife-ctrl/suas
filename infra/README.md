@@ -100,9 +100,13 @@ only the normalized result and failure class (`src/identity/va-confirmation-lamb
   constant, not a setting) and reads the key at run time from the secret named by the `VaVerifySecretName`
   output, cached per container for at most five minutes and read again sooner if VA refuses the key. The key
   is not in the template, any Lambda environment or any log. The API holds neither the key nor the base URL.
-- It refuses outside `STAGING` (LOCAL `sandbox` calls VA directly), and before sending anything it checks the
-  vendored projection is the approved one. It logs only the D035 §13 telemetry (status, failure class, latency bucket), never a projection
-  value or a VA response body.
+- It refuses outside `STAGING`. LOCAL `sandbox` has no relay function and calls the VA sandbox directly from
+  the API process, which has internet access there; STAGING must use this function because the API's subnets
+  have no internet egress (`src/identity/va-confirmation-factory.ts`).
+- Before sending anything it checks the vendored projection is the approved one, as the API does when it starts.
+  The approval record is part of the deployed code, so revoking it means a redeploy (with the updated record,
+  or without `vaSandbox`); every container then runs the new code. It logs only the D035 §13 telemetry (status,
+  failure class, latency bucket), never a projection value or a VA response body.
 - Its own egress is not host-filtered: the control is what it holds, not the network path (W9 item 4).
 - Until the secret holds the real key, every confirm answers `UNAVAILABLE` / `CONFIGURATION_INVALID`, which
   never counts toward the attempt limits. Self-attestation stays available. Each such refusal is logged as
