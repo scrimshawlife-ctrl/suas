@@ -5,13 +5,15 @@
  */
 
 import type { Pool } from 'pg';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
 import {
   assertJobPortConformance,
   createJobQueue,
+  deferJob,
   DurableJobQueueUnavailableError,
   InMemoryJobQueue,
+  reopenDeadLetter,
 } from '../../src/jobs/index.js';
 import { validEnv } from '../helpers/env.js';
 
@@ -90,6 +92,44 @@ describe('InMemoryJobQueue', () => {
       'distinct_work_gets_distinct_ids',
       'idempotency_key_deduplicates',
       'idempotency_is_tenant_scoped',
+    ]);
+  });
+});
+
+describe('deferring a job', () => {
+  afterEach(() => vi.useRealTimers());
+
+  /** A database stand-in that keeps the `run_at` each UPDATE was given (its last parameter). */
+  function recordingDb() {
+    const runAts: unknown[] = [];
+    const db = {
+      query: (_text: string, values: readonly unknown[] = []) => {
+        runAts.push(values[values.length - 1]);
+        return Promise.resolve({ rowCount: 1, rows: [] } as never);
+      },
+    };
+    return { db, runAts };
+  }
+
+  it('holds the due time to 15 minutes ahead, however long or short the delay', async () => {
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00.000Z'), toFake: ['Date'] });
+    const { db, runAts } = recordingDb();
+    const lease = { jobId: 'job-1', leaseOwner: 'owner-1', attempts: 1 };
+
+    await deferJob(db, lease, 45_000);
+    await deferJob(db, lease, 10 * 365 * 24 * 3_600_000);
+    await reopenDeadLetter(db, lease, Number.MAX_SAFE_INTEGER);
+    await reopenDeadLetter(db, lease, Number.POSITIVE_INFINITY);
+    await deferJob(db, lease, -60_000);
+    await deferJob(db, lease, Number.NaN);
+
+    expect(runAts).toEqual([
+      '2026-01-01T00:00:45.000Z',
+      '2026-01-01T00:15:00.000Z',
+      '2026-01-01T00:15:00.000Z',
+      '2026-01-01T00:15:00.000Z',
+      '2026-01-01T00:00:00.000Z',
+      '2026-01-01T00:00:00.000Z',
     ]);
   });
 });

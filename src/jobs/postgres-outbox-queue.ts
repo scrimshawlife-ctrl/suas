@@ -25,6 +25,18 @@ import type {
 const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_LEASE_MS = 60_000;
 
+/**
+ * The longest a deferred job waits. Today's deferrals are one send-claim window (45 s) or
+ * less; the cap keeps a buggy delay from parking a job for years or overflowing the date.
+ */
+const MAX_DEFER_MS = 15 * 60_000;
+
+/** When a deferred job is due: `delayMs` from now, held to 0..MAX_DEFER_MS (NaN counts as 0). */
+function deferredRunAt(delayMs: number): string {
+  const delay = Number.isNaN(delayMs) ? 0 : Math.min(Math.max(delayMs, 0), MAX_DEFER_MS);
+  return new Date(Date.now() + delay).toISOString();
+}
+
 export interface JobOutboxRow {
   readonly jobId: string;
   readonly tenantId: string | undefined;
@@ -285,13 +297,12 @@ export async function holdJobLease<T>(
 
 /** Put a held job back to PENDING after `delayMs`, giving back the attempt its claim took. */
 export async function deferJob(db: Queryable, lease: JobLease, delayMs: number): Promise<boolean> {
-  const runAt = new Date(Date.now() + delayMs);
   const result = await db.query(
     `UPDATE job_outbox
      SET status = 'PENDING', attempts = GREATEST(attempts - 1, 0), run_at = $4,
          leased_until = NULL, lease_owner = NULL, updated_at = now()
      WHERE ${LEASE_HELD}`,
-    [...leaseParams(lease), runAt.toISOString()],
+    [...leaseParams(lease), deferredRunAt(delayMs)],
   );
   return (result.rowCount ?? 0) > 0;
 }
@@ -302,12 +313,11 @@ export async function reopenDeadLetter(
   job: Pick<JobOutboxRow, 'jobId' | 'attempts'>,
   delayMs: number,
 ): Promise<boolean> {
-  const runAt = new Date(Date.now() + delayMs);
   const result = await db.query(
     `UPDATE job_outbox
      SET status = 'PENDING', attempts = GREATEST(attempts - 1, 0), run_at = $3, updated_at = now()
      WHERE job_id = $1 AND status = 'DEAD_LETTER' AND attempts = $2`,
-    [job.jobId, job.attempts, runAt.toISOString()],
+    [job.jobId, job.attempts, deferredRunAt(delayMs)],
   );
   return (result.rowCount ?? 0) > 0;
 }
