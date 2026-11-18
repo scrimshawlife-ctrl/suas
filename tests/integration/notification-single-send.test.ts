@@ -774,3 +774,27 @@ describe('a provider call another writer settles around', () => {
     expect(await claimToken(queued.notificationId)).toBeNull();
   });
 });
+
+describe('settling an exhausted send UNDELIVERABLE', () => {
+  it('audits the failure reason on one line and cut to 300 characters', async () => {
+    const queued = await queuedEmail();
+    const reason = `relay said:\n\u0000\u001b[31mrefused\r\t${'x'.repeat(5_000)}`;
+
+    const settled = await settleUndeliverable(pool, {
+      tenantId: queued.tenantId,
+      notificationId: queued.notificationId,
+      failureReason: reason,
+    });
+    expect(settled.outcome).toBe('SETTLED');
+
+    const audit = await pool.query<{ payload: { failure_reason: string } }>(
+      `SELECT payload FROM audit_events
+        WHERE aggregate_id = $1 AND event_type = 'NOTIFICATION_UNDELIVERABLE'`,
+      [queued.notificationId],
+    );
+    const recorded = audit.rows.map((row) => row.payload.failure_reason);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toHaveLength(300);
+    expect(recorded[0]?.startsWith('relay said:   [31mrefused  xxx')).toBe(true);
+  });
+});

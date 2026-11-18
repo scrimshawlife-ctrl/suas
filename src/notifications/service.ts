@@ -994,7 +994,8 @@ async function recordUndeliverableAudit(
       channel: notification.channel,
       reason: notification.reason,
       attempt_count: notification.attemptCount,
-      failure_reason: failureReason.slice(0, 300),
+      // A job's last error can carry provider text: one line, at most 300 characters.
+      failure_reason: failureReason.replace(/\p{Cc}/gu, ' ').slice(0, 300),
     },
   });
 }
