@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
@@ -105,5 +105,25 @@ describe('Consent templates admin page (R9.3)', () => {
       'It may already be published.',
     );
     await waitFor(() => expect(client.GET).toHaveBeenCalledTimes(2));
+  });
+
+  // With no key to dedupe on, the page itself must send one publish per confirm.
+  it('sends one publish on a same-tick double click on the confirm button', async () => {
+    client.POST.mockReturnValue(new Promise(() => undefined));
+    const user = userEvent.setup();
+    renderPage(<AdminConsentTemplatesPage />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Publish red-alert-trusted-contact@2' }),
+    );
+    const confirm = within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Publish',
+    });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(await screen.findByRole('button', { name: 'Working…' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(client.POST).toHaveBeenCalledTimes(1);
   });
 });

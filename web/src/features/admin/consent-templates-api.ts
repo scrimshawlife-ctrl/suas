@@ -38,7 +38,10 @@ export function useCreateConsentTemplate() {
   });
 }
 
-/** Publish a DRAFT version; the key's earlier published version is superseded. */
+/**
+ * Publish a DRAFT version; the key's earlier published version is superseded. No
+ * Idempotency-Key: the route takes none, and a repeat finds no DRAFT and answers 409.
+ */
 export function usePublishConsentTemplate() {
   const queryClient = useQueryClient();
   return useMutation({
