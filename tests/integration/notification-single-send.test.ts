@@ -284,6 +284,40 @@ describe('a send another runner holds', () => {
     expect(await sentAudits(queued.notificationId)).toBe(1);
   });
 
+  it('does not call the provider when its claim was taken while it stalled before the send', async () => {
+    const queued = await queuedEmail();
+    const { sends, channels } = slowCountingEmail(0);
+    // Stall the holder's consent re-check, as a slow or partitioned database would.
+    const stall = await pool.connect();
+    await stall.query('BEGIN');
+    await stall.query('LOCK TABLE users IN ACCESS EXCLUSIVE MODE');
+    const holder = attemptSend(pool, channels, {
+      tenantId: queued.tenantId,
+      notificationId: queued.notificationId,
+      disclosure: queued.disclosure,
+    });
+    const claimed = async () =>
+      (
+        await stall.query<{ token: string | null }>(
+          `SELECT send_claim_token AS token FROM notifications WHERE notification_id = $1`,
+          [queued.notificationId],
+        )
+      ).rows[0]?.token;
+    while ((await claimed()) === null) await sleep(10);
+    // Meanwhile the stalled claim expires and another runner claims the send.
+    await stall.query(
+      `UPDATE notifications SET send_claim_token = $2, send_claimed_at = now()
+       WHERE notification_id = $1`,
+      [queued.notificationId, randomUUID()],
+    );
+    await stall.query('COMMIT');
+    stall.release();
+
+    const result = await holder;
+    expect(result).toMatchObject({ outcome: 'SKIPPED', reason: 'CLAIM_LOST' });
+    expect(sends).toHaveLength(0);
+  });
+
   it('re-runs a dead-lettered job after a crashed holder claim expires, so the send settles', async () => {
     const queued = await queuedEmail();
     const hanging = new Map<NotificationChannel, NotificationChannelPort>([

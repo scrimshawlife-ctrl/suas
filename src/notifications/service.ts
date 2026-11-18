@@ -397,8 +397,12 @@ function buildOutboundMessage(
   return { ...base, body: rendered.text };
 }
 
-/** A claim older than this is presumed dead; it outlasts any provider call (relay waits 28 s). */
-const SEND_CLAIM_MS = 45_000;
+/**
+ * A claim older than this is presumed dead. It is renewed just before the provider call, so
+ * it must outlast the longest bounded provider call (relay invoke, 28 s) plus the settle;
+ * tests/unit/send-claim-window.test.ts pins that.
+ */
+export const SEND_CLAIM_MS = 45_000;
 
 /** Why a Notification needs no further attempt: it is settled or cancelled. */
 function skipReason(notification: Notification): string | undefined {
@@ -431,6 +435,20 @@ async function claimSend(
   );
   const row = result.rows[0];
   return row === undefined ? undefined : { notification: toNotification(row), token };
+}
+
+/**
+ * Restart a held claim's clock just before the provider call, so time spent before it (the
+ * consent re-check on a slow database) cannot leave an expired claim another runner retakes
+ * mid-call. False when another runner already holds the send: this one must not call.
+ */
+async function renewSend(pool: Pool, notification: Notification, token: string): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE notifications SET send_claimed_at = now()
+     WHERE tenant_id = $1 AND notification_id = $2 AND send_claim_token = $3`,
+    [notification.tenantId, notification.notificationId, token],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 /** Drop a claim whose attempt threw before settling, so a retry can claim at once. */
@@ -526,6 +544,9 @@ export async function attemptSend(
       throw new Error('Notification has no destination or recipient.');
     }
 
+    if (!(await renewSend(pool, notification, token))) {
+      return await claimLost(pool, input, notification);
+    }
     acknowledgement = await port.send(
       buildOutboundMessage(notification, destination, input.renderBody),
     );
