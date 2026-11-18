@@ -1,10 +1,12 @@
 import { expect, test } from '../fixtures';
-import { draftTurns, scriptModel } from '../helpers';
-import { idFromUrl, requestRows, tag, veteran } from './request';
+import { draftTurns, scriptModel, tag } from '../helpers';
+import { idFromUrl, requestRows } from './request';
+import { newVeteran } from '../people';
 
 type Category = Parameters<typeof draftTurns>[0]['category'];
 
-// FOOD through the assistant (and its missing meeting place) is covered by 01-request.spec.ts.
+// FOOD through the assistant (and its missing meeting place) is covered by
+// 01-request-through-assistant.spec.ts.
 const CASES: { category: Category; label: string; needsPlace: boolean }[] = [
   { category: 'TRANSPORTATION', label: 'Transportation', needsPlace: true },
   { category: 'SHELTER', label: 'Housing', needsPlace: true },
@@ -16,7 +18,7 @@ for (const { category, label, needsPlace } of CASES) {
     browser,
     request,
   }) => {
-    const page = await veteran(browser, request, { name: 'Rory Q.' });
+    const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
     const summary = `${label} help ${tag()}`;
 
     await page.goto('/request');
@@ -75,7 +77,7 @@ test('a question first, then a follow-up on the same draft: the second message d
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   const summary = `Someone to talk to ${tag()}`;
   // Turn 1 only asks a question (NO_DRAFT); turn 2 drafts the request on the same draft.
   await scriptModel(request, [
@@ -114,7 +116,7 @@ test('a question first, then a follow-up on the same draft: the second message d
 });
 
 test('a draft field is saved with PATCH when it loses focus', async ({ browser, request }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   await scriptModel(request, draftTurns({ category: 'FOOD', summary: `Groceries ${tag()}` }));
   await page.goto('/request');
   await page.getByLabel('Tell us what you need').fill('I need food.');
@@ -150,7 +152,7 @@ test('edits on the draft card (kind of help, summary, timing, place) are what ge
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   const summary = `Ride to the clinic ${tag()}`;
   const edited = `Someone to talk to ${tag()}`;
   await scriptModel(request, draftTurns({ category: 'TRANSPORTATION', summary }));
@@ -178,7 +180,7 @@ test('edits on the draft card (kind of help, summary, timing, place) are what ge
 });
 
 test('a follow-up message keeps the edits made on the draft card', async ({ browser, request }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   const summary = `Groceries ${tag()}`;
   await scriptModel(request, [
     ...draftTurns({ category: 'FOOD', summary }),
@@ -209,7 +211,7 @@ test('double-clicking Send request on the draft card makes one request', async (
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   await scriptModel(request, draftTurns({ category: 'PEER_SUPPORT', summary: `Talk ${tag()}` }));
   await page.goto('/request');
   await page.getByLabel('Tell us what you need').fill('I want to talk to someone.');
@@ -228,7 +230,7 @@ test('Back after sending does not resend or show the sent draft as new; Forward 
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   const summary = `Someone to talk to ${tag()}`;
   await scriptModel(request, draftTurns({ category: 'PEER_SUPPORT', summary }));
   await page.goto('/request');

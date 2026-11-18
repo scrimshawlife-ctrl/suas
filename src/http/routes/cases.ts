@@ -23,6 +23,7 @@ import {
   type SupportCase,
 } from '../../coordination/index.js';
 import { assertAccepter, resolveCaseAccess } from '../case-access.js';
+import { jsonDepth } from '../json-input.js';
 import { findUserById, requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import type { JsonObject } from '../../jobs/index.js';
@@ -70,11 +71,22 @@ const settlementParams = z.object({
   id: z.string().uuid(),
   settlement_id: z.string().uuid(),
 });
+/**
+ * Deepest nesting one Settlement section may hold. SETTLEMENT.md §2 content references
+ * canonical records (`{ "service_requests": [{ "id", "status" }] }` is depth 3); 16 leaves
+ * ample room and keeps the stored jsonb far from PostgreSQL's stack limit (54001).
+ */
+const SETTLEMENT_SECTION_MAX_DEPTH = 16;
+const settlementSection = z
+  .record(z.string(), z.unknown())
+  .refine((section) => jsonDepth(section) <= SETTLEMENT_SECTION_MAX_DEPTH, {
+    message: `Nests deeper than ${String(SETTLEMENT_SECTION_MAX_DEPTH)} levels.`,
+  });
 const resolveBody = z.object({
-  requested: z.record(z.string(), z.unknown()),
-  occurred: z.record(z.string(), z.unknown()),
-  fulfilled: z.record(z.string(), z.unknown()),
-  unresolved: z.record(z.string(), z.unknown()),
+  requested: settlementSection,
+  occurred: settlementSection,
+  fulfilled: settlementSection,
+  unresolved: settlementSection,
   // The author, the accepter and the requester's confirmation are derived on the server.
   // A client that still sends authored_by, accepted_by_user_id or veteran_confirmed_by
   // has them dropped by this schema (zod strips unknown keys, as everywhere in this API).

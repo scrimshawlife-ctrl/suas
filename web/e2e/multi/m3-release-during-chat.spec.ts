@@ -4,9 +4,9 @@
  */
 
 import { expect, test } from '../fixtures';
-import { runClock } from '../helpers';
+import { runClock, tag } from '../helpers';
 import { history, pair, say } from '../chat/chat';
-import { release, tag } from '../serve/serve';
+import { release } from '../serve/serve';
 
 test.describe.configure({ timeout: 180_000 });
 
