@@ -8,7 +8,17 @@
  */
 
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadMigrationFiles } from '../../src/db/migration-files.js';
@@ -59,9 +69,18 @@ export function assemblyDigest(dir: string): string {
   walk(dir);
   const hash = createHash('sha256');
   for (const file of files) {
-    const executable = (lstatSync(file).mode & 0o111) !== 0 ? 'x' : '-';
-    hash.update(relative(dir, file)).update('\0').update(executable).update('\0');
-    hash.update(readFileSync(file)).update('\0');
+    // O_NOFOLLOW plus fstat: mode and bytes come from one open regular file, so a file swapped
+    // for a symlink after the walk's check fails here instead of being followed.
+    const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const stat = fstatSync(fd);
+      if (!stat.isFile()) throw new Error(`cdk.out entry is not a file: ${relative(dir, file)}`);
+      const executable = (stat.mode & 0o111) !== 0 ? 'x' : '-';
+      hash.update(relative(dir, file)).update('\0').update(executable).update('\0');
+      hash.update(readFileSync(fd)).update('\0');
+    } finally {
+      closeSync(fd);
+    }
   }
   return hash.digest('hex');
 }

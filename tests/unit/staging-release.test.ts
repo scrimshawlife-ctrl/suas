@@ -3,10 +3,11 @@
  * and worker results that must match the build, and refusal of a schema-incompatible rollback.
  */
 
-import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import type * as Fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   assemblyDigest,
   assemblyStacks,
@@ -25,6 +26,18 @@ import {
 } from '../../scripts/ci/staging-release.js';
 import { EXPECTED_SCHEMA_VERSION } from '../../src/db/schema-version.js';
 import { SPEC_VERSION } from '../../src/release/pins.js';
+
+// Lets a test run code right after the digest's lstat check, to swap a file for a symlink.
+const afterLstat = vi.hoisted(() => ({ hook: undefined as ((path: string) => void) | undefined }));
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof Fs>();
+  const lstatSync = ((path: string) => {
+    const stat = actual.lstatSync(path);
+    afterLstat.hook?.(path);
+    return stat;
+  }) as typeof actual.lstatSync;
+  return { ...actual, lstatSync, default: { ...actual, lstatSync } };
+});
 
 const ACCOUNT = '123456789012';
 const SHA = 'b'.repeat(40);
@@ -145,6 +158,25 @@ describe('release record', () => {
     const toDir = assembly();
     symlinkSync(outside, join(toDir, 'asset.dir'));
     expect(() => assemblyDigest(toDir)).toThrow(/symlink/);
+  });
+
+  // A file swapped for a symlink after the lstat check must not be followed out of cdk.out.
+  it('refuses a file replaced by a symlink after it was checked', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'suas-outside-'));
+    writeFileSync(join(outside, 'secret'), 'not part of the build');
+    const dir = assembly();
+    const target = join(dir, 'asset.abc', 'api.mjs');
+    afterLstat.hook = (path) => {
+      if (path !== target) return;
+      afterLstat.hook = undefined;
+      rmSync(target);
+      symlinkSync(join(outside, 'secret'), target);
+    };
+    try {
+      expect(() => assemblyDigest(dir)).toThrow(/symlink|ELOOP/);
+    } finally {
+      afterLstat.hook = undefined;
+    }
   });
 
   it('refuses a backend template without maintenance controls', () => {
