@@ -4,6 +4,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { connect, type AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession, elevateSession } from '../../src/auth/index.js';
@@ -14,6 +15,7 @@ import {
 } from '../../src/consent/index.js';
 import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
 import { createDraft } from '../../src/intake/drafts.js';
+import { API_PREFIX } from '../../src/release/pins.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
@@ -70,11 +72,20 @@ async function ok(reply: Promise<Reply>, label: string) {
 
 /** "<status> <error code>", so one assertion shows every probe's outcome at once. */
 function outcome(reply: Reply): string {
-  const code = (JSON.parse(reply.body) as { error?: { code?: string } }).error?.code ?? '-';
-  return `${String(reply.statusCode)} ${code}`;
+  return `${String(reply.statusCode)} ${errorCode(reply.body)}`;
 }
 
-const REJECTED = '400 VALIDATION_FAILED';
+/** The envelope's error code, or '-' for a body that is not one (an HTML page, a redirect). */
+function errorCode(body: string): string {
+  try {
+    return (JSON.parse(body) as { error?: { code?: string } }).error?.code ?? '-';
+  } catch {
+    return '-';
+  }
+}
+
+const VALIDATION = 'VALIDATION_FAILED';
+const REJECTED = `400 ${VALIDATION}`;
 
 async function person(tenantId: string, label: string, verified: boolean) {
   const user = await createUser(pool(), {
@@ -296,37 +307,200 @@ describe('U+0000 in free text', () => {
   });
 });
 
-describe('settlement content on POST /cases/:id/commands/resolve', () => {
-  it('answers 400 for U+0000 in keys or values and for over-deep content, then still resolves', async () => {
-    const { caseId, P1 } = await resolvableCase();
-    const url = `/api/v0/cases/${caseId}/commands/resolve`;
-    const settlement = (requested: string) =>
-      `{"requested":${requested},"occurred":{},"fulfilled":{},"unresolved":{}}`;
+describe('U+0000 outside the JSON body', () => {
+  /**
+   * One raw HTTP/1.1 request; resolves with the status line and body. inject() hands headers
+   * straight to Fastify, skipping Node's HTTP parser, so a header probe needs a real socket.
+   */
+  function rawRequest(port: number, head: string[], body: string) {
+    return new Promise<{ status: string; body: string }>((resolve, reject) => {
+      const socket = connect(port, '127.0.0.1', () => {
+        socket.write(
+          [...head, `content-length: ${String(Buffer.byteLength(body))}`, 'connection: close']
+            .map((line) => `${line}\r\n`)
+            .join('') + `\r\n${body}`,
+        );
+      });
+      let received = '';
+      socket.on('data', (chunk: Buffer) => (received += chunk.toString('utf8')));
+      socket.on('close', () => {
+        const [headPart = '', bodyPart = ''] = received.split('\r\n\r\n');
+        resolve({ status: headPart.split('\r\n')[0] ?? '', body: bodyPart });
+      });
+      socket.on('error', reject);
+    });
+  }
 
+  it('refuses NUL in any header the API reads at the HTTP parser, before a handler runs', async () => {
+    const w = await world();
+    await app.server.listen({ port: 0, host: '127.0.0.1' });
+    const { port } = app.server.server.address() as AddressInfo;
+    const url = `${API_PREFIX}/service-requests/${w.accepted}/chat/messages`;
+    const headers = (overrides: Headers) =>
+      Object.entries({
+        host: 'localhost',
+        authorization: w.A.headers.authorization ?? '',
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+        ...overrides,
+      }).map(([name, value]) => `${name}: ${value}`);
+    const post = (label: string, overrides: Headers) =>
+      rawRequest(
+        port,
+        [`POST ${url} HTTP/1.1`, ...headers(overrides)],
+        JSON.stringify({ body: label }),
+      );
+
+    const probes: Headers = {
+      authorization: `${w.A.headers.authorization ?? ''}\u0000`,
+      cookie: 'suas_session=a\u0000b',
+      'idempotency-key': `${randomUUID()}\u0000`,
+      origin: 'http://localhost\u0000',
+      'x-request-id': 'a\u0000b',
+      'content-type': 'application/json\u0000',
+    };
+    const outcomes: Record<string, string> = {};
+    for (const [name, value] of Object.entries(probes)) {
+      const reply = await post(`probe ${name}`, { [name]: value });
+      outcomes[name] = `${reply.status} ${errorCode(reply.body)}`;
+    }
+    expect(outcomes).toEqual(
+      Object.fromEntries(
+        Object.keys(probes).map((name) => [name, `HTTP/1.1 400 Bad Request ${VALIDATION}`]),
+      ),
+    );
+
+    // The same request without the NUL is stored, and none of the probes were.
+    expect((await post('control', {})).status).toBe('HTTP/1.1 201 Created');
+    const listed = await app.server.inject({ method: 'GET', url, headers: w.A.headers });
+    const bodies = (JSON.parse(listed.body) as { messages: { body: string }[] }).messages.map(
+      (message) => message.body,
+    );
+    expect(bodies).toEqual(['control']);
+  });
+
+  it('answers 400 for NUL in a path or query parameter', async () => {
+    const w = await world();
+    const messages = `${API_PREFIX}/service-requests/${w.accepted}/chat/messages`;
+    const publish = `${API_PREFIX}/admin/consent-templates/a%00b/commands/publish`;
     const outcomes = {
-      'NUL in value': outcome(
-        await send(P1.headers, 'POST', url, settlement(JSON.stringify({ k: NUL }))),
+      'query value': outcome(await send(w.A.headers, 'GET', `${messages}?cursor=a%00b`)),
+      'query key': outcome(await send(w.A.headers, 'GET', `${messages}?a%00b=1`)),
+      'path parameter': outcome(await send(w.ADM.headers, 'POST', publish, {})),
+      '/app form field': outcome(
+        await app.server.inject({
+          method: 'POST',
+          url: '/app/admin/providers/routing',
+          headers: { ...w.ADM.headers, 'content-type': 'application/x-www-form-urlencoded' },
+          payload:
+            'adapter_id=food-manual&capability=FOOD&coverage_counties=SANTA%00CLARA&routing_priority=1',
+        }),
       ),
-      'NUL in key': outcome(
-        await send(P1.headers, 'POST', url, settlement(JSON.stringify({ [NUL]: 1 }))),
-      ),
-      'depth 20000': outcome(await send(P1.headers, 'POST', url, settlement(deepObject(20_000)))),
-      'depth 40': outcome(await send(P1.headers, 'POST', url, settlement(deepObject(40)))),
     };
     expect(outcomes).toEqual({
-      'NUL in value': REJECTED,
-      'NUL in key': REJECTED,
-      'depth 20000': REJECTED,
-      'depth 40': REJECTED,
+      'query value': REJECTED,
+      'query key': REJECTED,
+      'path parameter': REJECTED,
+      '/app form field': REJECTED,
     });
+  });
 
-    // A realistic reference-shaped settlement (SETTLEMENT.md §2) still resolves.
-    const resolved = await send(P1.headers, 'POST', url, {
+  /**
+   * Every route in Fastify's route tree (printRoutes) as a full path and its methods. It is the
+   * whole table, not just `/api/v0`, so a route under any prefix is held to the guard.
+   */
+  function registeredRoutes(): { path: string; methods: string[] }[] {
+    const routes: { path: string; methods: string[] }[] = [];
+    const parents: string[] = [];
+    for (const line of app.server.printRoutes({ commonPrefix: false }).split('\n')) {
+      const match = /^([│ ]*)[├└]── (.+?)(?: \(([^)]+)\))?$/.exec(line);
+      if (match === null) continue;
+      const level = (match[1] ?? '').length / 4;
+      const path = (parents[level - 1] ?? '') + (match[2] ?? '');
+      parents[level] = path;
+      if (match[3] !== undefined) routes.push({ path, methods: match[3].split(', ') });
+    }
+    return routes;
+  }
+
+  it('guards every registered route, under /api/v0 and /app alike', async () => {
+    // A signed-in Veteran and a form body, so the onRequest gates of the licence routes
+    // (session) and the /app sign-in routes (form media type) pass and the guard is reached.
+    const { A } = await world();
+    const routes = registeredRoutes();
+    expect(routes.filter((route) => route.path.startsWith(API_PREFIX)).length).toBeGreaterThan(50);
+    expect(routes.filter((route) => route.path.startsWith('/app')).length).toBeGreaterThan(20);
+
+    const unguarded: string[] = [];
+    for (const route of routes) {
+      for (const method of route.methods.filter((m) => m !== 'HEAD' && m !== 'OPTIONS')) {
+        const url = route.path.replace(/:[^/]+/g, randomUUID()).replace(/\*$/, 'x');
+        const withBody = method !== 'GET' && method !== 'DELETE';
+        const reply = await app.server.inject({
+          method: method as 'GET',
+          url: `${url}?probe=%00`,
+          headers: {
+            ...A.headers,
+            'idempotency-key': randomUUID(),
+            ...(withBody ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
+          },
+          ...(withBody ? { payload: 'field=1' } : {}),
+        });
+        if (outcome(reply) !== REJECTED)
+          unguarded.push(`${method} ${route.path} ${outcome(reply)}`);
+      }
+    }
+    expect(unguarded).toEqual([]);
+  });
+});
+
+describe('settlement content on POST /cases/:id/commands/resolve', () => {
+  const settlement = (requested: string) =>
+    `{"requested":${requested},"occurred":{},"fulfilled":{},"unresolved":{}}`;
+
+  it('answers 400 for U+0000 anywhere, an array section or depth 17, then resolves at depth 16', async () => {
+    const { caseId, P1 } = await resolvableCase();
+    const url = `/api/v0/cases/${caseId}/commands/resolve`;
+    const probe = async (requested: unknown) =>
+      outcome(await send(P1.headers, 'POST', url, settlement(JSON.stringify(requested))));
+
+    const outcomes = {
+      'NUL in value': await probe({ k: NUL }),
+      'NUL in key': await probe({ [NUL]: 1 }),
+      'NUL in nested key': await probe({ a: { [`b${NUL}`]: 1 } }),
+      'NUL in array element': await probe({ service_requests: ['ok', NUL] }),
+      'lone NUL string': await probe({ k: '\u0000' }),
+      'array section': await probe([{ id: randomUUID() }]),
+      'depth 20000': outcome(await send(P1.headers, 'POST', url, settlement(deepObject(20_000)))),
+      'depth 40': outcome(await send(P1.headers, 'POST', url, settlement(deepObject(40)))),
+      'depth 17': outcome(await send(P1.headers, 'POST', url, settlement(deepObject(17)))),
+    };
+    expect(outcomes).toEqual(Object.fromEntries(Object.keys(outcomes).map((k) => [k, REJECTED])));
+
+    const atLimit = await send(P1.headers, 'POST', url, settlement(deepObject(16)));
+    expect(atLimit.statusCode).toBe(200);
+  });
+
+  it('resolves a reference-shaped settlement with arrays inside a section (SETTLEMENT.md §2)', async () => {
+    const { caseId, P1 } = await resolvableCase();
+    const resolved = await send(P1.headers, 'POST', `/api/v0/cases/${caseId}/commands/resolve`, {
       requested: { service_requests: [{ id: randomUUID(), status: 'CANCELLED' }] },
       occurred: { contact_attempts: [{ channel: 'PHONE', outcome: { reached: false } }] },
       fulfilled: { fulfillments: [] },
       unresolved: { notes: 'none' },
     });
     expect(resolved.statusCode).toBe(200);
+  });
+
+  it('answers 413 for a body over the 1 MiB limit before the NUL guard sees it', async () => {
+    const { caseId, P1 } = await resolvableCase();
+    const oversized = settlement(JSON.stringify({ k: NUL, pad: 'x'.repeat(1_048_576) }));
+    const reply = await send(
+      P1.headers,
+      'POST',
+      `/api/v0/cases/${caseId}/commands/resolve`,
+      oversized,
+    );
+    expect(outcome(reply)).toBe(`413 ${VALIDATION}`);
   });
 });
