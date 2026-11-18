@@ -15,6 +15,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { assertMfaElevated, assertSuasAdmin } from '../../authz/index.js';
 import {
   createResourceDrafts,
@@ -47,9 +48,7 @@ import { API_PREFIX } from '../../release/pins.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 
-export interface AdminResourceDraftRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface AdminResourceDraftRouteDeps extends RouteContext {
   readonly modelInference: ModelInferencePort;
 }
 

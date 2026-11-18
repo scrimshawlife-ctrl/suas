@@ -8,8 +8,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import type { SuasConfig } from '../../config/index.js';
 import { SERVICE_CATEGORIES } from '../../coordination/index.js';
 import {
@@ -23,10 +23,8 @@ import { API_PREFIX } from '../../release/pins.js';
 import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
 import { authenticate } from '../authenticate.js';
 
-export interface AdminAdapterRouteDeps {
-  readonly pool: Pool;
+export interface AdminAdapterRouteDeps extends RouteContext {
   readonly config: SuasConfig;
-  readonly sessionSecret: string | undefined;
 }
 
 const tenantQuery = z.object({ tenant_id: z.string().uuid() });

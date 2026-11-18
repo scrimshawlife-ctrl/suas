@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useIdempotencyKey } from '../../api/idempotency';
 import { useMode } from '../../app/mode-store';
 import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
@@ -21,7 +20,6 @@ function InvitationItem({
   onAccepted: () => void;
 }) {
   const accept = useAcceptInvitation();
-  const key = useIdempotencyKey();
   const flight = useSingleFlight();
   const name = invitation.veteran_display_name ?? SOMEONE;
 
@@ -39,15 +37,7 @@ function InvitationItem({
           disabled={accept.isPending}
           onClick={() =>
             flight(() =>
-              accept.mutateAsync(
-                { trustedContactId: invitation.trusted_contact_id, headers: key.headers() },
-                {
-                  onSuccess: () => {
-                    key.renew();
-                    onAccepted();
-                  },
-                },
-              ),
+              accept.mutateAsync(invitation.trusted_contact_id, { onSuccess: () => onAccepted() }),
             )
           }
         >

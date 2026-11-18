@@ -10,8 +10,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
@@ -61,11 +61,6 @@ const EXECUTE_CASE_HTTP = [
   auth: 'suas_admin' | 'accepter' | 'accepter_or_suas_admin';
   reasonRequired: boolean;
 }>;
-
-export interface CaseRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
-}
 
 const idParams = z.object({ id: z.string().uuid() });
 const settlementParams = z.object({
@@ -144,7 +139,7 @@ const requiredReasonBody = z.object({
     .optional(),
 });
 
-export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): void {
+export function registerCaseRoutes(app: FastifyInstance, deps: RouteContext): void {
   app.post(`${API_PREFIX}/cases`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const veteran = await findUserById(deps.pool, context.tenantId, context.userId);

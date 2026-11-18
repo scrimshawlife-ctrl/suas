@@ -1,8 +1,9 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { ageRequest, requestHelp, runJobWorkerOnce } from '../helpers';
-import { closePeople, helper, uniqueSummary, veteran } from '../support/support';
-import { ageReleases } from './time';
+import { requestHelp, runJobWorkerOnce, uniqueText } from '../helpers';
+import { closePeople } from '../support/support';
+import { ageReleases, ageRequest } from './time';
+import { newHelper, newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -14,8 +15,8 @@ test('T1: after a release the widening wait starts again, so the request widens 
 }) => {
   // 03-widening covers the first widening from submit; this is the restart (R8.5,
   // src/coordination/widening.ts: the wait runs from the later of submit and last release).
-  const requester = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Cruz' });
-  const summary = uniqueSummary('Groceries for the week');
+  const requester = await newVeteran(browser, request, { name: 'Marcus T.', county: 'Santa Cruz' });
+  const summary = uniqueText('Groceries for the week');
   const requestId = await requestHelp(
     requester.page,
     request,
@@ -24,7 +25,10 @@ test('T1: after a release the widening wait starts again, so the request widens 
   );
 
   // A same-county helper takes it, then releases it.
-  const taker = await helper(browser, request, { name: 'Sam P.', county: 'Santa Cruz' });
+  const { page: taker } = await newHelper(browser, request, {
+    name: 'Sam P.',
+    county: 'Santa Cruz',
+  });
   await taker.getByRole('button', { name: new RegExp(`Take this request: .*${summary}`) }).click();
   await expect(taker).toHaveURL(new RegExp(`/serve/requests/${requestId}$`));
   await taker.getByRole('button', { name: 'Release this request' }).click();
@@ -34,7 +38,10 @@ test('T1: after a release the widening wait starts again, so the request widens 
   await expect(taker).toHaveURL(/\/serve$/);
 
   // San Mateo borders Santa Cruz; it does not see the request before it widens.
-  const bordering = await helper(browser, request, { name: 'Dee R.', county: 'San Mateo' });
+  const { page: bordering } = await newHelper(browser, request, {
+    name: 'Dee R.',
+    county: 'San Mateo',
+  });
   await expect(openList(bordering).getByRole('heading', { name: 'Open requests' })).toBeVisible();
   await expect(openList(bordering)).not.toContainText(summary);
 

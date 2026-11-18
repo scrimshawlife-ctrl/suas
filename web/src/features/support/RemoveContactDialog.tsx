@@ -1,4 +1,3 @@
-import { useIdempotencyKey } from '../../api/idempotency';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { useSingleFlight } from '../../lib/single-flight';
@@ -20,8 +19,6 @@ export function RemoveContactDialog({
 }) {
   const remove = useRemoveTrustedContact();
   const flight = useSingleFlight();
-  const revokeKey = useIdempotencyKey();
-  const removeKey = useIdempotencyKey();
   return (
     <Dialog open onClose={onClose} title={`Remove ${contact.relationship_label}?`}>
       <p>They will no longer be sent anything. You can add them again later.</p>
@@ -37,16 +34,8 @@ export function RemoveContactDialog({
                   redGrantId: grants
                     ? findRedAlertGrant(grants, contact.trusted_contact_id)?.consent_grant_id
                     : undefined,
-                  revokeHeaders: revokeKey.headers(),
-                  removeHeaders: removeKey.headers(),
                 },
-                {
-                  onSuccess: () => {
-                    revokeKey.renew();
-                    removeKey.renew();
-                    onRemoved();
-                  },
-                },
+                { onSuccess: () => onRemoved() },
               ),
             )
           }

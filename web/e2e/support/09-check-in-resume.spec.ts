@@ -1,11 +1,11 @@
-import { expect, test } from './fixtures';
-import { newVerifiedVeteran } from './helpers';
+import { expect, test } from '../fixtures';
+import { newVeteran } from '../people';
 
 test('a Veteran saves a Check-In to finish later, then resumes at the next question and completes', async ({
   browser,
   request,
 }) => {
-  const { page } = await newVerifiedVeteran(browser, request, {
+  const { page } = await newVeteran(browser, request, {
     name: 'Rae K.',
     county: 'Alameda',
     label: 'resume',

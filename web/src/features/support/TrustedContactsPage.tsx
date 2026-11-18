@@ -1,6 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { useIdempotencyKey } from '../../api/idempotency';
 import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
 import { Button } from '../../components/Button';
@@ -30,7 +29,6 @@ const STATUS: Record<string, { label: string; kind: StatusKind }> = {
 function InviteForm() {
   const invite = useInviteTrustedContact();
   const flight = useSingleFlight();
-  const key = useIdempotencyKey();
   const [label, setLabel] = useState('');
   const [email, setEmail] = useState('');
   const [problem, setProblem] = useState<{ label?: string; email?: string }>({});
@@ -51,10 +49,9 @@ function InviteForm() {
     if (next.label || next.email) return;
     flight(() =>
       invite.mutateAsync(
-        { relationshipLabel: trimmedLabel, email: trimmedEmail, headers: key.headers() },
+        { relationshipLabel: trimmedLabel, email: trimmedEmail },
         {
           onSuccess: () => {
-            key.renew();
             setLabel('');
             setEmail('');
           },

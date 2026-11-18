@@ -7,8 +7,7 @@ import type { Page } from '@playwright/test';
 import { UNREAD_REFETCH_MS } from '../../src/app/poll-intervals';
 import { expect, test } from '../fixtures';
 import { history, pair, say, threadLink } from '../chat/chat';
-import { POLL_MARGIN_MS, pauseAfterPoll, runClock } from '../helpers';
-import { tag } from '../serve/serve';
+import { pauseAfterPoll, POLL_MARGIN_MS, runClock, tag } from '../helpers';
 
 test.describe.configure({ timeout: 180_000 });
 

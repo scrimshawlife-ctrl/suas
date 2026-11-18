@@ -41,11 +41,11 @@ The database guard (`assertDisposableDatabase` in `config.ts`) runs whenever `co
 
 - **Numbered root specs** (`01-request.spec.ts` to `16-*.spec.ts`, plus `list-paging` and `request-edit-stale`): the original plan §10 scenarios and early gap fixes. Some numbers repeat (two `15-`, two `16-`) and several overlap the folder suites; they stay as they are until a cleanup is agreed.
 - **Folders**, one per area, numbered within the folder:
-  - `auth/`: landing, sign-in, welcome, guards and sign-out, session end
+  - `auth/`: landing, sign-in, welcome, gates and sign-out, guards and sign-out, session end
   - `request/`: the Intake Assistant, the plain form, request status, edit, cancel, deep links, home and list
   - `serve/`: the board, case commands, alerts, wrap-up
   - `chat/`: conversation, errors, the offline outbox, thread paging
-  - `support/`: resources, Check-In, trusted contacts, invitations, notifications, consents, crisis, deep links
+  - `support/`: resources, Check-In, trusted contacts, invitations, notifications, consents, crisis, deep links, check-in resume
   - `admin/`: MFA, overview, resource extraction, draft review, non-admins, consent templates
   - `multi/`: two or more people at once, named by plan ID (`m1`, `m3`, ...)
   - `time/`: time-driven flows (`t1` to `t7`)
@@ -58,11 +58,12 @@ The database guard (`assertDisposableDatabase` in `config.ts`) runs whenever `co
 - `fixtures.ts`: the suite's `test` and `expect`. Specs import them from here, not from `@playwright/test`. Every browser context a test opens is watched (`watch.ts`) for console errors, page errors, failed requests and 5xx. A test that provokes one on purpose adds a pattern to `allow`. Every `/api/v0` response is checked by `contract.ts`.
 - `contract.ts`: each `/api/v0` response must use a status that `docs/openapi/v0.json` documents for its operation and must match its schema. Each response is also logged to `e2e-results/coverage/*.jsonl`.
 - `helpers.ts`: people with their own browser context (`newPerson`, `signUp`, `newVerifiedVeteran`), sign-in codes (`readSignInCode`), scripted model turns (`scriptModel`), `requestHelp`, database access (`withDb`), time skips (`ageRequest`, `runJobWorkerOnce`), the page clock (`runClock`) and screenshots (`shoot`).
+- `people.ts`: the people a spec acts as, built through the UI — `newVeteran` (a verified Veteran already signed in) and `newHelper` (a second person in their own browser context) — so a spec names who is on screen instead of repeating the account setup.
 - The browser does everything a person can do. The API and database are used only for what a person cannot do: reading the fake sign-in code, scripting the fake model, moving time, and seeding lists longer than one page.
 
 ## Time skips
 
-A test moves time by moving one stored timestamp into the past in the e2e database, then runs one job-worker pass (`runJobWorkerOnce`, which is `src/cli/job-worker.ts --once`) so the sweeps act on it. The timestamps include request `submitted_at` (`helpers.ts`), chat `released_at`, consent `expires_at`, session `expires_at`, `last_seen_at` and `mfa_elevated_at` (`time/time.ts`), and Check-In `started_at` (`support/support.ts`). For timers in the page, `runClock` advances a paused Playwright clock.
+A test moves time by moving one stored timestamp into the past in the e2e database, then runs one job-worker pass (`runJobWorkerOnce`, which is `src/cli/job-worker.ts --once`) so the sweeps act on it. The timestamps include request `submitted_at` (`helpers.ts`), chat `released_at`, consent `expires_at`, session `expires_at`, `last_seen_at` and `mfa_elevated_at` (`time/time.ts`), and Check-In `started_at` (also `time/time.ts`). For timers in the page, `runClock` advances a paused Playwright clock.
 
 ## UI coverage
 

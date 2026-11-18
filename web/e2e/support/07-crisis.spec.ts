@@ -1,7 +1,8 @@
 import type { APIRequestContext, Browser, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { expectCrisisScreen } from '../helpers';
-import { closePeople, expectCrisisChrome, serverError, veteran, visitor } from './support';
+import { expectCrisisScreen, newPerson } from '../helpers';
+import { closePeople, expectCrisisChrome, serverError } from './support';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -83,7 +84,7 @@ async function expectCrisisPage(page: Page, continueTo: string): Promise<void> {
 test('signed out: the crisis strings are on every public screen and /crisis leads to sign in', async ({
   browser,
 }) => {
-  const page = await visitor(browser);
+  const page = await newPerson(browser);
   for (const path of ['/', '/sign-in', '/no-such-page']) {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
@@ -99,7 +100,7 @@ test('signed in: every support screen carries the crisis strings, and /crisis re
   browser,
   request,
 }) => {
-  const { page } = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
   for (const path of [
     '/home',
     '/resources/food',
@@ -140,7 +141,7 @@ test('signed out with the API down: the crisis copy and destinations still show 
   browser,
   allow,
 }) => {
-  const page = await visitor(browser);
+  const page = await newPerson(browser);
   await failTheApi(page, allow);
   for (const path of ['/', '/sign-in']) {
     await page.goto(path);
@@ -156,7 +157,7 @@ test('signed in with the API down: /crisis keeps the crisis copy and destination
   request,
   allow,
 }) => {
-  const { page } = await veteran(browser, request, { name: 'Dana R.', county: 'Santa Clara' });
+  const { page } = await newVeteran(browser, request, { name: 'Dana R.', county: 'Santa Clara' });
   const api = await failTheApi(page, allow);
   await page.goto('/crisis');
   await expectCrisisPage(page, '/home');
@@ -165,7 +166,7 @@ test('signed in with the API down: /crisis keeps the crisis copy and destination
 
 /** Signed in, API down: Home cannot load the account and shows its failed screen. */
 async function failedHome(browser: Browser, request: APIRequestContext, allow: RegExp[]) {
-  const { page } = await veteran(browser, request, { name: 'Lee K.', county: 'Santa Clara' });
+  const { page } = await newVeteran(browser, request, { name: 'Lee K.', county: 'Santa Clara' });
   await failTheApi(page, allow);
   await page.goto('/home');
   await expect(page.getByRole('heading', { name: 'We could not load your account.' })).toBeVisible({

@@ -1,8 +1,8 @@
-import { queryOptions, useQuery } from '@tanstack/react-query';
+import { queryOptions } from '@tanstack/react-query';
 import { api } from './client';
 import { requireData } from './require-data';
 import { queryKeys } from './keys';
-import { useSessionToken } from './token-store';
+import { useSignedInQuery } from './queries';
 
 /** GET /api/v0/veterans/me. */
 export function meQueryOptions() {
@@ -18,6 +18,5 @@ export function meQueryOptions() {
 
 /** The signed-in person. Idle (no request) while there is no session token. */
 export function useMe() {
-  const token = useSessionToken();
-  return useQuery({ ...meQueryOptions(), enabled: token !== null });
+  return useSignedInQuery(meQueryOptions());
 }

@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "synth": "node scripts/synth.mjs",
-    "check": "npm run typecheck && npm run test && npm run synth"
+    "check": "npm run typecheck && npm run test && npm run synth",
+    "synth:deploy": "node scripts/synth-deploy.mjs"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.275.0",

@@ -3,9 +3,15 @@
  * Default-off behaviour is covered by the second describe block.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { listRegisteredApiRoutes } from '../../src/http/server.js';
+import type { RecordingChallengeDelivery } from '../../src/auth/index.js';
+import { loadConfig } from '../../src/config/index.js';
+import { createUser } from '../../src/identity/index.js';
+import type { BuildInfo } from '../../src/provenance/build-info.js';
+import { createServer, listRegisteredApiRoutes } from '../../src/http/server.js';
+import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { validEnv } from '../helpers/env.js';
 
 const ALLOWED = 'https://app.example.org';
@@ -131,8 +137,9 @@ describe('preflight', () => {
 });
 
 describe('every /api/v0 endpoint', () => {
-  // Read after beforeAll has built the apps; at collection time the list is empty.
-  const routes = (): ReturnType<typeof listRegisteredApiRoutes> => listRegisteredApiRoutes();
+  // Read after beforeAll has built the app; at collection time it does not exist yet.
+  const routes = (): ReturnType<typeof listRegisteredApiRoutes> =>
+    listRegisteredApiRoutes(app.server);
 
   it('registered at least the released surface', () => {
     expect(routes().length).toBeGreaterThanOrEqual(50);
@@ -178,6 +185,78 @@ describe('every /api/v0 endpoint', () => {
       const label = `${route.method} ${route.path}`;
       expect(response.statusCode, label).toBe(403);
       expect(response.headers['access-control-allow-origin'], label).toBeUndefined();
+    }
+  });
+});
+
+// PR #331 review: the policy must act before any route handler, not only set the status.
+describe('the origin policy runs before route handlers', () => {
+  async function challengeRequest(origin: string) {
+    const pool = app.pool;
+    if (pool === undefined) throw new Error('The CORS test app has no database pool.');
+    const tenantId = randomUUID();
+    const email = syntheticEmail(`cors-${randomUUID().slice(0, 8)}`);
+    await createUser(pool, { tenantId, email, status: 'ACTIVE' });
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/challenges',
+      headers: { origin, 'sec-fetch-site': 'cross-site' },
+      payload: { tenant_id: tenantId, destination: email, method: 'EMAIL_OTP' },
+    });
+    const rows = await pool.query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM auth_challenges WHERE tenant_id = $1',
+      [tenantId],
+    );
+    const delivered = (app.challengeDelivery as RecordingChallengeDelivery).lastFor(
+      email.toLowerCase(),
+    );
+    return { status: response.statusCode, rows: rows.rows[0]?.n, delivered };
+  }
+
+  it('refuses a disallowed-origin challenge request with no row written and no code sent', async () => {
+    // The allowlisted control proves this request does write a row and send a code.
+    const allowed = await challengeRequest(ALLOWED);
+    expect(allowed.status).toBe(202);
+    expect(allowed.rows).toBe(1);
+    expect(allowed.delivered).toBeDefined();
+
+    const denied = await challengeRequest(OTHER);
+    expect(denied.status).toBe(403);
+    expect(denied.rows).toBe(0);
+    expect(denied.delivered).toBeUndefined();
+  });
+
+  it('answers a preflight and refuses a disallowed write without calling the route handler', async () => {
+    const server = createServer({
+      config: loadConfig(validEnv({ SUAS_CORS_ALLOWED_ORIGINS: ALLOWED })),
+      buildInfo: () => ({}) as BuildInfo,
+      logger: false,
+    });
+    const handler = vi.fn(() => ({ ran: true }));
+    server.route({ method: ['OPTIONS', 'POST'], url: '/api/v0/probe', handler });
+    try {
+      const preflight = await server.inject({
+        method: 'OPTIONS',
+        url: '/api/v0/probe',
+        headers: { origin: ALLOWED, 'access-control-request-method': 'POST' },
+      });
+      expect(preflight.statusCode).toBe(204);
+      expect(preflight.headers['access-control-allow-origin']).toBe(ALLOWED);
+
+      const denied = await server.inject({
+        method: 'POST',
+        url: '/api/v0/probe',
+        headers: { origin: OTHER, 'sec-fetch-site': 'cross-site' },
+      });
+      expect(denied.statusCode).toBe(403);
+      expect(handler).not.toHaveBeenCalled();
+
+      // Control: a plain OPTIONS is not a preflight, so it does reach the handler.
+      const plain = await server.inject({ method: 'OPTIONS', url: '/api/v0/probe' });
+      expect(plain.json()).toEqual({ ran: true });
+      expect(handler).toHaveBeenCalledTimes(1);
+    } finally {
+      await server.close();
     }
   });
 });
