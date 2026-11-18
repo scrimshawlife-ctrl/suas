@@ -13,6 +13,7 @@ import { startApp, type StartedApp } from '../../src/app.js';
 import { createUser } from '../../src/identity/index.js';
 import type { RecordingChallengeDelivery, TestMfaFactor } from '../../src/auth/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
@@ -30,8 +31,7 @@ function delivery(): RecordingChallengeDelivery {
 }
 
 async function enrol(): Promise<{ tenantId: string; email: string }> {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('The test app has no database pool.');
+  const pool = appPool(app);
   const tenantId = randomUUID();
   const email = syntheticEmail(`veteran-${randomUUID().slice(0, 8)}`);
   await createUser(pool, { tenantId, email, status: 'ACTIVE' });
@@ -93,8 +93,7 @@ describe('POST /api/v0/auth/challenges', () => {
   });
 
   it('sends nothing to an INVITED user and answers the same 202 (AUTH.md §6, §9.1)', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('The test app has no database pool.');
+    const pool = appPool(app);
     const tenantId = randomUUID();
     const email = syntheticEmail(`invited-${randomUUID().slice(0, 8)}`);
     await createUser(pool, { tenantId, email, status: 'INVITED' });

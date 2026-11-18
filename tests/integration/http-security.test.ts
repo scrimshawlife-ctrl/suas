@@ -10,6 +10,7 @@ import { startApp, type StartedApp } from '../../src/app.js';
 import { CHALLENGE_ISSUE_LIMIT, createSession } from '../../src/auth/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
@@ -27,8 +28,7 @@ afterAll(async () => {
 
 describe('SECURITY.md §2 — auth challenge abuse controls', () => {
   it('rate-limits challenge issuance per destination', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const tenantId = randomUUID();
     const email = syntheticEmail(`rate-${randomUUID().slice(0, 8)}`);
     await createUser(pool, { tenantId, email, status: 'ACTIVE' });
@@ -58,8 +58,7 @@ describe('SECURITY.md §2 — auth challenge abuse controls', () => {
 
 describe('SECURITY.md §2 / PRIVACY.md — tenant isolation on self APIs', () => {
   it('does not leak another tenant veteran projection', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const tenantA = randomUUID();
     const tenantB = randomUUID();
     const userA = await createUser(pool, {

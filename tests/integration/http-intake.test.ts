@@ -9,20 +9,18 @@ import type * as nodeFsType from 'node:fs';
 import { createRequire } from 'node:module';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import { withTransaction } from '../../src/db/index.js';
 import { createResource, setResourceActive, verifyResource } from '../../src/fulfillment/index.js';
 import type { ScriptedModelInference } from '../../src/inference/index.js';
 import { type ModelToolCall } from '../../src/inference/index.js';
-import { createUser } from '../../src/identity/index.js';
 import {
   createDraft,
   DraftChangedError,
   findOwnedDraft,
   saveDraftContent,
 } from '../../src/intake/drafts.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { appPool, createPerson } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
@@ -45,25 +43,9 @@ afterAll(async () => {
   await app.close();
 });
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function veteran(options: { verified?: boolean } = {}) {
-  const tenantId = randomUUID();
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
-  if (options.verified !== false) await markVerifiedVeteran(pool(), tenantId, user.userId);
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return { tenantId, user, headers: { authorization: `Bearer ${session.credential}` } };
-}
+/** A signed-in Veteran in a fresh tenant, verified unless `verified` is false. */
+const veteran = (options: { verified?: boolean } = {}) =>
+  createPerson(app, { label: 'vet', verified: options.verified !== false });
 
 const toolTurn = (...calls: ModelToolCall[]) => ({ ok: true as const, text: '', toolCalls: calls });
 const textTurn = (text: string) => ({ ok: true as const, text, toolCalls: [] });
@@ -111,7 +93,7 @@ describe('draft, edit and submit', () => {
     const draftId: string = turn.draft.draft_id;
 
     // Nothing exists as a Service Request until the Veteran submits.
-    const before = await pool().query(
+    const before = await appPool(app).query(
       `SELECT count(*)::int AS n FROM service_requests WHERE tenant_id = $1`,
       [tenantId],
     );
@@ -152,7 +134,7 @@ describe('draft, edit and submit', () => {
     });
 
     // The request carries the reviewed fields, not the typed text.
-    const stored = await pool().query(
+    const stored = await appPool(app).query(
       `SELECT details, created_by FROM service_requests WHERE service_request_id = $1`,
       [body.service_request.service_request_id],
     );
@@ -175,7 +157,7 @@ describe('draft, edit and submit', () => {
     expect(replay.json().draft).toMatchObject({ status: 'SUBMITTED' });
 
     // DISPATCH.md §13.4, §14.9: the stored command result holds ids and status only.
-    const record = await pool().query<{ result: unknown }>(
+    const record = await appPool(app).query<{ result: unknown }>(
       `SELECT result FROM command_idempotency_records
         WHERE tenant_id = $1 AND idempotency_key = 'submit-1'`,
       [tenantId],
@@ -245,25 +227,30 @@ describe('draft, edit and submit', () => {
       meetingPlace: null,
       destination: null,
     };
-    const draft = await createDraft(pool(), {
+    const draft = await createDraft(appPool(app), {
       draftId: randomUUID(),
       tenantId,
       userId: user.userId,
       intakeText: 'first',
       fields,
     });
-    const readA = await findOwnedDraft(pool(), tenantId, user.userId, draft.draftId);
-    const readB = await findOwnedDraft(pool(), tenantId, user.userId, draft.draftId);
+    const readA = await findOwnedDraft(appPool(app), tenantId, user.userId, draft.draftId);
+    const readB = await findOwnedDraft(appPool(app), tenantId, user.userId, draft.draftId);
     await saveDraftContent(
-      pool(),
+      appPool(app),
       readA,
       { fields, intakeText: 'first\n\nA' },
       { ifUnchanged: true },
     );
     await expect(
-      saveDraftContent(pool(), readB, { fields, intakeText: 'first\n\nB' }, { ifUnchanged: true }),
+      saveDraftContent(
+        appPool(app),
+        readB,
+        { fields, intakeText: 'first\n\nB' },
+        { ifUnchanged: true },
+      ),
     ).rejects.toThrow(DraftChangedError);
-    const current = await findOwnedDraft(pool(), tenantId, user.userId, draft.draftId);
+    const current = await findOwnedDraft(appPool(app), tenantId, user.userId, draft.draftId);
     expect(current.intakeText).toBe('first\n\nA');
   });
 
@@ -284,7 +271,7 @@ describe('draft, edit and submit', () => {
 describe('needs outside the four categories', () => {
   it('says not available yet, drafts nothing and lists matching Resources', async () => {
     const { headers, tenantId, user } = await veteran();
-    const created = await createResource(pool(), {
+    const created = await createResource(appPool(app), {
       tenantId,
       serviceName: 'Example Job Help',
       category: 'PEER_SUPPORT',
@@ -295,7 +282,7 @@ describe('needs outside the four categories', () => {
       ],
       area: 'San Jose',
     });
-    await withTransaction(pool(), async (tx) => {
+    await withTransaction(appPool(app), async (tx) => {
       await verifyResource(tx, {
         tenantId,
         resourceId: created.resourceId,
@@ -353,7 +340,7 @@ describe('fallback to the plain form', () => {
       draft: null,
       request_form: { method: 'POST', path: '/api/v0/service-requests' },
     });
-    const rows = await pool().query(
+    const rows = await appPool(app).query(
       `SELECT count(*)::int AS n FROM service_request_drafts WHERE tenant_id = $1`,
       [tenantId],
     );
@@ -435,7 +422,7 @@ describe('verified-Veteran gate', () => {
   // R12.8: the two submit routes document 422 COUNTY_REQUIRED for a verified Veteran.
   it('asks a verified Veteran with no county to choose one before submitting', async () => {
     const { tenantId, user, headers } = await veteran({ verified: false });
-    await markVerifiedVeteran(pool(), tenantId, user.userId, null);
+    await markVerifiedVeteran(appPool(app), tenantId, user.userId, null);
     const calls = [
       post(`/api/v0/intake/drafts/${randomUUID()}/submit`, headers, {}, { 'idempotency-key': 'k' }),
       post(

@@ -77,6 +77,18 @@ export default tseslint.config(
     },
   },
   {
+    // Production code never imports the test tree, which holds the synthetic session
+    // secret and fixture writers. `npm run build` (rootDir: src) also refuses it; this
+    // catches it in `npm run verify` too.
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ group: ['**/tests/**'], message: 'src/ must not import from tests/.' }] },
+      ],
+    },
+  },
+  {
     files: ['tests/**/*.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
