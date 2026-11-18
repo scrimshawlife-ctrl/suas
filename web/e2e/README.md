@@ -46,7 +46,7 @@ Every other spec lives in a folder, one folder per area. Specs in a folder are n
 - `auth/`: landing, sign-in, welcome, gates and sign-out, guards and sign-out, session end
 - `verify/`: the VA confirmation form, the licence fallback
 - `request/`: the Intake Assistant, the plain form, request status, edit, cancel, deep links, home and list, then the early gap fixes (edit before accept, edit after a stale accept, the plain form under the assistant, a cancelled request leaving the board)
-- `serve/`: the board, case commands, alerts, wrap-up, release and expiry
+- `serve/`: the board, case commands, alerts, wrap-up, release and expiry, Back at once after a reload
 - `chat/`: conversation, errors, the offline outbox, thread paging
 - `support/`: resources, Check-In, trusted contacts, invitations, notifications, consents, crisis, deep links, Check-In resume
 - `admin/`: MFA, overview, resource extraction, draft review, non-admins, consent templates, consent template v2
