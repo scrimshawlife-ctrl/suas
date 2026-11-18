@@ -349,6 +349,16 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pas
 5. **Run the migrate function (manual step 4).**
 6. Build the web app (above), then `cdk deploy Suas-Staging-Web`.
 7. Run the fixture seed (manual step 6), then smoke-test.
+8. **Store the VA sandbox key, only once the owner turns VA on.** Until then the backend is deployed without
+   `vaSandbox`, the API stays `SUAS_VA_CONFIRMATION_MODE=disabled`, and there is no secret to fill: skip this step.
+   When the owner turns it on, deploy the backend with `-c vaSandbox=true`, then type the LLC-owned key yourself
+   (manual step 7; a leading space keeps it out of shell history in most shells):
+   ` aws secretsmanager put-secret-value --secret-id <VaVerifySecretName output> --secret-string '{"SUAS_VA_CONFIRMATION_API_KEY":"<key>"}'`
+   Verify without reading the key back. `aws secretsmanager describe-secret --secret-id <VaVerifySecretName output> --query LastChangedDate`
+   shows the time of the put. Then confirm one synthetic VA test identity in the app and read the verify
+   function's log group (`aws cloudformation describe-stack-resources --stack-name Suas-Staging-Backend --query "StackResources[?starts_with(LogicalResourceId,'VaVerifyLogs')].PhysicalResourceId"`):
+   `va_verify_refused` with `not_configured` means the key is missing or malformed, a `va_verify` line with
+   `AUTHENTICATION_REJECTED` means VA refused it, and any other `va_verify` line means VA took it.
 
 ## Manual steps
 
