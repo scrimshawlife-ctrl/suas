@@ -59,6 +59,19 @@ describe('createPerson elevation', () => {
   it('does not elevate a non-admin by default', async () => {
     expect(await elevated(await createPerson(app, { label: 'plain' }))).toBe(false);
   });
+
+  it('does not elevate a non-admin when elevate is false, and does when it is true', async () => {
+    expect(await elevated(await createPerson(app, { label: 'plain', elevate: false }))).toBe(false);
+    expect(await elevated(await createPerson(app, { label: 'plain', elevate: true }))).toBe(true);
+  });
+});
+
+describe('appPool', () => {
+  it('refuses an app started without a database', () => {
+    expect(() => appPool({ ...app, pool: undefined })).toThrow(
+      'The test app has no database pool.',
+    );
+  });
 });
 
 describe('keyed', () => {
@@ -69,6 +82,14 @@ describe('keyed', () => {
       authorization: 'Bearer x',
       'idempotency-key': 'chosen',
     });
+  });
+
+  it("leaves the caller's headers as they were, so a reused actor sends no stale key", () => {
+    const who = { headers: { authorization: 'Bearer x' } };
+    const sent = keyed(who);
+    expect(sent['idempotency-key']).toEqual(expect.any(String));
+    expect(who.headers).toEqual({ authorization: 'Bearer x' });
+    expect(keyed(who)['idempotency-key']).not.toBe(sent['idempotency-key']);
   });
 });
 
@@ -115,6 +136,12 @@ describe('createPerson', () => {
     expect(full.user).toMatchObject({ county: 'SANTA_CLARA', displayName: 'Sam' });
     expect(await hasConfirmedVeteranStatus(pool, full.tenantId, full.userId)).toBe(true);
     expect(await isSuasAdmin(pool, full.userId)).toBe(true);
+  });
+
+  // A NULL display_name reads back as undefined: a new sign-up who has not picked one.
+  it('leaves the display name unset when none is given', async () => {
+    const actor = await createPerson(app, { label: 'unnamed', verified: true });
+    expect(actor.user.displayName).toBeUndefined();
   });
 });
 
