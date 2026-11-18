@@ -57,6 +57,30 @@ describe('LicenceReviewImages object URLs', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  // The URL is made in an effect keyed on the fetched blob, so re-renders while the fetch runs,
+  // or after the image shows, make no second URL; the one URL is revoked once on close.
+  it('re-renders during and after the fetch make one object URL, revoked once on close', async () => {
+    let answer: (value: { data: Blob }) => void = () => undefined;
+    client.GET.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const { rerender, unmount, queryClient } = renderImages();
+    const renderAgain = () =>
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <LicenceReviewImages id={id} images={{ ...images }} />
+        </QueryClientProvider>,
+      );
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading…');
+    renderAgain();
+    answer({ data: new Blob(['jpeg'], { type: 'image/jpeg' }) });
+    await screen.findByRole('img', { name: 'Front of the licence' });
+    renderAgain();
+    renderAgain();
+    expect(revoke).not.toHaveBeenCalled();
+    unmount();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledTimes(1);
+  });
+
   it('a failed fetch shows a retry notice and makes no object URL', async () => {
     client.GET.mockRejectedValue(new ApiError(500, 'INTERNAL', 'x'));
     renderImages();
