@@ -12,7 +12,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import {
   expireDueRequests,
   InvalidRequestExpiryError,
@@ -20,10 +19,8 @@ import {
 } from '../../src/coordination/expiry.js';
 import { repairMissedRequestNotices } from '../../src/coordination/request-notices.js';
 import type { Queryable } from '../../src/db/transaction.js';
-import { createUser } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
+import { appPool, createPerson, keyed } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -43,29 +40,9 @@ interface Person {
   readonly headers: Record<string, string>;
 }
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function person(tenantId: string, label: string): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  await markVerifiedVeteran(pool(), tenantId, user.userId, 'SANTA_CLARA');
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return { userId: user.userId, headers: { authorization: `Bearer ${session.credential}` } };
-}
-
-function keyed(who: Person): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': randomUUID() };
-}
+/** A signed-in, verified Veteran in Santa Clara. */
+const person = (tenantId: string, label: string) =>
+  createPerson(app, { tenantId, label, county: 'SANTA_CLARA', verified: true });
 
 /** A submitted request whose submission was `waitedHours` ago. */
 async function submittedRequest(requester: Person, waitedHours: number): Promise<string> {
@@ -90,7 +67,7 @@ async function submittedRequest(requester: Person, waitedHours: number): Promise
     payload: {},
   });
   expect(submitted.statusCode).toBe(200);
-  await pool().query(
+  await appPool(app).query(
     `UPDATE service_requests SET submitted_at = now() - make_interval(hours => $2)
       WHERE service_request_id = $1`,
     [serviceRequestId, waitedHours],
@@ -99,7 +76,7 @@ async function submittedRequest(requester: Person, waitedHours: number): Promise
 }
 
 async function statusOf(serviceRequestId: string) {
-  const result = await pool().query<{ status: string; terminal_at: Date | null }>(
+  const result = await appPool(app).query<{ status: string; terminal_at: Date | null }>(
     `SELECT status, terminal_at FROM service_requests WHERE service_request_id = $1`,
     [serviceRequestId],
   );
@@ -107,7 +84,7 @@ async function statusOf(serviceRequestId: string) {
 }
 
 async function noticesFor(serviceRequestId: string) {
-  const result = await pool().query<{
+  const result = await appPool(app).query<{
     recipient_user_id: string;
     channel: string;
     reason: string;
@@ -127,7 +104,7 @@ describe('the 72-hour boundary', () => {
     const requester = await person(tenantId, 'requester');
     const due = await submittedRequest(requester, 73);
 
-    const result = await expireDueRequests(pool());
+    const result = await expireDueRequests(appPool(app));
     expect(result.ttlHours).toBe(72);
     expect(result.noticeFailures).toBe(0);
     expect(result.expired.map((item) => item.serviceRequestId)).toContain(due);
@@ -145,7 +122,7 @@ describe('the 72-hour boundary', () => {
         sent: true,
       },
     ]);
-    const audit = await pool().query(
+    const audit = await appPool(app).query(
       `SELECT actor_type FROM audit_events
         WHERE event_type = 'SERVICE_REQUEST_EXPIRED' AND target_id = $1`,
       [due],
@@ -168,7 +145,7 @@ describe('the 72-hour boundary', () => {
     });
     expect(accept.statusCode).toBe(200);
 
-    await expireDueRequests(pool());
+    await expireDueRequests(appPool(app));
 
     expect((await statusOf(fresh))?.status).toBe('SUBMITTED');
     expect((await statusOf(accepted))?.status).toBe('ACCEPTED');
@@ -180,7 +157,7 @@ describe('the 72-hour boundary', () => {
     const tenantId = randomUUID();
     const requester = await person(tenantId, 'requester');
     const assigned = await submittedRequest(requester, 73);
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests SET status = 'ASSIGNED' WHERE service_request_id = $1`,
       [assigned],
     );
@@ -199,13 +176,13 @@ describe('the 72-hour boundary', () => {
     });
     expect(draft.statusCode).toBe(201);
     const draftId: string = draft.json().service_request_id;
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests SET created_at = now() - interval '10 days'
         WHERE service_request_id = $1`,
       [draftId],
     );
 
-    await expireDueRequests(pool());
+    await expireDueRequests(appPool(app));
 
     expect((await statusOf(assigned))?.status).toBe('EXPIRED');
     expect((await statusOf(draftId))?.status).toBe('CREATED');
@@ -217,16 +194,19 @@ describe('the 72-hour boundary', () => {
     const requester = await person(tenantId, 'requester');
     const due = await submittedRequest(requester, 80);
 
-    const runs = await Promise.all([expireDueRequests(pool()), expireDueRequests(pool())]);
+    const runs = await Promise.all([
+      expireDueRequests(appPool(app)),
+      expireDueRequests(appPool(app)),
+    ]);
     const expiredBy = runs.filter((run) =>
       run.expired.some((item) => item.serviceRequestId === due),
     );
     expect(expiredBy).toHaveLength(1);
-    const replay = await expireDueRequests(pool());
+    const replay = await expireDueRequests(appPool(app));
     expect(replay.expired.map((item) => item.serviceRequestId)).not.toContain(due);
 
     expect(await noticesFor(due)).toHaveLength(1);
-    const audit = await pool().query(
+    const audit = await appPool(app).query(
       `SELECT 1 FROM audit_events
         WHERE event_type = 'SERVICE_REQUEST_EXPIRED' AND target_id = $1`,
       [due],
@@ -240,12 +220,12 @@ describe('a lost expiry notice (A2-11)', () => {
     const tenantId = randomUUID();
     const requester = await person(tenantId, 'requester');
     const due = await submittedRequest(requester, 74);
-    await expireDueRequests(pool());
+    await expireDueRequests(appPool(app));
     // The post-commit notice write failed.
-    await pool().query('DELETE FROM notifications WHERE subject_id = $1', [due]);
+    await appPool(app).query('DELETE FROM notifications WHERE subject_id = $1', [due]);
 
-    await repairMissedRequestNotices(pool());
-    await repairMissedRequestNotices(pool());
+    await repairMissedRequestNotices(appPool(app));
+    await repairMissedRequestNotices(appPool(app));
 
     expect(await noticesFor(due)).toEqual([
       {

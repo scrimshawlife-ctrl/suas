@@ -6,12 +6,12 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { expect } from 'vitest';
 import type { StartedApp } from '../../src/app.js';
 import { createSession, elevateSession } from '../../src/auth/index.js';
 import { findCurrentCase } from '../../src/coordination/index.js';
 import {
   createUser,
+  findUserById,
   grantSuasAdmin,
   setUserDisplayName,
   type ServiceCounty,
@@ -20,7 +20,7 @@ import {
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { TEST_SESSION_SECRET } from './env.js';
-import { createVerifiedUser, markVerifiedVeteran } from './verified-veteran.js';
+import { markVerifiedVeteran } from './verified-veteran.js';
 
 /** The started app's database pool; integration apps always have one. */
 export function appPool(app: StartedApp): Pool {
@@ -44,7 +44,7 @@ export async function bearer(
 
 export interface PersonOptions {
   /** Defaults to a fresh synthetic tenant. */
-  readonly tenantId?: string;
+  readonly tenantId?: string | undefined;
   /** Prefix of the synthetic email address. */
   readonly label: string;
   /** Set at sign-up; omitted leaves the user without one. */
@@ -70,26 +70,29 @@ export interface Actor {
 export async function createPerson(app: StartedApp, options: PersonOptions): Promise<Actor> {
   const pool = appPool(app);
   const tenantId = options.tenantId ?? randomUUID();
-  const user = await createUser(pool, {
+  const created = await createUser(pool, {
     tenantId,
     email: syntheticEmail(`${options.label}-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
     ...(options.county !== undefined ? { county: options.county } : {}),
   });
   if (options.verified === true) {
-    await markVerifiedVeteran(pool, tenantId, user.userId, options.county ?? 'SANTA_CLARA');
+    await markVerifiedVeteran(pool, tenantId, created.userId, options.county ?? 'SANTA_CLARA');
   }
   if (options.displayName !== undefined) {
-    await setUserDisplayName(pool, tenantId, user.userId, options.displayName);
+    await setUserDisplayName(pool, tenantId, created.userId, options.displayName);
   }
-  if (options.admin === true) await grantSuasAdmin(pool, user.userId, undefined);
+  if (options.admin === true) await grantSuasAdmin(pool, created.userId, undefined);
   const session = await createSession(pool, TEST_SESSION_SECRET, {
     tenantId,
-    userId: user.userId,
+    userId: created.userId,
   });
-  if (options.elevate ?? options.admin === true) {
-    await elevateSession(pool, session.session.sessionId);
-  }
+  // An explicit `elevate` wins, including `false` for an unelevated admin.
+  const elevate = options.elevate === undefined ? options.admin === true : options.elevate;
+  if (elevate) await elevateSession(pool, session.session.sessionId);
+  // Read back after setup: the verified county and display name land after sign-up.
+  const user = await findUserById(pool, tenantId, created.userId);
+  if (user === undefined) throw new Error('createPerson: the new user is missing.');
   return {
     tenantId,
     userId: user.userId,
@@ -99,7 +102,10 @@ export async function createPerson(app: StartedApp, options: PersonOptions): Pro
   };
 }
 
-/** `who`'s headers plus an idempotency key, fresh unless `key` is given. */
+/**
+ * `who`'s headers plus an idempotency key, fresh unless `key` is given. The key is set
+ * last, so a stale key in `who.headers` never wins.
+ */
 export function keyed(
   who: { readonly headers: Record<string, string> },
   key: string = randomUUID(),
@@ -117,6 +123,15 @@ const A0: Readonly<Record<string, string>> = {
   safe_now: 'YES',
 };
 
+/**
+ * Throws when a setup request is refused. Setup is not the behaviour under test, so a
+ * refusal fails the caller with the step and the API's answer, not a test assertion.
+ */
+function setupStep(response: { statusCode: number; body: string }, status: number, step: string) {
+  if (response.statusCode === status) return;
+  throw new Error(`openRedCase: ${step} returned ${response.statusCode}: ${response.body}`);
+}
+
 interface QuestionJson {
   question_id: string;
   question_key: string;
@@ -126,24 +141,20 @@ interface QuestionJson {
 /**
  * A verified Santa Clara Veteran completes a check-in answering `safe_now` with
  * NO_IMMEDIATE_HELP, which opens a RED Support Case through the public API.
+ * Fixed on purpose: NO_IMMEDIATE_HELP is rule R-RED-01 (src/signals/sv-001.ts), and
+ * callers that add staff or peers create them in Santa Clara to reach this case.
  */
 export async function openRedCase(app: StartedApp) {
   const pool = appPool(app);
-  const tenantId = randomUUID();
-  const veteran = await createVerifiedUser(pool, {
-    tenantId,
-    email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
+  const vet = await createPerson(app, { label: 'vet', county: 'SANTA_CLARA', verified: true });
+  const { tenantId, user: veteran, headers } = vet;
   await ensurePublishedQv001(pool, veteran.userId);
-  const headers = await bearer(app, tenantId, veteran.userId);
   const started = await app.server.inject({
     method: 'POST',
     url: '/api/v0/check-ins',
     headers,
   });
-  expect(started.statusCode).toBe(201);
+  setupStep(started, 201, 'starting the check-in');
   const body: { check_in_id: string; questions: QuestionJson[] } = started.json();
   for (const question of body.questions) {
     const optionKey =
@@ -160,14 +171,14 @@ export async function openRedCase(app: StartedApp) {
         answer_option_id: option.answer_option_id,
       },
     });
-    expect(saved.statusCode).toBe(200);
+    setupStep(saved, 200, `answering ${question.question_key}`);
   }
   const completed = await app.server.inject({
     method: 'POST',
     url: `/api/v0/check-ins/${body.check_in_id}/commands/complete`,
     headers,
   });
-  expect(completed.statusCode).toBe(200);
+  setupStep(completed, 200, 'completing the check-in');
   const supportCase = await findCurrentCase(pool, tenantId, veteran.userId);
   if (supportCase === undefined) throw new Error('expected RED case');
   return { pool, tenantId, veteran, headers, supportCase };
