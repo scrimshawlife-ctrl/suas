@@ -53,7 +53,7 @@ Optional env: `VITE_SUAS_ENV_LABEL` (shows the EnvChip, for example "Synthetic d
 src/api/        client, token store, ApiError, query keys, idempotency, shared hooks
 src/app/        router, route guards, layouts (chrome), mode store, paths, query client
 src/components/ shared components, one file each (see the gallery)
-src/features/   <area>/<Screen>Page.tsx: public, request, support, serve, chat, licence, admin
+src/features/   <area>/<Screen>Page.tsx: public, verify, request, support, serve, chat, licence, admin
 src/lib/        small framework-free helpers (class names, single-flight, unique-by)
 src/dev/        component gallery
 src/test/       Vitest setup

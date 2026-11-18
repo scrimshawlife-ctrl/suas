@@ -7,8 +7,8 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { assertMfaElevated, assertSuasAdmin } from '../../authz/index.js';
 import { commandScope, fingerprintRequest } from '../../idempotency/fingerprint.js';
 import { runIdempotentCommand } from '../../idempotency/run.js';
@@ -40,9 +40,7 @@ import type { ObjectStoragePort } from '../../storage/index.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 
-export interface AdminLicenceReviewRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface AdminLicenceReviewRouteDeps extends RouteContext {
   /** Absent when object storage is disabled; image and decision routes then answer 503. */
   readonly storage?: ObjectStoragePort;
 }

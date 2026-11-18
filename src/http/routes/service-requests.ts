@@ -11,6 +11,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { ForbiddenError, ResourceNotVisibleError } from '../../authz/index.js';
@@ -54,11 +55,6 @@ import {
   runIdempotentCommand,
 } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
-
-export interface ServiceRequestRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
-}
 
 const idParams = z.object({ id: z.string().uuid() });
 const caseIdParams = z.object({ caseId: z.string().uuid() });
@@ -236,10 +232,7 @@ async function buildRequestDetail(
   };
 }
 
-export function registerServiceRequestRoutes(
-  app: FastifyInstance,
-  deps: ServiceRequestRouteDeps,
-): void {
+export function registerServiceRequestRoutes(app: FastifyInstance, deps: RouteContext): void {
   app.get(`${API_PREFIX}/cases/:caseId/service-requests`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const { caseId } = caseIdParams.parse(request.params);

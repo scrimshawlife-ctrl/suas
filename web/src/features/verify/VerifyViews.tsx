@@ -3,8 +3,8 @@ import { Link } from 'react-router';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { AlertCircleIcon, CheckIcon } from '../../components/icons';
-import type { VerifyView } from '../public/verify-status';
 import { LICENCE_APPROVED_TEXT } from '../licence/licence-status';
+import type { VerifyView } from './verify-status';
 
 // Wording: VA_CONFIRMATION_FLOW.md §4 (suas-specs #72, released in 0.10.0); the
 // self-attestation step is DECISION_PENDING owner copy, as no released D-016 wording exists.

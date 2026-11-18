@@ -11,7 +11,7 @@ import {
   VERIFY_FIELDS,
   type VerifyFormErrors,
   type VerifyFormValues,
-} from '../public/verify-form';
+} from './verify-form';
 
 export interface VerifyFormProps {
   values: VerifyFormValues;

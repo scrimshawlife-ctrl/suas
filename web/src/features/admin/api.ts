@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { isApiError } from '../../api/errors';
-import { useIdempotencyKey } from '../../api/idempotency';
+import { useCommandKey } from '../../api/idempotency';
 import { queryKeys, resourceKeys } from '../../api/keys';
 import { requireData } from '../../api/require-data';
 import type { Schemas } from '../../api/types';
@@ -84,21 +84,6 @@ export function useResourceDraft(id: string) {
   });
 }
 
-/**
- * One Idempotency-Key per user action. A retry after a dropped response reuses it; the key
- * is renewed once the action succeeded or the server refused it (4xx), because the next
- * attempt then has a different body.
- */
-function useCommandKey() {
-  const key = useIdempotencyKey();
-  return {
-    headers: () => key.headers(),
-    settle: (error?: unknown) => {
-      if (error === undefined || (isApiError(error) && error.status < 500)) key.renew();
-    },
-  };
-}
-
 export function useExtractDrafts() {
   const queryClient = useQueryClient();
   const key = useCommandKey();
@@ -106,15 +91,15 @@ export function useExtractDrafts() {
     mutationFn: async (body: { source_text: string; source_link: string }) => {
       const { data } = await api.POST('/api/v0/admin/resource-drafts/commands/extract', {
         body,
-        headers: key.headers(),
+        headers: key.headers(body),
       });
       return requireData(data, 'drafts').drafts;
     },
-    onSuccess: () => {
-      key.settle();
+    onSuccess: (_drafts, body) => {
+      key.settle(body);
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.all });
     },
-    onError: key.settle,
+    onError: (error, body) => key.settle(body, error),
   });
 }
 
@@ -126,14 +111,14 @@ function useDraftCommand<T>(
   const queryClient = useQueryClient();
   const key = useCommandKey();
   return useMutation({
-    mutationFn: (body?: DraftEditRequest) => run(key.headers(), body),
-    onSuccess: (result) => {
-      key.settle();
+    mutationFn: (body?: DraftEditRequest) => run(key.headers(body), body),
+    onSuccess: (result, body) => {
+      key.settle(body);
       queryClient.setQueryData(queryKeys.adminDrafts.detail(id), toDraft(result));
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.lists() });
     },
-    onError: (error) => {
-      key.settle(error);
+    onError: (error, body) => {
+      key.settle(body, error);
       // A 409 means the draft already left "to review": show what it is now.
       if (isApiError(error) && error.status === 409)
         void queryClient.invalidateQueries({ queryKey: queryKeys.adminDrafts.detail(id) });
@@ -264,7 +249,7 @@ export function useLicenceCommand(id: string) {
   const key = useCommandKey();
   return useMutation({
     mutationFn: async (command: LicenceCommand) => {
-      const options = { params: { path: { id } }, headers: key.headers() };
+      const options = { params: { path: { id } }, headers: key.headers(command) };
       switch (command.name) {
         case 'approve': {
           const { data } = await api.POST('/api/v0/admin/licence-reviews/{id}/commands/approve', {
@@ -303,8 +288,8 @@ export function useLicenceCommand(id: string) {
           return null;
       }
     },
-    onSuccess: (review) => {
-      key.settle();
+    onSuccess: (review, command) => {
+      key.settle(command);
       if (review === null) {
         queryClient.removeQueries({ queryKey: licenceKeys.detail(id) });
       } else {
@@ -315,8 +300,8 @@ export function useLicenceCommand(id: string) {
       }
       void queryClient.invalidateQueries({ queryKey: licenceKeys.lists() });
     },
-    onError: (error) => {
-      key.settle(error);
+    onError: (error, command) => {
+      key.settle(command, error);
       if (isApiError(error) && (error.status === 409 || error.status === 403))
         void queryClient.invalidateQueries({ queryKey: licenceKeys.detail(id), exact: true });
     },
@@ -342,15 +327,15 @@ export function useCreateConsentTemplate() {
     mutationFn: async (body: { template_key: string; body: string }) => {
       const { data } = await api.POST('/api/v0/admin/consent-templates', {
         body,
-        headers: key.headers(),
+        headers: key.headers(body),
       });
       return requireData(data, 'consent template');
     },
-    onSuccess: () => {
-      key.settle();
+    onSuccess: (_template, body) => {
+      key.settle(body);
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminConsentTemplates.all });
     },
-    onError: key.settle,
+    onError: (error, body) => key.settle(body, error),
   });
 }
 

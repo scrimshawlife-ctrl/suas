@@ -35,9 +35,6 @@ export type LicenceFailureClass = (typeof LICENCE_FAILURE_CLASSES)[number];
 /** L8.1: only an answer from the reader counts, and NOT_A_LICENCE is the one failure that does. */
 export const COUNTED_FAILURE_CLASSES: readonly LicenceFailureClass[] = ['NOT_A_LICENCE'];
 
-export const isReaderUnavailable = (value: string): value is LicenceReaderUnavailableClass =>
-  (LICENCE_READER_UNAVAILABLE_CLASSES as readonly string[]).includes(value);
-
 export type YesNo = 'yes' | 'no' | null;
 export type FieldSource = 'barcode' | 'front' | null;
 export type CheckResult = 'pass' | 'fail' | 'not_run';

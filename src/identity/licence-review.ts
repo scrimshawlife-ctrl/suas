@@ -34,10 +34,11 @@ import {
   type LicenceImageSet,
   type LicenceImageSide,
 } from './licence-images.js';
-import type {
-  LicenceFailureClass,
-  LicenceReaderPort,
-  LicenceReadResult,
+import {
+  COUNTED_FAILURE_CLASSES,
+  type LicenceFailureClass,
+  type LicenceReaderPort,
+  type LicenceReadResult,
 } from './licence-reader.js';
 import {
   countAnsweredSubmissions,
@@ -375,7 +376,7 @@ async function settleUnreadable(
     const settled = await markUnreadable(tx, {
       reviewId: review.reviewId,
       failureClass,
-      answered: failureClass === 'NOT_A_LICENCE',
+      answered: COUNTED_FAILURE_CLASSES.includes(failureClass),
     });
     if (!settled) return;
     await auditLicenceReview(

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { CheckIcon } from '../../components/icons';
-import { SelfAttestButton } from '../request/VerifyViews';
+import { SelfAttestButton } from '../verify/VerifyViews';
 import {
   declineReasonText,
   LICENCE_APPROVED_TEXT,
