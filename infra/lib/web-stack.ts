@@ -18,6 +18,7 @@ import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import type { Construct } from 'constructs';
+import { deploymentPipelineEnabled } from './deployment-mode.js';
 import { repoRoot } from './lambda-code.js';
 
 export interface WebStackProps extends StackProps {
@@ -33,6 +34,7 @@ export class WebStack extends Stack {
 
   constructor(scope: Construct, id: string, props: WebStackProps) {
     super(scope, id, props);
+    const pipeline = deploymentPipelineEnabled(this);
 
     this.bucket = new s3.Bucket(this, 'SiteBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -63,6 +65,18 @@ export class WebStack extends Stack {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
         responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
         compress: true,
+        // Pipeline builds revalidate index.html at the edge; hashed assets keep their own long TTL.
+        ...(pipeline
+          ? {
+              cachePolicy: new cloudfront.CachePolicy(this, 'RevalidatingCache', {
+                minTtl: Duration.seconds(0),
+                defaultTtl: Duration.seconds(0),
+                maxTtl: Duration.days(365),
+                enableAcceptEncodingGzip: true,
+                enableAcceptEncodingBrotli: true,
+              }),
+            }
+          : {}),
       },
       // With OAC and no list permission, S3 answers 403 for a missing key.
       errorResponses: [spaFallback(403), spaFallback(404)],
@@ -75,16 +89,48 @@ export class WebStack extends Stack {
 
     const distDir = path.join(repoRoot, 'web', 'dist');
     if (existsSync(path.join(distDir, 'index.html'))) {
-      new s3deploy.BucketDeployment(this, 'SiteFiles', {
+      // Pipeline builds upload hashed assets first and never prune them, so a browser holding the
+      // previous index.html can still load its chunks during a deploy or rollback.
+      const assets = pipeline
+        ? new s3deploy.BucketDeployment(this, 'SiteAssets', {
+            sources: [s3deploy.Source.asset(distDir)],
+            destinationBucket: this.bucket,
+            exclude: ['*'],
+            include: ['assets/*'],
+            prune: false,
+            cacheControl: [
+              s3deploy.CacheControl.setPublic(),
+              s3deploy.CacheControl.maxAge(Duration.days(365)),
+              s3deploy.CacheControl.immutable(),
+            ],
+            logGroup: new logs.LogGroup(this, 'SiteAssetsLogs', {
+              retention: logs.RetentionDays.ONE_MONTH,
+              removalPolicy: RemovalPolicy.DESTROY,
+            }),
+          })
+        : undefined;
+      const siteFiles = new s3deploy.BucketDeployment(this, 'SiteFiles', {
         sources: [s3deploy.Source.asset(distDir)],
         destinationBucket: this.bucket,
         distribution: this.distribution,
         distributionPaths: ['/*'],
+        ...(pipeline
+          ? {
+              exclude: ['assets/*'],
+              prune: false,
+              cacheControl: [
+                s3deploy.CacheControl.noCache(),
+                s3deploy.CacheControl.maxAge(Duration.seconds(0)),
+                s3deploy.CacheControl.mustRevalidate(),
+              ],
+            }
+          : {}),
         logGroup: new logs.LogGroup(this, 'SiteFilesLogs', {
           retention: logs.RetentionDays.ONE_MONTH,
           removalPolicy: RemovalPolicy.DESTROY,
         }),
       });
+      if (assets !== undefined) siteFiles.node.addDependency(assets);
     }
 
     new CfnOutput(this, 'WebUrl', { value: `https://${props.webHostname}` });

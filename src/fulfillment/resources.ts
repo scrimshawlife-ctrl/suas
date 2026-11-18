@@ -376,7 +376,7 @@ export function freshnessBand(
   now: Date = new Date(),
 ): FreshnessBand {
   if (lastVerifiedAt === undefined) return 'UNVERIFIED';
-  // Drivers (esp. Hyperdrive) may yield a Date or an ISO string.
+  // node-pg returns a number, not a Date, for an infinite timestamptz; that reads as UNVERIFIED.
   const verifiedAt = lastVerifiedAt instanceof Date ? lastVerifiedAt : new Date(lastVerifiedAt);
   if (Number.isNaN(verifiedAt.getTime())) return 'UNVERIFIED';
   const ageDays = (now.getTime() - verifiedAt.getTime()) / 86_400_000;
@@ -387,7 +387,7 @@ export function freshnessBand(
 
 /**
  * R8.9: `verified_at` is `last_verified_at` under a client-facing name. One stored value;
- * a driver may hand back a Date or an ISO string.
+ * node-pg hands back a number, not a Date, for an infinite timestamptz, which reads as null.
  */
 export function verifiedAtIso(lastVerifiedAt: Date | undefined): string | null {
   if (lastVerifiedAt === undefined) return null;

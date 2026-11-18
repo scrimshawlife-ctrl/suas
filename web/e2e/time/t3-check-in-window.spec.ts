@@ -1,7 +1,9 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { runJobWorkerOnce } from '../helpers';
-import { ageCheckIns, closePeople, myUserId, startCheckIn, veteran } from '../support/support';
+import { myUserId, runJobWorkerOnce } from '../helpers';
+import { closePeople, startCheckIn } from '../support/support';
+import { ageCheckIns } from './time';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -21,7 +23,7 @@ test('T3: an answer past the 24-hour window, before the sweep, is refused 409 an
 }) => {
   // The past-window answer is refused on purpose.
   allow.push(/status of 409/);
-  const { page } = await veteran(browser, request, { name: 'Flo M.', county: 'Alameda' });
+  const { page } = await newVeteran(browser, request, { name: 'Flo M.', county: 'Alameda' });
   await startCheckIn(page);
   await answerFirst(page);
   await ageCheckIns(await myUserId(page, request));
@@ -45,7 +47,7 @@ test('T3: after the idle sweep abandons a Check-In, Home offers a new one and th
 }) => {
   // The abandoned Check-In refuses the answer on purpose.
   allow.push(/status of 409/);
-  const { page } = await veteran(browser, request, { name: 'Gil M.', county: 'Alameda' });
+  const { page } = await newVeteran(browser, request, { name: 'Gil M.', county: 'Alameda' });
   await startCheckIn(page);
   await answerFirst(page);
   await ageCheckIns(await myUserId(page, request));

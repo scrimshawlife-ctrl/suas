@@ -3,14 +3,13 @@ import { Outlet, useLocation } from 'react-router';
 import { useMe } from '../api/me';
 import { useMfaElevated, useSessionToken } from '../api/token-store';
 import { AdminLayout, type AdminNavItem } from '../components/AdminLayout';
+import { AppHeader } from '../components/AppHeader';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { CrisisStrip } from '../components/CrisisStrip';
 import { SkipLink } from '../components/SkipLink';
 import { Footer } from '../components/Footer';
 import { ModeSwitch, type Mode } from '../components/ModeSwitch';
 import { PublicHeader } from '../components/PublicHeader';
-import { ServeHeader } from '../components/ServeHeader';
-import { VeteranHeader } from '../components/VeteranHeader';
 import { useBuildInfo } from '../features/admin/api';
 import { adminScopeLine } from '../features/admin/scope';
 import { useChatUnreadCount } from '../features/chat/unread';
@@ -98,26 +97,17 @@ function SignedInChrome({ mode }: { mode: Mode }) {
   const signOut = useSignOut();
   const current = navCurrent(useLocation().pathname);
   const chatUnread = useChatUnreadCount();
-  const header =
-    mode === 'serve' ? (
-      <ServeHeader
-        current={current}
-        displayName={me.data?.display_name ?? null}
-        isAdmin={me.data?.is_admin === true}
-        onSignOut={signOut}
-        onModeSelect={setMode}
-        chatUnread={chatUnread}
-      />
-    ) : (
-      <VeteranHeader
-        current={current}
-        displayName={me.data?.display_name ?? null}
-        isAdmin={me.data?.is_admin === true}
-        onSignOut={signOut}
-        onModeSelect={setMode}
-        chatUnread={chatUnread}
-      />
-    );
+  const header = (
+    <AppHeader
+      mode={mode}
+      current={current}
+      displayName={me.data?.display_name ?? null}
+      isAdmin={me.data?.is_admin === true}
+      onSignOut={signOut}
+      onModeSelect={setMode}
+      chatUnread={chatUnread}
+    />
+  );
   return (
     <PageFrame header={header} mode={mode} current={current} chatUnread={chatUnread}>
       <Outlet />

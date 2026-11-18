@@ -7,7 +7,6 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession, revokeSession, SESSION_IDLE_TTL_SECONDS } from '../../src/auth/index.js';
@@ -21,7 +20,6 @@ import {
   type ChatAccess,
   type ChatMessage,
 } from '../../src/chat/index.js';
-import { createUser } from '../../src/identity/index.js';
 import {
   ApiGatewayConnectionPush,
   ConnectionPushError,
@@ -29,9 +27,8 @@ import {
   type LocalWebSocketPush,
 } from '../../src/realtime/index.js';
 import { createServer } from '../../src/http/server.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool, createPerson, keyed } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 interface ChatPage {
   messages: { body: string }[];
@@ -55,7 +52,7 @@ beforeAll(async () => {
   localPort = await local.listen(0);
   // Connection ids below are fixed, and registration ignores an existing id, so rows left
   // by an earlier run on the same database would belong to another user.
-  await pool().query(`DELETE FROM chat_connections WHERE connection_id = ANY($1)`, [
+  await appPool(app).query(`DELETE FROM chat_connections WHERE connection_id = ANY($1)`, [
     [
       'c-1',
       'c-2',
@@ -75,39 +72,15 @@ afterAll(async () => {
   await app.close();
 });
 
-function pool(): Pool {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
 interface Person {
   readonly userId: string;
   readonly sessionId: string;
   readonly headers: Record<string, string>;
 }
 
-async function person(tenantId: string, label: string): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
-  // Passed scan and a county (Santa Clara), so requesting and accepting both work.
-  await markVerifiedVeteran(pool(), tenantId, user.userId);
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return {
-    userId: user.userId,
-    sessionId: session.session.sessionId,
-    headers: { authorization: `Bearer ${session.credential}` },
-  };
-}
-
-function keyed(who: Person, key: string = randomUUID()): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': key };
-}
+/** A signed-in Veteran with a passed scan; the scan gives them Santa Clara. */
+const person = (tenantId: string, label: string) =>
+  createPerson(app, { tenantId, label, verified: true });
 
 /** A requester with a Service Request, optionally with a thread to `accepter`. */
 async function scenario(options: { accepted: boolean }) {
@@ -132,13 +105,13 @@ async function scenario(options: { accepted: boolean }) {
   const serviceRequestId: string = created.json().service_request_id;
 
   if (options.accepted) {
-    await pool().query(
+    await appPool(app).query(
       `INSERT INTO chat_threads
          (chat_thread_id, tenant_id, service_request_id, requester_user_id, accepted_by_user_id)
        VALUES ($1, $2, $3, $4, $5)`,
       [randomUUID(), tenantId, serviceRequestId, requester.userId, accepter.userId],
     );
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests SET accepted_by_user_id = $2
         WHERE tenant_id = $1 AND service_request_id = $3`,
       [tenantId, accepter.userId, serviceRequestId],
@@ -209,7 +182,7 @@ describe('participant-only access', () => {
   it('accepts a cursor in the format the chat-only encoder issued before C-21', async () => {
     const s = await scenario({ accepted: true });
     for (const text of ['one', 'two']) await send(s.requester, s.serviceRequestId, text);
-    const stored = await pool().query<{ at: string; id: string }>(
+    const stored = await appPool(app).query<{ at: string; id: string }>(
       `SELECT to_char(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at,
               m.chat_message_id AS id
          FROM chat_messages m
@@ -325,73 +298,74 @@ describe('push on the local adapter', () => {
 
   it('removes a connection from the registry when its socket closes', async () => {
     const s = await scenario({ accepted: true });
-    const issued = await issueConnectTicket(pool(), {
+    const issued = await issueConnectTicket(appPool(app), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
       sessionId: s.requester.sessionId,
     });
     const client = openSocket(`ws://127.0.0.1:${String(localPort)}/?ticket=${issued.ticket}`);
     expect(await client.opened).toBe('open');
-    expect(await listConnectionIds(pool(), s.tenantId, s.requester.userId)).toHaveLength(1);
+    expect(await listConnectionIds(appPool(app), s.tenantId, s.requester.userId)).toHaveLength(1);
     client.socket.close();
     for (let i = 0; i < 100; i += 1) {
-      if ((await listConnectionIds(pool(), s.tenantId, s.requester.userId)).length === 0) break;
+      if ((await listConnectionIds(appPool(app), s.tenantId, s.requester.userId)).length === 0)
+        break;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
-    expect(await listConnectionIds(pool(), s.tenantId, s.requester.userId)).toEqual([]);
+    expect(await listConnectionIds(appPool(app), s.tenantId, s.requester.userId)).toEqual([]);
   });
 });
 
 describe('connect tickets', () => {
   it('redeems an issued ticket exactly once', async () => {
     const s = await scenario({ accepted: true });
-    const { ticket, expiresAt } = await issueConnectTicket(pool(), {
+    const { ticket, expiresAt } = await issueConnectTicket(appPool(app), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
       sessionId: s.requester.sessionId,
     });
     // expires_at comes from the DB clock; measure against it, not Node's (they drift by ms).
-    const { rows } = await pool().query<{ now: Date }>('SELECT now() AS now');
+    const { rows } = await appPool(app).query<{ now: Date }>('SELECT now() AS now');
     const ttl = expiresAt.getTime() - rows[0]!.now.getTime();
     expect(ttl).toBeLessThanOrEqual(60_000);
     expect(ttl).toBeGreaterThan(50_000);
 
-    const lifecycle = createChatConnectionLifecycle(pool());
+    const lifecycle = createChatConnectionLifecycle(appPool(app));
     expect(await lifecycle.connect({ connectionId: 'c-1', ticket })).toBe('accepted');
     expect(await lifecycle.connect({ connectionId: 'c-2', ticket })).toBe('refused');
-    expect(await listConnectionIds(pool(), s.tenantId, s.requester.userId)).toEqual(['c-1']);
+    expect(await listConnectionIds(appPool(app), s.tenantId, s.requester.userId)).toEqual(['c-1']);
     await lifecycle.disconnect('c-1');
   });
 
   it('refuses an expired ticket', async () => {
     const s = await scenario({ accepted: true });
-    const { ticket } = await issueConnectTicket(pool(), {
+    const { ticket } = await issueConnectTicket(appPool(app), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
       sessionId: s.requester.sessionId,
     });
-    await pool().query(
+    await appPool(app).query(
       `UPDATE chat_connect_tickets SET expires_at = now() - interval '1 second'
         WHERE user_id = $1`,
       [s.requester.userId],
     );
-    expect(await redeemConnectTicket(pool(), ticket)).toBeUndefined();
+    expect(await redeemConnectTicket(appPool(app), ticket)).toBeUndefined();
   });
 
   it('refuses an unknown or missing ticket, and stores only a hash', async () => {
     const s = await scenario({ accepted: true });
-    const lifecycle = createChatConnectionLifecycle(pool());
+    const lifecycle = createChatConnectionLifecycle(appPool(app));
     expect(await lifecycle.connect({ connectionId: 'c-x', ticket: 'not-a-ticket' })).toBe(
       'refused',
     );
     expect(await lifecycle.connect({ connectionId: 'c-x', ticket: undefined })).toBe('refused');
 
-    const { ticket } = await issueConnectTicket(pool(), {
+    const { ticket } = await issueConnectTicket(appPool(app), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
       sessionId: s.requester.sessionId,
     });
-    const stored = await pool().query(
+    const stored = await appPool(app).query(
       `SELECT ticket_hash FROM chat_connect_tickets WHERE user_id = $1`,
       [s.requester.userId],
     );
@@ -421,13 +395,13 @@ describe('push failure and gone connections', () => {
 
   it('drops a connection the AWS adapter reports gone (HTTP 410)', async () => {
     const s = await scenario({ accepted: true });
-    await registerConnection(pool(), {
+    await registerConnection(appPool(app), {
       connectionId: 'aws-gone',
       tenantId: s.tenantId,
       userId: s.requester.userId,
       sessionId: s.requester.sessionId,
     });
-    await registerConnection(pool(), {
+    await registerConnection(appPool(app), {
       connectionId: 'aws-live',
       tenantId: s.tenantId,
       userId: s.requester.userId,
@@ -460,19 +434,21 @@ describe('push failure and gone connections', () => {
       counterpartRole: 'REQUESTER',
     };
     await pushToCounterpart(
-      { pool: pool(), push, log: { warn: () => undefined } },
+      { pool: appPool(app), push, log: { warn: () => undefined } },
       s.tenantId,
       access,
       message(access, s.accepter.userId),
     );
 
     expect(sentTo.sort()).toEqual(['aws-gone', 'aws-live']);
-    expect(await listConnectionIds(pool(), s.tenantId, s.requester.userId)).toEqual(['aws-live']);
+    expect(await listConnectionIds(appPool(app), s.tenantId, s.requester.userId)).toEqual([
+      'aws-live',
+    ]);
   });
 
   it('sends nothing to a connection whose session was revoked or went idle', async () => {
     const s = await scenario({ accepted: true });
-    const liveSession = await createSession(pool(), TEST_SESSION_SECRET, {
+    const liveSession = await createSession(appPool(app), TEST_SESSION_SECRET, {
       tenantId: s.tenantId,
       userId: s.requester.userId,
     });
@@ -480,32 +456,32 @@ describe('push failure and gone connections', () => {
       ['revoked-conn', s.requester.sessionId],
       ['live-conn', liveSession.session.sessionId],
     ] as const) {
-      await registerConnection(pool(), {
+      await registerConnection(appPool(app), {
         connectionId,
         tenantId: s.tenantId,
         userId: s.requester.userId,
         sessionId,
       });
     }
-    await revokeSession(pool(), s.requester.sessionId, 'LOGOUT');
+    await revokeSession(appPool(app), s.requester.sessionId, 'LOGOUT');
 
     // A session idle past the idle TTL is dead too, the same as in resolveSession.
-    const idleSession = await createSession(pool(), TEST_SESSION_SECRET, {
+    const idleSession = await createSession(appPool(app), TEST_SESSION_SECRET, {
       tenantId: s.tenantId,
       userId: s.requester.userId,
     });
-    await registerConnection(pool(), {
+    await registerConnection(appPool(app), {
       connectionId: 'idle-conn',
       tenantId: s.tenantId,
       userId: s.requester.userId,
       sessionId: idleSession.session.sessionId,
     });
-    const idleTicket = await issueConnectTicket(pool(), {
+    const idleTicket = await issueConnectTicket(appPool(app), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
       sessionId: idleSession.session.sessionId,
     });
-    await pool().query(
+    await appPool(app).query(
       `UPDATE sessions SET last_seen_at = now() - make_interval(secs => $2)
         WHERE session_id = $1`,
       [idleSession.session.sessionId, SESSION_IDLE_TTL_SECONDS.value + 60],
@@ -527,27 +503,27 @@ describe('push failure and gone connections', () => {
       counterpartRole: 'REQUESTER',
     };
     await pushToCounterpart(
-      { pool: pool(), push: recording, log: { warn: () => undefined } },
+      { pool: appPool(app), push: recording, log: { warn: () => undefined } },
       s.tenantId,
       access,
       message(access, s.accepter.userId),
     );
     expect(sentTo).toEqual(['live-conn']);
-    expect(await redeemConnectTicket(pool(), idleTicket.ticket)).toBeUndefined();
+    expect(await redeemConnectTicket(appPool(app), idleTicket.ticket)).toBeUndefined();
 
     // A ticket issued before the revocation cannot be redeemed either.
-    const late = await issueConnectTicket(pool(), {
+    const late = await issueConnectTicket(appPool(app), {
       tenantId: s.tenantId,
       userId: s.requester.userId,
       sessionId: liveSession.session.sessionId,
     });
-    await revokeSession(pool(), liveSession.session.sessionId, 'LOGOUT');
-    expect(await redeemConnectTicket(pool(), late.ticket)).toBeUndefined();
+    await revokeSession(appPool(app), liveSession.session.sessionId, 'LOGOUT');
+    expect(await redeemConnectTicket(appPool(app), late.ticket)).toBeUndefined();
   });
 
   it('pushes to the helper only while they still hold the request (C-05)', async () => {
     const s = await scenario({ accepted: true });
-    await registerConnection(pool(), {
+    await registerConnection(appPool(app), {
       connectionId: 'helper-conn',
       tenantId: s.tenantId,
       userId: s.accepter.userId,
@@ -568,12 +544,12 @@ describe('push failure and gone connections', () => {
       counterpartUserId: s.accepter.userId,
       counterpartRole: 'HOLDER',
     };
-    const deps = { pool: pool(), push: recording, log: { warn: () => undefined } };
+    const deps = { pool: appPool(app), push: recording, log: { warn: () => undefined } };
     await pushToCounterpart(deps, s.tenantId, access, message(access, s.requester.userId));
     expect(sentTo).toEqual(['helper-conn']);
 
     // Once the case closes, the helper's REST read is 404, so the push stops too.
-    await pool().query(
+    await appPool(app).query(
       `UPDATE support_cases SET status = 'CLOSED', closed_at = now()
         WHERE tenant_id = $1 AND case_id = (
           SELECT case_id FROM service_requests WHERE service_request_id = $2)`,
@@ -585,7 +561,7 @@ describe('push failure and gone connections', () => {
 
   it('still stores and returns the message when the push provider fails', async () => {
     const s = await scenario({ accepted: true });
-    await registerConnection(pool(), {
+    await registerConnection(appPool(app), {
       connectionId: 'failing-conn',
       tenantId: s.tenantId,
       userId: s.requester.userId,
@@ -599,7 +575,7 @@ describe('push failure and gone connections', () => {
     const server = createServer({
       config: app.config,
       buildInfo: () => app.buildInfo,
-      pool: pool(),
+      pool: appPool(app),
       challengeDelivery: app.challengeDelivery,
       mfa: app.mfa,
       chatPush: failing,
@@ -615,7 +591,7 @@ describe('push failure and gone connections', () => {
     const listed = await list(s.requester, s.serviceRequestId);
     expect(listed.json().messages[0].body).toBe('stored despite push failure');
     // A failed (not gone) push keeps the registry entry.
-    expect(await listConnectionIds(pool(), s.tenantId, s.requester.userId)).toEqual([
+    expect(await listConnectionIds(appPool(app), s.tenantId, s.requester.userId)).toEqual([
       'failing-conn',
     ]);
     await server.close();

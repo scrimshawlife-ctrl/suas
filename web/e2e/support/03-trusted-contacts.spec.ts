@@ -1,6 +1,7 @@
 import { expect, test } from '../fixtures';
 import { uniqueEmail } from '../helpers';
-import { closePeople, contactRow, invite, serverError, veteran } from './support';
+import { closePeople, contactRow, invite, serverError } from './support';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -8,7 +9,7 @@ test('adding a trusted contact: validation, success, the list, and Remove after 
   browser,
   request,
 }) => {
-  const { page } = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
   await page.goto('/trusted-contacts');
   await expect(page).toHaveTitle('Trusted contacts · SUAS');
   await expect(page.getByText('You have not added anyone yet.')).toBeVisible();
@@ -61,7 +62,7 @@ test('a second invite to the same address returns the first one, and the 11th ne
 }) => {
   // The 11th invite is refused on purpose.
   allow.push(/status of 429/);
-  const { page } = await veteran(browser, request, { name: 'Gus A.', county: 'Santa Clara' });
+  const { page } = await newVeteran(browser, request, { name: 'Gus A.', county: 'Santa Clara' });
   await page.goto('/trusted-contacts');
 
   // R9.4: the API answers 200 with the open invite; the list still has one row.
@@ -96,7 +97,7 @@ test('when adding a contact fails on the server, the form says so and keeps what
   // The 500 is the one this test returns on purpose.
   // Only the routed add may 500; a real backend 500 still fails the test.
   allow.push(/POST \S+\/api\/v0\/trusted-contacts :: 500$/, /status of 500/);
-  const { page } = await veteran(browser, request, { name: 'Tess Q.', county: 'Alameda' });
+  const { page } = await newVeteran(browser, request, { name: 'Tess Q.', county: 'Alameda' });
   await page.goto('/trusted-contacts');
   await page.route('**/api/v0/trusted-contacts', (route) =>
     route.request().method() === 'POST' ? route.fulfill(serverError()) : route.fallback(),

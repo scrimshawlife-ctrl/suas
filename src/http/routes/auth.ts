@@ -5,6 +5,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { withTransaction } from '../../db/index.js';
 import { appendAuditEvent } from '../../events/index.js';
 import {
@@ -24,9 +25,7 @@ import { UnauthenticatedError } from '../../authz/index.js';
 import type { FixedOtpCodeFor } from '../../auth/demo-fixed-code.js';
 import type { StagingAccess } from '../../auth/staging-access.js';
 
-export interface AuthRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface AuthRouteDeps extends RouteContext {
   readonly delivery: ChallengeDeliveryPort;
   readonly mfa: MfaPort;
   /** LOCAL demo only; see src/auth/demo-fixed-code.ts. */

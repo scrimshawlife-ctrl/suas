@@ -4,14 +4,15 @@
  */
 
 import { expect, type APIRequestContext, type Browser, type Page } from '@playwright/test';
-import { newPerson, newVerifiedVeteran, signUp, uniqueEmail } from '../helpers';
+import { newPerson, signUp, uniqueEmail } from '../helpers';
+import { newVeteran } from '../people';
 
 /** A Veteran and a trusted contact who accepted, with the RED notice on. Both in Santa Clara. */
 export async function veteranWithRedContact(
   browser: Browser,
   request: APIRequestContext,
 ): Promise<{ veteran: Page; contact: Page }> {
-  const { page: veteran } = await newVerifiedVeteran(browser, request, {
+  const { page: veteran } = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
     label: 'm-red',

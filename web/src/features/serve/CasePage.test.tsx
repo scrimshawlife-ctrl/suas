@@ -219,6 +219,22 @@ describe('Release', () => {
     expect(detailReads()).toBe(before);
   });
 
+  // The flushSync navigation runs only on success: a failed release must leave the case as it was.
+  it.each([
+    ['a 5xx', new ApiError(503, 'UNAVAILABLE', 'x')],
+    ['a dropped connection', new TypeError('Failed to fetch')],
+  ])('stays on the case page with the error after %s, for a retry', async (_name, failure) => {
+    client.POST.mockRejectedValue(failure);
+    renderCase();
+    await userEvent.click(await screen.findByRole('button', { name: 'Release this request' }));
+    const dialog = screen.getByRole('dialog', { name: 'Release this request?' });
+    await userEvent.type(within(dialog).getByLabelText(/Why are you releasing it/), 'Car broke.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm release' }));
+    expect(await within(dialog).findByText('That did not go through. Try again.')).toBeVisible();
+    expect(screen.queryByText('serve board')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Confirm release' })).toBeEnabled();
+  });
+
   it('is not offered to a non-accepter, who gets the not-found page', async () => {
     replies.detail = new ApiError(404, 'NOT_FOUND', 'Resource not found.');
     renderCase();

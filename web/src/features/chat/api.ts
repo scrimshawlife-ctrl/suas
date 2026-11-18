@@ -1,9 +1,9 @@
-import { infiniteQueryOptions, useInfiniteQuery, type QueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import type { ChatThreadPages } from '../../api/chat';
 import { api } from '../../api/client';
 import { queryKeys } from '../../api/keys';
+import { cursorPages, useSignedInInfiniteQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
-import { useSessionToken } from '../../api/token-store';
 import type { ChatThread } from '../../api/types';
 import { isReadOnly } from './threads';
 import { insertMessage, type ChatMessage, type MessagePage, type MessagesData } from './messages';
@@ -16,32 +16,25 @@ const PREVIEW_MAX = 140;
 
 /** GET /service-requests/{id}/chat/messages, newest first, paged by `next_cursor`. */
 export function chatMessagesQueryOptions(serviceRequestId: string, threadId?: string) {
-  return infiniteQueryOptions({
+  return cursorPages({
     queryKey: queryKeys.chatMessages(serviceRequestId, threadId),
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }): Promise<MessagePage> => {
+    fetchPage: async (page): Promise<MessagePage> => {
       const { data } = await api.GET('/api/v0/service-requests/{id}/chat/messages', {
         params: {
           path: { id: serviceRequestId },
-          query: {
-            limit: 50,
-            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
-            ...(threadId !== undefined ? { thread: threadId } : {}),
-          },
+          query: { limit: 50, ...page, ...(threadId !== undefined ? { thread: threadId } : {}) },
         },
       });
       return requireData(data, 'messages');
     },
-    getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
 }
 
 /** Without `threadId` the server returns the request's live thread. */
 export function useChatMessages(serviceRequestId: string | undefined, threadId?: string) {
-  const token = useSessionToken();
-  return useInfiniteQuery({
+  return useSignedInInfiniteQuery({
     ...chatMessagesQueryOptions(serviceRequestId ?? '', threadId),
-    enabled: token !== null && serviceRequestId !== undefined,
+    enabled: serviceRequestId !== undefined,
   });
 }
 

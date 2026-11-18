@@ -336,6 +336,11 @@ export async function recordRequestAcceptedOnCase(
   return updated;
 }
 
+/**
+ * `closed_at` is the cycle boundary, so it is the wall-clock time of the write, taken under the
+ * case row lock: a helper write that held that lock committed before it, even when the
+ * CLOSE transaction (and its `now()`) began earlier.
+ */
 async function setCaseStatus(
   tx: Queryable,
   tenantId: string,
@@ -348,7 +353,7 @@ async function setCaseStatus(
            updated_at = now(),
            triaged_at = CASE WHEN $3::text = 'TRIAGED' THEN now() ELSE triaged_at END,
            resolved_at = CASE WHEN $3::text = 'RESOLVED' THEN now() ELSE resolved_at END,
-           closed_at = CASE WHEN $3::text = 'CLOSED' THEN now() ELSE closed_at END
+           closed_at = CASE WHEN $3::text = 'CLOSED' THEN clock_timestamp() ELSE closed_at END
      WHERE tenant_id = $1 AND case_id = $2
      RETURNING ${CASE_COLUMNS}`,
     [tenantId, caseId, status],

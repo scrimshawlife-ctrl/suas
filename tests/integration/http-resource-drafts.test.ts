@@ -9,12 +9,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession, elevateSession } from '../../src/auth/index.js';
 import { RESOURCE_EXTRACTION_TOOL } from '../../src/catalog/index.js';
 import type { ScriptedModelInference } from '../../src/inference/index.js';
-import { grantSuasAdmin, createUser } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { appPool, createPerson } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
 
 const SOURCE_LINK = 'https://pantry.example.invalid/hours';
@@ -44,31 +42,12 @@ afterAll(async () => {
   await app.close();
 });
 
-function pool(target: StartedApp = app) {
-  if (target.pool === undefined) throw new Error('no pool');
-  return target.pool;
-}
-
-async function credential(
+/** A signed-in admin, or else a verified Veteran (listing Resources needs a passed scan). */
+const credential = (
   target: StartedApp,
   tenantId: string,
   options: { admin: boolean; elevate: boolean },
-) {
-  const user = await createUser(pool(target), {
-    tenantId,
-    email: syntheticEmail(`u-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
-  if (options.admin) await grantSuasAdmin(pool(target), user.userId, undefined);
-  // Listing Resources needs a passed scan (the onboarding gate).
-  else await markVerifiedVeteran(pool(target), tenantId, user.userId);
-  const session = await createSession(pool(target), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  if (options.elevate) await elevateSession(pool(target), session.session.sessionId);
-  return { userId: user.userId, headers: { authorization: `Bearer ${session.credential}` } };
-}
+) => createPerson(target, { tenantId, label: 'u', verified: !options.admin, ...options });
 
 const validResource = {
   service_name: 'Willow Creek Veterans Pantry',
@@ -99,7 +78,7 @@ async function extract(
 }
 
 async function draftCount(tenantId: string): Promise<number> {
-  const result = await pool().query(`SELECT 1 FROM resource_drafts WHERE tenant_id = $1`, [
+  const result = await appPool(app).query(`SELECT 1 FROM resource_drafts WHERE tenant_id = $1`, [
     tenantId,
   ]);
   return result.rowCount ?? 0;
@@ -165,7 +144,7 @@ describe('extract', () => {
     expect(listed.json().builder.available).toBe(true);
     expect(listed.json().drafts).toHaveLength(1);
 
-    const audit = await pool().query(
+    const audit = await appPool(app).query(
       `SELECT 1 FROM audit_events WHERE tenant_id = $1 AND event_type = 'RESOURCE_DRAFT_CREATED'`,
       [tenantId],
     );
@@ -249,7 +228,7 @@ describe('list paging on the shared cursor (C-21)', () => {
     expect(first.drafts).toHaveLength(2);
     // Before C-21 the cursor was base64url(`<microsecond UTC created_at>|<id>`).
     const last = first.drafts[1].resource_draft_id as string;
-    const stored = await pool().query<{ at: string }>(
+    const stored = await appPool(app).query<{ at: string }>(
       `SELECT to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at
          FROM resource_drafts WHERE resource_draft_id = $1`,
       [last],
@@ -283,7 +262,7 @@ describe('edit, discard and publish', () => {
     const admin = await credential(app, tenantId, { admin: true, elevate: true });
     const veteran = await credential(app, tenantId, { admin: false, elevate: false });
     // Listing resources needs a passed scan (requireVerifiedVeteran); only this Veteran.
-    await markVerifiedVeteran(pool(), tenantId, veteran.userId);
+    await markVerifiedVeteran(appPool(app), tenantId, veteran.userId);
     const draft = await oneDraft(admin.headers);
     const second = await oneDraft(admin.headers);
 
@@ -316,7 +295,7 @@ describe('edit, discard and publish', () => {
       published_resource_id: resourceId,
     });
 
-    const stored = await pool().query(
+    const stored = await appPool(app).query(
       `SELECT active, last_verified_at, verification_source FROM resources WHERE resource_id = $1`,
       [resourceId],
     );
@@ -335,7 +314,7 @@ describe('edit, discard and publish', () => {
     expect(listed[0]?.hours).toBe('weekdays 8-4');
     expect(second.resource_draft_id).not.toBe(draft.resource_draft_id);
 
-    const events = await pool().query<{ event_type: string }>(
+    const events = await appPool(app).query<{ event_type: string }>(
       `SELECT event_type FROM audit_events WHERE tenant_id = $1 ORDER BY occurred_at`,
       [tenantId],
     );
@@ -391,11 +370,11 @@ describe('edit, discard and publish', () => {
     expect(discarded.statusCode).toBe(200);
     expect(discarded.json().status).toBe('REJECTED');
 
-    const resources = await pool().query(`SELECT 1 FROM resources WHERE tenant_id = $1`, [
+    const resources = await appPool(app).query(`SELECT 1 FROM resources WHERE tenant_id = $1`, [
       tenantId,
     ]);
     expect(resources.rowCount).toBe(0);
-    const audit = await pool().query(
+    const audit = await appPool(app).query(
       `SELECT 1 FROM audit_events WHERE tenant_id = $1 AND event_type = 'RESOURCE_DRAFT_DISCARDED'`,
       [tenantId],
     );
@@ -482,7 +461,7 @@ describe('contacts and area (R8.8, R8.9)', () => {
       stale_warning: false,
     });
 
-    const stored = await pool().query<{ last_verified_at: Date }>(
+    const stored = await appPool(app).query<{ last_verified_at: Date }>(
       `SELECT last_verified_at FROM resources WHERE resource_id = $1`,
       [resourceId],
     );
@@ -507,7 +486,7 @@ describe('contacts and area (R8.8, R8.9)', () => {
       headers: admin.headers,
     });
     const resourceId = published.json().resource_id as string;
-    await pool().query(
+    await appPool(app).query(
       `UPDATE resources SET last_verified_at = now() - interval '100 days' WHERE resource_id = $1`,
       [resourceId],
     );
@@ -517,7 +496,7 @@ describe('contacts and area (R8.8, R8.9)', () => {
       url: `/api/v0/resources/${resourceId}`,
       headers: veteran.headers,
     });
-    const stored = await pool().query<{ last_verified_at: Date }>(
+    const stored = await appPool(app).query<{ last_verified_at: Date }>(
       `SELECT last_verified_at FROM resources WHERE resource_id = $1`,
       [resourceId],
     );
@@ -657,7 +636,7 @@ describe('contacts and area (R8.8, R8.9)', () => {
     const tenantId = randomUUID();
     const admin = await credential(app, tenantId, { admin: true, elevate: true });
     const draft = await draftWith(admin.headers, {});
-    await pool().query(
+    await appPool(app).query(
       `UPDATE resource_drafts
           SET contact_method = '988', contact_method_kind = 'PHONE', contacts = '[]'::jsonb
         WHERE resource_draft_id = $1`,
@@ -670,7 +649,7 @@ describe('contacts and area (R8.8, R8.9)', () => {
       headers: admin.headers,
     });
     expect(response.statusCode).toBe(400);
-    const resources = await pool().query(`SELECT 1 FROM resources WHERE tenant_id = $1`, [
+    const resources = await appPool(app).query(`SELECT 1 FROM resources WHERE tenant_id = $1`, [
       tenantId,
     ]);
     expect(resources.rowCount).toBe(0);

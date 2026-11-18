@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { COUNTY_OPTIONS, validateWelcome } from './welcome-form';
+import { COUNTY_OPTIONS } from '../../lib/people';
+import { validateWelcome } from './welcome-form';
 
 describe('welcome form', () => {
   it('accepts a name and a county', () => {

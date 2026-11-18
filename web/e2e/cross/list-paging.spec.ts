@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { APIRequestContext } from '@playwright/test';
-import { expect, test } from './fixtures';
-import { API_URL } from './config';
-import { bearer, newPerson, newVerifiedVeteran, signUp, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { API_URL } from '../config';
+import { bearer, newPerson, signUp, uniqueEmail } from '../helpers';
+import { newVeteran } from '../people';
 
 // G8: lists longer than one page load the rest by `next_cursor` through "Show more". The rows
 // are seeded through the API (the same calls the screens make), then read from the pages.
@@ -28,7 +29,7 @@ test('Show more loads the next page of Serve "You\'re helping", case requests an
   request,
 }) => {
   test.setTimeout(180_000);
-  const requester = await newVerifiedVeteran(browser, request, {
+  const requester = await newVeteran(browser, request, {
     name: 'Ana P.',
     county: 'Merced',
     label: 'pager',

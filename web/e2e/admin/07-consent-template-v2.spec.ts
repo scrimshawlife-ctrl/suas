@@ -1,8 +1,9 @@
 import type { Locator } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { newPerson, newVerifiedVeteran, signUp, uniqueEmail } from '../helpers';
+import { newPerson, signUp, uniqueEmail } from '../helpers';
 import { errorCode, nextResponse } from '../auth/auth';
 import { elevatedAdmin } from './admin';
+import { newVeteran } from '../people';
 
 const TEMPLATE_KEY = 'red-alert-trusted-contact';
 const CONSENTS = /\/api\/v0\/consents$/;
@@ -28,7 +29,7 @@ test('an admin publishes the next consent version while a Veteran is on the page
 }) => {
   // Provoked on purpose: the superseded version is refused.
   allow.push(/status of 422/);
-  const veteran = await newVerifiedVeteran(browser, request, {
+  const veteran = await newVeteran(browser, request, {
     name: 'Nia R.',
     county: 'Alameda',
     label: 'm2-vet',

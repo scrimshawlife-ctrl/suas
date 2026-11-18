@@ -21,8 +21,11 @@ export function uniqueEmail(role: string): string {
 }
 
 /** A person with their own browser context, so two people can be signed in at once. */
-export async function newPerson(browser: Browser): Promise<Page> {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+export async function newPerson(
+  browser: Browser,
+  viewport: { width: number; height: number } = { width: 1280, height: 900 },
+): Promise<Page> {
+  const context = await browser.newContext({ viewport });
   return context.newPage();
 }
 
@@ -87,9 +90,9 @@ export async function signUp(
 /**
  * Opens the request gate through the API with D-016 self-attestation (suas-specs #72
  * R9.1 D1), for scenarios about something else; the Verify form itself is driven in
- * 15-verify. VA confirmation binds one identity per account and needs a matching name, so a
- * shared synthetic person cannot confirm every e2e user. Then the page shows the
- * confirmed state.
+ * verify/01-va-confirmation. VA confirmation binds one identity per account and needs a
+ * matching name, so a shared synthetic person cannot confirm every e2e user. Then the page
+ * shows the confirmed state.
  */
 export async function passIdCheck(page: Page): Promise<void> {
   const token = await page.evaluate(() => window.sessionStorage.getItem('suas.session'));
@@ -108,24 +111,6 @@ export async function passIdCheck(page: Page): Promise<void> {
   await expect(
     page.getByRole('heading', { name: /You're confirmed|Thanks\. You can ask for help now\./ }),
   ).toBeVisible();
-}
-
-/** A new, signed-in, ID-checked Veteran in the given county, on /home. */
-export async function newVerifiedVeteran(
-  browser: Browser,
-  request: APIRequestContext,
-  options: { name: string; county: CountyLabel; label?: string },
-): Promise<{ page: Page; email: string }> {
-  const page = await newPerson(browser);
-  const email = uniqueEmail(options.label ?? 'vet');
-  await signUp(page, request, { email, name: options.name, county: options.county });
-  await passIdCheck(page);
-  // Continue with no return path goes to /request; Home is one link back from there.
-  await page.getByRole('link', { name: 'Continue' }).click();
-  await expect(page).toHaveURL(/\/request$/);
-  await page.getByRole('link', { name: /back to home/i }).click();
-  await expect(page).toHaveURL(/\/home$/);
-  return { page, email };
 }
 
 /** The crisis screen: its heading, and 911 and 988 as red-flagged call buttons. */
@@ -194,17 +179,6 @@ export async function withDb<T>(work: (client: pg.Client) => Promise<T>): Promis
   } finally {
     await client.end();
   }
-}
-
-/** Pretends a request was sent `minutes` ago, so the widening delay has passed. */
-export async function ageRequest(serviceRequestId: string, minutes: number): Promise<void> {
-  await withDb((db) =>
-    db.query(
-      `UPDATE service_requests SET submitted_at = submitted_at - make_interval(mins => $2)
-        WHERE service_request_id = $1`,
-      [serviceRequestId, minutes],
-    ),
-  );
 }
 
 /**

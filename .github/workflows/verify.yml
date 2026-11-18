@@ -14,14 +14,29 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  # staging-deploy.yml reuses these exact checks for the SHA it is about to deploy.
+  workflow_call:
+    inputs:
+      ref:
+        # Each job checks this before checkout, so a caller verifies exactly one commit.
+        description: Full 40-character commit SHA to verify
+        type: string
+        required: true
+
+permissions:
+  contents: read
 
 concurrency:
-  group: verify-${{ github.ref }}
-  cancel-in-progress: true
+  group: verify-${{ github.event_name }}-${{ inputs.ref || github.ref }}
+  # Only a newer push to the same PR cancels an older run. Every main SHA and every reusable
+  # call finishes, so a deployed SHA always has a complete result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -62,11 +77,20 @@ jobs:
       TEST_MIGRATIONS_DATABASE_URL: postgresql://suas:suas@localhost:5432/suas_migrations_test
 
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
+      - name: Require a full commit SHA for inputs.ref
+        env:
+          REF: ${{ inputs.ref }}
+          # A called workflow sees its caller's workflow_ref, so only verify.yml's own runs may omit ref.
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          [[ "$REF" =~ ^[0-9a-f]{40}$ || ( -z "$REF" && "$WORKFLOW_REF" == */.github/workflows/verify.yml@* ) ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          node-version: '22'
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '22.22.2'
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -96,7 +120,7 @@ jobs:
       - name: Stamp build provenance
         # ENVIRONMENT.md §8: commit SHA and build timestamp for shared builds.
         run: |
-          echo "SUAS_BUILD_COMMIT=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "SUAS_BUILD_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "SUAS_BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Format check
@@ -154,6 +178,10 @@ jobs:
       - name: Migration harness against a fresh database
         run: npm run migrate -- apply
 
+      - name: Migration rehearsal on the migration-test database
+        # Re-plans against the separate migration database and fails on drift or orphans.
+        run: npm run migrate:rehearse
+
       - name: Build provenance surface
         run: npm run provenance
 
@@ -194,11 +222,20 @@ jobs:
       SUAS_E2E_SAFETY_COPY_MODE: placeholder_test_only
 
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
+      - name: Require a full commit SHA for inputs.ref
+        env:
+          REF: ${{ inputs.ref }}
+          # A called workflow sees its caller's workflow_ref, so only verify.yml's own runs may omit ref.
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          [[ "$REF" =~ ^[0-9a-f]{40}$ || ( -z "$REF" && "$WORKFLOW_REF" == */.github/workflows/verify.yml@* ) ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          node-version: '22'
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '22.22.2'
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -228,7 +265,7 @@ jobs:
 
       - name: Upload the UI coverage log
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-e2e-ui-coverage-${{ matrix.shard }}
           path: web/e2e-results/coverage/
@@ -236,7 +273,7 @@ jobs:
 
       - name: Upload the Playwright report and traces
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-e2e-results-${{ matrix.shard }}
           path: web/e2e-results/
@@ -253,3 +290,31 @@ jobs:
         env:
           SHARD_RESULT: ${{ needs.web-e2e-shard.result }}
         run: test "$SHARD_RESULT" = success
+
+  skills:
+    # The skill metadata checks from skills-validate.yml, on every PR and every reusable call
+    # rather than only when skill paths change. Run through uv, as AGENTS.md asks for Python checks.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Require a full commit SHA for inputs.ref
+        env:
+          REF: ${{ inputs.ref }}
+          # A called workflow sees its caller's workflow_ref, so only verify.yml's own runs may omit ref.
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          [[ "$REF" =~ ^[0-9a-f]{40}$ || ( -z "$REF" && "$WORKFLOW_REF" == */.github/workflows/verify.yml@* ) ]] || { echo "::error::inputs.ref must be a full 40-character lowercase commit SHA"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Check skill metadata
+        run: uv run --no-project --python 3.12 --with pyyaml==6.0.3 python -m unittest discover -s tests -p 'test_skill_metadata.py' -v
+      - name: Validate SUAS runtime skills
+        run: uv run --no-project --python 3.12 --with pyyaml==6.0.3 python scripts/validate-skills.py
+
+# Not run here, by design:
+# - test:e2e:staging needs a deployed STAGING origin; staging-deploy.yml runs its @public set.
+# - soak:staging takes hours against STAGING; va:sandbox-smoke calls a real provider.
+# - settle:check consumes a finished CI run; smoke:demo is LOCAL-only; load:synthetic only
+#   prints timings.

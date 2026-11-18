@@ -28,6 +28,7 @@ export {
 export {
   assertSettlementContent,
   createSettlement,
+  findCaseSettlement,
   findCurrentSettlement,
   findSettlement,
   listSettlements,
@@ -37,6 +38,7 @@ export {
   type CreateSettlementInput,
   type Settlement,
   type SettlementContent,
+  type SettlementCycles,
 } from './settlements.js';
 export {
   BlockingFollowUpError,

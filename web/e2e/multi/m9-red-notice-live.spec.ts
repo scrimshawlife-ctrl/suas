@@ -3,14 +3,13 @@
  * page should show it without a reload; `page.clock` stands in for the wait.
  */
 
+import { NOTIFICATION_REFRESH_MS } from '../../src/app/poll-intervals';
 import { expect, test } from '../fixtures';
 import { POLL_MARGIN_MS, pauseAfterPoll, runClock } from '../helpers';
 import { veteranWithRedContact, redCheckIn } from './multi';
 
 test.describe.configure({ timeout: 180_000 });
 
-/** The Notifications page poll (NOTIFICATION_REFRESH_MS in src/features/support/api.ts). */
-const NOTICES_POLL_MS = 30_000;
 const isNoticesRead = (url: string) => url.includes('/api/v0/notifications');
 const NOTICE = /Someone who named you as a trusted contact asked SUAS to send you this notice/;
 
@@ -24,12 +23,12 @@ test('a RED notice shows on the open Notifications page without a reload', async
   await contact.goto('/notifications');
   await expect(contact.getByRole('heading', { name: 'Notifications' })).toBeVisible();
   await expect(contact.getByText(NOTICE)).toHaveCount(0);
-  await pauseAfterPoll(contact, isNoticesRead, NOTICES_POLL_MS);
+  await pauseAfterPoll(contact, isNoticesRead, NOTIFICATION_REFRESH_MS);
 
   await redCheckIn(veteran);
 
   // Not before the next poll; shown once it lands.
-  await runClock(contact, NOTICES_POLL_MS - POLL_MARGIN_MS);
+  await runClock(contact, NOTIFICATION_REFRESH_MS - POLL_MARGIN_MS);
   await expect(contact.getByText(NOTICE)).toHaveCount(0);
   await runClock(contact, POLL_MARGIN_MS);
   await contact.clock.resume();

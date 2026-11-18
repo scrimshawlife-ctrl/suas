@@ -266,11 +266,6 @@ export interface DueWorkItem {
   readonly scheduleVersion: number;
 }
 
-export interface DueSweepResult {
-  readonly marked: readonly string[];
-  readonly stale: readonly string[];
-}
-
 /**
  * Mark a Follow-Up due.
  *
