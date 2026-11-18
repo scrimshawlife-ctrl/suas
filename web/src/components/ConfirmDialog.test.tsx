@@ -62,6 +62,29 @@ describe('ConfirmDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps Tab inside the dialog, and Enter or Space on a button acts on it', async () => {
+    const user = userEvent.setup();
+    const { onConfirm, onClose, dialog } = renderDialog({ pending: false });
+    const close = within(dialog).getByRole('button', { name: 'Close' });
+    const publish = within(dialog).getByRole('button', { name: 'Publish' });
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' });
+    expect(close).toHaveFocus();
+    await user.tab();
+    expect(publish).toHaveFocus();
+    await user.tab();
+    expect(cancel).toHaveFocus();
+    await user.tab();
+    expect(close).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(cancel).toHaveFocus();
+
+    await user.keyboard(' ');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await user.tab({ shift: true });
+    await user.keyboard('{Enter}');
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
   it('shows no alert without an error', () => {
     const { dialog } = renderDialog({ pending: false });
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
 import { LicenceReviewImages } from './LicenceReviewImages';
 
@@ -53,6 +54,15 @@ describe('LicenceReviewImages object URLs', () => {
     await waitFor(() =>
       expect(queryClient.getQueryCache().find({ queryKey: imageKey })).toBeUndefined(),
     );
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('a failed fetch shows a retry notice and makes no object URL', async () => {
+    client.GET.mockRejectedValue(new ApiError(500, 'INTERNAL', 'x'));
+    renderImages();
+    expect(await screen.findByRole('alert')).toHaveTextContent('We could not load this image.');
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(create).not.toHaveBeenCalled();
   });
 });
