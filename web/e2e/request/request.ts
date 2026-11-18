@@ -1,50 +1,11 @@
 /**
- * Helpers for the requester flows (`web/e2e/request`). Ported from the QA sweep's
- * `request/people.ts`; people come from the shared helpers so each has their own context.
+ * Helpers for the requester flows (`web/e2e/request`), ported from the QA sweep. People come
+ * from `e2e/people.ts`.
  */
 
 import { randomUUID } from 'node:crypto';
-import {
-  expect,
-  type APIRequestContext,
-  type Browser,
-  type Locator,
-  type Page,
-} from '@playwright/test';
+import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { API_URL } from '../config';
-export { tag } from '../helpers';
-export { take } from '../serve/serve';
-import { newPerson, newVerifiedVeteran, signUp, uniqueEmail, type CountyLabel } from '../helpers';
-
-/** A signed-up, ID-checked Veteran on /home. */
-export async function veteran(
-  browser: Browser,
-  request: APIRequestContext,
-  options: { name: string; county?: CountyLabel },
-): Promise<Page> {
-  const { page } = await newVerifiedVeteran(browser, request, {
-    name: options.name,
-    county: options.county ?? 'Santa Clara',
-    label: 'req',
-  });
-  return page;
-}
-
-/** A signed-up helper in Serve mode, on /serve. */
-export async function helper(
-  browser: Browser,
-  request: APIRequestContext,
-  options: { name: string; county?: CountyLabel },
-): Promise<Page> {
-  const page = await newPerson(browser);
-  await signUp(page, request, {
-    email: uniqueEmail('req-helper'),
-    name: options.name,
-    county: options.county ?? 'Santa Clara',
-    role: 'serve',
-  });
-  return page;
-}
 
 /** The id at the end of a /requests/:id address. */
 export function idFromUrl(page: Page): string {

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // Root package only; web/ and infra/ have their own checks. Report-only: `npm run deadcode`
+  // is not part of verify or CI. src/main.ts and eval/run.ts come from package.json scripts.
+  "entry": [
+    // CLI entries run by package.json scripts.
+    "src/cli/{migrate,provenance,seed-local,seed-demo,seed-staging-sessions,seed-recovery-fixtures,provision-staging-auth-users,job-worker,va-sandbox-smoke}.ts",
+    // Lambda handlers bundled by infra/lib/lambda-code.ts (ENTRY_POINTS).
+    "src/aws/{websocket,job-worker,migrate,email-relay}-lambda.ts",
+    "scripts/*.ts",
+    "tests/**/*.test.ts",
+    "tests/{setup,global-setup}.ts",
+    "tests/e2e/**/*.spec.ts",
+    "playwright.config.ts",
+  ],
+  "project": ["src/**/*.ts", "scripts/**/*.ts", "eval/**/*.ts", "tests/**/*.ts", "*.config.ts"],
+  // Loading playwright.config.ts throws without SUAS_E2E_BASE_URL, so its entries are listed above.
+  "playwright": false,
+}

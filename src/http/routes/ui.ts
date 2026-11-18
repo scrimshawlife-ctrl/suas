@@ -28,6 +28,7 @@ import type {
 } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import {
   ChallengeVerificationFailedError,
   issueChallenge,
@@ -116,9 +117,7 @@ import {
 import { stagingAccessFromConfig } from '../../auth/staging-access.js';
 import { normalizeDestination } from '../../auth/secrets.js';
 
-export interface UiRouteDependencies {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface UiRouteDependencies extends RouteContext {
   readonly config: SuasConfig;
   /** D-012 safety-copy mode; controls the immediate-resources slot. */
   readonly safetyCopyMode: SafetyCopyMode;

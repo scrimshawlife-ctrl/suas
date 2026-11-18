@@ -7,13 +7,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
-import { findCurrentCase } from '../../src/coordination/index.js';
 import { createUser } from '../../src/identity/index.js';
-import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { createVerifiedUser } from '../helpers/verified-veteran.js';
+import { appPool, bearer, openRedCase } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -28,86 +25,16 @@ afterAll(async () => {
   await app.close();
 });
 
-const A0: Readonly<Record<string, string>> = {
-  sleep_manage_7d: 'NOT_AT_ALL',
-  reliable_connection_now: 'WELL_CONNECTED',
-  stress_manage_7d: 'NOT_AT_ALL',
-  basic_needs_48h: 'SECURE',
-  coping_24h: 'ABLE',
-  safe_now: 'YES',
-};
-
-interface QuestionJson {
-  question_id: string;
-  question_key: string;
-  options: { answer_option_id: string; option_key: string }[];
-}
-
-async function bearer(tenantId: string, userId: string) {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId });
-  return { authorization: `Bearer ${session.credential}` };
-}
-
-async function openRedCase() {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const tenantId = randomUUID();
-  const veteran = await createVerifiedUser(pool, {
-    tenantId,
-    email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  await ensurePublishedQv001(pool, veteran.userId);
-  const headers = await bearer(tenantId, veteran.userId);
-  const started = await app.server.inject({
-    method: 'POST',
-    url: '/api/v0/check-ins',
-    headers,
-  });
-  expect(started.statusCode).toBe(201);
-  const body: { check_in_id: string; questions: QuestionJson[] } = started.json();
-  for (const question of body.questions) {
-    const optionKey =
-      question.question_key === 'safe_now' ? 'NO_IMMEDIATE_HELP' : A0[question.question_key];
-    if (optionKey === undefined) continue;
-    const option = question.options.find((entry) => entry.option_key === optionKey);
-    if (option === undefined) throw new Error(`missing ${optionKey}`);
-    const saved = await app.server.inject({
-      method: 'POST',
-      url: `/api/v0/check-ins/${body.check_in_id}/responses`,
-      headers,
-      payload: {
-        question_id: question.question_id,
-        answer_option_id: option.answer_option_id,
-      },
-    });
-    expect(saved.statusCode).toBe(200);
-  }
-  const completed = await app.server.inject({
-    method: 'POST',
-    url: `/api/v0/check-ins/${body.check_in_id}/commands/complete`,
-    headers,
-  });
-  expect(completed.statusCode).toBe(200);
-  const supportCase = await findCurrentCase(pool, tenantId, veteran.userId);
-  if (supportCase === undefined) throw new Error('expected RED case');
-  return { pool, tenantId, veteran, headers, supportCase };
-}
-
 /** A signed-in person in the launch county who can accept requests. */
 async function accepterFor(tenantId: string) {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
+  const pool = appPool(app);
   const responder = await createUser(pool, {
     tenantId,
     email: syntheticEmail(`acc-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
     county: 'SANTA_CLARA',
   });
-  return { responder, headers: await bearer(tenantId, responder.userId) };
+  return { responder, headers: await bearer(app, tenantId, responder.userId) };
 }
 
 function settlementPayload(responderId: string) {
@@ -169,7 +96,7 @@ async function claimAndActivate(
 
 describe('POST /api/v0/cases/:id/commands/resolve', () => {
   it('resolves an ACTIVE case, replays idempotency, and exposes settlements', async () => {
-    const { tenantId, veteran, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { tenantId, veteran, supportCase, headers: veteranHeaders } = await openRedCase(app);
     const { responder, headers } = await claimAndActivate(
       tenantId,
       supportCase.caseId,
@@ -258,7 +185,7 @@ describe('POST /api/v0/cases/:id/commands/resolve', () => {
   });
 
   it('takes the author and accepter from the session, not from the request body', async () => {
-    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase(app);
     const { responder, headers } = await claimAndActivate(
       tenantId,
       supportCase.caseId,
@@ -286,7 +213,7 @@ describe('POST /api/v0/cases/:id/commands/resolve', () => {
   });
 
   it('requires Idempotency-Key and hides the case from anyone who did not accept it', async () => {
-    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase(app);
     const assigned = await claimAndActivate(tenantId, supportCase.caseId, veteranHeaders);
     const other = await accepterFor(tenantId);
 
@@ -308,8 +235,8 @@ describe('POST /api/v0/cases/:id/commands/resolve', () => {
   });
 
   it('hides foreign-tenant cases (cross-tenant isolation)', async () => {
-    const a = await openRedCase();
-    const b = await openRedCase();
+    const a = await openRedCase(app);
+    const b = await openRedCase(app);
     const { headers } = await claimAndActivate(a.tenantId, a.supportCase.caseId, a.headers);
 
     const foreign = await app.server.inject({

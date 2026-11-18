@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { createBrowserRouter, Outlet, type RouteObject } from 'react-router';
+import ServePage from '../features/serve/ServePage';
 import {
   RequireAdmin,
   RequireMfa,
@@ -223,8 +224,11 @@ export const routes: RouteObject[] = [
                 element: <ServeLayout />,
                 children: [
                   {
+                    // Not lazy: release and close flushSync-navigate here, which React Router only
+                    // renders at once when the route has nothing to load; a lazy /serve rendered in
+                    // a transition after a reload, so an immediate Back kept the stale case page.
                     path: paths.serve,
-                    ...page('Serve', () => import('../features/serve/ServePage')),
+                    Component: wrapScreen(ServePage, 'Serve · SUAS'),
                   },
                   {
                     path: '/serve/requests/:id',

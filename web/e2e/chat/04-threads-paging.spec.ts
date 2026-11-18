@@ -5,7 +5,8 @@
  */
 
 import { expect, test } from '../fixtures';
-import { newHelper, newRequester, seedAcceptedRequests } from '../serve/serve';
+import { seedAcceptedRequests } from '../serve/serve';
+import { newHelper, newVeteran } from '../people';
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -14,7 +15,7 @@ test('a person with more than one page of conversations reaches the oldest throu
   browser,
   request,
 }) => {
-  const requester = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: requester } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   // One more than the server's largest page (100, API.md §5).
   const summaries = await seedAcceptedRequests(request, requester, page, 101);

@@ -8,8 +8,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { enforceRateLimit } from '../../auth/index.js';
 import {
@@ -40,9 +40,7 @@ import { buildNotificationSendPayload, enqueueNotification } from '../../notific
 import { API_PREFIX } from '../../release/pins.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 
-export interface TrustedContactRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface TrustedContactRouteDeps extends RouteContext {
   /** Where present, the invite's `notification.send` job is enqueued at once. */
   readonly jobQueue?: DurableJobQueuePort;
 }

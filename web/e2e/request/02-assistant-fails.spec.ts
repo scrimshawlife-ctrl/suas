@@ -1,5 +1,7 @@
 import { expect, test } from '../fixtures';
-import { requestRows, tag, veteran } from './request';
+import { requestRows } from './request';
+import { tag } from '../helpers';
+import { newVeteran } from '../people';
 
 const FALLBACK =
   'The assistant is not available right now. The simple form below sends the same request.';
@@ -9,7 +11,7 @@ test('when the assistant cannot answer, the form takes over with what the Vetera
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   const typed = `I need someone to talk to tonight ${tag()}`;
   // No scripted turns: the fake model answers "unavailable" and the API returns FALLBACK_FORM.
   const reply = page.waitForResponse(
@@ -40,7 +42,7 @@ test('a server error from the assistant is explained and the form beside it stil
   allow,
 }) => {
   allow.push(/intake\/drafts :: 500/, /status of 500/);
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   const typed = `Groceries for the week ${tag()}`;
   await page.route('**/api/v0/intake/drafts', (route) =>
     route.fulfill({
@@ -73,7 +75,7 @@ test('if the assistant status cannot be read, the page offers the form alone', a
   allow,
 }) => {
   allow.push(/intake\/status :: 503/, /status of 503/);
-  const page = await veteran(browser, request, { name: 'Rory Q.' });
+  const { page } = await newVeteran(browser, request, { name: 'Rory Q.' });
   await page.route('**/api/v0/intake/status', (route) =>
     route.fulfill({
       status: 503,

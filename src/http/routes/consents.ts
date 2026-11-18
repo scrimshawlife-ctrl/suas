@@ -10,8 +10,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { requireVerifiedVeteran } from '../../identity/index.js';
@@ -29,11 +29,6 @@ import { appendDomainEvent } from '../../events/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
-
-export interface ConsentRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
-}
 
 const idParams = z.object({ id: z.string().uuid() });
 
@@ -63,7 +58,7 @@ function publicGrant(grant: ConsentGrant) {
   };
 }
 
-export function registerConsentRoutes(app: FastifyInstance, deps: ConsentRouteDeps): void {
+export function registerConsentRoutes(app: FastifyInstance, deps: RouteContext): void {
   app.get(`${API_PREFIX}/consents`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     await requireVerifiedVeteran(deps.pool, context);

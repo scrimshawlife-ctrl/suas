@@ -26,8 +26,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import {
   normalizeDestination,
   RecordingChallengeDelivery,
@@ -49,9 +49,7 @@ import {
 } from '../../inference/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 
-export interface DevRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface DevRouteDeps extends RouteContext {
   readonly delivery: ChallengeDeliveryPort;
   /** The app's model port; only the scripted fake can be fed turns. */
   readonly modelInference?: ModelInferencePort | undefined;

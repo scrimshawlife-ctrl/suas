@@ -16,6 +16,7 @@ import {
 } from '../../src/consent/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
@@ -51,8 +52,7 @@ describe('GET /api/v0/consents', () => {
   });
 
   it('lists only the caller veteran grants and hides other tenants', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const template = await publishedTemplate(pool);
 
     const tenantId = randomUUID();
@@ -112,8 +112,7 @@ describe('GET /api/v0/consents', () => {
 
 describe('POST /api/v0/consents', () => {
   it('requires Idempotency-Key and grants for the caller only', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const template = await publishedTemplate(pool);
     const tenantId = randomUUID();
     const veteran = await createVerifiedUser(pool, {
@@ -160,8 +159,7 @@ describe('POST /api/v0/consents', () => {
   });
 
   it('replays an identical Idempotency-Key without creating a second grant', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const template = await publishedTemplate(pool);
     const tenantId = randomUUID();
     const veteran = await createVerifiedUser(pool, {
@@ -240,8 +238,7 @@ describe('POST /api/v0/consents', () => {
   });
 
   it('rejects a conflicting payload for the same Idempotency-Key', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const template = await publishedTemplate(pool);
     const tenantId = randomUUID();
     const veteran = await createVerifiedUser(pool, {
@@ -292,8 +289,7 @@ describe('POST /api/v0/consents', () => {
 
 describe('POST /api/v0/consents/:id/commands/revoke', () => {
   it('revokes an owned grant and hides foreign grants', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const template = await publishedTemplate(pool);
     const tenantId = randomUUID();
     const veteran = await createVerifiedUser(pool, {

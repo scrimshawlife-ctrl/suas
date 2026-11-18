@@ -23,23 +23,23 @@ describe('useIdempotencyKey', () => {
 });
 
 describe('useCommandKey', () => {
-  it('keeps the key after a 5xx and renews it after a success or a 4xx', () => {
+  it('keeps the key after a 5xx and renews it after a success or another 4xx', () => {
     const { result } = renderHook(() => useCommandKey());
     const first = keyOf(result.current.headers());
-    result.current.settle(new ApiError(503, 'UNAVAILABLE', 'down'));
+    result.current.settle(undefined, new ApiError(503, 'UNAVAILABLE', 'down'));
     expect(keyOf(result.current.headers())).toBe(first);
-    result.current.settle(new ApiError(409, 'CONFLICT', 'moved'));
+    result.current.settle(undefined, new ApiError(409, 'CONFLICT', 'moved'));
     const second = keyOf(result.current.headers());
     expect(second).not.toBe(first);
-    result.current.settle();
+    result.current.settle(undefined);
     expect(keyOf(result.current.headers())).not.toBe(second);
   });
 
   it('keeps the key after a failure that is not an API answer (network error, abort)', () => {
     const { result } = renderHook(() => useCommandKey());
     const first = keyOf(result.current.headers());
-    result.current.settle(new TypeError('Failed to fetch'));
-    result.current.settle(new DOMException('The operation was aborted.', 'AbortError'));
+    result.current.settle(undefined, new TypeError('Failed to fetch'));
+    result.current.settle(undefined, new DOMException('The operation was aborted.', 'AbortError'));
     expect(keyOf(result.current.headers())).toBe(first);
   });
 });
