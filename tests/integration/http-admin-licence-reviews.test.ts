@@ -135,6 +135,12 @@ describe('admin licence review access', () => {
     const unelevated = await signIn(tenantId, { admin: true, elevate: false });
     expect((await get(veteran.headers, BASE)).statusCode).toBe(403);
     expect((await get(unelevated.headers, BASE)).statusCode).toBe(403);
+    // Every command shares gate(), so an unelevated admin's write is refused before it runs.
+    for (const name of ['approve', 'confirm', 'decline', 'revoke', 'recuse']) {
+      const write = await run(unelevated.headers, randomUUID(), name, {});
+      expect(write.statusCode, name).toBe(403);
+      expect(code(write), name).toBe('MFA_REQUIRED');
+    }
 
     const subject = await signIn(tenantId, { admin: true });
     const own = await submitted(tenantId, undefined, subject);
