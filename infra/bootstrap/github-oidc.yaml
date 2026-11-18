@@ -50,7 +50,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: suas-gha-staging-plan
-      Description: GitHub staging-deploy plan job (cdk diff through the CDK lookup role only)
+      Description: GitHub staging-deploy plan job (cdk diff from the Suas-* templates; no CDK roles)
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: '2012-10-17'

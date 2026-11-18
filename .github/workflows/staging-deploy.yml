@@ -154,7 +154,7 @@ jobs:
           AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
         run: test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
       - name: Diff the assembly against STAGING
-        # The plan role can only assume the read-only CDK lookup role, so no change set is created.
+        # The plan role only reads the Suas-* templates (no CDK role), so no change set is created.
         # `shell: bash` adds pipefail, so a failed diff fails the step instead of passing through tee.
         shell: bash
         run: |
