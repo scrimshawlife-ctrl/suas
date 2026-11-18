@@ -63,7 +63,10 @@ function defaultDeps(): VaVerifyDeps {
     log: (record) => console.info(JSON.stringify(record)),
     readSecret: async () => {
       if (secretId === undefined || secretId === '') return undefined;
-      const output = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
+      // Named, not defaulted: the role's read is conditioned on this stage (infra/lib/va-verify.ts).
+      const output = await client.send(
+        new GetSecretValueCommand({ SecretId: secretId, VersionStage: 'AWSCURRENT' }),
+      );
       return output.SecretString;
     },
   };

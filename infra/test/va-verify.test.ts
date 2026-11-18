@@ -102,6 +102,60 @@ describe('VA verify function', () => {
     }
   });
 
+  // Review of #326: a version that put-secret-value replaced stays unreadable with this role.
+  it('reads only the current version of its secret, and the function asks for it by stage', () => {
+    const role = roleOf(on.backend, 'va-verify.handler');
+    const [own] = policies(on.backend).filter((p) => p.roles.includes(role));
+    const reads = (own?.statements ?? []).filter((st) =>
+      [st.Action].flat().some((a: string) => a.startsWith('secretsmanager:')),
+    );
+    expect(reads).toHaveLength(1);
+    expect(reads[0]).toMatchObject({
+      Effect: 'Allow',
+      Action: 'secretsmanager:GetSecretValue',
+      Condition: { StringEquals: { 'secretsmanager:VersionStage': 'AWSCURRENT' } },
+    });
+    expect(JSON.stringify(reads[0]?.Resource)).toContain('VaVerifyApiKey');
+  });
+
+  // Review of #326: the secret ships with a placeholder; a refusal for want of a key shows here.
+  it('alarms on any not_configured refusal in its log group, and only with vaSandbox=true', () => {
+    const notConfigured = (t: Template) => ({
+      filters: ofType(t, 'AWS::Logs::MetricFilter').filter(
+        ([, r]) => r.Properties?.MetricTransformations?.[0]?.MetricName === 'VaVerifyNotConfigured',
+      ),
+      alarms: ofType(t, 'AWS::CloudWatch::Alarm').filter(
+        ([, r]) => r.Properties?.MetricName === 'VaVerifyNotConfigured',
+      ),
+    });
+    expect(notConfigured(off.backend)).toEqual({ filters: [], alarms: [] });
+
+    const { filters, alarms } = notConfigured(on.backend);
+    const [logGroupId] = ofType(on.backend, 'AWS::Logs::LogGroup')
+      .map(([id]) => id)
+      .filter((id) => id.startsWith('VaVerifyLogs'));
+    expect(filters).toHaveLength(1);
+    expect(filters[0]?.[1].Properties).toMatchObject({
+      LogGroupName: { Ref: logGroupId },
+      FilterPattern: '"va_verify_refused" "not_configured"',
+      MetricTransformations: [
+        { MetricNamespace: 'Suas/staging', MetricValue: '1', DefaultValue: 0 },
+      ],
+    });
+    expect(alarms).toHaveLength(1);
+    const alarm = alarms[0]?.[1].Properties;
+    expect(alarm).toMatchObject({
+      Namespace: 'Suas/staging',
+      Statistic: 'Sum',
+      Period: 300,
+      EvaluationPeriods: 1,
+      Threshold: 1,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      TreatMissingData: 'notBreaching',
+    });
+    expect(alarm?.AlarmActions).toBeUndefined();
+  });
+
   it('may be invoked by the API role only, through an identity policy scoped to its ARN', () => {
     const [fnId] = functionByHandler(on.backend, 'va-verify.handler') ?? [];
     const invokers = policies(on.backend).filter((p) =>

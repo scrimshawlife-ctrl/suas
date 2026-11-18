@@ -182,13 +182,23 @@ describe('VA confirmation through the verify function', () => {
     timeout.mockRestore();
   });
 
+  // Review of #326: a crash (FunctionError set, payload or not) is PROVIDER_UNAVAILABLE; an answer
+  // that is absent, zero bytes, `{}` or malformed is PROVIDER_RESPONSE_INVALID (R14.5 proposal).
   it('never reads a crashed, empty or malformed answer as a more definite one', async () => {
     const cases: Array<[InvokeCommandOutput, string]> = [
       [
         answered({ errorType: 'Sandbox.Timedout' }, { FunctionError: 'Unhandled' }),
         'PROVIDER_UNAVAILABLE',
       ],
+      [{ $metadata: {}, StatusCode: 200, FunctionError: 'Unhandled' }, 'PROVIDER_UNAVAILABLE'],
       [{ $metadata: {}, StatusCode: 200 }, 'PROVIDER_RESPONSE_INVALID'],
+      [
+        answered(undefined, {
+          Payload: new Uint8Array() as NonNullable<InvokeCommandOutput['Payload']>,
+        }),
+        'PROVIDER_RESPONSE_INVALID',
+      ],
+      [answered({}), 'PROVIDER_RESPONSE_INVALID'],
       [answered('not json at all'), 'PROVIDER_RESPONSE_INVALID'],
       [answered({ status: 'VERIFIED', failure_class: 'TIMEOUT' }), 'PROVIDER_RESPONSE_INVALID'],
       [
@@ -515,7 +525,7 @@ describe('the verify function as deployed', () => {
 
     const fn = await coldStart(SECRET_ARN);
     expect(await fn.handler(PERSON)).toEqual({ status: 'VERIFIED' });
-    expect(fn.secretReads).toEqual([{ SecretId: SECRET_ARN }]);
+    expect(fn.secretReads).toEqual([{ SecretId: SECRET_ARN, VersionStage: 'AWSCURRENT' }]);
     expect(vaCalls).toHaveLength(1);
     const logged = printed.join('\n');
     expect(printed.length).toBeGreaterThan(0);
@@ -560,7 +570,10 @@ describe('the verify function as deployed', () => {
 
       // Not cached: the next call reads the secret again and reaches VA.
       expect(await fn.handler(PERSON)).toEqual({ status: 'VERIFIED' });
-      expect(fn.secretReads).toEqual([{ SecretId: SECRET_ARN }, { SecretId: SECRET_ARN }]);
+      expect(fn.secretReads).toEqual([
+        { SecretId: SECRET_ARN, VersionStage: 'AWSCURRENT' },
+        { SecretId: SECRET_ARN, VersionStage: 'AWSCURRENT' },
+      ]);
       expect(vaCalls).toHaveLength(1);
     },
   );

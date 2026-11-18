@@ -25,6 +25,7 @@ export interface VaVerifyProps {
 export class VaVerify extends Construct {
   readonly function: lambda.Function;
   readonly secret: secretsmanager.Secret;
+  readonly logGroup: logs.LogGroup;
 
   constructor(scope: Construct, id: string, props: VaVerifyProps) {
     super(scope, id);
@@ -41,7 +42,7 @@ export class VaVerify extends Construct {
       },
     });
 
-    const logGroup = new logs.LogGroup(this, 'Logs', {
+    this.logGroup = new logs.LogGroup(this, 'Logs', {
       retention: props.logRetention,
       removalPolicy: RemovalPolicy.DESTROY,
     });
@@ -50,8 +51,16 @@ export class VaVerify extends Construct {
     const role = new iam.Role(this, 'Role', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
-    logGroup.grantWrite(role);
-    this.secret.grantRead(role);
+    this.logGroup.grantWrite(role);
+    // The current version only: the function asks for AWSCURRENT by name, so a version that
+    // put-secret-value replaced cannot be read with this role.
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['secretsmanager:GetSecretValue'],
+        resources: [this.secret.secretArn],
+        conditions: { StringEquals: { 'secretsmanager:VersionStage': 'AWSCURRENT' } },
+      }),
+    );
 
     this.function = new lambda.Function(this, 'Function', {
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -62,7 +71,7 @@ export class VaVerify extends Construct {
       // Above the 10 s VA request bound plus the secret read, below the API's 18 s invoke bound.
       timeout: Duration.seconds(15),
       role,
-      logGroup,
+      logGroup: this.logGroup,
       environment: {
         SUAS_ENV: props.suasEnv,
         SUAS_VA_CONFIRMATION_SECRET_ID: this.secret.secretArn,

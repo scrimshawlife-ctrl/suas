@@ -441,8 +441,9 @@ export class BackendStack extends Stack {
     // VA_CONFIRMATION_FLOW W9 item 4 (R9.2 option (b)): VA sandbox calls go through the
     // outside-VPC verify function, built only with `-c vaSandbox=true`. Off, the API keeps
     // SUAS_VA_CONFIRMATION_MODE=disabled. Only the API may invoke it, over the Lambda endpoint.
+    let vaVerify: VaVerify | undefined;
     if (config.vaSandbox) {
-      const vaVerify = new VaVerify(this, 'VaVerify', {
+      vaVerify = new VaVerify(this, 'VaVerify', {
         code,
         logRetention: LOG_RETENTION,
         suasEnv: config.suasEnv,
@@ -621,6 +622,18 @@ export class BackendStack extends Stack {
         `${label}RelayFailures`,
         relayFailure,
         `${label}: an email relay invoke was refused (relay_unavailable) or its answer lost (relay_ambiguous_ack).`,
+      );
+    }
+
+    // The secret is deployed with a placeholder, so until the operator stores the key every call
+    // is refused this way. Terms, not a JSON selector: the Node runtime prefixes these lines too.
+    if (vaVerify !== undefined) {
+      alarmOnLogMatches(
+        vaVerify.logGroup,
+        'VaVerifyNotConfigured',
+        'VaVerifyNotConfigured',
+        logs.FilterPattern.allTerms('va_verify_refused', 'not_configured'),
+        'VaVerify: a call was refused because the secret holds no valid VA sandbox key or could not be read (va_verify_refused, not_configured).',
       );
     }
 
