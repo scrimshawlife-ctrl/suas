@@ -40,20 +40,6 @@ export const REQUEST_BAND: Readonly<
   },
 };
 
-export const COUNTY_NAMES: Readonly<Record<string, string>> = {
-  SANTA_CLARA: 'Santa Clara',
-  SAN_MATEO: 'San Mateo',
-  ALAMEDA: 'Alameda',
-  SANTA_CRUZ: 'Santa Cruz',
-  SAN_BENITO: 'San Benito',
-  MERCED: 'Merced',
-  STANISLAUS: 'Stanislaus',
-};
-
-export function countyName(county: string): string {
-  return COUNTY_NAMES[county] ?? county;
-}
-
 export interface Freshness {
   /** "Verified Oct 28" from the publish date; plain band words only when there is none. */
   label: string;

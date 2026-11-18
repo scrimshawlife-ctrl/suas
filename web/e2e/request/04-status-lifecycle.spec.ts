@@ -1,7 +1,9 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { requestHelp } from '../helpers';
-import { fastDoubleClick, helper, recordAlerts, recordPosts, take, tag, veteran } from './request';
+import { requestHelp, tag } from '../helpers';
+import { fastDoubleClick, recordAlerts, recordPosts } from './request';
+import { newHelper, newVeteran } from '../people';
+import { take } from '../serve/serve';
 
 /** The chip the request carries on /requests and in Home's "Your requests". */
 async function expectListChip(page: Page, summary: string, chip: string): Promise<void> {
@@ -23,7 +25,7 @@ test('the requester follows a request from open to accepted, in progress, done, 
 }) => {
   // Two people walk the whole lifecycle: more steps than the default timeout allows for.
   test.slow();
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Ride to the clinic ${tag()}`;
   const id = await requestHelp(
     page,
@@ -42,7 +44,7 @@ test('the requester follows a request from open to accepted, in progress, done, 
   await expectListChip(page, summary, 'Received');
 
   // Accepted by a second person, through Serve.
-  const helperPage = await helper(browser, request, { name: 'Dee R.' });
+  const { page: helperPage } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(helperPage, summary, id);
   await page.goto(detail);
   await expect(page.getByRole('heading', { name: 'Dee R. accepted your request.' })).toBeVisible();
@@ -110,10 +112,10 @@ test('the requester can cancel after a helper accepted, and the helper sees it c
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Someone to talk to ${tag()}`;
   const id = await requestHelp(page, request, { category: 'PEER_SUPPORT', summary }, 'Park bench');
-  const helperPage = await helper(browser, request, { name: 'Dee R.' });
+  const { page: helperPage } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(helperPage, summary, id);
 
   await page.reload();
@@ -136,10 +138,10 @@ test("double-clicking Confirm it's done sends one confirmation and shows no erro
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Someone to talk to ${tag()}`;
   const id = await requestHelp(page, request, { category: 'PEER_SUPPORT', summary }, 'Park bench');
-  const helperPage = await helper(browser, request, { name: 'Dee R.' });
+  const { page: helperPage } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(helperPage, summary, id);
   await helperPage.getByRole('button', { name: "I've started helping" }).click();
   await expect(helperPage.getByRole('region', { name: 'Progress' })).toContainText('In progress');

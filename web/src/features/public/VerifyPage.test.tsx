@@ -462,7 +462,9 @@ describe('Verify results', () => {
     expectHelpOthers();
   });
 
-  it('409 IDEMPOTENCY_CONFLICT: says to send again, and the next send takes a new key', async () => {
+  // W6 item 3, W8 item 2: the first attempt may still be with VA, so only its key can replay
+  // its answer; a new key would be a second, counted attempt.
+  it('409 IDEMPOTENCY_CONFLICT: says to send again, and the same details reuse the key', async () => {
     const user = userEvent.setup();
     client.POST.mockRejectedValueOnce(new ApiError(409, 'IDEMPOTENCY_CONFLICT', 'conflict'));
     client.POST.mockResolvedValueOnce(answer('NOT_CONFIRMED', 'PERSON_NOT_FOUND'));
@@ -476,6 +478,34 @@ describe('Verify results', () => {
     expect(screen.getByRole('button', { name: 'Send to VA' })).toBeEnabled();
     await send(user);
     await screen.findByRole('heading', { name: "VA couldn't match your details" });
+    expect(sentKey(1)).toBe(sentKey(0));
+  });
+
+  it('409 IDEMPOTENCY_CONFLICT then changed details: the new body takes a new key', async () => {
+    const user = userEvent.setup();
+    client.POST.mockRejectedValueOnce(new ApiError(409, 'IDEMPOTENCY_CONFLICT', 'conflict'));
+    client.POST.mockResolvedValueOnce(answer('NOT_CONFIRMED', 'PERSON_NOT_FOUND'));
+    renderVerify();
+    await sendWith(user);
+    await screen.findByText(
+      "We couldn't send your details just now. Wait a moment, then send them again.",
+    );
+    await user.clear(screen.getByLabelText('ZIP code'));
+    await user.type(screen.getByLabelText('ZIP code'), '00001');
+    await send(user);
+    await screen.findByRole('heading', { name: "VA couldn't match your details" });
+    expect(sentKey(1)).not.toBe(sentKey(0));
+  });
+
+  it('a refusal (409 VA_NAME_MISMATCH) ran nothing, so the next send takes a new key', async () => {
+    const user = userEvent.setup();
+    client.POST.mockRejectedValueOnce(new ApiError(409, 'VA_NAME_MISMATCH', 'name'));
+    client.POST.mockResolvedValueOnce(answer('NOT_CONFIRMED', 'PERSON_NOT_FOUND'));
+    renderVerify();
+    await sendWith(user);
+    await screen.findByRole('heading', { name: 'Use the name on your account' });
+    await send(user);
+    await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
     expect(sentKey(1)).not.toBe(sentKey(0));
   });
 
@@ -600,7 +630,7 @@ describe('Verify self-attestation (D-016 fallback)', () => {
     ).toBeInTheDocument();
   });
 
-  it('a 409 IDEMPOTENCY_CONFLICT says to try again and the next press takes a new key', async () => {
+  it('a 409 IDEMPOTENCY_CONFLICT says to try again and the next press reuses the key', async () => {
     const user = userEvent.setup();
     client.POST.mockRejectedValueOnce(new ApiError(409, 'IDEMPOTENCY_CONFLICT', 'conflict'));
     client.POST.mockResolvedValueOnce(attested);
@@ -613,7 +643,7 @@ describe('Verify self-attestation (D-016 fallback)', () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Yes, I served' }));
     await screen.findByRole('heading', { name: /Thanks\. You can ask for help now\./ });
-    expect(sentKey(1)).not.toBe(sentKey(0));
+    expect(sentKey(1)).toBe(sentKey(0));
   });
 });
 

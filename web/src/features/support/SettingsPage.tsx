@@ -12,19 +12,14 @@ import { Dialog } from '../../components/Dialog';
 import { AlertCircleIcon } from '../../components/icons';
 import { Page } from '../../components/Page';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
+import { countyName } from '../../lib/people';
 import { ProfileFields } from '../public/ProfileFields';
 import {
-  COUNTY_OPTIONS,
   isCounty,
   profileSaveError,
   validateWelcome,
   type WelcomeErrors,
 } from '../public/welcome-form';
-
-/** "Merced" for MERCED. */
-function countyName(value: string): string {
-  return COUNTY_OPTIONS.find((option) => option.value === value)?.label ?? value;
-}
 
 /**
  * #293 / R12.2 owner question 1, recommended option (OWNER DECISION, draft copy): a county

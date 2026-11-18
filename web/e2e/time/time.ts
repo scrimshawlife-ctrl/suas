@@ -1,10 +1,21 @@
 /**
- * Time travel for the T-flows (build choice B1): each helper moves one stored timestamp into
+ * Time travel for every flow (build choice B1): each helper moves one stored timestamp into
  * the past, as if that much time had gone by. The job worker (`runJobWorkerOnce`) then runs the
  * sweeps that act on it. No product code changes; LOCAL e2e database only.
  */
 
 import { withDb } from '../helpers';
+
+/** Pretends a request was sent `minutes` ago, so the widening delay has passed. */
+export async function ageRequest(serviceRequestId: string, minutes: number): Promise<void> {
+  await withDb((db) =>
+    db.query(
+      `UPDATE service_requests SET submitted_at = submitted_at - make_interval(mins => $2)
+        WHERE service_request_id = $1`,
+      [serviceRequestId, minutes],
+    ),
+  );
+}
 
 /** Every release of this request happened `minutes` earlier (R8.5 restarts the widening wait). */
 export async function ageReleases(serviceRequestId: string, minutes: number): Promise<void> {
@@ -56,6 +67,17 @@ export async function ageElevation(userId: string): Promise<void> {
     db.query(
       `UPDATE sessions SET mfa_elevated_at = now() - interval '16 minutes'
         WHERE user_id = $1 AND mfa_elevated_at IS NOT NULL AND revoked_at IS NULL`,
+      [userId],
+    ),
+  );
+}
+
+/** Moves every Check-In of this Veteran 25 hours back (the R8.10 resume window is 24 hours). */
+export async function ageCheckIns(userId: string): Promise<void> {
+  await withDb((db) =>
+    db.query(
+      `UPDATE check_ins SET started_at = started_at - interval '25 hours'
+        WHERE veteran_user_id = $1`,
       [userId],
     ),
   );

@@ -3,7 +3,7 @@
  *
  * Default: LOCAL/TEST against TEST_DATABASE_URL.
  * Staging rehearsal: set SUAS_ENV=STAGING and DATABASE_URL to the synthetic
- * Neon unpooled URL (no production markers).
+ * STAGING database URL (no production markers).
  *
  * Prints structured JSON with opaque identifiers and no contact data.
  */

@@ -12,9 +12,10 @@ import { NEEDS } from '../../components/needs';
 import { Page } from '../../components/Page';
 import { ShowMoreButton, type PagedList } from '../../components/ShowMoreButton';
 import { StatusChip } from '../../components/StatusChip';
+import { firstName } from '../../lib/people';
 import { useSingleFlight } from '../../lib/single-flight';
 import { useCaseServiceRequests, useContactAttempts, useRunStep } from './api';
-import { firstName, summaryOrCategory } from './board';
+import { summaryOrCategory } from './board';
 import {
   NOT_FOUND_MESSAGE,
   attemptLabel,

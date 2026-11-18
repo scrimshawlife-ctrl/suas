@@ -1,3 +1,4 @@
+import { BOARD_REFRESH_MS } from '../../src/app/poll-intervals';
 import { expect, test } from '../fixtures';
 import {
   ageRequest,
@@ -30,8 +31,8 @@ test('T2: a request past 72 hours leaves the open board at its next 30-second re
   await board.goto('/serve');
   const take = board.getByRole('button', { name: new RegExp(`Take this request: .*${summary}`) });
   await expect(take).toBeVisible();
-  // The board polls every 30 s (serve/api.ts BOARD_REFRESH_MS); time stands still after a poll.
-  await pauseAfterPoll(board, (url) => /ownership=open/.test(url), 30_000);
+  // The board polls on BOARD_REFRESH_MS; time stands still after a poll.
+  await pauseAfterPoll(board, (url) => /ownership=open/.test(url), BOARD_REFRESH_MS);
 
   await ageRequest(requestId, 73 * 60);
   const output = runJobWorkerOnce();
@@ -39,7 +40,7 @@ test('T2: a request past 72 hours leaves the open board at its next 30-second re
   expect(output).toContain(requestId);
 
   // Still listed just before the next poll; gone once it lands.
-  await runClock(board, 30_000 - POLL_MARGIN_MS);
+  await runClock(board, BOARD_REFRESH_MS - POLL_MARGIN_MS);
   await expect(take).toBeVisible();
   await runClock(board, POLL_MARGIN_MS);
   await board.clock.resume();
