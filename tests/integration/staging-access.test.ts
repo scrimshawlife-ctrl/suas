@@ -19,6 +19,7 @@ import { API_PREFIX } from '../../src/release/pins.js';
 import { DEMO_FIXED_CODE_DESTINATION } from '../../src/auth/demo-fixed-code.js';
 import { CHALLENGE_VERIFY_LIMIT } from '../../src/auth/constants.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
 
 interface EffectCounts {
@@ -79,8 +80,7 @@ describe('D-052 STAGING fixture registry', () => {
     const otherEmail = syntheticEmail(`staging-other-${randomUUID().slice(0, 8)}`);
     const app = await stagingApp([{ tenantId, userId: fixtureUserId }]);
     try {
-      const pool = app.pool;
-      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const pool = appPool(app);
       const fixture = await createUser(pool, {
         userId: fixtureUserId,
         tenantId,
@@ -120,8 +120,7 @@ describe('D-052 STAGING fixture registry', () => {
   it('refuses runtime fake ID on STAGING and PRODUCTION', async () => {
     const app = await stagingApp([]);
     try {
-      const pool = app.pool;
-      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const pool = appPool(app);
       const before = await effectCounts(pool, app);
       const base = app.config;
       const fakeId = { ...base.idVerification, mode: 'fake' as const };
@@ -141,8 +140,7 @@ describe('D-052 STAGING fixture registry', () => {
     for (const demo of ['enabled', 'disabled'] as const) {
       const app = await stagingApp([], demo);
       try {
-        const pool = app.pool;
-        if (pool === undefined) throw new Error('The test app has no database pool.');
+        const pool = appPool(app);
         const tenantId = randomUUID();
         const user = await createUser(pool, {
           tenantId,
@@ -176,8 +174,7 @@ describe('D-052 STAGING fixture registry', () => {
     const email = syntheticEmail(`shared-${userId.slice(0, 8)}`);
     const app = await stagingApp([{ tenantId, userId }]);
     try {
-      const pool = app.pool;
-      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const pool = appPool(app);
       await createUser(pool, { userId, tenantId, email, status: 'ACTIVE' });
       const other = await createUser(pool, {
         tenantId: randomUUID(),
@@ -204,8 +201,7 @@ describe('D-052 STAGING fixture registry', () => {
   it('refuses API bearer and browser cookie requests for a non-admitted session', async () => {
     const app = await stagingApp([]);
     try {
-      const pool = app.pool;
-      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const pool = appPool(app);
       const tenantId = randomUUID();
       const user = await createUser(pool, {
         tenantId,
@@ -240,8 +236,7 @@ describe('D-052 STAGING fixture registry', () => {
   it('refuses an API challenge for a non-admitted account and creates nothing', async () => {
     const app = await stagingApp([]);
     try {
-      const pool = app.pool;
-      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const pool = appPool(app);
       const tenantId = randomUUID();
       const email = syntheticEmail(`api-challenge-${tenantId.slice(0, 8)}`);
       await createUser(pool, { tenantId, email, status: 'ACTIVE' });
@@ -272,8 +267,7 @@ describe('D-052 STAGING fixture registry', () => {
       listen: false,
     });
     try {
-      const pool = app.pool;
-      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const pool = appPool(app);
       const email = syntheticEmail(`ui-challenge-${randomUUID().slice(0, 8)}`);
       await createUser(pool, { tenantId, email, status: 'ACTIVE' });
       const before = await effectCounts(pool, app);
@@ -295,8 +289,7 @@ describe('D-052 STAGING fixture registry', () => {
     async (environment) => {
       const app = await stagingApp([]);
       try {
-        const pool = app.pool;
-        if (pool === undefined) throw new Error('The test app has no database pool.');
+        const pool = appPool(app);
         const before = await effectCounts(pool, app);
         const tenantId = randomUUID();
         const result = await issueChallenge(
@@ -349,8 +342,7 @@ describe('D-052 STAGING fixture registry', () => {
       SUAS_BROWSER_TENANT_ID: tenantId,
     });
     try {
-      const pool = app.pool;
-      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const pool = appPool(app);
       await createUser(pool, { userId, tenantId, email: knownEmail, status: 'ACTIVE' });
       const request = (destination: string) =>
         app.server.inject({
@@ -384,8 +376,7 @@ describe('D-052 STAGING fixture registry', () => {
     const email = syntheticEmail(`challenge-${userId.slice(0, 8)}`);
     const app = await stagingApp([{ tenantId, userId }]);
     try {
-      const pool = app.pool;
-      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const pool = appPool(app);
       await createUser(pool, { userId, tenantId, email, status: 'ACTIVE' });
       await issueChallenge(
         {
@@ -425,8 +416,7 @@ describe('D-052 STAGING fixture registry', () => {
     const email = syntheticEmail(`budget-${randomUUID().slice(0, 8)}`);
     const app = await stagingApp([{ tenantId, userId: randomUUID() }]);
     try {
-      const pool = app.pool;
-      if (pool === undefined) throw new Error('The test app has no database pool.');
+      const pool = appPool(app);
       await createUser(pool, { tenantId, email, status: 'ACTIVE' });
       const statuses: number[] = [];
       for (let attempt = 0; attempt <= CHALLENGE_VERIFY_LIMIT.value; attempt += 1) {

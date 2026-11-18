@@ -14,12 +14,12 @@ import { createSession, elevateSession } from '../../src/auth/index.js';
 import { seedManualAdapterConfigurations } from '../../src/fulfillment/index.js';
 import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 /** Sign in a SUAS admin with an MFA-elevated session, as the admin surface requires. */
 async function elevatedAdminCredential(elevate = true): Promise<string> {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('The test app has no database pool.');
+  const pool = appPool(app);
 
   const tenantId = randomUUID();
   const user = await createUser(pool, {
@@ -38,8 +38,7 @@ async function elevatedAdminCredential(elevate = true): Promise<string> {
 
 /** A signed-in, non-admin, unelevated session. */
 async function plainCredential(): Promise<string> {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('The test app has no database pool.');
+  const pool = appPool(app);
   const tenantId = randomUUID();
   const user = await createUser(pool, {
     tenantId,
@@ -195,8 +194,7 @@ describe('GET /api/v0/admin/adapter-catalog', () => {
 
 describe('admin adapter configurations', () => {
   it('lists without writing and enables a catalog API adapter only with secrets', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('The test app has no database pool.');
+    const pool = appPool(app);
     const tenantId = randomUUID();
     const user = await createUser(pool, {
       tenantId,

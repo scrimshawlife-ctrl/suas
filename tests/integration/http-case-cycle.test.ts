@@ -14,7 +14,6 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession, elevateSession } from '../../src/auth/index.js';
 import {
   executeCaseCommand,
   executeCaseCommandInTx,
@@ -22,10 +21,8 @@ import {
   recordContactInTx,
 } from '../../src/coordination/index.js';
 import { deployQrf } from '../../src/ui/commands.js';
-import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
+import { appPool, createPerson, keyed } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -46,41 +43,9 @@ interface Person {
   readonly headers: Record<string, string>;
 }
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function person(
-  tenantId: string,
-  label: string,
-  verified = false,
-  admin = false,
-): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  if (verified) await markVerifiedVeteran(pool(), tenantId, user.userId);
-  if (admin) await grantSuasAdmin(pool(), user.userId, undefined);
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  // Admin case commands need an MFA-elevated session (ADMIN.md §2).
-  if (admin) await elevateSession(pool(), session.session.sessionId);
-  return {
-    tenantId,
-    userId: user.userId,
-    headers: { authorization: `Bearer ${session.credential}` },
-  };
-}
-
-function keyed(who: Person): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': randomUUID() };
-}
+/** A signed-in person in Santa Clara; an admin also gets an MFA-elevated session (ADMIN.md §2). */
+const person = (tenantId: string, label: string, verified = false, admin = false) =>
+  createPerson(app, { tenantId, label, county: 'SANTA_CLARA', verified, admin });
 
 function post(who: Person, url: string, payload: Record<string, unknown> = {}) {
   return app.server.inject({ method: 'POST', url: `/api/v0${url}`, headers: keyed(who), payload });
@@ -245,7 +210,7 @@ describe('holder standing ends with the case cycle', () => {
     expect((await accept(former, first.requestId)).statusCode).toBe(200);
     await finishAndClose(requester, former, first.caseId, first.requestId);
 
-    await executeCaseCommand(pool(), {
+    await executeCaseCommand(appPool(app), {
       tenantId,
       caseId: first.caseId,
       command: 'REOPEN',
@@ -337,7 +302,7 @@ describe('holder standing ends with the case cycle', () => {
     const [cycleOne] = (await get(requester, `/cases/${caseId}/settlements`)).json()
       .settlements as { settlement_id: string }[];
 
-    await executeCaseCommand(pool(), {
+    await executeCaseCommand(appPool(app), {
       tenantId,
       caseId,
       command: 'REOPEN',
@@ -394,7 +359,7 @@ describe('holder standing ends with the case cycle', () => {
     // helper read keys on status RESOLVED, which only resolve writes, with the pointer.
     const stored = async () =>
       (
-        await pool().query<{ status: string; current_settlement_id: string | null }>(
+        await appPool(app).query<{ status: string; current_settlement_id: string | null }>(
           'SELECT status, current_settlement_id FROM support_cases WHERE case_id = $1',
           [caseId],
         )
@@ -414,7 +379,7 @@ describe('holder standing ends with the case cycle', () => {
 
     expect((await post(helper, `/cases/${caseId}/commands/close`)).statusCode).toBe(200);
     expect(await stored()).toEqual({ status: 'CLOSED', current_settlement_id: cycleOne });
-    await executeCaseCommand(pool(), {
+    await executeCaseCommand(appPool(app), {
       tenantId,
       caseId,
       command: 'REOPEN',
@@ -469,7 +434,8 @@ describe('holdsRequestInCase, the standing re-check a contact write runs under t
     const requester = await person(tenantId, 'requester', true);
     const otherRequester = await person(tenantId, 'other-requester', true);
     const helper = await person(tenantId, 'helper');
-    const holds = (caseId: string) => holdsRequestInCase(pool(), tenantId, caseId, helper.userId);
+    const holds = (caseId: string) =>
+      holdsRequestInCase(appPool(app), tenantId, caseId, helper.userId);
 
     const first = await submitRequest(requester);
     const otherCase = (await submitRequest(otherRequester)).caseId;
@@ -480,7 +446,7 @@ describe('holdsRequestInCase, the standing re-check a contact write runs under t
 
     await finishAndClose(requester, helper, first.caseId, first.requestId);
     expect(await holds(first.caseId)).toBe(false);
-    await executeCaseCommand(pool(), {
+    await executeCaseCommand(appPool(app), {
       tenantId,
       caseId: first.caseId,
       command: 'REOPEN',
@@ -511,7 +477,7 @@ describe('a close racing a helper write files it only in the cycle whose standin
       () => (settled = true),
     );
     for (let tries = 0; tries < 300 && !settled; tries += 1) {
-      const waiting = await pool().query<{ n: string }>(
+      const waiting = await appPool(app).query<{ n: string }>(
         `SELECT count(*) AS n FROM pg_stat_activity
           WHERE datname = current_database() AND wait_event_type = 'Lock'`,
       );
@@ -545,7 +511,7 @@ describe('a close racing a helper write files it only in the cycle whose standin
   /** REOPEN, then `next` accepts a new request: what does the next-cycle helper read? */
   async function nextCycleReads(world: Awaited<ReturnType<typeof readyToResolve>>) {
     const { tenantId, requester, next, caseId } = world;
-    await executeCaseCommand(pool(), {
+    await executeCaseCommand(appPool(app), {
       tenantId,
       caseId,
       command: 'REOPEN',
@@ -579,7 +545,7 @@ describe('a close racing a helper write files it only in the cycle whose standin
       (await post(world.former, `/cases/${world.caseId}/commands/resolve`, settlementContent))
         .statusCode,
     ).toBe(200);
-    const closing = await pool().connect();
+    const closing = await appPool(app).connect();
     try {
       await closing.query('BEGIN');
       await closeIn(closing, world);
@@ -601,7 +567,7 @@ describe('a close racing a helper write files it only in the cycle whose standin
       (await post(world.former, `/cases/${world.caseId}/commands/resolve`, settlementContent))
         .statusCode,
     ).toBe(200);
-    const closing = await pool().connect();
+    const closing = await appPool(app).connect();
     try {
       await closing.query('BEGIN');
       await closeIn(closing, world);
@@ -611,7 +577,7 @@ describe('a close racing a helper write files it only in the cycle whose standin
       await lockWaitersOrSettled(1, write);
       // The admin REOPEN queues on the case row behind the write, so the write is granted
       // the row first, the moment CLOSE commits, and re-checks a CLOSED case.
-      const reopened = executeCaseCommand(pool(), {
+      const reopened = executeCaseCommand(appPool(app), {
         tenantId: world.tenantId,
         caseId: world.caseId,
         command: 'REOPEN',
@@ -641,7 +607,7 @@ describe('a close racing a helper write files it only in the cycle whose standin
       (await post(world.former, `/cases/${world.caseId}/commands/resolve`, settlementContent))
         .statusCode,
     ).toBe(200);
-    const contact = await pool().connect();
+    const contact = await appPool(app).connect();
     let written: Awaited<ReturnType<typeof recordContactInTx>>;
     try {
       // The write's transaction begins in the old cycle, as a slow request's would.
@@ -650,7 +616,7 @@ describe('a close racing a helper write files it only in the cycle whose standin
       expect((await post(world.former, `/cases/${world.caseId}/commands/close`)).statusCode).toBe(
         200,
       );
-      await executeCaseCommand(pool(), {
+      await executeCaseCommand(appPool(app), {
         tenantId: world.tenantId,
         caseId: world.caseId,
         command: 'REOPEN',
@@ -687,8 +653,8 @@ describe('a close racing a helper write files it only in the cycle whose standin
       (await post(world.former, `/cases/${world.caseId}/commands/resolve`, settlementContent))
         .statusCode,
     ).toBe(200);
-    const closing = await pool().connect();
-    const contact = await pool().connect();
+    const closing = await appPool(app).connect();
+    const contact = await appPool(app).connect();
     try {
       // CLOSE's transaction starts first, so its now() predates the contact write.
       await closing.query('BEGIN');
@@ -716,8 +682,8 @@ describe('a close racing a helper write files it only in the cycle whose standin
 
   it('keeps a settlement committed while an earlier-begun CLOSE waited out of the next cycle', async () => {
     const world = await readyToResolve();
-    const blocker = await pool().connect();
-    const closing = await pool().connect();
+    const blocker = await appPool(app).connect();
+    const closing = await appPool(app).connect();
     try {
       await blocker.query('BEGIN');
       await blocker.query('SELECT 1 FROM support_cases WHERE case_id = $1 FOR UPDATE', [
@@ -751,8 +717,8 @@ describe('a close racing a helper write files it only in the cycle whose standin
       (await post(world.former, `/cases/${world.caseId}/commands/resolve`, settlementContent))
         .statusCode,
     ).toBe(200);
-    const writers = [await pool().connect(), await pool().connect()];
-    const closing = await pool().connect();
+    const writers = [await appPool(app).connect(), await appPool(app).connect()];
+    const closing = await appPool(app).connect();
     try {
       // A wait that never ends fails here in 5 s instead of hanging; a lock cycle fails as 40P01.
       for (const client of [...writers, closing]) {
@@ -915,7 +881,7 @@ describe('a new request after the case is resolved or closed', () => {
     await post(requester, `/service-requests/${second.requestId}/commands/CANCEL`, {
       reason: 'sorted out',
     });
-    await pool().query(
+    await appPool(app).query(
       `UPDATE support_cases SET status = 'CLOSED', closed_at = now() WHERE case_id = $1`,
       [second.caseId],
     );
@@ -949,13 +915,13 @@ describe('a new request after the case is resolved or closed', () => {
     expect(second.json().case_id).toBe(formCase);
 
     // The legacy Deploy resolves the same current case.
-    const deployed = await deployQrf(pool(), {
+    const deployed = await deployQrf(appPool(app), {
       tenantId,
       veteranUserId: requester.userId,
       correlationId: randomUUID(),
     });
     expect(deployed.serviceRequestId).toBeDefined();
-    const cases = await pool().query(
+    const cases = await appPool(app).query(
       `SELECT status FROM support_cases WHERE veteran_user_id = $1 ORDER BY created_at`,
       [requester.userId],
     );
