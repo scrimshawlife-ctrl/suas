@@ -7,7 +7,8 @@
 
 import type { CDPSession, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { newHelper, newRequester, progress, sendRequest, take } from './serve';
+import { progress, sendRequest, take } from './serve';
+import { newHelper, newVeteran } from '../people';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -33,7 +34,7 @@ test('release after a reload, then Back at once: the case page is re-read', asyn
   allow,
 }) => {
   allow.push(/status of 404/);
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(page, summary, id);
@@ -57,7 +58,7 @@ test('close after a reload, then Back at once: the closed case is gone', async (
   allow,
 }) => {
   allow.push(/status of 40[34]/);
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(page, summary, id);
