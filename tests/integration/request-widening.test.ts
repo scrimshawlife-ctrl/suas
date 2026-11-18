@@ -10,12 +10,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import { widenDueRequests } from '../../src/coordination/widening.js';
-import { createUser, type ServiceCounty } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
+import { type ServiceCounty } from '../../src/identity/index.js';
+import { appPool, createPerson, keyed } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -35,30 +33,9 @@ interface Person {
   readonly headers: Record<string, string>;
 }
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function person(tenantId: string, county: ServiceCounty): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`widen-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county,
-  });
-  // Requesting needs a passed scan; the chosen county is kept.
-  await markVerifiedVeteran(pool(), tenantId, user.userId, county);
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return { userId: user.userId, headers: { authorization: `Bearer ${session.credential}` } };
-}
-
-function keyed(who: Person): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': randomUUID() };
-}
+/** A signed-in, verified Veteran in the given county; requesting needs a passed scan. */
+const person = (tenantId: string, county: ServiceCounty) =>
+  createPerson(app, { tenantId, label: 'widen', county, verified: true });
 
 /** A submitted request whose submission is `waitedMinutes` before `now`. */
 async function submittedRequest(requester: Person, now: Date, waitedMinutes: number) {
@@ -85,7 +62,7 @@ async function submittedRequest(requester: Person, now: Date, waitedMinutes: num
     payload: {},
   });
   expect(submitted.statusCode).toBe(200);
-  await pool().query(
+  await appPool(app).query(
     `UPDATE service_requests SET submitted_at = $2 WHERE service_request_id = $1`,
     [serviceRequestId, new Date(now.getTime() - waitedMinutes * 60_000)],
   );
@@ -93,7 +70,7 @@ async function submittedRequest(requester: Person, now: Date, waitedMinutes: num
 }
 
 async function widenedAt(serviceRequestId: string): Promise<Date | null> {
-  const result = await pool().query<{ widened_at: Date | null }>(
+  const result = await appPool(app).query<{ widened_at: Date | null }>(
     `SELECT widened_at FROM service_requests WHERE service_request_id = $1`,
     [serviceRequestId],
   );
@@ -120,7 +97,7 @@ describe('the delay boundary', () => {
     const tooSoon = await submittedRequest(requester, now, 29);
     const due = await submittedRequest(requester, now, 31);
 
-    const result = await widenDueRequests(pool(), { now });
+    const result = await widenDueRequests(appPool(app), { now });
 
     expect(result.delayMinutes).toBe(30);
     const ids = result.widened.map((item) => item.serviceRequestId);
@@ -135,19 +112,19 @@ describe('the delay boundary', () => {
     const requester = await person(randomUUID(), 'SAN_MATEO');
     const waited = await submittedRequest(requester, now, 31);
 
-    await pool().query(
+    await appPool(app).query(
       `UPDATE app_settings SET value = '45'::jsonb WHERE setting_key = 'widening_delay_minutes'`,
     );
     try {
-      await widenDueRequests(pool(), { now });
+      await widenDueRequests(appPool(app), { now });
       expect(await widenedAt(waited)).toBeNull();
     } finally {
-      await pool().query(
+      await appPool(app).query(
         `UPDATE app_settings SET value = '30'::jsonb WHERE setting_key = 'widening_delay_minutes'`,
       );
     }
 
-    await widenDueRequests(pool(), { now });
+    await widenDueRequests(appPool(app), { now });
     expect(await widenedAt(waited)).not.toBeNull();
   });
 });
@@ -165,7 +142,7 @@ describe('who can see a widened request', () => {
     const serviceRequestId = await submittedRequest(requester, now, 31);
 
     expect(await openItems(bordering)).toEqual([]);
-    await widenDueRequests(pool(), { now });
+    await widenDueRequests(appPool(app), { now });
 
     expect(await openItems(bordering)).toEqual([
       expect.objectContaining({ service_request_id: serviceRequestId, widened: true }),
@@ -178,7 +155,7 @@ describe('who can see a widened request', () => {
       expect.objectContaining({ service_request_id: serviceRequestId, widened: true }),
     ]);
 
-    const audit = await pool().query<{ payload: { reached_counties: string[] } }>(
+    const audit = await appPool(app).query<{ payload: { reached_counties: string[] } }>(
       `SELECT payload FROM audit_events
         WHERE event_type = 'SERVICE_REQUEST_WIDENED' AND target_id = $1`,
       [serviceRequestId],
@@ -206,7 +183,7 @@ describe('who can see a widened request', () => {
       });
 
     expect((await accept(bordering)).statusCode).toBe(404);
-    await widenDueRequests(pool(), { now });
+    await widenDueRequests(appPool(app), { now });
     expect((await accept(bordering)).statusCode).toBe(200);
     expect((await accept(ownCounty)).statusCode).toBe(409);
     expect(await openItems(ownCounty)).toEqual([]);
@@ -230,7 +207,7 @@ describe('a Veteran whose case already has a helper', () => {
     // The case now has a helper; the next request joins that case.
     const later = await submittedRequest(requester, now, 31);
 
-    const result = await widenDueRequests(pool(), { now });
+    const result = await widenDueRequests(appPool(app), { now });
 
     expect(result.widened.map((item) => item.serviceRequestId)).toEqual([later]);
     expect(await widenedAt(held)).toBeNull();
@@ -267,7 +244,7 @@ describe('requests that never widen', () => {
     });
     expect(cancel.statusCode).toBe(200);
 
-    await widenDueRequests(pool(), { now });
+    await widenDueRequests(appPool(app), { now });
 
     expect(await widenedAt(accepted)).toBeNull();
     expect(await widenedAt(cancelled)).toBeNull();
@@ -280,13 +257,15 @@ describe('replay', () => {
     const requester = await person(randomUUID(), 'SAN_MATEO');
     const serviceRequestId = await submittedRequest(requester, now, 31);
 
-    await widenDueRequests(pool(), { now });
+    await widenDueRequests(appPool(app), { now });
     const first = await widenedAt(serviceRequestId);
-    const replay = await widenDueRequests(pool(), { now: new Date(now.getTime() + 3_600_000) });
+    const replay = await widenDueRequests(appPool(app), {
+      now: new Date(now.getTime() + 3_600_000),
+    });
 
     expect(replay.widened.map((item) => item.serviceRequestId)).not.toContain(serviceRequestId);
     expect(await widenedAt(serviceRequestId)).toEqual(first);
-    const audit = await pool().query(
+    const audit = await appPool(app).query(
       `SELECT 1 FROM audit_events
         WHERE event_type = 'SERVICE_REQUEST_WIDENED' AND target_id = $1`,
       [serviceRequestId],
@@ -300,15 +279,15 @@ describe('replay', () => {
     const serviceRequestId = await submittedRequest(requester, now, 31);
 
     const runs = await Promise.all([
-      widenDueRequests(pool(), { now }),
-      widenDueRequests(pool(), { now }),
+      widenDueRequests(appPool(app), { now }),
+      widenDueRequests(appPool(app), { now }),
     ]);
 
     const hits = runs
       .flatMap((run) => run.widened)
       .filter((w) => w.serviceRequestId === serviceRequestId);
     expect(hits).toHaveLength(1);
-    const audit = await pool().query(
+    const audit = await appPool(app).query(
       `SELECT 1 FROM audit_events
         WHERE event_type = 'SERVICE_REQUEST_WIDENED' AND target_id = $1`,
       [serviceRequestId],

@@ -14,6 +14,7 @@ import { VA_SANDBOX_RETURN_PATH } from '../../src/http/routes/va-sandbox-oauth.j
 import { createSession } from '../../src/auth/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 const vaConfig = {
@@ -32,8 +33,7 @@ const vaConfig = {
 let app: StartedApp;
 
 async function freshCredential(): Promise<string> {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
+  const pool = appPool(app);
   const tenantId = randomUUID();
   const user = await createUser(pool, {
     tenantId,

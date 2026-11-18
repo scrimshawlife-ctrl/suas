@@ -5,7 +5,6 @@
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
-.wrangler/
 *.pem
 *.key
 *.p12
@@ -47,7 +46,6 @@ artifacts/
 *.log
 logs/
 .local-secrets/
-wrangler.synthetic.jsonc
 
 # graphify knowledge graph output (local, regenerated)
 graphify-out/

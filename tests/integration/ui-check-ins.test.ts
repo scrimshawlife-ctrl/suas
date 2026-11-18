@@ -17,6 +17,7 @@ import {
 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { auditAccessibility } from '../../src/ui/index.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
@@ -29,12 +30,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
 });
-
-function pool() {
-  const value = app.pool;
-  if (value === undefined) throw new Error('The test app has no database pool.');
-  return value;
-}
 
 function authorized(credential: string) {
   return { authorization: `Bearer ${credential}` };
@@ -55,13 +50,13 @@ async function veteranSession(): Promise<{
   userId: string;
 }> {
   const tenantId = randomUUID();
-  const user = await createVerifiedUser(pool(), {
+  const user = await createVerifiedUser(appPool(app), {
     tenantId,
     email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
   });
-  await ensurePublishedQv001(pool(), user.userId);
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
+  await ensurePublishedQv001(appPool(app), user.userId);
+  const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
     tenantId,
     userId: user.userId,
   });
@@ -88,9 +83,9 @@ async function answerRequired(
   checkInId: string,
   answers: Readonly<Record<string, string>> = A0,
 ): Promise<void> {
-  const checkIn = await findCheckIn(pool(), tenantId, checkInId);
+  const checkIn = await findCheckIn(appPool(app), tenantId, checkInId);
   if (checkIn === undefined) throw new Error('expected an owned Check-In');
-  const questions = await listQuestionsWithOptions(pool(), checkIn.questionnaireVersion);
+  const questions = await listQuestionsWithOptions(appPool(app), checkIn.questionnaireVersion);
   for (const question of questions) {
     if (!question.required) continue;
     const optionKey = answers[question.questionKey];
@@ -115,7 +110,7 @@ async function answerRequired(
 }
 
 async function countCheckIns(tenantId: string, userId: string): Promise<number> {
-  const result = await pool().query<{ n: string }>(
+  const result = await appPool(app).query<{ n: string }>(
     `SELECT count(*)::text AS n FROM check_ins
       WHERE tenant_id = $1 AND veteran_user_id = $2`,
     [tenantId, userId],
@@ -124,7 +119,7 @@ async function countCheckIns(tenantId: string, userId: string): Promise<number> 
 }
 
 async function countSignals(tenantId: string, userId: string): Promise<number> {
-  const result = await pool().query<{ n: string }>(
+  const result = await appPool(app).query<{ n: string }>(
     `SELECT count(*)::text AS n FROM support_signals
       WHERE tenant_id = $1 AND veteran_user_id = $2`,
     [tenantId, userId],
@@ -196,7 +191,7 @@ describe('Check-In HTML — start, answer, complete', () => {
     expect(result.body).not.toContain('Save answer');
     const main = /<main[\s\S]*<\/main>/.exec(result.body)?.[0] ?? '';
     expect(main.toLowerCase()).not.toContain('transition');
-    expect(await findCurrentCase(pool(), tenantId, userId)).toBeUndefined();
+    expect(await findCurrentCase(appPool(app), tenantId, userId)).toBeUndefined();
     expect(auditAccessibility(result.body)).toEqual([]);
   });
 
@@ -219,7 +214,7 @@ describe('Check-In HTML — start, answer, complete', () => {
   it('offers no Continue link to a Check-In past the 24-hour window', async () => {
     const { credential } = await veteranSession();
     const stale = await startHtmlCheckIn(credential);
-    await pool().query(
+    await appPool(app).query(
       `UPDATE check_ins SET started_at = now() - interval '25 hours' WHERE check_in_id = $1`,
       [stale],
     );
@@ -239,13 +234,13 @@ describe('Check-In HTML — start, answer, complete', () => {
   it('abandons an in-flight Check-In past the 24-hour window and starts a new one (A2-25)', async () => {
     const { credential, tenantId, userId } = await veteranSession();
     const stale = await startHtmlCheckIn(credential);
-    await pool().query(
+    await appPool(app).query(
       `UPDATE check_ins SET started_at = now() - interval '25 hours' WHERE check_in_id = $1`,
       [stale],
     );
     const fresh = await startHtmlCheckIn(credential);
     expect(fresh).not.toBe(stale);
-    const statuses = await pool().query<{ check_in_id: string; status: string }>(
+    const statuses = await appPool(app).query<{ check_in_id: string; status: string }>(
       `SELECT check_in_id, status FROM check_ins WHERE tenant_id = $1 AND veteran_user_id = $2`,
       [tenantId, userId],
     );
@@ -295,7 +290,9 @@ describe('Check-In HTML — start, answer, complete', () => {
     expect(result.body).toContain('This Check-In is incomplete.');
     expect(result.body).toContain('No Support Signal was computed');
     expect(await countSignals(tenantId, userId)).toBe(0);
-    expect(await findCheckIn(pool(), tenantId, checkInId)).toMatchObject({ status: 'INCOMPLETE' });
+    expect(await findCheckIn(appPool(app), tenantId, checkInId)).toMatchObject({
+      status: 'INCOMPLETE',
+    });
   });
 
   it('treats an already-completed replay as a no-op', async () => {
@@ -317,7 +314,9 @@ describe('Check-In HTML — start, answer, complete', () => {
     expect(replay.statusCode).toBe(303);
     expect(replay.headers.location).toBe(`/app/check-ins/${checkInId}`);
     expect(await countSignals(tenantId, userId)).toBe(1);
-    expect(await findCheckIn(pool(), tenantId, checkInId)).toMatchObject({ status: 'COMPLETED' });
+    expect(await findCheckIn(appPool(app), tenantId, checkInId)).toMatchObject({
+      status: 'COMPLETED',
+    });
   });
 
   it('mentions a Support Case on a RED result without claiming emergency contact', async () => {
@@ -342,7 +341,7 @@ describe('Check-In HTML — start, answer, complete', () => {
     expect(result.body).toContain('A Support Case was opened');
     expect(result.body).toContain('did not contact emergency services');
     expect(result.body).toContain('not a clinical score');
-    const supportCase = await findCurrentCase(pool(), tenantId, userId);
+    const supportCase = await findCurrentCase(appPool(app), tenantId, userId);
     expect(supportCase?.prioritySignalLevel).toBe('RED');
   });
 });

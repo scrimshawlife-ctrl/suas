@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   });
   try {
     const registered = new Set(
-      listRegisteredApiRoutes().map((route) =>
+      listRegisteredApiRoutes(app.server).map((route) =>
         openApiKey(route.method, fastifyToOpenApiPath(route.path)),
       ),
     );

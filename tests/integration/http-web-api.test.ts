@@ -9,16 +9,16 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession, type RecordingChallengeDelivery } from '../../src/auth/index.js';
+import type { RecordingChallengeDelivery } from '../../src/auth/index.js';
 import {
   DisclosureGuardRequiredError,
   executeServiceRequestCommand,
 } from '../../src/coordination/index.js';
-import { createUser, grantSuasAdmin, setUserStatus } from '../../src/identity/index.js';
+import { setUserStatus } from '../../src/identity/index.js';
 import type { ModelToolCall, ScriptedModelInference } from '../../src/inference/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
+import { appPool, createPerson, keyed } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 /** The tenant that new email addresses sign up into (deployment config, not the request). */
 const SIGN_UP_TENANT = randomUUID();
@@ -43,11 +43,6 @@ afterAll(async () => {
   await app.close();
 });
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
 function delivery(): RecordingChallengeDelivery {
   return app.challengeDelivery as RecordingChallengeDelivery;
 }
@@ -58,32 +53,11 @@ interface Person {
   readonly headers: Record<string, string>;
 }
 
-async function person(
+/** A signed-in person shaped by `options`; an admin's session is not MFA-elevated. */
+const person = (
   tenantId: string,
   options: { county?: 'SANTA_CLARA' | 'ALAMEDA'; verified?: boolean; admin?: boolean } = {},
-): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`web-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    ...(options.county !== undefined ? { county: options.county } : {}),
-  });
-  if (options.verified === true) await markVerifiedVeteran(pool(), tenantId, user.userId);
-  if (options.admin === true) await grantSuasAdmin(pool(), user.userId, undefined);
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return {
-    tenantId,
-    userId: user.userId,
-    headers: { authorization: `Bearer ${session.credential}` },
-  };
-}
-
-function keyed(who: Person): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': randomUUID() };
-}
+) => createPerson(app, { tenantId, label: 'web', ...options, elevate: false });
 
 function getJson(url: string, who?: Person) {
   return app.server.inject({ method: 'GET', url, ...(who ? { headers: who.headers } : {}) });
@@ -158,7 +132,7 @@ describe('self sign-up by email code', () => {
       is_admin: false,
       enrolled_channels: { email: true, phone: false },
     });
-    const row = await pool().query(`SELECT tenant_id FROM users WHERE lower(email) = $1`, [
+    const row = await appPool(app).query(`SELECT tenant_id FROM users WHERE lower(email) = $1`, [
       email.toLowerCase(),
     ]);
     expect(row.rows).toEqual([{ tenant_id: SIGN_UP_TENANT }]);
@@ -167,7 +141,7 @@ describe('self sign-up by email code', () => {
   it('answers an unknown and a known email with the same 202', async () => {
     const known = await person(SIGN_UP_TENANT);
     const knownEmail = (
-      await pool().query<{ email: string }>(`SELECT email FROM users WHERE user_id = $1`, [
+      await appPool(app).query<{ email: string }>(`SELECT email FROM users WHERE user_id = $1`, [
         known.userId,
       ])
     ).rows[0]?.email;
@@ -187,7 +161,7 @@ describe('self sign-up by email code', () => {
   it('sends nothing to, and gives no session to, a suspended user', async () => {
     const suspended = await person(SIGN_UP_TENANT);
     const email = (
-      await pool().query<{ email: string }>(`SELECT email FROM users WHERE user_id = $1`, [
+      await appPool(app).query<{ email: string }>(`SELECT email FROM users WHERE user_id = $1`, [
         suspended.userId,
       ])
     ).rows[0]?.email as string;
@@ -195,7 +169,7 @@ describe('self sign-up by email code', () => {
     // A code issued while the user was active stops working once they are suspended.
     expect((await issue(email)).statusCode).toBe(202);
     const code = delivery().lastFor(email.toLowerCase())?.secret ?? '';
-    await setUserStatus(pool(), SIGN_UP_TENANT, suspended.userId, 'SUSPENDED');
+    await setUserStatus(appPool(app), SIGN_UP_TENANT, suspended.userId, 'SUSPENDED');
     const refused = await verify(email, code);
     expect(refused.statusCode).toBe(401);
     expect(refused.json().error.code).toBe('CHALLENGE_INVALID');
@@ -247,7 +221,9 @@ describe('display name and the me projection', () => {
   it('refuses a name the database check would reject, even if the API were bypassed', async () => {
     const who = await person(randomUUID());
     await expect(
-      pool().query(`UPDATE users SET display_name = ' padded ' WHERE user_id = $1`, [who.userId]),
+      appPool(app).query(`UPDATE users SET display_name = ' padded ' WHERE user_id = $1`, [
+        who.userId,
+      ]),
     ).rejects.toThrow(/users_display_name_check/);
   });
 });
@@ -263,7 +239,11 @@ describe('profile change audit (R9.5 a)', () => {
     await put('/api/v0/veterans/me/profile', { display_name: 'Marcus T.' });
     await put('/api/v0/veterans/me/profile', { display_name: 'Marc T.' });
 
-    const audits = await pool().query<{ event_type: string; actor_id: string; payload: object }>(
+    const audits = await appPool(app).query<{
+      event_type: string;
+      actor_id: string;
+      payload: object;
+    }>(
       `SELECT event_type, actor_id, payload FROM audit_events
         WHERE tenant_id = $1 AND target_type = 'User' AND target_id = $2
           AND event_type IN ('USER_COUNTY_CHANGED', 'USER_DISPLAY_NAME_CHANGED')
@@ -395,7 +375,7 @@ describe('meeting place', () => {
     expect(open.body).not.toContain(MARKER);
 
     expect((await accept(helper, id)).statusCode).toBe(200);
-    const events = await pool().query(
+    const events = await appPool(app).query(
       `SELECT (SELECT count(*) FROM domain_events WHERE payload::text LIKE $1)
             + (SELECT count(*) FROM audit_events WHERE payload::text LIKE $1) AS n`,
       [`%${MARKER}%`],
@@ -663,7 +643,7 @@ describe('requester-only commands', () => {
 
 describe('sign-in answers do not depend on who is enrolled', () => {
   async function emailOf(userId: string): Promise<string> {
-    const row = await pool().query<{ email: string }>(
+    const row = await appPool(app).query<{ email: string }>(
       `SELECT email FROM users WHERE user_id = $1`,
       [userId],
     );
@@ -679,16 +659,16 @@ describe('sign-in answers do not depend on who is enrolled', () => {
 
   it('writes a challenge row and an audit event even when no code is sent', async () => {
     const suspended = await person(SIGN_UP_TENANT);
-    await setUserStatus(pool(), SIGN_UP_TENANT, suspended.userId, 'SUSPENDED');
+    await setUserStatus(appPool(app), SIGN_UP_TENANT, suspended.userId, 'SUSPENDED');
     const email = await emailOf(suspended.userId);
     expect((await issue(email)).statusCode).toBe(202);
 
-    const rows = await pool().query<{ status: string }>(
+    const rows = await appPool(app).query<{ status: string }>(
       `SELECT status FROM auth_challenges WHERE user_id = $1`,
       [suspended.userId],
     );
     expect(rows.rows).toEqual([{ status: 'REVOKED' }]);
-    const audit = await pool().query(
+    const audit = await appPool(app).query(
       `SELECT 1 FROM audit_events WHERE aggregate_id = $1 AND event_type = 'AUTH_CHALLENGE_ISSUE_SKIPPED'`,
       [suspended.userId],
     );
@@ -712,7 +692,7 @@ describe('sign-in answers do not depend on who is enrolled', () => {
       send.mockRestore();
       quiet.mockRestore();
     }
-    const failures = await pool().query(
+    const failures = await appPool(app).query(
       `SELECT 1 FROM audit_events WHERE aggregate_id = $1 AND event_type = 'AUTH_CHALLENGE_DELIVERY_FAILED'`,
       [enrolled.userId],
     );
@@ -725,11 +705,11 @@ describe('sign-in answers do not depend on who is enrolled', () => {
     const email = syntheticEmail(`race-${randomUUID().slice(0, 8)}`).toLowerCase();
     const suffix = randomUUID().slice(0, 8).replaceAll('-', '');
     const fn = `race_fn_${suffix}`;
-    await pool().query(
+    await appPool(app).query(
       `CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$
          BEGIN RAISE EXCEPTION 'duplicate' USING ERRCODE = '23505', DETAIL = NEW.email; END $$`,
     );
-    await pool().query(
+    await appPool(app).query(
       `CREATE TRIGGER race_trg_${suffix} BEFORE INSERT ON users FOR EACH ROW
          WHEN (NEW.email = '${email}') EXECUTE FUNCTION ${fn}()`,
     );
@@ -745,8 +725,8 @@ describe('sign-in answers do not depend on who is enrolled', () => {
       expect(refused.json().error.code).toBe('CHALLENGE_INVALID');
       expect(refused.body).not.toContain(email);
     } finally {
-      await pool().query(`DROP TRIGGER race_trg_${suffix} ON users`);
-      await pool().query(`DROP FUNCTION ${fn}()`);
+      await appPool(app).query(`DROP TRIGGER race_trg_${suffix} ON users`);
+      await appPool(app).query(`DROP FUNCTION ${fn}()`);
     }
   });
 });
@@ -762,12 +742,12 @@ describe('request summaries and case-route details are bounded', () => {
       meeting_place: undefined,
     });
     const odd = await submitForm(other, { category: 'PEER_SUPPORT', meeting_place: undefined });
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests SET details = jsonb_build_object('summary', repeat('x', 500))
         WHERE service_request_id = $1`,
       [long.id],
     );
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests SET details = jsonb_build_object('summary', 12345)
         WHERE service_request_id = $1`,
       [odd.id],
@@ -839,7 +819,7 @@ describe('peer accept moves the request to ACCEPTED', () => {
     ).toMatchObject({
       service_requests: [],
     });
-    const audit = await pool().query<{ payload: Record<string, unknown> }>(
+    const audit = await appPool(app).query<{ payload: Record<string, unknown> }>(
       `SELECT payload FROM audit_events
         WHERE target_id = $1 AND event_type = 'SERVICE_REQUEST_PEER_ACCEPTED'`,
       [id],
@@ -866,7 +846,7 @@ describe('peer accept moves the request to ACCEPTED', () => {
     const { id } = await submitForm(requester);
     const results = await Promise.all([accept(a, id), accept(b, id)]);
     expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409]);
-    const audit = await pool().query(
+    const audit = await appPool(app).query(
       `SELECT 1 FROM audit_events WHERE target_id = $1 AND event_type = 'SERVICE_REQUEST_PEER_ACCEPTED'`,
       [id],
     );
@@ -884,12 +864,12 @@ describe('peer accept moves the request to ACCEPTED', () => {
 
     // ASSIGN is unchanged: a request reaching MATCHING still needs a consent evaluation.
     const second = await submitForm(requester);
-    await pool().query(
+    await appPool(app).query(
       `UPDATE service_requests SET status = 'MATCHING' WHERE service_request_id = $1`,
       [second.id],
     );
     await expect(
-      executeServiceRequestCommand(pool(), {
+      executeServiceRequestCommand(appPool(app), {
         tenantId,
         serviceRequestId: second.id,
         command: 'ASSIGN',
