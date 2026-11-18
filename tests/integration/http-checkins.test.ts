@@ -10,6 +10,7 @@ import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { abandonStaleCheckIns, ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
@@ -46,8 +47,7 @@ async function abandonAudits(checkInId: string) {
 }
 
 async function veteranSession() {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
+  const pool = appPool(app);
   const tenantId = randomUUID();
   const user = await createVerifiedUser(pool, {
     tenantId,
@@ -105,7 +105,7 @@ describe('POST /api/v0/check-ins', () => {
   // briefly unpublished here and restored whatever the outcome.
   it('answers 422 UNPROCESSABLE when no questionnaire version is published', async () => {
     const { headers } = await veteranSession();
-    const pool = app.pool!;
+    const pool = appPool(app);
     const unpublished = await pool.query<{ questionnaire_version: string }>(
       `UPDATE questionnaire_versions SET status = 'SUPERSEDED'
         WHERE tenant_id IS NULL AND status = 'PUBLISHED'
@@ -444,8 +444,7 @@ describe('abandonStaleCheckIns', () => {
   }
 
   it('abandons a stale Check-In, keeps a fresh one, and is replay-safe', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const stale = await startAged(25);
     const fresh = await startAged(1);
 

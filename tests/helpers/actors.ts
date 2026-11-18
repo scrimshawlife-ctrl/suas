@@ -44,7 +44,7 @@ export async function bearer(
 
 export interface PersonOptions {
   /** Defaults to a fresh synthetic tenant. */
-  readonly tenantId?: string;
+  readonly tenantId?: string | undefined;
   /** Prefix of the synthetic email address. */
   readonly label: string;
   /** Set at sign-up; omitted leaves the user without one. */
@@ -87,9 +87,9 @@ export async function createPerson(app: StartedApp, options: PersonOptions): Pro
     tenantId,
     userId: user.userId,
   });
-  if (options.elevate ?? options.admin === true) {
-    await elevateSession(pool, session.session.sessionId);
-  }
+  // An explicit `elevate` wins, including `false` for an unelevated admin.
+  const elevate = options.elevate === undefined ? options.admin === true : options.elevate;
+  if (elevate) await elevateSession(pool, session.session.sessionId);
   return {
     tenantId,
     userId: user.userId,
@@ -99,7 +99,10 @@ export async function createPerson(app: StartedApp, options: PersonOptions): Pro
   };
 }
 
-/** `who`'s headers plus an idempotency key, fresh unless `key` is given. */
+/**
+ * `who`'s headers plus an idempotency key, fresh unless `key` is given. The key is set
+ * last, so a stale key in `who.headers` never wins.
+ */
 export function keyed(
   who: { readonly headers: Record<string, string> },
   key: string = randomUUID(),
@@ -126,6 +129,8 @@ interface QuestionJson {
 /**
  * A verified Santa Clara Veteran completes a check-in answering `safe_now` with
  * NO_IMMEDIATE_HELP, which opens a RED Support Case through the public API.
+ * Fixed on purpose: NO_IMMEDIATE_HELP is rule R-RED-01 (src/signals/sv-001.ts), and
+ * callers that add staff or peers create them in Santa Clara to reach this case.
  */
 export async function openRedCase(app: StartedApp) {
   const pool = appPool(app);

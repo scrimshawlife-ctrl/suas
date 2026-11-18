@@ -10,6 +10,7 @@ import { startApp, type StartedApp } from '../../src/app.js';
 import { createSession } from '../../src/auth/index.js';
 import { ensurePublishedQv001 } from '../../src/signals/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
@@ -49,8 +50,7 @@ describe('GET /api/v0/veterans/me', () => {
   });
 
   it('projects enrollment, categories, and empty coordination state', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const tenantId = randomUUID();
     const user = await createVerifiedUser(pool, {
       tenantId,
@@ -94,8 +94,7 @@ describe('GET /api/v0/veterans/me', () => {
   });
 
   it('includes an open RED case after Check-In completion', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const tenantId = randomUUID();
     const user = await createVerifiedUser(pool, {
       tenantId,

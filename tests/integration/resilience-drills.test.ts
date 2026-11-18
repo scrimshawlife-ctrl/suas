@@ -47,6 +47,7 @@ import type { DisclosureRequest } from '../../src/consent/index.js';
 import { recordDrillResult, type DrillResult } from '../../src/resilience/index.js';
 import type { RecordingChallengeDelivery } from '../../src/auth/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { validEnv } from '../helpers/env.js';
 import { holdCase } from '../helpers/hold-case.js';
 
@@ -74,22 +75,10 @@ afterAll(async () => {
   await instanceB.close();
 });
 
-function poolA() {
-  const value = instanceA.pool;
-  if (value === undefined) throw new Error('Instance A has no database pool.');
-  return value;
-}
-
-function poolB() {
-  const value = instanceB.pool;
-  if (value === undefined) throw new Error('Instance B has no database pool.');
-  return value;
-}
-
 async function enrolledUser(): Promise<{ tenantId: string; userId: string; email: string }> {
   const tenantId = randomUUID();
   const email = syntheticEmail(`drill-${randomUUID().slice(0, 8)}`);
-  const user = await createUser(poolA(), { tenantId, email, status: 'ACTIVE' });
+  const user = await createUser(appPool(instanceA), { tenantId, email, status: 'ACTIVE' });
   return { tenantId, userId: user.userId, email };
 }
 
@@ -166,7 +155,7 @@ describe('RESILIENCE.md §17.8 and §17.6 — duplicate command and lost respons
       requestFingerprint: `veteran_user_id=${userId}`,
     };
 
-    const first = await runIdempotentCommand(poolA(), input, async (tx) => {
+    const first = await runIdempotentCommand(appPool(instanceA), input, async (tx) => {
       executions += 1;
       const opened = await openCase(tx, {
         tenantId,
@@ -178,7 +167,7 @@ describe('RESILIENCE.md §17.8 and §17.6 — duplicate command and lost respons
     });
 
     // The client never saw the response and retried on the other instance.
-    const replay = await runIdempotentCommand(poolB(), input, () => {
+    const replay = await runIdempotentCommand(appPool(instanceB), input, () => {
       executions += 1;
       return Promise.resolve({ result: { case_id: 'should-not-run' } });
     });
@@ -210,7 +199,7 @@ describe('RESILIENCE.md §17.8 and §17.6 — duplicate command and lost respons
 
     // A transient failure after the domain write, before the response is seen.
     await expect(
-      runIdempotentCommand(poolA(), input, async (tx) => {
+      runIdempotentCommand(appPool(instanceA), input, async (tx) => {
         await openCase(tx, {
           tenantId,
           veteranUserId: userId,
@@ -222,7 +211,7 @@ describe('RESILIENCE.md §17.8 and §17.6 — duplicate command and lost respons
     ).rejects.toThrow('simulated transient database failure');
 
     // The retry succeeds and leaves exactly one Case: the failed attempt rolled back.
-    const retried = await runIdempotentCommand(poolA(), input, async (tx) => {
+    const retried = await runIdempotentCommand(appPool(instanceA), input, async (tx) => {
       const opened = await openCase(tx, {
         tenantId,
         veteranUserId: userId,
@@ -233,9 +222,10 @@ describe('RESILIENCE.md §17.8 and §17.6 — duplicate command and lost respons
     });
     expect(retried.result).toBeDefined();
 
-    const cases = await poolA().query('SELECT case_id FROM support_cases WHERE tenant_id = $1', [
-      tenantId,
-    ]);
+    const cases = await appPool(instanceA).query(
+      'SELECT case_id FROM support_cases WHERE tenant_id = $1',
+      [tenantId],
+    );
     expect(cases.rowCount).toBe(1);
 
     record({
@@ -254,7 +244,7 @@ describe('RESILIENCE.md §17.12 and §17.4 — publication recovers after a cras
     const { tenantId, userId } = await enrolledUser();
 
     // Domain commit succeeds; the publisher "crashes" before running.
-    const appended = await appendDomainEvent(poolA(), {
+    const appended = await appendDomainEvent(appPool(instanceA), {
       tenantId,
       eventType: 'CASE_CREATED',
       aggregateType: 'SupportCase',
@@ -272,7 +262,7 @@ describe('RESILIENCE.md §17.12 and §17.4 — publication recovers after a cras
     // one batch.
     let batches = 0;
     for (;;) {
-      const pass = await publishPendingEvents(poolB(), (event) => {
+      const pass = await publishPendingEvents(appPool(instanceB), (event) => {
         delivered.push(event.eventId);
         return Promise.resolve();
       });
@@ -285,7 +275,7 @@ describe('RESILIENCE.md §17.12 and §17.4 — publication recovers after a cras
     const deliveries = delivered.filter((id) => id === appended.event.eventId).length;
     expect(deliveries).toBe(1);
 
-    const afterDrain = await publishPendingEvents(poolB(), (event) => {
+    const afterDrain = await publishPendingEvents(appPool(instanceB), (event) => {
       delivered.push(event.eventId);
       return Promise.resolve();
     });
@@ -313,7 +303,7 @@ describe('RESILIENCE.md §17.12 and §17.4 — publication recovers after a cras
 describe('RESILIENCE.md §17.10 — stale scheduled work is suppressed', () => {
   it('refuses a due job that a reschedule has superseded', async () => {
     const { tenantId, userId } = await enrolledUser();
-    const opened = await withTransaction(poolA(), (tx) =>
+    const opened = await withTransaction(appPool(instanceA), (tx) =>
       openCase(tx, {
         tenantId,
         veteranUserId: userId,
@@ -322,7 +312,7 @@ describe('RESILIENCE.md §17.10 — stale scheduled work is suppressed', () => {
       }),
     );
 
-    const followUp = await createFollowUp(poolA(), {
+    const followUp = await createFollowUp(appPool(instanceA), {
       tenantId,
       caseId: opened.supportCase.caseId,
       responsibleType: 'USER',
@@ -333,13 +323,13 @@ describe('RESILIENCE.md §17.10 — stale scheduled work is suppressed', () => {
     });
 
     // A worker claims the due job and holds its schedule version.
-    const claimed = await claimDueWork(poolA());
+    const claimed = await claimDueWork(appPool(instanceA));
     const mine = claimed.find((entry) => entry.item.followUpId === followUp.followUpId);
     expect(mine).toBeDefined();
     const staleItem = mine?.item ?? { followUpId: followUp.followUpId, scheduleVersion: 0 };
 
     // The Follow-Up is rescheduled while that job is in flight.
-    await rescheduleFollowUp(poolA(), {
+    await rescheduleFollowUp(appPool(instanceA), {
       tenantId,
       followUpId: followUp.followUpId,
       newDueAt: new Date(Date.now() + 3_600_000),
@@ -349,7 +339,7 @@ describe('RESILIENCE.md §17.10 — stale scheduled work is suppressed', () => {
     });
 
     // The in-flight job must not transition the Follow-Up it no longer owns.
-    const stale = await markFollowUpDue(poolA(), tenantId, staleItem);
+    const stale = await markFollowUpDue(appPool(instanceA), tenantId, staleItem);
     expect(stale.transitioned).toBe(false);
     expect(stale.reason).toBe('STALE_OR_NOT_APPLICABLE');
 
@@ -367,17 +357,17 @@ describe('RESILIENCE.md §17.10 — stale scheduled work is suppressed', () => {
 describe('SCALING.md §10 — growing lists are bounded', () => {
   it('caps an open-request page regardless of what the caller asks for', async () => {
     const { tenantId, userId } = await enrolledUser();
-    await setUserCounty(poolA(), tenantId, userId, 'SANTA_CLARA');
+    await setUserCounty(appPool(instanceA), tenantId, userId, 'SANTA_CLARA');
 
     // A backlog of open requests larger than one page.
     for (let index = 0; index < MAX_PAGE_SIZE + 5; index += 1) {
-      const veteran = await createUser(poolA(), {
+      const veteran = await createUser(appPool(instanceA), {
         tenantId,
         email: syntheticEmail(`backlog-${randomUUID().slice(0, 8)}`),
         status: 'ACTIVE',
         county: 'SANTA_CLARA',
       });
-      const created = await withTransaction(poolA(), async (tx) => {
+      const created = await withTransaction(appPool(instanceA), async (tx) => {
         const opened = await openCase(tx, {
           tenantId,
           veteranUserId: veteran.userId,
@@ -393,7 +383,7 @@ describe('SCALING.md §10 — growing lists are bounded', () => {
           details: { meeting_place: 'Main Street library' },
         });
       });
-      await executeServiceRequestCommand(poolA(), {
+      await executeServiceRequestCommand(appPool(instanceA), {
         tenantId,
         serviceRequestId: created.serviceRequestId,
         command: 'SUBMIT',
@@ -403,7 +393,7 @@ describe('SCALING.md §10 — growing lists are bounded', () => {
     }
 
     const page = await readRequestList(
-      poolA(),
+      appPool(instanceA),
       tenantId,
       userId,
       { ownership: 'open' },
@@ -429,7 +419,7 @@ describe('SCALING.md §10 — growing lists are bounded', () => {
 describe('RESILIENCE.md §17.1 — notification provider unavailable', () => {
   it('leaves the send visibly failed and does not disturb the parent Case', async () => {
     const { tenantId, userId } = await enrolledUser();
-    const opened = await withTransaction(poolA(), (tx) =>
+    const opened = await withTransaction(appPool(instanceA), (tx) =>
       openCase(tx, { tenantId, veteranUserId: userId, actorType: 'VETERAN', actorId: userId }),
     );
     const statusBefore = opened.supportCase.status;
@@ -445,7 +435,7 @@ describe('RESILIENCE.md §17.1 — notification provider unavailable', () => {
       systemBasis: 'SYSTEM_INTERNAL_PROCESSING',
     };
 
-    const enqueued = await enqueueNotification(poolA(), {
+    const enqueued = await enqueueNotification(appPool(instanceA), {
       tenantId,
       recipientUserId: userId,
       destination: syntheticEmail('drill-recipient'),
@@ -457,18 +447,22 @@ describe('RESILIENCE.md §17.1 — notification provider unavailable', () => {
 
     // The provider is down for every attempt.
     const failing = new Map([['EMAIL' as const, new FailingChannel('EMAIL')]]);
-    await attemptSend(poolA(), failing, {
+    await attemptSend(appPool(instanceA), failing, {
       tenantId,
       notificationId: enqueued.notification.notificationId,
       disclosure,
     });
 
-    const after = await findNotification(poolA(), tenantId, enqueued.notification.notificationId);
+    const after = await findNotification(
+      appPool(instanceA),
+      tenantId,
+      enqueued.notification.notificationId,
+    );
     expect(after?.deliveryStatus).not.toBe('DELIVERED');
     expect(after?.deliveryStatus).not.toBe('SENT');
 
     // The assertion the earlier evidence string claimed but never made.
-    const caseAfter = await poolA().query<{ status: string }>(
+    const caseAfter = await appPool(instanceA).query<{ status: string }>(
       'SELECT status FROM support_cases WHERE tenant_id = $1 AND case_id = $2',
       [tenantId, opened.supportCase.caseId],
     );
@@ -499,7 +493,7 @@ describe('RESILIENCE.md §17.3 — duplicate provider webhook', () => {
       systemBasis: 'SYSTEM_INTERNAL_PROCESSING',
     };
 
-    const enqueued = await enqueueNotification(poolA(), {
+    const enqueued = await enqueueNotification(appPool(instanceA), {
       tenantId,
       recipientUserId: userId,
       destination: syntheticEmail('drill-webhook'),
@@ -517,9 +511,9 @@ describe('RESILIENCE.md §17.3 — duplicate provider webhook', () => {
     };
 
     // The provider redelivers the same event, and a stale one arrives after it.
-    const first = await applyDeliveryCallback(poolA(), callback);
-    const duplicate = await applyDeliveryCallback(poolB(), callback);
-    const outOfOrder = await applyDeliveryCallback(poolB(), {
+    const first = await applyDeliveryCallback(appPool(instanceA), callback);
+    const duplicate = await applyDeliveryCallback(appPool(instanceB), callback);
+    const outOfOrder = await applyDeliveryCallback(appPool(instanceB), {
       ...callback,
       providerEventId: `evt-${randomUUID()}`,
       reportedStatus: 'SENT',
@@ -544,18 +538,18 @@ describe('RESILIENCE.md §17.3 — duplicate provider webhook', () => {
 describe('RESILIENCE.md §17.9 — concurrent Settlement resolve', () => {
   it('settles once when two resolves race with different keys', async () => {
     const { tenantId, userId } = await enrolledUser();
-    const opened = await withTransaction(poolA(), (tx) =>
+    const opened = await withTransaction(appPool(instanceA), (tx) =>
       openCase(tx, { tenantId, veteranUserId: userId, actorType: 'VETERAN', actorId: userId }),
     );
 
     // RESOLVE is legal only from ACTIVE, by the assigned responder, with an
     // active assignment (CASES.md §4). Drive the Case there before racing.
-    await holdCase(poolA(), {
+    await holdCase(appPool(instanceA), {
       tenantId,
       caseId: opened.supportCase.caseId,
       acceptedByUserId: userId,
     });
-    await executeCaseCommand(poolA(), {
+    await executeCaseCommand(appPool(instanceA), {
       tenantId,
       caseId: opened.supportCase.caseId,
       command: 'ACTIVATE',
@@ -575,14 +569,14 @@ describe('RESILIENCE.md §17.9 — concurrent Settlement resolve', () => {
     // A genuine race across both instances, with distinct idempotency keys so
     // the command kernel cannot collapse them into a replay.
     const outcomes = await Promise.allSettled([
-      resolveCaseWithSettlement(poolA(), {
+      resolveCaseWithSettlement(appPool(instanceA), {
         tenantId,
         caseId: opened.supportCase.caseId,
         actorId: userId,
         content,
         idempotencyKey: randomUUID(),
       }),
-      resolveCaseWithSettlement(poolB(), {
+      resolveCaseWithSettlement(appPool(instanceB), {
         tenantId,
         caseId: opened.supportCase.caseId,
         actorId: userId,
@@ -594,7 +588,7 @@ describe('RESILIENCE.md §17.9 — concurrent Settlement resolve', () => {
     const fulfilled = outcomes.filter((o) => o.status === 'fulfilled');
     expect(fulfilled).toHaveLength(1);
 
-    const settlements = await poolA().query(
+    const settlements = await appPool(instanceA).query(
       'SELECT settlement_id FROM settlements WHERE tenant_id = $1 AND case_id = $2',
       [tenantId, opened.supportCase.caseId],
     );

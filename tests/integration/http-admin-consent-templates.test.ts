@@ -10,11 +10,8 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession, elevateSession } from '../../src/auth/index.js';
-import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
+import { appPool, createPerson } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -29,26 +26,9 @@ afterAll(async () => {
   await app.close();
 });
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function credential(tenantId: string, options: { admin: boolean; elevate: boolean }) {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`u-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
-  if (options.admin) await grantSuasAdmin(pool(), user.userId, undefined);
-  else await markVerifiedVeteran(pool(), tenantId, user.userId);
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  if (options.elevate) await elevateSession(pool(), session.session.sessionId);
-  return { userId: user.userId, headers: { authorization: `Bearer ${session.credential}` } };
-}
+/** A signed-in admin, or else a verified Veteran (the onboarding gate); `elevate` adds MFA. */
+const credential = (tenantId: string, options: { admin: boolean; elevate: boolean }) =>
+  createPerson(app, { tenantId, label: 'u', verified: !options.admin, ...options });
 
 const uniqueKey = () => `test-consent-${randomUUID().slice(0, 8)}`;
 
@@ -155,7 +135,11 @@ describe('create and publish', () => {
       `${templateKey}@1:SUPERSEDED`,
     ]);
 
-    const audits = await pool().query<{ event_type: string; actor_id: string; payload: object }>(
+    const audits = await appPool(app).query<{
+      event_type: string;
+      actor_id: string;
+      payload: object;
+    }>(
       `SELECT event_type, actor_id, payload FROM audit_events
         WHERE tenant_id = $1 AND target_type = 'ConsentTemplateVersion'
         ORDER BY occurred_at, event_type`,
