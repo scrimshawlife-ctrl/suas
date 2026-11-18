@@ -144,13 +144,18 @@ describe('useLicenceDecision after a decision', () => {
 });
 
 describe('useLicenceDecision after a recuse', () => {
-  it('stops reading the review once a recuse succeeded', async () => {
+  // The hook never navigates, so this is also the page when leaving for the queue fails: it
+  // stays open with no review data and sends no read the server would answer 403.
+  it('stops reading the review once a recuse succeeded, and holds none of it, while still open', async () => {
     client.POST.mockResolvedValue({ data: undefined });
     const { result, reread } = setup();
     await waitFor(() => expect(result.current.query.isSuccess).toBe(true));
     await send(result, { name: 'recuse', body: {} });
     await reread();
+    await reread();
     expect(result.current.query.fetchStatus).toBe('idle');
+    expect(result.current.query.data).toBeUndefined();
+    expect(result.current.query.isError).toBe(false);
     expect(detailReads()).toBe(1);
   });
 
