@@ -46,15 +46,18 @@ bootstrap version.
 
 [`infra/bootstrap/github-oidc.yaml`](../../infra/bootstrap/github-oidc.yaml) creates the OIDC provider and
 two roles. Each trusts one GitHub Environment through the repository's immutable OIDC subject
-(`gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub` → `sub_claim_prefix`). If the owner
-changes that setting, update `SubjectPrefix`.
+(`gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub` → `sub_claim_prefix`), and only from
+`.github/workflows/staging-deploy.yml` on `main` (IAM's `token.actions.githubusercontent.com:job_workflow_ref`
+key), so another workflow file or a branch copy that names the environment cannot assume either role. If the
+owner changes the subject setting, update `SubjectPrefix`; if the repository is renamed, update
+`WorkflowRepository`.
 
 ```sh
 SUBJECT=$(gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub --jq .sub_claim_prefix)
 echo "$SUBJECT"   # repo:<owner>@<id>/<repo>@<id>; immutable subjects are on for this repository
 aws cloudformation deploy --region us-west-2 --stack-name Suas-GitHub-OIDC \
   --template-file infra/bootstrap/github-oidc.yaml --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides "SubjectPrefix=$SUBJECT"
+  --parameter-overrides "SubjectPrefix=$SUBJECT" WorkflowRepository=scrimshawlife-ctrl/suas
 aws cloudformation update-termination-protection --region us-west-2 \
   --stack-name Suas-GitHub-OIDC --enable-termination-protection
 aws cloudformation describe-stacks --region us-west-2 --stack-name Suas-GitHub-OIDC \
@@ -71,7 +74,9 @@ edit IAM, or invoke the API or the email relay. Every stack change, including th
 as the CDK deploy role. On the first plan run, confirm that `cdk diff` falls back from the lookup role to the plan
 role (it prints a warning); if it does not, grant only the missing read action. IAM Access Analyzer `ValidatePolicy` reports no
 findings on the permission policies. On the trust policies it warns that a branch is recommended in `sub`:
-these subjects are environment-scoped, so the environment's branch policy (step 4) enforces `main`.
+these subjects are environment-scoped, and the `job_workflow_ref` condition plus the environment's branch policy
+(step 4) enforce `main`. If the first plan run is refused at `AssumeRoleWithWebIdentity`, the token's
+`job_workflow_ref` did not match: compare it with the condition before loosening anything.
 
 ## 3. Deploy-time parameters (before the first backend deploy)
 
