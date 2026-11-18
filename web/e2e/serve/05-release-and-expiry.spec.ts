@@ -1,34 +1,12 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
-import {
-  ageRequest,
-  newPerson,
-  newVerifiedVeteran,
-  requestHelp,
-  runJobWorkerOnce,
-  shoot,
-  signUp,
-  uniqueEmail,
-} from './helpers';
+import { expect, test } from '../fixtures';
+import { requestHelp, runJobWorkerOnce, shoot, uniqueEmail } from '../helpers';
+import { ageRequest } from '../time/time';
+import { newHelper, newVeteran } from '../people';
 
 const RELEASED_NOTICE = 'The helper released your request. It is back on the open list.';
 const EXPIRED_NOTICE = 'Your request expired 72 hours after you sent it.';
 const CLOSED_LINE = 'This helper released the request. This chat is closed.';
-
-async function newHelper(
-  browser: Parameters<typeof newPerson>[0],
-  request: Parameters<typeof signUp>[1],
-  name: string,
-): Promise<Page> {
-  const page = await newPerson(browser);
-  await signUp(page, request, {
-    email: uniqueEmail('helper'),
-    name,
-    county: 'Santa Clara',
-    role: 'serve',
-  });
-  return page;
-}
 
 async function take(page: Page, summary: string, requestId: string): Promise<void> {
   await page.goto('/serve');
@@ -43,7 +21,7 @@ test('a helper releases a request, the next helper gets a fresh chat and the req
 }) => {
   // The released helper reopens the case on purpose and gets the documented 404.
   allow.push(/status of 404/);
-  const requester = await newVerifiedVeteran(browser, request, {
+  const requester = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
     label: 'requester',
@@ -55,8 +33,8 @@ test('a helper releases a request, the next helper gets a fresh chat and the req
     { category: 'TRANSPORTATION', summary, timing: 'Tomorrow at 9 am' },
     'Front entrance of the library',
   );
-  const helperA = await newHelper(browser, request, 'Dee R.');
-  const helperB = await newHelper(browser, request, 'Sam P.');
+  const { page: helperA } = await newHelper(browser, request, { name: 'Dee R.' });
+  const { page: helperB } = await newHelper(browser, request, { name: 'Sam P.' });
 
   await take(helperA, summary, requestId);
   await helperA.getByRole('link', { name: 'Open chat with Marcus' }).click();
@@ -125,7 +103,7 @@ test('a request nobody accepts expires after 72 hours and only offers a new requ
   browser,
   request,
 }) => {
-  const requester = await newVerifiedVeteran(browser, request, {
+  const requester = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
     label: 'expiring',
