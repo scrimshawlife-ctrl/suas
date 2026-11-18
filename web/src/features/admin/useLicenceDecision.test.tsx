@@ -108,6 +108,41 @@ describe('useLicenceDecision commands', () => {
   });
 });
 
+describe('useLicenceDecision after a decision', () => {
+  // The command's answer is the server's fresh read of the review (the route reads it after the
+  // change), so it replaces the cached one at once, and the review stays readable to its admin.
+  it.each([
+    [
+      'approve',
+      {
+        name: 'approve',
+        body: {
+          designation_visible: true,
+          checklist: { selfie_matches: true, security_features: true, whole_card: true },
+        },
+      },
+      'AWAITING_CONFIRMATION',
+    ],
+    ['decline', { name: 'decline', body: { reason: 'OTHER' } }, 'DECLINED'],
+    ['revoke', { name: 'revoke', body: { reason: 'FRAUD' } }, 'REVOKED'],
+  ] as const)(
+    'after a successful %s shows the server answer, then reads the review again',
+    async (_name, command, status) => {
+      client.POST.mockResolvedValue({ data: { ...review, status, images: { front: false } } });
+      const { result, reread } = setup();
+      await waitFor(() => expect(result.current.query.isSuccess).toBe(true));
+      await send(result, command);
+      expect(result.current.query.data?.status).toBe(status);
+      expect(detailReads()).toBe(1);
+
+      client.GET.mockResolvedValue({ data: { ...review, status } });
+      await reread();
+      await waitFor(() => expect(detailReads()).toBe(2));
+      expect(result.current.query.data?.status).toBe(status);
+    },
+  );
+});
+
 describe('useLicenceDecision after a recuse', () => {
   it('stops reading the review once a recuse succeeded', async () => {
     client.POST.mockResolvedValue({ data: undefined });
