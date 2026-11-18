@@ -11,12 +11,12 @@ import { NEEDS } from '../../components/needs';
 import { Page } from '../../components/Page';
 import { StatusChip } from '../../components/StatusChip';
 import { cn } from '../../lib/cn';
+import { countyName } from '../../lib/people';
 import { useResources, type CatalogResource } from './api';
 import { ErrorNotice } from './errors';
 import {
   categoryFromParam,
   contactActions,
-  countyName,
   describeFreshness,
   REQUEST_BAND,
   type ContactAction,

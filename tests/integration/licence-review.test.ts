@@ -15,10 +15,12 @@ import {
   LICENCE_FIXTURE_WIDTHS,
   FixtureLicenceReader,
 } from '../../src/identity/licence-reader-fixture.js';
-import type {
-  LicenceImages,
-  LicenceReaderPort,
-  LicenceReadResult,
+import {
+  LICENCE_FAILURE_CLASSES,
+  type LicenceFailureClass,
+  type LicenceImages,
+  type LicenceReaderPort,
+  type LicenceReadResult,
 } from '../../src/identity/licence-reader.js';
 import {
   expireOldReviews,
@@ -66,12 +68,15 @@ const queue: DurableJobQueuePort = {
   },
 };
 
-beforeEach(async () => {
-  await resetKernelTables(pool);
-  await pool.query(
+const resetBreaker = () =>
+  pool.query(
     `UPDATE licence_reader_breaker
         SET consecutive_failures = 0, opened_at = NULL, probe_started_at = NULL`,
   );
+
+beforeEach(async () => {
+  await resetKernelTables(pool);
+  await resetBreaker();
   tenantId = randomUUID();
   storage = new InMemoryObjectStorage();
   queued = [];
@@ -180,6 +185,33 @@ const read = (reviewId: string, reader: LicenceReaderPort, attempt?: number) =>
     attempt,
     maxAttempts: LICENCE_READ_MAX_ATTEMPTS,
   });
+
+/** Settles one READING review UNREADABLE with this failure class, through the public seams. */
+async function settleAs(reviewId: string, failureClass: LicenceFailureClass) {
+  switch (failureClass) {
+    case 'NOT_A_LICENCE':
+    case 'NOT_SYNTHETIC':
+      await read(reviewId, recordingReader({ status: failureClass }).reader);
+      return;
+    case 'PHOTOS_GONE':
+      await storage.delete(`licence-reviews/${reviewId}/back.jpg`);
+      await read(reviewId, new FixtureLicenceReader());
+      return;
+    case 'PHOTOS_EXPIRED':
+      await pool.query(
+        `UPDATE veteran_licence_reviews SET created_at = now() - interval '29 days 1 hour'
+          WHERE review_id = $1`,
+        [reviewId],
+      );
+      await expireOldReviews({ pool, storage });
+      return;
+    default: {
+      // Every reader-unavailable class settles on the last try.
+      const down = recordingReader({ status: 'UNAVAILABLE', failureClass }).reader;
+      await read(reviewId, down, LICENCE_READ_MAX_ATTEMPTS);
+    }
+  }
+}
 
 const storedKeys = () => [
   ...(storage as unknown as { objects: Map<string, unknown> }).objects.keys(),
@@ -349,6 +381,30 @@ describe('limits, retries and missing photos (L4.5–L4.7, L8)', () => {
     const limited = submit(person.userId);
     await expect(limited).rejects.toBeInstanceOf(LicenceSubmissionLimitError);
     await expect(limited).rejects.toMatchObject({ code: 'LICENCE_SUBMISSION_LIMIT' });
+  });
+
+  it('counts NOT_A_LICENCE toward the limit and no other failure class', async () => {
+    // Expected from L8.1/L8.2, not from COUNTED_FAILURE_CLASSES: the reader saying "not a
+    // licence" is the only UNREADABLE outcome that counts; outages, refusals and lost or
+    // expired photos never do.
+    const person = await veteran();
+    const counted: LicenceFailureClass[] = [];
+    for (const failureClass of LICENCE_FAILURE_CLASSES) {
+      await resetBreaker();
+      const review = await submit(person.userId);
+      await settleAs(review.reviewId, failureClass);
+      const settled = await findReview(pool, tenantId, review.reviewId);
+      expect(settled).toMatchObject({ status: 'UNREADABLE', failureClass });
+      if (settled?.readAt !== undefined) counted.push(failureClass);
+    }
+    expect(counted).toEqual(['NOT_A_LICENCE']);
+
+    // So two more NOT_A_LICENCE reach the limit of 3; a leaked class would 429 sooner.
+    for (let n = 0; n < 2; n += 1) {
+      const review = await submit(person.userId);
+      await settleAs(review.reviewId, 'NOT_A_LICENCE');
+    }
+    await expect(submit(person.userId)).rejects.toBeInstanceOf(LicenceSubmissionLimitError);
   });
 
   it('retries a reader outage on later passes, then settles, and the breaker opens after 5', async () => {
