@@ -18,7 +18,7 @@ Description: SUAS GitHub Actions OIDC provider and staging plan/deploy roles
 Parameters:
   SubjectPrefix:
     Type: String
-    AllowedPattern: '^repo:[^:]+$'
+    AllowedPattern: '^repo:[^:/]+/[^:/]+$'
     Description: >-
       The repository's OIDC subject prefix, from
       `gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq .sub_claim_prefix`

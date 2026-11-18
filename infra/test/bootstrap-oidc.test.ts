@@ -51,6 +51,16 @@ describe('GitHub OIDC trust', () => {
     expect(trusts(role, token(`${environment}-other`))).toBe(false);
   });
 
+  // A prefix without exactly one owner/repo slash could widen or break the trusted subject.
+  it('accepts only a repo:owner/name subject prefix', () => {
+    const pattern = TEMPLATE.match(/SubjectPrefix:\n\s+Type: String\n\s+AllowedPattern: '(.+)'/);
+    const allowed = new RegExp(pattern![1]!);
+    for (const ok of ['repo:octo/suas', PARAMS.SubjectPrefix!]) expect(allowed.test(ok)).toBe(true);
+    for (const bad of ['repo:foo', 'repo:a/b/c', 'repo:a:b', 'repo:a/b:c', 'repo:/b', 'repo:a/']) {
+      expect(allowed.test(bad)).toBe(false);
+    }
+  });
+
   it('names environments the deploy workflow actually uses', () => {
     expect(WORKFLOW).toContain('environment: suas-synthetic-staging-plan');
     expect(WORKFLOW).toMatch(/environment:\n\s+name: suas-synthetic-staging\n/);
