@@ -1,8 +1,9 @@
 /**
- * The send claim must outlast every provider call it fences (NOTIFICATIONS.md §3, §5). The
- * claim is renewed just before the call, so it has to cover the longest bounded provider call
- * plus the settle; if a provider timeout grows past that, a second runner could retake the
- * claim mid-call and send twice. This pins the invariant so the values cannot drift apart.
+ * The send claim must outlast every provider call it fences (NOTIFICATIONS.md §3, §5). A
+ * runner calls only within PRE_CALL_BUDGET_MS of claiming, so the claim has to cover that
+ * budget, the longest bounded provider call and the settle. If a provider timeout grows past
+ * PROVIDER_CALL_MAX_MS, a second runner could retake the claim mid-call and send twice; this
+ * pins the values so they cannot drift apart.
  */
 
 import type { InvokeCommand, InvokeCommandOutput } from '@aws-sdk/client-lambda';
@@ -11,20 +12,27 @@ import {
   LambdaRelayEmailChannel,
   RELAY_INVOKE_TIMEOUT_MS,
 } from '../../src/notifications/lambda-relay-sender.js';
-import { SEND_CLAIM_MS } from '../../src/notifications/service.js';
+import {
+  PRE_CALL_BUDGET_MS,
+  PROVIDER_CALL_MAX_MS,
+  SETTLE_MARGIN_MS,
+} from '../../src/notifications/service.js';
 import { stagingRecipientAllowed } from '../../src/notifications/staging-recipients.js';
 import { OUTBOUND_FETCH_TIMEOUT_MS } from '../../src/resilience/index.js';
 
-// The settle opens a pooled connection (pg connectionTimeoutMillis, src/db/pool.ts) before
-// its claim-guarded update, so the claim keeps at least that much after the provider call.
-const SETTLE_MARGIN_MS = 10_000;
-
 describe('send claim window', () => {
-  it('outlasts the longest provider call plus the settle', () => {
+  it('bounds every provider call below the provider allowance', () => {
     // Resend direct (fetchWithTimeout) and the relay invoke are the only network providers;
     // SMS is recording-only and IN_APP is internal.
-    const longestProviderCall = Math.max(OUTBOUND_FETCH_TIMEOUT_MS, RELAY_INVOKE_TIMEOUT_MS);
-    expect(SEND_CLAIM_MS).toBeGreaterThanOrEqual(longestProviderCall + SETTLE_MARGIN_MS);
+    expect(OUTBOUND_FETCH_TIMEOUT_MS).toBeLessThanOrEqual(PROVIDER_CALL_MAX_MS);
+    expect(RELAY_INVOKE_TIMEOUT_MS).toBeLessThanOrEqual(PROVIDER_CALL_MAX_MS);
+  });
+
+  it('leaves a usable pre-call budget after the provider call and the settle', () => {
+    // The settle opens a pooled connection (connectionTimeoutMillis 10 s, src/db/pool.ts).
+    expect(SETTLE_MARGIN_MS).toBeGreaterThanOrEqual(10_000);
+    // The claim, re-check and render take milliseconds; a budget under 1 s would skip sends.
+    expect(PRE_CALL_BUDGET_MS).toBeGreaterThanOrEqual(1_000);
   });
 
   it('bounds the relay invoke with an abort signal', async () => {

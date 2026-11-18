@@ -397,12 +397,30 @@ function buildOutboundMessage(
   return { ...base, body: rendered.text };
 }
 
-/**
- * A claim older than this is presumed dead. It is renewed just before the provider call, so
- * it must outlast the longest bounded provider call (relay invoke, 28 s) plus the settle;
- * tests/unit/send-claim-window.test.ts pins that.
- */
+/** A claim older than this is presumed dead, and another runner may take the send. */
 export const SEND_CLAIM_MS = 45_000;
+
+/** Every provider port aborts by then (relay invoke 28 s, direct Resend 10 s). */
+export const PROVIDER_CALL_MAX_MS = 30_000;
+
+/** Kept after the provider call for the claim-guarded settle (pool connect 10 s). */
+export const SETTLE_MARGIN_MS = 10_000;
+
+/**
+ * Longest a runner may take from claiming to calling the provider, so the call and the settle
+ * still end inside the claim. Measured on this process's monotonic clock, so the check needs
+ * no database read between the consent re-check and the call. Pinned by
+ * tests/unit/send-claim-window.test.ts.
+ */
+export const PRE_CALL_BUDGET_MS = SEND_CLAIM_MS - PROVIDER_CALL_MAX_MS - SETTLE_MARGIN_MS;
+
+/** The claim aged past `PRE_CALL_BUDGET_MS` before the provider call, so no call was made. */
+export class SendClaimWindowPassedError extends Error {
+  constructor() {
+    super('send claim window passed before the provider call; nothing was sent');
+    this.name = 'SendClaimWindowPassedError';
+  }
+}
 
 /** Why a Notification needs no further attempt: it is settled or cancelled. */
 function skipReason(notification: Notification): string | undefined {
@@ -437,20 +455,6 @@ async function claimSend(
   return row === undefined ? undefined : { notification: toNotification(row), token };
 }
 
-/**
- * Restart a held claim's clock just before the provider call, so time spent before it (the
- * consent re-check on a slow database) cannot leave an expired claim another runner retakes
- * mid-call. False when another runner already holds the send: this one must not call.
- */
-async function renewSend(pool: Pool, notification: Notification, token: string): Promise<boolean> {
-  const result = await pool.query(
-    `UPDATE notifications SET send_claimed_at = now()
-     WHERE tenant_id = $1 AND notification_id = $2 AND send_claim_token = $3`,
-    [notification.tenantId, notification.notificationId, token],
-  );
-  return (result.rowCount ?? 0) > 0;
-}
-
 /** Drop a claim whose attempt threw before settling, so a retry can claim at once. */
 async function releaseSend(pool: Pool, notification: Notification, token: string): Promise<void> {
   await pool.query(
@@ -462,8 +466,8 @@ async function releaseSend(pool: Pool, notification: Notification, token: string
 
 /**
  * Attempt one external send under a send claim, so racing runners make one provider call
- * and one SENT record (§3, §5). The basis is re-checked immediately before the attempt; a
- * revoked grant cancels the send (§4.2, CONSENT.md §4).
+ * and one SENT record (§3, §5). The basis is re-checked after the claim and is the last
+ * database read before the attempt; a revoked grant cancels the send (§4.2, CONSENT.md §4).
  */
 export async function attemptSend(
   pool: Pool,
@@ -484,6 +488,7 @@ export async function attemptSend(
   const skipped = skipReason(current);
   if (skipped !== undefined) return { notification: current, outcome: 'SKIPPED', reason: skipped };
 
+  const claimStarted = performance.now();
   const claim = await claimSend(pool, input.tenantId, input.notificationId);
   if (claim === undefined) {
     const latest = (await findNotification(pool, input.tenantId, input.notificationId)) ?? current;
@@ -544,8 +549,9 @@ export async function attemptSend(
       throw new Error('Notification has no destination or recipient.');
     }
 
-    if (!(await renewSend(pool, notification, token))) {
-      return await claimLost(pool, input, notification);
+    // A slow re-check may have aged the claim until another runner could take it.
+    if (performance.now() - claimStarted > PRE_CALL_BUDGET_MS) {
+      throw new SendClaimWindowPassedError();
     }
     acknowledgement = await port.send(
       buildOutboundMessage(notification, destination, input.renderBody),
@@ -721,7 +727,11 @@ interface StatusUpdate {
   cancelReason?: string;
 }
 
-/** With a `claimToken`, updates only while that send claim holds, and clears it. */
+/**
+ * With a `claimToken`, updates only while that send claim holds on a claimable row, so it
+ * never overwrites a settled or cancelled one. Any update that settles the row clears the
+ * claim, so a stale holder cannot settle over it.
+ */
 async function updateStatus(
   tx: Queryable,
   tenantId: string,
@@ -737,11 +747,15 @@ async function updateStatus(
            sent_at = CASE WHEN $6::boolean THEN now() ELSE sent_at END,
            cancelled_at = CASE WHEN $7::boolean THEN now() ELSE cancelled_at END,
            cancel_reason = COALESCE($8, cancel_reason),
-           send_claim_token = CASE WHEN $9::uuid IS NULL THEN send_claim_token END,
-           send_claimed_at = CASE WHEN $9::uuid IS NULL THEN send_claimed_at END,
+           send_claim_token = CASE WHEN $9::uuid IS NULL AND $3::suas_delivery_status
+                                        IN ('QUEUED', 'FAILED') THEN send_claim_token END,
+           send_claimed_at = CASE WHEN $9::uuid IS NULL AND $3::suas_delivery_status
+                                       IN ('QUEUED', 'FAILED') THEN send_claimed_at END,
            updated_at = now()
      WHERE tenant_id = $1 AND notification_id = $2
-       AND ($9::uuid IS NULL OR send_claim_token = $9::uuid)
+       AND ($9::uuid IS NULL
+            OR (send_claim_token = $9::uuid AND cancelled_at IS NULL
+                AND delivery_status IN ('QUEUED', 'FAILED')))
      RETURNING ${NOTIFICATION_COLUMNS}`,
     [
       tenantId,
@@ -835,7 +849,8 @@ export async function deliverQueuedInApp(pool: Pool, limit = 100): Promise<numbe
       const updated = await tx.query<NotificationRow>(
         `UPDATE notifications
            SET delivery_status = 'SENT', attempt_count = attempt_count + 1,
-               last_attempt_at = now(), sent_at = now(), updated_at = now()
+               last_attempt_at = now(), sent_at = now(), updated_at = now(),
+               send_claim_token = NULL, send_claimed_at = NULL
          WHERE tenant_id = $1 AND notification_id = $2 AND delivery_status = 'QUEUED'
          RETURNING ${NOTIFICATION_COLUMNS}`,
         [row.tenant_id, row.notification_id],
