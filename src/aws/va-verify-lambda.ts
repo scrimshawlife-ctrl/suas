@@ -35,6 +35,9 @@ const VERIFY_ENVIRONMENT = 'STAGING';
 /** A key stored by `put-secret-value` reaches a warm container within this long. */
 export const VA_KEY_CACHE_TTL_MS = 5 * 60_000;
 
+/** Whole secret read, retry included: with the 10 s VA call it fits the 15 s function timeout. */
+export const VA_SECRET_READ_TIMEOUT_MS = 3_000;
+
 const secretSchema = z.object({
   SUAS_VA_CONFIRMATION_API_KEY: z.string().regex(VA_CONFIRMATION_API_KEY_PATTERN),
 });
@@ -57,15 +60,21 @@ export interface VaVerifyDeps {
 
 function defaultDeps(): VaVerifyDeps {
   const secretId = process.env.SUAS_VA_CONFIRMATION_SECRET_ID;
-  const client = new SecretsManagerClient({});
+  // A stalled attempt gives up early enough for one retry inside VA_SECRET_READ_TIMEOUT_MS.
+  const client = new SecretsManagerClient({
+    maxAttempts: 2,
+    requestHandler: { connectionTimeout: 500, requestTimeout: 1_000 },
+  });
   return {
     environment: process.env.SUAS_ENV,
     log: (record) => console.info(JSON.stringify(record)),
     readSecret: async () => {
       if (secretId === undefined || secretId === '') return undefined;
       // Named, not defaulted: the role's read is conditioned on this stage (infra/lib/va-verify.ts).
+      // A read that times out throws, and so is refused as not_configured like any failed read.
       const output = await client.send(
         new GetSecretValueCommand({ SecretId: secretId, VersionStage: 'AWSCURRENT' }),
+        { abortSignal: AbortSignal.timeout(VA_SECRET_READ_TIMEOUT_MS) },
       );
       return output.SecretString;
     },

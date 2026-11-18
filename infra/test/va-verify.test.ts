@@ -6,6 +6,7 @@
 
 import { App } from 'aws-cdk-lib';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { VA_SECRET_READ_TIMEOUT_MS } from '../../src/aws/va-verify-lambda.js';
 import { tryLoadConfig } from '../../src/config/index.js';
 import { VA_VERIFY_INVOKE_TIMEOUT_MS } from '../../src/identity/va-confirmation-lambda-relay.js';
 import { OUTBOUND_FETCH_TIMEOUT_MS } from '../../src/resilience/outbound-fetch.js';
@@ -166,6 +167,11 @@ describe('VA verify function', () => {
       ),
     );
     expect(invokers.map((p) => p.roles)).toEqual([[roleOf(on.backend, 'run.sh')]]);
+    // The relay invokes the name CDK took from this construct, not a value set elsewhere.
+    const [, api] = functionByHandler(on.backend, 'run.sh') ?? [];
+    expect(api?.Properties?.Environment.Variables.SUAS_VA_CONFIRMATION_RELAY_FUNCTION).toEqual({
+      Ref: fnId,
+    });
     const arn = { 'Fn::GetAtt': [fnId, 'Arn'] };
     const grant = invokers[0]?.statements.find((st) =>
       JSON.stringify(st.Resource).includes('VaVerify'),
@@ -206,13 +212,13 @@ describe('VA verify function', () => {
   });
 
   // Each layer gives up after the one below it, so the verify function's own answer (or its
-  // timeout) reaches the API before the API stops waiting.
-  it('orders the timeouts: VA fetch < verify function < relay invoke < HTTP API < API function', () => {
+  // timeout) reaches the API before the API stops waiting. Its own budget is a secret read then VA.
+  it('orders the timeouts: secret read + VA fetch < verify function < relay invoke < HTTP API < API function', () => {
     const seconds = (handler: string) =>
       Number(functionByHandler(on.backend, handler)?.[1].Properties?.Timeout) * 1000;
     const [[, integration] = []] = ofType(on.backend, 'AWS::ApiGatewayV2::Integration');
     const chain = [
-      OUTBOUND_FETCH_TIMEOUT_MS,
+      VA_SECRET_READ_TIMEOUT_MS + OUTBOUND_FETCH_TIMEOUT_MS,
       seconds('va-verify.handler'),
       VA_VERIFY_INVOKE_TIMEOUT_MS,
       Number(integration?.Properties?.TimeoutInMillis),

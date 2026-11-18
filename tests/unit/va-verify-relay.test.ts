@@ -6,7 +6,11 @@
 
 import type { InvokeCommand, InvokeCommandOutput } from '@aws-sdk/client-lambda';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createVaVerifyHandler, type VaVerifyLogRecord } from '../../src/aws/va-verify-lambda.js';
+import {
+  createVaVerifyHandler,
+  VA_SECRET_READ_TIMEOUT_MS,
+  type VaVerifyLogRecord,
+} from '../../src/aws/va-verify-lambda.js';
 import {
   FixtureVeteranConfirmation,
   VA_CONFIRMATION_FIXTURE_ZIPS,
@@ -471,15 +475,29 @@ describe('invokeFailureClass', () => {
 describe('the verify function as deployed', () => {
   const SECRET_ARN = 'arn:aws:secretsmanager:us-west-2:000000000000:secret:sentinel-arn-AbCdEf';
 
-  /** `failures` are what GetSecretValue throws on its first reads; later reads return SECRET. */
-  async function coldStart(secretId: string | undefined, failures: Error[] = []) {
+  /**
+   * `failures` are what GetSecretValue throws on its first reads ('hang': waits for its abort
+   * signal); later reads return SECRET.
+   */
+  async function coldStart(secretId: string | undefined, failures: Array<Error | 'hang'> = []) {
     vi.resetModules();
     const secretReads: unknown[] = [];
+    const clientConfigs: unknown[] = [];
     vi.doMock('@aws-sdk/client-secrets-manager', () => ({
       SecretsManagerClient: class {
-        send(command: { input: unknown }) {
+        constructor(config: unknown) {
+          clientConfigs.push(config);
+        }
+        send(command: { input: unknown }, options?: { abortSignal?: AbortSignal }) {
           secretReads.push(command.input);
           const failure = failures.shift();
+          if (failure === 'hang') {
+            return new Promise((_resolve, reject) => {
+              options?.abortSignal?.addEventListener('abort', () => {
+                reject(options.abortSignal?.reason as Error);
+              });
+            });
+          }
           return failure !== undefined
             ? Promise.reject(failure)
             : Promise.resolve({ SecretString: SECRET });
@@ -492,7 +510,7 @@ describe('the verify function as deployed', () => {
     vi.stubEnv('SUAS_ENV', 'STAGING');
     vi.stubEnv('SUAS_VA_CONFIRMATION_SECRET_ID', secretId);
     const { handler } = await import('../../src/aws/va-verify-lambda.js');
-    return { handler, secretReads };
+    return { handler, secretReads, clientConfigs };
   }
 
   afterEach(() => {
@@ -577,4 +595,32 @@ describe('the verify function as deployed', () => {
       expect(vaCalls).toHaveLength(1);
     },
   );
+
+  // Review of #326: the read is bounded (one retry, each attempt and the whole read), so it and
+  // the 10 s VA call fit in the 15 s function timeout (ordering pinned in infra/test/va-verify.test.ts).
+  it('reads the secret with bounded attempts and gives up a hung read as CONFIGURATION_INVALID', async () => {
+    const printed: string[] = [];
+    vi.spyOn(console, 'info').mockImplementation((...args) => void printed.push(String(args)));
+    const vaCalls: RequestInit[] = [];
+    vi.stubGlobal('fetch', (_url: string, init: RequestInit) => {
+      vaCalls.push(init);
+      return Promise.resolve(json(200, { veteran_status: 'confirmed' }));
+    });
+    const deadline = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const fn = await coldStart(SECRET_ARN, ['hang']);
+    expect(fn.clientConfigs).toEqual([
+      { maxAttempts: 2, requestHandler: { connectionTimeout: 500, requestTimeout: 1_000 } },
+    ]);
+
+    const answer = fn.handler(PERSON);
+    expect(timeout).toHaveBeenCalledWith(VA_SECRET_READ_TIMEOUT_MS);
+    expect(VA_SECRET_READ_TIMEOUT_MS).toBe(3_000);
+    deadline.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+    expect(await answer).toEqual({ status: 'UNAVAILABLE', failure_class: 'CONFIGURATION_INVALID' });
+    expect(vaCalls).toHaveLength(0);
+    expect(printed).toEqual([
+      JSON.stringify({ msg: 'va_verify_refused', reason: 'not_configured' }),
+    ]);
+  });
 });
