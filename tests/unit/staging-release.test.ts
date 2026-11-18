@@ -3,11 +3,12 @@
  * and worker results that must match the build, and refusal of a schema-incompatible rollback.
  */
 
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  assemblyDigest,
   assemblyStacks,
   checkHealth,
   checkInvocation,
@@ -15,6 +16,8 @@ import {
   checkSchemaOrder,
   checkWorker,
   drainSeconds,
+  invokeTarget,
+  parseRelease,
   quiesceDrainSeconds,
   verifyRelease,
   writeRelease,
@@ -98,12 +101,50 @@ describe('release record', () => {
     expect(() => verifyRelease(release, assembly(), 'c'.repeat(40))).toThrow(/another commit/);
   });
 
+  // release.json crosses an artifact hop, so it is read only in the exact shape `write` makes.
+  it('reads back a written record and refuses unexpected or injected fields', async () => {
+    const release = await writeRelease(assembly(), SHA, ACCOUNT);
+    const written: unknown = JSON.parse(JSON.stringify(release));
+    expect(parseRelease(written)).toEqual(release);
+    type Json = Record<string, unknown>;
+    const first = (r: Json, key: string) => (r[key] as Json[])[0]!;
+    const bad: Array<(r: Json) => void> = [
+      (r) => (r.extra = true),
+      (r) => (first(r, 'migrations').sql = 'DROP TABLE x'),
+      (r) => (first(r, 'stacks').roleArn = 'arn:aws:iam::1:role/x'),
+      (r) => (r.drainSeconds = '135; rm -rf /'),
+      (r) => (r.expectedSchemaVersion = String(EXPECTED_SCHEMA_VERSION)),
+      (r) => (r.account = ACCOUNT.replace('1', 'x')),
+      (r) => (r.assemblyDigest = 'abc'),
+      (r) => delete r.specVersion,
+    ];
+    for (const mutate of bad) {
+      const copy = JSON.parse(JSON.stringify(release)) as Json;
+      mutate(copy);
+      expect(() => parseRelease(JSON.parse(JSON.stringify(copy)))).toThrow(/release record/i);
+    }
+    const proto = JSON.stringify(release).replace(/^\{/, '{"__proto__":{"drainSeconds":1},');
+    expect(() => parseRelease(JSON.parse(proto))).toThrow(/release record/i);
+  });
+
   // The Lambda Web Adapter execs run.sh; an artifact hop that drops the mode breaks the API.
   it('refuses an assembly whose run.sh lost its executable bit', async () => {
     const dir = assembly();
     const release = await writeRelease(dir, SHA, ACCOUNT);
     chmodSync(join(dir, 'asset.abc', 'run.sh'), 0o644);
     expect(() => verifyRelease(release, dir, SHA)).toThrow(/digest/);
+  });
+
+  // A link would digest (and ship) whatever it points at outside cdk.out, or loop forever.
+  it('refuses an assembly that contains a symlink', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'suas-outside-'));
+    writeFileSync(join(outside, 'secret'), 'not part of the build');
+    const toFile = assembly();
+    symlinkSync(join(outside, 'secret'), join(toFile, 'asset.abc', 'linked'));
+    expect(() => assemblyDigest(toFile)).toThrow(/symlink/);
+    const toDir = assembly();
+    symlinkSync(outside, join(toDir, 'asset.dir'));
+    expect(() => assemblyDigest(toDir)).toThrow(/symlink/);
   });
 
   it('refuses a backend template without maintenance controls', () => {
@@ -118,6 +159,19 @@ describe('release record', () => {
     expect(quiesceDrainSeconds({ drainSeconds: 135 }, deployed)).toBe(615);
     expect(quiesceDrainSeconds({ drainSeconds: 135 }, JSON.stringify(deployed))).toBe(615);
     expect(quiesceDrainSeconds({ drainSeconds: 135 }, BACKEND)).toBe(135);
+  });
+
+  // A tampered deployed template must not hold the runner in `sleep` for hours.
+  it('refuses timeouts outside Lambda limits, so the drain never exceeds 915 seconds', () => {
+    for (const timeout of [0, 901, 1.5, 86_400]) {
+      const deployed = { Resources: { Api: fnResource(timeout, true) } };
+      expect(() => quiesceDrainSeconds({ drainSeconds: 135 }, deployed)).toThrow(/Timeout/);
+    }
+    const intrinsic = { Resources: { Api: fnResource(30, true) } };
+    (intrinsic.Resources.Api.Properties as Record<string, unknown>).Timeout = { Ref: 'T' };
+    expect(() => drainSeconds(intrinsic)).toThrow(/Timeout/);
+    expect(drainSeconds({ Resources: { Api: fnResource(900, true) } })).toBe(915);
+    expect(() => quiesceDrainSeconds({ drainSeconds: 86_400 }, BACKEND)).toThrow(/drainSeconds/);
   });
 
   it('refuses short SHAs, other accounts and unexpected or account-less stacks', async () => {
@@ -152,6 +206,28 @@ describe('deploy result checks', () => {
     ]) {
       expect(() => checkMigration({ ...migrated, ...bad }, release)).toThrow(/not verified/);
     }
+  });
+
+  // The migrator's own "environment: STAGING" proves nothing unless the function is the backend's.
+  it('invokes only the backend stack function in the release account and region', () => {
+    const bound = { account: ACCOUNT } as ReleaseRecord;
+    const name = 'Suas-Staging-Backend-MigrateFunction86058513-AbCd1234';
+    expect(invokeTarget(bound, 'migrate', name, ACCOUNT)).toBe(
+      `arn:aws:lambda:us-west-2:${ACCOUNT}:function:${name}`,
+    );
+    expect(invokeTarget(bound, 'worker', name.replace('Migrate', 'JobWorker'), ACCOUNT)).toMatch(
+      /:function:Suas-Staging-Backend-JobWorkerFunction/,
+    );
+    for (const other of [
+      '',
+      'Suas-Staging-Backend-ApiFunctionCE271BD4-AbCd1234',
+      'Fake-STAGING-MigrateFunction',
+      `${name}:attacker-alias`,
+      `arn:aws:lambda:us-west-2:210987654321:function:${name}`,
+    ]) {
+      expect(() => invokeTarget(bound, 'migrate', other, ACCOUNT)).toThrow(/migrate function/);
+    }
+    expect(() => invokeTarget(bound, 'migrate', name, '210987654321')).toThrow(/release account/);
   });
 
   it('treats a function error or non-200 invoke as failure', () => {
