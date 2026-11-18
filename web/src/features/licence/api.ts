@@ -1,9 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { retryServerErrors } from '../../api/errors';
 import { queryKeys } from '../../api/keys';
+import { useSignedInQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
-import { useSessionToken } from '../../api/token-store';
 import type { Schemas } from '../../api/types';
 import { blobToBase64 } from './licence-image';
 import type { LicencePhotos } from './LicenceForm';
@@ -18,10 +18,9 @@ export type LicenceReviewView = Schemas['LicenceReviewView'];
  * path is offered, and the newest review. Polls while the review is reading or with admins.
  */
 export function useLicenceReview(enabled = true) {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: queryKeys.licence,
-    enabled: enabled && token !== null,
+    enabled,
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/veterans/me/verification/licence');
       return requireData(data, 'licence review');

@@ -1,14 +1,7 @@
 import { expect, test } from './fixtures';
-import {
-  ageRequest,
-  newPerson,
-  newVerifiedVeteran,
-  requestHelp,
-  runJobWorkerOnce,
-  shoot,
-  signUp,
-  uniqueEmail,
-} from './helpers';
+import { newPerson, requestHelp, runJobWorkerOnce, shoot, signUp, uniqueEmail } from './helpers';
+import { ageRequest } from './time/time';
+import { newVeteran } from './people';
 
 test('an unaccepted request widens to a bordering county after the delay', async ({
   browser,
@@ -16,7 +9,7 @@ test('an unaccepted request widens to a bordering county after the delay', async
 }) => {
   // Santa Cruz borders Santa Clara, San Mateo and San Benito, and not Alameda
   // (migrations/0013_peer_matching.sql, county_adjacency).
-  const requester = await newVerifiedVeteran(browser, request, {
+  const requester = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Cruz',
     label: 'requester',
@@ -53,7 +46,8 @@ test('an unaccepted request widens to a bordering county after the delay', async
 
   const list = (page: typeof bordering) => page.getByRole('region', { name: 'Open requests' });
 
-  // Before the delay: only the requester's own county sees it.
+  // Before the delay: only the requester's own county sees it. The empty boards rely on this
+  // root spec running before the folder specs, which leave open requests in other counties.
   await expect(list(sameCounty)).toContainText(summary);
   await expect(list(bordering)).toContainText('No open requests right now.');
   await expect(list(distant)).toContainText('No open requests right now.');

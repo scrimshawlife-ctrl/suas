@@ -1,32 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { useBodyIdempotencyKey, useIdempotencyKey } from '../../api/idempotency';
 import { queryKeys } from '../../api/keys';
+import { useSignedInQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
 import { serviceRequestQueryOptions } from '../../api/service-requests';
-import { useSessionToken } from '../../api/token-store';
 import type { Schemas, ServiceCategory } from '../../api/types';
+import { REQUEST_POLL_MS } from '../../app/poll-intervals';
 import { isDraftGone, openDraft } from './open-draft';
 import { isSettled } from './request-card';
 
 export type IntakeTurn = Schemas['IntakeTurn'];
 export type IntakeDraft = Schemas['IntakeDraft'];
 export type IntakeDraftWithText = Schemas['IntakeDraftWithText'];
-export type IntakeResource = Schemas['IntakeResource'];
-
-/** Detail polling while a request is open: "every ~15 s" (sprint 2 brief). */
-export const REQUEST_POLL_MS = 15_000;
 
 /** GET /intake/status: whether to offer the assistant. */
 export function useIntakeStatus() {
-  const token = useSessionToken();
-  return useQuery({
+  return useSignedInQuery({
     queryKey: queryKeys.intake.detail('status'),
     queryFn: async () => {
       const { data } = await api.GET('/api/v0/intake/status');
       return requireData(data, 'assistant status');
     },
-    enabled: token !== null,
     staleTime: 0,
   });
 }
@@ -41,11 +37,10 @@ function dropGoneDraft(error: unknown): void {
  * and forgets the id, when the draft is gone or no longer DRAFT. Never served from cache.
  */
 export function useOpenDraft() {
-  const token = useSessionToken();
   const [draftId] = useState(() => openDraft.get());
-  return useQuery({
+  return useSignedInQuery({
     queryKey: queryKeys.intake.detail(draftId ?? ''),
-    enabled: token !== null && draftId !== null,
+    enabled: draftId !== null,
     queryFn: async (): Promise<IntakeDraftWithText | null> => {
       try {
         const { data } = await api.GET('/api/v0/intake/drafts/{id}', {
@@ -119,18 +114,23 @@ function useRequestCreated() {
   };
 }
 
-/** POST /intake/drafts/{id}/submit. `idempotencyKey` is one per submit action. */
+/**
+ * POST /intake/drafts/{id}/submit. Key: one per card, kept across retries and renewed only after
+ * a success.
+ */
 export function useSubmitDraft() {
   const created = useRequestCreated();
+  const key = useIdempotencyKey();
   return useMutation({
-    mutationFn: async (input: { draftId: string; idempotencyKey: string }) => {
+    mutationFn: async (draftId: string) => {
       const { data } = await api.POST('/api/v0/intake/drafts/{id}/submit', {
-        params: { path: { id: input.draftId } },
-        headers: { 'Idempotency-Key': input.idempotencyKey },
+        params: { path: { id: draftId } },
+        headers: key.headers(),
       });
       return requireData(data, 'request').service_request;
     },
     onSuccess: async () => {
+      key.renew();
       openDraft.clear();
       await created();
     },
@@ -146,19 +146,24 @@ export interface FormBody {
   destination?: string;
 }
 
-/** POST /service-requests: the plain form. */
+/**
+ * POST /service-requests: the plain form. Key: one per body, so a retry of the same content
+ * reuses it and changed content is a new action; renewed after a success.
+ */
 export function useCreateRequest() {
   const created = useRequestCreated();
+  const key = useBodyIdempotencyKey();
   return useMutation({
-    mutationFn: async (input: { body: FormBody; idempotencyKey: string }) => {
+    mutationFn: async (body: FormBody) => {
       const { data } = await api.POST('/api/v0/service-requests', {
-        body: input.body,
-        headers: { 'Idempotency-Key': input.idempotencyKey },
+        body,
+        headers: key.headers(body),
       });
       return requireData(data, 'request');
     },
     // A request sent through the plain form ends the assistant's draft too, so it cannot return.
     onSuccess: async () => {
+      key.renew();
       openDraft.clear();
       await created();
     },
@@ -171,11 +176,10 @@ export function useCreateRequest() {
  * The read that first shows a settled status refreshes `me` too, then polling stops.
  */
 export function useRequestDetail(id: string | undefined) {
-  const token = useSessionToken();
   const queryClient = useQueryClient();
-  const query = useQuery({
+  const query = useSignedInQuery({
     ...serviceRequestQueryOptions(id ?? ''),
-    enabled: token !== null && id !== undefined && id !== '',
+    enabled: id !== undefined && id !== '',
     refetchInterval: (q) => (isSettled(q.state.data?.status) ? false : REQUEST_POLL_MS),
   });
 
@@ -197,21 +201,26 @@ type OwnerCommand = 'CANCEL' | 'CONFIRM';
  * The reason sent with CANCEL, which the API requires. Fixed on purpose: a free-text reason
  * would put what the person typed into the request record.
  */
-export const CANCEL_REASON = 'Cancelled by the requester';
+const CANCEL_REASON = 'Cancelled by the requester';
 
-/** CANCEL and CONFIRM: requester-only commands on one request. */
+/**
+ * CANCEL and CONFIRM: requester-only commands on one request. Key: one per button, kept across
+ * retries and renewed only after a success.
+ */
 export function useRequestCommand(requestId: string, command: OwnerCommand) {
   const queryClient = useQueryClient();
+  const key = useIdempotencyKey();
   return useMutation({
-    mutationFn: async (idempotencyKey: string) => {
+    mutationFn: async () => {
       const { data } = await api.POST('/api/v0/service-requests/{id}/commands/{command}', {
         params: { path: { id: requestId, command } },
         body: command === 'CANCEL' ? { reason: CANCEL_REASON } : {},
-        headers: { 'Idempotency-Key': idempotencyKey },
+        headers: key.headers(),
       });
       return requireData(data, 'request');
     },
     onSuccess: async () => {
+      key.renew();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.serviceRequests.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.me }),
@@ -222,18 +231,25 @@ export function useRequestCommand(requestId: string, command: OwnerCommand) {
 
 export type RequestEdit = Schemas['ServiceRequestEditRequest'];
 
-/** POST /service-requests/{id}/commands/edit: the requester changes an unaccepted request. */
+/**
+ * POST /service-requests/{id}/commands/edit: the requester changes an unaccepted request.
+ * Key: one per body, as the plain form; renewed after a success.
+ */
 export function useEditRequest(requestId: string) {
   const created = useRequestCreated();
+  const key = useBodyIdempotencyKey();
   return useMutation({
-    mutationFn: async (input: { edit: RequestEdit; idempotencyKey: string }) => {
+    mutationFn: async (edit: RequestEdit) => {
       const { data } = await api.POST('/api/v0/service-requests/{id}/commands/edit', {
         params: { path: { id: requestId } },
-        body: input.edit,
-        headers: { 'Idempotency-Key': input.idempotencyKey },
+        body: edit,
+        headers: key.headers(edit),
       });
       return requireData(data, 'request');
     },
-    onSuccess: created,
+    onSuccess: async () => {
+      key.renew();
+      await created();
+    },
   });
 }

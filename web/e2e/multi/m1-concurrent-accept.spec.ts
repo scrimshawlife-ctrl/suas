@@ -4,14 +4,8 @@
  */
 
 import { expect, test } from '../fixtures';
-import {
-  newHelper,
-  newRequester,
-  openList,
-  sendRequest,
-  summaryValue,
-  takeButton,
-} from '../serve/serve';
+import { openList, sendRequest, summaryValue, takeButton } from '../serve/serve';
+import { newHelper, newVeteran } from '../people';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -22,7 +16,7 @@ test('two helpers Take at once: one case page, and the other sees the taken copy
 }) => {
   // The errors this test provokes on purpose.
   allow.push(/status of 409/);
-  const requester = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: requester } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(requester, request);
   const a = (await newHelper(browser, request, { name: 'Dee R.' })).page;
   const b = (await newHelper(browser, request, { name: 'Sam P.' })).page;

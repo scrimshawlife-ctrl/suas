@@ -15,6 +15,7 @@ import {
   INVITE_LIMIT_PER_VETERAN,
 } from '../../src/http/routes/trusted-contacts.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
@@ -31,13 +32,8 @@ afterAll(async () => {
   await app.close();
 });
 
-function requirePool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
 async function auditActions(tenantId: string, trustedContactId: string): Promise<string[]> {
-  const result = await requirePool().query<{ action: string }>(
+  const result = await appPool(app).query<{ action: string }>(
     `SELECT action FROM audit_events
       WHERE tenant_id = $1 AND target_type = 'TrustedContact' AND target_id = $2
       ORDER BY occurred_at`,
@@ -47,8 +43,7 @@ async function auditActions(tenantId: string, trustedContactId: string): Promise
 }
 
 async function veteranSession() {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
+  const pool = appPool(app);
   const tenantId = randomUUID();
   const user = await createVerifiedUser(pool, {
     tenantId,
@@ -183,7 +178,7 @@ describe('GET/POST /api/v0/trusted-contacts', () => {
 
     // TRUSTED_CIRCLE.md §3.4: one TRUSTED_CONTACT_INVITED, carrying no invite address.
     const id = first.json().trusted_contact_id as string;
-    const events = await requirePool().query<{ payload: object }>(
+    const events = await appPool(app).query<{ payload: object }>(
       `SELECT payload FROM domain_events
         WHERE tenant_id = $1 AND aggregate_id = $2 AND event_type = 'TRUSTED_CONTACT_INVITED'`,
       [tenantId, id],
@@ -196,8 +191,8 @@ describe('GET/POST /api/v0/trusted-contacts', () => {
 
 describe('invite delivery and the invitee read (R9.4)', () => {
   async function signedIn(tenantId: string, email: string) {
-    const user = await createUser(requirePool(), { tenantId, email, status: 'ACTIVE' });
-    const session = await createSession(requirePool(), TEST_SESSION_SECRET, {
+    const user = await createUser(appPool(app), { tenantId, email, status: 'ACTIVE' });
+    const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
       tenantId,
       userId: user.userId,
     });
@@ -216,7 +211,7 @@ describe('invite delivery and the invitee read (R9.4)', () => {
     });
     expect(phoneOnly.statusCode).toBe(201);
 
-    const sends = await requirePool().query<{
+    const sends = await appPool(app).query<{
       destination: string;
       reason: string;
       channel: string;
@@ -242,7 +237,7 @@ describe('invite delivery and the invitee read (R9.4)', () => {
 
   it('shows the invitee display name and relationship only, then nothing once accepted', async () => {
     const { headers, tenantId, user } = await veteranSession();
-    await setUserDisplayName(requirePool(), tenantId, user.userId, 'Marcus T.');
+    await setUserDisplayName(appPool(app), tenantId, user.userId, 'Marcus T.');
     const email = syntheticEmail(`invitee-${randomUUID().slice(0, 8)}`);
     const created = await invite(headers, { relationship_label: 'Sister', invite_email: email });
     const id = created.json().trusted_contact_id as string;
@@ -291,14 +286,14 @@ describe('invite delivery and the invitee read (R9.4)', () => {
         })
       ).json().invitations as unknown[];
     expect(await read()).toHaveLength(1);
-    await setUserStatus(requirePool(), tenantId, user.userId, 'SUSPENDED');
+    await setUserStatus(appPool(app), tenantId, user.userId, 'SUSPENDED');
     expect(await read()).toEqual([]);
   });
 });
 
 describe('invite abuse controls', () => {
   async function inviteSends(tenantId: string): Promise<number> {
-    const result = await requirePool().query(
+    const result = await appPool(app).query(
       `SELECT 1 FROM notifications WHERE tenant_id = $1 AND reason = 'trusted_contact_invited'`,
       [tenantId],
     );
@@ -355,12 +350,12 @@ describe('invite abuse controls', () => {
   it('past the recipient cap, answers exactly as usual and suppresses only the email', async () => {
     const tenantId = randomUUID();
     const inTenant = async () => {
-      const user = await createVerifiedUser(requirePool(), {
+      const user = await createVerifiedUser(appPool(app), {
         tenantId,
         email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
         status: 'ACTIVE',
       });
-      const session = await createSession(requirePool(), TEST_SESSION_SECRET, {
+      const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
         tenantId,
         userId: user.userId,
       });
@@ -385,7 +380,7 @@ describe('invite abuse controls', () => {
     const freshId = String(fresh.json().trusted_contact_id);
     expect(capped.body.replace(cappedId, 'id')).toBe(fresh.body.replace(freshId, 'id'));
 
-    const sends = await requirePool().query<{
+    const sends = await appPool(app).query<{
       notification_id: string;
       subject_id: string;
       delivery_status: string;
@@ -401,7 +396,7 @@ describe('invite abuse controls', () => {
     // The test app runs send jobs inline: the fresh invite was sent, the capped one never tried.
     expect(byContact.get(freshId)?.delivery_status).toBe('SENT');
     expect(byContact.get(cappedId)?.attempt_count).toBe(0);
-    const audit = await requirePool().query<{ payload: { failure_reason: string } }>(
+    const audit = await appPool(app).query<{ payload: { failure_reason: string } }>(
       `SELECT payload FROM audit_events
         WHERE tenant_id = $1 AND event_type = 'NOTIFICATION_UNDELIVERABLE' AND target_id = $2`,
       [tenantId, byContact.get(cappedId)?.notification_id],

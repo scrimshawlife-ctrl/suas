@@ -227,6 +227,42 @@ describe('database', () => {
     expect(budget).toBeLessThan(maxConnections - 3);
   });
 
+  // Review of #325 with #322: deploy modes may only block (0) or restore these caps. An unblocked
+  // AWS::NoValue would leave the function unbounded and break the budget the alarm assumes.
+  it('keeps the caps under the deploy workflow: 0 while blocked, 15 and 2 once unblocked', () => {
+    const pipeline = synthesize({ deploymentPipeline: 'true' }).backend;
+    const props = (handler: string) =>
+      ofType(pipeline, 'AWS::Lambda::Function').find(
+        ([, r]) => r.Properties?.Handler === handler,
+      )?.[1].Properties;
+    expect(props('run.sh')?.ReservedConcurrentExecutions).toEqual({
+      'Fn::If': ['ApiBlocked', 0, 15],
+    });
+    expect(props('job-worker.handler')?.ReservedConcurrentExecutions).toEqual({
+      'Fn::If': ['WorkerBlocked', 0, 2],
+    });
+    expect(props('migrate.handler')?.ReservedConcurrentExecutions).toBe(1);
+    // The most any mode allows is every unblocked cap at once: the same 52, under the alarm.
+    const unblocked = (handler: string) => {
+      const p = props(handler);
+      const cap = p?.ReservedConcurrentExecutions;
+      const value = typeof cap === 'object' ? cap['Fn::If'][2] : cap;
+      return Number(value) * Number(p?.Environment.Variables.DATABASE_POOL_MAX);
+    };
+    const budget = ['run.sh', 'job-worker.handler', 'migrate.handler']
+      .map(unblocked)
+      .reduce((a, b) => a + b, 0);
+    expect(budget).toBe(52);
+    const [[, group] = []] = ofType(pipeline, 'AWS::RDS::DBParameterGroup');
+    const [[, alarm] = []] = ofType(pipeline, 'AWS::CloudWatch::Alarm').filter(
+      ([, r]) => r.Properties?.MetricName === 'DatabaseConnections',
+    );
+    expect(budget).toBeLessThan(Number(alarm?.Properties?.Threshold));
+    expect(Number(alarm?.Properties?.Threshold)).toBeLessThan(
+      Number(group?.Properties?.Parameters?.max_connections) - 3,
+    );
+  });
+
   it('names nothing the config guard would read as a production database', () => {
     const text = JSON.stringify(resourcesOf(s.backend));
     expect(text).not.toMatch(

@@ -6,6 +6,9 @@ name: staging-auth-evidence
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: staging-auth-evidence
   cancel-in-progress: false
@@ -18,13 +21,11 @@ jobs:
     env:
       SUAS_E2E_BASE_URL: ${{ vars.SUAS_E2E_BASE_URL }}
       SUAS_CANONICAL_BASE_URL: ${{ vars.SUAS_CANONICAL_BASE_URL }}
-      SUAS_STAGING_AUTH_EMAILS: ${{ secrets.SUAS_STAGING_AUTH_EMAILS }}
-      RESEND_AUDIT_API_KEY: ${{ secrets.RESEND_AUDIT_API_KEY }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '22'
           cache: npm
@@ -33,4 +34,8 @@ jobs:
         run: npm ci
 
       - name: Exercise metadata-only browser auth evidence
+        # Secrets stay out of job env so `npm ci` install scripts and the setup actions never see them.
+        env:
+          SUAS_STAGING_AUTH_EMAILS: ${{ secrets.SUAS_STAGING_AUTH_EMAILS }}
+          RESEND_AUDIT_API_KEY: ${{ secrets.RESEND_AUDIT_API_KEY }}
         run: npm run evidence:staging:browser-auth

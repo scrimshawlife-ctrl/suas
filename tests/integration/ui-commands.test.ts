@@ -15,6 +15,7 @@ import { createUser } from '../../src/identity/index.js';
 import { presentQrfState, VETERAN_QRF_CANCEL_REASON } from '../../src/ui/index.js';
 import { readActiveQrf } from '../../src/ui/read.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 import { holdRequest } from '../helpers/hold-case.js';
@@ -29,12 +30,6 @@ afterAll(async () => {
   await app.close();
 });
 
-function pool() {
-  const value = app.pool;
-  if (value === undefined) throw new Error('The test app has no database pool.');
-  return value;
-}
-
 function authorized(credential: string) {
   return { authorization: `Bearer ${credential}` };
 }
@@ -45,12 +40,12 @@ async function veteranSession(): Promise<{
   userId: string;
 }> {
   const tenantId = randomUUID();
-  const user = await createVerifiedUser(pool(), {
+  const user = await createVerifiedUser(appPool(app), {
     tenantId,
     email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
   });
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
+  const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
     tenantId,
     userId: user.userId,
   });
@@ -61,13 +56,13 @@ async function accepterSession(tenantId: string): Promise<{
   credential: string;
   userId: string;
 }> {
-  const accepter = await createUser(pool(), {
+  const accepter = await createUser(appPool(app), {
     tenantId,
     email: syntheticEmail(`acc-${randomUUID().slice(0, 8)}`),
     status: 'ACTIVE',
     county: 'SANTA_CLARA',
   });
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
+  const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
     tenantId,
     userId: accepter.userId,
   });
@@ -75,7 +70,7 @@ async function accepterSession(tenantId: string): Promise<{
 }
 
 async function countPeerSupport(tenantId: string): Promise<number> {
-  const result = await pool().query<{ n: string }>(
+  const result = await appPool(app).query<{ n: string }>(
     `SELECT count(*)::text AS n FROM service_requests
       WHERE tenant_id = $1 AND category = 'PEER_SUPPORT'`,
     [tenantId],
@@ -113,9 +108,9 @@ describe('POST /app/qrf/deploy — veteran peer-support request', () => {
     expect(home.body).not.toContain('Deploy QRF');
     expect(home.body).toContain('action="/app/qrf/cancel"');
 
-    const supportCase = await findCurrentCase(pool(), tenantId, userId);
+    const supportCase = await findCurrentCase(appPool(app), tenantId, userId);
     expect(supportCase).toBeDefined();
-    const qrf = await readActiveQrf(pool(), tenantId, userId);
+    const qrf = await readActiveQrf(appPool(app), tenantId, userId);
     expect(qrf?.serviceRequestId).toBeDefined();
   });
 
@@ -168,8 +163,8 @@ describe('POST /app/qrf/cancel — veteran cancel', () => {
     });
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe('/app/home');
-    expect(await readActiveQrf(pool(), tenantId, userId)).toBeUndefined();
-    const reason = await pool().query<{ status_reason: string | null }>(
+    expect(await readActiveQrf(appPool(app), tenantId, userId)).toBeUndefined();
+    const reason = await appPool(app).query<{ status_reason: string | null }>(
       `SELECT status_reason FROM service_requests
         WHERE tenant_id = $1 AND category = 'PEER_SUPPORT'`,
       [tenantId],
@@ -205,7 +200,7 @@ describe('POST /app/qrf/cancel — veteran cancel', () => {
     });
     expect(replay.statusCode).toBe(303);
     expect(replay.headers.location).toBe('/app/home');
-    expect(await readActiveQrf(pool(), tenantId, userId)).toBeUndefined();
+    expect(await readActiveQrf(appPool(app), tenantId, userId)).toBeUndefined();
     expect(await countPeerSupport(tenantId)).toBe(1);
   });
 });
@@ -232,14 +227,14 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
       url: '/app/qrf/deploy',
       headers: authorized(veteran.credential),
     });
-    const supportCase = await findCurrentCase(pool(), veteran.tenantId, veteran.userId);
+    const supportCase = await findCurrentCase(appPool(app), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
     const responder = await accepterSession(veteran.tenantId);
     const request = (
-      await listCaseServiceRequests(pool(), veteran.tenantId, supportCase.caseId)
+      await listCaseServiceRequests(appPool(app), veteran.tenantId, supportCase.caseId)
     )[0];
     if (request === undefined) throw new Error('expected the deployed request');
-    await holdRequest(pool(), {
+    await holdRequest(appPool(app), {
       tenantId: veteran.tenantId,
       serviceRequestId: request.serviceRequestId,
       acceptedByUserId: responder.userId,
@@ -252,7 +247,7 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
     });
     expect(home.statusCode).toBe(200);
     expect(home.body).not.toContain('RESPONDER NOTIFIED');
-    const qrf = await readActiveQrf(pool(), veteran.tenantId, veteran.userId);
+    const qrf = await readActiveQrf(appPool(app), veteran.tenantId, veteran.userId);
     expect(qrf).toBeDefined();
     if (qrf === undefined) throw new Error('expected an in-flight request');
     expect(presentQrfState(qrf.facts).state).not.toBe('RESPONDER_NOTIFIED');
@@ -265,27 +260,27 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
       url: '/app/qrf/deploy',
       headers: authorized(veteran.credential),
     });
-    const supportCase = await findCurrentCase(pool(), veteran.tenantId, veteran.userId);
+    const supportCase = await findCurrentCase(appPool(app), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
     const responder = await accepterSession(veteran.tenantId);
     const request = (
-      await listCaseServiceRequests(pool(), veteran.tenantId, supportCase.caseId)
+      await listCaseServiceRequests(appPool(app), veteran.tenantId, supportCase.caseId)
     )[0];
     if (request === undefined) throw new Error('expected the deployed request');
-    await holdRequest(pool(), {
+    await holdRequest(appPool(app), {
       tenantId: veteran.tenantId,
       serviceRequestId: request.serviceRequestId,
       acceptedByUserId: responder.userId,
     });
     // An accepted request always reads RESPONDER_ACCEPTED. Put it back to a status that
     // is held but not yet accepted, so this isolates the notification join under test.
-    await pool().query(`UPDATE service_requests SET status = 'ASSIGNED' WHERE case_id = $1`, [
+    await appPool(app).query(`UPDATE service_requests SET status = 'ASSIGNED' WHERE case_id = $1`, [
       supportCase.caseId,
     ]);
-    const qrf = await readActiveQrf(pool(), veteran.tenantId, veteran.userId);
+    const qrf = await readActiveQrf(appPool(app), veteran.tenantId, veteran.userId);
     if (qrf === undefined) throw new Error('expected an in-flight request');
 
-    await pool().query(
+    await appPool(app).query(
       `INSERT INTO notifications
          (notification_id, tenant_id, recipient_user_id, reason, channel, consent_basis,
           template_version, subject_type, subject_id, delivery_status)
@@ -311,20 +306,20 @@ describe('MVP_REFERENCE.md §7.2 — the notified state on the home', () => {
       url: '/app/qrf/deploy',
       headers: authorized(veteran.credential),
     });
-    const supportCase = await findCurrentCase(pool(), veteran.tenantId, veteran.userId);
+    const supportCase = await findCurrentCase(appPool(app), veteran.tenantId, veteran.userId);
     if (supportCase === undefined) throw new Error('expected a case after deploy');
     const responder = await accepterSession(veteran.tenantId);
     const request = (
-      await listCaseServiceRequests(pool(), veteran.tenantId, supportCase.caseId)
+      await listCaseServiceRequests(appPool(app), veteran.tenantId, supportCase.caseId)
     )[0];
     if (request === undefined) throw new Error('expected the deployed request');
-    await holdRequest(pool(), {
+    await holdRequest(appPool(app), {
       tenantId: veteran.tenantId,
       serviceRequestId: request.serviceRequestId,
       acceptedByUserId: responder.userId,
     });
 
-    await pool().query(
+    await appPool(app).query(
       `INSERT INTO notifications
          (notification_id, tenant_id, recipient_user_id, reason, channel, consent_basis,
           template_version, delivery_status)

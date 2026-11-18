@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { withDb } from '../helpers';
-import { closePeople, expectCrisisChrome, serverError, veteran } from './support';
+import { closePeople, expectCrisisChrome, serverError } from './support';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -49,7 +50,7 @@ test('each released category lists its county listing with real contact targets 
   browser,
   request,
 }) => {
-  const { page } = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
   for (const item of SEEDED) {
     await page.goto(`/resources/${item.slug}`);
     await expect(page).toHaveTitle(`${item.heading} · SUAS`);
@@ -95,7 +96,7 @@ test('a county with no listings shows the empty state and still offers a request
   request,
 }) => {
   // Admin scenarios may publish county-less FOOD and SHELTER listings; peer support has none.
-  const { page } = await veteran(browser, request, { name: 'Pat K.', county: 'San Benito' });
+  const { page } = await newVeteran(browser, request, { name: 'Pat K.', county: 'San Benito' });
   await page.goto('/resources/peer_support');
   await expect(page.getByText('Listings for San Benito County.', { exact: false })).toBeVisible();
   await expect(page.getByText('No listings for your county yet.')).toBeVisible();
@@ -127,7 +128,7 @@ test('more listings than one page: "Show more listings" loads the rest', async (
     ),
   );
 
-  const { page } = await veteran(browser, request, { name: 'Ida P.', county: 'Stanislaus' });
+  const { page } = await newVeteran(browser, request, { name: 'Ida P.', county: 'Stanislaus' });
   await page.goto('/resources/food');
   // Each "Show more listings" adds a page; click until every listing is shown.
   const showing = page.getByText(/^Showing \d+ of \d+$/);
@@ -150,7 +151,7 @@ test('when the listings fail to load, the page says so and Try again recovers', 
   // The 500s are the ones this test returns on purpose.
   // Only the routed resource list may 500; a real backend 500 still fails the test.
   allow.push(/\/api\/v0\/resources\?.* :: 500$/, /status of 500/);
-  const { page } = await veteran(browser, request, { name: 'Sam D.', county: 'Santa Clara' });
+  const { page } = await newVeteran(browser, request, { name: 'Sam D.', county: 'Santa Clara' });
   let fail = true;
   await page.route('**/api/v0/resources?**', (route) =>
     fail ? route.fulfill(serverError()) : route.fallback(),

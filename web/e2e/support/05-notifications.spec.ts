@@ -1,7 +1,9 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { ageRequest, requestHelp, runJobWorkerOnce, withDb } from '../helpers';
-import { closePeople, myUserId, serverError, uniqueSummary, veteran, type Person } from './support';
+import { myUserId, requestHelp, runJobWorkerOnce, uniqueText, withDb } from '../helpers';
+import { closePeople, serverError } from './support';
+import { ageRequest } from '../time/time';
+import { newVeteran, type Person } from '../people';
 
 test.afterEach(closePeople);
 
@@ -9,14 +11,14 @@ const EXPIRED_NOTICE = 'Your request expired 72 hours after you sent it.';
 
 /** A Veteran whose request ran past 72 hours, so the sweep sent them one real notice. */
 async function veteranWithExpiredNotice(
-  browser: Parameters<typeof veteran>[0],
-  request: Parameters<typeof veteran>[1],
+  browser: Parameters<typeof newVeteran>[0],
+  request: Parameters<typeof newVeteran>[1],
 ): Promise<Person> {
-  const vet = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
+  const vet = await newVeteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
   const requestId = await requestHelp(
     vet.page,
     request,
-    { category: 'FOOD', summary: uniqueSummary('Groceries') },
+    { category: 'FOOD', summary: uniqueText('Groceries') },
     'Front entrance of the library',
   );
   await ageRequest(requestId, 73 * 60);
@@ -94,7 +96,7 @@ test('when notifications fail to load, the page says so and Try again recovers',
 }) => {
   // The 503s are the ones this test returns on purpose.
   allow.push(/:: 503$/, /status of 503/);
-  const { page } = await veteran(browser, request, {
+  const { page } = await newVeteran(browser, request, {
     name: 'Pat V.',
     county: 'Alameda',
     verified: false,

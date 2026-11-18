@@ -1,7 +1,7 @@
 import { expect, test } from '../fixtures';
-import { scriptModel, shoot } from '../helpers';
+import { scriptModel, shoot, uniqueText } from '../helpers';
 import { errorCode, expectNoDeadControls, nextResponse } from '../auth/auth';
-import { elevatedAdmin, extractDrafts, scriptExtraction, uniqueName } from './admin';
+import { elevatedAdmin, extractDrafts, scriptExtraction } from './admin';
 
 const EXTRACT = /\/api\/v0\/admin\/resource-drafts\/commands\/extract$/;
 
@@ -50,8 +50,8 @@ test('several resources from one source become several drafts, listed under To r
   request,
 }) => {
   const page = await elevatedAdmin(browser, request);
-  const a = uniqueName('Harbor Ride Share');
-  const b = uniqueName('Bayview Night Shelter');
+  const a = uniqueText('Harbor Ride Share');
+  const b = uniqueText('Bayview Night Shelter');
   await page.goto('/admin/drafts');
   await extractDrafts(page, request, [
     { service_name: a, category: 'TRANSPORTATION', counties: ['ALAMEDA'] },
@@ -119,7 +119,7 @@ test('when the builder fails or is unavailable, the page says so in plain words 
   // Provoked on purpose: the browser logs each refused load.
   allow.push(/commands\/extract :: 50[023]$/, /status of 50[023]/);
   const page = await elevatedAdmin(browser, request);
-  const name = uniqueName('Riverside Food Shelf');
+  const name = uniqueText('Riverside Food Shelf');
   await page.goto('/admin/drafts');
   await page.getByLabel('Source text').fill(`${name}. Groceries on Tuesdays.`);
   await page.getByLabel('Source link').fill('https://food.example.invalid/');
@@ -168,7 +168,7 @@ test('when the builder fails or is unavailable, the page says so in plain words 
 
 test('double-clicking Create drafts makes the drafts once', async ({ browser, request }) => {
   const page = await elevatedAdmin(browser, request);
-  const name = uniqueName('Double Tap Pantry');
+  const name = uniqueText('Double Tap Pantry');
   await page.goto('/admin/drafts');
   const extracts: string[] = [];
   page.on('request', (r) => {
@@ -204,7 +204,7 @@ test('more than one page of drafts: Show more loads the rest, then goes away', a
   request,
 }) => {
   const page = await elevatedAdmin(browser, request);
-  const batch = uniqueName('Batch');
+  const batch = uniqueText('Batch');
   const resources = Array.from({ length: 22 }, (_, i) => ({
     service_name: `${batch} pantry ${String(i + 1).padStart(2, '0')}`,
     category: 'FOOD' as const,

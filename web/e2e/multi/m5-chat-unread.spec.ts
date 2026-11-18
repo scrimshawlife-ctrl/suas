@@ -4,15 +4,13 @@
  */
 
 import type { Page } from '@playwright/test';
+import { UNREAD_REFETCH_MS } from '../../src/app/poll-intervals';
 import { expect, test } from '../fixtures';
 import { history, pair, say, threadLink } from '../chat/chat';
-import { POLL_MARGIN_MS, pauseAfterPoll, runClock } from '../helpers';
-import { tag } from '../serve/serve';
+import { pauseAfterPoll, POLL_MARGIN_MS, runClock, tag } from '../helpers';
 
 test.describe.configure({ timeout: 180_000 });
 
-/** The badge's thread list refetch (UNREAD_REFETCH_MS in src/features/chat/unread.ts). */
-const UNREAD_REFETCH_MS = 60_000;
 const isThreadsRead = (url: string) => url.includes('/api/v0/chat/threads');
 
 function primary(page: Page) {

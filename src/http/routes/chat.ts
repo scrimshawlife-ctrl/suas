@@ -8,8 +8,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { authenticate } from '../authenticate.js';
 import { pageQuery } from '../../db/cursor.js';
@@ -27,9 +27,7 @@ import {
 import type { ConnectionPushPort } from '../../realtime/connection-push.js';
 import { API_PREFIX } from '../../release/pins.js';
 
-export interface ChatRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface ChatRouteDeps extends RouteContext {
   /** Absent when realtime push is not configured; messages still work over REST. */
   readonly push: ConnectionPushPort | undefined;
 }

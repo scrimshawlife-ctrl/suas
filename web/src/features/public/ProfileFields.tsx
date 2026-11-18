@@ -1,6 +1,7 @@
 import { Select } from '../../components/Select';
 import { TextField } from '../../components/TextField';
-import { COUNTY_OPTIONS, type WelcomeErrors } from './welcome-form';
+import { COUNTY_OPTIONS } from '../../lib/people';
+import type { WelcomeErrors } from './welcome-form';
 
 export interface ProfileFieldsProps {
   displayName: string;

@@ -10,8 +10,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { assertMfaElevated, assertSuasAdmin, ResourceNotVisibleError } from '../../authz/index.js';
@@ -23,16 +23,18 @@ import {
   type SupportCase,
 } from '../../coordination/index.js';
 import { assertAccepter, resolveCaseAccess } from '../case-access.js';
+import { jsonDepth } from '../json-input.js';
 import { findUserById, requireCounty, requireVerifiedVeteran } from '../../identity/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import type { JsonObject } from '../../jobs/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import {
-  findSettlement,
+  findCaseSettlement,
   listSettlements,
   resolveCaseWithSettlement,
   veteranVisibleSettlement,
   type Settlement,
+  type SettlementCycles,
 } from '../../settlement/index.js';
 
 /**
@@ -60,21 +62,27 @@ const EXECUTE_CASE_HTTP = [
   reasonRequired: boolean;
 }>;
 
-export interface CaseRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
-}
-
 const idParams = z.object({ id: z.string().uuid() });
 const settlementParams = z.object({
   id: z.string().uuid(),
   settlement_id: z.string().uuid(),
 });
+/**
+ * Deepest nesting one Settlement section may hold. SETTLEMENT.md §2 content references
+ * canonical records (`{ "service_requests": [{ "id", "status" }] }` is depth 3); 16 leaves
+ * ample room and keeps the stored jsonb far from PostgreSQL's stack limit (54001).
+ */
+const SETTLEMENT_SECTION_MAX_DEPTH = 16;
+const settlementSection = z
+  .record(z.string(), z.unknown())
+  .refine((section) => jsonDepth(section) <= SETTLEMENT_SECTION_MAX_DEPTH, {
+    message: `Nests deeper than ${String(SETTLEMENT_SECTION_MAX_DEPTH)} levels.`,
+  });
 const resolveBody = z.object({
-  requested: z.record(z.string(), z.unknown()),
-  occurred: z.record(z.string(), z.unknown()),
-  fulfilled: z.record(z.string(), z.unknown()),
-  unresolved: z.record(z.string(), z.unknown()),
+  requested: settlementSection,
+  occurred: settlementSection,
+  fulfilled: settlementSection,
+  unresolved: settlementSection,
   // The author, the accepter and the requester's confirmation are derived on the server.
   // A client that still sends authored_by, accepted_by_user_id or veteran_confirmed_by
   // has them dropped by this schema (zod strips unknown keys, as everywhere in this API).
@@ -94,6 +102,11 @@ function publicCase(supportCase: SupportCase, revealPriority: boolean) {
     status: supportCase.status,
     priority_signal_level: revealPriority ? (supportCase.prioritySignalLevel ?? null) : null,
   };
+}
+
+/** The requester reads every cycle's Settlements; a helper, the current one (CASES.md §4.3). */
+function settlementCyclesFor(owner: boolean): SettlementCycles {
+  return owner ? 'all' : 'current';
 }
 
 export function publicSettlement(settlement: Settlement) {
@@ -126,7 +139,7 @@ const requiredReasonBody = z.object({
     .optional(),
 });
 
-export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): void {
+export function registerCaseRoutes(app: FastifyInstance, deps: RouteContext): void {
   app.post(`${API_PREFIX}/cases`, async (request, reply) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const veteran = await findUserById(deps.pool, context.tenantId, context.userId);
@@ -300,7 +313,12 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     const { id } = idParams.parse(request.params);
     const { owner } = await resolveCaseAccess(deps.pool, context, id);
 
-    const settlements = await listSettlements(deps.pool, context.tenantId, id);
+    const settlements = await listSettlements(
+      deps.pool,
+      context.tenantId,
+      id,
+      settlementCyclesFor(owner),
+    );
     return {
       settlements: owner
         ? settlements.map(veteranVisibleSettlement)
@@ -313,10 +331,14 @@ export function registerCaseRoutes(app: FastifyInstance, deps: CaseRouteDeps): v
     const { id, settlement_id: settlementId } = settlementParams.parse(request.params);
     const { owner } = await resolveCaseAccess(deps.pool, context, id);
 
-    const settlement = await findSettlement(deps.pool, context.tenantId, settlementId);
-    if (settlement === undefined || settlement.caseId !== id) {
-      throw new ResourceNotVisibleError();
-    }
+    const settlement = await findCaseSettlement(
+      deps.pool,
+      context.tenantId,
+      id,
+      settlementId,
+      settlementCyclesFor(owner),
+    );
+    if (settlement === undefined) throw new ResourceNotVisibleError();
     return owner ? veteranVisibleSettlement(settlement) : publicSettlement(settlement);
   });
 }

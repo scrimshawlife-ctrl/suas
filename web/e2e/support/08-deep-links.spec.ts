@@ -1,6 +1,7 @@
 import { expect, test } from '../fixtures';
 import { readSignInCode } from '../helpers';
-import { closePeople, veteran } from './support';
+import { closePeople } from './support';
+import { newVeteran } from '../people';
 
 test.afterEach(closePeople);
 
@@ -15,12 +16,13 @@ const ROUTES = [
 
 test('signed out, each support address goes to sign in and comes back to it after the code', async ({
   browser,
+  context,
   request,
 }) => {
   test.setTimeout(180_000);
   for (const route of ROUTES) {
     // Sign-in codes are rate limited per address, so each address gets its own Veteran.
-    const vet = await veteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
+    const vet = await newVeteran(browser, request, { name: 'Marcus T.', county: 'Santa Clara' });
     // A new tab has no session (it lives in sessionStorage), like a link opened from an email.
     const page = await vet.page.context().newPage();
     await page.goto(route.path);
@@ -36,7 +38,7 @@ test('signed out, each support address goes to sign in and comes back to it afte
     // Back does not return to the code screen.
     await page.goBack();
     await expect(page).not.toHaveURL(/\/sign-in\/code$/);
-    await closePeople();
+    await closePeople({ browser, context });
   }
 });
 
@@ -44,7 +46,7 @@ test('signed in without the ID check, each requester support address goes to Ver
   browser,
   request,
 }) => {
-  const { page } = await veteran(browser, request, {
+  const { page } = await newVeteran(browser, request, {
     name: 'Pat V.',
     county: 'Alameda',
     verified: false,

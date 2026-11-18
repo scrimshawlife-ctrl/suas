@@ -1,8 +1,9 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 import { chatThreadsQueryOptions } from '../../api/chat';
-import { tokenStore, useSessionToken } from '../../api/token-store';
+import { useSignedInInfiniteQuery } from '../../api/queries';
+import { tokenStore } from '../../api/token-store';
 import type { ChatThread } from '../../api/types';
+import { UNREAD_REFETCH_MS } from '../../app/poll-intervals';
 import { allThreads, threadKey } from './threads';
 
 /**
@@ -91,9 +92,6 @@ export function countUnread(threads: readonly ChatThread[], state: SeenState): n
   }).length;
 }
 
-/** Unread numbers stay fresh on any screen: refetch about every minute while the tab is visible. */
-export const UNREAD_REFETCH_MS = 60_000;
-
 /**
  * Number of conversations with a message newer than the last one the person opened or sent,
  * for the header badge: `import { useChatUnreadCount } from '../features/chat/unread'`.
@@ -103,10 +101,8 @@ export const UNREAD_REFETCH_MS = 60_000;
  * (`last_message_from_me`) does not count, including one sent from another device.
  */
 export function useChatUnreadCount(): number {
-  const token = useSessionToken();
-  const threads = useInfiniteQuery({
+  const threads = useSignedInInfiniteQuery({
     ...chatThreadsQueryOptions(),
-    enabled: token !== null,
     refetchInterval: UNREAD_REFETCH_MS,
   });
   const state = useSyncExternalStore(seenStore.subscribe, seenStore.getState);

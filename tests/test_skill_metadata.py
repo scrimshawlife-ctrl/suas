@@ -19,7 +19,7 @@ class SkillMetadataTests(unittest.TestCase):
                                         for pattern in triggers[event]["paths"]))
         commands = [step["run"] for step in workflow["jobs"]["validate-skills"]["steps"]
                     if "run" in step]
-        install = "python -m pip install PyYAML"
+        install = "python -m pip install PyYAML==6.0.3"
         regression = "python -m unittest discover -s tests -p 'test_skill_metadata.py' -v"
         self.assertIn(install, commands)
         self.assertIn(regression, commands)

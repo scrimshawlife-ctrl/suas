@@ -10,9 +10,9 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 const REQUEST_PACING_MS = 1_000;
 
 /**
- * GET-only client retries for transient synthetic-STAGING platform statuses.
- * 503 is the Worker isolate/Hyperdrive not-ready and Cloudflare edge path.
- * 500 is the Worker leftover-I/O / unhandled request-path fallback.
+ * GET-only client retries for transient synthetic-STAGING platform statuses (503, 500).
+ * The retry dates from the retired hosting platform and stays until it is re-baselined
+ * against AWS STAGING (an owner call).
  * This is soak-harness transport hardening, not a product SLO or capacity claim.
  */
 export const TRANSIENT_GET_RETRY = Object.freeze({

@@ -163,7 +163,8 @@ snapshot on delete. `rds.force_ssl=1`. Credentials are generated into Secrets Ma
 characters).
 
 There is **no RDS Proxy** (R14.1 proposal, lean synthetic STAGING). The API, job worker and migrate functions all
-connect to the instance endpoint directly, with `DATABASE_SSL_MODE=verify` and the RDS CA bundle, shipped as
+connect to the instance endpoint directly, with `DATABASE_SSL_MODE=verify` (the certificate chain and the host name,
+as libpq's `verify-full`; `src/db/pool.ts`) and the RDS CA bundle, shipped as
 `assets/rds-global-bundle.crt` (public certificates, from `truststore.pki.rds.amazonaws.com`) and set as
 `DATABASE_SSL_CA_FILE`. The migrate function would need a direct connection anyway (the migrator holds a session
 advisory lock; plan §4.1). Each warm API or job-worker container holds up to `DATABASE_POOL_MAX=3` connections
@@ -174,7 +175,9 @@ group pins `max_connections` at **80**, below the `db.t4g.micro` default (LEAST(
 most 112 for 1024 MiB), so the budget is checked against the limit the instance has; 3 of those are reserved for superusers. It is a static
 parameter: changing it needs a reboot. Tests keep the budget at 60 or less and below `max_connections` less 3, and an
 alarm fires at 70 connections (see "Alarms"). Lambda throttles a 16th concurrent API request instead of letting it fail
-on a database connection. See "Known risks".
+on a database connection. Under the deploy workflow (`-c deploymentPipeline=true`, `lib/deployment-mode.ts`) the
+API and job worker are set to 0 while a mode blocks them and back to 15 and 2 once it does not; migrate keeps 1.
+See "Known risks".
 
 ### Cost
 
@@ -447,6 +450,9 @@ owner decision.
 - **Endpoint availability by zone.** An interface endpoint cannot be created in a zone that does not offer the
   service. If a deploy fails for that reason, pass `-c availabilityZones=us-west-2a,us-west-2b` (or other zones).
   The Lambda endpoint uses the first zone listed.
+- **One Lambda endpoint zone.** If that zone fails, email relay invokes fail until it recovers and those sends
+  settle `UNDELIVERABLE`, not retried; the relay failure alarms show it (see "Network", "Alarms"). Mitigation: an
+  endpoint in the second zone (about $7.30/mo) before any real Veteran data, or sooner if the owner decides.
 - **Database connections without RDS Proxy.** Each warm API or job-worker container keeps up to 3 connections
   open, including while Lambda has frozen it, until the container is retired. Reserved concurrency (API 15, job
   worker 2, migrate 1) holds the total to 52 (see "Database"); `max_connections` is pinned at 80 and an alarm fires

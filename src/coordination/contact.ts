@@ -22,7 +22,12 @@ import {
 } from '../db/cursor.js';
 import { withTransaction, type Queryable } from '../db/transaction.js';
 import { appendDomainEvent } from '../events/index.js';
-import { caseHasAcceptedRequest, NoActiveAssignmentError } from './cases.js';
+import {
+  caseHasAcceptedRequest,
+  holdsRequestInCase,
+  NoActiveAssignmentError,
+  NotAssignedError,
+} from './cases.js';
 
 /** EVENT_MODEL.md §3.3 `channel`. */
 export const CONTACT_CHANNELS = ['EMAIL', 'SMS', 'IN_APP', 'PHONE'] as const;
@@ -151,6 +156,15 @@ export async function recordContactInTx(
   if (!(await caseHasAcceptedRequest(tx, input.tenantId, input.caseId))) {
     throw new NoActiveAssignmentError(input.command);
   }
+  // Serialise with a CLOSE (which locks the row FOR UPDATE), then re-check standing on the
+  // committed case: a write that waited out a CLOSE is refused, not filed in the next cycle.
+  await tx.query(`SELECT 1 FROM support_cases WHERE tenant_id = $1 AND case_id = $2 FOR SHARE`, [
+    input.tenantId,
+    input.caseId,
+  ]);
+  if (!(await holdsRequestInCase(tx, input.tenantId, input.caseId, input.loggedByUserId))) {
+    throw new NotAssignedError();
+  }
 
   const attemptedAt = input.attemptedAt ?? new Date();
   const contactAttemptId = randomUUID();
@@ -194,11 +208,14 @@ export async function recordContactInTx(
     return { contactAttempt: toContactAttempt(row), deduplicated: true };
   }
 
+  // `created_at` files the attempt in a cycle (listContactAttempts), so it is the time of the
+  // standing check under the case lock above, not the transaction start: a write that began
+  // before a CLOSE and passed on a new-cycle accept after REOPEN lands in that new cycle.
   const inserted = await tx.query<ContactRow>(
     `INSERT INTO contact_attempts
        (contact_attempt_id, tenant_id, case_id, logged_by_user_id, attempted_at,
-        channel, outcome, note)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        channel, outcome, note, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp())
      RETURNING ${CONTACT_COLUMNS}`,
     [
       contactAttemptId,
@@ -217,7 +234,10 @@ export async function recordContactInTx(
   return { contactAttempt: toContactAttempt(row), deduplicated: false };
 }
 
-/** A case's contact log as an API.md §5 keyset page, newest attempt first. */
+/**
+ * A case's contact log for its current cycle (a holder's standing, CASES.md §4.3), as an
+ * API.md §5 keyset page, newest first. Server `created_at`, not client `attempted_at`, decides.
+ */
 export async function listContactAttempts(
   db: Queryable,
   tenantId: string,
@@ -236,7 +256,11 @@ export async function listContactAttempts(
   const result = await db.query<ContactRow & { attempted_at_key: string }>(
     `SELECT ${CONTACT_COLUMNS}, ${timestampText('attempted_at')} AS attempted_at_key
      FROM contact_attempts
-     WHERE tenant_id = $1 AND case_id = $2 ${cursorCondition}
+     WHERE tenant_id = $1 AND case_id = $2
+       AND created_at > COALESCE(
+         (SELECT closed_at FROM support_cases WHERE tenant_id = $1 AND case_id = $2),
+         '-infinity'::timestamptz)
+       ${cursorCondition}
      ORDER BY attempted_at DESC, contact_attempt_id DESC
      LIMIT $${values.length}`,
     values,

@@ -1,5 +1,4 @@
 import { useId, useMemo, useState } from 'react';
-import { useIdempotencyKey } from '../../api/idempotency';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { useSingleFlight } from '../../lib/single-flight';
@@ -22,7 +21,6 @@ export function CancelRequest({ requestId }: { requestId: string }) {
     }),
     [keepId],
   );
-  const key = useIdempotencyKey();
   const cancel = useRequestCommand(requestId, 'CANCEL');
   const flight = useSingleFlight();
 
@@ -30,14 +28,7 @@ export function CancelRequest({ requestId }: { requestId: string }) {
     if (!cancel.isPending) setOpen(false);
   };
   const confirm = () => {
-    flight(() =>
-      cancel.mutateAsync(key.current(), {
-        onSuccess: () => {
-          key.renew();
-          setOpen(false);
-        },
-      }),
-    );
+    flight(() => cancel.mutateAsync(undefined, { onSuccess: () => setOpen(false) }));
   };
 
   return (
@@ -66,18 +57,12 @@ export function CancelRequest({ requestId }: { requestId: string }) {
 
 /** "Confirm it's done": the requester says the need was met (CONFIRM, FULFILLED only). */
 export function ConfirmDone({ requestId }: { requestId: string }) {
-  const key = useIdempotencyKey();
   const confirm = useRequestCommand(requestId, 'CONFIRM');
   const flight = useSingleFlight();
   return (
     <div className="flex flex-col gap-2.5">
       <div>
-        <Button
-          disabled={confirm.isPending}
-          onClick={() =>
-            flight(() => confirm.mutateAsync(key.current(), { onSuccess: () => key.renew() }))
-          }
-        >
+        <Button disabled={confirm.isPending} onClick={() => flight(() => confirm.mutateAsync())}>
           {confirm.isPending ? 'Confirming…' : "Confirm it's done"}
         </Button>
       </div>

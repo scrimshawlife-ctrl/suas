@@ -1,7 +1,9 @@
 import type { APIRequestContext, Browser, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { requestHelp } from '../helpers';
-import { helper, recordPosts, take, tag, veteran } from './request';
+import { requestHelp, tag } from '../helpers';
+import { recordPosts } from './request';
+import { newHelper, newVeteran } from '../people';
+import { take } from '../serve/serve';
 
 const STALE =
   'This request changed while you were editing. Someone may have accepted it. Your changes were not saved.';
@@ -10,7 +12,7 @@ test('editing checks the fields, Cancel throws edits away, and an emptied option
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Groceries ${tag()}`;
   await requestHelp(
     page,
@@ -70,7 +72,7 @@ test('Back while editing leaves without saving; the request is unchanged when re
   browser,
   request,
 }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Someone to talk to ${tag()}`;
   const id = await requestHelp(page, request, { category: 'PEER_SUPPORT', summary }, 'Park bench');
   const sent = page.getByRole('region', { name: 'What you sent' });
@@ -87,7 +89,7 @@ test('Back while editing leaves without saving; the request is unchanged when re
 });
 
 test('double-clicking Save changes saves once', async ({ browser, request }) => {
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const summary = `Someone to talk to ${tag()}`;
   await requestHelp(page, request, { category: 'PEER_SUPPORT', summary }, 'Park bench');
   const sent = page.getByRole('region', { name: 'What you sent' });
@@ -119,7 +121,7 @@ async function editWhileAccepted(page: Page, browser: Browser, request: APIReque
   await sent.getByRole('button', { name: 'Edit request' }).click();
   await sent.getByLabel('Short summary').fill(`Too late ${tag()}`);
 
-  const helperPage = await helper(browser, request, { name: 'Dee R.' });
+  const { page: helperPage } = await newHelper(browser, request, { name: 'Dee R.' });
   // Take right after the requester's detail poll, so the open form still holds the status it
   // loaded when Save is pressed (the next poll is 15 s away).
   await page.waitForResponse(
@@ -139,7 +141,7 @@ test('M7: saving an edit after a helper accepted gets 409 and explains that the 
   allow,
 }) => {
   allow.push(/status of 409/);
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { summary, sent, response } = await editWhileAccepted(page, browser, request);
 
   expect(response.status()).toBe(409);
@@ -158,7 +160,7 @@ test('M7: the edit carries the status it was opened on and the API answers STALE
   allow,
 }) => {
   allow.push(/status of 409/);
-  const page = await veteran(browser, request, { name: 'Marcus T.' });
+  const { page } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { posts, response } = await editWhileAccepted(page, browser, request);
 
   expect(posts[0]?.body).toMatchObject({ expected_status: expect.any(String) });

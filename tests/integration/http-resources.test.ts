@@ -17,6 +17,7 @@ import {
 } from '../../src/fulfillment/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
@@ -44,15 +45,13 @@ afterAll(async () => {
 });
 
 async function sessionFor(tenantId: string, userId: string) {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
+  const pool = appPool(app);
   const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId });
   return { authorization: `Bearer ${session.credential}` };
 }
 
 async function veteranInTenant() {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
+  const pool = appPool(app);
   const tenantId = randomUUID();
   const user = await createVerifiedUser(pool, {
     tenantId,
@@ -79,8 +78,7 @@ async function activeResource(
     eligibility?: string;
   },
 ): Promise<Resource> {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
+  const pool = appPool(app);
   const created = await createResource(pool, { tenantId, ...input });
   return withTransaction(pool, async (tx) => {
     await verifyResource(tx, {
@@ -101,8 +99,7 @@ async function activeResource(
 describe('GET /api/v0/resources', () => {
   it('lists active tenant resources without internal fields', async () => {
     const { tenantId, user, headers } = await veteranInTenant();
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
 
     const pantry = await activeResource(tenantId, user.userId, {
       serviceName: 'Neighborhood Pantry',
@@ -200,8 +197,7 @@ describe('GET /api/v0/resources', () => {
 
   it('downgrades a legacy crisis number in the single contact and in the list', async () => {
     const { tenantId, headers } = await veteranInTenant();
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const resourceId = randomUUID();
     await pool.query(
       `INSERT INTO resources
@@ -317,8 +313,7 @@ describe('GET /api/v0/resources', () => {
 describe('GET /api/v0/resources/:id', () => {
   it('returns one active resource and hides other tenants', async () => {
     const { tenantId, user, headers } = await veteranInTenant();
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const resource = await activeResource(tenantId, user.userId, {
       serviceName: 'Ride Desk',
       category: 'TRANSPORTATION',
@@ -358,8 +353,7 @@ describe('GET /api/v0/resources/:id', () => {
   // R12.5 / owner Q1: detail stays API-only; inactive must not be told apart from missing.
   it('returns the same 404 for an inactive resource as for a missing one', async () => {
     const { tenantId, headers } = await veteranInTenant();
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const resource = await createResource(pool, {
       tenantId,
       serviceName: 'Closed Shelter Slot',
@@ -400,8 +394,7 @@ describe('GET /api/v0/immediate-resources', () => {
   });
 
   it('returns approved 911/988 destinations when safety copy mode is approved', async () => {
-    const pool = approvedApp.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(approvedApp);
     const tenantId = randomUUID();
     const user = await createVerifiedUser(pool, {
       tenantId,

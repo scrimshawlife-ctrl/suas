@@ -4,15 +4,8 @@
  */
 
 import { expect, test } from '../fixtures';
-import {
-  cancelOwnRequest,
-  newHelper,
-  newRequester,
-  progress,
-  sendRequest,
-  summaryValue,
-  take,
-} from '../serve/serve';
+import { cancelOwnRequest, progress, sendRequest, summaryValue, take } from '../serve/serve';
+import { newHelper, newVeteran } from '../people';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -23,7 +16,7 @@ test('a command on the case page after the Veteran cancelled gets 409 and shows 
 }) => {
   // The errors this test provokes on purpose.
   allow.push(/status of 409/);
-  const requester = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: requester } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(requester, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(page, summary, id);

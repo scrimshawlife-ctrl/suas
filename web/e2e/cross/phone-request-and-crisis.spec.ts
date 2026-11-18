@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
-import { expectCrisisScreen, passIdCheck, requestHelp, signUp, uniqueEmail } from './helpers';
+import { expect, test } from '../fixtures';
+import { expectCrisisScreen, passIdCheck, requestHelp, signUp, uniqueEmail } from '../helpers';
 
 const PHONE = { width: 390, height: 844 };
 test.use({ viewport: PHONE, isMobile: true, hasTouch: true });

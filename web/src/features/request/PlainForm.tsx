@@ -1,6 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { useIdempotencyKey } from '../../api/idempotency';
 import { isApiError } from '../../api/errors';
 import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
@@ -50,8 +49,6 @@ export function PlainForm({ fallbackSummary = '' }: { fallbackSummary?: string }
   const [errors, setErrors] = useState<FieldErrors>({});
   const create = useCreateRequest();
   const flight = useSingleFlight();
-  const key = useIdempotencyKey();
-  const lastPayload = useRef('');
   const formRef = useRef<HTMLFormElement>(null);
   const [attempt, setAttempt] = useState(0);
   // A failed send puts focus on the first field with a problem, so it is announced.
@@ -64,33 +61,23 @@ export function PlainForm({ fallbackSummary = '' }: { fallbackSummary?: string }
     setAttempt((count) => count + 1);
     if (Object.keys(found).length > 0) return;
 
-    const body = toFormBody(fields);
-    // A retry of the same content reuses the key; changed content is a new action.
-    const payload = JSON.stringify(body);
-    if (payload !== lastPayload.current) key.renew();
-    lastPayload.current = payload;
-
     flight(() =>
-      create.mutateAsync(
-        { body, idempotencyKey: key.current() },
-        {
-          onSuccess: (created) => {
-            key.renew();
-            void navigate(paths.requestDetail(created.service_request_id));
-          },
-          onError: (error) => {
-            const gate = gateRedirect(error);
-            if (gate) void navigate(gate, { replace: true });
-            else if (
-              isApiError(error) &&
-              error.status === 422 &&
-              MEETING_PLACE_REJECTED.test(error.message)
-            ) {
-              setErrors({ meetingPlace: 'Tell us where the helper should meet you.' });
-            }
-          },
+      create.mutateAsync(toFormBody(fields), {
+        onSuccess: (created) => {
+          void navigate(paths.requestDetail(created.service_request_id));
         },
-      ),
+        onError: (error) => {
+          const gate = gateRedirect(error);
+          if (gate) void navigate(gate, { replace: true });
+          else if (
+            isApiError(error) &&
+            error.status === 422 &&
+            MEETING_PLACE_REJECTED.test(error.message)
+          ) {
+            setErrors({ meetingPlace: 'Tell us where the helper should meet you.' });
+          }
+        },
+      }),
     );
   };
 
