@@ -54,6 +54,39 @@ describe('Select onValueChange', () => {
     choose(screen.getByLabelText('Category'), '');
     expect(onValueChange).toHaveBeenCalledWith('');
   });
+
+  // Type checks (tsc runs on tests): '' belongs to the placeholder, not to `T`.
+  it('takes or emits the empty value only with a placeholder', () => {
+    const takeOption = (value: 'FOOD' | 'HOUSING') => value;
+    const takeOptionOrNone = vi.fn((value: 'FOOD' | 'HOUSING' | '') => value);
+    render(
+      <>
+        <Select
+          label="No placeholder"
+          options={OPTIONS}
+          // @ts-expect-error: '' is not an option, and there is no placeholder to stand for it.
+          value=""
+          onChange={() => undefined}
+        />
+        <Select
+          label="Placeholder"
+          placeholder="Choose one"
+          options={OPTIONS}
+          // @ts-expect-error: with a placeholder the Select can emit '', which this does not take.
+          onValueChange={takeOption}
+        />
+        <Select
+          label="Typed"
+          placeholder="Choose one"
+          options={OPTIONS}
+          value="FOOD"
+          onValueChange={takeOptionOrNone}
+        />
+      </>,
+    );
+    choose(screen.getByLabelText('Typed'), '');
+    expect(takeOptionOrNone).toHaveBeenCalledWith('');
+  });
 });
 
 describe('Select states', () => {

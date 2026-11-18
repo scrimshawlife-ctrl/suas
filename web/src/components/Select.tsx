@@ -8,27 +8,31 @@ interface SelectOption<T extends string> {
   label: string;
 }
 
-export interface SelectProps<T extends string = string> extends Omit<
-  SelectHTMLAttributes<HTMLSelectElement>,
-  'children' | 'value'
-> {
+/** The value a Select holds or emits: an option's, or the placeholder's '' when it has one. */
+type SelectValue<T extends string, P extends string | undefined> = P extends string ? T | '' : T;
+
+export interface SelectProps<
+  T extends string = string,
+  P extends string | undefined = undefined,
+> extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children' | 'value' | 'placeholder'> {
   label: string;
   helper?: string;
   error?: string;
+  /** The options; `T` is inferred from these alone. */
   options: readonly SelectOption<T>[];
-  /** The chosen option's value. With a placeholder, include '' in `T`. */
-  value?: T;
+  /** The chosen option's value, or '' for the placeholder (only when there is one). */
+  value?: NoInfer<SelectValue<T, P>>;
   /**
-   * The chosen value typed as `T`, so a caller needs no cast. Called after `onChange`, and only
-   * for a value in `options` (or the placeholder's '').
+   * The chosen value, typed so a caller needs no cast: an option's value, or the placeholder's ''
+   * (only when there is one). Called after `onChange`, and only for one of those values.
    */
-  onValueChange?: (value: T) => void;
+  onValueChange?: (value: NoInfer<SelectValue<T, P>>) => void;
   /** Adds a first, empty option with this text. */
-  placeholder?: string;
+  placeholder?: P;
 }
 
 /** Native select with the shared field look, so it keeps platform pickers on phones. */
-export function Select<T extends string = string>({
+export function Select<T extends string = string, P extends string | undefined = undefined>({
   label,
   helper,
   error,
@@ -39,15 +43,15 @@ export function Select<T extends string = string>({
   onChange,
   onValueChange,
   ...select
-}: SelectProps<T>) {
+}: SelectProps<T, P>) {
   // Checks the browser's string against what was rendered, since the DOM can hold options
-  // the caller never gave. The placeholder's '' counts only when there is one (`T` holds it).
-  const isOption = (value: string): value is T =>
+  // the caller never gave. The placeholder's '' counts only when there is one, as in `SelectValue`.
+  const isValue = (value: string): value is SelectValue<T, P> =>
     options.some((option) => option.value === value) || (placeholder !== undefined && value === '');
   const handleChange = onValueChange
     ? (event: ChangeEvent<HTMLSelectElement>) => {
         onChange?.(event);
-        if (isOption(event.target.value)) onValueChange(event.target.value);
+        if (isValue(event.target.value)) onValueChange(event.target.value);
       }
     : onChange;
   return (
