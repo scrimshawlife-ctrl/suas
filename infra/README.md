@@ -70,7 +70,7 @@ it one rendered message with its idempotency key; it sends with the Resend adapt
 (`src/notifications/resend-email.ts`, D-004) and answers with that adapter's acknowledgement.
 
 - The relay runs **outside the VPC** with **no database setting** and its own role: it can write its log
-  group and read its one secret, nothing else. The API and job worker roles may invoke the relay and no
+  group and read the current (`AWSCURRENT`) version of its one secret, nothing else. The API and job worker roles may invoke the relay and no
   other function.
 - The relay reads the Resend API key at run time from the secret named by the `EmailRelaySecretName` output,
   cached per container. The key is not in the template, any Lambda environment or any log. The sender
@@ -95,7 +95,7 @@ isolated subnets, invokes the function through the Lambda interface endpoint wit
 only the normalized result and failure class (`src/identity/va-confirmation-lambda-relay.ts`).
 
 - The function runs **outside the VPC** with **no database setting** and its own role: it can write its log
-  group and read its one secret, nothing else. Only the API role may invoke it; the job worker may not.
+  group and read the current (`AWSCURRENT`) version of its one secret, nothing else. Only the API role may invoke it; the job worker may not.
 - It holds the fixed sandbox base URL (`https://sandbox-api.va.gov/services/veteran-confirmation/v1`, a
   constant, not a setting) and reads the key at run time from the secret named by the `VaVerifySecretName`
   output, cached per container for at most five minutes and read again sooner if VA refuses the key. The key
@@ -105,7 +105,9 @@ only the normalized result and failure class (`src/identity/va-confirmation-lamb
   value or a VA response body.
 - Its own egress is not host-filtered: the control is what it holds, not the network path (W9 item 4).
 - Until the secret holds the real key, every confirm answers `UNAVAILABLE` / `CONFIGURATION_INVALID`, which
-  never counts toward the attempt limits. Self-attestation stays available.
+  never counts toward the attempt limits. Self-attestation stays available. Each such refusal is logged as
+  `va_verify_refused` / `not_configured`, and the `VaVerifyNotConfigured` alarm fires on one in 5 minutes (see
+  "Alarms"). Nothing fires before someone tries to confirm, so the deploy step below still checks the key.
 - Synthetic VA test identities only.
 
 ### Network
@@ -312,6 +314,8 @@ failures, `relay_ambiguous_ack` (the invoke's answer was lost) and `relay_unavai
 from the `email_send` outcome line (`src/notifications/channels.ts`); losing the one Lambda endpoint zone shows here.
 They match terms, because the Node runtime prefixes the job worker's lines. An alarm on the instance's
 `DatabaseConnections` (maximum over 5 minutes) fires at 70, between the budget of 52 and `max_connections` 80.
+With `vaSandbox=true`, the VA verify function's log group also counts `va_verify_refused` lines with reason
+`not_configured` (no valid key in its secret, or the secret could not be read) and alarms on one in 5 minutes.
 **There is no notification target yet**, so the alarms only show in the
 CloudWatch console until someone picks a topic (an SNS topic and subscriber are not created here). The inline
 job dispatcher in the API logs a different message (`[suas] job <type> failed`, `src/app.ts`) that these filters
