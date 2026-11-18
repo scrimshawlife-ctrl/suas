@@ -5,12 +5,10 @@
  */
 
 import { expect, test } from '../fixtures';
-import { ageRequest, runJobWorkerOnce, shoot } from '../helpers';
+import { runJobWorkerOnce, shoot } from '../helpers';
 import {
   PHONE,
   cancelOwnRequest,
-  newHelper,
-  newRequester,
   openList,
   progress,
   seedAcceptedRequests,
@@ -18,6 +16,8 @@ import {
   summaryValue,
   takeButton,
 } from './serve';
+import { ageRequest } from '../time/time';
+import { newHelper, newVeteran } from '../people';
 
 // Several people sign up per test.
 test.describe.configure({ timeout: 180_000 });
@@ -81,7 +81,7 @@ test('a Veteran who also helps never sees their own request on the open list', a
 }) => {
   // The errors this test provokes on purpose.
   allow.push(/status of 403/);
-  const requester = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: requester } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(requester, request);
   const helper = await newHelper(browser, request, { name: 'Dee R.' });
   await expect(openList(helper.page)).toContainText(summary);
@@ -115,9 +115,9 @@ test('a stale card for a request the Veteran cancelled, or that expired, says it
 }) => {
   // The errors this test provokes on purpose.
   allow.push(/status of 404/);
-  const cancelling = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: cancelling } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const cancelled = await sendRequest(cancelling, request);
-  const expiring = await newRequester(browser, request, { name: 'Rosa M.' });
+  const { page: expiring } = await newVeteran(browser, request, { name: 'Rosa M.' });
   const expired = await sendRequest(expiring, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   // The board refetches every 30 s and would drop a gone card by itself, so each step starts
@@ -155,7 +155,7 @@ test('double-clicking Take accepts once, and Back, Forward and refresh after it 
   browser,
   request,
 }) => {
-  const requester = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: requester } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(requester, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
 
@@ -204,7 +204,7 @@ test('when the open list or a Take fails on the server, the board says so and re
   // The errors this test provokes on purpose.
   // Only the routed open list and accept may 500; a real backend 500 still fails the test.
   allow.push(/ownership=open.* :: 500$/, /\/accept :: 500$/, /status of 500/);
-  const requester = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: requester } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(requester, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
 
@@ -237,7 +237,7 @@ test('a helper holding more than one page of requests sees them all through "Sho
   browser,
   request,
 }) => {
-  const requester = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: requester } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   // One more than the server's default page (20, API.md §5).
   const summaries = await seedAcceptedRequests(request, requester, page, 21);

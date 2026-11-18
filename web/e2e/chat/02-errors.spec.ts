@@ -7,9 +7,10 @@
 import { randomUUID } from 'node:crypto';
 import type { APIRequestContext, Browser, Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { shoot, signInWithCode } from '../helpers';
-import { newHelper, newRequester, release, sendRequest, tag, take } from '../serve/serve';
+import { shoot, signInWithCode, tag } from '../helpers';
+import { release, sendRequest, take } from '../serve/serve';
 import { history, pair, say, threadLink } from './chat';
+import { newHelper, newVeteran } from '../people';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -35,7 +36,7 @@ test('deep links to chats: an unknown id, someone else’s request, before anyon
   // The errors this test provokes on purpose.
   allow.push(/status of 40[49]/);
   const { helper: page, id } = await pair(browser, request);
-  const waiting = await newRequester(browser, request, { name: 'Rosa M.' });
+  const { page: waiting } = await newVeteran(browser, request, { name: 'Rosa M.' });
   const open = await sendRequest(waiting, request);
 
   for (const target of [randomUUID(), open.id]) {

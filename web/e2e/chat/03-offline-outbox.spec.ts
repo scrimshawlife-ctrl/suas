@@ -5,8 +5,8 @@
  */
 
 import { expect, test } from '../fixtures';
-import { tag } from '../serve/serve';
 import { history, pair } from './chat';
+import { tag } from '../helpers';
 
 test.describe.configure({ timeout: 180_000 });
 

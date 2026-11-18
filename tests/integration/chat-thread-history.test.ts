@@ -9,13 +9,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import { ChatClosedError } from '../../src/chat/index.js';
 import { insertChatMessage } from '../../src/chat/messages.js';
-import { createUser } from '../../src/identity/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { markVerifiedVeteran } from '../helpers/verified-veteran.js';
+import { type Actor, appPool, createPerson, keyed } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -30,46 +27,21 @@ afterAll(async () => {
   await app.close();
 });
 
-interface Person {
-  readonly userId: string;
-  readonly headers: Record<string, string>;
-}
+/** A signed-in, verified Veteran in Santa Clara. */
+const person = (tenantId: string, label: string) =>
+  createPerson(app, { tenantId, label, county: 'SANTA_CLARA', verified: true });
 
-function pool() {
-  if (app.pool === undefined) throw new Error('no pool');
-  return app.pool;
-}
-
-async function person(tenantId: string, label: string): Promise<Person> {
-  const user = await createUser(pool(), {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  await markVerifiedVeteran(pool(), tenantId, user.userId, 'SANTA_CLARA');
-  const session = await createSession(pool(), TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  return { userId: user.userId, headers: { authorization: `Bearer ${session.credential}` } };
-}
-
-function keyed(who: Person): Record<string, string> {
-  return { ...who.headers, 'idempotency-key': randomUUID() };
-}
-
-const get = (who: Person, url: string) =>
+const get = (who: Actor, url: string) =>
   app.server.inject({ method: 'GET', url: `/api/v0${url}`, headers: who.headers });
 
-const accept = (who: Person, id: string) =>
+const accept = (who: Actor, id: string) =>
   app.server.inject({
     method: 'POST',
     url: `/api/v0/service-requests/${id}/accept`,
     headers: who.headers,
   });
 
-const say = (who: Person, id: string, body: string) =>
+const say = (who: Actor, id: string, body: string) =>
   app.server.inject({
     method: 'POST',
     url: `/api/v0/service-requests/${id}/chat/messages`,
@@ -77,7 +49,7 @@ const say = (who: Person, id: string, body: string) =>
     payload: { body },
   });
 
-const release = (who: Person, id: string) =>
+const release = (who: Actor, id: string) =>
   app.server.inject({
     method: 'POST',
     url: `/api/v0/service-requests/${id}/commands/RELEASE`,
@@ -88,14 +60,14 @@ const release = (who: Person, id: string) =>
 const messagesUrl = (id: string, thread?: string) =>
   `/service-requests/${id}/chat/messages${thread === undefined ? '' : `?thread=${thread}`}`;
 
-async function bodies(who: Person, id: string, thread?: string): Promise<string[]> {
+async function bodies(who: Actor, id: string, thread?: string): Promise<string[]> {
   const response = await get(who, messagesUrl(id, thread));
   expect(response.statusCode, response.body).toBe(200);
   const page: { messages: { body: string }[] } = response.json();
   return page.messages.map((message) => message.body);
 }
 
-async function submittedRequest(requester: Person): Promise<string> {
+async function submittedRequest(requester: Actor): Promise<string> {
   const opened = await app.server.inject({
     method: 'POST',
     url: '/api/v0/cases',
@@ -125,7 +97,7 @@ interface ListedThread {
   released_at: string | null;
 }
 
-async function threadsOf(who: Person, id: string): Promise<ListedThread[]> {
+async function threadsOf(who: Actor, id: string): Promise<ListedThread[]> {
   const response = await get(who, '/chat/threads');
   expect(response.statusCode).toBe(200);
   const body: { threads: ListedThread[] } = response.json();
@@ -179,7 +151,7 @@ describe('the requester and earlier threads', () => {
 
     // The old thread stays read-only: the store refuses a message on it.
     await expect(
-      insertChatMessage(pool(), {
+      insertChatMessage(appPool(app), {
         tenantId,
         chatThreadId: oldId,
         senderUserId: requester.userId,

@@ -64,7 +64,7 @@ public/         icons, logos and the web manifest
 
 ### Adding or replacing a screen
 
-Each route points at a lazy `features/<area>/<Screen>Page.tsx` with a default export. Replace that file and its siblings in the same folder; do not edit `app/router.tsx`. The chrome (crisis strip, header, footer, tab bar) comes from the layout route, so a page renders only its own content inside `<Page>`.
+Each route points at a lazy `features/<area>/<Screen>Page.tsx` with a default export. `/serve` is the one screen loaded up front: the case page navigates there with `flushSync`, which only renders at once when the route is already loaded. Replace that file and its siblings in the same folder; do not edit `app/router.tsx`. The chrome (crisis strip, header, footer, tab bar) comes from the layout route, so a page renders only its own content inside `<Page>`.
 
 ## API layer
 

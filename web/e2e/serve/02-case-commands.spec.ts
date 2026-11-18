@@ -8,17 +8,8 @@ import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
 import { readSignInCode, shoot, signInWithCode } from '../helpers';
-import {
-  PHONE,
-  newHelper,
-  newRequester,
-  openList,
-  progress,
-  sendRequest,
-  summaryValue,
-  take,
-  takeButton,
-} from './serve';
+import { PHONE, openList, progress, sendRequest, summaryValue, take, takeButton } from './serve';
+import { newHelper, newVeteran } from '../people';
 
 // Several people sign up per test.
 test.describe.configure({ timeout: 180_000 });
@@ -39,7 +30,7 @@ test('the helper starts, marks done and closes, and the Veteran sees each step',
   browser,
   request,
 }) => {
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   const commands = countCommands(page, id);
@@ -107,7 +98,7 @@ test('the contact log saves every outcome once, each through its own route, and 
   // The errors this test provokes on purpose.
   // Only the routed contact save may 500; a real backend 500 still fails the test.
   allow.push(/\/commands\/complete-contact :: 500$/, /status of 500/);
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(page, summary, id);
@@ -192,7 +183,7 @@ test('releasing needs a reason, runs once, and the helper can take the request a
 }) => {
   // The errors this test provokes on purpose.
   allow.push(/status of 404/);
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const helper = await newHelper(browser, request, { name: 'Dee R.' });
   const page = helper.page;
@@ -250,7 +241,7 @@ test('deep links to a case: someone else’s, a missing id, a malformed id, and 
 }) => {
   // The errors this test provokes on purpose.
   allow.push(/status of 40[04]/);
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const owner = await newHelper(browser, request, { name: 'Dee R.' });
   await take(owner.page, summary, id);
@@ -288,7 +279,7 @@ test('on a phone the case page fits the screen and every command is reachable', 
   browser,
   request,
 }) => {
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.', viewport: PHONE });
   await expect(openList(page)).toContainText(summary);
@@ -310,7 +301,7 @@ test('double-clicking a case command or "Save contact attempt" sends it once and
   request,
 }) => {
   // SERVE-3: one double click must not send the POST twice under one Idempotency-Key.
-  const vet = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: vet } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const { id, summary } = await sendRequest(vet, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   const commands = countCommands(page, id);

@@ -11,7 +11,7 @@ const number = (name: string, fallback: number): number => {
 };
 
 export const API_PORT = number('SUAS_E2E_API_PORT', 3190);
-export const WS_PORT = number('SUAS_E2E_WS_PORT', 3191);
+const WS_PORT = number('SUAS_E2E_WS_PORT', 3191);
 export const WEB_PORT = number('SUAS_E2E_WEB_PORT', 5193);
 export const DB_NAME = process.env['SUAS_E2E_DB_NAME'] ?? 'suas_local_e2e';
 export const DB_HOST_URL =
@@ -21,7 +21,7 @@ export const API_URL = `http://127.0.0.1:${API_PORT}`;
 export const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
 export const DATABASE_URL = `${DB_HOST_URL}/${DB_NAME}`;
 /** The tenant `npm run seed` writes to, and the one browser sign-up creates users in. */
-export const TENANT_ID = '00000000-0000-4000-8000-000000000001';
+const TENANT_ID = '00000000-0000-4000-8000-000000000001';
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
