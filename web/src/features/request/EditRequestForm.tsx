@@ -1,6 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { isApiError } from '../../api/errors';
-import { useIdempotencyKey } from '../../api/idempotency';
 import type { ServiceRequestDetail } from '../../api/types';
 import { Button } from '../../components/Button';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
@@ -48,8 +47,6 @@ export function EditRequestForm({ request, onDone }: EditRequestFormProps) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const edit = useEditRequest(request.service_request_id);
   const flight = useSingleFlight();
-  const key = useIdempotencyKey();
-  const lastPayload = useRef('');
   const formRef = useRef<HTMLFormElement>(null);
   const [attempt, setAttempt] = useState(0);
   useFocusFirstInvalid(formRef, `${attempt}|${Object.keys(errors).join()}`);
@@ -68,30 +65,20 @@ export function EditRequestForm({ request, onDone }: EditRequestFormProps) {
     }
     // The status the form was loaded with: the server refuses the edit (409) if it moved on.
     const body = { ...changes, expected_status: request.status };
-    // A retry of the same content reuses the key; changed content is a new action.
-    const payload = JSON.stringify(body);
-    if (payload !== lastPayload.current) key.renew();
-    lastPayload.current = payload;
 
     flight(() =>
-      edit.mutateAsync(
-        { edit: body, idempotencyKey: key.current() },
-        {
-          onSuccess: () => {
-            key.renew();
-            onDone();
-          },
-          onError: (error) => {
-            if (
-              isApiError(error) &&
-              error.status === 422 &&
-              MEETING_PLACE_REJECTED.test(error.message)
-            ) {
-              setErrors({ meetingPlace: 'Tell us where the helper should meet you.' });
-            }
-          },
+      edit.mutateAsync(body, {
+        onSuccess: () => onDone(),
+        onError: (error) => {
+          if (
+            isApiError(error) &&
+            error.status === 422 &&
+            MEETING_PLACE_REJECTED.test(error.message)
+          ) {
+            setErrors({ meetingPlace: 'Tell us where the helper should meet you.' });
+          }
         },
-      ),
+      }),
     );
   };
 

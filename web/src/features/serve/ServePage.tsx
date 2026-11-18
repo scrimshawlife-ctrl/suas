@@ -13,6 +13,7 @@ import { AlertCircleIcon, ChatIcon } from '../../components/icons';
 import { NEEDS } from '../../components/needs';
 import { Page } from '../../components/Page';
 import { ShowMoreButton } from '../../components/ShowMoreButton';
+import { firstName } from '../../lib/people';
 import { useSingleFlight } from '../../lib/single-flight';
 import { useAcceptRequest, useAlerts, useOpenRequests } from './api';
 import { alertSubjectPath, alertText, type Notification } from './alerts';
@@ -21,7 +22,6 @@ import {
   helpingNowCount,
   boardSubtitle,
   classifyAcceptError,
-  firstName,
   relativeTime,
   summaryOrCategory,
   toOpenCard,

@@ -4,16 +4,12 @@
  * SUAS-specs DISPATCH.md §1 / §4; API.md §4.
  */
 
-import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
-import { createServiceRequest, findCurrentCase } from '../../src/coordination/index.js';
+import { createServiceRequest } from '../../src/coordination/index.js';
 import { withTransaction } from '../../src/db/index.js';
-import { ensurePublishedQv001 } from '../../src/signals/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { createVerifiedUser } from '../helpers/verified-veteran.js';
+import { openRedCase } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -28,70 +24,9 @@ afterAll(async () => {
   await app.close();
 });
 
-const A0: Readonly<Record<string, string>> = {
-  sleep_manage_7d: 'NOT_AT_ALL',
-  reliable_connection_now: 'WELL_CONNECTED',
-  stress_manage_7d: 'NOT_AT_ALL',
-  basic_needs_48h: 'SECURE',
-  coping_24h: 'ABLE',
-  safe_now: 'YES',
-};
-
-interface QuestionJson {
-  question_id: string;
-  question_key: string;
-  options: { answer_option_id: string; option_key: string }[];
-}
-
-async function openRedCase() {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const tenantId = randomUUID();
-  const user = await createVerifiedUser(pool, {
-    tenantId,
-    email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
-  await ensurePublishedQv001(pool, user.userId);
-  const session = await createSession(pool, TEST_SESSION_SECRET, {
-    tenantId,
-    userId: user.userId,
-  });
-  const headers = { authorization: `Bearer ${session.credential}` };
-  const started = await app.server.inject({ method: 'POST', url: '/api/v0/check-ins', headers });
-  expect(started.statusCode).toBe(201);
-  const checkIn: { check_in_id: string; questions: QuestionJson[] } = started.json();
-  for (const question of checkIn.questions) {
-    const optionKey =
-      question.question_key === 'safe_now' ? 'NO_IMMEDIATE_HELP' : A0[question.question_key];
-    if (optionKey === undefined) continue;
-    const option = question.options.find((entry) => entry.option_key === optionKey);
-    if (option === undefined) throw new Error(`missing ${optionKey}`);
-    const saved = await app.server.inject({
-      method: 'POST',
-      url: `/api/v0/check-ins/${checkIn.check_in_id}/responses`,
-      headers,
-      payload: {
-        question_id: question.question_id,
-        answer_option_id: option.answer_option_id,
-      },
-    });
-    expect(saved.statusCode).toBe(200);
-  }
-  const completed = await app.server.inject({
-    method: 'POST',
-    url: `/api/v0/check-ins/${checkIn.check_in_id}/commands/complete`,
-    headers,
-  });
-  expect(completed.statusCode).toBe(200);
-  const supportCase = await findCurrentCase(pool, tenantId, user.userId);
-  if (supportCase === undefined) throw new Error('expected RED case');
-  return { pool, tenantId, user, headers, supportCase };
-}
-
 describe('GET /api/v0/cases/:caseId/service-requests', () => {
   it('lists service requests for the veteran owner', async () => {
-    const { pool, tenantId, user, headers, supportCase } = await openRedCase();
+    const { pool, tenantId, veteran: user, headers, supportCase } = await openRedCase(app);
     const created = await withTransaction(pool, (tx) =>
       createServiceRequest(tx, {
         tenantId,
@@ -120,8 +55,8 @@ describe('GET /api/v0/cases/:caseId/service-requests', () => {
   });
 
   it('hides another tenant case', async () => {
-    const { supportCase } = await openRedCase();
-    const stranger = await openRedCase();
+    const { supportCase } = await openRedCase(app);
+    const stranger = await openRedCase(app);
     const response = await app.server.inject({
       method: 'GET',
       url: `/api/v0/cases/${supportCase.caseId}/service-requests`,
@@ -133,7 +68,7 @@ describe('GET /api/v0/cases/:caseId/service-requests', () => {
 
 describe('GET /api/v0/service-requests/:id', () => {
   it('returns one owned service request and 404s foreign ids', async () => {
-    const { pool, tenantId, user, headers, supportCase } = await openRedCase();
+    const { pool, tenantId, veteran: user, headers, supportCase } = await openRedCase(app);
     const created = await withTransaction(pool, (tx) =>
       createServiceRequest(tx, {
         tenantId,
@@ -155,7 +90,7 @@ describe('GET /api/v0/service-requests/:id', () => {
       category: 'TRANSPORTATION',
     });
 
-    const other = await openRedCase();
+    const other = await openRedCase(app);
     const leak = await app.server.inject({
       method: 'GET',
       url: `/api/v0/service-requests/${created.serviceRequestId}`,

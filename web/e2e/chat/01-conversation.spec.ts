@@ -5,9 +5,10 @@
  */
 
 import { expect, test } from '../fixtures';
-import { shoot } from '../helpers';
-import { PHONE, newHelper, newRequester, sendRequest, tag, take } from '../serve/serve';
+import { shoot, tag } from '../helpers';
+import { PHONE, sendRequest, take } from '../serve/serve';
 import { history, pair, say, threadLink } from './chat';
+import { newHelper, newVeteran } from '../people';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -91,9 +92,9 @@ test('a helper with two chats moves between them with Back and Forward, and the 
   browser,
   request,
 }) => {
-  const first = await newRequester(browser, request, { name: 'Marcus T.' });
+  const { page: first } = await newVeteran(browser, request, { name: 'Marcus T.' });
   const a = await sendRequest(first, request);
-  const second = await newRequester(browser, request, { name: 'Rosa M.' });
+  const { page: second } = await newVeteran(browser, request, { name: 'Rosa M.' });
   const b = await sendRequest(second, request);
   const { page } = await newHelper(browser, request, { name: 'Dee R.' });
   await take(page, a.summary, a.id);

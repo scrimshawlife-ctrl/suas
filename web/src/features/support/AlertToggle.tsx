@@ -33,8 +33,8 @@ interface Confirming {
 
 /**
  * Creates or ends the RED-alert grant for one contact; turning on first shows the published
- * consent text (R12.3). The Idempotency-Key is kept across retries and renewed after a success
- * or a superseded template (the retry then cites a new version, so it is a new request).
+ * consent text (R12.3). Grant and revoke share one Idempotency-Key, as they always have; the
+ * hooks keep it across retries and renew it (see useGrantConsent and useRevokeConsent).
  */
 export function AlertToggle({
   contact,
@@ -44,9 +44,9 @@ export function AlertToggle({
   grants: readonly ConsentGrant[] | undefined;
 }) {
   const template = usePublishedConsentTemplate(RED_ALERT_TEMPLATE_PURPOSE);
-  const grant = useGrantConsent();
-  const revoke = useRevokeConsent();
   const key = useIdempotencyKey();
+  const grant = useGrantConsent(key);
+  const revoke = useRevokeConsent(key);
   const flight = useSingleFlight();
   const [confirming, setConfirming] = useState<Confirming | null>(null);
   const text = consentText(template.data);
@@ -75,29 +75,17 @@ export function AlertToggle({
       return;
     }
     if (!active) return;
-    flight(() =>
-      revoke.mutateAsync(
-        { consentGrantId: active.consent_grant_id, headers: key.headers() },
-        { onSuccess: () => key.renew() },
-      ),
-    );
+    flight(() => revoke.mutateAsync(active.consent_grant_id));
   }
 
   function onConfirm(version: string) {
     setConfirming(null);
     flight(() =>
-      grant.mutateAsync(
-        { body: redAlertGrantBody(contact.trusted_contact_id, version), headers: key.headers() },
-        {
-          onSuccess: () => key.renew(),
-          onError: (error) => {
-            if (hasApiCode(error, 'CONSENT_TEMPLATE_UNAVAILABLE')) {
-              key.renew();
-              void template.refetch();
-            }
-          },
+      grant.mutateAsync(redAlertGrantBody(contact.trusted_contact_id, version), {
+        onError: (error) => {
+          if (hasApiCode(error, 'CONSENT_TEMPLATE_UNAVAILABLE')) void template.refetch();
         },
-      ),
+      }),
     );
   }
 

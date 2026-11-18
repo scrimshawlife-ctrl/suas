@@ -174,13 +174,14 @@ export function assertBoundedPayload(payload: JsonObject): void {
 
 const jsonObjectSchema: z.ZodType<JsonObject> = z.lazy(() =>
   z.record(
+    z.string(),
     z.union([
       z.string(),
       z.number(),
       z.boolean(),
       z.null(),
       z.array(z.unknown()),
-      z.record(z.unknown()),
+      z.record(z.string(), z.unknown()),
     ]),
   ),
 ) as z.ZodType<JsonObject>;

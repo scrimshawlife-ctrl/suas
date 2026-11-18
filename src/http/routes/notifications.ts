@@ -8,8 +8,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { pageQuery } from '../../db/cursor.js';
 import { API_PREFIX } from '../../release/pins.js';
@@ -19,11 +19,6 @@ import {
   setChannelPreference,
   type Notification,
 } from '../../notifications/index.js';
-
-export interface NotificationRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
-}
 
 const preferenceBody = z.object({
   channel: z.enum(NOTIFICATION_CHANNELS),
@@ -44,10 +39,7 @@ function publicNotification(notification: Notification) {
   };
 }
 
-export function registerNotificationRoutes(
-  app: FastifyInstance,
-  deps: NotificationRouteDeps,
-): void {
+export function registerNotificationRoutes(app: FastifyInstance, deps: RouteContext): void {
   app.get(`${API_PREFIX}/notifications`, async (request) => {
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const query = pageQuery.parse(request.query);

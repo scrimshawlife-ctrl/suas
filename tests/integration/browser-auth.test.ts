@@ -7,6 +7,7 @@ import type { RecordingChallengeDelivery } from '../../src/auth/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { BROWSER_AUTH_BODY_LIMIT_BYTES } from '../../src/http/routes/ui.js';
+import { appPool } from '../helpers/actors.js';
 import { validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
@@ -38,8 +39,7 @@ function delivery(): RecordingChallengeDelivery {
 
 async function enrolledEmail(): Promise<string> {
   const email = syntheticEmail(`browser-${randomUUID().slice(0, 8)}`);
-  if (app.pool === undefined) throw new Error('test database absent');
-  await createVerifiedUser(app.pool, { tenantId: TENANT_ID, email, status: 'ACTIVE' });
+  await createVerifiedUser(appPool(app), { tenantId: TENANT_ID, email, status: 'ACTIVE' });
   return email;
 }
 
@@ -662,8 +662,7 @@ describe('HTML sign-in with an empty CORS allowlist (0.6.0 cookie)', () => {
 
   it('sets and clears the session cookie with SameSite=Strict', async () => {
     const email = syntheticEmail(`browser-strict-${randomUUID().slice(0, 8)}`);
-    if (strictApp.pool === undefined) throw new Error('test database absent');
-    await createUser(strictApp.pool, { tenantId: TENANT_ID, email, status: 'ACTIVE' });
+    await createUser(appPool(strictApp), { tenantId: TENANT_ID, email, status: 'ACTIVE' });
     const strictDelivery = strictApp.challengeDelivery as RecordingChallengeDelivery;
 
     await strictApp.server.inject({

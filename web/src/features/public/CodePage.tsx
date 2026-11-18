@@ -4,10 +4,10 @@ import { useVerifyChallenge } from '../../api/auth';
 import { getMode } from '../../app/mode-store';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { fieldClass, FieldShell } from '../../components/FieldShell';
+import { CodeInput } from '../../components/CodeInput';
+import { FieldShell } from '../../components/FieldShell';
 import { Page } from '../../components/Page';
 import { ChevronLeftIcon } from '../../components/icons';
-import { cn } from '../../lib/cn';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { useSingleFlight } from '../../lib/single-flight';
 import {
@@ -23,13 +23,7 @@ interface CodeState {
   from?: unknown;
 }
 
-/** Six cells drawn behind one input, as on the Code board. */
-const cells = {
-  background:
-    'repeating-linear-gradient(90deg,#fff 0 calc(100%/6 - 2px),#F2F4F7 calc(100%/6 - 2px) calc(100%/6))',
-};
-
-/** Enter code (Code board): one 6-digit field, then the session and on to the right home. */
+/** Enter code (Code board): six digit boxes over one input, then the session and on to the right home. */
 export default function CodePage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -97,26 +91,14 @@ export default function CodePage() {
               id="sign-in-code"
             >
               {(control) => (
-                <input
+                <CodeInput
                   {...control}
-                  name="code"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  pattern="[0-9]{6}"
-                  required
                   value={code}
-                  onChange={(event) => {
-                    setCode(cleanCode(event.target.value));
+                  onChange={(raw) => {
+                    setCode(cleanCode(raw));
                     setFieldError(null);
                   }}
                   onPaste={onPaste}
-                  style={cells}
-                  className={cn(
-                    fieldClass,
-                    'font-display min-h-21 rounded-10 border-ink px-6 text-44 font-bold tracking-[0.42em] tabular-nums max-sm:px-3 max-sm:text-32',
-                  )}
                 />
               )}
             </FieldShell>

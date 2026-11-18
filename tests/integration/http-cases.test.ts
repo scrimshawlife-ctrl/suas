@@ -8,9 +8,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
+import { appPool, bearer } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
 let app: StartedApp;
@@ -26,17 +26,9 @@ afterAll(async () => {
   await app.close();
 });
 
-async function bearer(tenantId: string, userId: string) {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId });
-  return { authorization: `Bearer ${session.credential}` };
-}
-
 describe('POST /api/v0/cases', () => {
   it('opens one Veteran case and replays the authoritative result', async () => {
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const tenantId = randomUUID();
     const veteran = await createVerifiedUser(pool, {
       tenantId,
@@ -44,7 +36,7 @@ describe('POST /api/v0/cases', () => {
       status: 'ACTIVE',
     });
     const headers = {
-      ...(await bearer(tenantId, veteran.userId)),
+      ...(await bearer(app, tenantId, veteran.userId)),
       'idempotency-key': randomUUID(),
     };
 
@@ -82,8 +74,7 @@ describe('POST /api/v0/cases', () => {
     const unauthenticated = await app.server.inject({ method: 'POST', url: '/api/v0/cases' });
     expect(unauthenticated.statusCode).toBe(401);
 
-    const pool = app.pool;
-    if (pool === undefined) throw new Error('no pool');
+    const pool = appPool(app);
     const tenantId = randomUUID();
     const veteran = await createVerifiedUser(pool, {
       tenantId,
@@ -93,7 +84,7 @@ describe('POST /api/v0/cases', () => {
     const missingKey = await app.server.inject({
       method: 'POST',
       url: '/api/v0/cases',
-      headers: await bearer(tenantId, veteran.userId),
+      headers: await bearer(app, tenantId, veteran.userId),
     });
     expect(missingKey.statusCode).toBe(400);
     expect(missingKey.json().error.code).toBe('VALIDATION_FAILED');

@@ -72,7 +72,7 @@ export const buildInfoSchema = z.object({
   implementation_stage: z.string(),
   production_readiness: z.string(),
   provenance_complete: z.boolean(),
-  capabilities: z.record(z.union([z.string(), z.number(), z.boolean()])),
+  capabilities: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
 });
 
 /**

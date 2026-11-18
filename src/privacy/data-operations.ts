@@ -14,7 +14,6 @@ export const DATA_OPERATION_AFFECTED_SYSTEMS = [
   'durable_jobs',
   'covered_downstream_processors',
 ] as const;
-export type DataOperationKind = 'EXPORT' | 'DELETION' | 'RETENTION_PURGE';
 export type DataOperationStatus = 'RECEIVED' | 'VERIFIED' | 'AUTHORIZED' | 'COMPLETED' | 'BLOCKED';
 export const PROVIDER_DELETION_OUTCOMES = [
   'DELETED_CONFIRMED',
@@ -154,7 +153,7 @@ async function audit(
     tenantId: input.tenantId,
     actorType: 'SYSTEM',
     actorId: input.actorId,
-    payload: payload as never,
+    payload: payload,
   });
 }
 function canonical(value: unknown): string {

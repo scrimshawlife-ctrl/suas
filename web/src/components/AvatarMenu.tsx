@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { cn } from '../lib/cn';
+import { firstName } from '../lib/people';
 import { Button } from './Button';
 import { UserIcon } from './icons';
 
@@ -27,7 +28,7 @@ export function AvatarMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const initial = displayName?.trim().charAt(0).toUpperCase() ?? '';
-  const first = displayName?.trim().split(/\s+/)[0];
+  const first = firstName(displayName);
   const links = [
     { label: 'Settings', to: '/settings' },
     { label: 'Invitations', to: '/invitations' },

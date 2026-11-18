@@ -28,6 +28,7 @@ import {
 import { withTransaction } from '../../src/db/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { auditAccessibility } from '../../src/ui/index.js';
+import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
 import { createVerifiedUser } from '../helpers/verified-veteran.js';
 
@@ -41,18 +42,11 @@ afterAll(async () => {
   await app.close();
 });
 
-function pool() {
-  const value = app.pool;
-  if (value === undefined) throw new Error('The test app has no database pool.');
-  return value;
-}
-
 /** Enrol a user and return a live session credential plus their tenant. */
 async function signIn(
   target: StartedApp = app,
 ): Promise<{ credential: string; tenantId: string; userId: string }> {
-  const targetPool = target.pool;
-  if (targetPool === undefined) throw new Error('The test app has no database pool.');
+  const targetPool = appPool(target);
 
   const tenantId = randomUUID();
   const email = syntheticEmail(`veteran-${randomUUID().slice(0, 8)}`);
@@ -86,8 +80,7 @@ function authorized(credential: string) {
 }
 
 async function adminSignIn(target: StartedApp = app) {
-  const targetPool = target.pool;
-  if (targetPool === undefined) throw new Error('The test app has no database pool.');
+  const targetPool = appPool(target);
   const tenantId = randomUUID();
   const user = await createUser(targetPool, {
     tenantId,
@@ -169,7 +162,7 @@ describe('API.md §4 — authenticated surfaces require a session', () => {
 
     // The live 500: the in-flight home drops the Deploy QRF action, which the
     // §5 required-element list demanded unconditionally.
-    await withTransaction(pool(), async (tx) => {
+    await withTransaction(appPool(app), async (tx) => {
       const opened = await openCase(tx, {
         tenantId,
         veteranUserId: userId,
@@ -245,7 +238,7 @@ describe('API.md §4 — authenticated surfaces require a session', () => {
 
 describe('API.md §5 — /app/resources/:label queue cursor', () => {
   async function activateFood(tenantId: string, serviceName: string): Promise<string> {
-    const resource = await createResource(pool(), {
+    const resource = await createResource(appPool(app), {
       tenantId,
       serviceName,
       category: 'FOOD',
@@ -254,13 +247,13 @@ describe('API.md §5 — /app/resources/:label queue cursor', () => {
       contactMethod: 'Walk in during posted hours',
     });
     const actorId = randomUUID();
-    await verifyResource(pool(), {
+    await verifyResource(appPool(app), {
       tenantId,
       resourceId: resource.resourceId,
       verificationSource: 'Called the listed number during posted hours',
       actorId,
     });
-    await setResourceActive(pool(), {
+    await setResourceActive(appPool(app), {
       tenantId,
       resourceId: resource.resourceId,
       active: true,
@@ -323,7 +316,7 @@ describe('API.md §5 — /app/resources/:label queue cursor', () => {
 describe('MVP_REFERENCE.md §8 — resource screens read the catalog', () => {
   it('renders a configured resource with its recorded contact method', async () => {
     const { credential, tenantId } = await signIn();
-    const resource = await createResource(pool(), {
+    const resource = await createResource(appPool(app), {
       tenantId,
       serviceName: 'Example County Food Pantry',
       category: 'FOOD',
@@ -335,13 +328,13 @@ describe('MVP_REFERENCE.md §8 — resource screens read the catalog', () => {
     // RESOURCES.md §7: a Resource is inactive until it carries verification
     // evidence, so the veteran-facing list shows nothing until it is verified.
     const actorId = randomUUID();
-    await verifyResource(pool(), {
+    await verifyResource(appPool(app), {
       tenantId,
       resourceId: resource.resourceId,
       verificationSource: 'Called the listed number during posted hours',
       actorId,
     });
-    await setResourceActive(pool(), {
+    await setResourceActive(appPool(app), {
       tenantId,
       resourceId: resource.resourceId,
       active: true,
@@ -363,7 +356,7 @@ describe('MVP_REFERENCE.md §8 — resource screens read the catalog', () => {
 
   it('offers a direct tel: action when the catalog records a PHONE scheme (P-13)', async () => {
     const { credential, tenantId } = await signIn();
-    const resource = await createResource(pool(), {
+    const resource = await createResource(appPool(app), {
       tenantId,
       serviceName: 'Example County Food Pantry',
       category: 'FOOD',
@@ -373,13 +366,13 @@ describe('MVP_REFERENCE.md §8 — resource screens read the catalog', () => {
       contactMethodKind: 'PHONE',
     });
     const actorId = randomUUID();
-    await verifyResource(pool(), {
+    await verifyResource(appPool(app), {
       tenantId,
       resourceId: resource.resourceId,
       verificationSource: 'Called the listed number during posted hours',
       actorId,
     });
-    await setResourceActive(pool(), {
+    await setResourceActive(appPool(app), {
       tenantId,
       resourceId: resource.resourceId,
       active: true,
@@ -399,7 +392,7 @@ describe('MVP_REFERENCE.md §8 — resource screens read the catalog', () => {
 
   it('never shows an unverified resource to a veteran', async () => {
     const { credential, tenantId } = await signIn();
-    await createResource(pool(), {
+    await createResource(appPool(app), {
       tenantId,
       serviceName: 'Example Unverified Pantry',
       category: 'FOOD',
@@ -607,8 +600,7 @@ describe('MVP_REFERENCE.md §7.5 / ADMIN.md §2 — the admin overview', () => {
   });
 
   it.each(plannedAdminSurfacePaths)('requires MFA elevation for %s', async (url) => {
-    const targetPool = app.pool;
-    if (targetPool === undefined) throw new Error('The test app has no database pool.');
+    const targetPool = appPool(app);
 
     const tenantId = randomUUID();
     const user = await createUser(targetPool, {
@@ -665,7 +657,7 @@ describe('PRIVACY.md — consents and trusted contacts HTML', () => {
   it('lists self consents and trusted contacts without invite channels', async () => {
     const { credential, tenantId, userId } = await signIn();
     const inviteEmail = 'secret-invite@example.invalid';
-    await inviteTrustedContact(pool(), {
+    await inviteTrustedContact(appPool(app), {
       tenantId,
       veteranUserId: userId,
       relationshipLabel: 'Battle buddy',
@@ -673,13 +665,13 @@ describe('PRIVACY.md — consents and trusted contacts HTML', () => {
     });
 
     const key = consentTemplateVersionKey(`ui-consent-${randomUUID().slice(0, 8)}`, 1);
-    await createConsentTemplateVersion(pool(), {
+    await createConsentTemplateVersion(appPool(app), {
       templateKey: key.split('@')[0] ?? 'ui-consent',
       version: 1,
       body: 'Synthetic UI consent template.',
     });
-    await publishConsentTemplateVersion(pool(), key, undefined);
-    await grantConsent(pool(), {
+    await publishConsentTemplateVersion(appPool(app), key, undefined);
+    await grantConsent(appPool(app), {
       tenantId,
       veteranUserId: userId,
       permission: 'can_view',
@@ -772,7 +764,7 @@ describe('NOTIFICATIONS.md §4.4 — HTML channel preferences', () => {
 describe('NOTIFICATIONS.md — /app/notifications inbox', () => {
   it('serves the recipient inbox without destinations', async () => {
     const { credential, tenantId, userId } = await signIn();
-    await pool().query(
+    await appPool(app).query(
       `INSERT INTO notifications
          (notification_id, tenant_id, recipient_user_id, destination, reason, channel,
           consent_basis, template_version, delivery_status, attempt_count, max_attempts)
@@ -832,7 +824,7 @@ describe('QRF Call and Message stay hidden without an authorized path', () => {
     expect(idle.body).not.toContain('/app/qrf/call');
     expect(idle.body).not.toContain('/app/qrf/message');
 
-    await withTransaction(pool(), async (tx) => {
+    await withTransaction(appPool(app), async (tx) => {
       const opened = await openCase(tx, {
         tenantId,
         veteranUserId: userId,

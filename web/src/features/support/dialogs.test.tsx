@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/errors';
 import type { ConsentGrant, TrustedContact } from './api';
 import { RemoveContactDialog } from './RemoveContactDialog';
 import { StopSharingDialog } from './StopSharingDialog';
@@ -138,6 +139,33 @@ describe('RemoveContactDialog', () => {
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBeTruthy();
     expect(keys[0]).not.toBe(keys[1]);
+  });
+
+  // A revoke that succeeded may be sent again on the retry; its kept key makes the server replay
+  // it (API.md §7) instead of revoking twice. Both keys renew only once the whole removal succeeds.
+  it('after the revoke succeeds and the remove fails, the retry reuses both keys', async () => {
+    const user = userEvent.setup();
+    client.POST.mockResolvedValueOnce({ data: {} })
+      .mockRejectedValueOnce(new ApiError(503, 'UNAVAILABLE', 'down'))
+      .mockResolvedValueOnce({ data: {} })
+      .mockResolvedValueOnce({ data: {} });
+    const handlers = open([grant]);
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    await screen.findByRole('alert');
+    expect(handlers.onRemoved).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(handlers.onRemoved).toHaveBeenCalledTimes(1));
+    const calls = client.POST.mock.calls as [string, { headers: Record<string, string> }][];
+    const keys = calls.map((c) => c[1].headers['Idempotency-Key']);
+    expect(calls.map((c) => c[0].split('/').at(-1))).toEqual([
+      'revoke',
+      'remove',
+      'revoke',
+      'remove',
+    ]);
+    expect(keys[2]).toBe(keys[0]);
+    expect(keys[3]).toBe(keys[1]);
   });
 
   it('only removes when there is no ACTIVE RED grant', async () => {

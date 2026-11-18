@@ -6,13 +6,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession, elevateSession } from '../../src/auth/index.js';
 import { findCurrentCase } from '../../src/coordination/index.js';
-import { createUser, grantSuasAdmin } from '../../src/identity/index.js';
-import { ensurePublishedQv001 } from '../../src/signals/index.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
-import { TEST_SESSION_SECRET, testDatabaseUrl, validEnv } from '../helpers/env.js';
-import { createVerifiedUser } from '../helpers/verified-veteran.js';
+import { createPerson, openRedCase } from '../helpers/actors.js';
+import { testDatabaseUrl, validEnv } from '../helpers/env.js';
 
 let app: StartedApp;
 
@@ -27,96 +23,23 @@ afterAll(async () => {
   await app.close();
 });
 
-const A0: Readonly<Record<string, string>> = {
-  sleep_manage_7d: 'NOT_AT_ALL',
-  reliable_connection_now: 'WELL_CONNECTED',
-  stress_manage_7d: 'NOT_AT_ALL',
-  basic_needs_48h: 'SECURE',
-  coping_24h: 'ABLE',
-  safe_now: 'YES',
-};
-
-interface QuestionJson {
-  question_id: string;
-  question_key: string;
-  options: { answer_option_id: string; option_key: string }[];
-}
-
-async function bearer(tenantId: string, userId: string, elevate = false) {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId });
-  if (elevate) await elevateSession(pool, session.session.sessionId);
-  return { authorization: `Bearer ${session.credential}` };
-}
-
-async function openRedCase() {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const tenantId = randomUUID();
-  const veteran = await createVerifiedUser(pool, {
-    tenantId,
-    email: syntheticEmail(`vet-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  await ensurePublishedQv001(pool, veteran.userId);
-  const headers = await bearer(tenantId, veteran.userId);
-  const started = await app.server.inject({
-    method: 'POST',
-    url: '/api/v0/check-ins',
-    headers,
-  });
-  expect(started.statusCode).toBe(201);
-  const body: { check_in_id: string; questions: QuestionJson[] } = started.json();
-  for (const question of body.questions) {
-    const optionKey =
-      question.question_key === 'safe_now' ? 'NO_IMMEDIATE_HELP' : A0[question.question_key];
-    if (optionKey === undefined) continue;
-    const option = question.options.find((entry) => entry.option_key === optionKey);
-    if (option === undefined) throw new Error(`missing ${optionKey}`);
-    const saved = await app.server.inject({
-      method: 'POST',
-      url: `/api/v0/check-ins/${body.check_in_id}/responses`,
-      headers,
-      payload: {
-        question_id: question.question_id,
-        answer_option_id: option.answer_option_id,
-      },
-    });
-    expect(saved.statusCode).toBe(200);
-  }
-  const completed = await app.server.inject({
-    method: 'POST',
-    url: `/api/v0/check-ins/${body.check_in_id}/commands/complete`,
-    headers,
-  });
-  expect(completed.statusCode).toBe(200);
-  const supportCase = await findCurrentCase(pool, tenantId, veteran.userId);
-  if (supportCase === undefined) throw new Error('expected RED case');
-  return { pool, tenantId, veteran, headers, supportCase };
-}
-
 /**
  * A signed-in person in the launch county. `admin` adds the SUAS System Administrator grant
  * and, unless `elevate` is false, an MFA-elevated session.
  */
-async function person(
+function person(
   tenantId: string,
   label: string,
   options: { admin?: boolean; elevate?: boolean } = {},
-): Promise<{ userId: string; headers: Record<string, string> }> {
-  const pool = app.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const user = await createUser(pool, {
-    tenantId,
-    email: syntheticEmail(`${label}-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-    county: 'SANTA_CLARA',
-  });
-  if (options.admin === true) await grantSuasAdmin(pool, user.userId, undefined);
+) {
   const elevate = options.admin === true && options.elevate !== false;
-  return { userId: user.userId, headers: await bearer(tenantId, user.userId, elevate) };
+  return createPerson(app, {
+    tenantId,
+    label,
+    county: 'SANTA_CLARA',
+    admin: options.admin,
+    elevate,
+  });
 }
 
 /** The requester submits a request on their case, which puts it on the open list. */
@@ -152,7 +75,7 @@ function settlementPayload(accepterId: string) {
 
 describe('CASE_COMMANDS over /api/v0', () => {
   it('runs claim → activate → escalate → move-to-followup → resume → resolve → close → reopen', async () => {
-    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase(app);
     const responder = await person(tenantId, 'accepter');
     const admin = await person(tenantId, 'staff', { admin: true });
     const caseId = supportCase.caseId;
@@ -252,8 +175,8 @@ describe('CASE_COMMANDS over /api/v0', () => {
   });
 
   it('lets only SUAS System Administrators triage, and keeps other people out of a case', async () => {
-    const a = await openRedCase();
-    const b = await openRedCase();
+    const a = await openRedCase(app);
+    const b = await openRedCase(app);
     const staffA = await person(a.tenantId, 'staff', { admin: true });
     const accepterA = await person(a.tenantId, 'accepter');
     const accepterB = await person(b.tenantId, 'accepter');
@@ -304,7 +227,7 @@ describe('CASE_COMMANDS over /api/v0', () => {
 
 describe('ADMIN.md §2 / SECURITY.md §2 — admin case commands need MFA', () => {
   it('refuses triage, reopen and close from an unelevated SUAS admin with MFA_REQUIRED', async () => {
-    const { pool, supportCase, tenantId } = await openRedCase();
+    const { pool, supportCase, tenantId } = await openRedCase(app);
     const unelevated = await person(tenantId, 'staff', { admin: true, elevate: false });
 
     for (const [kebab, payload] of [
@@ -328,7 +251,7 @@ describe('ADMIN.md §2 / SECURITY.md §2 — admin case commands need MFA', () =
 
 describe('CASES.md §5 item 5 — accept replay over /api/v0', () => {
   it('returns the original assignment to the holder and 409 to anyone else', async () => {
-    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase(app);
     const accepter = await person(tenantId, 'accepter');
     const other = await person(tenantId, 'accepter-b');
     const requestId = await submitRequest(veteranHeaders, supportCase.caseId);
@@ -348,7 +271,7 @@ describe('CASES.md §5 item 5 — accept replay over /api/v0', () => {
 
 describe('CASES.md §3 / SAFETY.md §3.3 — the priority level is not shown to helpers', () => {
   it('shows the priority level to the requester and a SUAS admin, and null to the accepter', async () => {
-    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase(app);
     const accepter = await person(tenantId, 'accepter');
     const staff = await person(tenantId, 'staff', { admin: true });
     const url = `/api/v0/cases/${supportCase.caseId}`;
@@ -385,7 +308,7 @@ describe('CASES.md §3 / SAFETY.md §3.3 — the priority level is not shown to 
   });
 
   it('returns no priority field on any helper-facing request or chat route', async () => {
-    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase();
+    const { tenantId, supportCase, headers: veteranHeaders } = await openRedCase(app);
     const helper = await person(tenantId, 'helper');
     const requestId = await submitRequest(veteranHeaders, supportCase.caseId);
 

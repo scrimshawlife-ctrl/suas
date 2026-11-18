@@ -21,8 +21,8 @@
 
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
 import { z } from 'zod';
+import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { requireCounty, requireVerifiedVeteran } from '../../identity/veteran-gate.js';
@@ -60,9 +60,7 @@ import type { ModelInferencePort } from '../../inference/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 
-export interface IntakeRouteDeps {
-  readonly pool: Pool;
-  readonly sessionSecret: string | undefined;
+export interface IntakeRouteDeps extends RouteContext {
   readonly modelInference: ModelInferencePort;
 }
 

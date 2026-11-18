@@ -9,15 +9,15 @@ import { AlertCircleIcon, LockIcon } from '../../components/icons';
 import { useSingleFlight } from '../../lib/single-flight';
 import { useLicenceReview } from '../licence/api';
 import { isOpenReview, LICENCE_HEADINGS } from '../licence/licence-status';
-import { useConfirmVeteranStatus, useIdVerification, useSelfAttest } from '../public/api';
 import { safeFrom } from '../public/signin-flow';
+import { useConfirmVeteranStatus, useIdVerification, useSelfAttest } from './api';
 import {
   EMPTY_VERIFY_FORM,
   toConfirmBody,
   validateVerifyForm,
   type VerifyFormErrors,
   type VerifyFormValues,
-} from '../public/verify-form';
+} from './verify-form';
 import {
   FORM_VIEWS,
   isGateError,
@@ -25,7 +25,7 @@ import {
   verifyView,
   type VerifyChoice,
   type VerifyOutcome,
-} from '../public/verify-status';
+} from './verify-status';
 import { VerifyForm } from './VerifyForm';
 import { VerifyCrisisCard } from './VerifyAside';
 import {

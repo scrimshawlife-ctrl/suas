@@ -9,15 +9,12 @@ import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { createSession } from '../../src/auth/index.js';
 import { createServer } from '../../src/http/server.js';
 import { CommandInProgressError } from '../../src/idempotency/run.js';
 import {
   beginVaAttempt,
   confirmVeteranStatus,
-  createUser,
   FixtureVeteranConfirmation,
-  setUserDisplayName,
   settleVaAttempt,
   softDeleteUser,
   VA_CONFIRMATION_FINGERPRINT_LABEL,
@@ -37,12 +34,11 @@ import {
 } from '../../src/identity/va-confirmation-http.js';
 import { VA_CONFIRMATION_SANDBOX_BASE_URL } from '../../src/identity/va-confirmation.js';
 import { canonicalize, fingerprintRequest } from '../../src/idempotency/fingerprint.js';
-import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
+import { appPool, createPerson } from '../helpers/actors.js';
 import { closeVaOutageCooldown } from '../helpers/db.js';
 import {
   TEST_FINGERPRINT_KEY,
   TEST_FINGERPRINT_KEY_ID,
-  TEST_SESSION_SECRET,
   testDatabaseUrl,
   validEnv,
 } from '../helpers/env.js';
@@ -59,7 +55,7 @@ beforeAll(async () => {
 });
 
 // The VA outage cooldown is one shared row (suas #287); each test starts with VA reachable.
-beforeEach(() => closeVaOutageCooldown(app.pool!));
+beforeEach(() => closeVaOutageCooldown(appPool(app)));
 
 afterAll(async () => {
   await disabledApp.close();
@@ -87,18 +83,13 @@ async function person(
   started: StartedApp = app,
   options: { tenantId?: string; displayName?: string | null } = {},
 ) {
-  const pool = started.pool;
-  if (pool === undefined) throw new Error('no pool');
-  const tenantId = options.tenantId ?? randomUUID();
-  const user = await createUser(pool, {
-    tenantId,
-    email: syntheticEmail(`vac-${randomUUID().slice(0, 8)}`),
-    status: 'ACTIVE',
-  });
+  const pool = appPool(started);
   const displayName = options.displayName === undefined ? 'Testfirst T.' : options.displayName;
-  if (displayName !== null) await setUserDisplayName(pool, tenantId, user.userId, displayName);
-  const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId: user.userId });
-  const headers = { authorization: `Bearer ${session.credential}` };
+  const { tenantId, user, headers } = await createPerson(started, {
+    label: 'vac',
+    tenantId: options.tenantId,
+    displayName: displayName ?? undefined,
+  });
   const rows = async () =>
     (
       await pool.query<{
@@ -809,7 +800,7 @@ describe('projection values are never kept (R9.1 storage rule, D035 §13)', () =
     const server = createServer({
       config: { ...app.config, logLevel: 'trace' },
       buildInfo: () => app.buildInfo,
-      pool: app.pool!,
+      pool: appPool(app),
       challengeDelivery: app.challengeDelivery,
       mfa: app.mfa,
       veteranConfirmation: port,

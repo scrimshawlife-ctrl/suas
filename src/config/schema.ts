@@ -213,7 +213,7 @@ function requiredEnum<const T extends readonly string[]>(
   varName: string,
   allowed: T,
   guidance: string,
-): z.ZodType<T[number], z.ZodTypeDef, unknown> {
+): z.ZodType<T[number], unknown> {
   return optionalRaw.superRefine((value, ctx) => {
     if (value === undefined) {
       ctx.addIssue({
@@ -228,7 +228,7 @@ function requiredEnum<const T extends readonly string[]>(
         message: `${varName}="${value}" is not a released value. Allowed: ${allowed.join(' | ')}. ${guidance}`,
       });
     }
-  }) as unknown as z.ZodType<T[number], z.ZodTypeDef, unknown>;
+  }) as unknown as z.ZodType<T[number], unknown>;
 }
 
 /** Like {@link requiredEnum}, but an unset variable takes `fallback`. */
@@ -236,7 +236,7 @@ function optionalEnum<const T extends readonly string[]>(
   varName: string,
   allowed: T,
   fallback: T[number],
-): z.ZodType<T[number], z.ZodTypeDef, unknown> {
+): z.ZodType<T[number], unknown> {
   return optionalRaw
     .superRefine((value, ctx) => {
       if (value !== undefined && !allowed.includes(value)) {
@@ -250,10 +250,7 @@ function optionalEnum<const T extends readonly string[]>(
 }
 
 /** ENVIRONMENT.md §5: fail closed on invalid/unknown values, including booleans. */
-function strictBoolean(
-  varName: string,
-  guidance: string,
-): z.ZodType<boolean, z.ZodTypeDef, unknown> {
+function strictBoolean(varName: string, guidance: string): z.ZodType<boolean, unknown> {
   return optionalRaw
     .superRefine((value, ctx) => {
       if (value === undefined || (value !== 'true' && value !== 'false')) {

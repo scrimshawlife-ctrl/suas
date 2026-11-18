@@ -21,8 +21,11 @@ export function uniqueEmail(role: string): string {
 }
 
 /** A person with their own browser context, so two people can be signed in at once. */
-export async function newPerson(browser: Browser): Promise<Page> {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+export async function newPerson(
+  browser: Browser,
+  viewport: { width: number; height: number } = { width: 1280, height: 900 },
+): Promise<Page> {
+  const context = await browser.newContext({ viewport });
   return context.newPage();
 }
 

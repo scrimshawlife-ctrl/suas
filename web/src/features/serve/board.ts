@@ -1,6 +1,7 @@
 import { hasApiCode, isApiError } from '../../api/errors';
 import type { County, ServiceCategory, ServiceRequestListItem } from '../../api/types';
 import { NEEDS } from '../../components/needs';
+import { countyName } from '../../lib/people';
 
 /** Plain-word helpers for the Serve board. Kept free of React so they are easy to test. */
 
@@ -16,21 +17,6 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   if (elapsed < HOUR) return unit(Math.floor(elapsed / MINUTE), 'minute');
   if (elapsed < DAY) return unit(Math.floor(elapsed / HOUR), 'hour');
   return unit(Math.floor(elapsed / DAY), 'day');
-}
-
-/** SANTA_CLARA -> "Santa Clara". */
-export function countyName(county: County): string {
-  return county
-    .toLowerCase()
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-/** "Marcus T." -> "Marcus". Falls back to `fallback` when there is no name. */
-export function firstName(displayName: string | null | undefined, fallback = ''): string {
-  const first = displayName?.trim().split(/\s+/)[0];
-  return first ? first : fallback;
 }
 
 /** The request's one-line summary, or its category name when the requester wrote none. */
@@ -107,7 +93,7 @@ export type AcceptFailure =
 
 export const TAKEN_MESSAGE = 'Someone else took this one.';
 export const GONE_MESSAGE = 'That request is no longer open.';
-export const TRY_AGAIN_MESSAGE = 'That did not go through. Try again.';
+const TRY_AGAIN_MESSAGE = 'That did not go through. Try again.';
 
 /** Maps a failed POST /service-requests/{id}/accept to what the board does next. */
 export function classifyAcceptError(error: unknown): AcceptFailure {

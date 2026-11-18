@@ -92,6 +92,16 @@ describe('Enter code', () => {
     expect(screen.getByLabelText('6-digit code')).toBeRequired();
   });
 
+  it('puts one digit in each of the six boxes and drops anything that is not a digit', async () => {
+    renderAt({
+      pathname: '/sign-in/code',
+      state: { email: 'a@example.invalid' },
+    });
+    await userEvent.type(screen.getByLabelText('6-digit code'), '12a3456');
+    const cells = [...document.querySelectorAll('[data-cell]')];
+    expect(cells.map((cell) => cell.textContent)).toEqual(['1', '2', '3', '4', '5', '6']);
+  });
+
   it('ignores a from that leaves the app', async () => {
     client.POST.mockResolvedValue(session);
     renderAt({

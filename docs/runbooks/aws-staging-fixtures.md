@@ -1,6 +1,6 @@
 # AWS STAGING fixture users and Resources
 
-Contributor proposal R11.5 (suas-specs #75, not released). Applies to the AWS CDK staging in `infra/` only.
+R11.5 (suas-specs #75, released in 0.10.0). Applies to the AWS CDK staging in `infra/` only.
 STAGING admits only explicitly provisioned synthetic principals (D-052, ENVIRONMENT.md §3, released in 0.8.0).
 The database is in isolated subnets with no bastion, so the migrate function seeds it.
 
@@ -28,7 +28,7 @@ seeds no SUAS admin.
 
 ## Fixture addresses and sign-in codes (R11.7)
 
-Contributor proposal R11.7 (specs #75, not released). Sign-in on STAGING is an emailed code, and a synthetic
+R11.7 (specs #75, released in 0.10.0). Sign-in on STAGING is an emailed code, and a synthetic
 address (`@example.invalid`) never receives mail. So a fixture address may also be a plus address of the one real
 mailbox stored in `/suas/staging/fixture-mailbox`:
 

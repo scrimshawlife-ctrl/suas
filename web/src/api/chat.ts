@@ -1,8 +1,8 @@
-import { infiniteQueryOptions, useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
+import type { InfiniteData } from '@tanstack/react-query';
 import { api } from './client';
 import { queryKeys } from './keys';
+import { cursorPages, useSignedInInfiniteQuery } from './queries';
 import { requireData } from './require-data';
-import { useSessionToken } from './token-store';
 import type { Schemas } from './types';
 
 /** The server's list maximum: one page holds up to 100 threads; older ones come by cursor. */
@@ -12,25 +12,17 @@ export type ChatThreadPages = InfiniteData<Schemas['ChatThreadList'], string | u
 
 /** GET /api/v0/chat/threads: the caller's chat threads, most recent activity first, paged. */
 export function chatThreadsQueryOptions() {
-  return infiniteQueryOptions({
+  return cursorPages({
     queryKey: queryKeys.chatThreads,
-    initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => {
+    fetchPage: async (page) => {
       const { data } = await api.GET('/api/v0/chat/threads', {
-        params: {
-          query: {
-            limit: THREAD_LIMIT,
-            ...(pageParam !== undefined ? { cursor: pageParam } : {}),
-          },
-        },
+        params: { query: { limit: THREAD_LIMIT, ...page } },
       });
       return requireData(data, 'chats');
     },
-    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
 }
 
 export function useChatThreads() {
-  const token = useSessionToken();
-  return useInfiniteQuery({ ...chatThreadsQueryOptions(), enabled: token !== null });
+  return useSignedInInfiniteQuery(chatThreadsQueryOptions());
 }

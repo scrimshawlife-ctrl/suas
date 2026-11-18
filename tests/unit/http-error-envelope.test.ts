@@ -49,7 +49,7 @@ describe('error envelope outside route code', () => {
     expect(error.code).toBe('VALIDATION_FAILED');
     expect(error.message).toBe('category: Invalid value.');
     expect(error.details.issues).toEqual([
-      { path: 'category', code: 'invalid_enum_value', message: 'Invalid value.' },
+      { path: 'category', code: 'invalid_value', message: 'Invalid value.' },
     ]);
     expect(response.body).not.toContain('SHELTER');
     expect(response.body).not.toContain('NOPE');

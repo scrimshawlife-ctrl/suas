@@ -1,17 +1,8 @@
 import { isApiError } from '../../api/errors';
 import type { County } from '../../api/types';
+import { COUNTY_OPTIONS } from '../../lib/people';
 
-export const COUNTY_OPTIONS: readonly { value: County; label: string }[] = [
-  { value: 'SANTA_CLARA', label: 'Santa Clara' },
-  { value: 'SAN_MATEO', label: 'San Mateo' },
-  { value: 'ALAMEDA', label: 'Alameda' },
-  { value: 'SANTA_CRUZ', label: 'Santa Cruz' },
-  { value: 'SAN_BENITO', label: 'San Benito' },
-  { value: 'MERCED', label: 'Merced' },
-  { value: 'STANISLAUS', label: 'Stanislaus' },
-];
-
-export const DISPLAY_NAME_MAX = 40;
+const DISPLAY_NAME_MAX = 40;
 
 export interface WelcomeErrors {
   displayName?: string;
