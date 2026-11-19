@@ -196,8 +196,9 @@ export class BackendStack extends Stack {
       removalPolicy: RemovalPolicy.SNAPSHOT,
       databaseName: DB_NAME,
       credentials: rds.Credentials.fromGeneratedSecret('suas_admin', {
-        // URL-safe, so the password can sit inside DATABASE_URL unescaped.
-        excludeCharacters: '"%+~`#$&*()|[]{}:;<>?!\'/@\\=,^-._ ',
+        // URL-safe, so the password can sit inside DATABASE_URL unescaped. Keeps `-` and `_`:
+        // Secrets Manager needs one punctuation character it may use, or generation fails.
+        excludeCharacters: '"%+~`#$&*()|[]{}:;<>?!\'/@\\=,^. ',
       }),
     });
     const dbSecret = database.secret;

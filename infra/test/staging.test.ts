@@ -263,6 +263,19 @@ describe('database', () => {
     );
   });
 
+  it('generates a URL-safe password that Secrets Manager can produce', () => {
+    // Secrets Manager requires each included character type, so some punctuation must remain.
+    const secret = ofType(s.backend, 'AWS::SecretsManager::Secret').find(
+      ([, r]) => r.Properties?.GenerateSecretString?.GenerateStringKey === 'password',
+    )?.[1];
+    const excluded: string = secret?.Properties?.GenerateSecretString.ExcludeCharacters;
+    const punctuation = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'.split('');
+    const allowed = punctuation.filter((c) => !excluded.includes(c));
+    expect(allowed.length).toBeGreaterThan(0);
+    expect(allowed.every((c) => '-_'.includes(c))).toBe(true);
+    expect(excluded).toContain(' ');
+  });
+
   it('names nothing the config guard would read as a production database', () => {
     const text = JSON.stringify(resourcesOf(s.backend));
     expect(text).not.toMatch(
