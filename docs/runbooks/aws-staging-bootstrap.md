@@ -34,9 +34,14 @@ The CloudFormation execution role gets all three policies `SuasCdkExecution`, `S
 `SuasCdkEdge`
 ([`infra/bootstrap/cfn-execution-policy.yaml`](../../infra/bootstrap/cfn-execution-policy.yaml)).
 
+For an existing account, first disable the GitHub deployment identity and any other principals
+that can submit updates through the application execution role. Keep them disabled through the
+legacy-role check below; pause queued/running deployments before changing the bootstrap policies.
+
 ```sh
 aws cloudformation deploy --region us-west-2 --stack-name Suas-Cdk-Execution-Policy \
-  --template-file infra/bootstrap/cfn-execution-policy.yaml --capabilities CAPABILITY_NAMED_IAM
+  --template-file infra/bootstrap/cfn-execution-policy.yaml --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides "StagingApiHostname=$STAGING_API_HOSTNAME" "StagingWebHostname=$STAGING_WEB_HOSTNAME"
 aws cloudformation update-termination-protection --region us-west-2 \
   --stack-name Suas-Cdk-Execution-Policy --enable-termination-protection
 cd infra && npm ci
@@ -45,6 +50,26 @@ node node_modules/aws-cdk/bin/cdk bootstrap \
   --cloudformation-execution-policies "arn:aws:iam::$ACCOUNT:policy/SuasCdkExecution,arn:aws:iam::$ACCOUNT:policy/SuasCdkServices,arn:aws:iam::$ACCOUNT:policy/SuasCdkEdge" \
   --termination-protection
 ```
+
+Set `STAGING_API_HOSTNAME` and `STAGING_WEB_HOSTNAME` to the exact DNS names in the reviewed
+assembly before bootstrap. They are required parameters, with no wildcard or default. Confirm they
+match the API and web certificates; a hostname change requires a reviewed bootstrap update.
+
+CloudFront `CreateDistribution` needs `Resource: "*"`, as do cache-policy and origin-access-control
+creation. The policy enumerates those actions; existing-resource operations retain ARN scoping.
+`CreateDistributionWithTags` is an API operation, not an IAM action; tagged creation uses
+`CreateDistribution` and the applicable `TagResource` grant.
+
+ACM's [API permissions guide](https://docs.aws.amazon.com/acm/latest/userguide/authen-apipermissions.html)
+and [authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_acm.html)
+disagree about certificate-ARN scoping for `RequestCertificate`. Both permit `Resource: "*"`.
+Use that only for this action, with DNS validation, the supported regions, no private CA, and
+`ForAllValues:StringEquals` for the two exact hostnames. The non-null condition prevents a missing
+domain list from satisfying the set condition. Existing-certificate actions remain scoped to the
+account's ARNs. This resolves the implementation choice without claiming the previous scope was
+proven broken. Before operation, validate the policy and simulate both hostname allows, a mixed
+allowed/foreign SAN set, wildcard/foreign names, a missing domain key, a private CA, email validation
+and an unsupported region. Perform actual certificate issuance only in an authorized deployment window.
 
 Use the lockfile CLI, not `npx cdk@latest`. Re-run the bootstrap after a CDK upgrade that needs a newer
 bootstrap version.
@@ -60,12 +85,34 @@ map and workflow together requires a separate reviewed change.
 ### Permissions boundary acceptance
 
 The bootstrap also creates `SuasStagingRuntimeBoundary`. Every generated role, including late-created
-cross-region helpers, receives it. The execution policies require it on role creation and forbid its
-removal, replacement or policy modification. Application identities still need their own grants;
+cross-region helpers, receives it. The execution policies require it on role creation, inline-policy writes, managed-policy attachment
+and trust-policy updates, and forbid its removal, replacement or policy modification. Application identities still need their own grants;
 the boundary alone grants nothing. Provision and update the boundary from the separate administrator
 identity, never from the application execution role.
 
+Before enabling or re-enabling deployment access, the independent administrator must inventory **all**
+existing `Suas-*` roles, including helpers from older deployments. New templates do not prove that
+existing roles have a boundary. For each role, review its owner, trust policy, inline/attached policies
+and required actions. Attach `SuasStagingRuntimeBoundary` to the reviewed application/helper roles
+using the administrator identity, then read back the boundary ARN. Do not blindly adopt an unknown
+role by name. Resolve unexpected roles or broader legacy privileges before continuing, and retain
+the inventory and validation result as bootstrap evidence. An empty inventory is valid on first setup.
+Do this before application updates: CloudFormation is not guaranteed to attach a new boundary before
+updating the role's policies. Boundary changes can also restrict an existing workload immediately.
+
+AWS supports `iam:PermissionsBoundary` on `PutRolePolicy`, `AttachRolePolicy` and
+`UpdateAssumeRolePolicy`, but **not** `PassRole` (see the
+[official IAM action reference](https://servicereference.us-east-1.amazonaws.com/v1/iam/iam.json)).
+PassRole is restricted by generated role name, account and receiving service; its safety also depends
+on the qualified role namespace. Keep independent administrators from introducing unbounded roles
+into that namespace while deployment access is enabled. Repeat this qualification after any such
+administrator change. New-role enforcement plus the boundary removal/replacement denies preserve
+the invariant for routine deploys; this is a one-time bootstrap transition, not per-deploy ceremony.
+
 Policies restrict resources by account, region and generated names where those identifiers exist.
+S3 bucket/object grants also check `s3:ResourceAccount` and the supported regions, including CDK
+asset reads. Bucket ARNs have no account field; a matching name, even one containing an account ID,
+is not ownership evidence. Include a foreign-owned matching-prefix bucket in negative simulations.
 EC2 network resources and service-generated IDs still have account-wide scope in the two regions;
 Route 53 zones and CloudFront resources have generated-ID scope. Read inventories and the creation
 APIs without resource-level support retain explicit `*` resources. This is a bounded synthetic
@@ -75,7 +122,11 @@ in the account. After foundation creation, tighten generated identifiers where f
 Offline tests check syntax, size, boundary attachment and forbidden privileges. Before any authorized
 run, require fresh IAM Access Analyzer validation and positive/negative policy simulations for the
 exact account: expected deployment actions pass; outside-account resources, wrong regions,
-unbounded role creation, boundary changes and production secrets fail. Test real CloudFormation
+unbounded role creation, inline-policy/trust updates or policy attachment to an unbounded or
+wrong-boundary role, boundary changes and production secrets fail. The same supported role updates
+with the approved boundary must succeed. Confirm managed attachment still accepts only the existing
+AWSLambdaBasicExecutionRole allow-list. PassRole evidence must use the qualified role inventory;
+do not pretend that an unsupported condition validates the role boundary. Test real CloudFormation
 create/update/rollback only inside a separately authorized synthetic window. Do not add a broad
 policy to bypass a denied action.
 
@@ -83,11 +134,20 @@ policy to bypass a denied action.
 
 [`infra/bootstrap/github-oidc.yaml`](../../infra/bootstrap/github-oidc.yaml) creates the OIDC provider and
 two roles. Each trusts one GitHub Environment through the repository's immutable OIDC subject
-(`gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub` → `sub_claim_prefix`), and only from
-`.github/workflows/staging-deploy.yml` on `main` (IAM's `token.actions.githubusercontent.com:job_workflow_ref`
-key), so another workflow file or a branch copy that names the environment cannot assume either role. If the
-owner changes the subject setting, update `SubjectPrefix`; if the repository is renamed, update
-`WorkflowRepository`.
+(`gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub` → `sub_claim_prefix`), and the
+called `.github/workflows/staging-deploy-verified.yml` on `main` through `job_workflow_ref`.
+The manual entry remains `staging-deploy.yml`; it calls that reusable workflow. Before checkout or
+credentials, the called workflow requires the manual event, main ref, exact entry-workflow path and
+supported scope. It then keeps the original verify/build/plan/deploy dependencies and both protected
+environments. A branch copy or another caller fails these controls. The entry passes inherited secrets;
+only the deployment step reads the alarm-email secret. No credential is passed as a workflow input.
+If the owner changes the subject setting, update `SubjectPrefix`; after a repository rename, update
+`WorkflowRepository`. Do not dispatch either workflow until all release and operational holds clear.
+
+AWS's [current IAM reference](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_iam-condition-keys.html)
+supports the GitHub `job_workflow_ref` condition. The claim exists for a called reusable workflow,
+not an ordinary manual job, as explained in [GitHub's reusable-workflow OIDC guide](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-with-reusable-workflows).
+This replaces the previous mismatch; string comparisons against invented token fields were not proof.
 
 ```sh
 SUBJECT=$(gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub --jq .sub_claim_prefix)
@@ -111,8 +171,11 @@ edit IAM, or invoke the API or the email relay. Every stack change, including th
 as the CDK deploy role. On the first plan run, confirm that `cdk diff` falls back from the lookup role to the plan
 role (it prints a warning); if it does not, grant only the missing read action. The earlier Access Analyzer result predates these policy changes; rerun `ValidatePolicy` before operation. On the trust policies it warns that a branch is recommended in `sub`:
 these subjects are environment-scoped, and the `job_workflow_ref` condition plus the environment's branch policy
-(step 4) enforce `main`. If the first plan run is refused at `AssumeRoleWithWebIdentity`, the token's
-`job_workflow_ref` did not match: compare it with the condition before loosening anything.
+(step 4) enforce `main`. Before a separately authorized deployment, independently verify both environments,
+the exact `aud`, `sub` and called `job_workflow_ref` values, and successful STS assumption of each intended
+role without running deployment commands. Never print or upload the raw JWT or returned credentials.
+An STS refusal may be a missing/wrong claim, trust setting or another policy restriction; diagnose the actual
+reason. Do not remove the workflow restriction or bypass the environment gate to obtain a successful run.
 
 ## 3. Deploy-time parameters (before the first backend deploy)
 
@@ -153,7 +216,8 @@ smoke test are acceptance evidence. Never print the key.
 
 Environments (a repository admin, the owner, configures protection):
 
-- `suas-synthetic-staging-plan`: deployment branches `main` only. No reviewers: the plan job cannot change anything.
+- `suas-synthetic-staging-plan`: deployment branches `main` only, with the recorded required reviewer.
+  The plan job is read-only, but removing its reviewer requires a separate explicit owner decision.
 - `suas-synthetic-staging`: deployment branches `main` only, required reviewers, prevent self-review. Without
   reviewers, nothing stands between a dispatch and a deploy, so do not run the workflow until they are set.
 

@@ -22,6 +22,12 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
+- Draft staging OIDC binding (SUAS-specs #112, HOLD): the manual entry now calls `staging-deploy-verified.yml`, so credentialed jobs emit the reusable-workflow claim required by both role trusts. A pre-credential gate rejects another caller, event, branch or scope. Both protected environments, reviewers, release artifact, verification and recovery steps remain required. Tests exercise missing claims and the real caller guard. No workflow was dispatched.
+
+- Draft staging creation permissions (SUAS-specs #112, HOLD): grant CloudFront creation with the required wildcard resource and valid IAM action names. Resolve the ACM documentation conflict with a separate DNS-only certificate request grant restricted to two required staging hostname parameters and the supported regions; retain account-scoped existing-certificate operations. No bootstrap or deployment is performed.
+
+- Draft STAGING execution policy now requires the approved boundary when updating existing roles' inline policies, attached managed policies or trust policies. S3 grants check actual bucket ownership and supported regions. Legacy role inventory and administrator boundary adoption are required before enabling deployment access (SUAS-specs #112, still on HOLD).
+
 - After a case is closed and reopened, the next cycle's helper no longer reads the previous cycle's Settlements (`GET /cases/{id}/settlements`, `/settlements/{settlement_id}`) or contact attempts (`GET /cases/{caseId}/contact-attempts`); a helper's standing is per cycle (CASES.md §4.3, DISPATCH.md §13.2, R11.1). The requester still reads every cycle. A helper Settlement read is scoped by the RESOLVED case's current Settlement, a contact write takes the case row lock and re-checks standing so it cannot outlast a concurrent CLOSE, and `closed_at` is the wall-clock time of the close. A contact attempt's `created_at` is the time of that re-check, so a write that outlasts CLOSE and REOPEN stands only on a new-cycle accept and is filed in that cycle.
 
 - U+0000 (NUL) in any string or key of a body, query or path parameter, on `/api/v0` and the `/app` form routes alike, is now 400 `VALIDATION_FAILED` instead of a 500 from PostgreSQL (22021 text, 22P05 jsonb); a NUL in a header value was already 400 from Node's HTTP parser; Settlement sections nest at most 16 levels, so deep content is 400 instead of a 500 (54001) (API.md §6).

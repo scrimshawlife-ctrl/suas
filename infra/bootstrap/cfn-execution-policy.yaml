@@ -1,6 +1,15 @@
 # Provision separately before the application. The execution role cannot modify the boundary.
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Synthetic STAGING execution policies and runtime boundary; deploy requires separate approval.
+Parameters:
+  StagingApiHostname:
+    Type: String
+    AllowedPattern: '[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}'
+    Description: Exact API hostname in the reviewed staging assembly (no wildcard).
+  StagingWebHostname:
+    Type: String
+    AllowedPattern: '[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}'
+    Description: Exact web hostname in the reviewed staging assembly (no wildcard).
 Resources:
   SuasCdkExecutionPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -149,11 +158,13 @@ Resources:
                 aws:RequestedRegion:
                   - us-west-2
                   - us-east-1
-          - Sid: BoundedRoleCreation
+          - Sid: BoundedRoleWrites
             Effect: Allow
             Action:
               - iam:CreateRole
               - iam:PutRolePermissionsBoundary
+              - iam:PutRolePolicy
+              - iam:UpdateAssumeRolePolicy
             Resource:
               Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
             Condition:
@@ -167,10 +178,8 @@ Resources:
               - iam:GetRole
               - iam:GetRolePolicy
               - iam:UpdateRole
-              - iam:UpdateAssumeRolePolicy
               - iam:TagRole
               - iam:UntagRole
-              - iam:PutRolePolicy
               - iam:DeleteRolePolicy
               - iam:ListRolePolicies
               - iam:ListAttachedRolePolicies
@@ -185,6 +194,8 @@ Resources:
               Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
             Condition:
               ArnEquals:
+                iam:PermissionsBoundary:
+                  Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/SuasStagingRuntimeBoundary
                 iam:PolicyARN:
                   Fn::Sub: arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
           - Sid: PassGeneratedRoles
@@ -371,6 +382,13 @@ Resources:
             Resource:
               - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*
               - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*/*
+            Condition:
+              StringEquals:
+                s3:ResourceAccount:
+                  Ref: AWS::AccountId
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
           - Sid: RdsEncryption
             Effect: Allow
             Action:
@@ -390,10 +408,27 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          # Creation has no stable ARN; restrict the complete requested domain set instead.
+          - Sid: RequestStagingCertificates
+            Effect: Allow
+            Action: acm:RequestCertificate
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+                acm:ValidationMethod: DNS
+              ForAllValues:StringEquals:
+                acm:DomainNames:
+                  - Ref: StagingApiHostname
+                  - Ref: StagingWebHostname
+              'Null':
+                acm:DomainNames: 'false'
+                acm:CertificateAuthority: 'true'
           - Sid: Certificates
             Effect: Allow
             Action:
-              - acm:RequestCertificate
               - acm:DescribeCertificate
               - acm:DeleteCertificate
               - acm:AddTagsToCertificate
@@ -443,8 +478,6 @@ Resources:
           - Sid: Edge
             Effect: Allow
             Action:
-              - cloudfront:CreateDistribution
-              - cloudfront:CreateDistributionWithTags
               - cloudfront:GetDistribution
               - cloudfront:GetDistributionConfig
               - cloudfront:UpdateDistribution
@@ -468,9 +501,11 @@ Resources:
               - Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
               - Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:cache-policy/*
               - Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:origin-access-control/*
+          # These creation actions do not support resource-level authorization.
           - Sid: EdgeCreate
             Effect: Allow
             Action:
+              - cloudfront:CreateDistribution
               - cloudfront:CreateCachePolicy
               - cloudfront:CreateOriginAccessControl
             Resource: '*'
@@ -552,6 +587,13 @@ Resources:
             Resource:
               - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*
               - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*/*
+            Condition:
+              StringEquals:
+                s3:ResourceAccount:
+                  Ref: AWS::AccountId
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
           - Sid: PublishedAssets
             Effect: Allow
             Action:
@@ -565,6 +607,8 @@ Resources:
               - Fn::Sub: arn:${AWS::Partition}:s3:::cdk-hnb659fds-assets-${AWS::AccountId}-*/*
             Condition:
               StringEquals:
+                s3:ResourceAccount:
+                  Ref: AWS::AccountId
                 aws:RequestedRegion:
                   - us-west-2
                   - us-east-1

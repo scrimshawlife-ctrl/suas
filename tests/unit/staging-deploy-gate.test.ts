@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 const WORKFLOW = readFileSync(
-  new URL('../../.github/workflows/staging-deploy.yml', import.meta.url),
+  new URL('../../.github/workflows/staging-deploy-verified.yml', import.meta.url),
   'utf8',
 );
 const GATE_STEP = 'Require a commit on main and the deployment variables';
@@ -93,5 +93,45 @@ describe('staging-deploy.yml gate', () => {
     ['a script URL as web origin', { SUAS_STAGING_WEB_ORIGIN: 'javascript:alert(1)' }],
   ])('refuses %s', (_case, overrides) => {
     expect(gate(overrides)).not.toBe(0);
+  });
+});
+
+describe('staging reusable workflow caller gate', () => {
+  const valid = {
+    CALLER_EVENT: 'workflow_dispatch',
+    CALLER_REF: 'refs/heads/main',
+    CALLER_REPOSITORY: 'octo/suas',
+    CALLER_WORKFLOW: 'octo/suas/.github/workflows/staging-deploy.yml@refs/heads/main',
+    DEPLOY_SCOPE: 'full',
+  };
+  const accepts = (overrides: Partial<typeof valid>) =>
+    spawnSync('bash', ['-e', '-c', runBlock('Require the manual entry workflow on main')], {
+      env: { ...valid, ...overrides },
+    }).status === 0;
+  it('uses issuer context, not caller-controlled inputs, for origin checks', () => {
+    const step = stepLines('Require the manual entry workflow on main').join('\n');
+    for (const [key, context] of Object.entries({
+      CALLER_EVENT: 'event_name',
+      CALLER_REF: 'ref',
+      CALLER_REPOSITORY: 'repository',
+      CALLER_WORKFLOW: 'workflow_ref',
+    })) {
+      expect(step).toContain(`${key}: \${{ github.${context} }}`);
+    }
+  });
+  it('accepts only the manual entry on main and either supported scope', () => {
+    expect(accepts({})).toBe(true);
+    expect(accepts({ DEPLOY_SCOPE: 'web' })).toBe(true);
+  });
+  it.each<Partial<typeof valid>>([
+    { CALLER_EVENT: 'push' },
+    { CALLER_EVENT: 'pull_request' },
+    { CALLER_REF: 'refs/heads/other' },
+    { CALLER_WORKFLOW: 'octo/suas/.github/workflows/other.yml@refs/heads/main' },
+    { CALLER_WORKFLOW: 'octo/suas/.github/workflows/staging-deploy.yml@refs/heads/other' },
+    { CALLER_WORKFLOW: '' },
+    { DEPLOY_SCOPE: 'anything' },
+  ])('rejects an invalid caller or scope: %j', (overrides) => {
+    expect(accepts(overrides)).toBe(false);
   });
 });
