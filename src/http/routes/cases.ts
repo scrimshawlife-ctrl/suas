@@ -29,11 +29,12 @@ import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../id
 import type { JsonObject } from '../../jobs/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import {
-  findSettlement,
+  findCaseSettlement,
   listSettlements,
   resolveCaseWithSettlement,
   veteranVisibleSettlement,
   type Settlement,
+  type SettlementCycles,
 } from '../../settlement/index.js';
 
 /**
@@ -101,6 +102,11 @@ function publicCase(supportCase: SupportCase, revealPriority: boolean) {
     status: supportCase.status,
     priority_signal_level: revealPriority ? (supportCase.prioritySignalLevel ?? null) : null,
   };
+}
+
+/** The requester reads every cycle's Settlements; a helper, the current one (CASES.md §4.3). */
+function settlementCyclesFor(owner: boolean): SettlementCycles {
+  return owner ? 'all' : 'current';
 }
 
 export function publicSettlement(settlement: Settlement) {
@@ -307,7 +313,12 @@ export function registerCaseRoutes(app: FastifyInstance, deps: RouteContext): vo
     const { id } = idParams.parse(request.params);
     const { owner } = await resolveCaseAccess(deps.pool, context, id);
 
-    const settlements = await listSettlements(deps.pool, context.tenantId, id);
+    const settlements = await listSettlements(
+      deps.pool,
+      context.tenantId,
+      id,
+      settlementCyclesFor(owner),
+    );
     return {
       settlements: owner
         ? settlements.map(veteranVisibleSettlement)
@@ -320,10 +331,14 @@ export function registerCaseRoutes(app: FastifyInstance, deps: RouteContext): vo
     const { id, settlement_id: settlementId } = settlementParams.parse(request.params);
     const { owner } = await resolveCaseAccess(deps.pool, context, id);
 
-    const settlement = await findSettlement(deps.pool, context.tenantId, settlementId);
-    if (settlement === undefined || settlement.caseId !== id) {
-      throw new ResourceNotVisibleError();
-    }
+    const settlement = await findCaseSettlement(
+      deps.pool,
+      context.tenantId,
+      id,
+      settlementId,
+      settlementCyclesFor(owner),
+    );
+    if (settlement === undefined) throw new ResourceNotVisibleError();
     return owner ? veteranVisibleSettlement(settlement) : publicSettlement(settlement);
   });
 }

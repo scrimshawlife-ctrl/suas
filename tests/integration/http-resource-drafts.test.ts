@@ -504,7 +504,7 @@ describe('contacts and area (R8.8, R8.9)', () => {
     expect(read.json().verified_at).toBe(stored.rows[0]?.last_verified_at.toISOString());
   });
 
-  it('refuses a fourth contact, an over-long area and a mismatched alias on edit', async () => {
+  it('refuses a fourth contact, an over-long area, a mismatched alias and unknown values on edit', async () => {
     const admin = await credential(app, randomUUID(), { admin: true, elevate: true });
     const draft = await draftWith(admin.headers, { contacts: threeContacts });
     const id = draft.resource_draft_id;
@@ -512,6 +512,9 @@ describe('contacts and area (R8.8, R8.9)', () => {
     const four = [...threeContacts, { kind: 'FREEFORM', value: 'Ask at the front desk' }];
     expect((await edit(admin.headers, id, { contacts: four })).statusCode).toBe(400);
     expect((await edit(admin.headers, id, { area: 'x'.repeat(81) })).statusCode).toBe(400);
+    expect((await edit(admin.headers, id, { category: 'LEGAL' })).statusCode).toBe(400);
+    const badKind = [{ kind: 'FAX', value: '408-555-0100' }];
+    expect((await edit(admin.headers, id, { contacts: badKind })).statusCode).toBe(400);
     expect(
       (
         await edit(admin.headers, id, {

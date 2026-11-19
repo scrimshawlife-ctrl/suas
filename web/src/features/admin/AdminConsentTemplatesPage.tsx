@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { StatusChip, type StatusKind } from '../../components/StatusChip';
 import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
@@ -11,8 +12,7 @@ import {
   useCreateConsentTemplate,
   usePublishConsentTemplate,
   type ConsentTemplateVersion,
-} from './api';
-import { ConfirmDialog } from './ConfirmDialog';
+} from './consent-templates-api';
 import { QueryNotice } from './QueryNotice';
 
 const KEY_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

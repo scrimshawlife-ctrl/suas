@@ -238,6 +238,9 @@ Seeded for the demo Veteran: one open case with TRANSPORTATION (MATCHING), FOOD
 (FULFILLED, ready to confirm), SHELTER (CANCELLED) and PEER_SUPPORT (CREATED)
 requests; synthetic resources in all four categories; an ACTIVE consent grant,
 a trusted contact, notifications, a completed Check-In and a Veteran follow-up.
+The demo Veteran is not seeded as verified: self-attest on the Verify page (or
+`POST /api/v0/veterans/me/verification/commands/self-attest`) before requesting
+help, Resources, Consents, Trusted Contacts or Check-Ins, as the smoke does.
 The legacy `/app/chat` page shows its unavailable state and nothing is seeded
 for chat; v1 chat is in `/api/v0` (`src/http/routes/chat.ts`) and `web/`.
 
@@ -246,8 +249,8 @@ seeded `/api/v0` responses into the deterministic fixture file the iOS and
 Android no-server demo modes load. Identifiers and timestamps are rewritten,
 and the script refuses any non-synthetic email or phone number. Export from a
 fresh seed (`npm run dev:demo -- --reset`, then `npm run demo:fixtures` before
-`npm run smoke:demo`), because the smoke test creates and cancels an extra
-request.
+`npm run smoke:demo`), because the smoke test self-attests the demo Veteran
+and creates and cancels an extra request.
 
 ### Local demo workflow
 
@@ -326,8 +329,8 @@ separately. Override either with `TEST_DATABASE_URL` and `TEST_MIGRATIONS_DATABA
 `infra/` is the CDK app for v1 synthetic STAGING in `us-west-2`
 (`V1_PROJECT_PLAN.md` §6 in SUAS-specs, a proposal). It defines a DNS stack, a
 web stack (S3 and CloudFront for `web/dist`) and a backend stack (RDS PostgreSQL
-17 behind RDS Proxy; API, job worker and migrate Lambdas; HTTP API; EventBridge
-Scheduler). Nothing is deployed yet. The manual, approval-gated
+17, reached directly with no RDS Proxy (R14.1 proposal); API, job worker and
+migrate Lambdas; HTTP API; EventBridge Scheduler). Nothing is deployed yet. The manual, approval-gated
 [`staging-deploy.yml`](.github/workflows/staging-deploy.yml) workflow deploys a verified `main` commit through
 GitHub OIDC once the AWS foundation exists
 ([docs/runbooks/aws-staging-bootstrap.md](docs/runbooks/aws-staging-bootstrap.md)); until then STAGING deploys

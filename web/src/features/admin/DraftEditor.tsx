@@ -1,14 +1,14 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { isApiError } from '../../api/errors';
 import { Button } from '../../components/Button';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { AlertCircleIcon } from '../../components/icons';
 import { Select } from '../../components/Select';
 import { useFocusFirstInvalid } from '../../lib/focus-invalid';
 import { useSingleFlight } from '../../lib/single-flight';
 import { TextArea } from '../../components/TextArea';
 import { TextField } from '../../components/TextField';
-import { useDiscardDraft, useEditDraft, usePublishDraft } from './api';
-import { ConfirmDialog } from './ConfirmDialog';
+import { useDiscardDraft, useEditDraft, usePublishDraft } from './drafts-api';
 import { ContactListField } from './ContactListField';
 import {
   buildEditPayload,
@@ -20,7 +20,6 @@ import {
   type ResourceDraft,
 } from './draft-form';
 import { CATEGORIES, CATEGORY_LABELS, COUNTIES, COUNTY_LABELS } from './labels';
-import type { ServiceCategory } from '../../api/types';
 
 export const PUBLISH_CONFIRM_TEXT =
   'Publishing makes this a verified Resource that veterans can see.';
@@ -119,7 +118,7 @@ export function DraftEditor({
         <Select
           label="Category"
           value={values.category}
-          onChange={(event) => set('category', event.target.value as ServiceCategory | '')}
+          onValueChange={(category) => set('category', category)}
           error={errors.category}
           placeholder="Choose a category"
           options={options(CATEGORIES, CATEGORY_LABELS)}

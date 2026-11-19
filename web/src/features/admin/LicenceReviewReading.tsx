@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { StatusChip } from '../../components/StatusChip';
-import type { AdminLicenceReview } from './api';
+import type { AdminLicenceReview } from './licence-api';
 import {
   checkChip,
   CONSISTENCY_CHECKS,

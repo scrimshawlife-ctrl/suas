@@ -49,9 +49,7 @@ export function RequestFieldsForm({
         value={fields.category}
         error={errors.category}
         disabled={disabled || categoryLocked}
-        onChange={(event) =>
-          onChange({ category: event.target.value as RequestFields['category'] })
-        }
+        onValueChange={(category) => onChange({ category })}
         onBlur={onBlur}
       />
       <TextArea

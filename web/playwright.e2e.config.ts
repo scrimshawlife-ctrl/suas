@@ -4,8 +4,9 @@ import { defineConfig, devices } from '@playwright/test';
 import { API_PORT, API_URL, WEB_PORT, WEB_URL } from './e2e/config';
 
 // Each run starts a fresh coverage log (e2e/contract.ts). Workers load this file too, so only
-// the main process, which has no TEST_WORKER_INDEX, clears it.
-if (process.env['TEST_WORKER_INDEX'] === undefined) {
+// the main process, which has no TEST_WORKER_INDEX, clears it. A `--list` run (the order guard
+// in src/e2e-order.test.ts) runs no tests, so it keeps the last run's log.
+if (process.env['TEST_WORKER_INDEX'] === undefined && !process.argv.includes('--list')) {
   rmSync(resolve(import.meta.dirname, 'e2e-results', 'coverage'), { recursive: true, force: true });
 }
 

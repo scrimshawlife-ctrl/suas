@@ -39,31 +39,35 @@ The database guard (`assertDisposableDatabase` in `config.ts`) runs whenever `co
 
 ## Layout
 
-- **Numbered root specs** (`01-request.spec.ts` to `16-*.spec.ts`, plus `list-paging` and `request-edit-stale`): the original plan §10 scenarios and early gap fixes. Some numbers repeat (two `15-`, two `16-`) and several overlap the folder suites; they stay as they are until a cleanup is agreed.
-- **Folders**, one per area, numbered within the folder:
-  - `auth/`: landing, sign-in, welcome, gates and sign-out, guards and sign-out, session end
-  - `request/`: the Intake Assistant, the plain form, request status, edit, cancel, deep links, home and list
-  - `serve/`: the board, case commands, alerts, wrap-up
-  - `chat/`: conversation, errors, the offline outbox, thread paging
-  - `support/`: resources, Check-In, trusted contacts, invitations, notifications, consents, crisis, deep links, check-in resume
-  - `admin/`: MFA, overview, resource extraction, draft review, non-admins, consent templates
-  - `multi/`: two or more people at once, named by plan ID (`m1`, `m3`, ...)
-  - `time/`: time-driven flows (`t1` to `t7`)
-  - `cross/`: accessibility at several viewports, double-click safety, browser history
-  - `decided/`: Round 12 decisions (R12.1 to R12.4)
-- Each folder may have a helper file named after it (`auth/auth.ts`, `request/request.ts`, `serve/serve.ts`, `support/support.ts`, `admin/admin.ts`, `chat/chat.ts`, `multi/multi.ts`, `time/time.ts`).
+The six plan §10 end-to-end scenarios sit at the root, `01-` to `06-` (a request through the Intake Assistant, accept and chat, widening, the RED alert, catalog publish, crisis). Playwright walks `e2e/` depth first, sorting each folder's files and subfolders together by name, and a digit sorts before every letter, so these run before the specs in every folder. `03-widening` relies on that, because it expects the boards of other counties to be empty. A root spec that sorts before `03-` (for example `00-setup.spec.ts`), or a folder that does (`00-triage/`), would run first and break it as an apparent product bug. `src/e2e-order.test.ts` (in `npm run check`) reads Playwright's own `--list` order and fails unless only `01-` and `02-` run before `03-widening`; a shard runs a contiguous slice of that order on its own database, so it holds under `--shard` too.
+
+Every other spec lives in a folder, one folder per area. Specs in a folder are numbered in the order a reader should take them (`01-`, `02-`, ...); `multi/` and `time/` use their plan IDs instead, and `cross/` and `decided/` are unnumbered.
+
+- `auth/`: landing, sign-in, welcome, gates and sign-out, guards and sign-out, session end
+- `verify/`: the VA confirmation form, the licence fallback
+- `request/`: the Intake Assistant, the plain form, request status, edit, cancel, deep links, home and list, then the early gap fixes (edit before accept, edit after a stale accept, the plain form under the assistant, a cancelled request leaving the board)
+- `serve/`: the board, case commands, alerts, wrap-up, release and expiry, Back at once after a reload
+- `chat/`: conversation, errors, the offline outbox, thread paging
+- `support/`: resources, Check-In, trusted contacts, invitations, notifications, consents, crisis, deep links, Check-In resume
+- `admin/`: MFA, overview, resource extraction, draft review, non-admins, consent templates, consent template v2
+- `multi/`: two or more people at once, named by plan ID (`m1`, `m3`, ...)
+- `time/`: time-driven flows (`t1` to `t7`)
+- `cross/`: accessibility of the main screens and at several viewports, 320 px reflow, a phone run through a request and crisis, double-click safety, browser history, list paging
+- `decided/`: Round 12 decisions (R12.1 to R12.4)
+
+Each folder may have a helper file named after it (`auth/auth.ts`, `request/request.ts`, `serve/serve.ts`, `support/support.ts`, `admin/admin.ts`, `chat/chat.ts`, `multi/multi.ts`, `time/time.ts`). Some specs overlap others (for example `06-crisis` and `support/07-crisis`); they stay until folding them is agreed, because no test is deleted without a human's sign-off.
 
 ## Shared helpers
 
 - `fixtures.ts`: the suite's `test` and `expect`. Specs import them from here, not from `@playwright/test`. Every browser context a test opens is watched (`watch.ts`) for console errors, page errors, failed requests and 5xx. A test that provokes one on purpose adds a pattern to `allow`. Every `/api/v0` response is checked by `contract.ts`.
 - `contract.ts`: each `/api/v0` response must use a status that `docs/openapi/v0.json` documents for its operation and must match its schema. Each response is also logged to `e2e-results/coverage/*.jsonl`.
-- `helpers.ts`: people with their own browser context (`newPerson`, `signUp`, `newVerifiedVeteran`), sign-in codes (`readSignInCode`), scripted model turns (`scriptModel`), `requestHelp`, database access (`withDb`), time skips (`ageRequest`, `runJobWorkerOnce`), the page clock (`runClock`) and screenshots (`shoot`).
-- `people.ts`: the people a spec acts as, built through the UI — `newVeteran` (a verified Veteran already signed in) and `newHelper` (a second person in their own browser context) — so a spec names who is on screen instead of repeating the account setup.
+- `people.ts`: the one way to make a test user. `newVeteran` signs up a Veteran and passes the ID check (unless `verified: false`), ending on `/home`; `newHelper` signs up a helper in Serve mode, ending on `/serve`. Both live in Santa Clara unless the test names a `county`, and each gets its own browser context.
+- `helpers.ts`: browser contexts and sign-up (`newPerson`, `signUp`, `passIdCheck`), sign-in codes (`readSignInCode`), scripted model turns (`scriptModel`), `requestHelp`, database access (`withDb`), the job worker (`runJobWorkerOnce`), the page clock (`runClock`) and screenshots (`shoot`).
 - The browser does everything a person can do. The API and database are used only for what a person cannot do: reading the fake sign-in code, scripting the fake model, moving time, and seeding lists longer than one page.
 
 ## Time skips
 
-A test moves time by moving one stored timestamp into the past in the e2e database, then runs one job-worker pass (`runJobWorkerOnce`, which is `src/cli/job-worker.ts --once`) so the sweeps act on it. The timestamps include request `submitted_at` (`helpers.ts`), chat `released_at`, consent `expires_at`, session `expires_at`, `last_seen_at` and `mfa_elevated_at` (`time/time.ts`), and Check-In `started_at` (also `time/time.ts`). For timers in the page, `runClock` advances a paused Playwright clock.
+A test moves time by moving one stored timestamp into the past in the e2e database, then runs one job-worker pass (`runJobWorkerOnce`, which is `src/cli/job-worker.ts --once`) so the sweeps act on it. Every time skip lives in `time/time.ts`: request `submitted_at`, chat `released_at`, consent `expires_at`, session `expires_at` and `last_seen_at`, `mfa_elevated_at`, and Check-In `started_at`. For timers in the page, `runClock` advances a paused Playwright clock.
 
 ## UI coverage
 

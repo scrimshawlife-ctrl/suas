@@ -6,6 +6,7 @@ import {
   identityMatchText,
   licenceCommandError,
   licenceLoadError,
+  parseRevokeReason,
   sentAgo,
 } from './licence-labels';
 
@@ -54,5 +55,15 @@ describe('licenceCommandError', () => {
     );
     expect(licenceLoadError(new ApiError(403, 'REVIEWER_RECUSED', 'x'))).toMatch(/stepped back/);
     expect(licenceLoadError(new ApiError(403, 'FORBIDDEN', 'x'))).toBeNull();
+  });
+});
+
+describe('parseRevokeReason', () => {
+  it('accepts only a reason the server accepts', () => {
+    expect(parseRevokeReason('FRAUD')).toBe('FRAUD');
+    expect(parseRevokeReason('REVIEW_ERROR')).toBe('REVIEW_ERROR');
+    expect(parseRevokeReason('fraud')).toBeNull();
+    expect(parseRevokeReason('OTHER')).toBeNull();
+    expect(parseRevokeReason('')).toBeNull();
   });
 });

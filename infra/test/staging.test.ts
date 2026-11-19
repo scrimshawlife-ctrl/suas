@@ -3,6 +3,9 @@
  * in-memory synthesized templates.
  */
 
+import { X509Certificate } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { App } from 'aws-cdk-lib';
 import { Match } from 'aws-cdk-lib/assertions';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -59,12 +62,15 @@ describe('network', () => {
     for (const name of ['lambda']) {
       expect(byService[name]?.VpcEndpointType).toBe('Interface');
       expect(byService[name]?.PrivateDnsEnabled).toBe(true);
+      // R14.1 proposal: one zone, the first isolated subnet; private DNS serves both zones.
+      expect(byService[name]?.SubnetIds).toEqual([
+        { Ref: expect.stringMatching(/^VpcisolatedSubnet1Subnet/) },
+      ]);
     }
   });
 
-  it('allows only Lambda to Proxy to RDS on 5432 (plus migrate to RDS), and HTTPS to endpoints', () => {
-    const databasePort = (port: unknown): boolean =>
-      port === 5432 || JSON.stringify(port).includes('Endpoint.Port');
+  it('allows only Lambda and migrate to RDS on 5432, and HTTPS to endpoints', () => {
+    const databasePort = (port: unknown): boolean => port === 5432;
     const separate = [
       ...ofType(s.backend, 'AWS::EC2::SecurityGroupIngress'),
       ...ofType(s.backend, 'AWS::EC2::SecurityGroupEgress'),
@@ -93,6 +99,26 @@ describe('network', () => {
         });
       }
     }
+    // The database group accepts exactly the Lambda and migrate groups, and each may reach it.
+    const groupOf = (ref: unknown): string =>
+      String((ref as { 'Fn::GetAtt': [string, string] })['Fn::GetAtt'][0]).replace(
+        /[0-9A-F]{8}$/,
+        '',
+      );
+    const intoDatabase = ofType(s.backend, 'AWS::EC2::SecurityGroupIngress')
+      .map(([, r]) => r.Properties)
+      .filter((rule) => groupOf(rule?.GroupId) === 'DatabaseSg');
+    expect(intoDatabase.map((rule) => groupOf(rule?.SourceSecurityGroupId)).sort()).toEqual([
+      'LambdaSg',
+      'MigrateSg',
+    ]);
+    const toDatabase = ofType(s.backend, 'AWS::EC2::SecurityGroupEgress')
+      .map(([, r]) => r.Properties)
+      .filter((rule) => groupOf(rule?.DestinationSecurityGroupId) === 'DatabaseSg');
+    expect(toDatabase.map((rule) => groupOf(rule?.GroupId)).sort()).toEqual([
+      'LambdaSg',
+      'MigrateSg',
+    ]);
   });
 });
 
@@ -112,15 +138,129 @@ describe('database', () => {
     });
   });
 
-  it('is reached through an RDS Proxy that requires TLS and holds the generated secret', () => {
-    s.backend.hasResourceProperties('AWS::RDS::DBProxy', {
-      EngineFamily: 'POSTGRESQL',
-      RequireTLS: true,
-      Auth: [Match.objectLike({ AuthScheme: 'SECRETS' })],
+  // R14.1 proposal (lean synthetic STAGING): no RDS Proxy; TLS to the instance is verified
+  // against the shipped RDS CA bundle, and the instance refuses plain connections.
+  it('has no RDS Proxy: every in-VPC function connects to the instance with verified TLS', () => {
+    s.backend.resourceCountIs('AWS::RDS::DBProxy', 0);
+    s.backend.resourceCountIs('AWS::RDS::DBProxyTargetGroup', 0);
+    s.backend.hasResourceProperties('AWS::RDS::DBParameterGroup', {
+      Parameters: { 'rds.force_ssl': '1' },
     });
     s.backend.hasResourceProperties('AWS::SecretsManager::Secret', {
       GenerateSecretString: Match.objectLike({ SecretStringTemplate: Match.anyValue() }),
     });
+    const [databaseId] = ofType(s.backend, 'AWS::RDS::DBInstance').map(([id]) => id);
+    const poolMax = { 'run.sh': '3', 'job-worker.handler': '3', 'migrate.handler': '1' };
+    for (const [handler, pool] of Object.entries(poolMax)) {
+      const fn = ofType(s.backend, 'AWS::Lambda::Function').find(
+        ([, r]) => r.Properties?.Handler === handler,
+      );
+      const variables = fn?.[1].Properties?.Environment.Variables as Record<string, unknown>;
+      expect(JSON.stringify(variables.DATABASE_URL), handler).toContain(
+        JSON.stringify({ 'Fn::GetAtt': [databaseId, 'Endpoint.Address'] }),
+      );
+      expect(variables.DATABASE_SSL_MODE, handler).toBe('verify');
+      expect(variables.DATABASE_SSL_CA_FILE, handler).toBe('/var/task/rds-global-bundle.crt');
+      expect(variables.DATABASE_POOL_MAX, handler).toBe(pool);
+    }
+  });
+
+  // Review of #325: DATABASE_SSL_MODE=verify only verifies if the file it names is in the code
+  // and holds the root of the CA the instance is issued from.
+  it('ships, in the function code, the RDS CA bundle holding the root of the instance certificate', () => {
+    s.backend.hasResourceProperties('AWS::RDS::DBInstance', {
+      CACertificateIdentifier: 'rds-ca-rsa2048-g1',
+    });
+    const api = ofType(s.backend, 'AWS::Lambda::Function').find(
+      ([, r]) => r.Properties?.Handler === 'run.sh',
+    )?.[1].Properties;
+    const assetHash = String(api?.Code.S3Key).replace(/\.zip$/, '');
+    const assembly = (s.stacks.backend.node.root as App).synth();
+    const bundle = readFileSync(
+      join(assembly.directory, `asset.${assetHash}`, 'rds-global-bundle.crt'),
+      'utf8',
+    );
+    const subjects = (
+      bundle.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? []
+    ).map((pem) => new X509Certificate(pem).subject);
+    expect(subjects).toContainEqual(
+      expect.stringContaining('CN=Amazon RDS us-west-2 Root CA RSA2048 G1'),
+    );
+  });
+
+  // R14.1 (SUAS-specs #100): without a proxy, reserved concurrency is what bounds connections.
+  it('caps API, job-worker and migrate concurrency so connections stay well under db.t4g.micro', () => {
+    const props = (handler: string) =>
+      ofType(s.backend, 'AWS::Lambda::Function').find(
+        ([, r]) => r.Properties?.Handler === handler,
+      )?.[1].Properties;
+    const api = props('run.sh');
+    const worker = props('job-worker.handler');
+    const migrate = props('migrate.handler');
+    expect(api?.ReservedConcurrentExecutions).toBe(15);
+    expect(worker?.ReservedConcurrentExecutions).toBe(2);
+    // The budget counts one migrate connection, so a second concurrent invoke must throttle.
+    expect(migrate?.ReservedConcurrentExecutions).toBe(1);
+    const connections = (p: typeof api) =>
+      Number(p?.ReservedConcurrentExecutions) * Number(p?.Environment.Variables.DATABASE_POOL_MAX);
+    expect(connections(api) + connections(worker) + connections(migrate)).toBe(52);
+    expect(connections(api) + connections(worker) + connections(migrate)).toBeLessThanOrEqual(60);
+  });
+
+  // Review of #325: check the budget against the instance's real limit, not an assumed default.
+  it('pins max_connections at 80, above the connection budget of every in-VPC function', () => {
+    const [[, group] = []] = ofType(s.backend, 'AWS::RDS::DBParameterGroup');
+    const maxConnections = Number(group?.Properties?.Parameters?.max_connections);
+    expect(maxConnections).toBe(80);
+    const budget = ofType(s.backend, 'AWS::Lambda::Function')
+      .map(([, r]) => r.Properties)
+      .filter((p) => p?.VpcConfig !== undefined)
+      .reduce(
+        (sum, p) =>
+          sum +
+          Number(p?.ReservedConcurrentExecutions) *
+            Number(p?.Environment.Variables.DATABASE_POOL_MAX),
+        0,
+      );
+    expect(budget).toBe(52);
+    // superuser_reserved_connections (3) come out of max_connections first.
+    expect(budget).toBeLessThan(maxConnections - 3);
+  });
+
+  // Review of #325 with #322: deploy modes may only block (0) or restore these caps. An unblocked
+  // AWS::NoValue would leave the function unbounded and break the budget the alarm assumes.
+  it('keeps the caps under the deploy workflow: 0 while blocked, 15 and 2 once unblocked', () => {
+    const pipeline = synthesize({ deploymentPipeline: 'true' }).backend;
+    const props = (handler: string) =>
+      ofType(pipeline, 'AWS::Lambda::Function').find(
+        ([, r]) => r.Properties?.Handler === handler,
+      )?.[1].Properties;
+    expect(props('run.sh')?.ReservedConcurrentExecutions).toEqual({
+      'Fn::If': ['ApiBlocked', 0, 15],
+    });
+    expect(props('job-worker.handler')?.ReservedConcurrentExecutions).toEqual({
+      'Fn::If': ['WorkerBlocked', 0, 2],
+    });
+    expect(props('migrate.handler')?.ReservedConcurrentExecutions).toBe(1);
+    // The most any mode allows is every unblocked cap at once: the same 52, under the alarm.
+    const unblocked = (handler: string) => {
+      const p = props(handler);
+      const cap = p?.ReservedConcurrentExecutions;
+      const value = typeof cap === 'object' ? cap['Fn::If'][2] : cap;
+      return Number(value) * Number(p?.Environment.Variables.DATABASE_POOL_MAX);
+    };
+    const budget = ['run.sh', 'job-worker.handler', 'migrate.handler']
+      .map(unblocked)
+      .reduce((a, b) => a + b, 0);
+    expect(budget).toBe(52);
+    const [[, group] = []] = ofType(pipeline, 'AWS::RDS::DBParameterGroup');
+    const [[, alarm] = []] = ofType(pipeline, 'AWS::CloudWatch::Alarm').filter(
+      ([, r]) => r.Properties?.MetricName === 'DatabaseConnections',
+    );
+    expect(budget).toBeLessThan(Number(alarm?.Properties?.Threshold));
+    expect(Number(alarm?.Properties?.Threshold)).toBeLessThan(
+      Number(group?.Properties?.Parameters?.max_connections) - 3,
+    );
   });
 
   it('names nothing the config guard would read as a production database', () => {
@@ -274,18 +414,64 @@ describe('functions', () => {
 });
 
 describe('alarms', () => {
+  const metricFilters = (metricName: RegExp) =>
+    ofType(s.backend, 'AWS::Logs::MetricFilter')
+      .map(([, r]) => r.Properties)
+      .filter((p) => metricName.test(String(p?.MetricTransformations?.[0]?.MetricName)));
+  const alarmsOn = (metricName: RegExp) =>
+    ofType(s.backend, 'AWS::CloudWatch::Alarm')
+      .map(([, r]) => r.Properties)
+      .filter((p) => metricName.test(String(p?.MetricName)));
+
   it('counts the logged failure messages on the API and job worker logs and alarms on them', () => {
-    const filters = ofType(s.backend, 'AWS::Logs::MetricFilter').map(([, r]) => r.Properties);
+    const filters = metricFilters(/FailureMessages$/);
     expect(filters).toHaveLength(2);
     for (const filter of filters) {
       expect(filter?.FilterPattern).toBe('?"job_failed" ?"sweep_failed" ?"chat push failed"');
     }
-    const alarms = ofType(s.backend, 'AWS::CloudWatch::Alarm').map(([, r]) => r.Properties);
+    const alarms = alarmsOn(/FailureMessages$/);
+    expect(alarms).toHaveLength(2);
+    for (const alarm of alarms) expect(alarm?.Threshold).toBe(1);
+  });
+
+  // Review of #325: a lost or refused relay invoke (for example the one endpoint zone being down)
+  // settles the send UNDELIVERABLE; these make it visible. Fields: src/notifications/channels.ts
+  // logEmailSend and lambda-relay-sender.ts finish().
+  it('counts relay ambiguous acknowledgements and refused invokes on the API and job worker logs', () => {
+    const filters = metricFilters(/RelayFailures$/);
+    expect(filters).toHaveLength(2);
+    for (const filter of filters) {
+      // Terms, not a JSON selector: the Node runtime prefixes the job worker's lines with a
+      // timestamp, request id and level. Both outcomes are logged nowhere else in src/.
+      expect(filter?.FilterPattern).toBe('?"relay_ambiguous_ack" ?"relay_unavailable"');
+    }
+    const alarms = alarmsOn(/RelayFailures$/);
     expect(alarms).toHaveLength(2);
     for (const alarm of alarms) {
-      expect(alarm?.Threshold).toBe(1);
-      // No notification target yet.
-      expect(alarm?.AlarmActions).toBeUndefined();
+      expect(alarm).toMatchObject({
+        Threshold: 1,
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      });
+    }
+  });
+
+  // Review of #325: reserved concurrency bounds connections; this shows when the bound is near.
+  it('alarms on the instance at 70 database connections', () => {
+    const [databaseId] = ofType(s.backend, 'AWS::RDS::DBInstance').map(([id]) => id);
+    const [alarm, ...others] = alarmsOn(/^DatabaseConnections$/);
+    expect(others).toHaveLength(0);
+    expect(alarm).toMatchObject({
+      Namespace: 'AWS/RDS',
+      Dimensions: [{ Name: 'DBInstanceIdentifier', Value: { Ref: databaseId } }],
+      Statistic: 'Maximum',
+      Threshold: 70,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+    });
+  });
+
+  it('has no notification target on any alarm yet', () => {
+    for (const [id, alarm] of ofType(s.backend, 'AWS::CloudWatch::Alarm')) {
+      expect(alarm.Properties?.AlarmActions, id).toBeUndefined();
     }
   });
 });

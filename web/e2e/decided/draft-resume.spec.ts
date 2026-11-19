@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../fixtures';
-import { draftTurns, newVerifiedVeteran, scriptModel, uniqueEmail } from '../helpers';
+import { draftTurns, scriptModel, uniqueEmail } from '../helpers';
+import { newVeteran } from '../people';
 
 /** R12.1 (contributor proposal, SUAS-specs #79): the open draft comes back after a reload. */
 const storedDraftId = (page: Page) =>
@@ -10,7 +11,7 @@ test('an open intake draft survives a reload, and its id is dropped on submit an
   browser,
   request,
 }) => {
-  const { page } = await newVerifiedVeteran(browser, request, {
+  const { page } = await newVeteran(browser, request, {
     name: 'Dana R.',
     county: 'Santa Clara',
     label: 'resume',

@@ -1,9 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/errors';
 import { tokenStore } from '../../api/token-store';
 import AdminConsentTemplatesPage from './AdminConsentTemplatesPage';
-import type { ConsentTemplateVersion } from './api';
+import type { ConsentTemplateVersion } from './consent-templates-api';
 import { renderPage } from './test-utils';
 
 const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));
@@ -87,5 +88,42 @@ describe('Consent templates admin page (R9.3)', () => {
         { params: { path: { version: 'red-alert-trusted-contact@2' } } },
       ),
     );
+  });
+
+  // The route takes no Idempotency-Key: publish only moves a DRAFT, so a repeat (a retry after
+  // a lost response) is a 409. The page says so and rereads the list to show the version now.
+  it('a publish answered 409 says it may already be published and rereads the list', async () => {
+    client.POST.mockRejectedValue(new ApiError(409, 'ILLEGAL_TRANSITION', 'x'));
+    const user = userEvent.setup();
+    renderPage(<AdminConsentTemplatesPage />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Publish red-alert-trusted-contact@2' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Publish' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'It may already be published.',
+    );
+    await waitFor(() => expect(client.GET).toHaveBeenCalledTimes(2));
+  });
+
+  // With no key to dedupe on, the page itself must send one publish per confirm.
+  it('sends one publish on a same-tick double click on the confirm button', async () => {
+    client.POST.mockReturnValue(new Promise(() => undefined));
+    const user = userEvent.setup();
+    renderPage(<AdminConsentTemplatesPage />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Publish red-alert-trusted-contact@2' }),
+    );
+    const confirm = within(await screen.findByRole('dialog')).getByRole('button', {
+      name: 'Publish',
+    });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(await screen.findByRole('button', { name: 'Working…' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(client.POST).toHaveBeenCalledTimes(1);
   });
 });

@@ -72,9 +72,9 @@ describe('DispatchingJobQueue', () => {
         bad: () => Promise.reject(new Error('refused')),
       },
       () => undefined,
-      (job) => {
+      async (job, run) => {
+        await run();
         handled.push(job.jobType);
-        return Promise.resolve();
       },
     );
     const tenantId = '00000000-0000-4000-8000-000000000001';

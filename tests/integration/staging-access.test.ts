@@ -136,6 +136,58 @@ describe('D-052 STAGING fixture registry', () => {
     }
   });
 
+  // Review of #325: with ID verification disabled as deployed, D-016 self-attestation alone
+  // opens the gate, once, and each new standing is audited.
+  it('opens the gate by self-attestation with ID verification disabled, auditing it once', async () => {
+    const tenantId = randomUUID();
+    const userId = randomUUID();
+    const app = await stagingApp([{ tenantId, userId }]);
+    try {
+      const pool = app.pool;
+      if (pool === undefined) throw new Error('The test app has no database pool.');
+      expect(app.config.idVerification.mode).toBe('disabled');
+      await createUser(pool, {
+        userId,
+        tenantId,
+        email: syntheticEmail(`staging-attest-${userId.slice(0, 8)}`),
+        status: 'ACTIVE',
+      });
+      const session = await createSession(pool, TEST_SESSION_SECRET, { tenantId, userId });
+      const authorization = `Bearer ${session.credential}`;
+      const resources = () =>
+        app.server.inject({
+          method: 'GET',
+          url: `${API_PREFIX}/resources`,
+          headers: { authorization },
+        });
+      const selfAttest = () =>
+        app.server.inject({
+          method: 'POST',
+          url: `${API_PREFIX}/veterans/me/verification/commands/self-attest`,
+          headers: { authorization, 'idempotency-key': randomUUID() },
+        });
+
+      expect((await resources()).statusCode).toBe(403);
+      expect((await selfAttest()).json()).toMatchObject({
+        method: 'SELF_ATTESTATION',
+        status: 'VERIFIED',
+      });
+      expect((await resources()).statusCode).toBe(200);
+      expect((await selfAttest()).statusCode).toBe(200);
+
+      const audits = await pool.query<{ actor_id: string; payload: Record<string, unknown> }>(
+        `SELECT actor_id, payload FROM audit_events
+          WHERE tenant_id = $1 AND event_type = 'VETERAN_SELF_ATTESTED'`,
+        [tenantId],
+      );
+      expect(audits.rows).toEqual([
+        { actor_id: userId, payload: { method: 'SELF_ATTESTATION', status: 'VERIFIED' } },
+      ]);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('admits nobody when the registry is empty, with demo mode on and off', async () => {
     for (const demo of ['enabled', 'disabled'] as const) {
       const app = await stagingApp([], demo);

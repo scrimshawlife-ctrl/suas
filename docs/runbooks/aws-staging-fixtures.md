@@ -22,9 +22,12 @@ The database is in isolated subnets with no bastion, so the migrate function see
     user outside the registry that can never sign in.
 - A re-run creates nothing new. The result lists counts and the seeded `tenant-id:user-id` pairs, never addresses.
 
-It does not mark anyone ID-verified. VETERAN_VERIFICATION.md §1.1 (0.8.0) says a fake check cannot satisfy the
-request gate in STAGING, so seeded users can help others but cannot request help until a real gate exists. It
-seeds no SUAS admin.
+It does not mark anyone verified, and it seeds no SUAS admin. A seeded user can help others at once. To request
+help, the user opens the request gate the same way anyone does: VETERAN_VERIFICATION.md §21 (released in 0.10.0)
+opens it for a `VERIFIED` row of any of its methods, and a `VERIFIED` `SELF_ATTESTATION` row is written by
+`POST /api/v0/veterans/me/verification/commands/self-attest` ("Tell us you served" on the web Verify page;
+`src/http/routes/veterans.ts`). That works on STAGING whatever the VA mode, unless the user holds an unlifted
+`REVOKED` row.
 
 ## Fixture addresses and sign-in codes (R11.7)
 

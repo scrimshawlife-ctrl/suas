@@ -8,8 +8,9 @@
  *  - The VPC has isolated subnets only. There is no NAT gateway and no internet gateway
  *    route. Lambdas reach AWS through a gateway endpoint (S3) and interface endpoints for
  *    the services the code calls, and nothing else.
- *  - Lambdas reach Postgres through RDS Proxy with TLS. Only the migrate function connects
- *    to the instance directly, because the migrator holds a session advisory lock.
+ *  - Every in-VPC Lambda connects to the RDS instance endpoint directly with verified TLS; the
+ *    Lambda interface endpoint sits in one zone. Lean synthetic STAGING (R14.1 proposal);
+ *    infra/README.md "Before production" restores RDS Proxy and a multi-AZ endpoint.
  *  - Secrets live in Secrets Manager. The application reads configuration from environment
  *    variables only, so each secret is injected as a CloudFormation dynamic reference that
  *    CloudFormation resolves at deploy time; the template never contains the value.
@@ -59,6 +60,15 @@ const LICENCE_REVIEWS_PREFIX = 'licence-reviews/';
  * changes, and move the old pair to the `_PREVIOUS` variables.
  */
 const FINGERPRINT_KEY_ID = 'staging-1';
+// R14.1 (SUAS-specs #100): with no RDS Proxy these caps bound database connections to
+// API 15 x pool 3 + worker 2 x pool 3 + migrate 1 x pool 1 = 52, under db.t4g.micro's ~80 usable.
+const API_RESERVED_CONCURRENCY = 15;
+const JOB_WORKER_RESERVED_CONCURRENCY = 2;
+const MIGRATE_RESERVED_CONCURRENCY = 1;
+// Pinned below the memory formula's default (at most 112 on db.t4g.micro), so the budget above is
+// checked against the limit the instance really has. A static parameter: changing it needs a reboot.
+const DB_MAX_CONNECTIONS = 80;
+const DB_CONNECTIONS_ALARM = 70;
 
 type Env = Record<string, string>;
 
@@ -107,11 +117,6 @@ export class BackendStack extends Stack {
       description: 'Migrate function (connects to the instance directly)',
       allowAllOutbound: false,
     });
-    const proxySg = new ec2.SecurityGroup(this, 'ProxySg', {
-      vpc,
-      description: 'RDS Proxy',
-      allowAllOutbound: false,
-    });
     const dbSg = new ec2.SecurityGroup(this, 'DatabaseSg', {
       vpc,
       description: 'RDS instance',
@@ -123,13 +128,15 @@ export class BackendStack extends Stack {
       allowAllOutbound: false,
     });
 
-    // Lambda -> Proxy -> RDS on 5432, and migrate -> RDS on 5432. Nothing else.
-    proxySg.connections.allowFrom(lambdaSg, ec2.Port.tcp(DB_PORT), 'Lambda to RDS Proxy');
-    lambdaSg.connections.allowTo(proxySg, ec2.Port.tcp(DB_PORT), 'Lambda to RDS Proxy');
-    dbSg.connections.allowFrom(proxySg, ec2.Port.tcp(DB_PORT), 'RDS Proxy to RDS');
-    proxySg.connections.allowTo(dbSg, ec2.Port.tcp(DB_PORT), 'RDS Proxy to RDS');
-    dbSg.connections.allowFrom(migrateSg, ec2.Port.tcp(DB_PORT), 'Migrate to RDS');
-    migrateSg.connections.allowTo(dbSg, ec2.Port.tcp(DB_PORT), 'Migrate to RDS');
+    // Lambda -> RDS and migrate -> RDS on 5432. Nothing else. Migrate keeps its own group
+    // because it needs no HTTPS egress.
+    for (const [sg, label] of [
+      [lambdaSg, 'Lambda'],
+      [migrateSg, 'Migrate'],
+    ] as const) {
+      dbSg.connections.allowFrom(sg, ec2.Port.tcp(DB_PORT), `${label} to RDS`);
+      sg.connections.allowTo(dbSg, ec2.Port.tcp(DB_PORT), `${label} to RDS`);
+    }
     // HTTPS to the interface endpoints and, through the gateway endpoint, S3. These are the
     // only routes out of the subnets, so a wide destination here reaches nothing else.
     endpointSg.connections.allowFrom(lambdaSg, ec2.Port.tcp(443), 'Lambda to VPC endpoints');
@@ -145,10 +152,13 @@ export class BackendStack extends Stack {
     // endpoints while inference and chat push stay off.
     const interfaceEndpoints: ReadonlyArray<readonly [string, ec2.InterfaceVpcEndpointAwsService]> =
       [['LambdaEndpoint', ec2.InterfaceVpcEndpointAwsService.LAMBDA]];
+    // R14.1 proposal: one zone only (the first isolated subnet). Private DNS resolves to that
+    // ENI from both zones over the VPC's local route; losing that zone stops relay invokes.
+    const endpointSubnets: ec2.SubnetSelection = { subnets: vpc.isolatedSubnets.slice(0, 1) };
     for (const [endpointId, service] of interfaceEndpoints) {
       vpc.addInterfaceEndpoint(endpointId, {
         service,
-        subnets: isolated,
+        subnets: endpointSubnets,
         securityGroups: [endpointSg],
         // Only the Lambda security group may reach the endpoints, not the whole VPC CIDR.
         open: false,
@@ -159,7 +169,7 @@ export class BackendStack extends Stack {
     // --------------------------------------------------------------- database
     const dbParameters = new rds.ParameterGroup(this, 'DatabaseParameters', {
       engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_17 }),
-      parameters: { 'rds.force_ssl': '1' },
+      parameters: { 'rds.force_ssl': '1', max_connections: String(DB_MAX_CONNECTIONS) },
     });
     const database = new rds.DatabaseInstance(this, 'Database', {
       instanceIdentifier: `suas-${config.name}`,
@@ -190,28 +200,22 @@ export class BackendStack extends Stack {
     const dbSecret = database.secret;
     if (dbSecret === undefined) throw new Error('The database must have a generated secret.');
 
-    const proxy = database.addProxy('Proxy', {
-      dbProxyName: `suas-${config.name}`,
-      secrets: [dbSecret],
-      vpc,
-      vpcSubnets: isolated,
-      securityGroups: [proxySg],
-      requireTLS: true,
-      iamAuth: false,
-    });
-
     const dbUser = dbSecret.secretValueFromJson('username').unsafeUnwrap();
     const dbPassword = dbSecret.secretValueFromJson('password').unsafeUnwrap();
-    const databaseUrl = (host: string): string =>
-      Fn.join('', [
+    // Every in-VPC function connects to the instance itself (no RDS Proxy, R14.1 proposal), so
+    // each verifies the instance certificate against the shipped RDS CA bundle.
+    const directDatabase: Env = {
+      DATABASE_URL: Fn.join('', [
         'postgresql://',
         dbUser,
         ':',
         dbPassword,
         '@',
-        host,
+        database.dbInstanceEndpointAddress,
         `:${String(DB_PORT)}/${DB_NAME}`,
-      ]);
+      ]),
+      DATABASE_SSL_CA_FILE: `/var/task/${RDS_CA_BUNDLE_FILE}`,
+    };
 
     // ---------------------------------------------------------------- storage
     const assetsBucket = new s3.Bucket(this, 'AssetsBucket', {
@@ -292,8 +296,8 @@ export class BackendStack extends Stack {
       SUAS_MIGRATIONS_MODE: 'off',
       SUAS_STAGING_FIXTURE_REGISTRY: fixtureParameter('fixture-registry'),
       SUAS_STAGING_FIXTURE_MAILBOX: fixtureParameter('fixture-mailbox'),
+      ...directDatabase,
     };
-    const viaProxy: Env = { DATABASE_URL: databaseUrl(proxy.endpoint) };
 
     const functionLogGroups = new Map<string, logs.LogGroup>();
     const newFunction = (
@@ -305,6 +309,7 @@ export class BackendStack extends Stack {
         readonly memory: number;
         readonly timeout: Duration;
         readonly layers?: lambda.ILayerVersion[];
+        readonly reservedConcurrency?: number;
       },
     ): lambda.Function => {
       const logGroup = new logs.LogGroup(this, `${fnId}Logs`, {
@@ -346,6 +351,9 @@ export class BackendStack extends Stack {
         securityGroups: [options.sg],
         environment: options.env,
         ...(options.layers !== undefined ? { layers: options.layers } : {}),
+        ...(options.reservedConcurrency !== undefined
+          ? { reservedConcurrentExecutions: options.reservedConcurrency }
+          : {}),
       });
     };
 
@@ -373,9 +381,9 @@ export class BackendStack extends Stack {
       memory: 512,
       timeout: Duration.seconds(30),
       layers: [webAdapterLayer],
+      reservedConcurrency: API_RESERVED_CONCURRENCY,
       env: {
         ...baseEnv,
-        ...viaProxy,
         SUAS_MIGRATIONS_MODE: 'validate',
         SUAS_HTTP_HOST: '0.0.0.0',
         SUAS_HTTP_PORT: API_PORT,
@@ -389,8 +397,9 @@ export class BackendStack extends Stack {
         SUAS_MODEL_INFERENCE_MODE: 'disabled',
         SUAS_OBJECT_STORAGE_MODE: 's3',
         SUAS_S3_BUCKET: assetsBucket.bucketName,
-        // No identity-check provider is chosen (plan §8 item 2). Fake ID verification
-        // is refused on STAGING (D-052), so the gate stays disabled.
+        // No ID-scan provider is chosen (plan §8 item 2) and fake is refused on STAGING (D-052).
+        // The request gate does not read this: VA confirmation or self-attestation opens it
+        // (VETERAN_VERIFICATION.md §21, released in 0.10.0).
         SUAS_ID_VERIFICATION_MODE: 'disabled',
         // R6.12 is not accepted. Chat still works over REST. The push adapter is not selected.
         SUAS_CHAT_PUSH_MODE: 'disabled',
@@ -407,9 +416,9 @@ export class BackendStack extends Stack {
       sg: lambdaSg,
       memory: 512,
       timeout: Duration.minutes(2),
+      reservedConcurrency: JOB_WORKER_RESERVED_CONCURRENCY,
       env: {
         ...baseEnv,
-        ...viaProxy,
         ...viaEmailRelay,
         // The licence read job reads the images and deletes them when it settles a review.
         SUAS_OBJECT_STORAGE_MODE: 's3',
@@ -426,10 +435,9 @@ export class BackendStack extends Stack {
       sg: migrateSg,
       memory: 512,
       timeout: Duration.minutes(5),
+      reservedConcurrency: MIGRATE_RESERVED_CONCURRENCY,
       env: {
         ...baseEnv,
-        DATABASE_URL: databaseUrl(database.dbInstanceEndpointAddress),
-        DATABASE_SSL_CA_FILE: `/var/task/${RDS_CA_BUNDLE_FILE}`,
         SUAS_MIGRATIONS_MODE: 'apply',
         DATABASE_POOL_MAX: '1',
       },
@@ -558,23 +566,28 @@ export class BackendStack extends Stack {
     // notification target yet: the alarm only shows in the console until one is chosen.
     //   job_failed, sweep_failed: src/jobs/worker.ts (job worker)
     //   chat push failed:         src/chat/send.ts (API, through pino)
+    //   relay_ambiguous_ack, relay_unavailable: the email_send outcome (src/notifications/
+    //   channels.ts, both) when a relay invoke's answer is lost or the invoke is refused, as when
+    //   the one Lambda endpoint zone is down (R14.1). Terms, because the Node runtime prefixes
+    //   the job worker's lines, so a JSON selector would not match them.
     const failureTerms = ['job_failed', 'sweep_failed', 'chat push failed'];
-    for (const [fnId, label] of [
-      ['ApiFunction', 'Api'],
-      ['JobWorkerFunction', 'JobWorker'],
-    ] as const) {
-      const logGroup = functionLogGroups.get(fnId);
-      if (logGroup === undefined) throw new Error(`No log group recorded for ${fnId}.`);
-      const metricName = `${label}FailureMessages`;
-      logGroup.addMetricFilter(`${label}FailureFilter`, {
-        filterPattern: logs.FilterPattern.anyTerm(...failureTerms),
+    const relayFailure = logs.FilterPattern.anyTerm('relay_ambiguous_ack', 'relay_unavailable');
+    const alarmOnLogMatches = (
+      logGroup: logs.LogGroup,
+      id: string,
+      metricName: string,
+      filterPattern: logs.IFilterPattern,
+      description: string,
+    ): void => {
+      logGroup.addMetricFilter(`${id}Filter`, {
+        filterPattern,
         metricNamespace: `Suas/${config.name}`,
         metricName,
         metricValue: '1',
         defaultValue: 0,
       });
-      new cloudwatch.Alarm(this, `${label}FailureAlarm`, {
-        alarmDescription: `${label}: the code logged ${failureTerms.join(', ')}. No notification target yet.`,
+      new cloudwatch.Alarm(this, `${id}Alarm`, {
+        alarmDescription: `${description} No notification target yet.`,
         metric: new cloudwatch.Metric({
           namespace: `Suas/${config.name}`,
           metricName,
@@ -586,7 +599,42 @@ export class BackendStack extends Stack {
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       });
+    };
+    for (const [fnId, label] of [
+      ['ApiFunction', 'Api'],
+      ['JobWorkerFunction', 'JobWorker'],
+    ] as const) {
+      const logGroup = functionLogGroups.get(fnId);
+      if (logGroup === undefined) throw new Error(`No log group recorded for ${fnId}.`);
+      alarmOnLogMatches(
+        logGroup,
+        `${label}Failure`,
+        `${label}FailureMessages`,
+        logs.FilterPattern.anyTerm(...failureTerms),
+        `${label}: the code logged ${failureTerms.join(', ')}.`,
+      );
+      alarmOnLogMatches(
+        logGroup,
+        `${label}RelayFailure`,
+        `${label}RelayFailures`,
+        relayFailure,
+        `${label}: an email relay invoke was refused (relay_unavailable) or its answer lost (relay_ambiguous_ack).`,
+      );
     }
+
+    // Reserved concurrency holds connections to 52; this shows when something else (a manual
+    // session, a leak, a raised cap) pushes them towards max_connections. No target yet either.
+    new cloudwatch.Alarm(this, 'DatabaseConnectionsAlarm', {
+      alarmDescription: `Database connections reached ${String(DB_CONNECTIONS_ALARM)} of max_connections ${String(DB_MAX_CONNECTIONS)}; the reserved-concurrency budget is 52. No notification target yet.`,
+      metric: database.metricDatabaseConnections({
+        statistic: 'Maximum',
+        period: Duration.minutes(5),
+      }),
+      threshold: DB_CONNECTIONS_ALARM,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
 
     new CfnOutput(this, 'ApiUrl', { value: `https://${config.apiHostname}` });
     new CfnOutput(this, 'MigrateFunctionName', {

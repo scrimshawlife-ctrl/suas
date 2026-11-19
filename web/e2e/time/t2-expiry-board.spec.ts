@@ -18,7 +18,7 @@ test('T2: a request past 72 hours leaves the open board at its next 30-second re
   browser,
   request,
 }) => {
-  // 08-release-expiry covers the requester's side; this is the helper's board.
+  // serve/05-release-and-expiry covers the requester's side; this is the helper's board.
   const requester = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',

@@ -4,7 +4,7 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { StatusChip } from '../../components/StatusChip';
 import { cn } from '../../lib/cn';
-import { useResourceDrafts } from './api';
+import { useResourceDrafts } from './drafts-api';
 import type { ResourceDraft } from './draft-form';
 import { ExtractForm } from './ExtractForm';
 import {

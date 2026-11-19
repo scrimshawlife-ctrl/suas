@@ -10,8 +10,9 @@
  * - `assertLoopbackBaseUrl` refuses any non-loopback host, so this smoke can
  *   never be pointed at staging or production.
  *
- * Mutations per run are limited to one cancelled synthetic TRANSPORTATION
- * service request and one completed Check-In. All demo data is synthetic:
+ * Mutations per run are limited to one self-attestation for the demo Veteran
+ * (none once VERIFIED), one cancelled synthetic TRANSPORTATION service request
+ * and one completed Check-In. All demo data is synthetic:
  * emails use @example.invalid, phone numbers use the 555-0100..555-0199 range,
  * and names are obviously fictional.
  */
@@ -223,6 +224,7 @@ export async function authAndCaseSteps(ctx: SmokeContext, email: string): Promis
   const token: string | undefined = ctx.token;
   if (token === undefined) {
     skipAll([
+      'POST /veterans/me/verification/commands/self-attest',
       'GET /veterans/me',
       'POST /cases (open, replay-safe)',
       'GET /cases/{caseId}/service-requests',
@@ -234,7 +236,20 @@ export async function authAndCaseSteps(ctx: SmokeContext, email: string): Promis
     return;
   }
 
-  // Step 5: the authenticated veteran profile exposes the seeded open case.
+  // Step 5: D-016 self-attestation opens the R9.1 request gate, as a Veteran does on
+  // the Verify page; the demo seed does not pre-verify (VETERAN_VERIFICATION.md §21).
+  await ctx.check('POST /veterans/me/verification/commands/self-attest', async () => {
+    const res = await ctx.api('POST', '/api/v0/veterans/me/verification/commands/self-attest', {
+      token,
+      idempotencyKey: ctx.key(),
+      body: {},
+    });
+    ctx.expect(res.status === 200, `expected 200, got ${res.status}`);
+    ctx.expect(str(res.json, 'status') === 'VERIFIED', 'expected status VERIFIED');
+    return `status ${res.status}, ${str(res.json, 'method') ?? 'unknown'} VERIFIED`;
+  });
+
+  // Step 6: the authenticated veteran profile exposes the seeded open case.
   await ctx.check('GET /veterans/me', async () => {
     const res = await ctx.api('GET', '/api/v0/veterans/me', { token });
     ctx.expect(res.status === 200, `expected 200, got ${res.status}`);
@@ -263,7 +278,7 @@ export async function authAndCaseSteps(ctx: SmokeContext, email: string): Promis
     return;
   }
 
-  // Step 6: opening the case is idempotent for a repeated key.
+  // Step 7: opening the case is idempotent for a repeated key.
   const openKey = ctx.key();
   await ctx.check('POST /cases (open, replay-safe)', async () => {
     const first = await ctx.api('POST', '/api/v0/cases', {
@@ -294,7 +309,7 @@ export async function authAndCaseSteps(ctx: SmokeContext, email: string): Promis
     return `case ${String(caseId)} stable across replay`;
   });
 
-  // Step 7: the seeded case covers every coordinated category.
+  // Step 8: the seeded case covers every coordinated category.
   await ctx.check('GET /cases/{caseId}/service-requests', async () => {
     const res = await ctx.api('GET', `/api/v0/cases/${String(caseId)}/service-requests`, { token });
     ctx.expect(res.status === 200, `expected 200, got ${res.status}`);
@@ -310,7 +325,7 @@ export async function authAndCaseSteps(ctx: SmokeContext, email: string): Promis
     return `status ${res.status}, ${list.length} service requests`;
   });
 
-  // Step 8: a single service request reads back with a status.
+  // Step 9: a single service request reads back with a status.
   const requestId: string | null = foodRequestId;
   if (requestId === null) {
     ctx.skip('GET /service-requests/{id}');
@@ -324,11 +339,17 @@ export async function authAndCaseSteps(ctx: SmokeContext, email: string): Promis
     });
   }
 
-  // Step 9: create a synthetic TRANSPORTATION request, submit it, then cancel it.
+  // Step 10: create a synthetic TRANSPORTATION request, submit it, then cancel it.
   const createKey = ctx.key();
   const transportBody = {
     category: 'TRANSPORTATION',
-    details: { purpose: 'Smoke test ride (synthetic)' },
+    // Only the draft fields `draftDetailsInput` allows (src/intake/tools.ts); unknown keys 400.
+    // SUBMIT refuses a ride without a meeting place (src/coordination/requests.ts).
+    details: {
+      summary: 'Smoke test ride (synthetic)',
+      meeting_place: 'Smoke test pickup (synthetic)',
+      destination: 'Smoke test drop-off (synthetic)',
+    },
   };
   await ctx.check('POST /cases/{caseId}/service-requests (create, replay)', async () => {
     const created = await ctx.api('POST', `/api/v0/cases/${String(caseId)}/service-requests`, {
@@ -399,7 +420,7 @@ export async function authAndCaseSteps(ctx: SmokeContext, email: string): Promis
 }
 
 /**
- * Steps 10 to 18: resources (including cursor pagination), consents, notifications,
+ * Steps 11 to 19: resources (including cursor pagination), consents, notifications,
  * trusted contacts, follow-ups, the immediate-resources crisis read, the Check-In
  * journey, the web surface, and logout.
  *
@@ -419,7 +440,7 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
       : ctx.api(method, path, { ...extra, token });
   };
 
-  // 10. Resources per category, then cursor pagination.
+  // 11. Resources per category, then cursor pagination.
   await ctx.check('resources: one or more per category', async () => {
     const categories = ['FOOD', 'TRANSPORTATION', 'SHELTER', 'PEER_SUPPORT'];
     for (const category of categories) {
@@ -467,7 +488,7 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
     return `cursor page returned a different resource (${secondId})`;
   });
 
-  // 11. Consents.
+  // 12. Consents.
   await ctx.check('consents: at least one ACTIVE', async () => {
     const res = await withAuth('GET', '/api/v0/consents');
     ctx.expect(res.status === 200, `consents expected 200, got ${res.status}`);
@@ -478,7 +499,7 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
     return `${active.length} ACTIVE consent(s)`;
   });
 
-  // 12. Notifications.
+  // 13. Notifications.
   await ctx.check('notifications: list', async () => {
     const res = await withAuth('GET', '/api/v0/notifications');
     ctx.expect(res.status === 200, `notifications expected 200, got ${res.status}`);
@@ -487,7 +508,7 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
     return `${notifications.length} notification(s)`;
   });
 
-  // 13. Trusted contacts.
+  // 14. Trusted contacts.
   await ctx.check('trusted-contacts: at least one', async () => {
     const res = await withAuth('GET', '/api/v0/trusted-contacts');
     ctx.expect(res.status === 200, `trusted-contacts expected 200, got ${res.status}`);
@@ -499,7 +520,7 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
     return `${contacts.length} trusted contact(s)`;
   });
 
-  // 14. Follow-ups for the case opened in the earlier steps.
+  // 15. Follow-ups for the case opened in the earlier steps.
   if (ctx.caseId === undefined) {
     ctx.skip('follow-ups: at least one');
   } else {
@@ -516,7 +537,7 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
     });
   }
 
-  // 15. Immediate resources (the crisis read).
+  // 16. Immediate resources (the crisis read).
   await ctx.check('immediate-resources: crisis read', async () => {
     const res = await withAuth('GET', '/api/v0/immediate-resources');
     ctx.expect(res.status === 200, `immediate-resources expected 200, got ${res.status}`);
@@ -525,7 +546,7 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
     return `state ${state}`;
   });
 
-  // 16. Check-In journey.
+  // 17. Check-In journey.
   if (ctx.token === undefined) {
     ctx.skip('check-ins: create, respond, complete');
   } else {
@@ -580,7 +601,7 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
     });
   }
 
-  // 17. Web surface (not under /api/v0, no cookie).
+  // 18. Web surface (not under /api/v0, no cookie).
   await ctx.check('web: /app and /app/chat', async () => {
     const app = await ctx.api('GET', '/app');
     ctx.expect(app.status < 500, `GET /app expected status < 500, got ${app.status}`);
@@ -590,7 +611,7 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
     return `/app ${app.status}, /app/chat ${chat.status}`;
   });
 
-  // 18. Logout invalidates the session.
+  // 19. Logout invalidates the session.
   if (ctx.token === undefined) {
     ctx.skip('auth: logout invalidates the session');
   } else {
@@ -605,8 +626,8 @@ export async function surfaceSteps(ctx: SmokeContext): Promise<void> {
 }
 
 /**
- * Runs the full LOCAL demo smoke: authenticate and open a case (steps 1 to 9),
- * then the remaining surface steps (10 to 18). Returns the tallies plus every
+ * Runs the full LOCAL demo smoke: authenticate and open a case (steps 1 to 10),
+ * then the remaining surface steps (11 to 19). Returns the tallies plus every
  * recorded step result.
  */
 export async function runSmoke(

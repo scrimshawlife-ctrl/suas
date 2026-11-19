@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { createUser } from '../../src/identity/index.js';
+import { findCaseSettlement } from '../../src/settlement/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { appPool, bearer, openRedCase } from '../helpers/actors.js';
 import { testDatabaseUrl, validEnv } from '../helpers/env.js';
@@ -92,6 +93,26 @@ async function claimAndActivate(
     payload: { reason: 'withdrawn before resolving' },
   });
   return { responder, headers };
+}
+
+/** Opens a RED case in a fresh tenant and resolves it, returning its Settlement id. */
+async function resolvedCase() {
+  const opened = await openRedCase(app);
+  const { tenantId, supportCase, headers: veteranHeaders } = opened;
+  const { responder, headers } = await claimAndActivate(
+    tenantId,
+    supportCase.caseId,
+    veteranHeaders,
+  );
+  const resolved = await app.server.inject({
+    method: 'POST',
+    url: `/api/v0/cases/${supportCase.caseId}/commands/resolve`,
+    headers: { ...headers, 'idempotency-key': `resolve-${randomUUID()}` },
+    payload: settlementPayload(responder.userId),
+  });
+  expect(resolved.statusCode).toBe(200);
+  const settlementId = resolved.json().settlement_id as string;
+  return { ...opened, accepterHeaders: headers, settlementId };
 }
 
 describe('POST /api/v0/cases/:id/commands/resolve', () => {
@@ -253,5 +274,39 @@ describe('POST /api/v0/cases/:id/commands/resolve', () => {
       headers,
     });
     expect(foreignList.statusCode).toBe(404);
+  });
+
+  it('gives 404 for a Settlement id from another tenant, by route and by lookup', async () => {
+    const a = await resolvedCase();
+    const b = await resolvedCase();
+    const get = (caseId: string, settlementId: string, headers: Record<string, string>) =>
+      app.server.inject({
+        method: 'GET',
+        url: `/api/v0/cases/${caseId}/settlements/${settlementId}`,
+        headers,
+      });
+    const unknown = await get(a.supportCase.caseId, randomUUID(), a.accepterHeaders);
+    expect(unknown.statusCode).toBe(404);
+
+    // Tenant A's helper and Veteran, on their own case and on tenant B's, with B's id.
+    for (const headers of [a.accepterHeaders, a.headers]) {
+      for (const caseId of [a.supportCase.caseId, b.supportCase.caseId]) {
+        const foreign = await get(caseId, b.settlementId, headers);
+        expect(foreign.statusCode).toBe(404);
+        expect(foreign.json()).toEqual(unknown.json());
+      }
+    }
+
+    // The lookup itself keys on the tenant: B's own case and id, asked as tenant A.
+    const pool = appPool(app);
+    const caseB = b.supportCase.caseId;
+    for (const cycles of ['all', 'current'] as const) {
+      expect(await findCaseSettlement(pool, a.tenantId, caseB, b.settlementId, cycles)).toBe(
+        undefined,
+      );
+      expect(
+        (await findCaseSettlement(pool, b.tenantId, caseB, b.settlementId, cycles))?.settlementId,
+      ).toBe(b.settlementId);
+    }
   });
 });

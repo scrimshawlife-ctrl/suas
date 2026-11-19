@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useLicenceImage, type LicenceImageSide } from './api';
+import { useLicenceImage, type LicenceImageSide } from './licence-api';
 import { QueryNotice } from './QueryNotice';
 
 const LABELS: Readonly<Record<LicenceImageSide, string>> = {

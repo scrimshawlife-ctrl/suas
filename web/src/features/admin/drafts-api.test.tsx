@@ -4,13 +4,16 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, TIMEOUT_CODE } from '../../api/errors';
 import { useCommandKey } from '../../api/idempotency';
-import { tokenStore } from '../../api/token-store';
+import { createQueryClient } from '../../app/query-client';
 import {
-  useCreateConsentTemplate,
+  useDiscardDraft,
   useEditDraft,
-  useLicenceCommand,
-  useLicenceReviews,
-} from './api';
+  usePublishDraft,
+  useResourceDraft,
+  useResourceDrafts,
+} from './drafts-api';
+import { useCreateConsentTemplate } from './consent-templates-api';
+import { useLicenceCommand } from './licence-api';
 import { makeDraft } from './test-utils';
 
 const client = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }));
@@ -22,7 +25,10 @@ const keyOf = (call: number) =>
     'Idempotency-Key'
   ];
 
-beforeEach(() => client.POST.mockReset());
+beforeEach(() => {
+  client.GET.mockReset();
+  client.POST.mockReset();
+});
 
 function makeWrapper() {
   const queryClient = new QueryClient();
@@ -187,39 +193,68 @@ describe('useCommandKey', () => {
   });
 });
 
-describe('licence review queue', () => {
-  it('sends nothing without a session token, then loads once signed in', async () => {
-    tokenStore.clear();
-    client.GET.mockReset().mockResolvedValue({
-      data: { reviews: [], limit: 20, next_cursor: null },
+// A 409 (the draft moved on) or a 403 (no longer allowed) leaves the cached status stale.
+describe.each([
+  [409, 'ILLEGAL_TRANSITION'],
+  [403, 'FORBIDDEN'],
+] as const)('a %i on a draft command', (status, errorCode) => {
+  it.each([
+    ['publish', usePublishDraft, 'PUBLISHED'],
+    ['discard', useDiscardDraft, 'REJECTED'],
+  ] as const)('%s: the open draft rereads and shows its state now', async (_, useCommand, now) => {
+    client.GET.mockResolvedValueOnce({ data: draft }).mockResolvedValueOnce({
+      data: makeDraft({ status: now }),
     });
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useLicenceReviews(), { wrapper });
-    expect(result.current.fetchStatus).toBe('idle');
-    expect(client.GET).not.toHaveBeenCalled();
-    act(() => tokenStore.setToken('tok', { mfaElevated: true }));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(client.GET).toHaveBeenCalledTimes(1);
-  });
-
-  // The client gate is the session only; MFA is the server's (gate() in
-  // src/http/routes/admin-licence-reviews.ts) and the admin route guard's. The queue read is
-  // sent, and the 403 MFA_REQUIRED it gets is the query's error, shown with no data.
-  it('with a session that is not MFA-elevated, the queue read gets the server 403 and no rows', async () => {
-    tokenStore.setToken('tok', { mfaElevated: false });
-    client.GET.mockReset().mockRejectedValue(
-      new ApiError(403, 'MFA_REQUIRED', 'Confirm it is you.'),
-    );
+    client.POST.mockRejectedValue(new ApiError(status, errorCode, 'x'));
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
-    const { result } = renderHook(() => useLicenceReviews(), { wrapper });
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error).toMatchObject({ status: 403, code: 'MFA_REQUIRED' });
-    expect(result.current.data).toBeUndefined();
-    expect(client.GET).toHaveBeenCalledTimes(1);
+    const { result } = renderHook(
+      () => ({
+        query: useResourceDraft(draft.resource_draft_id),
+        command: useCommand(draft.resource_draft_id),
+      }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.query.data?.status).toBe('DRAFT'));
+
+    await act(async () => {
+      await result.current.command.mutateAsync(undefined).catch(() => undefined);
+    });
+    await waitFor(() => expect(result.current.query.data?.status).toBe(now));
+    expect(client.GET).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['publish', usePublishDraft],
+    ['discard', useDiscardDraft],
+  ] as const)('%s: the draft queue rereads when it is opened next', async (_, useCommand) => {
+    const LIST = '/api/v0/admin/resource-drafts';
+    client.GET.mockResolvedValue({
+      data: {
+        builder: { available: true, message: null },
+        drafts: [draft],
+        limit: 20,
+        next_cursor: null,
+      },
+    });
+    client.POST.mockRejectedValue(new ApiError(status, errorCode, 'x'));
+    // The app's client: a list read in the last 15 s is shown from cache unless invalidated.
+    const queryClient = createQueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const listReads = () => client.GET.mock.calls.filter(([path]) => path === LIST).length;
+    const queue = renderHook(() => useResourceDrafts('DRAFT'), { wrapper });
+    await waitFor(() => expect(queue.result.current.isSuccess).toBe(true));
+    queue.unmount();
+
+    const { result } = renderHook(() => useCommand(draft.resource_draft_id), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync(undefined).catch(() => undefined);
+    });
+    renderHook(() => useResourceDrafts('DRAFT'), { wrapper });
+    await waitFor(() => expect(listReads()).toBe(2));
   });
 });

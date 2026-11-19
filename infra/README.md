@@ -94,12 +94,12 @@ Hostnames must be inside `rootDomain`, because certificates are validated in the
 
 ## Stacks
 
-| Stack                  | Region    | Contents                                                                                                                                                                                                                                            |
-| ---------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), the Resend mail records carried over from Cloudflare, `NameServers` output. No apex or `www` record. No SES identity (suas #305).                                                        |
-| `Suas-Staging-WebCert` | us-east-1 | DNS-validated ACM certificate for the web hostname (CloudFront needs us-east-1). Passed to the web stack with `crossRegionReferences`.                                                                                                              |
-| `Suas-Staging-Backend` | us-west-2 | VPC (isolated subnets), VPC endpoints, RDS PostgreSQL 17 + RDS Proxy, secrets, assets bucket, API / job worker / migrate Lambdas, the email relay Lambda (outside the VPC), HTTP API with a custom domain, EventBridge Scheduler. No WebSocket API. |
-| `Suas-Staging-Web`     | us-west-2 | Private S3 bucket, CloudFront distribution with OAC, `staging.suasqrf.com` A and AAAA alias, `web/dist` upload (only if `web/dist` exists at synth time).                                                                                           |
+| Stack                  | Region    | Contents                                                                                                                                                                                                                                                               |
+| ---------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), the Resend mail records carried over from Cloudflare, `NameServers` output. No apex or `www` record. No SES identity (suas #305).                                                                           |
+| `Suas-Staging-WebCert` | us-east-1 | DNS-validated ACM certificate for the web hostname (CloudFront needs us-east-1). Passed to the web stack with `crossRegionReferences`.                                                                                                                                 |
+| `Suas-Staging-Backend` | us-west-2 | VPC (isolated subnets), VPC endpoints, RDS PostgreSQL 17 (no RDS Proxy, R14.1 proposal), secrets, assets bucket, API / job worker / migrate Lambdas, the email relay Lambda (outside the VPC), HTTP API with a custom domain, EventBridge Scheduler. No WebSocket API. |
+| `Suas-Staging-Web`     | us-west-2 | Private S3 bucket, CloudFront distribution with OAC, `staging.suasqrf.com` A and AAAA alias, `web/dist` upload (only if `web/dist` exists at synth time).                                                                                                              |
 
 ### Email: Resend through a relay (suas #305)
 
@@ -129,8 +129,15 @@ it one rendered message with its idempotency key; it sends with the Resend adapt
 
 - 2 AZs, isolated subnets only. **No NAT gateway, no internet gateway, no route off the VPC.**
 - S3 gateway endpoint, plus one interface endpoint (private DNS on) for each AWS service the code calls.
-- Security groups: Lambda to RDS Proxy on 5432, RDS Proxy to RDS on 5432, migrate function to RDS on 5432.
-  Lambda egress is HTTPS only, and only the endpoint security group accepts it. The database is not public.
+- The Lambda interface endpoint is in **one zone** only, the first isolated subnet (R14.1 proposal, lean synthetic
+  STAGING). Private DNS resolves `lambda.us-west-2.amazonaws.com` to that endpoint's address from every subnet, and
+  the VPC's local route carries traffic between zones, so the API and job worker reach it from either zone. If that
+  zone fails, email relay invokes fail until it recovers. The sender treats a lost connection as ambiguous
+  (`src/notifications/lambda-relay-sender.ts`), so those sends settle `UNDELIVERABLE` (`relay_ambiguous_ack`), not
+  retried.
+- Security groups: the Lambda group (API, job worker) and the migrate group to RDS on 5432, nothing else into the
+  database group. Lambda egress is otherwise HTTPS only, and only the endpoint security group accepts it. The
+  database is not public.
 - The licence reader (suas-specs R10.1, proposal) would need the job worker to reach the reader's host, which is
   outside AWS. That egress waits on the owner's R9.2 decision (question 8) and is not built here: no NAT, no
   `SUAS_SCRY_BASE_URL`, and `SUAS_LICENCE_READER_MODE=disabled` on every function. Before staging turns the reader
@@ -167,15 +174,30 @@ decision.
 
 PostgreSQL 17, `db.t4g.micro`, single-AZ, 20 GB gp3, encrypted, 7-day backups, deletion protection, final
 snapshot on delete. `rds.force_ssl=1`. Credentials are generated into Secrets Manager (URL-safe
-characters). RDS Proxy requires TLS. AWS docs checked on 2026-11-05: RDS Proxy supports RDS for PostgreSQL 17
-in US West (Oregon), and no instance class restriction is documented (burstable T classes are named as good
-candidates).
+characters).
 
-The Lambdas connect with `DATABASE_SSL_MODE=verify`, with no CA file for the Proxy (its certificates chain to
-Amazon Trust Services roots, which Node already trusts). The **migrate** function connects to the instance
-directly (the migrator holds a session advisory lock; plan §4.1) and needs the RDS CA bundle, which is shipped
-as `assets/rds-global-bundle.crt` (public certificates, from `truststore.pki.rds.amazonaws.com`) and set as
-`DATABASE_SSL_CA_FILE`.
+There is **no RDS Proxy** (R14.1 proposal, lean synthetic STAGING). The API, job worker and migrate functions all
+connect to the instance endpoint directly, with `DATABASE_SSL_MODE=verify` (the certificate chain and the host name,
+as libpq's `verify-full`; `src/db/pool.ts`) and the RDS CA bundle, shipped as
+`assets/rds-global-bundle.crt` (public certificates, from `truststore.pki.rds.amazonaws.com`) and set as
+`DATABASE_SSL_CA_FILE`. The migrate function would need a direct connection anyway (the migrator holds a session
+advisory lock; plan §4.1). Each warm API or job-worker container holds up to `DATABASE_POOL_MAX=3` connections
+(migrate holds 1), and without a proxy nothing pools them across containers. The account's Lambda concurrency
+limit (1000) does not bound them, so reserved concurrency does (R14.1, SUAS-specs #100): **15 on the API, 2 on
+the job worker and 1 on migrate**. Budget: 15 × 3 + 2 × 3 + 1 × 1 (migrate) = **52 connections**. The parameter
+group pins `max_connections` at **80**, below the `db.t4g.micro` default (LEAST({DBInstanceClassMemory/9531392}, 5000), at
+most 112 for 1024 MiB), so the budget is checked against the limit the instance has; 3 of those are reserved for superusers. It is a static
+parameter: changing it needs a reboot. Tests keep the budget at 60 or less and below `max_connections` less 3, and an
+alarm fires at 70 connections (see "Alarms"). Lambda throttles a 16th concurrent API request instead of letting it fail
+on a database connection. Under the deploy workflow (`-c deploymentPipeline=true`, `lib/deployment-mode.ts`) the
+API and job worker are set to 0 while a mode blocks them and back to 15 and 2 once it does not; migrate keeps 1.
+See "Known risks".
+
+### Cost
+
+Rough monthly estimates in `us-west-2` from the R14.1 proposal, not checked against an AWS bill: about **$55/mo as
+first designed** versus about **$26/mo lean**. The difference is RDS Proxy (about $22/mo, billed at its 2-vCPU
+minimum) and the Lambda interface endpoint's second zone (about $7.30/mo per zone). See "Before production".
 
 ### Lambda package
 
@@ -187,11 +209,11 @@ bundle (`src/provenance/build-info.ts`, `src/db/migration-files.ts`). The AWS SD
 the runtime. Provenance (`SUAS_BUILD_COMMIT`, `SUAS_BUILD_TIMESTAMP`) is stamped from git at synth time
 (the commit date, so the template is stable per commit), or from `-c buildCommit=` / `-c buildTimestamp=`.
 
-| Function   | Handler                | Network SG | Notes                                                                               |
-| ---------- | ---------------------- | ---------- | ----------------------------------------------------------------------------------- |
-| API        | `run.sh` (Web Adapter) | Lambda     | Node 22, arm64, 512 MB, 30 s, behind the HTTP API. `SUAS_MIGRATIONS_MODE=validate`. |
-| Job worker | `job-worker.handler`   | Lambda     | One pass (`job-worker --once`): widening sweep, then one batch of due outbox jobs   |
-| Migrate    | `migrate.handler`      | Migrate    | `migrate apply`, direct to RDS. Invoked by hand. No custom resource.                |
+| Function   | Handler                | Network SG | Notes                                                                                                        |
+| ---------- | ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------ |
+| API        | `run.sh` (Web Adapter) | Lambda     | Node 22, arm64, 512 MB, 30 s, behind the HTTP API. `SUAS_MIGRATIONS_MODE=validate`. Reserved concurrency 15. |
+| Job worker | `job-worker.handler`   | Lambda     | One pass (`job-worker --once`): widening sweep, then one batch of due outbox jobs. Reserved concurrency 2.   |
+| Migrate    | `migrate.handler`      | Migrate    | `migrate apply`, direct to RDS. Invoked by hand. No custom resource. Reserved concurrency 1.                 |
 
 EventBridge Scheduler invokes the job worker every minute (the Scheduler minimum for a rate). Overlapping runs are
 safe because jobs are claimed with leases. The two handlers `src/aws/job-worker-lambda.ts` and
@@ -211,8 +233,8 @@ worker, with its id `SUAS_FINGERPRINT_KEY_ID=staging-1` as a plain value. To rot
 `SUAS_FINGERPRINT_KEY_PREVIOUS` / `_PREVIOUS_ID`, set a new key and id, and deploy. `SUAS_SCRY_API_TOKEN` (64
 generated characters) is the licence reader's bearer token and goes to the job worker only; the same value is set
 on the reader. No role has `secretsmanager:GetSecretValue`.
-Rotating a secret needs a redeploy. The API and job worker functions connect as the generated master
-user (`suas_admin`, an `rds_superuser`), the same user the Proxy and the migrate function use.
+Rotating a secret needs a redeploy. The API, job worker and migrate functions all connect to the instance as the
+generated master user (`suas_admin`, an `rds_superuser`).
 
 ### Environment variables (API function)
 
@@ -226,8 +248,8 @@ each function's environment is checked against the application's own config vali
 | `SUAS_ALLOW_REAL_EXTERNAL_EFFECTS`                                                              | `false`                                                                                                                              |
 | `SUAS_SESSION_SECRET`                                                                           | secret (Secrets Manager)                                                                                                             |
 | `SUAS_FINGERPRINT_KEY`, `SUAS_FINGERPRINT_KEY_ID`                                               | secret (Secrets Manager), `staging-1`; API and job worker only                                                                       |
-| `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<proxy endpoint>:5432/suas` (migrate uses the instance address, not the proxy)                   |
-| `DATABASE_SSL_MODE`, `DATABASE_POOL_MAX`                                                        | `verify`, `3` on the API and job worker; the migrate function sets `DATABASE_POOL_MAX` to `1`                                        |
+| `DATABASE_URL`                                                                                  | secret: `postgresql://user:password@<instance address>:5432/suas` on every in-VPC function (no RDS Proxy, R14.1 proposal)            |
+| `DATABASE_SSL_MODE`, `DATABASE_SSL_CA_FILE`, `DATABASE_POOL_MAX`                                | `verify`, `/var/task/rds-global-bundle.crt`, `3` on the API and job worker; the migrate function sets `DATABASE_POOL_MAX` to `1`     |
 | `SUAS_MIGRATIONS_MODE`                                                                          | `validate` (the migrate function uses `apply`; the job worker uses `off`)                                                            |
 | `SUAS_BROWSER_AUTH_MODE`, `SUAS_BROWSER_TENANT_ID`                                              | `email_otp`, the `browserTenantId` context                                                                                           |
 | `SUAS_EMAIL_MODE`, `SUAS_EMAIL_RELAY_FUNCTION`                                                  | `resend`, the relay function name (API and job worker). `RESEND_API_KEY` and `SUAS_EMAIL_FROM` are set on the relay only.            |
@@ -301,7 +323,12 @@ method, path and status per request, never bodies: no code in `src/intake`, `src
 
 Each of the API and job-worker log groups has a metric filter for the messages the code logs on failure:
 `job_failed` and `sweep_failed` (`src/jobs/worker.ts`) and `chat push failed` (`src/chat/send.ts`). An alarm per
-group fires on one or more in 5 minutes. **There is no notification target yet**, so the alarms only show in the
+group fires on one or more in 5 minutes. A second filter and alarm on each of those groups count the email relay
+failures, `relay_ambiguous_ack` (the invoke's answer was lost) and `relay_unavailable` (Lambda refused the invoke),
+from the `email_send` outcome line (`src/notifications/channels.ts`); losing the one Lambda endpoint zone shows here.
+They match terms, because the Node runtime prefixes the job worker's lines. An alarm on the instance's
+`DatabaseConnections` (maximum over 5 minutes) fires at 70, between the budget of 52 and `max_connections` 80.
+**There is no notification target yet**, so the alarms only show in the
 CloudWatch console until someone picks a topic (an SNS topic and subscriber are not created here). The inline
 job dispatcher in the API logs a different message (`[suas] job <type> failed`, `src/app.ts`) that these filters
 do not match.
@@ -407,6 +434,15 @@ owner decision.
   adapter remains in `src/realtime/` and is not selected. Chat over REST does not need it.
 - **Endpoint availability by zone.** An interface endpoint cannot be created in a zone that does not offer the
   service. If a deploy fails for that reason, pass `-c availabilityZones=us-west-2a,us-west-2b` (or other zones).
+  The Lambda endpoint uses the first zone listed.
+- **One Lambda endpoint zone.** If that zone fails, email relay invokes fail until it recovers and those sends
+  settle `UNDELIVERABLE`, not retried; the relay failure alarms show it (see "Network", "Alarms"). Mitigation: an
+  endpoint in the second zone (about $7.30/mo) before any real Veteran data, or sooner if the owner decides.
+- **Database connections without RDS Proxy.** Each warm API or job-worker container keeps up to 3 connections
+  open, including while Lambda has frozen it, until the container is retired. Reserved concurrency (API 15, job
+  worker 2, migrate 1) holds the total to 52 (see "Database"); `max_connections` is pinned at 80 and an alarm fires
+  at 70. Nothing in the database limits connections per role. The cap also limits staging throughput: past 15 concurrent API requests, Lambda throttles. Every cold
+  container opens TLS straight to the instance.
 - **Cold starts and the API Gateway limit.** The HTTP API integration times out after 29 seconds. Inference is
   disabled, so this template does not make a Bedrock call.
 - `npm audit` reports a moderate `minimatch` issue bundled inside `aws-cdk-lib` itself; it affects build-time code
@@ -422,3 +458,5 @@ Not needed for synthetic staging, required before any real Veteran data (plan §
   generated master user, which is an `rds_superuser`. Only the migrate function needs schema-change rights.
 - Secret rotation: a rotation needs a redeploy while secrets are injected as environment variables.
 - A notification target for the alarms, and a CSP on the web distribution.
+- Restore RDS Proxy (or an equivalent connection pooler) for the API and job worker, and place the Lambda interface
+  endpoint in every zone the functions run in. Lean synthetic STAGING removed both (R14.1 proposal).

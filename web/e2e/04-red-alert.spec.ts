@@ -1,7 +1,8 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { API_URL } from './config';
-import { newPerson, newVerifiedVeteran, shoot, signUp, uniqueEmail, withDb } from './helpers';
+import { newPerson, shoot, signUp, uniqueEmail, withDb } from './helpers';
+import { newVeteran } from './people';
 
 const sessionToken = (page: Page) =>
   page.evaluate(() => sessionStorage.getItem('suas.session') ?? '');
@@ -10,7 +11,7 @@ test('a RED Check-In alerts the trusted contact who holds a RED grant', async ({
   browser,
   request,
 }) => {
-  const veteran = await newVerifiedVeteran(browser, request, {
+  const veteran = await newVeteran(browser, request, {
     name: 'Marcus T.',
     county: 'Santa Clara',
     label: 'checkin',
