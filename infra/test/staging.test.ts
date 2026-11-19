@@ -482,9 +482,12 @@ describe('alarms', () => {
     });
   });
 
-  it('has no notification target on any alarm yet', () => {
+  it('delivers alarm and recovery notifications for every alarm', () => {
     for (const [id, alarm] of ofType(s.backend, 'AWS::CloudWatch::Alarm')) {
-      expect(alarm.Properties?.AlarmActions, id).toBeUndefined();
+      expect(alarm.Properties?.AlarmActions, id).toEqual([
+        { Ref: expect.stringMatching(/^AlarmTopic/) },
+      ]);
+      expect(alarm.Properties?.OKActions, id).toEqual(alarm.Properties?.AlarmActions);
     }
   });
 });

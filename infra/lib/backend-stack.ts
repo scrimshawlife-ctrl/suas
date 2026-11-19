@@ -16,12 +16,24 @@
  *    CloudFormation resolves at deploy time; the template never contains the value.
  */
 
-import { CfnOutput, Duration, Fn, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import {
+  ArnFormat,
+  CfnOutput,
+  CfnParameter,
+  Duration,
+  Fn,
+  RemovalPolicy,
+  Stack,
+  type StackProps,
+} from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { AccessLogFormat } from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -62,8 +74,8 @@ const LICENCE_REVIEWS_PREFIX = 'licence-reviews/';
  * changes, and move the old pair to the `_PREVIOUS` variables.
  */
 const FINGERPRINT_KEY_ID = 'staging-1';
-// R14.1 (SUAS-specs #100): with no RDS Proxy these caps bound database connections to
-// API 15 x pool 3 + worker 2 x pool 3 + migrate 1 x pool 1 = 52, under db.t4g.micro's ~80 usable.
+// R14.1 (SUAS-specs #100): nominal active-pool budget, requiring live session qualification:
+// API 15 x pool 3 + worker 2 x pool 3 + migrate 1 x pool 1 = 52, with max_connections pinned to 80 (reserved slots reduce usable capacity).
 const API_RESERVED_CONCURRENCY = 15;
 const JOB_WORKER_RESERVED_CONCURRENCY = 2;
 const MIGRATE_RESERVED_CONCURRENCY = 1;
@@ -471,9 +483,9 @@ export class BackendStack extends Stack {
         vaVerify.function.functionName,
       );
       vaVerify.function.grantInvoke(apiFunction);
-      new CfnOutput(this, 'VaVerifySecretName', {
-        description: 'Put the LLC-owned VA sandbox key here by hand (see infra/README.md).',
-        value: vaVerify.secret.secretName,
+      new CfnOutput(this, 'VaVerifySecretArn', {
+        description: 'Externally owned VA sandbox secret; no key value is exposed.',
+        value: vaVerify.secretArn,
       });
     }
     apiFunction.addToRolePolicy(
@@ -573,8 +585,39 @@ export class BackendStack extends Stack {
     }
 
     // ------------------------------------------------------------------ alarms
-    // Count the failure messages the code logs and alarm on any in five minutes. There is no
-    // notification target yet: the alarm only shows in the console until one is chosen.
+    const alarmEmail = new CfnParameter(this, 'AlarmEmail', {
+      type: 'String',
+      noEcho: true,
+      allowedPattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$',
+      description: 'Private operator email; confirm the SNS subscription before operation.',
+    });
+    const alarmTopic = new sns.Topic(this, 'AlarmTopic', { topicName: 'Suas-Staging-Alarms' });
+    alarmTopic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        principals: [new iam.ServicePrincipal('cloudwatch.amazonaws.com')],
+        actions: ['sns:Publish'],
+        resources: [alarmTopic.topicArn],
+        conditions: {
+          StringEquals: { 'aws:SourceAccount': this.account },
+          ArnLike: {
+            'aws:SourceArn': this.formatArn({
+              service: 'cloudwatch',
+              resource: 'alarm',
+              resourceName: 'Suas-*',
+              arnFormat: ArnFormat.COLON_RESOURCE_NAME,
+            }),
+          },
+        },
+      }),
+    );
+    alarmTopic.addSubscription(new subscriptions.EmailSubscription(alarmEmail.valueAsString));
+    const alarmAction = new cloudwatchActions.SnsAction(alarmTopic);
+    const notify = (alarm: cloudwatch.Alarm): void => {
+      alarm.addAlarmAction(alarmAction);
+      alarm.addOkAction(alarmAction);
+    };
+    new CfnOutput(this, 'AlarmTopicArn', { value: alarmTopic.topicArn });
+    // Count existing content-free failure messages and notify on ALARM and recovery.
     //   job_failed, sweep_failed: src/jobs/worker.ts (job worker)
     //   chat push failed:         src/chat/send.ts (API, through pino)
     //   relay_ambiguous_ack, relay_unavailable: the email_send outcome (src/notifications/
@@ -597,19 +640,21 @@ export class BackendStack extends Stack {
         metricValue: '1',
         defaultValue: 0,
       });
-      new cloudwatch.Alarm(this, `${id}Alarm`, {
-        alarmDescription: `${description} No notification target yet.`,
-        metric: new cloudwatch.Metric({
-          namespace: `Suas/${config.name}`,
-          metricName,
-          statistic: 'Sum',
-          period: Duration.minutes(5),
+      notify(
+        new cloudwatch.Alarm(this, `${id}Alarm`, {
+          alarmDescription: description,
+          metric: new cloudwatch.Metric({
+            namespace: `Suas/${config.name}`,
+            metricName,
+            statistic: 'Sum',
+            period: Duration.minutes(5),
+          }),
+          threshold: 1,
+          evaluationPeriods: 1,
+          comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
         }),
-        threshold: 1,
-        evaluationPeriods: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      );
     };
     for (const [fnId, label] of [
       ['ApiFunction', 'Api'],
@@ -633,8 +678,7 @@ export class BackendStack extends Stack {
       );
     }
 
-    // The secret is deployed with a placeholder, so until the operator stores the key every call
-    // is refused this way. Terms, not a JSON selector: the Node runtime prefixes these lines too.
+    // Missing, unreadable or malformed external keys fail closed and notify the operator.
     if (vaVerify !== undefined) {
       alarmOnLogMatches(
         vaVerify.logGroup,
@@ -645,19 +689,20 @@ export class BackendStack extends Stack {
       );
     }
 
-    // Reserved concurrency holds connections to 52; this shows when something else (a manual
-    // session, a leak, a raised cap) pushes them towards max_connections. No target yet either.
-    new cloudwatch.Alarm(this, 'DatabaseConnectionsAlarm', {
-      alarmDescription: `Database connections reached ${String(DB_CONNECTIONS_ALARM)} of max_connections ${String(DB_MAX_CONNECTIONS)}; the reserved-concurrency budget is 52. No notification target yet.`,
-      metric: database.metricDatabaseConnections({
-        statistic: 'Maximum',
-        period: Duration.minutes(5),
+    // 52 is a nominal active-pool budget, not a hard ceiling on frozen/old sessions or other clients.
+    notify(
+      new cloudwatch.Alarm(this, 'DatabaseConnectionsAlarm', {
+        alarmDescription: `Database connections reached ${String(DB_CONNECTIONS_ALARM)} of max_connections ${String(DB_MAX_CONNECTIONS)}; the nominal active-pool budget is 52.`,
+        metric: database.metricDatabaseConnections({
+          statistic: 'Maximum',
+          period: Duration.minutes(5),
+        }),
+        threshold: DB_CONNECTIONS_ALARM,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       }),
-      threshold: DB_CONNECTIONS_ALARM,
-      evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    );
 
     // The stage is $default, so the execute-api endpoint is already the bare API origin.
     new CfnOutput(this, 'ApiUrl', {

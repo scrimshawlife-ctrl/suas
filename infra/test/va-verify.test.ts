@@ -44,23 +44,18 @@ describe('VA verify function', () => {
     const [, api] = functionByHandler(off.backend, 'run.sh') ?? [];
     const variables = api?.Properties?.Environment.Variables as Record<string, unknown>;
     expect(Object.keys(variables).filter((k) => k.startsWith('SUAS_VA_CONFIRMATION'))).toEqual([]);
-    expect(Object.keys(off.backend.toJSON().Outputs)).not.toContain('VaVerifySecretName');
+    expect(Object.keys(off.backend.toJSON().Outputs)).not.toContain('VaVerifySecretArn');
   });
 
   // The deploy-time switch: only `vaSandbox=true` adds the construct's resources.
-  it('adds its function, role, secret and log group only with vaSandbox=true', () => {
+  it('adds its function, role and log group only with vaSandbox=true', () => {
     const vaVerifyTypes = (t: Template) =>
       Object.entries(resourcesOf(t))
         .filter(([id]) => id.startsWith('VaVerify'))
         .map(([, r]) => r.Type);
     expect(vaVerifyTypes(off.backend)).toEqual([]);
     expect(vaVerifyTypes(on.backend)).toEqual(
-      expect.arrayContaining([
-        'AWS::IAM::Role',
-        'AWS::Lambda::Function',
-        'AWS::Logs::LogGroup',
-        'AWS::SecretsManager::Secret',
-      ]),
+      expect.arrayContaining(['AWS::IAM::Role', 'AWS::Lambda::Function', 'AWS::Logs::LogGroup']),
     );
   });
 
@@ -70,26 +65,38 @@ describe('VA verify function', () => {
     const variables = fn?.Properties?.Environment.Variables as Record<string, unknown>;
     expect(Object.keys(variables).sort()).toEqual(['SUAS_ENV', 'SUAS_VA_CONFIRMATION_SECRET_ID']);
     expect(variables.SUAS_ENV).toBe('STAGING');
-    expect(JSON.stringify(variables.SUAS_VA_CONFIRMATION_SECRET_ID)).toContain('VaVerifyApiKey');
+    expect(JSON.stringify(variables.SUAS_VA_CONFIRMATION_SECRET_ID)).toContain(
+      'VaSandboxSecretArn',
+    );
     expect(JSON.stringify(fn)).not.toMatch(/DATABASE_URL|ProxySg|DatabaseSg|LambdaSg|Session/);
-    expect(Object.keys(on.backend.toJSON().Outputs)).toContain('VaVerifySecretName');
+    expect(Object.keys(on.backend.toJSON().Outputs)).toContain('VaVerifySecretArn');
   });
 
-  it('holds only the VA key in its secret, as a placeholder the operator replaces', () => {
-    const secrets = ofType(on.backend, 'AWS::SecretsManager::Secret').filter(([id]) =>
-      id.startsWith('VaVerifyApiKey'),
-    );
-    expect(secrets).toHaveLength(1);
-    const generated = secrets[0]?.[1].Properties?.GenerateSecretString;
-    expect(JSON.parse(generated.SecretStringTemplate)).toEqual({
-      SUAS_VA_CONFIRMATION_API_KEY: '',
-    });
+  it('requires an external same-region ARN with no default and never owns that secret', () => {
+    expect(
+      ofType(on.backend, 'AWS::SecretsManager::Secret').filter(([id]) => id.startsWith('VaVerify')),
+    ).toEqual([]);
+    const parameter = on.backend.toJSON().Parameters.VaSandboxSecretArn;
+    expect(parameter.Default).toBeUndefined();
+    const pattern = new RegExp(parameter.AllowedPattern);
+    expect(
+      pattern.test(
+        'arn:aws:secretsmanager:us-west-2:123456789012:secret:suas/staging/va-sandbox-ABC123',
+      ),
+    ).toBe(true);
+    for (const bad of [
+      '',
+      '*',
+      'secret-name',
+      'arn:aws:secretsmanager:us-east-2:123456789012:secret:suas/staging/va-sandbox-ABC123',
+    ])
+      expect(pattern.test(bad)).toBe(false);
   });
 
   it('lets only its role read its secret, and its role writes logs and reads that secret only', () => {
     const role = roleOf(on.backend, 'va-verify.handler');
     const readers = policies(on.backend).filter((p) =>
-      p.statements.some((st) => JSON.stringify(st.Resource).includes('VaVerifyApiKey')),
+      p.statements.some((st) => JSON.stringify(st.Resource).includes('VaSandboxSecretArn')),
     );
     expect(readers.map((p) => p.roles)).toEqual([[role]]);
     const own = policies(on.backend).filter((p) => p.roles.includes(role));
@@ -98,7 +105,7 @@ describe('VA verify function', () => {
       const actions = [st.Action].flat() as string[];
       expect(actions.every((a) => /^(secretsmanager|logs):/.test(a))).toBe(true);
       if (actions.some((a) => a.startsWith('secretsmanager:'))) {
-        expect(JSON.stringify(st.Resource)).toContain('VaVerifyApiKey');
+        expect(JSON.stringify(st.Resource)).toContain('VaSandboxSecretArn');
       }
     }
   });
@@ -114,9 +121,14 @@ describe('VA verify function', () => {
     expect(reads[0]).toMatchObject({
       Effect: 'Allow',
       Action: 'secretsmanager:GetSecretValue',
-      Condition: { StringEquals: { 'secretsmanager:VersionStage': 'AWSCURRENT' } },
+      Condition: {
+        StringEquals: {
+          'secretsmanager:VersionStage': 'AWSCURRENT',
+          'aws:ResourceAccount': { Ref: 'AWS::AccountId' },
+        },
+      },
     });
-    expect(JSON.stringify(reads[0]?.Resource)).toContain('VaVerifyApiKey');
+    expect(JSON.stringify(reads[0]?.Resource)).toContain('VaSandboxSecretArn');
   });
 
   // Review of #326: the secret ships with a placeholder; a refusal for want of a key shows here.
@@ -154,7 +166,7 @@ describe('VA verify function', () => {
       ComparisonOperator: 'GreaterThanOrEqualToThreshold',
       TreatMissingData: 'notBreaching',
     });
-    expect(alarm?.AlarmActions).toBeUndefined();
+    expect(alarm?.AlarmActions).toEqual([{ Ref: expect.stringMatching(/^AlarmTopic/) }]);
   });
 
   it('may be invoked by the API role only, through an identity policy scoped to its ARN', () => {
