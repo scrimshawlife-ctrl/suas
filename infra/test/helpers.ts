@@ -1,19 +1,31 @@
 import { App } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
+import type { DnsStack } from '../lib/dns-stack.js';
 import { createStagingApp, type StagingStacks } from '../lib/staging.js';
+import type { WebCertStack } from '../lib/web-cert-stack.js';
+
+/** The default (custom-domain) layout, where every stack exists. */
+type AllStacks = StagingStacks & { readonly dns: DnsStack; readonly webCert: WebCertStack };
 
 export interface Synthesized {
-  readonly stacks: StagingStacks;
+  readonly stacks: AllStacks;
   readonly dns: Template;
   readonly webCert: Template;
   readonly backend: Template;
   readonly web: Template;
 }
 
-/** Synthesizes the staging app in memory. Offline: no lookups, no credentials. */
+/**
+ * Synthesizes the staging app in memory. Offline: no lookups, no credentials. For contexts
+ * that drop the Dns or WebCert stack, call createStagingApp directly.
+ */
 export function synthesize(context: Record<string, string> = {}): Synthesized {
   const app = new App({ context });
-  const stacks = createStagingApp(app);
+  const { dns, webCert, ...rest } = createStagingApp(app);
+  if (dns === undefined || webCert === undefined) {
+    throw new Error('synthesize() expects the Dns and WebCert stacks; this context drops one.');
+  }
+  const stacks: AllStacks = { ...rest, dns, webCert };
   return {
     stacks,
     dns: Template.fromStack(stacks.dns),

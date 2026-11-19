@@ -37,7 +37,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
 import { EXPECTED_SCHEMA_VERSION } from '../../src/db/schema-version.js';
 import { RELEASE_MANIFEST, SPEC_VERSION } from '../../src/release/pins.js';
-import { REGION, type EnvironmentConfig } from './config.js';
+import type { EnvironmentConfig } from './config.js';
 import { RDS_CA_BUNDLE_FILE, suasLambdaCode } from './lambda-code.js';
 import { applyDeploymentMode, deploymentPipelineEnabled } from './deployment-mode.js';
 import { EmailRelay } from './email-relay.js';
@@ -45,7 +45,8 @@ import { VaVerify } from './va-verify.js';
 
 export interface BackendStackProps extends StackProps {
   readonly config: EnvironmentConfig;
-  readonly zone: route53.IHostedZone;
+  /** Absent when customDomains is false: the API is served on its execute-api URL. */
+  readonly zone?: route53.IHostedZone;
 }
 
 const DB_NAME = 'suas';
@@ -95,7 +96,7 @@ export class BackendStack extends Stack {
     this.zoneNames =
       config.availabilityZones.length > 0
         ? [...config.availabilityZones]
-        : [Fn.select(0, Fn.getAzs(REGION)), Fn.select(1, Fn.getAzs(REGION))];
+        : [Fn.select(0, Fn.getAzs(config.region)), Fn.select(1, Fn.getAzs(config.region))];
     const isolated: ec2.SubnetSelection = { subnetType: ec2.SubnetType.PRIVATE_ISOLATED };
 
     // ---------------------------------------------------------------- network
@@ -277,7 +278,7 @@ export class BackendStack extends Stack {
       SUAS_RELEASE_MANIFEST: RELEASE_MANIFEST,
       SUAS_ALLOW_REAL_EXTERNAL_EFFECTS: 'false',
       SUAS_SESSION_SECRET: sessionSecret.secretValue.unsafeUnwrap(),
-      SUAS_AWS_REGION: REGION,
+      SUAS_AWS_REGION: config.region,
       SUAS_BROWSER_AUTH_MODE: 'disabled',
       SUAS_EMAIL_MODE: 'disabled',
       SUAS_SMS_MODE: 'sink',
@@ -371,10 +372,13 @@ export class BackendStack extends Stack {
       SUAS_EMAIL_RELAY_FUNCTION: emailRelay.function.functionName,
     };
 
+    // Without custom domains the CloudFront URL is known only after the first Web deploy.
+    const corsOrigin = zone !== undefined ? `https://${config.webHostname}` : config.webOrigin;
+
     const webAdapterLayer = lambda.LayerVersion.fromLayerVersionArn(
       this,
       'WebAdapterLayer',
-      `arn:aws:lambda:${REGION}:${WEB_ADAPTER_LAYER_PUBLISHER}:layer:LambdaAdapterLayerArm64:${String(config.webAdapterLayerVersion)}`,
+      `arn:aws:lambda:${config.region}:${WEB_ADAPTER_LAYER_PUBLISHER}:layer:LambdaAdapterLayerArm64:${String(config.webAdapterLayerVersion)}`,
     );
 
     const apiFunction = newFunction('ApiFunction', {
@@ -393,7 +397,7 @@ export class BackendStack extends Stack {
         SUAS_BROWSER_TENANT_ID: config.browserTenantId,
         // R11.3 (D-038): the v1 web client's origin, which calls this API with Bearer. A
         // non-empty allowlist makes the /app session cookie SameSite=None (src/http/routes/ui.ts).
-        SUAS_CORS_ALLOWED_ORIGINS: `https://${config.webHostname}`,
+        ...(corsOrigin !== undefined ? { SUAS_CORS_ALLOWED_ORIGINS: corsOrigin } : {}),
         ...viaEmailRelay,
         // R2.15 is not approved. The Bedrock adapter is not selected.
         SUAS_MODEL_INFERENCE_MODE: 'disabled',
@@ -502,36 +506,16 @@ export class BackendStack extends Stack {
       }),
     );
     // ---------------------------------------------------- certificate and domains
-    const certificate = new acm.Certificate(this, 'ApiCertificate', {
-      domainName: config.apiHostname,
-      validation: acm.CertificateValidation.fromDns(zone),
-    });
-    const regionalDomain = (domainId: string, domainName: string): apigw.DomainName =>
-      new apigw.DomainName(this, domainId, {
-        domainName,
-        certificate,
-        securityPolicy: apigw.SecurityPolicy.TLS_1_2,
-      });
-    const aliasTo = (recordId: string, hostname: string, domain: apigw.DomainName): void => {
-      new route53.ARecord(this, recordId, {
-        zone,
-        recordName: hostname,
-        target: route53.RecordTarget.fromAlias(
-          new route53Targets.ApiGatewayv2DomainProperties(
-            domain.regionalDomainName,
-            domain.regionalHostedZoneId,
-          ),
-        ),
-      });
-    };
+    // Without a zone there is no certificate or custom domain: clients use the execute-api URL.
+    const apiDomain =
+      zone !== undefined ? apiCustomDomain(this, config.apiHostname, zone) : undefined;
 
     // HTTP API: every route goes to the API function. No request or response bodies, paths,
     // query strings or client addresses are logged; the access log is a fixed metadata record.
-    const apiDomain = regionalDomain('ApiDomain', config.apiHostname);
     const httpApi = new apigw.HttpApi(this, 'HttpApi', {
       apiName: `suas-${config.name}-api`,
       createDefaultStage: false,
-      disableExecuteApiEndpoint: true,
+      disableExecuteApiEndpoint: apiDomain !== undefined,
       defaultIntegration: new apigwIntegrations.HttpLambdaIntegration(
         'ApiIntegration',
         apiFunction,
@@ -549,7 +533,7 @@ export class BackendStack extends Stack {
       httpApi,
       autoDeploy: true,
       throttle: { rateLimit: 50, burstLimit: 100 },
-      domainMapping: { domainName: apiDomain },
+      ...(apiDomain !== undefined ? { domainMapping: { domainName: apiDomain } } : {}),
       accessLogSettings: {
         destination: new apigw.LogGroupLogDestination(accessLogs),
         format: AccessLogFormat.custom(
@@ -563,7 +547,9 @@ export class BackendStack extends Stack {
         ),
       },
     });
-    aliasTo('ApiAlias', config.apiHostname, apiDomain);
+    if (zone !== undefined && apiDomain !== undefined) {
+      apiAlias(this, config.apiHostname, zone, apiDomain);
+    }
 
     // ------------------------------------------------------------------- jobs
     // One pass of the job worker each minute (outbox drain plus request widening).
@@ -672,7 +658,10 @@ export class BackendStack extends Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    new CfnOutput(this, 'ApiUrl', { value: `https://${config.apiHostname}` });
+    // The stage is $default, so the execute-api endpoint is already the bare API origin.
+    new CfnOutput(this, 'ApiUrl', {
+      value: apiDomain !== undefined ? `https://${config.apiHostname}` : httpApi.apiEndpoint,
+    });
     new CfnOutput(this, 'MigrateFunctionName', {
       description: 'Invoke once after each deploy that adds migrations.',
       value: migrateFunction.functionName,
@@ -683,4 +672,40 @@ export class BackendStack extends Stack {
       value: emailRelay.secret.secretName,
     });
   }
+}
+
+/** The API's regional custom domain with its DNS-validated certificate. */
+function apiCustomDomain(
+  stack: Stack,
+  hostname: string,
+  zone: route53.IHostedZone,
+): apigw.DomainName {
+  const certificate = new acm.Certificate(stack, 'ApiCertificate', {
+    domainName: hostname,
+    validation: acm.CertificateValidation.fromDns(zone),
+  });
+  return new apigw.DomainName(stack, 'ApiDomain', {
+    domainName: hostname,
+    certificate,
+    securityPolicy: apigw.SecurityPolicy.TLS_1_2,
+  });
+}
+
+/** Created after the stage so construct (and template) order stays as before. */
+function apiAlias(
+  stack: Stack,
+  hostname: string,
+  zone: route53.IHostedZone,
+  domain: apigw.DomainName,
+): void {
+  new route53.ARecord(stack, 'ApiAlias', {
+    zone,
+    recordName: hostname,
+    target: route53.RecordTarget.fromAlias(
+      new route53Targets.ApiGatewayv2DomainProperties(
+        domain.regionalDomainName,
+        domain.regionalHostedZoneId,
+      ),
+    ),
+  });
 }

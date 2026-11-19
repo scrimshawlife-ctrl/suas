@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * CDK app entry. Nothing here reads from AWS: the account comes from CDK_DEFAULT_ACCOUNT
- * at deploy time, the region is fixed, and no context lookup is used.
+ * at deploy time, the region from context (default us-west-2), and no context lookup is used.
  */
 
 import { App } from 'aws-cdk-lib';

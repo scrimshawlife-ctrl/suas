@@ -14,46 +14,53 @@ import { WebCertStack } from './web-cert-stack.js';
 import { WebStack } from './web-stack.js';
 
 export interface StagingStacks {
-  readonly dns: DnsStack;
-  readonly webCert: WebCertStack;
+  /** Absent when customDomains is false. */
+  readonly dns: DnsStack | undefined;
+  /** Absent when customDomains is false or webCertificateArn names a certificate made by CLI. */
+  readonly webCert: WebCertStack | undefined;
   readonly backend: BackendStack;
   readonly web: WebStack;
 }
 
 export function createStagingApp(app: App): StagingStacks {
   const config = loadEnvironmentConfig(app.node);
-  const env = stackEnv();
+  const env = stackEnv(config);
   const prefix = `Suas-${config.name === 'staging' ? 'Staging' : config.name}`;
 
   // Shared by every environment: the hosted zone.
-  const dns = new DnsStack(app, 'Suas-Dns', {
-    env,
-    rootDomain: config.rootDomain,
-    crossRegionReferences: true,
-    description: 'SUAS Route 53 hosted zone and mail records',
-  });
+  const dns = config.customDomains
+    ? new DnsStack(app, 'Suas-Dns', {
+        env,
+        rootDomain: config.rootDomain,
+        crossRegionReferences: true,
+        description: 'SUAS Route 53 hosted zone and mail records',
+      })
+    : undefined;
 
-  const webCert = new WebCertStack(app, `${prefix}-WebCert`, {
-    env: { ...env, region: 'us-east-1' },
-    crossRegionReferences: true,
-    zone: dns.zone,
-    webHostname: config.webHostname,
-    description: `SUAS ${config.name} CloudFront certificate (us-east-1)`,
-  });
+  const webCert =
+    dns !== undefined && config.webCertificateArn === undefined
+      ? new WebCertStack(app, `${prefix}-WebCert`, {
+          env: { ...env, region: 'us-east-1' },
+          crossRegionReferences: true,
+          zone: dns.zone,
+          webHostname: config.webHostname,
+          description: `SUAS ${config.name} CloudFront certificate (us-east-1)`,
+        })
+      : undefined;
 
   const backend = new BackendStack(app, `${prefix}-Backend`, {
     env,
     config,
-    zone: dns.zone,
+    zone: dns?.zone,
     description: `SUAS ${config.name} backend: VPC, RDS, API, jobs. Inference and chat push stay off.`,
   });
 
   const web = new WebStack(app, `${prefix}-Web`, {
     env,
-    crossRegionReferences: true,
-    zone: dns.zone,
+    crossRegionReferences: webCert !== undefined,
+    zone: dns?.zone,
     webHostname: config.webHostname,
-    certificate: webCert.certificate,
+    certificate: webCert?.certificate ?? config.webCertificateArn,
     description: `SUAS ${config.name} web app: S3 and CloudFront`,
   });
 

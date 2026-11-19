@@ -1,6 +1,7 @@
 /**
  * The web SPA: a private S3 bucket behind CloudFront with Origin Access Control, on the
  * web hostname, HTTPS only, with unknown paths answered by index.html (client-side routes).
+ * Without a zone and certificate it serves on the distribution's own cloudfront.net domain.
  *
  * `web/dist` is uploaded only when it exists at synth time, so a synth works before the web
  * app has been built. Build it with VITE_SUAS_API_BASE_URL set to the API origin first.
@@ -9,7 +10,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
-import type * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -22,10 +23,11 @@ import { deploymentPipelineEnabled } from './deployment-mode.js';
 import { repoRoot } from './lambda-code.js';
 
 export interface WebStackProps extends StackProps {
-  readonly zone: route53.IHostedZone;
+  /** With `certificate`, serves `webHostname`; without both, the CloudFront domain. */
+  readonly zone?: route53.IHostedZone;
   readonly webHostname: string;
-  /** Certificate for `webHostname`, from the us-east-1 stack. */
-  readonly certificate: acm.ICertificate;
+  /** Certificate for `webHostname`: from the us-east-1 stack, or the ARN of one made by CLI. */
+  readonly certificate?: acm.ICertificate | string;
 }
 
 export class WebStack extends Stack {
@@ -35,6 +37,13 @@ export class WebStack extends Stack {
   constructor(scope: Construct, id: string, props: WebStackProps) {
     super(scope, id, props);
     const pipeline = deploymentPipelineEnabled(this);
+    if ((props.zone === undefined) !== (props.certificate === undefined)) {
+      throw new Error('WebStack needs both a zone and a certificate, or neither.');
+    }
+    const certificate =
+      typeof props.certificate === 'string'
+        ? acm.Certificate.fromCertificateArn(this, 'Certificate', props.certificate)
+        : props.certificate;
 
     this.bucket = new s3.Bucket(this, 'SiteBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -54,8 +63,7 @@ export class WebStack extends Stack {
 
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultRootObject: 'index.html',
-      domainNames: [props.webHostname],
-      certificate: props.certificate,
+      ...(certificate !== undefined ? { domainNames: [props.webHostname], certificate } : {}),
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
@@ -82,10 +90,15 @@ export class WebStack extends Stack {
       errorResponses: [spaFallback(403), spaFallback(404)],
     });
 
-    const target = route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(this.distribution));
-    const recordName = props.webHostname;
-    new route53.ARecord(this, 'WebAlias', { zone: props.zone, recordName, target });
-    new route53.AaaaRecord(this, 'WebAliasIpv6', { zone: props.zone, recordName, target });
+    if (props.zone !== undefined) {
+      const zone = props.zone;
+      const target = route53.RecordTarget.fromAlias(
+        new targets.CloudFrontTarget(this.distribution),
+      );
+      const recordName = props.webHostname;
+      new route53.ARecord(this, 'WebAlias', { zone, recordName, target });
+      new route53.AaaaRecord(this, 'WebAliasIpv6', { zone, recordName, target });
+    }
 
     const distDir = path.join(repoRoot, 'web', 'dist');
     if (existsSync(path.join(distDir, 'index.html'))) {
@@ -133,6 +146,8 @@ export class WebStack extends Stack {
       if (assets !== undefined) siteFiles.node.addDependency(assets);
     }
 
-    new CfnOutput(this, 'WebUrl', { value: `https://${props.webHostname}` });
+    const webHost =
+      props.zone !== undefined ? props.webHostname : this.distribution.distributionDomainName;
+    new CfnOutput(this, 'WebUrl', { value: `https://${webHost}` });
   }
 }
