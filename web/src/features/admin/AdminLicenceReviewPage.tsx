@@ -6,30 +6,22 @@ import { BackLink } from '../../components/BackLink';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { RadioCardGroup } from '../../components/RadioCardGroup';
-import { Select } from '../../components/Select';
 import { StatusChip } from '../../components/StatusChip';
-import { useSingleFlight } from '../../lib/single-flight';
-import { useAdminLicenceReview, useLicenceCommand, type AdminLicenceReview } from './api';
-import { ConfirmDialog } from './ConfirmDialog';
+import type { AdminLicenceReview } from './licence-api';
 import {
   CHECKLIST,
-  DECLINE_REASONS,
   declineReasonLabel,
-  licenceCommandError,
   licenceLoadError,
-  REVOKE_REASONS,
   revokeReasonLabel,
   sentAgo,
   statusChip,
   type ChecklistKey,
-  type DeclineReason,
-  type RevokeReason,
 } from './licence-labels';
+import { LicenceDecisionDialogs } from './LicenceDecisionDialogs';
 import { LicenceReviewImages } from './LicenceReviewImages';
 import { ConflictingReview, formatWhen, LicenceReviewReading } from './LicenceReviewReading';
 import { QueryNotice } from './QueryNotice';
-
-type Dialog = 'approve' | 'confirm' | 'decline' | 'recuse' | 'revoke' | 'revoke_conflict' | null;
+import { isDesignation, useLicenceDecision } from './useLicenceDecision';
 
 const NO_TICKS: Record<ChecklistKey, boolean> = {
   selfie_matches: false,
@@ -76,60 +68,20 @@ function DecidedRecord({ review }: { review: AdminLicenceReview }) {
 export default function AdminLicenceReviewPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const command = useLicenceCommand(id);
-  // A recuse drops this review from the cache and the server now answers 403 for it, so the
-  // page must not read it again while it leaves for the queue.
-  const recused = command.isSuccess && command.variables.name === 'recuse';
-  const query = useAdminLicenceReview(id, !recused);
+  const decision = useLicenceDecision(id);
+  const { query, designation, answerDesignation, setDialog } = decision;
   const me = useMe();
-  const conflictId = query.data?.conflicting_review?.review_id ?? '';
-  const conflictCommand = useLicenceCommand(conflictId);
-  const flight = useSingleFlight();
-  const [designation, setDesignation] = useState<'yes' | 'no' | null>(null);
   const [ticks, setTicks] = useState(NO_TICKS);
-  const [dialog, setDialog] = useState<Dialog>(null);
-  const [reason, setReason] = useState<DeclineReason | ''>('');
-  const [reasonError, setReasonError] = useState<string | undefined>(undefined);
-  const [revokeReason, setRevokeReason] = useState<RevokeReason | ''>('');
   const review = query.data;
-
-  const close = () => {
-    setDialog(null);
-    setReasonError(undefined);
-    command.reset();
-    conflictCommand.reset();
-  };
-  const run = (action: () => Promise<unknown>) =>
-    flight(async () => {
-      try {
-        await action();
-        setDialog(null);
-      } catch {
-        // The dialog shows the plain-words error.
-      }
-    });
-
-  const answerDesignation = (value: string) => {
-    if (value === 'no') {
-      setDesignation('no');
-      setReason('NO_VETERAN_DESIGNATION');
-      setDialog('decline');
-    } else setDesignation('yes');
-  };
 
   const open = review?.status === 'AWAITING_REVIEW' || review?.status === 'AWAITING_CONFIRMATION';
   const allTicked = CHECKLIST.every(({ key }) => ticks[key]);
-  const approval = {
-    designation_visible: true as const,
-    checklist: { selfie_matches: true, security_features: true, whole_card: true } as const,
-  };
   const iApproved =
     review?.approved_by !== null &&
     review?.approved_by !== undefined &&
     review.approved_by === me.data?.user_id;
   const chip = review ? statusChip(review.status) : null;
   const loadError = query.isError ? licenceLoadError(query.error) : null;
-  const pending = command.isPending || conflictCommand.isPending;
   const block = review ? approvalBlock(review) : null;
 
   return (
@@ -204,7 +156,9 @@ export default function AdminLicenceReviewPage() {
                 { value: 'no', title: 'No', description: 'This declines the review.' },
               ]}
               value={designation ?? ''}
-              onValueChange={answerDesignation}
+              onValueChange={(value) => {
+                if (isDesignation(value)) answerDesignation(value);
+              }}
             />
           </Card>
 
@@ -300,135 +254,12 @@ export default function AdminLicenceReviewPage() {
         </>
       )}
 
-      <ConfirmDialog
-        open={dialog === 'approve'}
-        title="Approve this licence?"
-        confirmLabel="Approve licence"
-        cancelLabel="Cancel"
-        pending={pending}
-        error={command.isError ? licenceCommandError(command.error) : undefined}
-        onConfirm={() => run(() => command.mutateAsync({ name: 'approve', body: approval }))}
-        onClose={close}
-      >
-        <p>
-          This is the first approval. A different admin must confirm it before the person can ask
-          for help.
-        </p>
-      </ConfirmDialog>
-      <ConfirmDialog
-        open={dialog === 'confirm'}
-        title="Confirm this approval?"
-        confirmLabel="Confirm approval"
-        cancelLabel="Cancel"
-        pending={pending}
-        error={command.isError ? licenceCommandError(command.error) : undefined}
-        onConfirm={() => run(() => command.mutateAsync({ name: 'confirm', body: approval }))}
-        onClose={close}
-      >
-        <p>This confirms the person's Veteran status, so they can ask for help.</p>
-        <p className="text-16 text-slate">
-          The images and the reading are deleted when you confirm.
-        </p>
-      </ConfirmDialog>
-      <ConfirmDialog
-        open={dialog === 'decline'}
-        title="Decline this licence?"
-        confirmLabel="Decline licence"
-        cancelLabel="Cancel"
-        pending={pending}
-        error={command.isError ? licenceCommandError(command.error) : undefined}
-        onConfirm={() => {
-          if (reason === '') {
-            setReasonError('Choose a reason.');
-            document.getElementById('decline-reason')?.focus();
-            return;
-          }
-          run(() => command.mutateAsync({ name: 'decline', body: { reason } }));
-        }}
-        onClose={() => {
-          close();
-          if (designation === 'no') setDesignation(null);
-        }}
-      >
-        <p>The person sees the reason in plain words, and can send new photos or dispute it.</p>
-        <Select
-          id="decline-reason"
-          label="Reason"
-          placeholder="Choose a reason"
-          options={DECLINE_REASONS}
-          value={reason}
-          error={reasonError}
-          onChange={(event) => {
-            setReason(event.target.value as DeclineReason | '');
-            setReasonError(undefined);
-          }}
-        />
-        <p className="text-16 text-slate">
-          The images and the reading are deleted when you decline.
-        </p>
-      </ConfirmDialog>
-      <ConfirmDialog
-        open={dialog === 'recuse'}
-        title="Step back from this review?"
-        confirmLabel="Step back"
-        cancelLabel="Cancel"
-        pending={pending}
-        error={command.isError ? licenceCommandError(command.error) : undefined}
-        onConfirm={() =>
-          run(async () => {
-            await command.mutateAsync({ name: 'recuse', body: {} });
-            void navigate(paths.adminLicenceReviews);
-          })
-        }
-        onClose={close}
-      >
-        <p>
-          For example, if you know the person. The review leaves your queue, and you cannot open or
-          decide it again.
-        </p>
-      </ConfirmDialog>
-      {(['revoke', 'revoke_conflict'] as const).map((which) => {
-        const target = which === 'revoke' ? command : conflictCommand;
-        return (
-          <ConfirmDialog
-            key={which}
-            open={dialog === which}
-            title="Revoke this approval?"
-            confirmLabel="Revoke approval"
-            cancelLabel="Cancel"
-            pending={pending}
-            error={target.isError ? licenceCommandError(target.error) : undefined}
-            onConfirm={() => {
-              if (revokeReason === '') {
-                setReasonError('Choose a reason.');
-                return;
-              }
-              run(async () => {
-                await target.mutateAsync({ name: 'revoke', body: { reason: revokeReason } });
-                if (which === 'revoke_conflict') void query.refetch();
-              });
-            }}
-            onClose={close}
-          >
-            <p>This frees the licence, so it can be approved on another review.</p>
-            <RadioCardGroup
-              legend="Reason"
-              name={`${which}-reason`}
-              options={REVOKE_REASONS.map(({ value, label, description }) => ({
-                value,
-                title: label,
-                description,
-              }))}
-              value={revokeReason}
-              onValueChange={(value) => {
-                setRevokeReason(value as RevokeReason);
-                setReasonError(undefined);
-              }}
-            />
-            {reasonError && dialog === which ? <p className="font-bold">{reasonError}</p> : null}
-          </ConfirmDialog>
-        );
-      })}
+      <LicenceDecisionDialogs
+        decision={decision}
+        // The URL changes before a transition renders the queue; render it at once so Back
+        // right after a recuse cannot keep this page mounted with its read turned off.
+        onRecused={() => void navigate(paths.adminLicenceReviews, { flushSync: true })}
+      />
     </>
   );
 }

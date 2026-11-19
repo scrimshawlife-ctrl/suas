@@ -31,7 +31,8 @@ export function ProfileFields({
         error={errors.displayName}
         required
       />
-      <Select
+      {/* Any string, as the profile holds it: this field reads onChange, and the server checks it. */}
+      <Select<string, string>
         label="County"
         helper="We match requests with people in the same county."
         name="county"

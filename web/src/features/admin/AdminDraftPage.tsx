@@ -3,7 +3,7 @@ import { useParams } from 'react-router';
 import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
 import { Card } from '../../components/Card';
-import { useResourceDraft } from './api';
+import { useResourceDraft } from './drafts-api';
 import { DRAFT_NOT_FOUND, DraftEditor } from './DraftEditor';
 import { DraftStatusChip } from './AdminDraftsPage';
 import { isHttpUrl, type ResourceDraft } from './draft-form';

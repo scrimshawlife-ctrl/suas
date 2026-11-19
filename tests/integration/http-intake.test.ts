@@ -99,6 +99,14 @@ describe('draft, edit and submit', () => {
     );
     expect(before.rows[0].n).toBe(0);
 
+    const unknown = await app.server.inject({
+      method: 'PATCH',
+      url: `/api/v0/intake/drafts/${draftId}`,
+      headers,
+      payload: { category: 'EMPLOYMENT' },
+    });
+    expect(unknown.statusCode).toBe(400);
+
     const edited = await app.server.inject({
       method: 'PATCH',
       url: `/api/v0/intake/drafts/${draftId}`,

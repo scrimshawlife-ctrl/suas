@@ -152,6 +152,13 @@ describe('requester edit before accept (R8.1)', () => {
     expect(other.statusCode).toBe(409);
   });
 
+  it('refuses a category outside the list on the plain form', async () => {
+    const requester = await person(randomUUID(), 'requester');
+    const { response } = await submit(requester, { ...FOOD, category: 'EMPLOYMENT' });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('VALIDATION_FAILED');
+  });
+
   it('keeps the meeting place required for FOOD and needs a key and a field', async () => {
     const tenantId = randomUUID();
     const requester = await person(tenantId, 'requester');

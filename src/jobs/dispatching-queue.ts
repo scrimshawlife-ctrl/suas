@@ -22,11 +22,14 @@ export class DispatchingJobQueue implements DurableJobQueuePort {
       /* tests replace this */
     },
     /**
-     * Called after the handler succeeds, so a durable queue can mark the row
-     * done and the job worker does not run it a second time. When this fails
-     * the row stays pending and the worker replays it, which handlers tolerate.
+     * Runs the handler for an enqueued job. A durable queue passes one that leases the
+     * row first, so the job worker skips it while it runs, marks it done after, and
+     * skips the inline run when a worker holds it already. Default: run it directly.
      */
-    private readonly onHandled?: (job: EnqueuedJob) => Promise<void>,
+    private readonly runInline: (job: EnqueuedJob, run: () => Promise<void>) => Promise<void> = (
+      _job,
+      run,
+    ) => run(),
   ) {
     this.durability = inner.durability;
     this.implementation = inner.implementation;
@@ -38,8 +41,7 @@ export class DispatchingJobQueue implements DurableJobQueuePort {
     const handler = this.handlers[request.jobType];
     if (handler === undefined) return result;
     try {
-      await handler(request);
-      await this.onHandled?.(result);
+      await this.runInline(result, () => handler(request));
     } catch (error) {
       this.onHandlerError(error, request);
     }

@@ -41,6 +41,16 @@ export class RetryLaterError extends Error {
     this.name = 'RetryLaterError';
   }
 }
+/** Thrown to run the job again after `delayMs` without spending one of its attempts. */
+export class DeferJobError extends Error {
+  constructor(
+    message: string,
+    readonly delayMs: number,
+  ) {
+    super(message);
+    this.name = 'DeferJobError';
+  }
+}
 export type JobWork = (job: JobToHandle) => Promise<void>;
 /** Runs once a job is dead-lettered, to settle the record it was working on. */
 export type DeadLetterWork = (job: JobToHandle, lastError: string) => Promise<void>;
@@ -70,19 +80,22 @@ export function createDeadLetterHandlers(pool: Pool): Readonly<Record<string, De
 const deadLetterNotificationPayload = z.object({ notification_id: z.string().uuid() });
 
 /**
- * NOTIFICATIONS.md §5: failures thrown before any provider attempt (channel unavailable,
- * template error) never count as attempts, so the outbox exhausts first. The Notification
- * then settles UNDELIVERABLE instead of staying QUEUED.
+ * NOTIFICATIONS.md §5: an exhausted send settles UNDELIVERABLE instead of staying QUEUED.
+ * Under another runner's live claim it defers instead, so a job remains to settle the send
+ * if that runner dies.
  */
 function notificationDeadLetterHandler(pool: Pool): DeadLetterWork {
   return async (job, lastError) => {
     const parsed = deadLetterNotificationPayload.safeParse(job.payload);
     if (!parsed.success || job.tenantId === undefined) return;
-    await settleUndeliverable(pool, {
+    const settled = await settleUndeliverable(pool, {
       tenantId: job.tenantId,
       notificationId: parsed.data.notification_id,
       failureReason: lastError,
     });
+    if (settled.outcome === 'IN_FLIGHT') {
+      throw new DeferJobError('notification send in flight elsewhere', settled.retryAfterMs);
+    }
   };
 }
 
@@ -154,11 +167,8 @@ export function licenceCloseHandler(pool: Pool, config: SuasConfig): JobWork {
 }
 
 /**
- * Delivers one Notification. Replay-safe: `attemptSend` skips a Notification
- * that is already SENT, terminal or cancelled, so a redelivered or
- * lease-expired job cannot send twice. A refused attempt (FAILED) throws so the
- * outbox retries it; once attempts are exhausted the Notification is
- * UNDELIVERABLE, which is a settled outcome and finishes the job.
+ * Delivers one Notification. Replay-safe through `attemptSend`'s send claim. A refused
+ * attempt (FAILED) throws so the outbox retries it; UNDELIVERABLE is settled and finishes.
  */
 export function notificationSendHandler(
   pool: Pool,
@@ -174,6 +184,13 @@ export function notificationSendHandler(
       notificationId: parsed.notificationId,
       disclosure: parsed.disclosure,
     });
+    // No provider call was made and the send should run again: another runner holds it
+    // (come back once its claim settles or expires, so a runner that died mid-send leaves a
+    // job behind), or the claim was lost or ran short before the call. Waiting spends no
+    // attempt, so it can never dead-letter a send that was never tried.
+    if (result.outcome === 'SKIPPED' && result.retryAfterMs !== undefined) {
+      throw new DeferJobError(`notification send deferred: ${result.reason}`, result.retryAfterMs);
+    }
     if (result.notification.deliveryStatus === 'FAILED') {
       throw new Error(`notification send failed: ${result.reason ?? 'provider refused'}`);
     }

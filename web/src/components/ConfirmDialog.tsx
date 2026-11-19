@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { Button } from '../../components/Button';
-import { Dialog } from '../../components/Dialog';
-import { AlertCircleIcon } from '../../components/icons';
+import { Button } from './Button';
+import { Dialog } from './Dialog';
+import { AlertCircleIcon } from './icons';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -16,7 +16,10 @@ export interface ConfirmDialogProps {
   onClose: () => void;
 }
 
-/** Confirm step for an act that cannot be taken back (publish, discard). */
+/**
+ * Asks the person to confirm an action before it runs. While `pending`, both buttons are disabled
+ * and the dialog cannot be dismissed; `error` shows why the last attempt failed.
+ */
 export function ConfirmDialog({
   open,
   title,

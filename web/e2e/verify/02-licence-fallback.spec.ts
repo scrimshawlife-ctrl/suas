@@ -321,7 +321,9 @@ test.describe.serial('licence fallback', () => {
     await expect(third.getByText(/^Declined: Other\./)).toBeVisible();
   });
 
-  // The guard also proves the page does not re-read the review it left (that read answers 403).
+  // The first navigation after a recuse: the page turns its review read off and leaves for the
+  // queue in the same moment. A 20x CPU throttle widens that window; the page must still land on
+  // the queue and never read the review it left (that read answers 403; the guard also checks).
   test('an admin steps back from a review and it leaves their queue', async ({
     browser,
     request,
@@ -332,14 +334,55 @@ test.describe.serial('licence fallback', () => {
     await expect(reviews.last()).toBeVisible();
     const before = await reviews.count();
     await openNewest(first);
+    const reviewId = first.url().split('/').pop() ?? '';
+    const reviewRead = new RegExp(`/api/v0/admin/licence-reviews/${reviewId}(?:$|[/?])`);
+    const readsAfterRecuse: string[] = [];
     await first.getByRole('button', { name: 'Step back from this review' }).click();
+    const cdp = await first.context().newCDPSession(first);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 20 });
+    first.on('request', (sent) => {
+      if (sent.method() === 'GET' && reviewRead.test(sent.url())) readsAfterRecuse.push(sent.url());
+    });
     await first
       .getByRole('dialog', { name: 'Step back from this review?' })
       .getByRole('button', { name: 'Step back' })
       .click();
     await expect(first).toHaveURL(/\/admin\/licence-reviews$/);
     await expect(first.getByRole('heading', { level: 1, name: 'Licence reviews' })).toBeVisible();
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     await expect(reviews).toHaveCount(before - 1);
+    await expect(first.getByText('Loading…')).toHaveCount(0);
+    expect(readsAfterRecuse).toEqual([]);
+  });
+
+  // The #327 bug class: Back right after the recuse must re-read the review, not keep the page
+  // mounted with its read off ("Loading…" forever). A 20x CPU throttle opens the race window.
+  test('Back right after stepping back shows the review as stepped back, not loading', async ({
+    browser,
+    request,
+    allow,
+  }) => {
+    // The page mounted again by Back re-reads the review, and that read answers 403 by design.
+    allow.push(/status of 403/);
+    await veteranSendsLicence(browser, request, 'licence-recuse-back');
+    const first = await adminOnQueue(browser, request, FIRST_ADMIN);
+    await openNewest(first);
+    const reviewUrl = first.url();
+    await first.getByRole('button', { name: 'Step back from this review' }).click();
+    const cdp = await first.context().newCDPSession(first);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 20 });
+    await first
+      .getByRole('dialog', { name: 'Step back from this review?' })
+      .getByRole('button', { name: 'Step back' })
+      .click();
+    await expect(first).toHaveURL(/\/admin\/licence-reviews$/);
+    await first.goBack();
+    await expect(first).toHaveURL(reviewUrl);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    await expect(
+      first.getByText('You stepped back from this review, so you cannot decide it.'),
+    ).toBeVisible();
+    await expect(first.getByText('Loading…')).toHaveCount(0);
   });
 
   test('licence path is never offered after a VA 400', async ({ page, request }) => {

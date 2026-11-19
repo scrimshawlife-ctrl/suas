@@ -3,7 +3,7 @@ import { paths } from '../../app/paths';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { StatusChip } from '../../components/StatusChip';
-import { useLicenceReviews } from './api';
+import { useLicenceReviews } from './licence-api';
 import { sentAgo, statusChip } from './licence-labels';
 import { QueryNotice } from './QueryNotice';
 
