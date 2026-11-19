@@ -118,15 +118,10 @@ describe('region-restricted account on default URLs', () => {
     });
   });
 
-  it('keeps the deploy-workflow caps as Fn::If under deploymentPipeline', () => {
-    const { backend } = synth({ ...DEFAULT_URLS, deploymentPipeline: 'true' });
-    const api = JSON.stringify(fn(backend, 'run.sh').ReservedConcurrentExecutions);
-    const worker = JSON.stringify(fn(backend, 'job-worker.handler').ReservedConcurrentExecutions);
-    expect(api).toContain('Fn::If');
-    expect(api).toContain('15');
-    expect(worker).toContain('Fn::If');
-    expect(worker).toContain('2');
-    expect(fn(backend, 'migrate.handler').ReservedConcurrentExecutions).toBe(1);
+  it('refuses this unsupported layout in the deployment workflow', () => {
+    expect(() => synth({ ...DEFAULT_URLS, deploymentPipeline: 'true' })).toThrow(
+      'Deployment pipeline supports only us-west-2 with the four custom-domain stacks.',
+    );
   });
 });
 
@@ -178,6 +173,18 @@ describe('refused contexts', () => {
     refuse(
       { region: 'us-east-2', availabilityZones: 'us-west-2a,us-west-2b' },
       /two us-east-2 zones/,
+    );
+  });
+});
+
+describe('deployment workflow layout', () => {
+  it.each<Record<string, string>>([
+    { region: 'us-east-2' },
+    { customDomains: 'false' },
+    { webCertificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/0000-1111-2222' },
+  ])('rejects unsupported context %j before synthesizing stacks', (context) => {
+    expect(() => synth({ ...context, deploymentPipeline: 'true' })).toThrow(
+      'Deployment pipeline supports only us-west-2 with the four custom-domain stacks.',
     );
   });
 });

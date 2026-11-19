@@ -1,59 +1,168 @@
-# CloudFormation execution policy for the SUAS synthetic-STAGING CDK bootstrap.
-#
-# Passed to `cdk bootstrap --cloudformation-execution-policies` instead of the default
-# AdministratorAccess. It covers the services the four Suas-* stacks create (see the resource
-# list in infra/README.md "Stacks"). IAM is limited to roles and policies whose names start with
-# `Suas-` (CloudFormation names generated roles after the stack) and to the one AWS managed
-# policy the CDK helper functions attach. Deploy by hand: docs/runbooks/aws-staging-bootstrap.md.
-#
-# Known limit: an inline role policy written by a Suas-* stack is not content-restricted, so
-# template review plus the protected deploy environment remain the control. A permissions
-# boundary on generated roles is the planned hardening.
-
+# Provision separately before the application. The execution role cannot modify the boundary.
 AWSTemplateFormatVersion: '2010-09-09'
-Description: SUAS staging CDK execution policy (least-privilege replacement for AdministratorAccess)
-
+Description: Synthetic STAGING execution policies and runtime boundary; deploy requires separate approval.
 Resources:
   SuasCdkExecutionPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       ManagedPolicyName: SuasCdkExecution
-      Description: Permissions CloudFormation uses to create the SUAS synthetic-STAGING stacks
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: StackServices
+          - Sid: RegionalNetwork
             Effect: Allow
             Action:
-              - acm:*
-              - apigateway:*
-              - cloudfront:*
-              - cloudwatch:*
-              - ec2:*
-              - lambda:*
-              - logs:*
-              - rds:*
-              - route53:*
-              - s3:*
-              - scheduler:*
-              - secretsmanager:*
-              - ssm:*
-            Resource: '*'
-          - Sid: KmsForAwsManagedKeys
-            # RDS, Secrets Manager and Lambda use AWS managed keys; no customer key is created.
+              - ec2:CreateVpc
+              - ec2:DeleteVpc
+              - ec2:ModifyVpcAttribute
+              - ec2:CreateSubnet
+              - ec2:DeleteSubnet
+              - ec2:ModifySubnetAttribute
+              - ec2:CreateRouteTable
+              - ec2:DeleteRouteTable
+              - ec2:AssociateRouteTable
+              - ec2:DisassociateRouteTable
+              - ec2:CreateRoute
+              - ec2:DeleteRoute
+              - ec2:ReplaceRoute
+              - ec2:CreateSecurityGroup
+              - ec2:DeleteSecurityGroup
+              - ec2:AuthorizeSecurityGroupIngress
+              - ec2:AuthorizeSecurityGroupEgress
+              - ec2:RevokeSecurityGroupIngress
+              - ec2:RevokeSecurityGroupEgress
+              - ec2:CreateVpcEndpoint
+              - ec2:ModifyVpcEndpoint
+              - ec2:DeleteVpcEndpoints
+              - ec2:CreateTags
+              - ec2:DeleteTags
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: RegionalDescribe
             Effect: Allow
             Action:
-              - kms:CreateGrant
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey*
-              - kms:ListAliases
+              - ec2:Describe*
+              - rds:Describe*
+              - acm:ListCertificates
             Resource: '*'
-          - Sid: SuasRoles
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: Database
+            Effect: Allow
+            Action:
+              - rds:CreateDBInstance
+              - rds:ModifyDBInstance
+              - rds:DeleteDBInstance
+              - rds:CreateDBParameterGroup
+              - rds:ModifyDBParameterGroup
+              - rds:DeleteDBParameterGroup
+              - rds:CreateDBSubnetGroup
+              - rds:ModifyDBSubnetGroup
+              - rds:DeleteDBSubnetGroup
+              - rds:AddTagsToResource
+              - rds:RemoveTagsFromResource
+              - rds:ListTagsForResource
+              - rds:CreateDBSnapshot
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:rds:*:${AWS::AccountId}:db:suas-staging
+              - Fn::Sub: arn:${AWS::Partition}:rds:*:${AWS::AccountId}:pg:suas-staging-*
+              - Fn::Sub: arn:${AWS::Partition}:rds:*:${AWS::AccountId}:subgrp:suas-staging-*
+              - Fn::Sub: arn:${AWS::Partition}:rds:*:${AWS::AccountId}:snapshot:suas-staging-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: Lambda
+            Effect: Allow
+            Action:
+              - lambda:CreateFunction
+              - lambda:DeleteFunction
+              - lambda:GetFunction*
+              - lambda:UpdateFunction*
+              - lambda:PublishVersion
+              - lambda:ListVersionsByFunction
+              - lambda:AddPermission
+              - lambda:RemovePermission
+              - lambda:GetPolicy
+              - lambda:PutFunctionConcurrency
+              - lambda:DeleteFunctionConcurrency
+              - lambda:GetFunctionConcurrency
+              - lambda:TagResource
+              - lambda:UntagResource
+              - lambda:ListTags
+              - lambda:InvokeFunction
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:Suas-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: Layer
+            Effect: Allow
+            Action:
+              - lambda:GetLayerVersion
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:lambda:*:753240598075:layer:LambdaAdapterLayerArm64:*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: Logs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:DeleteLogGroup
+              - logs:PutRetentionPolicy
+              - logs:DeleteRetentionPolicy
+              - logs:PutMetricFilter
+              - logs:DeleteMetricFilter
+              - logs:DescribeMetricFilters
+              - logs:TagResource
+              - logs:UntagResource
+              - logs:ListTagsForResource
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:Suas-*
+              - Fn::Sub: arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/aws/lambda/Suas-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: LogInventory
+            Effect: Allow
+            Action:
+              - logs:DescribeLogGroups
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: BoundedRoleCreation
             Effect: Allow
             Action:
               - iam:CreateRole
+              - iam:PutRolePermissionsBoundary
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
+            Condition:
+              ArnEquals:
+                iam:PermissionsBoundary:
+                  Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/SuasStagingRuntimeBoundary
+          - Sid: GeneratedRolePolicies
+            Effect: Allow
+            Action:
               - iam:DeleteRole
               - iam:GetRole
               - iam:GetRolePolicy
@@ -66,18 +175,24 @@ Resources:
               - iam:ListRolePolicies
               - iam:ListAttachedRolePolicies
               - iam:DetachRolePolicy
-            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
-          - Sid: AttachOnlyLambdaBasicExecution
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
+          - Sid: BasicLogging
             Effect: Allow
-            Action: iam:AttachRolePolicy
-            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
+            Action:
+              - iam:AttachRolePolicy
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
             Condition:
               ArnEquals:
-                iam:PolicyARN: !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-          - Sid: PassSuasRolesToServices
+                iam:PolicyARN:
+                  Fn::Sub: arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - Sid: PassGeneratedRoles
             Effect: Allow
-            Action: iam:PassRole
-            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
+            Action:
+              - iam:PassRole
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
             Condition:
               StringEquals:
                 iam:PassedToService:
@@ -87,23 +202,432 @@ Resources:
                   - apigateway.amazonaws.com
           - Sid: ServiceLinkedRoles
             Effect: Allow
-            Action: iam:CreateServiceLinkedRole
-            Resource: '*'
+            Action:
+              - iam:CreateServiceLinkedRole
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/*
             Condition:
               StringEquals:
                 iam:AWSServiceName:
                   - rds.amazonaws.com
                   - ops.apigateway.amazonaws.com
                   - lambda.amazonaws.com
-          - Sid: ReadIam
+          - Sid: CannotRemoveBoundary
+            Effect: Deny
+            Action: iam:DeleteRolePermissionsBoundary
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
+          - Sid: CannotReplaceBoundary
+            Effect: Deny
+            Action:
+              - iam:CreateRole
+              - iam:PutRolePermissionsBoundary
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
+            Condition:
+              ArnNotEquals:
+                iam:PermissionsBoundary:
+                  Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/SuasStagingRuntimeBoundary
+          - Sid: CannotEditBoundary
+            Effect: Deny
+            Action:
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicyVersion
+              - iam:SetDefaultPolicyVersion
+              - iam:DeletePolicy
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/SuasStagingRuntimeBoundary
+  SuasCdkServicesPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: SuasCdkServices
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Alarms
             Effect: Allow
             Action:
-              - iam:GetPolicy
-              - iam:GetPolicyVersion
-              - iam:ListRoles
+              - cloudwatch:PutMetricAlarm
+              - cloudwatch:DeleteAlarms
+              - cloudwatch:DescribeAlarms
+              - cloudwatch:TagResource
+              - cloudwatch:UntagResource
+              - cloudwatch:ListTagsForResource
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:cloudwatch:*:${AWS::AccountId}:alarm:Suas-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: Notifications
+            Effect: Allow
+            Action:
+              - sns:CreateTopic
+              - sns:DeleteTopic
+              - sns:GetTopicAttributes
+              - sns:SetTopicAttributes
+              - sns:Subscribe
+              - sns:ListSubscriptionsByTopic
+              - sns:TagResource
+              - sns:UntagResource
+              - sns:ListTagsForResource
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:sns:*:${AWS::AccountId}:Suas-Staging-Alarms
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: SubscriptionLifecycle
+            Effect: Allow
+            Action:
+              - sns:GetSubscriptionAttributes
+              - sns:SetSubscriptionAttributes
+              - sns:Unsubscribe
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:sns:*:${AWS::AccountId}:Suas-Staging-Alarms
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: GeneratedSecrets
+            Effect: Allow
+            Action:
+              - secretsmanager:CreateSecret
+              - secretsmanager:DeleteSecret
+              - secretsmanager:UpdateSecret
+              - secretsmanager:PutSecretValue
+              - secretsmanager:DescribeSecret
+              - secretsmanager:GetSecretValue
+              - secretsmanager:GetResourcePolicy
+              - secretsmanager:TagResource
+              - secretsmanager:UntagResource
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:secretsmanager:*:${AWS::AccountId}:secret:Suas-Staging-Backend-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: RandomPasswords
+            Effect: Allow
+            Action:
+              - secretsmanager:GetRandomPassword
             Resource: '*'
-
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: Parameters
+            Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - ssm:PutParameter
+              - ssm:DeleteParameter
+              - ssm:AddTagsToResource
+              - ssm:RemoveTagsFromResource
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/suas/staging/*
+              - Fn::Sub: arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/cdk/exports/Suas-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: Scheduler
+            Effect: Allow
+            Action:
+              - scheduler:CreateSchedule
+              - scheduler:UpdateSchedule
+              - scheduler:DeleteSchedule
+              - scheduler:GetSchedule
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:scheduler:*:${AWS::AccountId}:schedule/default/Suas-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: Buckets
+            Effect: Allow
+            Action:
+              - s3:CreateBucket
+              - s3:DeleteBucket
+              - s3:GetBucket*
+              - s3:PutBucket*
+              - s3:DeleteBucketPolicy
+              - s3:GetEncryptionConfiguration
+              - s3:PutEncryptionConfiguration
+              - s3:GetLifecycleConfiguration
+              - s3:PutLifecycleConfiguration
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*
+              - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*/*
+          - Sid: RdsEncryption
+            Effect: Allow
+            Action:
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:kms:us-west-2:${AWS::AccountId}:key/*
+            Condition:
+              StringEquals:
+                kms:ViaService: rds.us-west-2.amazonaws.com
+                kms:CallerAccount:
+                  Ref: AWS::AccountId
+  SuasCdkEdgePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: SuasCdkEdge
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Certificates
+            Effect: Allow
+            Action:
+              - acm:RequestCertificate
+              - acm:DescribeCertificate
+              - acm:DeleteCertificate
+              - acm:AddTagsToCertificate
+              - acm:RemoveTagsFromCertificate
+              - acm:ListTagsForCertificate
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:acm:*:${AWS::AccountId}:certificate/*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: HttpApi
+            Effect: Allow
+            Action:
+              - apigateway:GET
+              - apigateway:POST
+              - apigateway:PATCH
+              - apigateway:PUT
+              - apigateway:DELETE
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:apigateway:*::/apis*
+              - Fn::Sub: arn:${AWS::Partition}:apigateway:*::/domainnames*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: Dns
+            Effect: Allow
+            Action:
+              - route53:CreateHostedZone
+              - route53:GetHostedZone
+              - route53:DeleteHostedZone
+              - route53:ChangeResourceRecordSets
+              - route53:ListResourceRecordSets
+              - route53:ChangeTagsForResource
+              - route53:ListTagsForResource
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:route53:::hostedzone/*
+          - Sid: DnsChanges
+            Effect: Allow
+            Action:
+              - route53:GetChange
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:route53:::change/*
+          - Sid: Edge
+            Effect: Allow
+            Action:
+              - cloudfront:CreateDistribution
+              - cloudfront:CreateDistributionWithTags
+              - cloudfront:GetDistribution
+              - cloudfront:GetDistributionConfig
+              - cloudfront:UpdateDistribution
+              - cloudfront:DeleteDistribution
+              - cloudfront:CreateInvalidation
+              - cloudfront:GetInvalidation
+              - cloudfront:CreateCachePolicy
+              - cloudfront:GetCachePolicy
+              - cloudfront:GetCachePolicyConfig
+              - cloudfront:UpdateCachePolicy
+              - cloudfront:DeleteCachePolicy
+              - cloudfront:CreateOriginAccessControl
+              - cloudfront:GetOriginAccessControl
+              - cloudfront:GetOriginAccessControlConfig
+              - cloudfront:UpdateOriginAccessControl
+              - cloudfront:DeleteOriginAccessControl
+              - cloudfront:TagResource
+              - cloudfront:UntagResource
+              - cloudfront:ListTagsForResource
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
+              - Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:cache-policy/*
+              - Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:origin-access-control/*
+          - Sid: EdgeCreate
+            Effect: Allow
+            Action:
+              - cloudfront:CreateCachePolicy
+              - cloudfront:CreateOriginAccessControl
+            Resource: '*'
+          - Sid: DnsCreate
+            Effect: Allow
+            Action:
+              - route53:CreateHostedZone
+            Resource: '*'
+  SuasStagingRuntimeBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: SuasStagingRuntimeBoundary
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Logs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:Suas-*
+              - Fn::Sub: arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/aws/lambda/Suas-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: VpcEni
+            Effect: Allow
+            Action:
+              - ec2:CreateNetworkInterface
+              - ec2:DeleteNetworkInterface
+              - ec2:DescribeNetworkInterfaces
+              - ec2:DescribeSubnets
+              - ec2:AssignPrivateIpAddresses
+              - ec2:UnassignPrivateIpAddresses
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: RuntimeSecrets
+            Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:secretsmanager:*:${AWS::AccountId}:secret:Suas-Staging-Backend-EmailRelay*
+              - Fn::Sub: arn:${AWS::Partition}:secretsmanager:*:${AWS::AccountId}:secret:suas/staging/*
+            Condition:
+              StringEquals:
+                aws:ResourceAccount:
+                  Ref: AWS::AccountId
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: RuntimeObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:GetBucketPolicy
+              - s3:PutBucketPolicy
+              - s3:DeleteBucket
+              - s3:AbortMultipartUpload
+              - s3:ListBucketMultipartUploads
+              - s3:ListMultipartUploadParts
+              - s3:GetObjectVersion
+              - s3:DeleteObjectVersion
+              - s3:ListBucketVersions
+              - s3:PutObjectTagging
+              - s3:GetObjectTagging
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*
+              - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*/*
+          - Sid: PublishedAssets
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:GetBucketLocation
+              - s3:ListBucket
+              - s3:GetBucketVersioning
+              - s3:GetObjectVersion
+            Resource:
+              - Fn::Sub: arn:${AWS::Partition}:s3:::cdk-hnb659fds-assets-${AWS::AccountId}-*
+              - Fn::Sub: arn:${AWS::Partition}:s3:::cdk-hnb659fds-assets-${AWS::AccountId}-*/*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: InvokeStaging
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:Suas-Staging-Backend-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: InvalidateWeb
+            Effect: Allow
+            Action:
+              - cloudfront:CreateInvalidation
+              - cloudfront:GetInvalidation
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
+          - Sid: CrossRegionExports
+            Effect: Allow
+            Action:
+              - ssm:PutParameter
+              - ssm:GetParameter
+              - ssm:DeleteParameter
+              - ssm:GetParameters
+              - ssm:DeleteParameters
+              - ssm:ListTagsForResource
+              - ssm:AddTagsToResource
+              - ssm:RemoveTagsFromResource
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/cdk/exports/Suas-*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+          - Sid: RestrictDefaultSecurityGroup
+            Effect: Allow
+            Action:
+              - ec2:AuthorizeSecurityGroupIngress
+              - ec2:AuthorizeSecurityGroupEgress
+              - ec2:RevokeSecurityGroupIngress
+              - ec2:RevokeSecurityGroupEgress
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:security-group/*
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
 Outputs:
   PolicyArn:
-    Description: Pass to cdk bootstrap --cloudformation-execution-policies
-    Value: !Ref SuasCdkExecutionPolicy
+    Value:
+      Ref: SuasCdkExecutionPolicy
+  ServicesPolicyArn:
+    Value:
+      Ref: SuasCdkServicesPolicy
+  EdgePolicyArn:
+    Value:
+      Ref: SuasCdkEdgePolicy
+  RuntimeBoundaryArn:
+    Value:
+      Ref: SuasStagingRuntimeBoundary
