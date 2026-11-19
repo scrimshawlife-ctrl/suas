@@ -213,6 +213,8 @@ jobs:
           AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
         run: test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
       - name: Deploy, migrate and verify
+        env:
+          SUAS_STAGING_ALARM_EMAIL: ${{ secrets.SUAS_STAGING_ALARM_EMAIL }}
         run: bash scripts/ci/staging-deploy.sh
       - name: Upload the public acceptance report
         # Public tests only: no sessions or tokens are in these traces.

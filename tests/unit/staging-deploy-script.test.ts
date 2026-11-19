@@ -38,13 +38,28 @@ case "$*" in
     if [ "$AWS_ACCESS_KEY_ID" = ASIAKEY ]; then echo "$ASSUMED_ARN"
     else echo "arn:aws:sts::${ACCOUNT}:assumed-role/suas-gha-staging-deploy/caller"; fi ;;
   "sts assume-role"*) printf '%s\\n' "$CREDS" ;;
-  *StackStatus*) echo UPDATE_COMPLETE ;;
+  *StackStatus*) echo "\${STACK_STATUS:-UPDATE_COMPLETE}" ;;
   *ExpectedSchemaVersion*) [ "$API_LOOKUP" = missing ] && missing; echo "$SCHEMA" ;;
   *ApiFunctionName*)
     [ "$API_LOOKUP" = missing ] && missing
     [ "$API_LOOKUP" = deployed ] && { echo Suas-Staging-Backend-ApiFunction-x; exit 0; }
     echo "An error occurred (ExpiredToken): The security token is expired" >&2; exit 254 ;;
   *MigrateFunctionName*) echo "$MIGRATE_NAME" ;;
+  *JobWorkerFunctionName*) echo Suas-Staging-Backend-JobWorkerFunction12345678-AbCd1234 ;;
+  *DeploymentMode*) cat "$MODE_FILE" ;;
+  *'Parameters[].ParameterKey'*) echo '["DeploymentMode", "AlarmEmail"]' ;;
+  *RoleARN*) echo "arn:aws:iam::${ACCOUNT}:role/cdk-hnb659fds-cfn-exec-role-${ACCOUNT}-us-west-2" ;;
+  "cloudformation update-stack"*)
+    [ "$RECOVERY_FAIL" = true ] && exit 31
+    echo maintenance >"$MODE_FILE" ;;
+  "cloudformation wait"*) [ "$RECOVERY_FAIL" != wait ] ;;
+  "sns publish"*) exit 0 ;;
+  "lambda invoke"*)
+    case "$*" in
+      *Migrate*) printf '{"environment":"STAGING","mode":"apply","expected_schema_version":%s,"schema_version":%s,"spec_stack_drift":false}' "$SCHEMA" "$SCHEMA" >"\${@: -1}" ;;
+      *) echo '{"passes":1}' >"\${@: -1}" ;;
+    esac
+    echo '{"StatusCode":200}' ;;
   *) echo "unexpected aws call: $*" >&2; exit 99 ;;
 esac
 `;
@@ -52,7 +67,10 @@ esac
 // Records every CDK call and exits with CDK_STATUS (failing by default), so no test reaches a
 // real deploy.
 const FAKE_CDK = `require('fs').appendFileSync(process.env.CDK_LOG, process.argv.slice(2).join(' ') + '\\n');
-process.exit(Number(process.env.CDK_STATUS ?? 1));
+const mode = process.argv.find(a => a.startsWith('Suas-Staging-Backend:DeploymentMode='))?.split('=')[1];
+if (mode) require('fs').writeFileSync(process.env.MODE_FILE, mode);
+const stage = mode ?? 'web';
+process.exit(stage === process.env.FAIL_STAGE ? 23 : Number(process.env.CDK_STATUS ?? 1));
 `;
 
 interface Scenario {
@@ -63,6 +81,9 @@ interface Scenario {
   assumedArn?: string;
   cdkStatus?: number;
   migrateName?: string;
+  failStage?: string;
+  recoveryFail?: string;
+  stackStatus?: string;
 }
 
 function runDeploy(scenario: Scenario) {
@@ -71,6 +92,24 @@ function runDeploy(scenario: Scenario) {
     symlinkSync(join(ROOT, link), join(work, link));
   }
   mkdirSync(join(work, 'bin'));
+  writeFileSync(join(work, 'mode'), 'maintenance');
+  writeFileSync(
+    join(work, 'bin', 'curl'),
+    `#!/usr/bin/env bash
+[ "$FAIL_STAGE" = health ] && exit 23
+echo '{"status":"ok","dependencies":{"job_queue":{"durability":"durable"}}}'
+`,
+    { mode: 0o755 },
+  );
+  writeFileSync(
+    join(work, 'bin', 'npm'),
+    `#!/usr/bin/env bash
+echo "$*" >>"$PUBLIC_LOG"
+[ "$FAIL_STAGE" = public ] && exit 23
+exit 0
+`,
+    { mode: 0o755 },
+  );
   writeFileSync(join(work, 'bin', 'aws'), FAKE_AWS, { mode: 0o755 });
   mkdirSync(join(work, 'infra/node_modules/aws-cdk/bin'), { recursive: true });
   writeFileSync(join(work, 'infra/node_modules/aws-cdk/bin/cdk'), FAKE_CDK);
@@ -99,6 +138,7 @@ function runDeploy(scenario: Scenario) {
       CDK_OUT: 'cdk.out',
       RELEASE_JSON: 'release.json',
       SUAS_BUILD_COMMIT: SHA,
+      SUAS_STAGING_ALARM_EMAIL: 'operator@example.invalid',
       API_ORIGIN: 'https://api.example.invalid',
       GITHUB_RUN_ID: '42',
       SCOPE: scenario.scope ?? 'full',
@@ -109,12 +149,25 @@ function runDeploy(scenario: Scenario) {
       CDK_STATUS: String(scenario.cdkStatus ?? 1),
       MIGRATE_NAME: scenario.migrateName ?? MIGRATE,
       AWS_LOG: join(work, 'aws.log'),
+      MODE_FILE: join(work, 'mode'),
+      PUBLIC_LOG: join(work, 'public.log'),
+      GITHUB_STEP_SUMMARY: join(work, 'summary'),
+      FAIL_STAGE: scenario.failStage ?? '',
+      RECOVERY_FAIL: scenario.recoveryFail ?? '',
+      STACK_STATUS: scenario.stackStatus ?? 'UPDATE_COMPLETE',
       CDK_LOG: join(work, 'cdk.log'),
     },
   });
   const log = (name: string) =>
     existsSync(join(work, name)) ? readFileSync(join(work, name), 'utf8') : '';
-  return { ...result, cdkCalls: log('cdk.log'), awsCalls: log('aws.log') };
+  return {
+    ...result,
+    cdkCalls: log('cdk.log'),
+    awsCalls: log('aws.log'),
+    mode: log('mode'),
+    summary: log('summary'),
+    publicCalls: log('public.log'),
+  };
 }
 
 describe('staging-deploy.sh', () => {
@@ -187,5 +240,55 @@ describe('staging-deploy.sh', () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toMatch(/Web-only deploy needs/);
     expect(result.cdkCalls).toBe('');
+  });
+});
+
+describe('deployment failure recovery', () => {
+  const admitted = {
+    apiLookup: 'missing' as const,
+    cdkStatus: 0,
+    creds: 'ASIAKEY secret token',
+    assumedArn: `arn:aws:sts::${ACCOUNT}:assumed-role/${DEPLOY_ROLE}/suas-quiesce-42`,
+  };
+  it.each(['maintenance', 'api', 'health', 'worker', 'live', 'web', 'public'])(
+    'recovers after %s failure and preserves its exit status',
+    (failStage) => {
+      const result = runDeploy({ ...admitted, failStage });
+      expect(result.status, result.stderr).toBe(23);
+      expect(result.mode.trim()).toBe('maintenance');
+      expect(result.summary).toContain('Recovery state: maintenance');
+      expect(result.awsCalls).toContain('sns publish');
+      if (failStage !== 'public') expect(result.publicCalls).toBe('');
+      if (['maintenance', 'api', 'health', 'worker'].includes(failStage)) {
+        expect(result.cdkCalls).not.toContain('DeploymentMode=live');
+      }
+    },
+  );
+  it.each(['true', 'wait'])('reports UNKNOWN when recovery fails (%s)', (recoveryFail) => {
+    const result = runDeploy({ ...admitted, failStage: 'public', recoveryFail });
+    expect(result.status).toBe(23);
+    expect(result.summary).toContain('Recovery state: UNKNOWN');
+    expect(result.summary).not.toContain('Recovery state: maintenance');
+    expect(result.awsCalls).toContain('sns publish');
+  });
+  it('does not report maintenance while a stack update is still in progress', () => {
+    const result = runDeploy({
+      ...admitted,
+      failStage: 'public',
+      stackStatus: 'UPDATE_IN_PROGRESS',
+    });
+    expect(result.summary).toContain('Recovery state: UNKNOWN');
+  });
+  it('does not change a successful deployment or send a failure notification', () => {
+    const result = runDeploy(admitted);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.mode.trim()).toBe('live');
+    expect(result.awsCalls).not.toContain('sns publish');
+  });
+  it('does not mutate or send notifications after a preflight failure', () => {
+    const result = runDeploy({ ...admitted, apiLookup: 'expired' });
+    expect(result.cdkCalls).toBe('');
+    expect(result.awsCalls).not.toContain('update-stack');
+    expect(result.awsCalls).not.toContain('sns publish');
   });
 });
