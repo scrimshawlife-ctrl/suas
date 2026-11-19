@@ -6,7 +6,8 @@
  * production is gated by V1_PROJECT_PLAN.md §7.
  */
 
-import type { App } from 'aws-cdk-lib';
+import { PermissionsBoundary, type App } from 'aws-cdk-lib';
+import { BoundedSynthesizer } from './bounded-synthesizer.js';
 import { BackendStack } from './backend-stack.js';
 import { loadEnvironmentConfig, stackEnv } from './config.js';
 import { DnsStack } from './dns-stack.js';
@@ -25,12 +26,29 @@ export interface StagingStacks {
 export function createStagingApp(app: App): StagingStacks {
   const config = loadEnvironmentConfig(app.node);
   const env = stackEnv(config);
+  const permissionsBoundary = PermissionsBoundary.fromName('SuasStagingRuntimeBoundary');
+  if (
+    app.node.tryGetContext('deploymentPipeline') === true ||
+    app.node.tryGetContext('deploymentPipeline') === 'true'
+  ) {
+    if (
+      config.region !== 'us-west-2' ||
+      !config.customDomains ||
+      config.webCertificateArn !== undefined
+    ) {
+      throw new Error(
+        'Deployment pipeline supports only us-west-2 with the four custom-domain stacks.',
+      );
+    }
+  }
   const prefix = `Suas-${config.name === 'staging' ? 'Staging' : config.name}`;
 
   // Shared by every environment: the hosted zone.
   const dns = config.customDomains
     ? new DnsStack(app, 'Suas-Dns', {
         env,
+        permissionsBoundary,
+        synthesizer: new BoundedSynthesizer(),
         rootDomain: config.rootDomain,
         crossRegionReferences: true,
         description: 'SUAS Route 53 hosted zone and mail records',
@@ -41,6 +59,8 @@ export function createStagingApp(app: App): StagingStacks {
     dns !== undefined && config.webCertificateArn === undefined
       ? new WebCertStack(app, `${prefix}-WebCert`, {
           env: { ...env, region: 'us-east-1' },
+          permissionsBoundary,
+          synthesizer: new BoundedSynthesizer(),
           crossRegionReferences: true,
           zone: dns.zone,
           webHostname: config.webHostname,
@@ -50,6 +70,8 @@ export function createStagingApp(app: App): StagingStacks {
 
   const backend = new BackendStack(app, `${prefix}-Backend`, {
     env,
+    permissionsBoundary,
+    synthesizer: new BoundedSynthesizer(),
     config,
     zone: dns?.zone,
     description: `SUAS ${config.name} backend: VPC, RDS, API, jobs. Inference and chat push stay off.`,
@@ -57,6 +79,8 @@ export function createStagingApp(app: App): StagingStacks {
 
   const web = new WebStack(app, `${prefix}-Web`, {
     env,
+    permissionsBoundary,
+    synthesizer: new BoundedSynthesizer(),
     crossRegionReferences: webCert !== undefined,
     zone: dns?.zone,
     webHostname: config.webHostname,

@@ -4,15 +4,14 @@
  * outside the VPC, has no database access, and its role can read only its own secret. The API
  * invokes it with one projection (src/aws/va-verify-lambda.ts).
  *
- * The secret is created here with a placeholder. The operator puts an LLC-owned VA sandbox key
- * into it by hand (see README); nothing in the template carries it.
+ * A required ARN parameter names an independently provisioned LLC-owned sandbox secret.
+ * No key value is synthesized, and this stack never creates or deletes the secret.
  */
 
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { CfnParameter, Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 export interface VaVerifyProps {
@@ -24,23 +23,20 @@ export interface VaVerifyProps {
 
 export class VaVerify extends Construct {
   readonly function: lambda.Function;
-  readonly secret: secretsmanager.Secret;
+  readonly secretArn: string;
   readonly logGroup: logs.LogGroup;
 
   constructor(scope: Construct, id: string, props: VaVerifyProps) {
     super(scope, id);
 
-    // JSON `{"SUAS_VA_CONFIRMATION_API_KEY": "..."}`. The generated value fills an unused key,
-    // so the function answers UNAVAILABLE / CONFIGURATION_INVALID until the key is stored.
-    this.secret = new secretsmanager.Secret(this, 'ApiKey', {
-      description:
-        'VA sandbox key for the VA verify function: {"SUAS_VA_CONFIRMATION_API_KEY"}. Set by hand.',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ SUAS_VA_CONFIRMATION_API_KEY: '' }),
-        generateStringKey: 'placeholder',
-        excludePunctuation: true,
-      },
-    });
+    // R14.5 option (b): ownership stays outside the app stack; disabling VA never deletes the key.
+    const stack = Stack.of(this);
+    this.secretArn = new CfnParameter(stack, 'VaSandboxSecretArn', {
+      type: 'String',
+      description: 'Existing LLC-owned VA sandbox secret ARN, in this account and region.',
+      allowedPattern: `^arn:aws:secretsmanager:${stack.region}:[0-9]{12}:secret:suas/staging/[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}$`,
+      constraintDescription: 'Use a complete same-region secret ARN under suas/staging/.',
+    }).valueAsString;
 
     this.logGroup = new logs.LogGroup(this, 'Logs', {
       retention: props.logRetention,
@@ -57,8 +53,13 @@ export class VaVerify extends Construct {
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ['secretsmanager:GetSecretValue'],
-        resources: [this.secret.secretArn],
-        conditions: { StringEquals: { 'secretsmanager:VersionStage': 'AWSCURRENT' } },
+        resources: [this.secretArn],
+        conditions: {
+          StringEquals: {
+            'secretsmanager:VersionStage': 'AWSCURRENT',
+            'aws:ResourceAccount': stack.account,
+          },
+        },
       }),
     );
 
@@ -74,7 +75,7 @@ export class VaVerify extends Construct {
       logGroup: this.logGroup,
       environment: {
         SUAS_ENV: props.suasEnv,
-        SUAS_VA_CONFIRMATION_SECRET_ID: this.secret.secretArn,
+        SUAS_VA_CONFIRMATION_SECRET_ID: this.secretArn,
       },
     });
   }

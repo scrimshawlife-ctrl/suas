@@ -15,6 +15,8 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Added
 
+- Draft synthetic-STAGING controls (SUAS-specs #112, release and deployment HOLD): pre-provisioned VA secret ARN, confirmed-email SNS alarm target, scoped execution policies with a mandatory runtime boundary, and failure recovery that reports verified stack maintenance or UNKNOWN. Unsupported deployment-workflow layouts fail before AWS operations. Existing v0.10.0 pins remain unchanged pending a released decision.
+
 - Manual synthetic-STAGING deploy workflow (`.github/workflows/staging-deploy.yml`). It takes a verified `main` SHA through the full CI, a credential-free build and synth, an OIDC plan (`cdk diff`) and an environment-approved deploy. That deploy quiesces, migrates, then admits the API, the worker and the schedule, deploys the web app and runs the public STAGING suite. Nothing is deployed by this change (`docs/runbooks/aws-staging-bootstrap.md`).
 - CI runs the skill metadata checks and the migration rehearsal on every pull request. Every workflow action is pinned to a commit SHA.
 

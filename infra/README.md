@@ -59,7 +59,8 @@ one, otherwise none (`AWS::NoValue`). The modes never add or drop a cap. The dep
 migrate function, so it keeps its own reservation in every mode. Every fixed cap still has to fit in the
 account's Lambda concurrency limit.
 
-The run takes these steps, and stops on the first failure without re-enabling traffic:
+The run takes these steps. A failure after mutation attempts maintenance recovery; failed recovery
+is reported as `UNKNOWN`. Runner termination can prevent recovery. See the bootstrap runbook.
 
 1. Quiesce the deployed backend on its own template, and wait for the longest timeout among the functions it
    throttles.
@@ -163,8 +164,8 @@ only the normalized result and failure class (`src/identity/va-confirmation-lamb
 - The function runs **outside the VPC** with **no database setting** and its own role: it can write its log
   group and read the current (`AWSCURRENT`) version of its one secret, nothing else. Only the API role may invoke it; the job worker may not.
 - It holds the fixed sandbox base URL (`https://sandbox-api.va.gov/services/veteran-confirmation/v1`, a
-  constant, not a setting) and reads the key at run time from the secret named by the `VaVerifySecretName`
-  output, cached per container for at most five minutes and read again sooner if VA refuses the key. The key
+  constant, not a setting) and reads the key at run time from the pre-provisioned secret named by the required `VaSandboxSecretArn` parameter
+  (`VaVerifySecretArn` output), cached per container for at most five minutes and read again sooner if VA refuses the key. The key
   is not in the template, any Lambda environment or any log. The API holds neither the key nor the base URL.
 - It refuses outside `STAGING`. LOCAL `sandbox` has no relay function and calls the VA sandbox directly from
   the API process, which has internet access there; STAGING must use this function because the API's subnets
@@ -174,7 +175,7 @@ only the normalized result and failure class (`src/identity/va-confirmation-lamb
   or without `vaSandbox`); every container then runs the new code. It logs only the D035 §13 telemetry (status,
   failure class, latency bucket), never a projection value or a VA response body.
 - Its own egress is not host-filtered: the control is what it holds, not the network path (W9 item 4).
-- Until the secret holds the real key, every confirm answers `UNAVAILABLE` / `CONFIGURATION_INVALID`, which
+- A missing, unreadable or malformed key fails closed: every confirm answers `UNAVAILABLE` / `CONFIGURATION_INVALID`, which
   never counts toward the attempt limits. Self-attestation stays available. Each such refusal is logged as
   `va_verify_refused` / `not_configured`, and the `VaVerifyNotConfigured` alarm fires on one in 5 minutes (see
   "Alarms"). Nothing fires before someone tries to confirm, so the deploy step below still checks the key.
@@ -240,7 +241,10 @@ as libpq's `verify-full`; `src/db/pool.ts`) and the RDS CA bundle, shipped as
 advisory lock; plan §4.1). Each warm API or job-worker container holds up to `DATABASE_POOL_MAX=3` connections
 (migrate holds 1), and without a proxy nothing pools them across containers. The account's Lambda concurrency
 limit (1000) does not bound them, so reserved concurrency does (R14.1, SUAS-specs #100): **15 on the API, 2 on
-the job worker and 1 on migrate**. Budget: 15 × 3 + 2 × 3 + 1 × 1 (migrate) = **52 connections**. The parameter
+the job worker and 1 on migrate**. Nominal active-pool budget: 15 × 3 + 2 × 3 + 1 × 1 (migrate) = **52 connections**.
+This is not a hard ceiling: frozen containers, replaced versions and administrative sessions can
+retain connections. Reserved PostgreSQL slots reduce the usable part of `max_connections=80`.
+Qualify live session counts during an approved synthetic load and recycle test before operation. The parameter
 group pins `max_connections` at **80**, below the `db.t4g.micro` default (LEAST({DBInstanceClassMemory/9531392}, 5000), at
 most 112 for 1024 MiB), so the budget is checked against the limit the instance has; 3 of those are reserved for superusers. It is a static
 parameter: changing it needs a reboot. Tests keep the budget at 60 or less and below `max_connections` less 3, and an
@@ -389,8 +393,9 @@ They match terms, because the Node runtime prefixes the job worker's lines. An a
 `DatabaseConnections` (maximum over 5 minutes) fires at 70, between the budget of 52 and `max_connections` 80.
 With `vaSandbox=true`, the VA verify function's log group also counts `va_verify_refused` lines with reason
 `not_configured` (no valid key in its secret, or the secret could not be read) and alarms on one in 5 minutes.
-**There is no notification target yet**, so the alarms only show in the
-CloudWatch console until someone picks a topic (an SNS topic and subscriber are not created here). The inline
+Every alarm sends ALARM and OK transitions to `Suas-Staging-Alarms`. Its email subscription uses
+the required NoEcho `AlarmEmail` parameter. Confirm the subscription and receive a test notification
+before accepting STAGING. No alarm payload includes a VA projection, provider body or key. The inline
 job dispatcher in the API logs a different message (`[suas] job <type> failed`, `src/app.ts`) that these filters
 do not match.
 
@@ -400,7 +405,7 @@ Application function log groups use 30-day retention (`RetentionDays.ONE_MONTH`)
 same retention on its own log group, and only when `web/dist/index.html` exists at synth so the upload is created.
 CDK-owned helper functions that do not take a log group in this code (the cross-region export reader/writer, the
 VPC default-security-group restrictor, and the S3 auto-delete helper) are left on the AWS default, which does not
-expire those logs. No alarm topic and no Content-Security-Policy are added by this app.
+expire those logs. The alarm topic is created by the backend. No Content-Security-Policy is added by this app.
 
 ### Web
 
@@ -415,27 +420,24 @@ not set yet. **Build the SPA for staging before deploying the web stack:**
 Do not deploy until the AWS account layout is decided. When it is, from `infra/` with credentials for the chosen
 account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pass `bedrockModelId`:
 
-1. `cdk bootstrap` the account for `us-west-2` **and** `us-east-1` (cross-region references and the certificate need both).
+1. Provision all three execution policies and the runtime boundary from the bootstrap runbook,
+   then `cdk bootstrap` the account for `us-west-2` **and** `us-east-1` (cross-region references and the certificate need both).
 2. Export the Cloudflare zone (manual step 1), then `cdk deploy Suas-Dns`. Note the `NameServers` output. That note is prep only.
 3. **Do not change the registrar name servers.** The nameserver cutover waits for the suas-specs #61 R6.8 gate and an
    owner decision (manual step 1). Until both are recorded, leave the registrar pointing at Cloudflare. Certificates
    and DKIM stay pending while the domain still resolves from Cloudflare. Keep the zone export and the `NameServers`
    output for that later decision. Do not apply them.
-4. `cdk deploy Suas-Staging-WebCert Suas-Staging-Backend` only after that gate and an owner decision allow a cutover.
+4. Pass the required private `Suas-Staging-Backend:AlarmEmail` parameter to
+   `cdk deploy Suas-Staging-WebCert Suas-Staging-Backend` only after that gate and an owner decision allow a cutover.
    These stacks wait for DNS validation and will not finish before then. Do not change name servers to unblock them.
 5. **Run the migrate function (manual step 4).**
 6. Build the web app (above), then `cdk deploy Suas-Staging-Web`.
 7. Run the fixture seed (manual step 6), then smoke-test.
-8. **Store the VA sandbox key, only once the owner turns VA on.** Until then the backend is deployed without
-   `vaSandbox`, the API stays `SUAS_VA_CONFIRMATION_MODE=disabled`, and there is no secret to fill: skip this step.
-   When the owner turns it on, deploy the backend with `-c vaSandbox=true`, then type the LLC-owned key yourself
-   (manual step 7; a leading space keeps it out of shell history in most shells):
-   ` aws secretsmanager put-secret-value --secret-id <VaVerifySecretName output> --secret-string '{"SUAS_VA_CONFIRMATION_API_KEY":"<key>"}'`
-   Verify without reading the key back. `aws secretsmanager describe-secret --secret-id <VaVerifySecretName output> --query LastChangedDate`
-   shows the time of the put. Then confirm one synthetic VA test identity in the app and read the verify
-   function's log group (`aws cloudformation describe-stack-resources --stack-name Suas-Staging-Backend --query "StackResources[?starts_with(LogicalResourceId,'VaVerifyLogs')].PhysicalResourceId"`):
-   `va_verify_refused` with `not_configured` means the key is missing or malformed, a `va_verify` line with
-   `AUTHENTICATION_REJECTED` means VA refused it, and any other `va_verify` line means VA took it.
+8. **VA remains off until separately accepted.** Before a VA-enabled deploy, provision the LLC-owned
+   sandbox secret as described in manual step 7. Pass its ARN in `VaSandboxSecretArn`; there is no
+   placeholder secret. After deployment, use only an approved synthetic VA identity for the smoke
+   check. `not_configured` indicates an unreadable or malformed key; `AUTHENTICATION_REJECTED` means
+   the provider rejected it. Do not read the key back or log request/response bodies.
 
 ## Manual steps
 
@@ -478,20 +480,21 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pas
    action refuses outside STAGING, refuses any other address or any user id not in the registry, checks the
    schema version first, and a re-run creates nothing new. Details:
    [docs/runbooks/aws-staging-fixtures.md](../docs/runbooks/aws-staging-fixtures.md).
-7. **Turn on the VA sandbox, and put the VA sandbox key into the verify function's secret** (only when the
-   VA flow is to be shown; you do this yourself, no tool or agent reads or writes the key).
-   1. The key must be an **LLC-owned** VA sandbox key, not a personal one (VA_CONFIRMATION_FLOW W9 item 3,
-      developer.va.gov terms).
-   2. Deploy the backend with `-c vaSandbox=true`. This creates the function and its secret and switches the API
-      to `sandbox`.
-   3. Store the key in the secret named by the `VaVerifySecretName` output. Type the command yourself so the key
-      stays out of files; a leading space keeps it out of shell history in most shells:
-      ` aws secretsmanager put-secret-value --secret-id <VaVerifySecretName> --secret-string '{"SUAS_VA_CONFIRMATION_API_KEY":"<key>"}'`
-   4. No redeploy is needed: until a valid key is stored the function reads the secret on every call, and after
-      that again on a cold start, every five minutes, or when VA refuses the key. To rotate, `put-secret-value` again
-      with the new key; every warm container uses it within five minutes.
-   5. To turn it off, deploy without `vaSandbox` (or `-c vaSandbox=false`): the API returns to `disabled`, and
-      the function and its secret are deleted.
+7. **Provision VA before enabling it** (separate owner approval; no agent reads or writes the key).
+   1. Use an LLC-owned VA sandbox key, not a personal key. Provision it outside CloudFormation through
+      the approved secret-entry surface in a same-account, same-region Secrets Manager secret under
+      `suas/staging/`. Its JSON property is `SUAS_VA_CONFIRMATION_API_KEY`. Use the AWS managed
+      Secrets Manager key; customer KMS encryption needs a separately reviewed decrypt grant.
+   2. Verify secret metadata and ownership without returning its value. Deploy the reviewed assembly
+      with `-c vaSandbox=true` and `--parameters Suas-Staging-Backend:VaSandboxSecretArn=<complete ARN>`.
+      The parameter has no default. This creates the function, not the secret.
+   3. The role can read only that exact ARN, in this account, at `AWSCURRENT`. Confirm one approved
+      synthetic identity and verify the normalized outcome. An ARN alone does not establish key validity.
+   4. Rotate externally. The relay rereads on cold start, at most every five minutes, or after a provider
+      authentication rejection. Do not log or commit values.
+   5. Disabling `vaSandbox` removes the function and leaves the external secret under its owner's control.
+      On transition from the old managed secret, inspect and retain any needed old secret before the
+      old CloudFormation resource is removed.
 
 ## Records on Cloudflare today
 
@@ -525,7 +528,7 @@ owner decision.
   endpoint in the second zone (about $7.30/mo) before any real Veteran data, or sooner if the owner decides.
 - **Database connections without RDS Proxy.** Each warm API or job-worker container keeps up to 3 connections
   open, including while Lambda has frozen it, until the container is retired. Reserved concurrency (API 15, job
-  worker 2, migrate 1) holds the total to 52 (see "Database"); `max_connections` is pinned at 80 and an alarm fires
+  worker 2, migrate 1) gives a nominal active-pool budget of 52 (see "Database"); `max_connections` is pinned at 80 and an alarm fires
   at 70. Nothing in the database limits connections per role. The cap also limits staging throughput: past 15 concurrent API requests, Lambda throttles. Every cold
   container opens TLS straight to the instance.
 - **Cold starts and the API Gateway limit.** The HTTP API integration times out after 29 seconds. Inference is

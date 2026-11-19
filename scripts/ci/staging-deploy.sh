@@ -4,10 +4,13 @@
 # Order: quiesce the deployed backend on its own template and wait out its longest function
 # timeout, deploy the new backend still in maintenance, migrate privately, then admit the API,
 # then one worker pass, then the schedule, then the web app. Every step must pass; on failure
-# the stack stays in its current mode and nothing re-enables traffic (CI_CD_ARCHITECTURE.md §7).
+# recovery attempts maintenance and reports UNKNOWN if it cannot verify it (specs #112).
 # Never prints Lambda configuration.
 set -euo pipefail
+MUTATION_STARTED=false
+DEPLOY_STEP=preflight
 
+: "${SUAS_STAGING_ALARM_EMAIL:?Private alarm recipient is required}"
 : "${CDK_OUT:?}" "${RELEASE_JSON:?}" "${SUAS_BUILD_COMMIT:?}" "${API_ORIGIN:?}" "${SCOPE:?}"
 readonly REGION=us-west-2
 readonly BACKEND=Suas-Staging-Backend
@@ -16,7 +19,7 @@ readonly WORK
 
 cdk() { node infra/node_modules/aws-cdk/bin/cdk --app "$CDK_OUT" --no-notices --no-version-reporting "$@"; }
 release() { node --import tsx/esm scripts/ci/staging-release.ts "$@"; }
-step() { echo "::group::$*"; }
+step() { DEPLOY_STEP="$*"; echo "::group::$*"; }
 done_step() { echo "::endgroup::"; }
 
 # One stack output, or empty when the stack does not exist yet. Any other error is fatal.
@@ -44,8 +47,9 @@ require_stack() {
 }
 
 deploy_backend() {
+  MUTATION_STARTED=true
   cdk deploy "$BACKEND" --exclusively --require-approval never \
-    --parameters "$BACKEND:DeploymentMode=$1"
+    --parameters "$BACKEND:DeploymentMode=$1" --parameters "$BACKEND:AlarmEmail=$SUAS_STAGING_ALARM_EMAIL"
 }
 
 # Runs one AWS CLI command as the CDK deploy role, the only identity allowed to change stacks.
@@ -57,7 +61,7 @@ as_cdk_deploy_role() {
   session="suas-quiesce-${GITHUB_RUN_ID:-local}"
   creds=$(aws sts assume-role --role-session-name "$session" \
     --role-arn "arn:aws:iam::${CALLER_ACCOUNT}:role/${role}" \
-    --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
+    --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text) || return 1
   read -r key secret token <<<"$creds"
   for value in "$key" "$secret" "$token"; do
     if [ -z "$value" ] || [ "$value" = None ]; then
@@ -66,7 +70,7 @@ as_cdk_deploy_role() {
     fi
   done
   arn=$(AWS_ACCESS_KEY_ID="$key" AWS_SECRET_ACCESS_KEY="$secret" AWS_SESSION_TOKEN="$token" \
-    aws sts get-caller-identity --query Arn --output text)
+    aws sts get-caller-identity --query Arn --output text) || return 1
   if [ "$arn" != "arn:aws:sts::${CALLER_ACCOUNT}:assumed-role/${role}/${session}" ]; then
     echo "Assumed identity $arn is not the CDK deploy role; stopping." >&2
     exit 1
@@ -78,7 +82,7 @@ as_cdk_deploy_role() {
 quiesce() {
   local current
   current=$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$BACKEND" \
-    --query "Stacks[0].Parameters[?ParameterKey=='DeploymentMode'].ParameterValue | [0]" --output text)
+    --query "Stacks[0].Parameters[?ParameterKey=='DeploymentMode'].ParameterValue | [0]" --output text) || return 1
   if [ "$current" = maintenance ]; then return 0; fi
   if [ "$current" = None ]; then
     echo "$BACKEND has no DeploymentMode parameter; it was not deployed by this pipeline." >&2
@@ -89,14 +93,14 @@ quiesce() {
     node -e 'const keys = JSON.parse(require("fs").readFileSync(0, "utf8"));
       console.log(JSON.stringify(keys.map((k) => k === "DeploymentMode"
         ? { ParameterKey: k, ParameterValue: "maintenance" }
-        : { ParameterKey: k, UsePreviousValue: true })));' >"$WORK/quiesce-params.json"
+        : { ParameterKey: k, UsePreviousValue: true })));' >"$WORK/quiesce-params.json" || return 1
   local exec_role
   exec_role=$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$BACKEND" \
-    --query 'Stacks[0].RoleARN' --output text)
+    --query 'Stacks[0].RoleARN' --output text) || return 1
   as_cdk_deploy_role aws cloudformation update-stack --region "$REGION" --stack-name "$BACKEND" \
     --use-previous-template --role-arn "$exec_role" --parameters "file://$WORK/quiesce-params.json" \
-    --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND >/dev/null
-  aws cloudformation wait stack-update-complete --region "$REGION" --stack-name "$BACKEND"
+    --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND >/dev/null || return 1
+  timeout 600 aws cloudformation wait stack-update-complete --region "$REGION" --stack-name "$BACKEND" || return 1
 }
 
 # Invokes the backend's migrate or worker function by its full ARN in the release account and
@@ -108,6 +112,38 @@ invoke() {
   aws lambda invoke --region "$REGION" --function-name "$target" --cli-binary-format raw-in-base64-out \
     --cli-read-timeout 360 --payload '{}' "$WORK/$1.json" >"$WORK/$1.meta.json"
 }
+
+# Recover only after mutation; a failed read or rollback never becomes a claim of maintenance.
+recover_on_exit() {
+  local status="$?" recovery=UNKNOWN mode stack_status
+  trap - EXIT INT TERM
+  set +e # Recovery/reporting errors must never replace the original exit status.
+  if [ "$status" -ne 0 ] && [ "$MUTATION_STARTED" = true ]; then
+    if (quiesce); then
+      if mode=$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$BACKEND" \
+        --query "Stacks[0].Parameters[?ParameterKey=='DeploymentMode'].ParameterValue | [0]" --output text) && [ "$mode" = maintenance ] &&
+        stack_status=$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$BACKEND" \
+          --query "Stacks[0].StackStatus" --output text) &&
+        { [ "$stack_status" = UPDATE_COMPLETE ] || [ "$stack_status" = CREATE_COMPLETE ]; }; then
+        recovery=maintenance
+      fi
+    fi
+    printf '::error::Staging deploy failed; recovery state: %s. No further promotion.\n' "$recovery" >&2
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+      printf '\nDeployment failed at %s. Recovery state: %s. Review CloudFormation before retry.\n' \
+        "$DEPLOY_STEP" "$recovery" >>"$GITHUB_STEP_SUMMARY"
+    fi
+    aws sns publish --region "$REGION" \
+      --topic-arn "arn:aws:sns:${REGION}:${CALLER_ACCOUNT}:Suas-Staging-Alarms" \
+      --subject 'SUAS synthetic staging deploy failed' \
+      --message "Deployment failed. Recovery state: ${recovery}. Review the workflow and CloudFormation before retry." \
+      >/dev/null || echo '::error::Deploy failure notification failed; operator attention required.' >&2
+  fi
+  exit "$status"
+}
+trap recover_on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 step "Verify the release artifact"
 release verify "$CDK_OUT" "$RELEASE_JSON"
@@ -127,6 +163,7 @@ if [ "$SCOPE" = full ]; then
     # The deployed functions hold the in-flight work, so their timeouts set the wait.
     as_cdk_deploy_role aws cloudformation get-template --region "$REGION" --stack-name "$BACKEND" \
       --query TemplateBody --output json >"$WORK/deployed-backend.json"
+    MUTATION_STARTED=true
     quiesce
     drain=$(release drain "$RELEASE_JSON" "$WORK/deployed-backend.json")
     echo "Waiting ${drain}s for in-flight API and worker invocations to finish."
@@ -167,6 +204,7 @@ else
 fi
 
 step "Deploy the web app"
+MUTATION_STARTED=true
 cdk deploy Suas-Staging-Web --exclusively --require-approval never
 done_step
 

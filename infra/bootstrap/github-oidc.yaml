@@ -124,6 +124,10 @@ Resources:
                 Resource:
                   - !Sub arn:${AWS::Partition}:cloudformation:us-west-2:${AWS::AccountId}:stack/Suas-*/*
                   - !Sub arn:${AWS::Partition}:cloudformation:us-east-1:${AWS::AccountId}:stack/Suas-*/*
+              - Sid: NotifyDeploymentFailure
+                Effect: Allow
+                Action: sns:Publish
+                Resource: !Sub arn:${AWS::Partition}:sns:us-west-2:${AWS::AccountId}:Suas-Staging-Alarms
               - Sid: InvokeMigrateAndWorker
                 # CloudFormation names functions <stack>-<logical id>-<suffix>. The API and the email
                 # relay are excluded, and GetFunctionConfiguration is withheld because the
