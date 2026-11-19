@@ -1,6 +1,6 @@
 # SUAS infrastructure (AWS CDK)
 
-TypeScript CDK app for the SUAS v1 STAGING environment in `us-west-2` (synthetic data only).
+TypeScript CDK app for the SUAS v1 STAGING environment in `us-west-2` by default (synthetic data only).
 It follows `V1_PROJECT_PLAN.md` §6 in the SUAS-specs repository.
 
 **Nothing has been deployed.** This app has only been synthesized and tested offline. A manual deploy
@@ -17,7 +17,7 @@ production set can be added later without restructuring.
   fail rather than call it.
 - No context lookup is used (`Vpc.fromLookup`, `HostedZone.fromLookup`, AMI lookups). The two availability
   zones come from `Fn::GetAZs`, resolved by CloudFormation. `cdk.context.json` is git-ignored.
-- The account comes from `CDK_DEFAULT_ACCOUNT` at deploy time. The region is fixed to `us-west-2`.
+- The account comes from `CDK_DEFAULT_ACCOUNT` at deploy time. The region is `us-west-2` unless the `region` context says otherwise.
   No account id, secret or key is committed. The one 12-digit number in the templates is the AWS-owned
   account that publishes the public Lambda Web Adapter layer; a test checks there are no others.
 
@@ -87,11 +87,36 @@ Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user c
 | `allowPlaceholderModel`  | refused                                | Same refusal. It does not select a model and it does not mark a deployable template.                                       |
 | `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches the retired Worker staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
 | `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value the retired Worker used)                                |
-| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of `us-west-2` zones, if an endpoint service is missing in one                                                  |
+| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of zones in `region`, if an endpoint service is missing in one                                                  |
 | `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                      |
 | `vaSandbox`              | `false`                                | `true` builds the VA verify function and sets `SUAS_VA_CONFIRMATION_MODE=sandbox` on the API. See "VA confirmation".       |
+| `region`                 | `us-west-2`                            | Region of the Dns, Backend and Web stacks. The WebCert stack stays in `us-east-1`.                                         |
+| `customDomains`          | `true`                                 | `false`: no Dns or WebCert stack, no certificates, custom domains or DNS records. See "Region-restricted accounts".        |
+| `webOrigin`              | none                                   | Only with `customDomains=false`. The `WebUrl` origin (`https://<id>.cloudfront.net`), set as `SUAS_CORS_ALLOWED_ORIGINS`.  |
+| `webCertificateArn`      | none                                   | Only with `customDomains=true`. A `us-east-1` ACM certificate ARN for CloudFront; replaces the WebCert stack.              |
 
 Hostnames must be inside `rootDomain`, because certificates are validated in the zone this app owns.
+
+### Region-restricted accounts and default URLs
+
+Some accounts allow regional services in one region only, and in `us-east-1` allow only ACM, CloudFront, Route 53
+and IAM. For those:
+
+- `-c region=<region>` moves the Dns, Backend and Web stacks there (zones, `SUAS_AWS_REGION`, the Web Adapter layer).
+- `-c customDomains=false` builds only `Suas-Staging-Backend` and `Suas-Staging-Web`. The web runs on the
+  CloudFront domain (`WebUrl` is `https://<id>.cloudfront.net`) and the API on its `execute-api` URL (`ApiUrl`;
+  the stage is `$default`, so the URL has no path). The `execute-api` endpoint is enabled only in this mode.
+- Without `webOrigin` the API has no CORS allowlist, so the browser cannot call it yet. The CloudFront domain is
+  known only after the first deploy, so it takes two builds:
+  1. Deploy Backend and Web with `-c region=<region> -c customDomains=false`.
+  2. Redeploy the Backend with `-c webOrigin=<WebUrl>` added, then build the web with
+     `VITE_SUAS_API_BASE_URL=<ApiUrl>` and redeploy the Web stack.
+- Adding the domain later: CloudFront takes certificates from `us-east-1` only. When CloudFormation is not allowed
+  there, request the certificate with `aws acm request-certificate --region us-east-1`, validate it, and pass its
+  ARN as `-c webCertificateArn=<arn>` with custom domains on. No WebCert stack is then built.
+
+The deploy workflow and `scripts/ci/` still assume `us-west-2` and all four stacks, and `npm run synth:deploy`
+does not pass these contexts. That is a CD follow-up; until then use `npm run synth -- -c ...` by hand.
 
 ## Stacks
 
@@ -286,7 +311,7 @@ each function's environment is checked against the application's own config vali
 | `SUAS_EMAIL_MODE`, `SUAS_EMAIL_RELAY_FUNCTION`                                                  | `resend`, the relay function name (API and job worker). `RESEND_API_KEY` and `SUAS_EMAIL_FROM` are set on the relay only.            |
 | `SUAS_VA_CONFIRMATION_MODE`, `SUAS_VA_CONFIRMATION_RELAY_FUNCTION`                              | unset (`disabled`); with `vaSandbox=true`, `sandbox` and the verify function name (API only). No VA key or base URL on the API.      |
 | `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                          |
-| `SUAS_AWS_REGION`                                                                               | `us-west-2`                                                                                                                          |
+| `SUAS_AWS_REGION`                                                                               | the `region` context (default `us-west-2`)                                                                                           |
 | `SUAS_MODEL_INFERENCE_MODE`                                                                     | `disabled`. R2.15 is not approved, so no model id is set.                                                                            |
 | `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket (API and job worker)                                                                                         |
 | `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052).                                                               |

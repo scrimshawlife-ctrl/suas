@@ -42,6 +42,21 @@ node node_modules/aws-cdk/bin/cdk bootstrap \
 Use the lockfile CLI, not `npx cdk@latest`. Re-run the bootstrap after a CDK upgrade that needs a newer
 bootstrap version.
 
+### Region-restricted accounts
+
+If the organisation allows regional services in one region only (and in `us-east-1` only ACM, CloudFront,
+Route 53 and IAM), bootstrap that one region and skip `us-east-1`: deploy the execution policy with
+`--region <region>` and run `cdk bootstrap "aws://$ACCOUNT/<region>"` alone. Deploy with
+`-c region=<region> -c customDomains=false` (see "Region-restricted accounts and default URLs" in
+`infra/README.md`). When the domain is added later, create the CloudFront certificate by CLI and pass its ARN
+as `webCertificateArn`:
+
+```sh
+aws acm request-certificate --region us-east-1 --domain-name staging.suasqrf.com --validation-method DNS
+```
+
+The deploy workflow does not support this layout yet.
+
 ## 2. GitHub OIDC roles
 
 [`infra/bootstrap/github-oidc.yaml`](../../infra/bootstrap/github-oidc.yaml) creates the OIDC provider and
