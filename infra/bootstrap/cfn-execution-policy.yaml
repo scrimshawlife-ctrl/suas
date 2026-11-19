@@ -149,11 +149,13 @@ Resources:
                 aws:RequestedRegion:
                   - us-west-2
                   - us-east-1
-          - Sid: BoundedRoleCreation
+          - Sid: BoundedRoleWrites
             Effect: Allow
             Action:
               - iam:CreateRole
               - iam:PutRolePermissionsBoundary
+              - iam:PutRolePolicy
+              - iam:UpdateAssumeRolePolicy
             Resource:
               Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
             Condition:
@@ -167,10 +169,8 @@ Resources:
               - iam:GetRole
               - iam:GetRolePolicy
               - iam:UpdateRole
-              - iam:UpdateAssumeRolePolicy
               - iam:TagRole
               - iam:UntagRole
-              - iam:PutRolePolicy
               - iam:DeleteRolePolicy
               - iam:ListRolePolicies
               - iam:ListAttachedRolePolicies
@@ -185,6 +185,8 @@ Resources:
               Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*
             Condition:
               ArnEquals:
+                iam:PermissionsBoundary:
+                  Fn::Sub: arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/SuasStagingRuntimeBoundary
                 iam:PolicyARN:
                   Fn::Sub: arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
           - Sid: PassGeneratedRoles

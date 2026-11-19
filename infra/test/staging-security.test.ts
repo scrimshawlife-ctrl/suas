@@ -30,6 +30,23 @@ describe('staging privilege boundary', () => {
       }
     }
   });
+  it.each(['iam:PutRolePolicy', 'iam:AttachRolePolicy', 'iam:UpdateAssumeRolePolicy'])(
+    'requires the approved existing boundary on every allow path for %s',
+    (action) => {
+      const grants = statements.filter((s) => s.Effect === 'Allow' && actions(s).includes(action));
+      expect(grants.length).toBeGreaterThan(0);
+      for (const grant of grants) {
+        // ArnEquals fails when the existing boundary is missing or differs; IfExists would not.
+        expect(grant.Condition?.ArnEquals?.['iam:PermissionsBoundary']).toEqual({
+          'Fn::Sub':
+            'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/SuasStagingRuntimeBoundary',
+        });
+        expect(grant.Resource).toEqual({
+          'Fn::Sub': 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Suas-*',
+        });
+      }
+    },
+  );
   it('explicitly denies removing, replacing or editing the runtime boundary', () => {
     const denied = statements.filter((s) => s.Effect === 'Deny');
     for (const action of [

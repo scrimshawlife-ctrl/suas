@@ -34,6 +34,10 @@ The CloudFormation execution role gets all three policies `SuasCdkExecution`, `S
 `SuasCdkEdge`
 ([`infra/bootstrap/cfn-execution-policy.yaml`](../../infra/bootstrap/cfn-execution-policy.yaml)).
 
+For an existing account, first disable the GitHub deployment identity and any other principals
+that can submit updates through the application execution role. Keep them disabled through the
+legacy-role check below; pause queued/running deployments before changing the bootstrap policies.
+
 ```sh
 aws cloudformation deploy --region us-west-2 --stack-name Suas-Cdk-Execution-Policy \
   --template-file infra/bootstrap/cfn-execution-policy.yaml --capabilities CAPABILITY_NAMED_IAM
@@ -60,10 +64,29 @@ map and workflow together requires a separate reviewed change.
 ### Permissions boundary acceptance
 
 The bootstrap also creates `SuasStagingRuntimeBoundary`. Every generated role, including late-created
-cross-region helpers, receives it. The execution policies require it on role creation and forbid its
-removal, replacement or policy modification. Application identities still need their own grants;
+cross-region helpers, receives it. The execution policies require it on role creation, inline-policy writes, managed-policy attachment
+and trust-policy updates, and forbid its removal, replacement or policy modification. Application identities still need their own grants;
 the boundary alone grants nothing. Provision and update the boundary from the separate administrator
 identity, never from the application execution role.
+
+Before enabling or re-enabling deployment access, the independent administrator must inventory **all**
+existing `Suas-*` roles, including helpers from older deployments. New templates do not prove that
+existing roles have a boundary. For each role, review its owner, trust policy, inline/attached policies
+and required actions. Attach `SuasStagingRuntimeBoundary` to the reviewed application/helper roles
+using the administrator identity, then read back the boundary ARN. Do not blindly adopt an unknown
+role by name. Resolve unexpected roles or broader legacy privileges before continuing, and retain
+the inventory and validation result as bootstrap evidence. An empty inventory is valid on first setup.
+Do this before application updates: CloudFormation is not guaranteed to attach a new boundary before
+updating the role's policies. Boundary changes can also restrict an existing workload immediately.
+
+AWS supports `iam:PermissionsBoundary` on `PutRolePolicy`, `AttachRolePolicy` and
+`UpdateAssumeRolePolicy`, but **not** `PassRole` (see the
+[official IAM action reference](https://servicereference.us-east-1.amazonaws.com/v1/iam/iam.json)).
+PassRole is restricted by generated role name, account and receiving service; its safety also depends
+on the qualified role namespace. Keep independent administrators from introducing unbounded roles
+into that namespace while deployment access is enabled. Repeat this qualification after any such
+administrator change. New-role enforcement plus the boundary removal/replacement denies preserve
+the invariant for routine deploys; this is a one-time bootstrap transition, not per-deploy ceremony.
 
 Policies restrict resources by account, region and generated names where those identifiers exist.
 EC2 network resources and service-generated IDs still have account-wide scope in the two regions;
@@ -75,7 +98,11 @@ in the account. After foundation creation, tighten generated identifiers where f
 Offline tests check syntax, size, boundary attachment and forbidden privileges. Before any authorized
 run, require fresh IAM Access Analyzer validation and positive/negative policy simulations for the
 exact account: expected deployment actions pass; outside-account resources, wrong regions,
-unbounded role creation, boundary changes and production secrets fail. Test real CloudFormation
+unbounded role creation, inline-policy/trust updates or policy attachment to an unbounded or
+wrong-boundary role, boundary changes and production secrets fail. The same supported role updates
+with the approved boundary must succeed. Confirm managed attachment still accepts only the existing
+AWSLambdaBasicExecutionRole allow-list. PassRole evidence must use the qualified role inventory;
+do not pretend that an unsupported condition validates the role boundary. Test real CloudFormation
 create/update/rollback only inside a separately authorized synthetic window. Do not add a broad
 policy to bypass a denied action.
 
