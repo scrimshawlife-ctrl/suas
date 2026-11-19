@@ -53,7 +53,7 @@ case "$*" in
     [ "$RECOVERY_FAIL" = true ] && exit 31
     echo maintenance >"$MODE_FILE" ;;
   "cloudformation wait"*) [ "$RECOVERY_FAIL" != wait ] ;;
-  "sns publish"*) exit 0 ;;
+  "sns publish"*) [ "$NOTIFICATION_FAIL" = true ] && exit 32; exit 0 ;;
   "lambda invoke"*)
     case "$*" in
       *Migrate*) printf '{"environment":"STAGING","mode":"apply","expected_schema_version":%s,"schema_version":%s,"spec_stack_drift":false}' "$SCHEMA" "$SCHEMA" >"\${@: -1}" ;;
@@ -84,6 +84,7 @@ interface Scenario {
   failStage?: string;
   recoveryFail?: string;
   stackStatus?: string;
+  reportingFailure?: boolean;
 }
 
 function runDeploy(scenario: Scenario) {
@@ -151,7 +152,10 @@ exit 0
       AWS_LOG: join(work, 'aws.log'),
       MODE_FILE: join(work, 'mode'),
       PUBLIC_LOG: join(work, 'public.log'),
-      GITHUB_STEP_SUMMARY: join(work, 'summary'),
+      GITHUB_STEP_SUMMARY: scenario.reportingFailure
+        ? join(work, 'mode', 'summary')
+        : join(work, 'summary'),
+      NOTIFICATION_FAIL: scenario.reportingFailure ? 'true' : '',
       FAIL_STAGE: scenario.failStage ?? '',
       RECOVERY_FAIL: scenario.recoveryFail ?? '',
       STACK_STATUS: scenario.stackStatus ?? 'UPDATE_COMPLETE',
@@ -278,6 +282,13 @@ describe('deployment failure recovery', () => {
       stackStatus: 'UPDATE_IN_PROGRESS',
     });
     expect(result.summary).toContain('Recovery state: UNKNOWN');
+  });
+  it('preserves the original failure when summary and SNS reporting fail', () => {
+    const result = runDeploy({ ...admitted, failStage: 'public', reportingFailure: true });
+    expect(result.status).toBe(23);
+    expect(result.mode.trim()).toBe('maintenance');
+    expect(result.awsCalls).toContain('sns publish');
+    expect(result.stderr).toContain('Deploy failure notification failed');
   });
   it('does not change a successful deployment or send a failure notification', () => {
     const result = runDeploy(admitted);

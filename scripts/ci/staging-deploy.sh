@@ -117,6 +117,7 @@ invoke() {
 recover_on_exit() {
   local status="$?" recovery=UNKNOWN mode stack_status
   trap - EXIT INT TERM
+  set +e # Recovery/reporting errors must never replace the original exit status.
   if [ "$status" -ne 0 ] && [ "$MUTATION_STARTED" = true ]; then
     if (quiesce); then
       if mode=$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$BACKEND" \
