@@ -40,7 +40,8 @@ legacy-role check below; pause queued/running deployments before changing the bo
 
 ```sh
 aws cloudformation deploy --region us-west-2 --stack-name Suas-Cdk-Execution-Policy \
-  --template-file infra/bootstrap/cfn-execution-policy.yaml --capabilities CAPABILITY_NAMED_IAM
+  --template-file infra/bootstrap/cfn-execution-policy.yaml --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides "StagingApiHostname=$STAGING_API_HOSTNAME" "StagingWebHostname=$STAGING_WEB_HOSTNAME"
 aws cloudformation update-termination-protection --region us-west-2 \
   --stack-name Suas-Cdk-Execution-Policy --enable-termination-protection
 cd infra && npm ci
@@ -49,6 +50,26 @@ node node_modules/aws-cdk/bin/cdk bootstrap \
   --cloudformation-execution-policies "arn:aws:iam::$ACCOUNT:policy/SuasCdkExecution,arn:aws:iam::$ACCOUNT:policy/SuasCdkServices,arn:aws:iam::$ACCOUNT:policy/SuasCdkEdge" \
   --termination-protection
 ```
+
+Set `STAGING_API_HOSTNAME` and `STAGING_WEB_HOSTNAME` to the exact DNS names in the reviewed
+assembly before bootstrap. They are required parameters, with no wildcard or default. Confirm they
+match the API and web certificates; a hostname change requires a reviewed bootstrap update.
+
+CloudFront `CreateDistribution` needs `Resource: "*"`, as do cache-policy and origin-access-control
+creation. The policy enumerates those actions; existing-resource operations retain ARN scoping.
+`CreateDistributionWithTags` is an API operation, not an IAM action; tagged creation uses
+`CreateDistribution` and the applicable `TagResource` grant.
+
+ACM's [API permissions guide](https://docs.aws.amazon.com/acm/latest/userguide/authen-apipermissions.html)
+and [authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_acm.html)
+disagree about certificate-ARN scoping for `RequestCertificate`. Both permit `Resource: "*"`.
+Use that only for this action, with DNS validation, the supported regions, no private CA, and
+`ForAllValues:StringEquals` for the two exact hostnames. The non-null condition prevents a missing
+domain list from satisfying the set condition. Existing-certificate actions remain scoped to the
+account's ARNs. This resolves the implementation choice without claiming the previous scope was
+proven broken. Before operation, validate the policy and simulate both hostname allows, a mixed
+allowed/foreign SAN set, wildcard/foreign names, a missing domain key, a private CA, email validation
+and an unsupported region. Perform actual certificate issuance only in an authorized deployment window.
 
 Use the lockfile CLI, not `npx cdk@latest`. Re-run the bootstrap after a CDK upgrade that needs a newer
 bootstrap version.

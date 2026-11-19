@@ -7,12 +7,102 @@ import { synthesize } from './helpers.js';
 
 const file = new URL('../bootstrap/cfn-execution-policy.yaml', import.meta.url).pathname;
 const stack = new Stack(new App(), 'PolicyTest');
-new CfnInclude(stack, 'BootstrapPolicies', { templateFile: file });
+new CfnInclude(stack, 'BootstrapPolicies', {
+  templateFile: file,
+  parameters: {
+    StagingApiHostname: 'api.staging.example.org',
+    StagingWebHostname: 'staging.example.org',
+  },
+});
 const policies = Object.values(Template.fromStack(stack).findResources('AWS::IAM::ManagedPolicy'));
 const statements = policies.flatMap((p) => p.Properties.PolicyDocument.Statement);
 const actions = (s: { Action: string | string[] }): string[] => [s.Action].flat();
 
 describe('staging privilege boundary', () => {
+  it('allows CloudFront creation without widening existing-resource actions', () => {
+    const grants = statements.filter(
+      (s) => s.Effect === 'Allow' && actions(s).includes('cloudfront:CreateDistribution'),
+    );
+    expect(grants).toHaveLength(1);
+    expect(grants[0].Resource).toBe('*');
+    expect(actions(grants[0]).sort()).toEqual([
+      'cloudfront:CreateCachePolicy',
+      'cloudfront:CreateDistribution',
+      'cloudfront:CreateOriginAccessControl',
+    ]);
+    expect(statements.flatMap(actions)).not.toContain('cloudfront:CreateDistributionWithTags');
+    for (const action of [
+      'cloudfront:UpdateDistribution',
+      'cloudfront:DeleteDistribution',
+      'cloudfront:TagResource',
+    ]) {
+      const scoped = statements.filter((s) => s.Effect === 'Allow' && actions(s).includes(action));
+      expect(scoped.length).toBeGreaterThan(0);
+      for (const grant of scoped) expect(grant.Resource).not.toBe('*');
+    }
+  });
+  it('bounds every certificate-request path by exact domains, DNS, region and public issuance', () => {
+    const grants = statements.filter(
+      (s) => s.Effect === 'Allow' && actions(s).includes('acm:RequestCertificate'),
+    );
+    expect(grants).toHaveLength(1);
+    const grant = grants[0];
+    expect(grant.Resource).toBe('*');
+    expect(actions(grant)).toEqual(['acm:RequestCertificate']);
+    expect(grant.Condition).toEqual({
+      StringEquals: {
+        'aws:RequestedRegion': ['us-west-2', 'us-east-1'],
+        'acm:ValidationMethod': 'DNS',
+      },
+      'ForAllValues:StringEquals': {
+        'acm:DomainNames': ['api.staging.example.org', 'staging.example.org'],
+      },
+      Null: { 'acm:DomainNames': 'false', 'acm:CertificateAuthority': 'true' },
+    });
+    // Evaluate these supported condition operators against representative request contexts.
+    const accepts = (context: Record<string, string | string[]>) =>
+      Object.entries(grant.Condition.StringEquals).every(([key, values]) =>
+        [values].flat().includes(context[key]),
+      ) &&
+      Object.entries(grant.Condition.Null).every(
+        ([key, absent]) => (context[key] === undefined) === (absent === 'true'),
+      ) &&
+      Object.entries(grant.Condition['ForAllValues:StringEquals']).every(([key, values]) =>
+        [context[key] ?? []].flat().every((value) => [values].flat().includes(value)),
+      );
+    const request = {
+      'aws:RequestedRegion': 'us-east-1',
+      'acm:ValidationMethod': 'DNS',
+      'acm:DomainNames': ['staging.example.org'],
+    };
+    expect(accepts(request)).toBe(true);
+    expect(
+      accepts({
+        ...request,
+        'aws:RequestedRegion': 'us-west-2',
+        'acm:DomainNames': ['api.staging.example.org'],
+      }),
+    ).toBe(true);
+    for (const names of [
+      ['foreign.example.org'],
+      ['staging.example.org', 'foreign.example.org'],
+      ['*.example.org'],
+    ]) {
+      expect(accepts({ ...request, 'acm:DomainNames': names })).toBe(false);
+    }
+    expect(accepts({ 'aws:RequestedRegion': 'us-east-1', 'acm:ValidationMethod': 'DNS' })).toBe(
+      false,
+    );
+    expect(
+      accepts({
+        ...request,
+        'acm:CertificateAuthority':
+          'arn:aws:acm-pca:us-east-1:123456789012:certificate-authority/test',
+      }),
+    ).toBe(false);
+    expect(accepts({ ...request, 'acm:ValidationMethod': 'EMAIL' })).toBe(false);
+    expect(accepts({ ...request, 'aws:RequestedRegion': 'eu-west-1' })).toBe(false);
+  });
   it('keeps policies within IAM size limits and contains no CloudFormation YAML aliases', () => {
     expect(policies).toHaveLength(4);
     for (const policy of policies) {

@@ -1,6 +1,15 @@
 # Provision separately before the application. The execution role cannot modify the boundary.
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Synthetic STAGING execution policies and runtime boundary; deploy requires separate approval.
+Parameters:
+  StagingApiHostname:
+    Type: String
+    AllowedPattern: '[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}'
+    Description: Exact API hostname in the reviewed staging assembly (no wildcard).
+  StagingWebHostname:
+    Type: String
+    AllowedPattern: '[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}'
+    Description: Exact web hostname in the reviewed staging assembly (no wildcard).
 Resources:
   SuasCdkExecutionPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -399,10 +408,27 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          # Creation has no stable ARN; restrict the complete requested domain set instead.
+          - Sid: RequestStagingCertificates
+            Effect: Allow
+            Action: acm:RequestCertificate
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
+                acm:ValidationMethod: DNS
+              ForAllValues:StringEquals:
+                acm:DomainNames:
+                  - Ref: StagingApiHostname
+                  - Ref: StagingWebHostname
+              'Null':
+                acm:DomainNames: 'false'
+                acm:CertificateAuthority: 'true'
           - Sid: Certificates
             Effect: Allow
             Action:
-              - acm:RequestCertificate
               - acm:DescribeCertificate
               - acm:DeleteCertificate
               - acm:AddTagsToCertificate
@@ -452,8 +478,6 @@ Resources:
           - Sid: Edge
             Effect: Allow
             Action:
-              - cloudfront:CreateDistribution
-              - cloudfront:CreateDistributionWithTags
               - cloudfront:GetDistribution
               - cloudfront:GetDistributionConfig
               - cloudfront:UpdateDistribution
@@ -477,9 +501,11 @@ Resources:
               - Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
               - Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:cache-policy/*
               - Fn::Sub: arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:origin-access-control/*
+          # These creation actions do not support resource-level authorization.
           - Sid: EdgeCreate
             Effect: Allow
             Action:
+              - cloudfront:CreateDistribution
               - cloudfront:CreateCachePolicy
               - cloudfront:CreateOriginAccessControl
             Resource: '*'
