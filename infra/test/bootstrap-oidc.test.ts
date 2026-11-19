@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest';
 // claims. Read as text like the workflow tests: each role's StringEquals map, with !Sub resolved.
 const TEMPLATE = readFileSync(new URL('../bootstrap/github-oidc.yaml', import.meta.url), 'utf8');
 const WORKFLOW = readFileSync(
-  new URL('../../.github/workflows/staging-deploy.yml', import.meta.url),
+  new URL('../../.github/workflows/staging-deploy-verified.yml', import.meta.url),
   'utf8',
 );
 const PARAMS: Record<string, string> = {
   SubjectPrefix: 'repo:octo@1/suas@2',
   WorkflowRepository: 'octo/suas',
 };
-const DEPLOY_WORKFLOW = 'octo/suas/.github/workflows/staging-deploy.yml@refs/heads/main';
+const DEPLOY_WORKFLOW = 'octo/suas/.github/workflows/staging-deploy-verified.yml@refs/heads/main';
 
 function trustConditions(role: 'PlanRole' | 'DeployRole'): Record<string, string> {
   const block = TEMPLATE.split(/^ {2}(?=\w+:$)/m).find((b) => b.startsWith(`${role}:`)) ?? '';
@@ -37,10 +37,27 @@ const token = (environment: string, jobWorkflowRef = DEPLOY_WORKFLOW) => ({
 });
 
 describe('GitHub OIDC trust', () => {
+  it('issues the workflow claim from a called workflow and retains manual-only entry', () => {
+    const entry = readFileSync(
+      new URL('../../.github/workflows/staging-deploy.yml', import.meta.url),
+      'utf8',
+    );
+    expect(entry).toMatch(/on:\n  workflow_dispatch:/);
+    expect(entry).toContain('uses: ./.github/workflows/staging-deploy-verified.yml');
+    expect(entry).toContain('id-token: write');
+    expect(entry).toContain('secrets: inherit');
+    expect(entry).toContain('cancel-in-progress: false');
+    expect(WORKFLOW).toMatch(/on:\n  workflow_call:/);
+    expect(WORKFLOW).not.toContain('workflow_dispatch:');
+    // Credentialed jobs are downstream of the caller/commit guard and retain their environments.
+    expect(WORKFLOW).toMatch(/plan:\n    needs: \[gate, build\]/);
+    expect(WORKFLOW).toMatch(/deploy:\n    needs: \[gate, plan\]/);
+    expect(WORKFLOW).toContain('uses: ./.github/workflows/verify.yml');
+  });
   it.each([
     ['DeployRole', 'suas-synthetic-staging'],
     ['PlanRole', 'suas-synthetic-staging-plan'],
-  ] as const)('%s trusts only staging-deploy.yml on main in %s', (role, environment) => {
+  ] as const)('%s trusts only staging-deploy-verified.yml on main in %s', (role, environment) => {
     expect(trusts(role, token(environment))).toBe(true);
     // Any other workflow file that names the environment, or a branch copy of this one.
     expect(
@@ -48,6 +65,13 @@ describe('GitHub OIDC trust', () => {
     ).toBe(false);
     expect(trusts(role, token(environment, DEPLOY_WORKFLOW.replace('main', 'attack')))).toBe(false);
     expect(trusts(role, { ...token(environment), job_workflow_ref: '' })).toBe(false);
+    // Ordinary manual-job tokens do not contain the called-workflow claim.
+    const { job_workflow_ref: _calledWorkflow, ...ordinaryToken } = token(environment);
+    expect(trusts(role, ordinaryToken)).toBe(false);
+    expect(trusts(role, { ...token(environment), aud: 'other' })).toBe(false);
+    expect(
+      trusts(role, { ...token(environment), sub: `repo:foreign/suas:environment:${environment}` }),
+    ).toBe(false);
     expect(trusts(role, token(`${environment}-other`))).toBe(false);
   });
 

@@ -2,7 +2,7 @@
 #
 # OIDC only: no access keys. Each role trusts exactly one protected GitHub Environment through the
 # repository's immutable OIDC subject (`gh api repos/<repo>/actions/oidc/customization/sub`), and only
-# from staging-deploy.yml on main (the job_workflow_ref claim), so no other workflow file or branch copy
+# from staging-deploy-verified.yml on main (the job_workflow_ref claim), so no other workflow file or branch copy
 # that names the environment can assume it.
 # - plan: reads the Suas-* stack templates and the bootstrap version, for `cdk diff`. It does not get
 #   the CDK lookup role, whose ReadOnlyAccess could read Lambda configuration (resolved secrets).
@@ -63,7 +63,7 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
                 token.actions.githubusercontent.com:sub: !Sub ${SubjectPrefix}:environment:suas-synthetic-staging-plan
-                token.actions.githubusercontent.com:job_workflow_ref: !Sub ${WorkflowRepository}/.github/workflows/staging-deploy.yml@refs/heads/main
+                token.actions.githubusercontent.com:job_workflow_ref: !Sub ${WorkflowRepository}/.github/workflows/staging-deploy-verified.yml@refs/heads/main
       Policies:
         - PolicyName: read-suas-stacks
           PolicyDocument:
@@ -102,7 +102,7 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
                 token.actions.githubusercontent.com:sub: !Sub ${SubjectPrefix}:environment:suas-synthetic-staging
-                token.actions.githubusercontent.com:job_workflow_ref: !Sub ${WorkflowRepository}/.github/workflows/staging-deploy.yml@refs/heads/main
+                token.actions.githubusercontent.com:job_workflow_ref: !Sub ${WorkflowRepository}/.github/workflows/staging-deploy-verified.yml@refs/heads/main
       Policies:
         - PolicyName: staging-deploy
           PolicyDocument:

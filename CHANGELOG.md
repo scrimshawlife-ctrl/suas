@@ -22,6 +22,8 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
+- Draft staging OIDC binding (SUAS-specs #112, HOLD): the manual entry now calls `staging-deploy-verified.yml`, so credentialed jobs emit the reusable-workflow claim required by both role trusts. A pre-credential gate rejects another caller, event, branch or scope. Both protected environments, reviewers, release artifact, verification and recovery steps remain required. Tests exercise missing claims and the real caller guard. No workflow was dispatched.
+
 - Draft staging creation permissions (SUAS-specs #112, HOLD): grant CloudFront creation with the required wildcard resource and valid IAM action names. Resolve the ACM documentation conflict with a separate DNS-only certificate request grant restricted to two required staging hostname parameters and the supported regions; retain account-scoped existing-certificate operations. No bootstrap or deployment is performed.
 
 - Draft STAGING execution policy now requires the approved boundary when updating existing roles' inline policies, attached managed policies or trust policies. S3 grants check actual bucket ownership and supported regions. Legacy role inventory and administrator boundary adoption are required before enabling deployment access (SUAS-specs #112, still on HOLD).

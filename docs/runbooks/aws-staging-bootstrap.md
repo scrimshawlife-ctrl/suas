@@ -134,11 +134,20 @@ policy to bypass a denied action.
 
 [`infra/bootstrap/github-oidc.yaml`](../../infra/bootstrap/github-oidc.yaml) creates the OIDC provider and
 two roles. Each trusts one GitHub Environment through the repository's immutable OIDC subject
-(`gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub` → `sub_claim_prefix`), and only from
-`.github/workflows/staging-deploy.yml` on `main` (IAM's `token.actions.githubusercontent.com:job_workflow_ref`
-key), so another workflow file or a branch copy that names the environment cannot assume either role. If the
-owner changes the subject setting, update `SubjectPrefix`; if the repository is renamed, update
-`WorkflowRepository`.
+(`gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub` → `sub_claim_prefix`), and the
+called `.github/workflows/staging-deploy-verified.yml` on `main` through `job_workflow_ref`.
+The manual entry remains `staging-deploy.yml`; it calls that reusable workflow. Before checkout or
+credentials, the called workflow requires the manual event, main ref, exact entry-workflow path and
+supported scope. It then keeps the original verify/build/plan/deploy dependencies and both protected
+environments. A branch copy or another caller fails these controls. The entry passes inherited secrets;
+only the deployment step reads the alarm-email secret. No credential is passed as a workflow input.
+If the owner changes the subject setting, update `SubjectPrefix`; after a repository rename, update
+`WorkflowRepository`. Do not dispatch either workflow until all release and operational holds clear.
+
+AWS's [current IAM reference](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_iam-condition-keys.html)
+supports the GitHub `job_workflow_ref` condition. The claim exists for a called reusable workflow,
+not an ordinary manual job, as explained in [GitHub's reusable-workflow OIDC guide](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-with-reusable-workflows).
+This replaces the previous mismatch; string comparisons against invented token fields were not proof.
 
 ```sh
 SUBJECT=$(gh api repos/scrimshawlife-ctrl/suas/actions/oidc/customization/sub --jq .sub_claim_prefix)
@@ -162,8 +171,11 @@ edit IAM, or invoke the API or the email relay. Every stack change, including th
 as the CDK deploy role. On the first plan run, confirm that `cdk diff` falls back from the lookup role to the plan
 role (it prints a warning); if it does not, grant only the missing read action. The earlier Access Analyzer result predates these policy changes; rerun `ValidatePolicy` before operation. On the trust policies it warns that a branch is recommended in `sub`:
 these subjects are environment-scoped, and the `job_workflow_ref` condition plus the environment's branch policy
-(step 4) enforce `main`. If the first plan run is refused at `AssumeRoleWithWebIdentity`, the token's
-`job_workflow_ref` did not match: compare it with the condition before loosening anything.
+(step 4) enforce `main`. Before a separately authorized deployment, independently verify both environments,
+the exact `aud`, `sub` and called `job_workflow_ref` values, and successful STS assumption of each intended
+role without running deployment commands. Never print or upload the raw JWT or returned credentials.
+An STS refusal may be a missing/wrong claim, trust setting or another policy restriction; diagnose the actual
+reason. Do not remove the workflow restriction or bypass the environment gate to obtain a successful run.
 
 ## 3. Deploy-time parameters (before the first backend deploy)
 
