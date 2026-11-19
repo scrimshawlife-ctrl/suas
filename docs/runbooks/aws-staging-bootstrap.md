@@ -5,6 +5,12 @@ deploy the CDK app in [`infra/`](../../infra/README.md). Routine deploys then ru
 nobody stores AWS keys in GitHub. This does not authorize PRODUCTION, a pilot, real Veteran data or real
 external effects, and a deploy is not SPEC-018 evidence.
 
+**HOLD:** this follow-up implements the proposal in
+[SUAS-specs #112](https://github.com/scrimshawlife-ctrl/suas-specs/pull/112).
+It does not release that proposal or authorize these commands. Before operation, release the owner
+choices (including R14.5 and the Resend amendment), repin the runtime, review the exact synthesized
+change, and obtain a separate synthetic-STAGING deployment decision.
+
 Run every command from a human administrator identity, never from GitHub. Pass `--region` every time:
 the `zerostate` profile defaults to `us-west-1`, but the stacks live in `us-west-2` and `us-east-1`.
 Never paste secret values into files, tickets or chat.
@@ -19,12 +25,13 @@ aws sts get-caller-identity --query Account --output text   # must print $ACCOUN
 1. Prefer an IAM Identity Center administrator over the account root user for everything below
    (`aws configure sso --profile zerostate`). Keep root for account recovery only.
 2. New accounts start with 10 concurrent Lambda executions, all of which must stay unreserved. The
-   pipeline's maintenance mode only ever reserves 0, so it works at that limit, but ask for headroom:
+   API and worker reserve 0 in maintenance, but migrate still reserves 1. This does not fit that limit. Ask for headroom:
    `aws service-quotas request-service-quota-increase --region us-west-2 --service-code lambda --quota-code L-B99A9384 --desired-value 1000`.
 
 ## 1. CDK bootstrap (both regions)
 
-The CloudFormation execution role gets `SuasCdkExecution`, not `AdministratorAccess`
+The CloudFormation execution role gets all three policies `SuasCdkExecution`, `SuasCdkServices` and
+`SuasCdkEdge`
 ([`infra/bootstrap/cfn-execution-policy.yaml`](../../infra/bootstrap/cfn-execution-policy.yaml)).
 
 ```sh
@@ -35,7 +42,7 @@ aws cloudformation update-termination-protection --region us-west-2 \
 cd infra && npm ci
 node node_modules/aws-cdk/bin/cdk bootstrap \
   "aws://$ACCOUNT/us-west-2" "aws://$ACCOUNT/us-east-1" \
-  --cloudformation-execution-policies "arn:aws:iam::$ACCOUNT:policy/SuasCdkExecution" \
+  --cloudformation-execution-policies "arn:aws:iam::$ACCOUNT:policy/SuasCdkExecution,arn:aws:iam::$ACCOUNT:policy/SuasCdkServices,arn:aws:iam::$ACCOUNT:policy/SuasCdkEdge" \
   --termination-protection
 ```
 
@@ -44,18 +51,33 @@ bootstrap version.
 
 ### Region-restricted accounts
 
-If the organisation allows regional services in one region only (and in `us-east-1` only ACM, CloudFront,
-Route 53 and IAM), bootstrap that one region and skip `us-east-1`: deploy the execution policy with
-`--region <region>` and run `cdk bootstrap "aws://$ACCOUNT/<region>"` alone. Deploy with
-`-c region=<region> -c customDomains=false` (see "Region-restricted accounts and default URLs" in
-`infra/README.md`). When the domain is added later, create the CloudFront certificate by CLI and pass its ARN
-as `webCertificateArn`:
+The workflow and these bootstrap policies support only the four-stack `us-west-2` layout with
+`Suas-Staging-WebCert` in `us-east-1`. `deploymentPipeline=true` rejects another region, default URLs,
+or an imported certificate before any AWS operation. Direct synth retains those configuration modes,
+but this boundary does not qualify them for deployment. Extending the policy, release-record stack
+map and workflow together requires a separate reviewed change.
 
-```sh
-aws acm request-certificate --region us-east-1 --domain-name staging.suasqrf.com --validation-method DNS
-```
+### Permissions boundary acceptance
 
-The deploy workflow does not support this layout yet.
+The bootstrap also creates `SuasStagingRuntimeBoundary`. Every generated role, including late-created
+cross-region helpers, receives it. The execution policies require it on role creation and forbid its
+removal, replacement or policy modification. Application identities still need their own grants;
+the boundary alone grants nothing. Provision and update the boundary from the separate administrator
+identity, never from the application execution role.
+
+Policies restrict resources by account, region and generated names where those identifiers exist.
+EC2 network resources and service-generated IDs still have account-wide scope in the two regions;
+Route 53 zones and CloudFront resources have generated-ID scope. Read inventories and the creation
+APIs without resource-level support retain explicit `*` resources. This is a bounded synthetic
+account policy, not tenant isolation or production least privilege. Do not place unrelated workloads
+in the account. After foundation creation, tighten generated identifiers where feasible.
+
+Offline tests check syntax, size, boundary attachment and forbidden privileges. Before any authorized
+run, require fresh IAM Access Analyzer validation and positive/negative policy simulations for the
+exact account: expected deployment actions pass; outside-account resources, wrong regions,
+unbounded role creation, boundary changes and production secrets fail. Test real CloudFormation
+create/update/rollback only inside a separately authorized synthetic window. Do not add a broad
+policy to bypass a denied action.
 
 ## 2. GitHub OIDC roles
 
@@ -87,8 +109,7 @@ aws cloudformation describe-stacks --region us-west-2 --stack-name Suas-GitHub-O
 Neither role can read secrets or application SSM values, read Lambda configuration (it holds resolved secrets),
 edit IAM, or invoke the API or the email relay. Every stack change, including the workflow's maintenance step, runs
 as the CDK deploy role. On the first plan run, confirm that `cdk diff` falls back from the lookup role to the plan
-role (it prints a warning); if it does not, grant only the missing read action. IAM Access Analyzer `ValidatePolicy` reports no
-findings on the permission policies. On the trust policies it warns that a branch is recommended in `sub`:
+role (it prints a warning); if it does not, grant only the missing read action. The earlier Access Analyzer result predates these policy changes; rerun `ValidatePolicy` before operation. On the trust policies it warns that a branch is recommended in `sub`:
 these subjects are environment-scoped, and the `job_workflow_ref` condition plus the environment's branch policy
 (step 4) enforce `main`. If the first plan run is refused at `AssumeRoleWithWebIdentity`, the token's
 `job_workflow_ref` did not match: compare it with the condition before loosening anything.
@@ -116,11 +137,30 @@ Repository variables (Settings → Secrets and variables → Actions → Variabl
 | `SUAS_STAGING_API_ORIGIN` | `https://api.staging.suasqrf.com` (the `ApiUrl`) |
 | `SUAS_STAGING_WEB_ORIGIN` | `https://staging.suasqrf.com` (the `WebUrl`)     |
 
+Environment secret `SUAS_STAGING_ALARM_EMAIL` must hold one monitored recipient. It is passed as the
+required `AlarmEmail` NoEcho parameter, never baked into the assembly. A missing value fails before
+mutation. SNS creates a pending email subscription: its recipient must confirm it once and a test
+notification must be received before accepting STAGING. Changing the address requires reconfirmation.
+
+VA stays disabled in the current workflow build. An approved VA-enabled assembly requires a pre-existing
+LLC-owned sandbox secret in this account and region under `suas/staging/`, using the AWS managed
+Secrets Manager encryption key. Pass its complete ARN as `Suas-Staging-Backend:VaSandboxSecretArn`
+when deploying that assembly. There is no default or placeholder. Do not delete an older managed
+secret during transition until the external secret is provisioned and verified; the current stack's
+change set must be checked for that removal. A customer KMS key requires a separate reviewed decrypt
+grant. ARN syntax cannot prove ownership or key validity; metadata review and an approved synthetic
+smoke test are acceptance evidence. Never print the key.
+
 Environments (a repository admin, the owner, configures protection):
 
 - `suas-synthetic-staging-plan`: deployment branches `main` only. No reviewers: the plan job cannot change anything.
 - `suas-synthetic-staging`: deployment branches `main` only, required reviewers, prevent self-review. Without
   reviewers, nothing stands between a dispatch and a deploy, so do not run the workflow until they are set.
+
+Protect `main` with required checks and review; disable administrator bypass for deployment protection
+where supported. Verify actual repository and environment settings through read-back before an
+approved run. The YAML environment name alone is not a protection rule. Current settings have not
+been changed by this proposal.
 
 ## 5. Foundation stacks (blocked on the DNS decision)
 
@@ -148,7 +188,18 @@ To check the plumbing before DNS is ready, dispatch it and leave the deploy job 
 
 ## Recovery
 
-- A failed run leaves the backend in the mode it reached (often `maintenance`). Fix forward and dispatch a
-  new SHA. To reopen traffic on the current code instead, dispatch the same SHA again.
+- On a failure after mutation, the shell attempts to return the existing backend to `maintenance`
+  with its current template and preserved parameters. It waits up to 600 seconds for the update and
+  reports `maintenance` only after reading that parameter and a `CREATE_COMPLETE` or `UPDATE_COMPLETE`
+  stack status. Otherwise it reports `UNKNOWN`. This is stack-level evidence, not a runtime drift check.
+- The original failing exit code is preserved. No later promotion runs. A fixed-message notification
+  goes to `Suas-Staging-Alarms`; notification failure is itself visible in the job. No AWS error or
+  provider payload is included. The deploy role can publish only to that topic.
+- Job cancellation, runner termination, hard timeout, an in-progress rollback, missing foundation, or
+  lost credentials can prevent recovery. Treat these as `UNKNOWN`, inspect CloudFormation and actual
+  concurrency/schedule state, and restore maintenance before retrying. Do not infer that failure means
+  traffic is closed. Recovery does not undo database migrations or stop already-running invocations.
+- After inspection, repair forward and dispatch a separately approved SHA. Even retrying the same SHA
+  requires a new environment approval.
 - Rolling back means dispatching an older SHA. The workflow refuses when the deployed schema is newer than
   that build expects; repair forward instead (`deployment-rollback.md`).
