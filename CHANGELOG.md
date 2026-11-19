@@ -22,7 +22,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Fixed
 
-- Draft STAGING execution policy now requires the approved boundary when updating existing roles' inline policies, attached managed policies or trust policies. Legacy role inventory and administrator boundary adoption are required before enabling deployment access (SUAS-specs #112, still on HOLD).
+- Draft STAGING execution policy now requires the approved boundary when updating existing roles' inline policies, attached managed policies or trust policies. S3 grants check actual bucket ownership and supported regions. Legacy role inventory and administrator boundary adoption are required before enabling deployment access (SUAS-specs #112, still on HOLD).
 
 - After a case is closed and reopened, the next cycle's helper no longer reads the previous cycle's Settlements (`GET /cases/{id}/settlements`, `/settlements/{settlement_id}`) or contact attempts (`GET /cases/{caseId}/contact-attempts`); a helper's standing is per cycle (CASES.md §4.3, DISPATCH.md §13.2, R11.1). The requester still reads every cycle. A helper Settlement read is scoped by the RESOLVED case's current Settlement, a contact write takes the case row lock and re-checks standing so it cannot outlast a concurrent CLOSE, and `closed_at` is the wall-clock time of the close. A contact attempt's `created_at` is the time of that re-check, so a write that outlasts CLOSE and REOPEN stands only on a new-cycle accept and is filed in that cycle.
 

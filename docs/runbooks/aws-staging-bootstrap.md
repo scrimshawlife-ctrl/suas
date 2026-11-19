@@ -89,6 +89,9 @@ administrator change. New-role enforcement plus the boundary removal/replacement
 the invariant for routine deploys; this is a one-time bootstrap transition, not per-deploy ceremony.
 
 Policies restrict resources by account, region and generated names where those identifiers exist.
+S3 bucket/object grants also check `s3:ResourceAccount` and the supported regions, including CDK
+asset reads. Bucket ARNs have no account field; a matching name, even one containing an account ID,
+is not ownership evidence. Include a foreign-owned matching-prefix bucket in negative simulations.
 EC2 network resources and service-generated IDs still have account-wide scope in the two regions;
 Route 53 zones and CloudFront resources have generated-ID scope. Read inventories and the creation
 APIs without resource-level support retain explicit `*` resources. This is a bounded synthetic
@@ -180,7 +183,8 @@ smoke test are acceptance evidence. Never print the key.
 
 Environments (a repository admin, the owner, configures protection):
 
-- `suas-synthetic-staging-plan`: deployment branches `main` only. No reviewers: the plan job cannot change anything.
+- `suas-synthetic-staging-plan`: deployment branches `main` only, with the recorded required reviewer.
+  The plan job is read-only, but removing its reviewer requires a separate explicit owner decision.
 - `suas-synthetic-staging`: deployment branches `main` only, required reviewers, prevent self-review. Without
   reviewers, nothing stands between a dispatch and a deploy, so do not run the workflow until they are set.
 

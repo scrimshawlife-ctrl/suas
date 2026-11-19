@@ -373,6 +373,13 @@ Resources:
             Resource:
               - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*
               - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*/*
+            Condition:
+              StringEquals:
+                s3:ResourceAccount:
+                  Ref: AWS::AccountId
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
           - Sid: RdsEncryption
             Effect: Allow
             Action:
@@ -554,6 +561,13 @@ Resources:
             Resource:
               - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*
               - Fn::Sub: arn:${AWS::Partition}:s3:::suas-staging-*/*
+            Condition:
+              StringEquals:
+                s3:ResourceAccount:
+                  Ref: AWS::AccountId
+                aws:RequestedRegion:
+                  - us-west-2
+                  - us-east-1
           - Sid: PublishedAssets
             Effect: Allow
             Action:
@@ -567,6 +581,8 @@ Resources:
               - Fn::Sub: arn:${AWS::Partition}:s3:::cdk-hnb659fds-assets-${AWS::AccountId}-*/*
             Condition:
               StringEquals:
+                s3:ResourceAccount:
+                  Ref: AWS::AccountId
                 aws:RequestedRegion:
                   - us-west-2
                   - us-east-1

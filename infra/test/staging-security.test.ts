@@ -47,6 +47,22 @@ describe('staging privilege boundary', () => {
       }
     },
   );
+  it('requires the actual owner account and supported region on every S3 allow', () => {
+    const grants = statements.filter(
+      (s) => s.Effect === 'Allow' && actions(s).some((action) => action.startsWith('s3:')),
+    );
+    expect(grants.length).toBeGreaterThan(0);
+    for (const grant of grants) {
+      // A matching bucket-name prefix, including an account ID, is not ownership evidence.
+      expect(grant.Condition?.StringEquals?.['s3:ResourceAccount']).toEqual({
+        Ref: 'AWS::AccountId',
+      });
+      expect(grant.Condition?.StringEquals?.['aws:RequestedRegion']).toEqual([
+        'us-west-2',
+        'us-east-1',
+      ]);
+    }
+  });
   it('explicitly denies removing, replacing or editing the runtime boundary', () => {
     const denied = statements.filter((s) => s.Effect === 'Deny');
     for (const action of [
