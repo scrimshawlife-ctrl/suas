@@ -67,17 +67,17 @@ export const CHALLENGE_VERIFY_WINDOW_SECONDS = inferred(
 );
 
 /**
- * R16.2 (contributor proposal, not released): STAGING public demo daily budget of EMAIL_OTP
- * issuances, counted for every address. Over it a new address is sent nothing; accounts still are.
+ * R16.2 (contributor proposal, not released) / owner review on #363: the fixed windows of the
+ * STAGING public demo caps. The cap values are settings (`SuasConfig.publicDemoLimits`).
  */
-export const SIGN_UP_DAILY_CAP = inferred(
-  200,
-  'Bounds outbound mail and new demo accounts per day without limiting existing accounts.',
-);
-
 export const SIGN_UP_DAILY_WINDOW_SECONDS = inferred(
   60 * 60 * 24,
-  'One fixed daily window for the shared public demo sign-up budget.',
+  'One fixed daily window for the public demo sign-up and per-address caps.',
+);
+
+export const PUBLIC_DEMO_ROUTE_WINDOW_SECONDS = inferred(
+  60,
+  'The per-minute window of the public demo challenge route limit.',
 );
 
 /** AUTH.md §5: absolute session lifetime. */
@@ -114,8 +114,8 @@ export const AUTH_CONSTANTS: Readonly<Record<string, AuthConstant>> = {
   CHALLENGE_ISSUE_WINDOW_SECONDS,
   CHALLENGE_VERIFY_LIMIT,
   CHALLENGE_VERIFY_WINDOW_SECONDS,
-  SIGN_UP_DAILY_CAP,
   SIGN_UP_DAILY_WINDOW_SECONDS,
+  PUBLIC_DEMO_ROUTE_WINDOW_SECONDS,
   SESSION_ABSOLUTE_TTL_SECONDS,
   SESSION_IDLE_TTL_SECONDS,
   MFA_ELEVATION_TTL_SECONDS,
