@@ -48,6 +48,8 @@ export interface EvalSuite<TCase extends { readonly id: string }> {
   readonly name: string;
   readonly description: string;
   readonly cases: readonly TCase[];
+  /** The prompt this suite scores, printed with its report (R18.5, contributor proposal). */
+  readonly promptVersion?: string;
   /** Fake-adapter answer for a case. Ignored when the real adapter is configured. */
   scriptedTurns?(testCase: TCase): readonly ScriptedTurn[];
   runCase(testCase: TCase, context: EvalContext): Promise<CaseScore>;
@@ -74,6 +76,7 @@ export function defineSuite<TCase extends { readonly id: string }>(
 export interface SuiteReport {
   readonly suite: string;
   readonly description: string;
+  readonly prompt_version?: string;
   readonly cases: number;
   /** Mean per metric over the cases it applied to. */
   readonly metrics: Readonly<Record<string, { readonly mean: number; readonly applied: number }>>;
@@ -130,7 +133,7 @@ function countingPort(port: ModelInferencePort, stats: MutableStats): ModelInfer
 }
 
 export function aggregate(
-  suite: { readonly name: string; readonly description: string },
+  suite: { readonly name: string; readonly description: string; readonly promptVersion?: string },
   scores: readonly CaseScore[],
   errors: SuiteReport['errors'],
   stats: RunStats,
@@ -155,6 +158,7 @@ export function aggregate(
   return {
     suite: suite.name,
     description: suite.description,
+    ...(suite.promptVersion !== undefined ? { prompt_version: suite.promptVersion } : {}),
     cases: scores.length + errors.length,
     metrics,
     errors,
@@ -203,6 +207,7 @@ export function formatReport(reports: readonly SuiteReport[], implementation: st
   }
   for (const report of reports) {
     lines.push('', `${report.suite}: ${report.cases} cases. ${report.description}`);
+    if (report.prompt_version !== undefined) lines.push(`  prompt: ${report.prompt_version}`);
     for (const [metric, { mean, applied }] of Object.entries(report.metrics)) {
       lines.push(`  ${metric.padEnd(34)} ${(mean * 100).toFixed(1).padStart(5)}%  (${applied})`);
     }

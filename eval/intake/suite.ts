@@ -10,6 +10,7 @@ import {
   type IntakeResource,
 } from '../../src/intake/assistant.js';
 import type { ModelInferencePort } from '../../src/inference/index.js';
+import { INTAKE_PROMPT_VERSION } from '../../src/intake/system-prompt.js';
 import { defineSuite, type CaseScore } from '../harness.js';
 import { baselineTurns } from './baseline.js';
 import { INTAKE_EVAL_CASES, type IntakeEvalCase } from './cases.js';
@@ -54,6 +55,7 @@ export const intakeSuite = defineSuite<IntakeEvalCase>({
   name: 'intake',
   description: 'Intake Assistant: category, timing, out-of-scope handling, tool contract.',
   cases: INTAKE_EVAL_CASES,
+  promptVersion: INTAKE_PROMPT_VERSION,
   scriptedTurns: () => baselineTurns(),
   async runCase(testCase, { inference }): Promise<CaseScore> {
     let modelCalls = 0;

@@ -17,6 +17,7 @@ import {
   type IntakeHost,
   type IntakeResource,
 } from '../../src/intake/assistant.js';
+import { INTAKE_SYSTEM_PROMPT } from '../../src/intake/system-prompt.js';
 import { INTAKE_TOOLS } from '../../src/intake/tools.js';
 
 const RESOURCE: IntakeResource = {
@@ -120,6 +121,30 @@ describe('the two-tool contract', () => {
     );
     expect(extra.draft).toEqual(EMPTY_DRAFT_FIELDS);
     expect(extra.outcome).toBe('NO_DRAFT');
+  });
+});
+
+// R18.5 (contributor proposal, not released): the model is told to fill timing and to
+// search before it replies to an outside need.
+describe('prompt and tool wording', () => {
+  const property = (tool: string, name: string) =>
+    (
+      INTAKE_TOOLS.find((t) => t.name === tool)?.inputSchema.properties as Record<
+        string,
+        { description?: string }
+      >
+    )[name];
+
+  it('describes timing and keywords to the model', () => {
+    expect(property('draft_service_request', 'timing')?.description).toMatch(/tomorrow morning/);
+    expect(property('search_resources', 'keywords')?.description).toMatch(/job resume/);
+  });
+
+  it('asks for timing and a search before an out-of-scope reply', () => {
+    expect(INTAKE_SYSTEM_PROMPT).toContain('Fill timing whenever the Veteran says when');
+    expect(INTAKE_SYSTEM_PROMPT).toContain(
+      'you must call search_resources with outside_categories set to true before you reply',
+    );
   });
 });
 
