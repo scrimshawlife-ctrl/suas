@@ -217,6 +217,36 @@ describe('STAGING public demo sign-up', () => {
     expect(plain.rows.map((row) => row.bucket)).toEqual(['auth.challenge.issue']);
   });
 
+  // R16.2 (contributor's call, D-065): racing requests for one new address share one atomic
+  // counter, so no more than the per-address cap is sent at the boundary.
+  it('sends at most the per-address cap when requests for one new address race', async () => {
+    const server = createServer({
+      config: {
+        ...app.config,
+        publicDemoLimits: { ...app.config.publicDemoLimits, addressDailyCap: 1 },
+      },
+      buildInfo: () => app.buildInfo,
+      pool: appPool(app),
+      challengeDelivery: app.challengeDelivery,
+      mfa: app.mfa,
+      logger: false,
+    });
+    const email = newAddress();
+    const post = () =>
+      server.inject({
+        method: 'POST',
+        url: `${API_PREFIX}/auth/challenges`,
+        payload: { destination: email, method: 'EMAIL_OTP', demo_acknowledged: true },
+      });
+    const responses = await Promise.all([post(), post(), post()]);
+    await server.close();
+    expect(responses.map((response) => response.statusCode)).toEqual([202, 202, 202]);
+    const sent = deliveries()
+      .delivered()
+      .filter((delivery) => delivery.destination === email);
+    expect(sent).toHaveLength(1);
+  });
+
   it('over the daily cap answers a new address the same and sends nothing, but not a known one', async () => {
     expect((await issueCapped(newAddress())).issued).toBe(true);
 
@@ -373,18 +403,34 @@ describe('STAGING public demo VA confirmation', () => {
     expect(refused.statusCode).toBe(401);
     expect(refused.json().error.code).toBe('UNAUTHENTICATED');
   });
+
+  // R16.5(a) (contributor's call, D-065): the gate covers VA confirmation only, not D-016.
+  it('lets a demo account self-attest', async () => {
+    const demoUser = await createUser(appPool(app), {
+      tenantId: SIGN_UP_TENANT,
+      email: newAddress(),
+      status: 'ACTIVE',
+    });
+    const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
+      tenantId: SIGN_UP_TENANT,
+      userId: demoUser.userId,
+    });
+    const response = await app.server.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/veterans/me/verification/commands/self-attest`,
+      headers: { authorization: `Bearer ${session.credential}`, 'idempotency-key': randomUUID() },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ method: 'SELF_ATTESTATION', status: 'VERIFIED' });
+  });
 });
 
 // R16.1 (contributor proposal, not released): the licence review is fixture-only like VA confirmation.
 describe('STAGING public demo licence review', () => {
   const LICENCE = `${API_PREFIX}/veterans/me/verification/licence`;
   let server: ReturnType<typeof createServer>;
-
-  beforeAll(async () => {
-    await appPool(app).query(
-      `UPDATE licence_reader_breaker SET consecutive_failures = 0, opened_at = NULL`,
-    );
-    server = createServer({
+  const licenceServer = () =>
+    createServer({
       config: app.config,
       buildInfo: () => app.buildInfo,
       pool: appPool(app),
@@ -395,6 +441,12 @@ describe('STAGING public demo licence review', () => {
       objectStorage: new InMemoryObjectStorage(),
       logger: false,
     });
+
+  beforeAll(async () => {
+    await appPool(app).query(
+      `UPDATE licence_reader_breaker SET consecutive_failures = 0, opened_at = NULL`,
+    );
+    server = licenceServer();
   });
 
   afterAll(() => server.close());
@@ -444,6 +496,23 @@ describe('STAGING public demo licence review', () => {
     expect(get.statusCode).toBe(200);
     expect(get.json().offered).toBe(false);
     expect((await postMalformed(FIXTURE_USER, LICENCE)).statusCode).toBe(400);
+  });
+
+  // R16.5 (contributor's call, D-065): a request the server did not mark fails closed here too.
+  it('refuses even a fixture user when the request carries no staging access', async () => {
+    const bare = licenceServer();
+    bare.addHook('onRequest', (request, _reply, done) => {
+      delete request.stagingAccess;
+      done();
+    });
+    const get = await bare.inject({
+      method: 'GET',
+      url: LICENCE,
+      headers: await bearer(FIXTURE_USER),
+    });
+    await bare.close();
+    expect(get.statusCode).toBe(401);
+    expect(get.json().error.code).toBe('UNAUTHENTICATED');
   });
 });
 
