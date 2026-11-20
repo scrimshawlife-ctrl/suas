@@ -389,6 +389,8 @@ const rawConfigSchema = z.object({
   SUAS_LICENCE_SYNTHETIC_IIN: optionalRaw,
   // D-052. Public self sign-up stays off unless LOCAL or TEST sets "enabled".
   SUAS_PUBLIC_SIGN_UP: optionalRaw,
+  // R16.1 (contributor proposal, not released): STAGING public demo; refused in PRODUCTION.
+  SUAS_PUBLIC_DEMO: optionalRaw,
   // Addresses the STAGING provision command may create. Not an admission list.
   SUAS_STAGING_AUTH_EMAILS: optionalRaw,
   // Explicit tenant-id:user-id pairs STAGING auth admits. Empty admits nobody.
@@ -557,6 +559,11 @@ export interface SuasConfig {
   };
   /** Public self sign-up. Startup refuses `enabled` outside LOCAL and TEST. */
   readonly publicSignUp: boolean;
+  /**
+   * R16.1 (contributor proposal, not released): public demo on STAGING. Opens self sign-up,
+   * the fixture gate and the recipient allowlist there; refused at startup in PRODUCTION.
+   */
+  readonly publicDemo: boolean;
   /** Normalized emails the STAGING provision command may create. Not admission. */
   readonly stagingAuthEmails: readonly string[];
   /**
@@ -1086,6 +1093,22 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
         'STAGING and PRODUCTION fail closed.',
     });
   }
+  if (
+    raw.SUAS_PUBLIC_DEMO !== undefined &&
+    raw.SUAS_PUBLIC_DEMO !== 'enabled' &&
+    raw.SUAS_PUBLIC_DEMO !== 'disabled'
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SUAS_PUBLIC_DEMO must be exactly "enabled" or "disabled" when set.',
+    });
+  }
+  if (raw.SUAS_PUBLIC_DEMO === 'enabled' && environment === 'PRODUCTION') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'SUAS_PUBLIC_DEMO=enabled is refused in PRODUCTION.',
+    });
+  }
 
   const stagingPrincipals = splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) =>
     email.toLowerCase(),
@@ -1557,6 +1580,7 @@ export function shapeConfig(
       syntheticIin: raw.SUAS_LICENCE_SYNTHETIC_IIN,
     },
     publicSignUp: raw.SUAS_PUBLIC_SIGN_UP === 'enabled',
+    publicDemo: raw.SUAS_PUBLIC_DEMO === 'enabled',
     stagingAuthEmails: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) => email.toLowerCase()),
     stagingFixturePrincipals: parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY)
       .principals,

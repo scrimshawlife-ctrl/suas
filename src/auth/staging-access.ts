@@ -5,6 +5,9 @@
  * fake ID verification and public self sign-up are refused outside LOCAL and
  * TEST. Server authentication on STAGING checks the principal behind an
  * existing account or session, not only a new sign-up.
+ *
+ * R16.1 (contributor proposal, not released; owner decision pending): STAGING public demo mode
+ * lifts that gate and permits self sign-up there. Startup refuses it in PRODUCTION.
  */
 
 import type { SuasConfig } from '../config/index.js';
@@ -39,12 +42,15 @@ export interface StagingAccess {
    * The demo account is not inserted when this list is empty or the flag is on.
    */
   readonly fixturePrincipals: readonly StagingFixturePrincipal[];
+  /** R16.1 (proposal, not released): SUAS_PUBLIC_DEMO=enabled. Absent means off. */
+  readonly publicDemo?: boolean;
 }
 
 export function stagingAccessFromConfig(config: SuasConfig): StagingAccess {
   return {
     environment: config.environment,
     publicSignUp: config.publicSignUp,
+    publicDemo: config.publicDemo,
     fixturePrincipals: Object.freeze(
       config.stagingFixturePrincipals.map((principal) => Object.freeze({ ...principal })),
     ),
@@ -52,7 +58,16 @@ export function stagingAccessFromConfig(config: SuasConfig): StagingAccess {
 }
 
 /**
- * Public self sign-up is permitted only in LOCAL and TEST. A refusal is silent: the caller
+ * Is STAGING running the public demo (R16.1, contributor proposal, not released)? Only STAGING
+ * changes: in LOCAL and TEST the flag affects nothing but the banner and the acknowledgement.
+ */
+export function publicDemoActive(access: StagingAccess | undefined): boolean {
+  return access?.environment === 'STAGING' && access.publicDemo === true;
+}
+
+/**
+ * Public self sign-up is permitted only in LOCAL and TEST, and on STAGING in public demo mode
+ * (R16.1, contributor proposal, not released). A refusal is silent: the caller
  * treats the address like any unenrolled one (the same 202), so a refusal never reveals whether
  * an address is enrolled. Released basis: AUTH.md §9.3 at 0.7.0 ("Challenge issuance remains
  * non-enumerating"), and AUTH.md §9.4 with ENVIRONMENT.md §3 / D-052, released in 0.8.0 and
@@ -60,6 +75,7 @@ export function stagingAccessFromConfig(config: SuasConfig): StagingAccess {
  * flag is owned by startup config, which refuses it outside LOCAL and TEST.
  */
 export function publicSignUpPermitted(access: StagingAccess | undefined): boolean {
+  if (publicDemoActive(access)) return true;
   return access !== undefined && (access.environment === 'LOCAL' || access.environment === 'TEST');
 }
 
@@ -67,13 +83,13 @@ export function publicSignUpPermitted(access: StagingAccess | undefined): boolea
  * True when STAGING must refuse this account. Other environment classes are
  * not gated here. Admission is the (tenant id, user id) pair. The same email
  * in another tenant, or the same tenant with a different user id, is refused.
- * An empty or missing registry admits nobody.
+ * An empty or missing registry admits nobody. Public demo mode (R16.1, proposal) admits all.
  */
 export function stagingFixturePrincipalRefused(
   access: StagingAccess,
   principal: { readonly tenantId: string; readonly userId: string } | undefined,
 ): boolean {
-  if (access.environment !== 'STAGING') return false;
+  if (access.environment !== 'STAGING' || access.publicDemo === true) return false;
   if (principal === undefined) return true;
   const tenantId = principal.tenantId.toLowerCase();
   const userId = principal.userId.toLowerCase();

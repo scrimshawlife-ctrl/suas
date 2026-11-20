@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  publicDemoActive,
   publicSignUpPermitted,
   stagingAccessFromConfig,
   stagingFixturePrincipalRefused,
@@ -124,5 +125,28 @@ describe('D-052 sign-up and fake ID', () => {
       stagingFixturePrincipalRefused(access, { tenantId: otherTenant, userId: otherUser }),
     ).toBe(true);
     expect(stagingFixturePrincipalRefused(access, { tenantId, userId: otherUser })).toBe(true);
+  });
+});
+
+// R16.1 (contributor proposal, not released): STAGING public demo opens sign-up and the gate.
+describe('R16.1 public demo on STAGING', () => {
+  const stranger = {
+    tenantId: '00000000-0000-4000-8000-000000000001',
+    userId: '00000000-0000-4000-8000-000000000002',
+  };
+  const staging = { environment: 'STAGING', publicSignUp: false, fixturePrincipals: [] } as const;
+
+  it('permits sign-up and admits an unregistered principal only with the flag on', () => {
+    expect(publicSignUpPermitted({ ...staging, publicDemo: true })).toBe(true);
+    expect(publicSignUpPermitted({ ...staging, publicDemo: false })).toBe(false);
+    expect(stagingFixturePrincipalRefused({ ...staging, publicDemo: true }, stranger)).toBe(false);
+    expect(stagingFixturePrincipalRefused({ ...staging, publicDemo: false }, stranger)).toBe(true);
+  });
+
+  it('is active on STAGING only, never in PRODUCTION', () => {
+    expect(publicDemoActive({ ...staging, publicDemo: true })).toBe(true);
+    const production = { ...staging, environment: 'PRODUCTION', publicDemo: true } as const;
+    expect(publicDemoActive(production)).toBe(false);
+    expect(publicSignUpPermitted(production)).toBe(false);
   });
 });
