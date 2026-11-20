@@ -65,7 +65,12 @@ export const INTAKE_TOOLS: readonly ModelToolDefinition[] = [
       type: 'object',
       properties: {
         category: { type: 'string', enum: [...INTAKE_CATEGORIES] },
-        keywords: { type: 'string', maxLength: KEYWORDS_MAX },
+        keywords: {
+          type: 'string',
+          maxLength: KEYWORDS_MAX,
+          description:
+            "Two or three plain words for the need, for example 'job resume' or 'dentist'.",
+        },
         outside_categories: {
           type: 'boolean',
           description:
@@ -85,7 +90,13 @@ export const INTAKE_TOOLS: readonly ModelToolDefinition[] = [
       properties: {
         category: { type: 'string', enum: [...INTAKE_CATEGORIES] },
         summary: { type: 'string', maxLength: SUMMARY_MAX },
-        timing: { type: 'string', maxLength: TIMING_MAX },
+        timing: {
+          type: 'string',
+          maxLength: TIMING_MAX,
+          description:
+            "When the Veteran needs it, in their own words (for example 'tomorrow morning' or " +
+            "'by Friday'). Leave it out only if they gave no time.",
+        },
         meeting_place: {
           type: 'string',
           maxLength: MEETING_PLACE_MAX,

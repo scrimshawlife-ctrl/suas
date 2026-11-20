@@ -40,6 +40,8 @@ import {
 export const MAX_MODEL_CALLS = 4;
 export const MAX_ASSISTANT_TEXT = 1_500;
 export const MAX_RESOURCES_PER_SEARCH = 5;
+/** Low sampling temperature so the same message drafts the same way (R18.5, proposal). */
+export const INTAKE_TEMPERATURE = 0.2;
 
 /**
  * Whole-run budget for one Veteran message, inside the 29 s HTTP API limit, and the least
@@ -54,6 +56,13 @@ export const NOT_AVAILABLE_NOTICE =
 /** Used when tools ran but the model wrote no closing text. */
 const DEFAULT_DRAFT_TEXT =
   'I drafted a request from what you wrote. Please check it before you submit.';
+
+/**
+ * R18.5 (contributor's call, D-066): a text-only reply where SUAS or "we" turns away requests
+ * without searching. Subject and "request" are required, so "I can't take the bus" never matches.
+ */
+const DECLINE_PATTERN =
+  /\b(?:SUAS|we)\b[^.]{0,40}?(?:\bcan ?not|\bcan['’]t|\bnot able to|n['’]t able to|\bunable to)\s+(?:take|accept|handle)\b[^.]{0,20}?\brequests?\b/i;
 
 /** Veteran-facing projection of a published Resource (RESOURCES.md §6). */
 export interface IntakeResource {
@@ -107,6 +116,8 @@ export interface IntakeRunInput {
   readonly intakeText: string;
   /** The draft as it stands before this message. */
   readonly draft: IntakeDraftFields;
+  /** The assistant's previous reply, so an answer reads with its question (R18.4, proposal). */
+  readonly lastAssistantMessage?: string;
 }
 
 export interface IntakeRun {
@@ -125,6 +136,11 @@ export interface IntakeRun {
 /** Wrap the Veteran's words so the model reads them as data, not instructions. */
 function renderUserMessage(input: IntakeRunInput): string {
   const safeText = escapePromptData(input.intakeText);
+  const last = escapePromptData(input.lastAssistantMessage ?? '');
+  const memory =
+    last === ''
+      ? ''
+      : `Your last message to the Veteran:\n<assistant_reply>\n${last}\n</assistant_reply>\n\n`;
   const current =
     input.draft.category === null
       ? 'No draft yet.'
@@ -137,7 +153,7 @@ function renderUserMessage(input: IntakeRunInput): string {
             destination: input.draft.destination,
           }),
         );
-  return `<intake_text>\n${safeText}\n</intake_text>\n\nCurrent draft: ${current}`;
+  return `${memory}<intake_text>\n${safeText}\n</intake_text>\n\nCurrent draft: ${current}`;
 }
 
 function isToolName(name: string): name is IntakeToolName {
@@ -159,6 +175,7 @@ interface RunState {
   resources: Map<string, IntakeResource>;
   notAvailableYet: boolean;
   refusedToolCalls: number;
+  searched: boolean;
 }
 
 interface ToolOutcome {
@@ -175,6 +192,7 @@ async function runSearch(
   host: IntakeHost,
   state: RunState,
 ): Promise<ToolOutcome> {
+  state.searched = true;
   const parsed = searchResourcesInput.safeParse(call.input);
   if (!parsed.success) {
     return error('Invalid input. Use only category, keywords and outside_categories.');
@@ -253,6 +271,21 @@ async function runTool(
   return call.name === 'search_resources' ? runSearch(call, host, state) : runDraft(call, state);
 }
 
+/**
+ * The model declined an outside need in words but skipped the search the prompt asks for:
+ * run that search server-side so the notice and Resources still come from SUAS, not the model.
+ */
+async function backstopDecline(text: string, host: IntakeHost, state: RunState): Promise<void> {
+  const draftReady = state.draft.category !== null && state.draft.summary !== null;
+  if (draftReady || state.notAvailableYet || state.searched || !DECLINE_PATTERN.test(text)) return;
+  const call = {
+    id: 'server-search',
+    name: 'search_resources',
+    input: { outside_categories: true },
+  };
+  await runSearch(call, host, state);
+}
+
 function finish(state: RunState, assistantText: string, failure?: ModelFailureKind): IntakeRun {
   const draftReady = state.draft.category !== null && state.draft.summary !== null;
   const outcome: IntakeOutcome =
@@ -295,6 +328,7 @@ export async function runIntakeAssistant(
     resources: new Map(),
     notAvailableYet: false,
     refusedToolCalls: 0,
+    searched: false,
   };
   // Before any model call, and whether or not a model is configured (R17.4, proposal). It
   // covers every Veteran-written text the model would see: the typed text and the draft fields.
@@ -325,6 +359,7 @@ export async function runIntakeAssistant(
           purpose: 'intake',
           deadlineMs: remainingMs,
           maxTokens: INFERENCE_PURPOSE_LIMITS.intake.maxTokens,
+          temperature: INTAKE_TEMPERATURE,
         },
         remainingMs,
       );
@@ -335,7 +370,10 @@ export async function runIntakeAssistant(
     }
     if (!result.ok) return finish(state, '', result.failure);
 
-    if (result.toolCalls.length === 0) return finish(state, result.text);
+    if (result.toolCalls.length === 0) {
+      await backstopDecline(result.text, host, state);
+      return finish(state, result.text);
+    }
 
     const assistantParts: ModelMessagePart[] = [];
     if (result.text !== '') assistantParts.push({ type: 'text', text: result.text });

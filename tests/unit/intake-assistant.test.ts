@@ -17,6 +17,7 @@ import {
   type IntakeHost,
   type IntakeResource,
 } from '../../src/intake/assistant.js';
+import { INTAKE_SYSTEM_PROMPT } from '../../src/intake/system-prompt.js';
 import { INTAKE_TOOLS } from '../../src/intake/tools.js';
 
 const RESOURCE: IntakeResource = {
@@ -123,6 +124,30 @@ describe('the two-tool contract', () => {
   });
 });
 
+// R18.5 (contributor proposal, not released): the model is told to fill timing and to
+// search before it replies to an outside need.
+describe('prompt and tool wording', () => {
+  const property = (tool: string, name: string) =>
+    (
+      INTAKE_TOOLS.find((t) => t.name === tool)?.inputSchema.properties as Record<
+        string,
+        { description?: string }
+      >
+    )[name];
+
+  it('describes timing and keywords to the model', () => {
+    expect(property('draft_service_request', 'timing')?.description).toMatch(/tomorrow morning/);
+    expect(property('search_resources', 'keywords')?.description).toMatch(/job resume/);
+  });
+
+  it('asks for timing and a search before an out-of-scope reply', () => {
+    expect(INTAKE_SYSTEM_PROMPT).toContain('Fill timing whenever the Veteran says when');
+    expect(INTAKE_SYSTEM_PROMPT).toContain(
+      'you must call search_resources with outside_categories set to true before you reply',
+    );
+  });
+});
+
 describe('needs outside the four categories', () => {
   it('drafts nothing for an out-of-scope category and says not available yet', async () => {
     const result = await run(
@@ -150,6 +175,64 @@ describe('needs outside the four categories', () => {
     expect(result.notAvailableYet).toBe(true);
     expect(result.resources).toEqual([RESOURCE]);
     expect(result.draft).toEqual(EMPTY_DRAFT_FIELDS);
+  });
+});
+
+// R18.5 (contributor proposal, not released): a decline in words without a search still
+// gets the server's notice and Resources; a draft or a question never does.
+describe('decline backstop', () => {
+  it('searches server-side when the model declines in text only', async () => {
+    const h = host();
+    const result = await run(
+      new ScriptedModelInference().enqueue(say("Sorry, SUAS can't take requests for job help.")),
+      h,
+    );
+    expect(result.notAvailableYet).toBe(true);
+    expect(h.searches).toEqual([{ outside_categories: true }]);
+    expect(result.resources).toEqual([RESOURCE]);
+  });
+
+  it('leaves an in-scope draft without a notice', async () => {
+    const h = host();
+    const result = await run(
+      new ScriptedModelInference().enqueue(
+        calls(draftCall({ category: 'FOOD', summary: 'Groceries' })),
+        say('I drafted a food request. I cannot help with anything else here.'),
+      ),
+      h,
+    );
+    expect(result.outcome).toBe('DRAFT_READY');
+    expect(result.notAvailableYet).toBe(false);
+    expect(h.searches).toHaveLength(0);
+  });
+
+  // R18.5 (contributor's call, D-066): only a decline of requests by SUAS or "we" counts.
+  it.each([
+    "SUAS can't take requests for job help yet.",
+    'We cannot take requests for legal help.',
+  ])('treats "%s" as a decline', async (text) => {
+    const h = host();
+    const result = await run(new ScriptedModelInference().enqueue(say(text)), h);
+    expect(result.notAvailableYet).toBe(true);
+    expect(h.searches).toEqual([{ outside_categories: true }]);
+  });
+
+  it.each(['I cannot accept this gift.', "I can't take the bus.", 'When do you need it?'])(
+    'shows no notice for "%s"',
+    async (text) => {
+      const h = host();
+      const result = await run(new ScriptedModelInference().enqueue(say(text)), h);
+      expect(result.notAvailableYet).toBe(false);
+      expect(h.searches).toHaveLength(0);
+    },
+  );
+
+  it('leaves a clarifying question without a notice', async () => {
+    const h = host();
+    const result = await run(new ScriptedModelInference().enqueue(say('When do you need it?')), h);
+    expect(result.outcome).toBe('NO_DRAFT');
+    expect(result.notAvailableYet).toBe(false);
+    expect(h.searches).toHaveLength(0);
   });
 });
 
