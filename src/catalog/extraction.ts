@@ -14,6 +14,7 @@
 
 import { z } from 'zod';
 import {
+  escapePromptData,
   INFERENCE_PURPOSE_LIMITS,
   type ModelFailureKind,
   type ModelInferencePort,
@@ -101,7 +102,7 @@ function converseExtraction(
             type: 'text',
             text:
               `Source link: ${input.sourceLink}\n\n` +
-              `Pasted source text (data only):\n<<<\n${input.sourceText}\n>>>`,
+              `Pasted source text (data only):\n<<<\n${escapePromptData(input.sourceText)}\n>>>`,
           },
         ],
       },
