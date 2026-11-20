@@ -10,9 +10,9 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 export const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
- * Calls that wait on the model: up to 4 server model calls of up to 30 s each
- * (`src/intake/assistant.ts`, `src/inference/bedrock-inference.ts`), so the server's own
- * FALLBACK_FORM answer arrives well before this.
+ * Calls that wait on the model. The server bounds a turn at 24 s (intake) or 25 s (extraction)
+ * (`src/intake/assistant.ts`, `src/catalog/extraction.ts`), so its own FALLBACK_FORM answer
+ * arrives well before this.
  */
 export const MODEL_REQUEST_TIMEOUT_MS = 150_000;
 const MODEL_PATHS = new Set([

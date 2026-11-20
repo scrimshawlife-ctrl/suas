@@ -507,6 +507,7 @@ function registerRequestArea(app: FastifyInstance, { deps, pool }: SignedInArea)
       pool,
       sessionSecret: deps.config.sessionSecret,
       modelInference: deps.modelInference,
+      safetyCopyMode: deps.config.safetyCopyMode,
     });
   }
 

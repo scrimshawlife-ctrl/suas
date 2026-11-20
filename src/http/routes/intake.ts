@@ -22,6 +22,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import type { SafetyCopyMode } from '../../config/index.js';
 import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
@@ -59,9 +60,12 @@ import {
 import type { ModelInferencePort } from '../../inference/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
+import { CRISIS_BANNER_COMPACT, resolveImmediateResourceSlot } from '../../ui/safety.js';
 
 export interface IntakeRouteDeps extends RouteContext {
   readonly modelInference: ModelInferencePort;
+  /** Picks the crisis notice, as for `GET /immediate-resources` (D-012). */
+  readonly safetyCopyMode: SafetyCopyMode;
 }
 
 /** One Veteran message. The bound keeps a prompt, and a stored draft, small. */
@@ -118,16 +122,31 @@ function resourceView(resource: IntakeResource) {
   };
 }
 
-function turnView(run: IntakeRun, draft: ServiceRequestDraft | undefined) {
+/**
+ * The crisis notice comes from the immediate-resource slot behind `GET /immediate-resources`:
+ * the released SAFETY_COPY.md §2.1 banner in `approved` mode, else its labelled placeholder.
+ * No new crisis wording (R17.4, contributor proposal, not released).
+ */
+function crisisNotice(mode: SafetyCopyMode): string {
+  const slot = resolveImmediateResourceSlot(mode);
+  return slot.state === 'APPROVED' ? CRISIS_BANNER_COMPACT : (slot.placeholder ?? '');
+}
+
+/** A turn that stores nothing: the model did not answer, or was never asked (crisis). */
+function storesNothing(run: IntakeRun): boolean {
+  return run.outcome === 'FALLBACK_FORM' || run.outcome === 'CRISIS_SUPPORT';
+}
+
+function turnView(run: IntakeRun, draft: ServiceRequestDraft | undefined, mode: SafetyCopyMode) {
+  const crisis = run.outcome === 'CRISIS_SUPPORT';
   return {
     outcome: run.outcome,
-    assistant_message:
-      run.outcome === 'FALLBACK_FORM' || run.assistantText === '' ? null : run.assistantText,
+    assistant_message: storesNothing(run) || run.assistantText === '' ? null : run.assistantText,
     not_available_yet: run.notAvailableYet,
-    notice: run.notAvailableYet ? NOT_AVAILABLE_NOTICE : null,
+    notice: crisis ? crisisNotice(mode) : run.notAvailableYet ? NOT_AVAILABLE_NOTICE : null,
     draft: draft === undefined ? null : draftView(draft),
     resources: run.resources.map(resourceView),
-    request_form: run.outcome === 'FALLBACK_FORM' ? REQUEST_FORM : null,
+    request_form: storesNothing(run) ? REQUEST_FORM : null,
   };
 }
 
@@ -150,8 +169,8 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
       createDatabaseIntakeHost(deps.pool, context.tenantId),
       { intakeText: body.text, draft: EMPTY_DRAFT_FIELDS },
     );
-    // The model did not answer: store nothing, send the Veteran to the plain form.
-    if (run.outcome === 'FALLBACK_FORM') return turnView(run, undefined);
+    // The model did not answer, or crisis copy comes first: store nothing, offer the form.
+    if (storesNothing(run)) return turnView(run, undefined, deps.safetyCopyMode);
 
     const draft = await createDraft(deps.pool, {
       draftId: randomUUID(),
@@ -160,7 +179,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
       intakeText: body.text,
       fields: run.draft,
     });
-    return reply.status(201).send(turnView(run, draft));
+    return reply.status(201).send(turnView(run, draft, deps.safetyCopyMode));
   });
 
   /** A follow-up message on a draft that is still open. */
@@ -179,7 +198,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
       createDatabaseIntakeHost(deps.pool, context.tenantId),
       { intakeText, draft: draft.fields },
     );
-    if (run.outcome === 'FALLBACK_FORM') return turnView(run, draft);
+    if (storesNothing(run)) return turnView(run, draft, deps.safetyCopyMode);
 
     // The model call is slow: save only if no other message or edit landed meanwhile (409).
     const saved = await saveDraftContent(
@@ -188,7 +207,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
       { fields: run.draft, intakeText },
       { ifUnchanged: true },
     );
-    return turnView(run, saved);
+    return turnView(run, saved, deps.safetyCopyMode);
   });
 
   app.get(`${API_PREFIX}/intake/drafts/:id`, async (request) => {
