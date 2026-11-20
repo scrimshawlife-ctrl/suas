@@ -33,6 +33,11 @@ export function isStagingFixtureAddress(email: string, mailbox: string | undefin
   return PLUS_TAG.test(tag) && base === mailbox.trim().toLowerCase();
 }
 
+export interface StagingPrincipal {
+  readonly tenantId: string;
+  readonly userId: string;
+}
+
 export interface StagingAccess {
   readonly environment: EnvironmentClass;
   /** True only when public sign-up was explicitly enabled. Startup refuses that outside LOCAL/TEST. */
@@ -87,9 +92,22 @@ export function publicSignUpPermitted(access: StagingAccess | undefined): boolea
  */
 export function stagingFixturePrincipalRefused(
   access: StagingAccess,
-  principal: { readonly tenantId: string; readonly userId: string } | undefined,
+  principal: StagingPrincipal | undefined,
 ): boolean {
-  if (access.environment !== 'STAGING' || access.publicDemo === true) return false;
+  if (access.publicDemo === true) return false;
+  return vaConfirmationFixtureRefused(access, principal);
+}
+
+/**
+ * The fixture gate for VA confirmation (the API confirm route and the VA sandbox OAuth routes).
+ * R16.1 (contributor proposal, not released) / owner review on #363: public demo mode does not
+ * lift it, so on STAGING only a registered fixture principal reaches the VA sandbox.
+ */
+export function vaConfirmationFixtureRefused(
+  access: StagingAccess | undefined,
+  principal: StagingPrincipal | undefined,
+): boolean {
+  if (access?.environment !== 'STAGING') return false;
   if (principal === undefined) return true;
   const tenantId = principal.tenantId.toLowerCase();
   const userId = principal.userId.toLowerCase();

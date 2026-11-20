@@ -4825,7 +4825,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description ID_VERIFICATION_UNAVAILABLE: VA confirmation is not offered in this environment (SUAS_VA_CONFIRMATION_MODE=disabled). Not an outage; self-attestation stays available. */
+            /** @description ID_VERIFICATION_UNAVAILABLE: VA confirmation is not offered in this environment (SUAS_VA_CONFIRMATION_MODE=disabled), or on STAGING to an account that is not a registered fixture principal, public demo included (R16.1, contributor proposal, not released). Not an outage; self-attestation stays available. */
             503: {
                 headers: {
                     [name: string]: unknown;

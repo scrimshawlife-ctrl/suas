@@ -18,7 +18,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { RouteContext } from '../route-context.js';
-import { authenticate } from '../authenticate.js';
+import { authenticate, authenticateForVaConfirmation } from '../authenticate.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
 import { findCurrentCase } from '../../coordination/index.js';
@@ -189,7 +189,7 @@ export function registerVeteranRoutes(app: FastifyInstance, deps: VeteranRouteDe
    * idempotency record and keeps only the bounded result and keyed hashes.
    */
   app.post(`${API_PREFIX}/veterans/me/verification/va/confirm`, async (request) => {
-    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const context = await authenticateForVaConfirmation(deps.pool, deps.sessionSecret, request);
     const port = deps.veteranConfirmation;
     const keyring = deps.fingerprintKeys;
     if (port === undefined || keyring === undefined) {

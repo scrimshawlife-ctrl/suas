@@ -12,9 +12,14 @@
 
 import type { FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
-import { stagingFixturePrincipalRefused, type StagingAccess } from '../auth/staging-access.js';
+import {
+  stagingFixturePrincipalRefused,
+  vaConfirmationFixtureRefused,
+  type StagingAccess,
+} from '../auth/staging-access.js';
 import { resolveAuthContext, type AuthContext } from '../authz/index.js';
 import { UnauthenticatedError } from '../authz/index.js';
+import { VeteranConfirmationUnavailableError } from '../identity/va-confirmation.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -103,4 +108,22 @@ export async function authenticate(
     throw new UnauthenticatedError('The session credential is not valid.');
   }
   return resolution.context;
+}
+
+/**
+ * `authenticate` for the VA confirmation routes. On STAGING a session that is not a registered
+ * fixture principal gets 503 ID_VERIFICATION_UNAVAILABLE, even in public demo mode (R16.1,
+ * contributor proposal, not released / owner review on #363); self-attestation is unaffected.
+ */
+export async function authenticateForVaConfirmation(
+  pool: Pool,
+  sessionSecret: string | undefined,
+  request: FastifyRequest,
+): Promise<AuthContext> {
+  const context = await authenticate(pool, sessionSecret, request);
+  if (vaConfirmationFixtureRefused(request.stagingAccess, context)) {
+    request.log.info({ va_confirmation_refusal: 'not_staging_fixture' }, 'va confirmation refused');
+    throw new VeteranConfirmationUnavailableError();
+  }
+  return context;
 }
