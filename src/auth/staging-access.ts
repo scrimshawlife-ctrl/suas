@@ -110,11 +110,13 @@ export function publicSignUpPermitted(access: StagingAccess | undefined): boolea
  * not gated here. Admission is the (tenant id, user id) pair. The same email
  * in another tenant, or the same tenant with a different user id, is refused.
  * An empty or missing registry admits nobody. Public demo mode (R16.1, proposal) admits all.
+ * Missing access fails closed (R16.5, contributor's call, D-065): the environment is unknown.
  */
 export function stagingFixturePrincipalRefused(
-  access: StagingAccess,
+  access: StagingAccess | undefined,
   principal: StagingPrincipal | undefined,
 ): boolean {
+  if (access === undefined) return true;
   if (access.publicDemo === true) return false;
   return vaConfirmationFixtureRefused(access, principal);
 }
@@ -122,13 +124,15 @@ export function stagingFixturePrincipalRefused(
 /**
  * The fixture gate for VA confirmation (the API confirm route and the VA sandbox OAuth routes).
  * R16.1 (contributor proposal, not released) / owner review on #363: public demo mode does not
- * lift it, so on STAGING only a registered fixture principal reaches the VA sandbox.
+ * lift it, so on STAGING only a registered fixture principal reaches the VA sandbox. Missing
+ * access refuses (R16.5, contributor's call, D-065), since STAGING cannot then be ruled out.
  */
 export function vaConfirmationFixtureRefused(
   access: StagingAccess | undefined,
   principal: StagingPrincipal | undefined,
 ): boolean {
-  if (access?.environment !== 'STAGING') return false;
+  if (access === undefined) return true;
+  if (access.environment !== 'STAGING') return false;
   if (principal === undefined) return true;
   const tenantId = principal.tenantId.toLowerCase();
   const userId = principal.userId.toLowerCase();
