@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { nearestRank, runSuite, type EvalSuite } from '../../eval/harness.js';
+import { nearestRank, REASONING_LEAK, runSuite, type EvalSuite } from '../../eval/harness.js';
 import { ScriptedModelInference, type ScriptedTurn } from '../../src/inference/index.js';
 
 interface TimedCase {
@@ -95,4 +95,33 @@ describe('nearestRank', () => {
     expect(nearestRank([], 95)).toBe(0);
     expect(nearestRank([12], 50)).toBe(12);
   });
+
+  it('takes the lower middle rank for an even number of values', () => {
+    // Ranks ceil(0.5 * 4) = 2 and ceil(0.95 * 4) = 4.
+    expect(nearestRank([40, 10, 30, 20], 50)).toBe(20);
+    expect(nearestRank([40, 10, 30, 20], 95)).toBe(40);
+  });
+});
+
+// R17.x (contributor's call, D-064): every think, thinking or reasoning tag form is a leak.
+describe('REASONING_LEAK', () => {
+  it.each([
+    '<think>',
+    '</think>',
+    '<THINKING>',
+    '< think>',
+    '</ think>',
+    '< / Thinking >',
+    '<reasoning>',
+    '</Reasoning>',
+  ])('flags %s', (tag) => {
+    expect(REASONING_LEAK.test(`ok ${tag} plan`)).toBe(true);
+  });
+
+  it.each(['I think so.', 'thinking about Tuesday', 'the reasoning is simple', '<thinker>', '<b>'])(
+    'does not flag %s',
+    (text) => {
+      expect(REASONING_LEAK.test(text)).toBe(false);
+    },
+  );
 });
