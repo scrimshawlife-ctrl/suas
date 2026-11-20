@@ -80,6 +80,8 @@ export interface SuiteReport {
   readonly cases: number;
   /** Mean per metric over the cases it applied to. */
   readonly metrics: Readonly<Record<string, { readonly mean: number; readonly applied: number }>>;
+  /** R18.6 (contributor's call, D-066): ids of the cases that scored 0, per metric with any. */
+  readonly failures: Readonly<Record<string, readonly string[]>>;
   /** Cases that threw instead of scoring. A thrown case counts as a harness defect. */
   readonly errors: readonly { readonly id: string; readonly message: string }[];
   /** Nearest-rank percentiles of each case's wall-clock `runCase` time, in ms to 0.1. */
@@ -138,22 +140,25 @@ export function aggregate(
   errors: SuiteReport['errors'],
   stats: RunStats,
 ): SuiteReport {
-  const sums = new Map<string, { total: number; applied: number }>();
+  const sums = new Map<string, { total: number; applied: number; failed: string[] }>();
   for (const score of scores) {
     for (const [metric, value] of Object.entries(score.metrics)) {
-      const entry = sums.get(metric) ?? { total: 0, applied: 0 };
+      const entry = sums.get(metric) ?? { total: 0, applied: 0, failed: [] };
       if (value !== null) {
         entry.total += value;
         entry.applied += 1;
+        if (value === 0) entry.failed.push(score.id);
       }
       sums.set(metric, entry);
     }
   }
   const metrics: Record<string, { mean: number; applied: number }> = {};
-  for (const [metric, { total, applied }] of [...sums.entries()].sort(([a], [b]) =>
+  const failures: Record<string, string[]> = {};
+  for (const [metric, { total, applied, failed }] of [...sums.entries()].sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
     metrics[metric] = { mean: applied === 0 ? 0 : total / applied, applied };
+    if (failed.length > 0) failures[metric] = failed;
   }
   return {
     suite: suite.name,
@@ -161,6 +166,7 @@ export function aggregate(
     ...(suite.promptVersion !== undefined ? { prompt_version: suite.promptVersion } : {}),
     cases: scores.length + errors.length,
     metrics,
+    failures,
     errors,
     latency_ms_p50: toTenthMs(nearestRank(stats.latenciesMs, 50)),
     latency_ms_p95: toTenthMs(nearestRank(stats.latenciesMs, 95)),
@@ -218,6 +224,9 @@ export function formatReport(reports: readonly SuiteReport[], implementation: st
       row('input_tokens / output_tokens', `${report.input_tokens} / ${report.output_tokens}`),
       row('reasoning_leak_count (<think)', String(report.reasoning_leak_count)),
     );
+    for (const [metric, ids] of Object.entries(report.failures)) {
+      lines.push(`  FAIL ${metric}: ${ids.join(', ')}`);
+    }
     for (const error of report.errors) lines.push(`  ERROR ${error.id}: ${error.message}`);
   }
   return lines.join('\n');

@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { nearestRank, runSuite, type EvalSuite } from '../../eval/harness.js';
+import { formatReport, nearestRank, runSuite, type EvalSuite } from '../../eval/harness.js';
 import { ScriptedModelInference, type ScriptedTurn } from '../../src/inference/index.js';
 
 interface TimedCase {
@@ -87,6 +87,32 @@ describe('runSuite run metrics', () => {
       latency_ms_p50: 0,
       latency_ms_p95: 0,
     });
+  });
+});
+
+// R18.6 (contributor's call, D-066): a report names the cases that scored 0, per metric.
+describe('runSuite failure ids', () => {
+  it('lists the cases that scored 0 for each metric, in the report and its text', async () => {
+    const suite: EvalSuite<{ id: string; ok: boolean }> = {
+      name: 'mixed',
+      description: 'one failing case',
+      cases: [
+        { id: 'pass', ok: true },
+        { id: 'fail', ok: false },
+      ],
+      runCase: (testCase) =>
+        Promise.resolve({
+          id: testCase.id,
+          metrics: { right: testCase.ok ? 1 : 0, skipped: null, always: 1 },
+        }),
+    };
+    const report = await runSuite(
+      suite,
+      () => new ScriptedModelInference(),
+      () => 0,
+    );
+    expect(report.failures).toEqual({ right: ['fail'] });
+    expect(formatReport([report], 'scripted-fake')).toContain('  FAIL right: fail');
   });
 });
 

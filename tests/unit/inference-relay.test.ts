@@ -167,6 +167,18 @@ describe('inference relay function', () => {
     });
   });
 
+  // R18.7 (contributor's call, D-066): chat assistance gets its own output cap through the relay.
+  it('caps a chat_assist turn at its own output limit', async () => {
+    const { client, handler } = relayHandler({});
+    const result = await handler({
+      purpose: 'chat_assist',
+      request: { ...REQUEST, maxTokens: 99_999 },
+      deadlineMs: 8_000,
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(client.commands[0]?.input).toMatchObject({ inferenceConfig: { maxTokens: 300 } });
+  });
+
   // R18.5 (contributor proposal, not released): the intake turn's temperature reaches Bedrock.
   it('forwards a temperature from 0 to 1 and refuses one outside it', async () => {
     const { client, handler } = relayHandler({});
