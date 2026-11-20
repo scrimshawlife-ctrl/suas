@@ -1,4 +1,4 @@
-import type { QueryClient } from '@tanstack/react-query';
+import { useMutation, type QueryClient } from '@tanstack/react-query';
 import type { ChatThreadPages } from '../../api/chat';
 import { api } from '../../api/client';
 import { queryKeys } from '../../api/keys';
@@ -49,6 +49,28 @@ export async function postChatMessage(
     body: { body },
   });
   return requireData(data, 'message');
+}
+
+export type ChatAssistKind = 'SUGGEST_REPLY' | 'CATCH_UP';
+
+/** R18.1–R18.3 (contributor proposal, not released). Swapped for the generated type on rebase. */
+export interface ChatAssistReply {
+  outcome: 'SUGGESTION' | 'CATCH_UP' | 'CRISIS_SUPPORT';
+  text?: string;
+  notice?: string;
+}
+
+/** POST …/chat/assist: a private suggestion or summary for the helper; it never posts a message. */
+export function useChatAssistRequest(serviceRequestId: string) {
+  return useMutation({
+    mutationFn: async (kind: ChatAssistKind): Promise<ChatAssistReply> => {
+      const { data } = await api.POST('/api/v0/service-requests/{id}/chat/assist', {
+        params: { path: { id: serviceRequestId } },
+        body: { kind },
+      });
+      return requireData(data, 'assist reply');
+    },
+  });
 }
 
 /** POST /chat/connect-tickets: a one-time ticket and the WebSocket URL to redeem it at. */
