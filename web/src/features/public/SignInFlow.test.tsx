@@ -44,6 +44,7 @@ describe('Sign in', () => {
     renderAt('/sign-in?role=serve');
     expect(screen.getByRole('radio', { name: /I want to serve/ })).toBeChecked();
     expect(screen.queryByText(/demo/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   it('asks for a valid email before calling the API', async () => {
@@ -73,6 +74,34 @@ describe('Sign in', () => {
     await userEvent.type(screen.getByLabelText('Email address'), 'marcus@example.invalid');
     await userEvent.click(screen.getByRole('button', { name: 'Send sign-in code' }));
     expect(await screen.findByText('Too many tries. Try again in 2 minutes.')).toBeInTheDocument();
+  });
+});
+
+// R16.3 (contributor proposal, not released): the public demo acknowledgement at sign-in.
+describe('Sign in on the public demo', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITE_SUAS_PUBLIC_DEMO', 'enabled');
+    return () => vi.unstubAllEnvs();
+  });
+
+  it('asks for the acknowledgement before calling the API', async () => {
+    renderAt('/sign-in');
+    await userEvent.type(screen.getByLabelText('Email address'), 'marcus@example.invalid');
+    await userEvent.click(screen.getByRole('button', { name: 'Send sign-in code' }));
+    expect(screen.getByText('Tick the box to continue.')).toBeInTheDocument();
+    expect(client.POST).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: /I understand this is a demo/ })).toHaveFocus();
+  });
+
+  it('sends demo_acknowledged once the box is ticked', async () => {
+    client.POST.mockResolvedValue({ data: { status: 'accepted' } });
+    renderAt('/sign-in');
+    await userEvent.type(screen.getByLabelText('Email address'), 'marcus@example.invalid');
+    await userEvent.click(screen.getByRole('checkbox', { name: /I understand this is a demo/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Send sign-in code' }));
+    expect(client.POST).toHaveBeenCalledWith('/api/v0/auth/challenges', {
+      body: { destination: 'marcus@example.invalid', method: 'EMAIL_OTP', demo_acknowledged: true },
+    });
   });
 });
 
