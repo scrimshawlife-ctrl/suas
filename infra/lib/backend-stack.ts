@@ -550,12 +550,14 @@ export class BackendStack extends Stack {
       },
     });
     if (config.publicDemo)
-      publicDemo(httpApi, stage, apiIntegration, [
-        apiFunction,
-        jobWorkerFunction,
-        migrateFunction,
+      publicDemo(
+        httpApi,
+        stage,
+        apiIntegration,
+        [apiFunction, jobWorkerFunction, migrateFunction, emailRelay.function],
         emailRelay.function,
-      ]);
+        config.publicDemoThrottle,
+      );
     if (zone !== undefined && apiDomain !== undefined) {
       apiAlias(this, config.apiHostname, zone, apiDomain);
     }
@@ -724,7 +726,6 @@ function apiAlias(
  * JSON API and the `/app` HTML form (src/http/routes/auth.ts, src/http/routes/ui.ts).
  */
 const PUBLIC_DEMO_CHALLENGE_PATHS = ['/api/v0/auth/challenges', '/app/auth/challenges'] as const;
-const PUBLIC_DEMO_CHALLENGE_THROTTLE = { ThrottlingRateLimit: 2, ThrottlingBurstLimit: 5 };
 
 /**
  * `-c publicDemo=true` (R16.1, R16.2; contributor proposal, not released). Every given function
@@ -736,15 +737,22 @@ function publicDemo(
   stage: apigw.HttpStage,
   integration: apigw.HttpRouteIntegration,
   functions: readonly lambda.Function[],
+  relay: lambda.Function,
+  throttle: EnvironmentConfig['publicDemoThrottle'],
 ): void {
   for (const fn of functions) fn.addEnvironment('SUAS_PUBLIC_DEMO', 'enabled');
-  // Best-effort defence in depth: a path variant the app router also accepts (for example a
-  // percent-encoded letter) can miss these edge routes. The bound that holds on every path is
-  // the daily cap enforced in issueChallenge (src/auth/challenge.ts).
-  const routeSettings: Record<string, typeof PUBLIC_DEMO_CHALLENGE_THROTTLE> = {};
+  // The relay opens its allowlist only with SUAS_ENV=STAGING too (owner review on #363).
+  relay.addEnvironment('SUAS_ENV', 'STAGING');
+  // Best-effort defence in depth: the app answers 404 to percent-encoded auth paths that could
+  // miss these edge routes, and enforces its own per-minute and daily limits behind them.
+  const setting = {
+    ThrottlingRateLimit: throttle.rateLimit,
+    ThrottlingBurstLimit: throttle.burstLimit,
+  };
+  const routeSettings: Record<string, typeof setting> = {};
   for (const path of PUBLIC_DEMO_CHALLENGE_PATHS) {
     const routes = httpApi.addRoutes({ path, methods: [apigw.HttpMethod.POST], integration });
-    routeSettings[`POST ${path}`] = PUBLIC_DEMO_CHALLENGE_THROTTLE;
+    routeSettings[`POST ${path}`] = setting;
     // A stage's route settings name routes that must already exist.
     for (const route of routes) stage.node.addDependency(route);
   }

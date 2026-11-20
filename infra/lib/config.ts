@@ -50,6 +50,11 @@ export interface EnvironmentConfig {
    * and throttles the sign-in route. Off by default, and the template is then unchanged.
    */
   readonly publicDemo: boolean;
+  /**
+   * R16.2 (proposal, not released) / owner review on #363: the challenge-route throttle used with
+   * publicDemo, from `publicDemoThrottleRate` (rps, default 2) and `publicDemoThrottleBurst` (5).
+   */
+  readonly publicDemoThrottle: { readonly rateLimit: number; readonly burstLimit: number };
 }
 
 function text(node: Node, key: string): string | undefined {
@@ -77,6 +82,15 @@ function hostnameWithin(root: string, key: string, value: string): string {
     );
   }
   return value;
+}
+
+function positiveInteger(node: Node, key: string, fallback: number): number {
+  const raw = text(node, key);
+  if (raw === undefined) return fallback;
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new Error(`Context "${key}" must be a positive integer; got "${raw}".`);
+  }
+  return Number(raw);
 }
 
 function trueOrFalse(node: Node, key: string, fallback: 'true' | 'false'): boolean {
@@ -182,6 +196,10 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
 
   const vaSandbox = trueOrFalse(node, 'vaSandbox', 'false');
   const publicDemo = trueOrFalse(node, 'publicDemo', 'false');
+  const publicDemoThrottle = {
+    rateLimit: positiveInteger(node, 'publicDemoThrottleRate', 2),
+    burstLimit: positiveInteger(node, 'publicDemoThrottleBurst', 5),
+  };
 
   return {
     name: 'staging',
@@ -211,6 +229,7 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
       'unknown',
     vaSandbox,
     publicDemo,
+    publicDemoThrottle,
   };
 }
 
