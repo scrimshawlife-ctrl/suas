@@ -44,7 +44,14 @@ const issueBody = z.object({
   tenant_id: z.string().uuid().optional(),
   destination: z.string().min(3).max(320),
   method: z.enum([CHALLENGE_METHODS[0], ...CHALLENGE_METHODS.slice(1)] as [string, ...string[]]),
+  demo_acknowledged: z.boolean().optional(),
 });
+
+/**
+ * R16.3 (contributor proposal, not released): with SUAS_PUBLIC_DEMO on, every address must
+ * carry the demo acknowledgement. It is checked before any lookup, so a 400 reveals nothing.
+ */
+const demoIssueBody = issueBody.extend({ demo_acknowledged: z.literal(true) });
 
 const verifyBody = z.object({
   tenant_id: z.string().uuid().optional(),
@@ -81,7 +88,9 @@ async function tenantForSignIn(
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   app.post(`${API_PREFIX}/auth/challenges`, async (request, reply) => {
-    const body = issueBody.parse(request.body);
+    const body = (deps.stagingAccess?.publicDemo === true ? demoIssueBody : issueBody).parse(
+      request.body,
+    );
     const { tenantId, allowSignUp } = await tenantForSignIn(
       deps.pool,
       body.destination,
