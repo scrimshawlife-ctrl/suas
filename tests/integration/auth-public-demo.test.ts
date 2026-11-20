@@ -196,6 +196,24 @@ describe('STAGING public demo sign-up', () => {
     expect(deliveries().lastFor(tagged('2'))).toBeDefined();
   });
 
+  // R16.5 (contributor proposal, not released): the day-long counter holds a digest, not the address.
+  it('stores the per-address daily counter without the address', async () => {
+    const email = newAddress();
+    expect((await issue(email, { demo_acknowledged: true })).statusCode).toBe(202);
+    const daily = await appPool(app).query<{ subject: string }>(
+      `SELECT subject FROM auth_rate_limits WHERE bucket = 'auth.challenge.address.daily'`,
+    );
+    expect(daily.rows.map((row) => row.subject)).toEqual([
+      expect.stringMatching(new RegExp(`^${SIGN_UP_TENANT}:[0-9a-f]{64}$`)),
+    ]);
+    // The 15-minute issue limit still keys on the address; it is pruned after its window.
+    const plain = await appPool(app).query<{ bucket: string }>(
+      `SELECT bucket FROM auth_rate_limits WHERE position($1 IN subject) > 0`,
+      [email],
+    );
+    expect(plain.rows.map((row) => row.bucket)).toEqual(['auth.challenge.issue']);
+  });
+
   it('over the daily cap answers a new address the same and sends nothing, but not a known one', async () => {
     expect((await issueCapped(newAddress())).issued).toBe(true);
 
