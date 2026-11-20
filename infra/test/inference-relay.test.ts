@@ -157,6 +157,22 @@ describe('inference relay', () => {
     expect(roleResource?.Properties?.ManagedPolicyArns).toBeUndefined();
   });
 
+  // R17.x (contributor's call, D-064): on-demand invocation, so one regional model ARN and no
+  // inference-profile ARN or condition anywhere in the stack.
+  it('grants InvokeModel on exactly one foundation-model ARN in the stack region, unconditioned', () => {
+    const invokes = policies(on.backend)
+      .flatMap((p) => p.statements)
+      .filter((st) => [st.Action].flat().some((a: string) => /^bedrock:(\*|Invoke)/.test(a)));
+    expect(invokes).toHaveLength(1);
+    expect([renderArns(invokes[0]?.Resource)].flat()).toEqual([
+      `arn:\${AWS::Partition}:bedrock:us-west-2::foundation-model/${MODEL_ID}`,
+    ]);
+    expect(invokes[0]?.Condition).toBeUndefined();
+    expect(JSON.stringify(on.backend.toJSON())).not.toMatch(
+      /inference-profile|InferenceProfileArn/,
+    );
+  });
+
   it('may be invoked by the API role only, through an identity policy scoped to its ARN', () => {
     const [fnId] = functionByHandler(on.backend, 'inference-relay.handler') ?? [];
     const invokers = policies(on.backend).filter((p) =>
