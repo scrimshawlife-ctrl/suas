@@ -230,8 +230,6 @@ describe('region-restricted bootstrap and Bedrock grants', () => {
     all
       .map((s) => s.Condition?.StringEquals?.['aws:RequestedRegion'])
       .filter((value) => Array.isArray(value));
-  const profile =
-    'arn:${AWS::Partition}:bedrock:us-east-2:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0';
   const guardrails = {
     'Fn::Sub': 'arn:${AWS::Partition}:bedrock:us-east-2:${AWS::AccountId}:guardrail/*',
   };
@@ -254,33 +252,23 @@ describe('region-restricted bootstrap and Bedrock grants', () => {
     });
   });
 
-  it('bounds the relay to the Haiku profile, its destination-Region model and staging guardrails', () => {
+  it('bounds the relay to one on-demand model in the staging Region and staging guardrails', () => {
+    expect(readFileSync(file, 'utf8')).toMatch(
+      /BedrockModelId:\n {4}Type: String\n {4}Default: qwen\.qwen3-32b-v1:0\n/,
+    );
     const { byName } = loadPolicies(EAST2_BEDROCK);
     const boundary = byName.SuasStagingRuntimeBoundary!;
     const bedrock = boundary.filter((s: any) => actions(s).some((a) => a.startsWith('bedrock:')));
     expect(bedrock).toEqual([
       {
-        Sid: 'InvokeModelProfile',
+        Sid: 'InvokeFoundationModel',
         Effect: 'Allow',
         Action: 'bedrock:InvokeModel',
-        Resource: { 'Fn::Sub': profile },
-        Condition: { StringEquals: { 'aws:RequestedRegion': 'us-east-2' } },
-      },
-      {
-        Sid: 'InvokeModelViaProfile',
-        Effect: 'Allow',
-        Action: 'bedrock:InvokeModel',
+        // BedrockModelId keeps its default here, so CloudFormation fills it in at deploy.
         Resource: {
-          'Fn::Sub':
-            'arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
+          'Fn::Sub': 'arn:${AWS::Partition}:bedrock:us-east-2::foundation-model/${BedrockModelId}',
         },
-        // The us. profile routes to these Regions; the model is reachable only through it.
-        Condition: {
-          StringEquals: {
-            'bedrock:InferenceProfileArn': { 'Fn::Sub': profile },
-            'aws:RequestedRegion': ['us-east-1', 'us-east-2', 'us-west-2'],
-          },
-        },
+        Condition: { StringEquals: { 'aws:RequestedRegion': ['us-east-2'] } },
       },
       {
         Sid: 'ApplyGuardrail',

@@ -120,19 +120,16 @@ policies:
 - **`SuasCdkServices`** lets CloudFormation create, version, update, tag and delete Guardrails in the
   staging region. The actions are those in the `AWS::Bedrock::Guardrail` and `GuardrailVersion`
   handler schemas, without KMS, because no customer key is used.
-- **The boundary** allows three things:
-  - `bedrock:InvokeModel` on the `us.anthropic.claude-haiku-4-5-20251001-v1:0` inference profile in
-    the staging region;
-  - `bedrock:InvokeModel` on the Haiku 4.5 foundation model, only through that profile
-    (`bedrock:InferenceProfileArn`), in `us-east-1`, `us-east-2` and `us-west-2`;
+- **The boundary** allows two things:
+  - `bedrock:InvokeModel` on the one foundation model named by `BedrockModelId` (default
+    `qwen.qwen3-32b-v1:0`, Qwen3 32B) in the staging region, with `aws:RequestedRegion` the staging
+    region;
   - `bedrock:ApplyGuardrail` on the staging region's guardrails.
 
-Bedrock authorizes the profile, then the model in the source region and in each destination region
-the profile can route to. AWS's
-[geographic cross-Region inference guide](https://docs.aws.amazon.com/bedrock/latest/userguide/geographic-cross-region-inference.html)
-says an SCP that blocks regions must allow all of them. Confirm that before enabling the relay. The
-existing `InvokeStaging` grant already covers the API invoking the relay. The boundary grants nothing by
-itself: the relay role still needs its own scoped policy.
+The model is invoked on demand in `us-east-2`: no inference profile and no cross-region routing, so the
+account's region SCP needs to allow only `us-east-2` for Bedrock. The existing `InvokeStaging` grant
+already covers the API invoking the relay. The boundary grants nothing by itself: the relay role still
+needs its own scoped policy.
 
 ### Permissions boundary acceptance
 
