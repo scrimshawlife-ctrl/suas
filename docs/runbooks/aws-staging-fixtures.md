@@ -103,8 +103,10 @@ releases it and lifts the staging maintenance hold.
   Over either daily cap the answer is still `202` and nothing is sent. Capping only addresses with no account leaves a
   small enumeration side channel (known addresses still get codes over a cap), which the owner accepted.
 
-- Any request under `/api/v0/auth/` or `/app/auth/` whose path percent-encodes an unreserved character (for example
-  `/api/v0/auth/%63hallenges`) answers `404`, so no path variant skips the API Gateway route throttle.
+- Any request whose path holds a `%` and, lower-cased and decoded until stable (at most 3 rounds), starts with
+  `/api/v0/auth` or `/app/auth` answers `404` before routing (for example `/api/v0/auth/%63hallenges`,
+  `/api/v0/auth%2Fchallenges` or `/api/v0/auth/%2563hallenges`), so no path variant skips the API Gateway route
+  throttle.
 - VA confirmation stays fixture-only: a non-fixture account gets `503 ID_VERIFICATION_UNAVAILABLE` from
   `POST /api/v0/veterans/me/verification/va/confirm` and the VA sandbox OAuth routes. Self-attestation still works.
 - The email relay opens its allowlist only with both `SUAS_PUBLIC_DEMO=enabled` and `SUAS_ENV=STAGING`; the
