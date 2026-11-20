@@ -1,6 +1,6 @@
 /**
  * R18.7 (contributor proposal, not released): a suggested reply or catch-up summary for the helper.
- * It writes, stores and logs nothing; Veteran crisis language skips the model (as intake, R17.4).
+ * It writes, stores and logs nothing; crisis language in the chat skips the model (as intake, R17.4).
  */
 
 import { detectCrisisLanguage } from '../intake/crisis-check.js';
@@ -10,6 +10,7 @@ import {
   type ModelInferencePort,
   type ModelMessagePart,
 } from '../inference/index.js';
+import { guardAssistText, type AssistGuardReport } from './assist-guard.js';
 import { CHAT_ASSIST_SYSTEM_PROMPT } from './assist-prompt.js';
 
 export const CHAT_ASSIST_KINDS = ['SUGGEST_REPLY', 'CATCH_UP'] as const;
@@ -58,12 +59,14 @@ export interface ChatAssistInput {
 
 /**
  * - `SUGGESTION` / `CATCH_UP`: `text` holds the answer for that kind.
- * - `CRISIS_SUPPORT`: the Veteran's words matched the crisis list; no model was asked.
- * - `UNAVAILABLE`: no model, a model failure, or an empty answer.
+ * - `CRISIS_SUPPORT`: the request or a message matched the crisis list; no model was asked.
+ * - `UNAVAILABLE`: no model, a model failure, an empty answer, or one the output guard dropped.
  */
 export interface ChatAssistResult {
   readonly outcome: 'SUGGESTION' | 'CATCH_UP' | 'CRISIS_SUPPORT' | 'UNAVAILABLE';
   readonly text?: string;
+  /** Set whenever the model answered; for the eval only, never in an HTTP response. */
+  readonly guard?: AssistGuardReport;
 }
 
 const UNAVAILABLE: ChatAssistResult = { outcome: 'UNAVAILABLE' };
@@ -118,16 +121,12 @@ export async function assistChat(
   input: ChatAssistInput,
 ): Promise<ChatAssistResult> {
   const window = input.messages.slice(-CHAT_ASSIST_WINDOW);
-  // Every Veteran-written text the model would see, checked before any call.
-  const { summary, timing, meetingPlace, destination } = input.request;
-  const veteranText = [
-    summary,
-    timing,
-    meetingPlace,
-    destination,
-    ...window.filter((message) => !message.fromHelper).map((message) => message.body),
-  ];
-  if (veteranText.some((text) => text !== null && detectCrisisLanguage(text))) {
+  // R18.6 (contributor's call, D-066): every text the model would see, the helper's messages
+  // too, since a helper may quote the Veteran ("Veteran said: I want to die").
+  const { category, summary, timing, meetingPlace, destination } = input.request;
+  const fields = [summary, timing, meetingPlace, destination].filter((text) => text !== null);
+  const chatText = window.map((message) => message.body);
+  if ([...fields, ...chatText].some((text) => detectCrisisLanguage(text))) {
     return { outcome: 'CRISIS_SUPPORT' };
   }
   if (!port.isAvailable()) return UNAVAILABLE;
@@ -150,7 +149,16 @@ export async function assistChat(
   }
   if (!result.ok) return UNAVAILABLE;
 
-  const text = capOnWord(stripThinking(result.text).trim(), CHAT_ASSIST_TEXT_MAX[input.kind]);
-  if (text === '') return UNAVAILABLE;
-  return { outcome: input.kind === 'SUGGEST_REPLY' ? 'SUGGESTION' : 'CATCH_UP', text };
+  const raw = stripThinking(result.text).trim();
+  if (raw === '') return UNAVAILABLE;
+  const { text: kept, ...guard } = guardAssistText(input.kind, raw, {
+    source: [category, ...fields, ...chatText].join('\n'),
+    helperText: window
+      .filter((message) => message.fromHelper)
+      .map((message) => message.body)
+      .join('\n'),
+  });
+  const text = capOnWord(kept, CHAT_ASSIST_TEXT_MAX[input.kind]);
+  if (text === '') return { ...UNAVAILABLE, guard };
+  return { outcome: input.kind === 'SUGGEST_REPLY' ? 'SUGGESTION' : 'CATCH_UP', text, guard };
 }
