@@ -53,6 +53,7 @@ const requestSchema = z
     purpose: z.enum(INFERENCE_PURPOSES).optional(),
     deadlineMs: z.number().optional(),
     maxTokens: z.number().int().positive().optional(),
+    temperature: z.number().min(0).max(1).optional(),
   })
   .strict();
 

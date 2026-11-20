@@ -1,6 +1,7 @@
 /**
  * Intake Assistant eval: runs the real assistant loop (`runIntakeAssistant`) over
- * the synthetic set with an in-memory Resource list, and scores the draft.
+ * the synthetic set with an in-memory Resource list, and scores the draft. Follow-ups
+ * run as the follow-up route does: text joined, draft and last reply carried over.
  */
 
 import {
@@ -8,6 +9,7 @@ import {
   EMPTY_DRAFT_FIELDS,
   type IntakeHost,
   type IntakeResource,
+  type IntakeRun,
 } from '../../src/intake/assistant.js';
 import type { ModelInferencePort } from '../../src/inference/index.js';
 import { INTAKE_PROMPT_VERSION } from '../../src/intake/system-prompt.js';
@@ -39,6 +41,7 @@ const SYNTHETIC_RESOURCES: readonly IntakeResource[] = [
   staleWarning: false,
 }));
 
+/** Same rules as `createDatabaseIntakeHost`: category filter, then any keyword, none means all. */
 const host: IntakeHost = {
   searchResources(input) {
     const words = (input.keywords ?? '')
@@ -46,17 +49,40 @@ const host: IntakeHost = {
       .split(/\s+/)
       .filter((w) => w !== '');
     return Promise.resolve(
-      SYNTHETIC_RESOURCES.filter((r) => words.some((w) => r.serviceName.toLowerCase().includes(w))),
+      SYNTHETIC_RESOURCES.filter(
+        (r) => input.category === undefined || r.category === input.category,
+      ).filter(
+        (r) => words.length === 0 || words.some((w) => r.serviceName.toLowerCase().includes(w)),
+      ),
     );
   },
 };
+
+/** The first message, then each follow-up with the stored text, draft and reply. */
+async function runConversation(
+  port: ModelInferencePort,
+  testCase: IntakeEvalCase,
+): Promise<IntakeRun> {
+  let intakeText = testCase.text;
+  let run = await runIntakeAssistant(port, host, { intakeText, draft: EMPTY_DRAFT_FIELDS });
+  for (const followUp of testCase.followUps ?? []) {
+    intakeText = `${intakeText}\n\n${followUp}`;
+    run = await runIntakeAssistant(port, host, {
+      intakeText,
+      draft: run.draft,
+      ...(run.assistantText !== '' ? { lastAssistantMessage: run.assistantText } : {}),
+    });
+  }
+  return run;
+}
 
 export const intakeSuite = defineSuite<IntakeEvalCase>({
   name: 'intake',
   description: 'Intake Assistant: category, timing, out-of-scope handling, tool contract.',
   cases: INTAKE_EVAL_CASES,
   promptVersion: INTAKE_PROMPT_VERSION,
-  scriptedTurns: () => baselineTurns(),
+  scriptedTurns: (testCase) =>
+    [testCase.text, ...(testCase.followUps ?? [])].flatMap(() => baselineTurns()),
   async runCase(testCase, { inference }): Promise<CaseScore> {
     let modelCalls = 0;
     const counted: ModelInferencePort = {
@@ -67,10 +93,7 @@ export const intakeSuite = defineSuite<IntakeEvalCase>({
         return inference.converse(request);
       },
     };
-    const run = await runIntakeAssistant(counted, host, {
-      intakeText: testCase.text,
-      draft: EMPTY_DRAFT_FIELDS,
-    });
+    const run = await runConversation(counted, testCase);
     // R17.4 (contributor proposal, not released): crisis language never reaches the model.
     if (testCase.crisis === true) {
       return {

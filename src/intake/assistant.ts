@@ -39,6 +39,8 @@ import {
 export const MAX_MODEL_CALLS = 4;
 export const MAX_ASSISTANT_TEXT = 1_500;
 export const MAX_RESOURCES_PER_SEARCH = 5;
+/** Low sampling temperature so the same message drafts the same way (R18.5, proposal). */
+export const INTAKE_TEMPERATURE = 0.2;
 
 /**
  * Whole-run budget for one Veteran message, inside the 29 s HTTP API limit, and the least
@@ -354,6 +356,7 @@ export async function runIntakeAssistant(
           purpose: 'intake',
           deadlineMs: remainingMs,
           maxTokens: INFERENCE_PURPOSE_LIMITS.intake.maxTokens,
+          temperature: INTAKE_TEMPERATURE,
         },
         remainingMs,
       );
