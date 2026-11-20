@@ -4,7 +4,7 @@ import { api } from '../../api/client';
 import { queryKeys } from '../../api/keys';
 import { cursorPages, useSignedInInfiniteQuery } from '../../api/queries';
 import { requireData } from '../../api/require-data';
-import type { ChatThread } from '../../api/types';
+import type { ChatThread, Schemas } from '../../api/types';
 import { isReadOnly } from './threads';
 import { insertMessage, type ChatMessage, type MessagePage, type MessagesData } from './messages';
 
@@ -51,14 +51,8 @@ export async function postChatMessage(
   return requireData(data, 'message');
 }
 
-export type ChatAssistKind = 'SUGGEST_REPLY' | 'CATCH_UP';
-
-/** R18.1–R18.3 (contributor proposal, not released). Swapped for the generated type on rebase. */
-export interface ChatAssistReply {
-  outcome: 'SUGGESTION' | 'CATCH_UP' | 'CRISIS_SUPPORT';
-  text?: string;
-  notice?: string;
-}
+export type ChatAssistKind = Schemas['ChatAssistRequest']['kind'];
+type ChatAssistReply = Schemas['ChatAssistResult'];
 
 /** POST …/chat/assist: a private suggestion or summary for the helper; it never posts a message. */
 export function useChatAssistRequest(serviceRequestId: string) {
