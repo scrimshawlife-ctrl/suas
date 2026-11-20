@@ -54,11 +54,10 @@ export type ModelInferenceConfig =
   { readonly mode: 'disabled' } | { readonly mode: 'bedrock'; readonly modelId: string };
 
 /**
- * An on-demand Bedrock base model id, `provider.model`, invoked in the stack's region (R17.2,
- * proposal). Lower case only; a geographic or global inference profile prefix is refused.
+ * R17.x (contributor's call, D-064): the exact on-demand Bedrock base model ids the relay may
+ * invoke in the stack's region. An allowlist, so no profile, other model or case variant gets in.
  */
-const BEDROCK_MODEL_ID_PATTERN = /^[a-z0-9-]+\.[a-z0-9][a-z0-9.:-]*$/;
-const INFERENCE_PROFILE_PREFIX = /^(us|us-gov|eu|apac|ca|jp|au|global)\./;
+export const ALLOWED_BEDROCK_MODEL_IDS: readonly string[] = ['qwen.qwen3-32b-v1:0'];
 
 function text(node: Node, key: string): string | undefined {
   const value: unknown = node.tryGetContext(key);
@@ -234,13 +233,9 @@ function modelInferenceConfig(node: Node): ModelInferenceConfig {
   if (mode !== 'bedrock') {
     throw new Error('Context "modelInference" must be disabled or bedrock.');
   }
-  if (
-    modelId === undefined ||
-    !BEDROCK_MODEL_ID_PATTERN.test(modelId) ||
-    INFERENCE_PROFILE_PREFIX.test(modelId)
-  ) {
+  if (modelId === undefined || !ALLOWED_BEDROCK_MODEL_IDS.includes(modelId)) {
     throw new Error(
-      `Context "bedrockModelId" must be an on-demand Bedrock base model id in the staging region, not an inference profile, like qwen.qwen3-32b-v1:0; got "${modelId ?? ''}".`,
+      `Context "bedrockModelId" must be one of the allowed on-demand Bedrock base model ids (${ALLOWED_BEDROCK_MODEL_IDS.join(', ')}); got "${modelId ?? ''}".`,
     );
   }
   return { mode, modelId };

@@ -41,12 +41,24 @@ export const CRISIS_PHRASES: readonly string[] = [
   'kill me',
 ];
 
+/** Zero-width and format characters (soft hyphen, LRM/RLM) and bidi embeddings and isolates. */
+const INVISIBLE = /[\u200B-\u200F\u2060\uFEFF\u00AD\u202A-\u202E\u2066-\u2069]/g;
+
+/** Cyrillic and Greek letters drawn like Latin ones, so "suісіdе" cannot slip past. */
+const LOOK_ALIKES = 'аеорсухіАЕОРСУХІοΟ';
+const LATIN_FORMS = 'aeopcyxiaeopcyxioo';
+const LOOK_ALIKE_PATTERN = new RegExp(`[${LOOK_ALIKES}]`, 'g');
+
 /**
- * Lower-case, drop apostrophes (so "can't" reads "cant"), turn other punctuation into spaces
- * (so "self-harm" reads "self harm"), then collapse whitespace.
+ * R17.x (contributor's call, D-064): NFKC (full-width and compatibility forms), drop invisible
+ * characters, map homoglyphs, lower-case, drop apostrophes ("can't" reads "cant"), turn other
+ * punctuation into spaces ("self-harm" reads "self harm"), then collapse whitespace.
  */
 function normalize(text: string): string {
   return text
+    .normalize('NFKC')
+    .replace(INVISIBLE, '')
+    .replace(LOOK_ALIKE_PATTERN, (glyph) => LATIN_FORMS[LOOK_ALIKES.indexOf(glyph)] ?? glyph)
     .toLowerCase()
     .replace(/['‘’]/g, '')
     .replace(/[^\p{L}\p{N}]+/gu, ' ')

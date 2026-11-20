@@ -38,6 +38,18 @@ describe('detectCrisisLanguage', () => {
     expect(detectCrisisLanguage(text)).toBe(true);
   });
 
+  // R17.x (contributor's call, D-064): Unicode look-alikes and invisible characters are undone.
+  it.each([
+    ['full-width letters', 'I keep thinking about ｓｕｉｃｉｄｅ'],
+    ['a zero-width space inside a word', 'thinking about sui\u200Bcide'],
+    ['a soft hyphen and a word joiner', 'I want to kill my\u00ADse\u2060lf'],
+    ['Cyrillic look-alikes', 'I am su\u0456\u0441\u0456d\u0430l'],
+    ['a Greek omicron', 'I want to end my life, n\u03BF reason to live'],
+    ['an RTL override', 'I want to \u202Ekill myself\u202C tonight'],
+  ])('matches with %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(true);
+  });
+
   it.each([
     ['an ordinary food request', 'I need groceries by Friday.'],
     ['a ride request', 'Can someone drive me to the pharmacy?'],

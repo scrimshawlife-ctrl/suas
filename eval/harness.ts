@@ -112,6 +112,12 @@ export function nearestRank(values: readonly number[], percent: number): number 
 
 const toTenthMs = (ms: number): number => Math.round(ms * 10) / 10;
 
+/**
+ * R17.x (contributor's call, D-064): an opening or closing think, thinking or reasoning tag, in
+ * any case and with spaces after the bracket or slash, marks reasoning that reached the answer.
+ */
+export const REASONING_LEAK = /<\s*\/?\s*(?:think(?:ing)?|reasoning)\b/i;
+
 type MutableStats = { -readonly [K in Exclude<keyof RunStats, 'latenciesMs'>]: number };
 
 /** Wraps a port so every call, its token usage and any reasoning leak is counted in `stats`. */
@@ -125,7 +131,7 @@ function countingPort(port: ModelInferencePort, stats: MutableStats): ModelInfer
       if (result.ok) {
         stats.inputTokens += result.usage?.inputTokens ?? 0;
         stats.outputTokens += result.usage?.outputTokens ?? 0;
-        if (/<think/i.test(result.text)) stats.reasoningLeaks += 1;
+        if (REASONING_LEAK.test(result.text)) stats.reasoningLeaks += 1;
       }
       return result;
     },

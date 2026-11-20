@@ -25,9 +25,11 @@ import {
 import {
   createDraft,
   DraftChangedError,
+  DraftNotEditableError,
   findOwnedDraft,
   saveDraftContent,
 } from '../../src/intake/drafts.js';
+import { EMPTY_DRAFT_FIELDS } from '../../src/intake/assistant.js';
 import { resolveImmediateResourceSlot } from '../../src/ui/safety.js';
 import { appPool, createPerson } from '../helpers/actors.js';
 import { testDatabaseUrl, validEnv } from '../helpers/env.js';
@@ -455,6 +457,32 @@ describe('draft, edit and submit', () => {
     const winner = stored.intakeText.endsWith('Tuesday') ? 'Tuesday' : 'Friday';
     expect(stored.intakeText).toBe(`I need a ride\n\n${winner}`);
     expect(stored.lastAssistantMessage).toBe(`Reply to ${winner}`);
+  });
+
+  // R17.x (contributor's call, D-064): a draft that left DRAFT meanwhile is not editable
+  // (ILLEGAL_TRANSITION), which is a different conflict from a lost race (STALE_STATE).
+  it('refuses a follow-up save on a draft discarded since it was read as not editable', async () => {
+    const { tenantId, user } = await veteran();
+    const draft = await createDraft(appPool(app), {
+      draftId: randomUUID(),
+      tenantId,
+      userId: user.userId,
+      intakeText: 'first',
+      fields: EMPTY_DRAFT_FIELDS,
+    });
+    const read = await findOwnedDraft(appPool(app), tenantId, user.userId, draft.draftId);
+    await appPool(app).query(
+      `UPDATE service_request_drafts SET status = 'DISCARDED' WHERE draft_id = $1`,
+      [draft.draftId],
+    );
+    const save = saveDraftContent(
+      appPool(app),
+      read,
+      { fields: EMPTY_DRAFT_FIELDS, intakeText: 'first\n\nlater' },
+      { ifUnchanged: true },
+    );
+    await expect(save).rejects.toThrow(DraftNotEditableError);
+    await expect(save).rejects.not.toThrow(DraftChangedError);
   });
 
   it('refuses to submit a draft with no category', async () => {

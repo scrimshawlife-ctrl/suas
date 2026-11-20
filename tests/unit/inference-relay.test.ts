@@ -221,4 +221,26 @@ describe('token usage through the relay', () => {
     const { port } = relayPort([invoked({ Payload: encode(bad) })]);
     expect(await port.converse(REQUEST)).toEqual({ ok: false, failure: 'invalid' });
   });
+
+  // R17.x (contributor's call, D-064): an implausible count is refused, and one reported count
+  // is kept with the other as 0.
+  it('refuses a token count above 1,000,000', async () => {
+    const huge = {
+      ok: true,
+      text: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: 1_000_001, outputTokens: 2 },
+    };
+    const { port } = relayPort([invoked({ Payload: encode(huge) })]);
+    expect(await port.converse(REQUEST)).toEqual({ ok: false, failure: 'invalid' });
+  });
+
+  it.each([
+    [{ inputTokens: 12 }, { inputTokens: 12, outputTokens: 0 }],
+    [{ outputTokens: 5 }, { inputTokens: 0, outputTokens: 5 }],
+  ])('reports both counts when Bedrock gives only %o', async (usage, expected) => {
+    const partial = { ...ENDED, usage } as unknown as ConverseCommandOutput;
+    const { handler } = relayHandler({}, [partial]);
+    expect(await handler(EVENT)).toMatchObject({ ok: true, usage: expected });
+  });
 });
