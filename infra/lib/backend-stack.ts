@@ -1,8 +1,8 @@
 /**
  * The STAGING backend (synthetic data only): network, database, the API, the scheduled
- * job worker, the migrate function, the email relay, and the assets bucket. Inference stays disabled
- * (R2.15 is not approved) and chat push stays off (R6.12 is not accepted). The Bedrock
- * and API Gateway push adapters remain in src/ and are not selected here.
+ * job worker, the migrate function, the email relay, and the assets bucket. Inference is off unless
+ * `-c modelInference=bedrock` adds the inference relay and its guardrail (R17.1/R17.3, contributor
+ * proposal, not released). Chat push stays off (R6.12 is not accepted).
  *
  * Design rules (user decisions of 2026-11-05):
  *  - The VPC has isolated subnets only. There is no NAT gateway and no internet gateway
@@ -16,8 +16,10 @@
  *    CloudFormation resolves at deploy time; the template never contains the value.
  */
 
+import { createHash } from 'node:crypto';
 import { CfnOutput, Duration, Fn, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as bedrock from 'aws-cdk-lib/aws-bedrock';
 import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { AccessLogFormat } from 'aws-cdk-lib/aws-apigateway';
@@ -41,6 +43,7 @@ import type { EnvironmentConfig } from './config.js';
 import { RDS_CA_BUNDLE_FILE, suasLambdaCode } from './lambda-code.js';
 import { applyDeploymentMode, deploymentPipelineEnabled } from './deployment-mode.js';
 import { EmailRelay } from './email-relay.js';
+import { InferenceRelay } from './inference-relay.js';
 import { VaVerify } from './va-verify.js';
 
 export interface BackendStackProps extends StackProps {
@@ -151,8 +154,8 @@ export class BackendStack extends Stack {
     vpc.addGatewayEndpoint('S3Endpoint', { service: ec2.GatewayVpcEndpointAwsService.S3 });
     // One interface endpoint per AWS service the code calls (see README for the source files).
     // Lambda only, to invoke the email relay (suas #305) and, with vaSandbox, the VA verify
-    // function (VA_CONFIRMATION_FLOW W9 item 4). Bedrock Runtime and execute-api are not
-    // endpoints while inference and chat push stay off.
+    // function (VA_CONFIRMATION_FLOW W9 item 4) and, with modelInference=bedrock, the inference
+    // relay (R17.3, proposal). No bedrock-runtime endpoint: Bedrock is reached only by the relay.
     const interfaceEndpoints: ReadonlyArray<readonly [string, ec2.InterfaceVpcEndpointAwsService]> =
       [['LambdaEndpoint', ec2.InterfaceVpcEndpointAwsService.LAMBDA]];
     // R14.1 proposal: one zone only (the first isolated subnet). Private DNS resolves to that
@@ -400,8 +403,9 @@ export class BackendStack extends Stack {
         // non-empty allowlist makes the /app session cookie SameSite=None (src/http/routes/ui.ts).
         ...(corsOrigin !== undefined ? { SUAS_CORS_ALLOWED_ORIGINS: corsOrigin } : {}),
         ...viaEmailRelay,
-        // R2.15 is not approved. The Bedrock adapter is not selected.
-        SUAS_MODEL_INFERENCE_MODE: 'disabled',
+        // `disabled` unless modelInference=bedrock (R17.1, contributor proposal, not released);
+        // then the turns go to the inference relay, set below.
+        SUAS_MODEL_INFERENCE_MODE: config.modelInference.mode,
         SUAS_OBJECT_STORAGE_MODE: 's3',
         SUAS_S3_BUCKET: assetsBucket.bucketName,
         // No ID-scan provider is chosen (plan §8 item 2) and fake is refused on STAGING (D-052).
@@ -451,7 +455,7 @@ export class BackendStack extends Stack {
     });
 
     // ------------------------------------------------------- IAM (least privilege)
-    // Email: invoke the email relay and nothing else. No bedrock:InvokeModel: inference is disabled.
+    // Email: invoke the email relay and nothing else. Only the inference relay's role has Bedrock.
     emailRelay.function.grantInvoke(apiFunction);
     emailRelay.function.grantInvoke(jobWorkerFunction);
 
@@ -475,6 +479,29 @@ export class BackendStack extends Stack {
         description: 'Put the LLC-owned VA sandbox key here by hand (see infra/README.md).',
         value: vaVerify.secret.secretName,
       });
+    }
+
+    // R17.3/R17.5 (contributor proposal, not released): built only with modelInference=bedrock.
+    // The API hands each model turn to the outside-VPC relay over the Lambda endpoint; only the
+    // relay's role may call Bedrock, and only the API may invoke the relay.
+    if (config.modelInference.mode === 'bedrock') {
+      const guardrail = inferenceGuardrail(this, config.name);
+      const inferenceRelay = new InferenceRelay(this, 'InferenceRelay', {
+        code,
+        logRetention: LOG_RETENTION,
+        suasEnv: config.suasEnv,
+        region: config.region,
+        modelId: config.modelInference.modelId,
+        ...guardrail,
+      });
+      apiFunction.addEnvironment('SUAS_BEDROCK_MODEL_ID', config.modelInference.modelId);
+      apiFunction.addEnvironment('SUAS_BEDROCK_GUARDRAIL_ID', guardrail.guardrailId);
+      apiFunction.addEnvironment('SUAS_BEDROCK_GUARDRAIL_VERSION', guardrail.guardrailVersion);
+      apiFunction.addEnvironment(
+        'SUAS_MODEL_INFERENCE_RELAY_FUNCTION',
+        inferenceRelay.function.functionName,
+      );
+      inferenceRelay.function.grantInvoke(apiFunction);
     }
     apiFunction.addToRolePolicy(
       new iam.PolicyStatement({
@@ -673,6 +700,56 @@ export class BackendStack extends Stack {
       value: emailRelay.secret.secretName,
     });
   }
+}
+
+/** Shown in place of a blocked message or answer; the web app then offers the plain form. */
+export const GUARDRAIL_BLOCKED_MESSAGE =
+  "This message can't be processed. Please use the request form.";
+
+/**
+ * R17.5 (contributor proposal, not released): harmful-content filters on both sides and the
+ * prompt-attack filter on input. No PII policy: the Veteran's text is not masked.
+ */
+export const GUARDRAIL_CONTENT_FILTERS: readonly bedrock.CfnGuardrail.ContentFilterConfigProperty[] =
+  [
+    ...(['HATE', 'INSULTS', 'SEXUAL', 'VIOLENCE', 'MISCONDUCT'] as const).map((type) => ({
+      type,
+      inputStrength: 'MEDIUM',
+      outputStrength: 'MEDIUM',
+    })),
+    // Bedrock accepts only NONE on output for this filter.
+    { type: 'PROMPT_ATTACK', inputStrength: 'HIGH', outputStrength: 'NONE' },
+  ];
+
+/**
+ * The guardrail and a numbered version of it. A version is a fixed snapshot that CloudFormation
+ * replaces only when its description changes, so the description carries a hash of the config.
+ */
+function inferenceGuardrail(
+  stack: Stack,
+  environment: string,
+): { guardrailId: string; guardrailVersion: string; guardrailArn: string } {
+  const guardrailProps: bedrock.CfnGuardrailProps = {
+    name: `suas-${environment}-inference`,
+    description: 'SUAS STAGING intake and catalog extraction (R17.5, contributor proposal).',
+    blockedInputMessaging: GUARDRAIL_BLOCKED_MESSAGE,
+    blockedOutputsMessaging: GUARDRAIL_BLOCKED_MESSAGE,
+    contentPolicyConfig: { filtersConfig: [...GUARDRAIL_CONTENT_FILTERS] },
+  };
+  const guardrail = new bedrock.CfnGuardrail(stack, 'InferenceGuardrail', guardrailProps);
+  const fingerprint = createHash('sha256')
+    .update(JSON.stringify(guardrailProps))
+    .digest('hex')
+    .slice(0, 16);
+  const version = new bedrock.CfnGuardrailVersion(stack, 'InferenceGuardrailVersion', {
+    guardrailIdentifier: guardrail.attrGuardrailId,
+    description: `Config ${fingerprint}`,
+  });
+  return {
+    guardrailId: guardrail.attrGuardrailId,
+    guardrailVersion: version.attrVersion,
+    guardrailArn: guardrail.attrGuardrailArn,
+  };
 }
 
 /** The API's regional custom domain with its DNS-validated certificate. */
