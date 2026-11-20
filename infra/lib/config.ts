@@ -45,7 +45,16 @@ export interface EnvironmentConfig {
    * Off by default: the API keeps SUAS_VA_CONFIRMATION_MODE=disabled and no verify function exists.
    */
   readonly vaSandbox: boolean;
+  /** Model inference through the outside-VPC relay (R17.1/R17.3, contributor proposal, not released). */
+  readonly modelInference: ModelInferenceConfig;
 }
+
+/** `disabled` builds nothing; `bedrock` builds the relay and guardrail for one `us.` profile. */
+export type ModelInferenceConfig =
+  { readonly mode: 'disabled' } | { readonly mode: 'bedrock'; readonly modelId: string };
+
+/** A US geographic cross-region inference profile for an Anthropic model (R17.2, proposal). */
+const BEDROCK_MODEL_ID_PATTERN = /^us\.anthropic\.[a-z0-9.:-]+$/;
 
 function text(node: Node, key: string): string | undefined {
   const value: unknown = node.tryGetContext(key);
@@ -138,17 +147,7 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
     text(node, 'apiHostname') ?? 'api.staging.suasqrf.com',
   );
 
-  // R2.15 is not approved. A model id must not turn inference on.
-  if (
-    text(node, 'bedrockModelId') !== undefined ||
-    text(node, 'allowPlaceholderModel') !== undefined
-  ) {
-    throw new Error(
-      'Staging leaves SUAS_MODEL_INFERENCE_MODE=disabled. R2.15 is not approved, so ' +
-        'bedrockModelId and allowPlaceholderModel are refused. The Bedrock adapter in ' +
-        'src/inference/bedrock-inference.ts stays unused by this template.',
-    );
-  }
+  const modelInference = modelInferenceConfig(node);
 
   const safety = text(node, 'safetyCopyMode') ?? 'placeholder_test_only';
   if (safety !== 'placeholder_test_only' && safety !== 'approved') {
@@ -204,7 +203,39 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
       git(['show', '-s', '--format=%cI', 'HEAD']) ??
       'unknown',
     vaSandbox,
+    modelInference,
   };
+}
+
+/**
+ * R17.1/R17.2 (contributor proposal, not released): inference stays off unless
+ * `modelInference=bedrock` names a `us.anthropic.` profile. A model id alone never turns it on.
+ */
+function modelInferenceConfig(node: Node): ModelInferenceConfig {
+  if (text(node, 'allowPlaceholderModel') !== undefined) {
+    throw new Error(
+      'Context "allowPlaceholderModel" is refused: it selects no model and marks no template deployable.',
+    );
+  }
+  const mode = text(node, 'modelInference') ?? 'disabled';
+  const modelId = text(node, 'bedrockModelId');
+  if (mode === 'disabled') {
+    if (modelId !== undefined) {
+      throw new Error(
+        'Context "bedrockModelId" needs modelInference=bedrock (R17.1, contributor proposal, not released).',
+      );
+    }
+    return { mode };
+  }
+  if (mode !== 'bedrock') {
+    throw new Error('Context "modelInference" must be disabled or bedrock.');
+  }
+  if (modelId === undefined || !BEDROCK_MODEL_ID_PATTERN.test(modelId)) {
+    throw new Error(
+      `Context "bedrockModelId" must be a us.anthropic. inference profile id, like us.anthropic.claude-haiku-4-5-20251001-v1:0; got "${modelId ?? ''}".`,
+    );
+  }
+  return { mode, modelId };
 }
 
 /** Stack env: region from context, account taken from the CLI at deploy time (never committed). */

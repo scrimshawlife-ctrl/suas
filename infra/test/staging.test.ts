@@ -13,6 +13,12 @@ import { tryLoadConfig } from '../../src/config/index.js';
 import { resolveForValidation, synthesize, type Synthesized } from './helpers.js';
 import { createStagingApp } from '../lib/staging.js';
 
+/** Inference through the relay (R17 contributor proposal), with the planned model. */
+const BEDROCK_CONTEXT = {
+  modelInference: 'bedrock',
+  bedrockModelId: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+};
+
 let s: Synthesized;
 beforeAll(() => {
   s = synthesize();
@@ -398,6 +404,7 @@ describe('functions', () => {
         expect(result.config.notifications.relayFunction).toBeDefined();
         expect(result.config.modelInference.mode).toBe('disabled');
         expect(result.config.modelInference.bedrockModelId).toBeUndefined();
+        expect(result.config.modelInference.relayFunction).toBeUndefined();
         expect(result.config.idVerification.mode).toBe('disabled');
         expect(result.config.publicSignUp).toBe(false);
         expect(result.config.stagingFixturePrincipals).toHaveLength(1);
@@ -533,10 +540,31 @@ describe('IAM', () => {
     }
   });
 
-  it('grants neither SES nor Bedrock', () => {
+  it('grants neither SES nor Bedrock by default', () => {
     expect(
       statements(s.backend).some((st) => [st.Action].flat().some((a) => /^(bedrock|ses):/.test(a))),
     ).toBe(false);
+  });
+
+  // R17.3 (contributor proposal, not released): with inference on, Bedrock is the relay's alone.
+  it('grants Bedrock only to the inference relay role, on named resources, with modelInference=bedrock', () => {
+    const on = synthesize(BEDROCK_CONTEXT).backend;
+    const relayRole = ofType(on, 'AWS::Lambda::Function').find(
+      ([, r]) => r.Properties?.Handler === 'inference-relay.handler',
+    )?.[1].Properties?.Role['Fn::GetAtt'][0];
+    const withBedrock = ofType(on, 'AWS::IAM::Policy').filter(([, p]) =>
+      JSON.stringify(p.Properties?.PolicyDocument).includes('"bedrock:'),
+    );
+    expect(withBedrock.map(([, p]) => p.Properties?.Roles)).toEqual([[{ Ref: relayRole }]]);
+    const bedrockStatements = statements(on).filter((st) =>
+      [st.Action].flat().some((a) => a.startsWith('bedrock:')),
+    );
+    expect(bedrockStatements.flatMap((st) => [st.Action].flat()).sort()).toEqual([
+      'bedrock:ApplyGuardrail',
+      'bedrock:InvokeModel',
+      'bedrock:InvokeModel',
+    ]);
+    for (const st of bedrockStatements) expect([st.Resource].flat()).not.toContain('*');
   });
 });
 
@@ -856,8 +884,27 @@ describe('DNS and email', () => {
 });
 
 describe('configuration and hygiene', () => {
-  it('refuses a Bedrock model id so inference cannot be turned on from context', () => {
-    expect(() => synthesize({ bedrockModelId: 'us.example.model-v1:0' })).toThrow(/R2\.15/);
+  // R17.1/R17.2 (contributor proposal, not released): a model id alone never turns inference on.
+  it('refuses a model id without modelInference=bedrock, and a bad or absent id with it', () => {
+    expect(() => synthesize({ bedrockModelId: BEDROCK_CONTEXT.bedrockModelId })).toThrow(
+      /needs modelInference=bedrock/,
+    );
+    for (const bedrockModelId of [
+      undefined,
+      'anthropic.claude-haiku-4-5-20251001-v1:0',
+      'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+      'us.amazon.nova-lite-v1:0',
+      'us.anthropic.Claude',
+    ]) {
+      const context = {
+        modelInference: 'bedrock',
+        ...(bedrockModelId !== undefined ? { bedrockModelId } : {}),
+      };
+      expect(() => synthesize(context), String(bedrockModelId)).toThrow(/us\.anthropic\./);
+    }
+    expect(() => synthesize({ modelInference: 'fake' })).toThrow(/disabled or bedrock/);
+    expect(() => synthesize({ allowPlaceholderModel: 'true' })).toThrow(/allowPlaceholderModel/);
+    expect(() => synthesize(BEDROCK_CONTEXT)).not.toThrow();
     expect(() => createStagingApp(new App())).not.toThrow();
   });
 
