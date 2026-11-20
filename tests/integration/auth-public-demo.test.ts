@@ -1,7 +1,8 @@
 /**
  * R16.1–R16.3 (contributor proposal, not released; owner review on #363): STAGING public demo
  * sign-up. Anyone may sign up after the acknowledgement, daily caps bound sends without changing
- * the answer (D-056), registered fixture users keep working, and only they reach VA confirmation.
+ * the answer (D-056), registered fixture users keep working, and only they reach VA confirmation
+ * and the licence review.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -13,9 +14,11 @@ import { stagingAccessFromConfig } from '../../src/auth/staging-access.js';
 import type { PublicDemoLimits } from '../../src/config/index.js';
 import { createServer } from '../../src/http/server.js';
 import { FixtureVeteranConfirmation, VA_NOTICE_V1 } from '../../src/identity/index.js';
+import { FixtureLicenceReader } from '../../src/identity/licence-reader-fixture.js';
 import { createSession } from '../../src/auth/index.js';
 import { createUser } from '../../src/identity/users.js';
 import { API_PREFIX } from '../../src/release/pins.js';
+import { InMemoryObjectStorage } from '../../src/storage/memory-object-storage.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
@@ -341,5 +344,77 @@ describe('STAGING public demo VA confirmation', () => {
     const fixture = await confirm(FIXTURE_USER);
     expect(fixture.statusCode).toBe(409);
     expect(fixture.json().error.code).toBe('VA_NAME_MISMATCH');
+  });
+});
+
+// R16.1 (contributor proposal, not released): the licence review is fixture-only like VA confirmation.
+describe('STAGING public demo licence review', () => {
+  const LICENCE = `${API_PREFIX}/veterans/me/verification/licence`;
+  let server: ReturnType<typeof createServer>;
+
+  beforeAll(async () => {
+    await appPool(app).query(
+      `UPDATE licence_reader_breaker SET consecutive_failures = 0, opened_at = NULL`,
+    );
+    server = createServer({
+      config: app.config,
+      buildInfo: () => app.buildInfo,
+      pool: appPool(app),
+      challengeDelivery: app.challengeDelivery,
+      mfa: app.mfa,
+      jobQueue: app.jobQueue,
+      licenceReader: new FixtureLicenceReader(),
+      objectStorage: new InMemoryObjectStorage(),
+      logger: false,
+    });
+  });
+
+  afterAll(() => server.close());
+
+  const bearer = async (userId: string) => ({
+    authorization: `Bearer ${
+      (await createSession(appPool(app), TEST_SESSION_SECRET, { tenantId: SIGN_UP_TENANT, userId }))
+        .credential
+    }`,
+  });
+  // Malformed JSON: a 503 for it shows the gate answered before the body was parsed.
+  const postMalformed = async (userId: string, url: string) =>
+    server.inject({
+      method: 'POST',
+      url,
+      headers: { ...(await bearer(userId)), 'content-type': 'application/json' },
+      payload: '{not json',
+    });
+
+  it('answers a demo account 503 on GET, submit and dispute, before the body is read', async () => {
+    const demoUser = await createUser(appPool(app), {
+      tenantId: SIGN_UP_TENANT,
+      email: newAddress(),
+      status: 'ACTIVE',
+    });
+    const get = await server.inject({
+      method: 'GET',
+      url: LICENCE,
+      headers: await bearer(demoUser.userId),
+    });
+    for (const response of [
+      get,
+      await postMalformed(demoUser.userId, LICENCE),
+      await postMalformed(demoUser.userId, `${LICENCE}/${randomUUID()}/commands/dispute`),
+    ]) {
+      expect(response.statusCode).toBe(503);
+      expect(response.json().error.code).toBe('ID_VERIFICATION_UNAVAILABLE');
+    }
+  });
+
+  it('lets a registered fixture user through to the usual answers', async () => {
+    const get = await server.inject({
+      method: 'GET',
+      url: LICENCE,
+      headers: await bearer(FIXTURE_USER),
+    });
+    expect(get.statusCode).toBe(200);
+    expect(get.json().offered).toBe(false);
+    expect((await postMalformed(FIXTURE_USER, LICENCE)).statusCode).toBe(400);
   });
 });

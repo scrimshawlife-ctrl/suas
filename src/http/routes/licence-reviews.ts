@@ -2,8 +2,10 @@
  * The Veteran's licence review routes (suas-specs R10.1, released in 0.10.0; L1, L2, L6, L7.3).
  *
  * Any signed-in person may call them; whether the path is offered is decided by the VA
- * answer. Responses carry states, reasons and times only, never a licence field, and a
- * validation error names the field, never its content. The session is checked before the
+ * answer. On STAGING only a registered fixture principal may, even in public demo mode (R16.1,
+ * contributor proposal, not released); anyone else gets 503 ID_VERIFICATION_UNAVAILABLE.
+ * Responses carry states, reasons and times only, never a licence field, and a validation
+ * error names the field, never its content. The session and that gate are checked before the
  * upload body is read.
  */
 
@@ -31,7 +33,7 @@ import { VeteranConfirmationUnavailableError } from '../../identity/va-confirmat
 import type { DurableJobQueuePort } from '../../jobs/index.js';
 import { API_PREFIX } from '../../release/pins.js';
 import type { ObjectStoragePort } from '../../storage/index.js';
-import { authenticate } from '../authenticate.js';
+import { authenticateForVaConfirmation } from '../authenticate.js';
 
 export interface LicenceReviewRouteDeps extends RouteContext {
   /** False when SUAS_LICENCE_READER_MODE=disabled; the path is then closed (503). */
@@ -113,7 +115,11 @@ export function registerLicenceReviewRoutes(
 
   /** L1.3, L4.6, L6: whether the path is offered now, and the newest review. */
   app.get(path, async (request) => {
-    const { tenantId, userId } = await authenticate(deps.pool, deps.sessionSecret, request);
+    const { tenantId, userId } = await authenticateForVaConfirmation(
+      deps.pool,
+      deps.sessionSecret,
+      request,
+    );
     const open = await isLicencePathOpen(deps.pool, configured);
     const offered = open && (await licenceEligibility(deps.pool, tenantId, userId)) !== undefined;
     const review = await findNewestReview(deps.pool, tenantId, userId);
@@ -129,14 +135,19 @@ export function registerLicenceReviewRoutes(
     };
   });
 
-  // The session is checked in onRequest, before the up-to-4.5 MB body is read or parsed.
+  // The session and the STAGING fixture gate are checked in onRequest, before the up-to-4.5 MB
+  // body is read or parsed.
   const contexts = new WeakMap<FastifyRequest, AuthContext>();
   const signedIn = async (request: FastifyRequest) => {
-    contexts.set(request, await authenticate(deps.pool, deps.sessionSecret, request));
+    contexts.set(
+      request,
+      await authenticateForVaConfirmation(deps.pool, deps.sessionSecret, request),
+    );
   };
   const send = async (request: FastifyRequest, disputeOfReviewId: string | undefined) => {
     const context =
-      contexts.get(request) ?? (await authenticate(deps.pool, deps.sessionSecret, request));
+      contexts.get(request) ??
+      (await authenticateForVaConfirmation(deps.pool, deps.sessionSecret, request));
     const { storage, jobQueue } = deps;
     if (!configured || storage === undefined || jobQueue === undefined) {
       throw new VeteranConfirmationUnavailableError();
