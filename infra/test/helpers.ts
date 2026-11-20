@@ -71,8 +71,15 @@ export function resolveForValidation(
     }
     return logicalId.toLowerCase();
   }
-  if ('Fn::GetAtt' in node)
-    return `${String((node['Fn::GetAtt'] as string[])[0]).toLowerCase()}.example.invalid`;
+  if ('Fn::GetAtt' in node) {
+    const [logicalId, attribute] = node['Fn::GetAtt'] as [string, string];
+    // Guardrail ids are lower-case letters and digits; a version is a number.
+    if (resources[logicalId]?.Type === 'AWS::Bedrock::Guardrail' && attribute === 'GuardrailId') {
+      return 'abc123guardrail';
+    }
+    if (resources[logicalId]?.Type === 'AWS::Bedrock::GuardrailVersion') return '1';
+    return `${logicalId.toLowerCase()}.example.invalid`;
+  }
   if ('Fn::Join' in node) {
     const [sep, parts] = node['Fn::Join'] as [string, Json[]];
     const secretRef = parts[1] as Record<string, Json> | undefined;
