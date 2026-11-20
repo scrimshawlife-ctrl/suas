@@ -21,6 +21,18 @@ export {
 } from './bedrock-inference.js';
 export { ScriptedModelInference, type ScriptedTurn } from './fake-model-inference.js';
 export {
+  inferenceRelayEventSchema,
+  inferenceRelayResultSchema,
+  type InferenceRelayEvent,
+} from './inference-relay.js';
+export {
+  BEDROCK_RELAY_IMPLEMENTATION,
+  DEFAULT_RELAY_DEADLINE_MS,
+  INFERENCE_RELAY_INVOKE_TIMEOUT_MS,
+  LambdaRelayModelInference,
+  type LambdaRelayInferenceOptions,
+} from './lambda-relay-inference.js';
+export {
   INFERENCE_PURPOSE_LIMITS,
   INFERENCE_PURPOSES,
   MODEL_FAILURE_KINDS,
