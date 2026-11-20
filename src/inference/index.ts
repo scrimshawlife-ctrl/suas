@@ -21,6 +21,7 @@ export {
   type BedrockInferenceOptions,
 } from './bedrock-inference.js';
 export { ScriptedModelInference, type ScriptedTurn } from './fake-model-inference.js';
+export { escapePromptData } from './prompt-data.js';
 export {
   inferenceRelayEventSchema,
   inferenceRelayResultSchema,

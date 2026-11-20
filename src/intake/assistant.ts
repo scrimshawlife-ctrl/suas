@@ -13,6 +13,7 @@
  */
 
 import {
+  escapePromptData,
   INFERENCE_PURPOSE_LIMITS,
   type ModelInferencePort,
   type ModelMessage,
@@ -123,17 +124,19 @@ export interface IntakeRun {
 
 /** Wrap the Veteran's words so the model reads them as data, not instructions. */
 function renderUserMessage(input: IntakeRunInput): string {
-  const safeText = input.intakeText.replaceAll('</intake_text>', '');
+  const safeText = escapePromptData(input.intakeText);
   const current =
     input.draft.category === null
       ? 'No draft yet.'
-      : JSON.stringify({
-          category: input.draft.category,
-          summary: input.draft.summary,
-          timing: input.draft.timing,
-          meeting_place: input.draft.meetingPlace,
-          destination: input.draft.destination,
-        });
+      : escapePromptData(
+          JSON.stringify({
+            category: input.draft.category,
+            summary: input.draft.summary,
+            timing: input.draft.timing,
+            meeting_place: input.draft.meetingPlace,
+            destination: input.draft.destination,
+          }),
+        );
   return `<intake_text>\n${safeText}\n</intake_text>\n\nCurrent draft: ${current}`;
 }
 
