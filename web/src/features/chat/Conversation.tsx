@@ -5,6 +5,7 @@ import { paths } from '../../app/paths';
 import { BackLink } from '../../components/BackLink';
 import { Button } from '../../components/Button';
 import { useChatMessages } from './api';
+import { AssistPanel, CatchUpButton } from './ChatAssist';
 import { Composer } from './Composer';
 import {
   CHECKING_LINE,
@@ -12,14 +13,16 @@ import {
   conversationErrorText,
   counterpartName,
   isPermanentConversationError,
+  REQUESTER_ASSIST_NOTICE,
   systemLine,
   threadTitle,
 } from './copy';
 import { isMine, toOldestFirst } from './messages';
 import { MessageList } from './MessageList';
 import { useOutbox } from './outbox';
-import { isReadOnly, threadKey } from './threads';
+import { helperAssist, isReadOnly, requesterAssistNotice, threadKey } from './threads';
 import { seenStore } from './unread';
+import { useChatAssist } from './useChatAssist';
 
 const NOTE_CLASS = 'border-t border-line px-5 py-4 text-slate max-sm:px-4';
 
@@ -38,6 +41,9 @@ export function Conversation({ serviceRequestId, threadId, thread, meUserId }: C
   const name = counterpartName(thread);
   const messages = toOldestFirst(messagesQuery.data);
   const newest = messages[messages.length - 1];
+  const assist = useChatAssist(serviceRequestId);
+  // A crisis reply turns assistance off for the rest of this conversation.
+  const helperTools = helperAssist(thread) && !assist.crisis;
 
   const seenKey = thread === undefined ? serviceRequestId : threadKey(thread);
   // The conversation is on screen, so everything up to its newest message counts as read.
@@ -94,7 +100,9 @@ export function Conversation({ serviceRequestId, threadId, thread, meUserId }: C
             )
           ) : null}
         </div>
+        {helperTools ? <CatchUpButton assist={assist} /> : null}
       </div>
+      {helperAssist(thread) ? <AssistPanel assist={assist} /> : null}
 
       {messagesQuery.data === undefined && !messagesQuery.isError ? (
         <p role="status" className="p-6 text-slate">
@@ -117,6 +125,7 @@ export function Conversation({ serviceRequestId, threadId, thread, meUserId }: C
             meUserId={meUserId}
             counterpart={name}
             openingLine={systemLine(thread)}
+            noticeLine={requesterAssistNotice(thread) ? REQUESTER_ASSIST_NOTICE : undefined}
             hasEarlier={messagesQuery.hasNextPage}
             loadingEarlier={messagesQuery.isFetchingNextPage}
             earlierFailed={messagesQuery.isFetchNextPageError}
@@ -133,7 +142,7 @@ export function Conversation({ serviceRequestId, threadId, thread, meUserId }: C
               {CHECKING_LINE}
             </p>
           ) : (
-            <Composer name={name} onSend={outbox.send} />
+            <Composer name={name} onSend={outbox.send} assist={helperTools ? assist : undefined} />
           )}
         </>
       )}

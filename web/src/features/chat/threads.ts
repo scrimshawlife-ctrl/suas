@@ -9,6 +9,21 @@ export function isReadOnly(thread: ChatThread | undefined): boolean {
   return typeof thread?.released_at === 'string';
 }
 
+/** The live thread offers assistance (R18.3, contributor proposal, not released); the server decides. */
+function assistOn(thread: ChatThread | undefined): thread is ChatThread {
+  return thread?.chat_assist_enabled === true && !isReadOnly(thread);
+}
+
+/** `role` is the caller's side, so ACCEPTER is the helper, who gets the assist buttons. */
+export function helperAssist(thread: ChatThread | undefined): boolean {
+  return assistOn(thread) && thread.role === 'ACCEPTER';
+}
+
+/** The requester is told, once at the top of the chat, that the helper may use assistance. */
+export function requesterAssistNotice(thread: ChatThread | undefined): boolean {
+  return assistOn(thread) && thread.role === 'REQUESTER';
+}
+
 /** One request can have several threads, so the thread id (when sent) identifies a row. */
 export function threadKey(thread: ChatThread): string {
   return thread.chat_thread_id ?? thread.service_request_id;
