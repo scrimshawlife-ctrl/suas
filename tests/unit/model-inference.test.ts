@@ -4,7 +4,7 @@
  */
 
 import type { ConverseCommandOutput } from '@aws-sdk/client-bedrock-runtime';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/config/index.js';
 import {
   BedrockModelInference,
@@ -51,6 +51,7 @@ function output(partial: Partial<ConverseCommandOutput>): ConverseCommandOutput 
 function adapterWith(
   responses: Array<ConverseCommandOutput | Error>,
   logs: BedrockInferenceLogRecord[] = [],
+  guardrail?: { identifier: string; version: string },
 ) {
   const client = new ScriptedAwsClient<ConverseCommandOutput>(responses);
   const port = new BedrockModelInference({
@@ -58,9 +59,25 @@ function adapterWith(
     region: 'us-west-2',
     client: client,
     logger: (record) => logs.push(record),
+    ...(guardrail !== undefined ? { guardrail } : {}),
   });
   return { client, port, logs };
 }
+
+const ENDED = output({
+  stopReason: 'end_turn',
+  output: { message: { role: 'assistant', content: [{ text: 'ok' }] } },
+});
+
+/** A first user turn whose Veteran text is marked for the guardrail. */
+const GUARDED: ModelTurnRequest = {
+  ...REQUEST,
+  messages: [{ role: 'user', parts: [{ type: 'text', text: SENSITIVE, guarded: true }] }],
+};
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('BedrockModelInference', () => {
   it('sends system, messages and tools in Converse shape', async () => {
@@ -75,6 +92,7 @@ describe('BedrockModelInference', () => {
     expect(client.commands[0]?.input).toEqual({
       modelId: 'test-model-id',
       system: [{ text: REQUEST.system }],
+      inferenceConfig: { maxTokens: 800 },
       messages: [
         { role: 'user', content: [{ text: SENSITIVE }] },
         {
@@ -103,6 +121,47 @@ describe('BedrockModelInference', () => {
       },
     });
     expect(client.commands[0]?.abortSignal).toBeInstanceOf(AbortSignal);
+  });
+
+  // R17.2/R17.5 (contributor proposal, not released): explicit output cap, guardrail with
+  // trace off, and the Veteran's text in a guardContent block.
+  it('sends maxTokens, the guardrail with trace disabled, and guarded text as guardContent', async () => {
+    const { client, port } = adapterWith([ENDED], [], { identifier: 'gr-test', version: '3' });
+    await port.converse({ ...GUARDED, maxTokens: 2048 });
+    expect(client.commands[0]?.input).toMatchObject({
+      inferenceConfig: { maxTokens: 2048 },
+      guardrailConfig: { guardrailIdentifier: 'gr-test', guardrailVersion: '3', trace: 'disabled' },
+      messages: [{ role: 'user', content: [{ guardContent: { text: { text: SENSITIVE } } }] }],
+    });
+  });
+
+  it('sends guarded text as plain text and no guardrailConfig when no guardrail is set', async () => {
+    const { client, port } = adapterWith([ENDED]);
+    await port.converse(GUARDED);
+    const input = client.commands[0]?.input as Record<string, unknown>;
+    expect(input.guardrailConfig).toBeUndefined();
+    expect(input.messages).toEqual([{ role: 'user', content: [{ text: SENSITIVE }] }]);
+  });
+
+  it.each([
+    ['intake with time to spare', { purpose: 'intake', deadlineMs: 24_000 }, 12_000],
+    ['intake near its deadline', { purpose: 'intake', deadlineMs: 6_000 }, 5_000],
+    ['extraction', { purpose: 'extraction', deadlineMs: 25_000 }, 24_000],
+    ['no purpose or deadline', {}, 30_000],
+  ] as const)('bounds the call for %s', async (_name, bounds, expected) => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const { port } = adapterWith([ENDED]);
+    await port.converse({ ...REQUEST, ...bounds });
+    expect(timeout).toHaveBeenCalledWith(expected);
+  });
+
+  it('answers timeout without calling Bedrock when the deadline leaves no time', async () => {
+    const { client, port } = adapterWith([ENDED]);
+    expect(await port.converse({ ...REQUEST, deadlineMs: 900 })).toEqual({
+      ok: false,
+      failure: 'timeout',
+    });
+    expect(client.commands).toHaveLength(0);
   });
 
   it('maps text and tool calls from the assistant message', async () => {

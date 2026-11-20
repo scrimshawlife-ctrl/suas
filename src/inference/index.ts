@@ -1,22 +1,34 @@
 import type { SuasConfig } from '../config/index.js';
-import { BedrockModelInference, type BedrockInferenceLogger } from './bedrock-inference.js';
+import { BedrockModelInference } from './bedrock-inference.js';
 import { ScriptedModelInference } from './fake-model-inference.js';
-import { UnavailableModelInference, type ModelInferencePort } from './model-inference.js';
+import {
+  UnavailableModelInference,
+  type ModelInferenceLogger,
+  type ModelInferencePort,
+} from './model-inference.js';
 
 export {
   BEDROCK_IMPLEMENTATION,
   BEDROCK_TIMEOUT_MS,
   BedrockModelInference,
+  DEADLINE_MARGIN_MS,
+  DEFAULT_MAX_TOKENS,
   type BedrockClientLike,
+  type BedrockGuardrail,
   type BedrockInferenceLogRecord,
   type BedrockInferenceLogger,
   type BedrockInferenceOptions,
 } from './bedrock-inference.js';
 export { ScriptedModelInference, type ScriptedTurn } from './fake-model-inference.js';
 export {
+  INFERENCE_PURPOSE_LIMITS,
+  INFERENCE_PURPOSES,
   MODEL_FAILURE_KINDS,
   UnavailableModelInference,
+  type InferencePurpose,
   type ModelFailureKind,
+  type ModelInferenceLogger,
+  type ModelInferenceLogRecord,
   type ModelInferencePort,
   type ModelMessage,
   type ModelMessagePart,
@@ -27,7 +39,7 @@ export {
 } from './model-inference.js';
 
 /** One JSON line per model call with the outcome only (C-14); never request or response text. */
-export const consoleInferenceLogger: BedrockInferenceLogger = (record) => {
+export const consoleInferenceLogger: ModelInferenceLogger = (record) => {
   console.info(JSON.stringify({ level: 'info', msg: 'model_inference', ...record }));
 };
 
@@ -39,7 +51,7 @@ export const consoleInferenceLogger: BedrockInferenceLogger = (record) => {
  */
 export function createModelInferencePort(
   config: SuasConfig,
-  logger: BedrockInferenceLogger = consoleInferenceLogger,
+  logger: ModelInferenceLogger = consoleInferenceLogger,
 ): ModelInferencePort {
   const { mode, bedrockModelId } = config.modelInference;
   if (mode === 'fake') return new ScriptedModelInference();
