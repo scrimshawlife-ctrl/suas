@@ -76,11 +76,63 @@ bootstrap version.
 
 ### Region-restricted accounts
 
-The workflow and these bootstrap policies support only the four-stack `us-west-2` layout with
-`Suas-Staging-WebCert` in `us-east-1`. `deploymentPipeline=true` rejects another region, default URLs,
-or an imported certificate before any AWS operation. Direct synth retains those configuration modes,
-but this boundary does not qualify them for deployment. Extending the policy, release-record stack
-map and workflow together requires a separate reviewed change.
+By default these bootstrap policies support the four-stack `us-west-2` layout, with
+`Suas-Staging-WebCert` in `us-east-1`.
+
+**Proposal, not released.** The R14.x region-restricted layout (suas #360) and R17 Bedrock are
+contributor proposals. They are on HOLD with the rest of this runbook.
+
+Some accounts limit regional services to `us-east-2`. In `us-east-1` they allow only ACM, CloudFront,
+Route 53 and IAM: CloudFormation, S3, SSM and Lambda are denied there, and so is creating an OIDC
+provider. For such an account:
+
+- **Layout.** Use three stacks, `Suas-Dns`, `Suas-Staging-Backend` and `Suas-Staging-Web`, all in
+  `us-east-2`. Request the CloudFront certificate in `us-east-1` with the CLI and pass it as
+  `-c webCertificateArn=<arn>` together with `-c region=us-east-2 -c customDomains=true`. No WebCert
+  stack and no cross-region references are built, so nothing is written to SSM in `us-east-1`.
+- **Pipeline check.** `deploymentPipeline=true` accepts this layout as well as the default one. It still
+  rejects every other region, default URLs, and an imported certificate in `us-west-2`.
+- **Not supported yet.** `staging-deploy.yml`, `scripts/ci/` and `github-oidc.yaml` still assume
+  `us-west-2` and the four stacks, and the account cannot create the OIDC provider. Run CDK by hand from
+  the administrator identity.
+- **Bootstrap.** Deploy the policy stack with `StagingRegion=us-east-2`. Every regional grant and the
+  RDS KMS grant then name `us-east-2`. `us-east-1` stays in the region lists for the edge services, and
+  the account's SCP still denies everything else there. Bootstrap CDK in `us-east-2` only.
+
+```sh
+aws cloudformation deploy --region us-east-2 --stack-name Suas-Cdk-Execution-Policy \
+  --template-file infra/bootstrap/cfn-execution-policy.yaml --capabilities CAPABILITY_NAMED_IAM \
+  --no-execute-changeset \
+  --parameter-overrides "StagingApiHostname=$STAGING_API_HOSTNAME" \
+    "StagingWebHostname=$STAGING_WEB_HOSTNAME" StagingRegion=us-east-2 ModelInference=disabled
+# Review the change set, execute it, then:
+node node_modules/aws-cdk/bin/cdk bootstrap "aws://$ACCOUNT/us-east-2" \
+  --cloudformation-execution-policies "arn:aws:iam::$ACCOUNT:policy/SuasCdkExecution,arn:aws:iam::$ACCOUNT:policy/SuasCdkServices,arn:aws:iam::$ACCOUNT:policy/SuasCdkEdge" \
+  --termination-protection
+```
+
+An older `Suas-Cdk-Execution-Policy` stack may predate `SuasStagingRuntimeBoundary`. Updating it creates
+the boundary, so do the legacy-role inventory below before you execute the change set.
+
+`ModelInference=bedrock` (R17) is only for an assembly with the inference relay. It changes two
+policies:
+
+- **`SuasCdkServices`** lets CloudFormation create, version, update, tag and delete Guardrails in the
+  staging region. The actions are those in the `AWS::Bedrock::Guardrail` and `GuardrailVersion`
+  handler schemas, without KMS, because no customer key is used.
+- **The boundary** allows three things:
+  - `bedrock:InvokeModel` on the `us.anthropic.claude-haiku-4-5-20251001-v1:0` inference profile in
+    the staging region;
+  - `bedrock:InvokeModel` on the Haiku 4.5 foundation model, only through that profile
+    (`bedrock:InferenceProfileArn`), in `us-east-1`, `us-east-2` and `us-west-2`;
+  - `bedrock:ApplyGuardrail` on the staging region's guardrails.
+
+Bedrock authorizes the profile, then the model in the source region and in each destination region
+the profile can route to. AWS's
+[geographic cross-Region inference guide](https://docs.aws.amazon.com/bedrock/latest/userguide/geographic-cross-region-inference.html)
+says an SCP that blocks regions must allow all of them. Confirm that before enabling the relay. The
+existing `InvokeStaging` grant already covers the API invoking the relay. The boundary grants nothing by
+itself: the relay role still needs its own scoped policy.
 
 ### Permissions boundary acceptance
 

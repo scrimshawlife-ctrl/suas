@@ -17,6 +17,8 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 - Draft synthetic-STAGING controls (SUAS-specs #112, release and deployment HOLD): pre-provisioned VA secret ARN, confirmed-email SNS alarm target, scoped execution policies with a mandatory runtime boundary, and failure recovery that reports verified stack maintenance or UNKNOWN. Unsupported deployment-workflow layouts fail before AWS operations. Existing v0.10.0 pins remain unchanged pending a released decision.
 
+- Draft region-restricted STAGING bootstrap (contributor proposal on the #362 HOLD, R14.x region-restricted layout and R17 Bedrock, not released). The deployment check also accepts `us-east-2` with custom domains and an imported CloudFront certificate. A `StagingRegion` parameter (default `us-west-2`) replaces the hard-coded regions in the bootstrap policies. An opt-in `ModelInference=bedrock` parameter adds Guardrail deploy grants and a runtime boundary for the Haiku 4.5 `us.` profile and the staging guardrails. With the default parameters and context, every template is unchanged. Nothing is deployed.
+
 - Manual synthetic-STAGING deploy workflow (`.github/workflows/staging-deploy.yml`). It takes a verified `main` SHA through the full CI, a credential-free build and synth, an OIDC plan (`cdk diff`) and an environment-approved deploy. That deploy quiesces, migrates, then admits the API, the worker and the schedule, deploys the web app and runs the public STAGING suite. Nothing is deployed by this change (`docs/runbooks/aws-staging-bootstrap.md`).
 - CI runs the skill metadata checks and the migration rehearsal on every pull request. Every workflow action is pinned to a commit SHA.
 
