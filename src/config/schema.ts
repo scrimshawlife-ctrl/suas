@@ -347,6 +347,11 @@ const rawConfigSchema = z.object({
   ),
   // Unset means the capability is reported unavailable: the model is not chosen.
   SUAS_BEDROCK_MODEL_ID: optionalRaw,
+  // `bedrock` from inside the STAGING VPC (R17.3, contributor proposal, not released): the
+  // outside-VPC relay function calls Bedrock; the guardrail screens the Veteran's text (R17.5).
+  SUAS_MODEL_INFERENCE_RELAY_FUNCTION: optionalRaw,
+  SUAS_BEDROCK_GUARDRAIL_ID: optionalRaw,
+  SUAS_BEDROCK_GUARDRAIL_VERSION: optionalRaw,
   SUAS_OBJECT_STORAGE_MODE: optionalEnum(
     'SUAS_OBJECT_STORAGE_MODE',
     OBJECT_STORAGE_MODES,
@@ -533,6 +538,10 @@ export interface SuasConfig {
     readonly mode: ModelInferenceMode;
     /** Unset means the capability is unavailable (model not chosen). */
     readonly bedrockModelId: string | undefined;
+    /** When set, `bedrock` calls go through this outside-VPC relay function. */
+    readonly relayFunction: string | undefined;
+    readonly guardrailId: string | undefined;
+    readonly guardrailVersion: string | undefined;
   };
   readonly objectStorage: {
     readonly mode: ObjectStorageMode;
@@ -752,7 +761,8 @@ function validateAwsCapabilities(
   if (
     (awsEnabled.length > 0 ||
       raw.SUAS_EMAIL_RELAY_FUNCTION !== undefined ||
-      raw.SUAS_VA_CONFIRMATION_RELAY_FUNCTION !== undefined) &&
+      raw.SUAS_VA_CONFIRMATION_RELAY_FUNCTION !== undefined ||
+      raw.SUAS_MODEL_INFERENCE_RELAY_FUNCTION !== undefined) &&
     raw.SUAS_AWS_REGION === undefined
   ) {
     issue('SUAS_AWS_REGION is required when an AWS-backed capability mode is selected.');
@@ -803,19 +813,77 @@ function validateAwsCapabilities(
     );
   }
 
-  // SAFETY.md §6, RESOURCES.md §5.1, API.md §17: model extraction and the intake assistant
-  // are not authorized (R2.15 unapproved), so a deployed class runs with inference off.
-  if (
-    (environment === 'STAGING' || environment === 'PRODUCTION') &&
-    raw.SUAS_MODEL_INFERENCE_MODE !== 'disabled'
-  ) {
-    issue(
-      `SUAS_MODEL_INFERENCE_MODE=${raw.SUAS_MODEL_INFERENCE_MODE} is forbidden in ${environment}; ` +
-        'model inference is not authorized by the released spec (SAFETY.md §6).',
-    );
-  }
+  validateModelInference(raw, environment, issue);
   if (environment === 'PRODUCTION' && raw.SUAS_OBJECT_STORAGE_MODE === 'fake') {
     issue('SUAS_OBJECT_STORAGE_MODE=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).');
+  }
+}
+
+const BEDROCK_GUARDRAIL_ID_PATTERN =
+  /^(?:[a-z0-9]+|arn:aws[a-z-]*:bedrock:[a-z]{2}(?:-[a-z]+)+-\d:\d{12}:guardrail\/[a-z0-9]+)$/;
+const BEDROCK_GUARDRAIL_VERSION_PATTERN = /^(?:[1-9]\d{0,7}|DRAFT)$/;
+
+/**
+ * Model inference (R17.1, R17.3, R17.7: contributor proposal, not released; SAFETY.md §6 at the
+ * pin still refuses it). Synthetic STAGING may run `bedrock` only through the outside-VPC relay
+ * with a guardrail; `fake` stays LOCAL/TEST and PRODUCTION allows `disabled` only.
+ */
+function validateModelInference(
+  raw: z.output<typeof rawConfigSchema>,
+  environment: EnvironmentClass,
+  issue: (message: string) => void,
+): void {
+  const mode = raw.SUAS_MODEL_INFERENCE_MODE;
+  const relay = raw.SUAS_MODEL_INFERENCE_RELAY_FUNCTION;
+  const guardrailId = raw.SUAS_BEDROCK_GUARDRAIL_ID;
+  const guardrailVersion = raw.SUAS_BEDROCK_GUARDRAIL_VERSION;
+
+  if (environment === 'PRODUCTION' && mode !== 'disabled') {
+    issue(
+      `SUAS_MODEL_INFERENCE_MODE=${mode} is forbidden in PRODUCTION; model inference is not ` +
+        'authorized there (SAFETY.md §6; R17.1, a contributor proposal, covers STAGING only).',
+    );
+  }
+  if (environment === 'STAGING' && mode === 'fake') {
+    issue(
+      'SUAS_MODEL_INFERENCE_MODE=fake is forbidden in STAGING; STAGING allows disabled, or ' +
+        'bedrock through the inference relay (R17.1, contributor proposal, not released).',
+    );
+  }
+  if (environment === 'STAGING' && mode === 'bedrock') {
+    const missing = [
+      ['SUAS_MODEL_INFERENCE_RELAY_FUNCTION', relay],
+      ['SUAS_BEDROCK_MODEL_ID', raw.SUAS_BEDROCK_MODEL_ID],
+      ['SUAS_BEDROCK_GUARDRAIL_ID', guardrailId],
+      ['SUAS_BEDROCK_GUARDRAIL_VERSION', guardrailVersion],
+    ]
+      .filter(([, value]) => value === undefined)
+      .map(([name]) => name);
+    if (missing.length > 0) {
+      issue(
+        `SUAS_MODEL_INFERENCE_MODE=bedrock in STAGING requires ${missing.join(', ')}; a direct ` +
+          'Bedrock call from the VPC is refused (R17.1, R17.3, contributor proposal, not released).',
+      );
+    }
+  }
+  if (relay !== undefined) {
+    if (mode !== 'bedrock') {
+      issue(
+        'SUAS_MODEL_INFERENCE_RELAY_FUNCTION is allowed only with SUAS_MODEL_INFERENCE_MODE=bedrock.',
+      );
+    }
+    if (!LAMBDA_FUNCTION_PATTERN.test(relay)) {
+      issue('SUAS_MODEL_INFERENCE_RELAY_FUNCTION must be a Lambda function name or ARN.');
+    }
+  }
+  if ((guardrailId !== undefined || guardrailVersion !== undefined) && mode !== 'bedrock') {
+    issue('SUAS_BEDROCK_GUARDRAIL_ID and _VERSION are allowed only with bedrock.');
+  }
+  if (guardrailId !== undefined && !BEDROCK_GUARDRAIL_ID_PATTERN.test(guardrailId)) {
+    issue('SUAS_BEDROCK_GUARDRAIL_ID must be a Bedrock guardrail id or ARN.');
+  }
+  if (guardrailVersion !== undefined && !BEDROCK_GUARDRAIL_VERSION_PATTERN.test(guardrailVersion)) {
+    issue('SUAS_BEDROCK_GUARDRAIL_VERSION must be a guardrail version number or DRAFT.');
   }
 }
 
@@ -1541,6 +1609,9 @@ export function shapeConfig(
     modelInference: {
       mode: raw.SUAS_MODEL_INFERENCE_MODE,
       bedrockModelId: raw.SUAS_BEDROCK_MODEL_ID,
+      relayFunction: raw.SUAS_MODEL_INFERENCE_RELAY_FUNCTION,
+      guardrailId: raw.SUAS_BEDROCK_GUARDRAIL_ID,
+      guardrailVersion: raw.SUAS_BEDROCK_GUARDRAIL_VERSION,
     },
     objectStorage: { mode: raw.SUAS_OBJECT_STORAGE_MODE, bucket: raw.SUAS_S3_BUCKET },
     idVerification: { mode: raw.SUAS_ID_VERIFICATION_MODE },

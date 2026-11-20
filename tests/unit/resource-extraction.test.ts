@@ -64,6 +64,23 @@ describe('extractResourceDrafts', () => {
     expect(await extractResourceDrafts(port, input)).toEqual({ ok: true, resources: [] });
   });
 
+  // R17.3 (contributor proposal, not released): one bounded call inside the 29 s API limit.
+  it('bounds the call: extraction purpose, 25 s deadline, 2048 output tokens', async () => {
+    const port = new ScriptedModelInference().enqueue(toolCall({ resources: [] }));
+    await extractResourceDrafts(port, input);
+    expect(port.requests()[0]).toMatchObject({
+      purpose: 'extraction',
+      deadlineMs: 25_000,
+      maxTokens: 2048,
+    });
+  });
+
+  it('maps a port that throws to unavailable', async () => {
+    const port = new ScriptedModelInference();
+    port.converse = () => Promise.reject(new Error(`provider quoted ${input.sourceText}`));
+    expect(await extractResourceDrafts(port, input)).toEqual({ ok: false, failure: 'unavailable' });
+  });
+
   it('sends the pasted text as data and the only tool is the extraction tool', async () => {
     const port = new ScriptedModelInference().enqueue(toolCall({ resources: [] }));
     await extractResourceDrafts(port, input);

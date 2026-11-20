@@ -80,6 +80,8 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     aws_region_configured: config.aws.region !== undefined,
     model_inference_mode: config.modelInference.mode,
     bedrock_model_configured: config.modelInference.bedrockModelId !== undefined,
+    model_inference_relay_configured: config.modelInference.relayFunction !== undefined,
+    bedrock_guardrail_configured: config.modelInference.guardrailId !== undefined,
     object_storage_mode: config.objectStorage.mode,
     chat_push_mode: config.chatPush.mode,
     id_verification_mode: config.idVerification.mode,

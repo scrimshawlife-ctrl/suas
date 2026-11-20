@@ -95,6 +95,19 @@ describe('IntakeTurnView', () => {
     expect(screen.getByText(FALLBACK_NOTICE)).toBeInTheDocument();
   });
 
+  it('CRISIS_SUPPORT shows the crisis panel and keeps the assistant and form in place', () => {
+    const crisis = turn({
+      outcome: 'CRISIS_SUPPORT',
+      notice: 'Immediate danger? Call 911.',
+      request_form: { method: 'POST', path: '/api/v0/service-requests' },
+    });
+    expect(turnNeedsForm(crisis)).toBe(false);
+    show(crisis);
+    expect(screen.getByRole('heading', { name: 'Need help right now?' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Call 911' })).toHaveAttribute('href', 'tel:911');
+    expect(screen.queryByText(FALLBACK_NOTICE)).not.toBeInTheDocument();
+  });
+
   it('warns on a stale listing', () => {
     show(turn({ resources: [{ ...resource, stale_warning: true }] }));
     expect(screen.getByText(/may be out of date/)).toBeInTheDocument();
