@@ -27,6 +27,8 @@ export interface ServiceRequestDraft {
   readonly status: DraftStatus;
   readonly fields: IntakeDraftFields;
   readonly intakeText: string;
+  /** What the assistant last told the Veteran, read with the next message (R18.4, proposal). */
+  readonly lastAssistantMessage: string | null;
   readonly serviceRequestId: string | undefined;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -43,6 +45,7 @@ interface DraftRow {
   category: IntakeCategory | null;
   details: { summary?: unknown; timing?: unknown; meeting_place?: unknown; destination?: unknown };
   intake_text: string;
+  last_assistant_message: string | null;
   service_request_id: string | null;
   created_at: Date;
   updated_at: Date;
@@ -51,7 +54,7 @@ interface DraftRow {
 }
 
 const DRAFT_COLUMNS = `draft_id, tenant_id, user_id, status, category, details, intake_text,
-  service_request_id, created_at, updated_at, submitted_at, xmin::text AS row_version`;
+  last_assistant_message, service_request_id, created_at, updated_at, submitted_at, xmin::text AS row_version`;
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
@@ -71,6 +74,7 @@ function toDraft(row: DraftRow): ServiceRequestDraft {
       destination: text(row.details.destination),
     },
     intakeText: row.intake_text,
+    lastAssistantMessage: row.last_assistant_message,
     serviceRequestId: row.service_request_id ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -141,12 +145,13 @@ export async function createDraft(
     readonly userId: string;
     readonly intakeText: string;
     readonly fields: IntakeDraftFields;
+    readonly lastAssistantMessage?: string | null;
   },
 ): Promise<ServiceRequestDraft> {
   const result = await db.query<DraftRow>(
     `INSERT INTO service_request_drafts
-       (draft_id, tenant_id, user_id, category, details, intake_text)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (draft_id, tenant_id, user_id, category, details, intake_text, last_assistant_message)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING ${DRAFT_COLUMNS}`,
     [
       input.draftId,
@@ -155,6 +160,7 @@ export async function createDraft(
       input.fields.category,
       JSON.stringify(draftDetails(input.fields)),
       input.intakeText,
+      input.lastAssistantMessage ?? null,
     ],
   );
   const row = result.rows[0];
@@ -191,16 +197,23 @@ export async function findOwnedDraft(
  *
  * `ifUnchanged` saves only if the row is still the version `draft` was read at, so two
  * slow assistant turns on one draft cannot overwrite each other's message (409 instead).
+ * An assistant turn also sets `lastAssistantMessage` (null clears it) in the same write.
  */
 export async function saveDraftContent(
   db: Queryable,
   draft: ServiceRequestDraft,
-  content: { readonly fields: IntakeDraftFields; readonly intakeText?: string },
+  content: {
+    readonly fields: IntakeDraftFields;
+    readonly intakeText?: string;
+    readonly lastAssistantMessage?: string | null;
+  },
   options: { readonly ifUnchanged?: boolean } = {},
 ): Promise<ServiceRequestDraft> {
   const result = await db.query<DraftRow>(
     `UPDATE service_request_drafts
-        SET category = $4, details = $5, intake_text = COALESCE($6, intake_text), updated_at = now()
+        SET category = $4, details = $5, intake_text = COALESCE($6, intake_text),
+            last_assistant_message = CASE WHEN $8::boolean THEN $9::text ELSE last_assistant_message END,
+            updated_at = now()
       WHERE tenant_id = $1 AND user_id = $2 AND draft_id = $3 AND status = 'DRAFT'
         AND ($7::text IS NULL OR xmin::text = $7)
       RETURNING ${DRAFT_COLUMNS}`,
@@ -212,6 +225,8 @@ export async function saveDraftContent(
       JSON.stringify(draftDetails(content.fields)),
       content.intakeText ?? null,
       options.ifUnchanged === true ? draft.rowVersion : null,
+      content.lastAssistantMessage !== undefined,
+      content.lastAssistantMessage ?? null,
     ],
   );
   const row = result.rows[0];
@@ -231,7 +246,8 @@ export async function markDraftSubmitted(
 ): Promise<ServiceRequestDraft> {
   const result = await db.query<DraftRow>(
     `UPDATE service_request_drafts
-        SET status = 'SUBMITTED', service_request_id = $4, submitted_at = now(), updated_at = now()
+        SET status = 'SUBMITTED', service_request_id = $4, submitted_at = now(), updated_at = now(),
+            last_assistant_message = NULL
       WHERE tenant_id = $1 AND user_id = $2 AND draft_id = $3 AND status = 'DRAFT'
       RETURNING ${DRAFT_COLUMNS}`,
     [draft.tenantId, draft.userId, draft.draftId, serviceRequestId],

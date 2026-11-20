@@ -113,6 +113,8 @@ export interface IntakeRunInput {
   readonly intakeText: string;
   /** The draft as it stands before this message. */
   readonly draft: IntakeDraftFields;
+  /** The assistant's previous reply, so an answer reads with its question (R18.4, proposal). */
+  readonly lastAssistantMessage?: string;
 }
 
 export interface IntakeRun {
@@ -131,6 +133,11 @@ export interface IntakeRun {
 /** Wrap the Veteran's words so the model reads them as data, not instructions. */
 function renderUserMessage(input: IntakeRunInput): string {
   const safeText = input.intakeText.replaceAll('</intake_text>', '');
+  const last = input.lastAssistantMessage?.replaceAll('</assistant_reply>', '') ?? '';
+  const memory =
+    last === ''
+      ? ''
+      : `Your last message to the Veteran:\n<assistant_reply>\n${last}\n</assistant_reply>\n\n`;
   const current =
     input.draft.category === null
       ? 'No draft yet.'
@@ -141,7 +148,7 @@ function renderUserMessage(input: IntakeRunInput): string {
           meeting_place: input.draft.meetingPlace,
           destination: input.draft.destination,
         });
-  return `<intake_text>\n${safeText}\n</intake_text>\n\nCurrent draft: ${current}`;
+  return `${memory}<intake_text>\n${safeText}\n</intake_text>\n\nCurrent draft: ${current}`;
 }
 
 function isToolName(name: string): name is IntakeToolName {

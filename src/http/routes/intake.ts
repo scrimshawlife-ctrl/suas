@@ -178,6 +178,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
       userId: context.userId,
       intakeText: body.text,
       fields: run.draft,
+      lastAssistantMessage: run.assistantText === '' ? null : run.assistantText,
     });
     return reply.status(201).send(turnView(run, draft, deps.safetyCopyMode));
   });
@@ -196,7 +197,14 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     const run = await runIntakeAssistant(
       deps.modelInference,
       createDatabaseIntakeHost(deps.pool, context.tenantId),
-      { intakeText, draft: draft.fields },
+      {
+        intakeText,
+        draft: draft.fields,
+        // R18.4 (contributor proposal, not released): model text only; never returned or logged.
+        ...(draft.lastAssistantMessage !== null
+          ? { lastAssistantMessage: draft.lastAssistantMessage }
+          : {}),
+      },
     );
     if (storesNothing(run)) return turnView(run, draft, deps.safetyCopyMode);
 
@@ -204,7 +212,11 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     const saved = await saveDraftContent(
       deps.pool,
       draft,
-      { fields: run.draft, intakeText },
+      {
+        fields: run.draft,
+        intakeText,
+        lastAssistantMessage: run.assistantText === '' ? null : run.assistantText,
+      },
       { ifUnchanged: true },
     );
     return turnView(run, saved, deps.safetyCopyMode);

@@ -287,6 +287,52 @@ describe('draft, edit and submit', () => {
     expect(stranger.statusCode).toBe(404);
   });
 
+  // R18.4 (contributor proposal, not released): the stored question goes back to the model
+  // with the answer, is never returned, and is cleared on submit.
+  it('sends the last assistant question with a follow-up answer', async () => {
+    const { headers, tenantId, user } = await veteran();
+    model.enqueue(textTurn('When do you need the ride?'));
+    const first = await post('/api/v0/intake/drafts', headers, { text: 'I need a ride' });
+    expect(first.json()).toMatchObject({ outcome: 'NO_DRAFT' });
+    const draftId: string = first.json().draft.draft_id;
+
+    const before = model.requests().length;
+    model.enqueue(
+      toolTurn(
+        draftTool({
+          category: 'TRANSPORTATION',
+          summary: 'A ride',
+          timing: 'Tuesday',
+          meeting_place: 'Front of the library',
+        }),
+      ),
+      textTurn('I drafted a ride for Tuesday.'),
+    );
+    const next = await post(`/api/v0/intake/drafts/${draftId}/messages`, headers, {
+      text: 'Tuesday',
+    });
+    const sent = model.requests()[before]?.messages[0]?.parts[0];
+    expect(sent?.type === 'text' ? sent.text : '').toContain(
+      '<assistant_reply>\nWhen do you need the ride?\n</assistant_reply>',
+    );
+    const drafted = next.json<{ draft: { category: string; timing: string } }>().draft;
+    expect(drafted.category).toBe('TRANSPORTATION');
+    expect(drafted.timing.toLowerCase()).toContain('tuesday');
+    expect(JSON.stringify(next.json())).not.toContain('When do you need');
+    const stored = await findOwnedDraft(appPool(app), tenantId, user.userId, draftId);
+    expect(stored.lastAssistantMessage).toBe('I drafted a ride for Tuesday.');
+
+    const submitted = await post(
+      `/api/v0/intake/drafts/${draftId}/submit`,
+      headers,
+      {},
+      { 'idempotency-key': 'memory-submit' },
+    );
+    expect(submitted.statusCode).toBe(201);
+    const after = await findOwnedDraft(appPool(app), tenantId, user.userId, draftId);
+    expect(after.lastAssistantMessage).toBeNull();
+  });
+
   it('refuses the slower of two concurrent message saves instead of losing a message', async () => {
     const { tenantId, user } = await veteran();
     const fields = {
