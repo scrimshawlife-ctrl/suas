@@ -155,6 +155,16 @@ export function resolveImmediateResourceSlot(
   };
 }
 
+/**
+ * The crisis notice beside a model-free CRISIS_SUPPORT answer (intake R17.4, chat assist R18.7;
+ * contributor proposals, not released): the §2.1 banner in `approved` mode, else the slot's
+ * labelled placeholder. Same source as `GET /immediate-resources`; no new crisis wording.
+ */
+export function crisisNotice(mode: SafetyCopyMode): string {
+  const slot = resolveImmediateResourceSlot(mode);
+  return slot.state === 'APPROVED' ? CRISIS_BANNER_COMPACT : (slot.placeholder ?? '');
+}
+
 export class UnapprovedSafetyCopyError extends Error {
   readonly code = 'UNAPPROVED_SAFETY_COPY';
   readonly httpStatus = 409;

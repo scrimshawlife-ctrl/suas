@@ -1,0 +1,150 @@
+/**
+ * R18.7 (contributor proposal, not released): a suggested reply or catch-up summary for the helper.
+ * It writes, stores and logs nothing; Veteran crisis language skips the model (as intake, R17.4).
+ */
+
+import { detectCrisisLanguage } from '../intake/crisis-check.js';
+import {
+  escapePromptData,
+  INFERENCE_PURPOSE_LIMITS,
+  type ModelInferencePort,
+  type ModelMessagePart,
+} from '../inference/index.js';
+import { CHAT_ASSIST_SYSTEM_PROMPT } from './assist-prompt.js';
+
+export const CHAT_ASSIST_KINDS = ['SUGGEST_REPLY', 'CATCH_UP'] as const;
+export type ChatAssistKind = (typeof CHAT_ASSIST_KINDS)[number];
+
+/** How many of the newest messages the model sees. */
+export const CHAT_ASSIST_WINDOW = 30;
+export const CHAT_ASSIST_TEMPERATURE = 0.2;
+/** Character caps on the returned text, cut on a word boundary. */
+export const CHAT_ASSIST_TEXT_MAX: Readonly<Record<ChatAssistKind, number>> = {
+  SUGGEST_REPLY: 400,
+  CATCH_UP: 600,
+};
+
+const TASK_LINES: Readonly<Record<ChatAssistKind, string>> = {
+  SUGGEST_REPLY: "Task: SUGGEST_REPLY. Write the helper's next message to the Veteran.",
+  CATCH_UP: 'Task: CATCH_UP. Write a short neutral summary of this chat for the helper.',
+};
+
+export interface ChatAssistRequestFields {
+  readonly category: string;
+  readonly summary: string | null;
+  readonly timing: string | null;
+  readonly meetingPlace: string | null;
+  readonly destination: string | null;
+}
+
+export interface ChatAssistMessage {
+  /** True for the helper's own messages, false for the Veteran's. */
+  readonly fromHelper: boolean;
+  readonly body: string;
+}
+
+export interface ChatAssistInput {
+  readonly kind: ChatAssistKind;
+  readonly request: ChatAssistRequestFields;
+  /** Oldest first; only the last {@link CHAT_ASSIST_WINDOW} are used. */
+  readonly messages: readonly ChatAssistMessage[];
+}
+
+/**
+ * - `SUGGESTION` / `CATCH_UP`: `text` holds the answer for that kind.
+ * - `CRISIS_SUPPORT`: the Veteran's words matched the crisis list; no model was asked.
+ * - `UNAVAILABLE`: no model, a model failure, or an empty answer.
+ */
+export interface ChatAssistResult {
+  readonly outcome: 'SUGGESTION' | 'CATCH_UP' | 'CRISIS_SUPPORT' | 'UNAVAILABLE';
+  readonly text?: string;
+}
+
+const UNAVAILABLE: ChatAssistResult = { outcome: 'UNAVAILABLE' };
+
+/** Wrap untrusted text in a tag; escaping its angle brackets means it can forge no tag at all. */
+function tagged(tag: string, text: string): string {
+  return `<${tag}>\n${escapePromptData(text)}\n</${tag}>`;
+}
+
+/**
+ * Request fields and each message are guarded parts, so the guardrail screens them (R17.5). The
+ * "Veteran:" / "You:" label comes from the sender id, never from message text.
+ */
+function userParts(input: ChatAssistInput, window: readonly ChatAssistMessage[]) {
+  const { category, summary, timing, meetingPlace, destination } = input.request;
+  const fields = JSON.stringify({
+    category,
+    summary,
+    timing,
+    meeting_place: meetingPlace,
+    destination,
+  });
+  const parts: ModelMessagePart[] = [
+    { type: 'text', text: `Request details:\n${tagged('request', fields)}`, guarded: true },
+    ...window.map((message): ModelMessagePart => ({
+      type: 'text',
+      text: `${message.fromHelper ? 'You' : 'Veteran'}:\n${tagged('message', message.body)}`,
+      guarded: true,
+    })),
+    { type: 'text', text: TASK_LINES[input.kind] },
+  ];
+  return parts;
+}
+
+/** Drop reasoning blocks, including one the model never closed. */
+function stripThinking(text: string): string {
+  const closed = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const open = closed.search(/<think>/i);
+  return open === -1 ? closed : closed.slice(0, open);
+}
+
+/** At most `max` characters, cut at the last space inside the cap when there is one. */
+export function capOnWord(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const space = cut.search(/\s\S*$/);
+  return (space > 0 ? cut.slice(0, space) : cut).trimEnd();
+}
+
+export async function assistChat(
+  port: ModelInferencePort,
+  input: ChatAssistInput,
+): Promise<ChatAssistResult> {
+  const window = input.messages.slice(-CHAT_ASSIST_WINDOW);
+  // Every Veteran-written text the model would see, checked before any call.
+  const { summary, timing, meetingPlace, destination } = input.request;
+  const veteranText = [
+    summary,
+    timing,
+    meetingPlace,
+    destination,
+    ...window.filter((message) => !message.fromHelper).map((message) => message.body),
+  ];
+  if (veteranText.some((text) => text !== null && detectCrisisLanguage(text))) {
+    return { outcome: 'CRISIS_SUPPORT' };
+  }
+  if (!port.isAvailable()) return UNAVAILABLE;
+
+  const limits = INFERENCE_PURPOSE_LIMITS.chat_assist;
+  let result;
+  try {
+    result = await port.converse({
+      system: CHAT_ASSIST_SYSTEM_PROMPT,
+      messages: [{ role: 'user', parts: userParts(input, window) }],
+      tools: [],
+      purpose: 'chat_assist',
+      deadlineMs: limits.callTimeoutCapMs,
+      maxTokens: limits.maxTokens,
+      temperature: CHAT_ASSIST_TEMPERATURE,
+    });
+  } catch {
+    // Drop the error: its message could quote the chat.
+    return UNAVAILABLE;
+  }
+  if (!result.ok) return UNAVAILABLE;
+
+  const text = capOnWord(stripThinking(result.text).trim(), CHAT_ASSIST_TEXT_MAX[input.kind]);
+  if (text === '') return UNAVAILABLE;
+  return { outcome: input.kind === 'SUGGEST_REPLY' ? 'SUGGESTION' : 'CATCH_UP', text };
+}
