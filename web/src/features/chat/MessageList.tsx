@@ -13,6 +13,8 @@ export interface MessageListProps {
   counterpart: string;
   /** The pill above the oldest message. */
   openingLine: string;
+  /** A fixed line under the opening one, for the requester (R18.2, contributor proposal). */
+  noticeLine?: string | undefined;
   hasEarlier: boolean;
   loadingEarlier: boolean;
   /** The last attempt to load older messages failed; what is shown stays. */
@@ -35,6 +37,7 @@ export function MessageList({
   meUserId,
   counterpart,
   openingLine,
+  noticeLine,
   hasEarlier,
   loadingEarlier,
   earlierFailed,
@@ -103,6 +106,11 @@ export function MessageList({
         {hasEarlier ? null : (
           <li className="self-center rounded-pill bg-white px-4 py-1.5 text-center text-16 text-slate">
             {openingLine}
+          </li>
+        )}
+        {hasEarlier || noticeLine === undefined ? null : (
+          <li className="self-center max-w-[62%] text-center text-16 text-slate max-[860px]:max-w-[85%]">
+            {noticeLine}
           </li>
         )}
         {messages.map((message) => {
