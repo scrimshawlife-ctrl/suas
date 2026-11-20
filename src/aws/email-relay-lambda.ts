@@ -30,7 +30,10 @@ const secretSchema = z.object({ RESEND_API_KEY: z.string().min(1) });
 export interface EmailRelayDeps {
   readonly readSecret: () => Promise<string | undefined>;
   readonly fromAddress: string | undefined;
-  /** The STAGING last-hop allowlist, checked again here (r263 F2, #306). */
+  /**
+   * The STAGING last-hop allowlist, checked again here (r263 F2, #306). The relay reads its own
+   * SUAS_PUBLIC_DEMO (R16.1, proposal), so an API in demo mode cannot open it alone.
+   */
   readonly allowRecipient: RecipientAllowed;
   readonly transport?: FetchTransport;
 }
@@ -40,7 +43,10 @@ function defaultDeps(): EmailRelayDeps {
   const mailbox = process.env.SUAS_STAGING_FIXTURE_MAILBOX?.trim().toLowerCase();
   const client = new SecretsManagerClient({});
   return {
-    allowRecipient: stagingRecipientAllowed(mailbox === '' ? undefined : mailbox),
+    allowRecipient: stagingRecipientAllowed(
+      mailbox === '' ? undefined : mailbox,
+      process.env.SUAS_PUBLIC_DEMO === 'enabled',
+    ),
     fromAddress: process.env.SUAS_EMAIL_FROM,
     readSecret: async () => {
       if (secretId === undefined || secretId === '') return undefined;

@@ -208,7 +208,11 @@ export function createChannelRegistry(
   const registry = new Map<NotificationChannel, NotificationChannelPort>();
 
   if (config.notifications.email === 'resend') {
-    const allowRecipient = stagingRecipientAllowed(config.stagingFixtureMailbox);
+    // R16.1 (proposal, not released): only the STAGING public demo opens the allowlist.
+    const allowRecipient = stagingRecipientAllowed(
+      config.stagingFixtureMailbox,
+      config.environment === 'STAGING' && config.publicDemo,
+    );
     const relayFunction = config.notifications.relayFunction;
     registry.set(
       'EMAIL',

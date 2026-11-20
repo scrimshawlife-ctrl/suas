@@ -4,7 +4,7 @@
  */
 
 import type { InvokeCommand, InvokeCommandOutput } from '@aws-sdk/client-lambda';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEmailRelayHandler } from '../../src/aws/email-relay-lambda.js';
 import { loadConfig } from '../../src/config/index.js';
 import { createChannelRegistry, type OutboundMessage } from '../../src/notifications/channels.js';
@@ -229,6 +229,34 @@ describe('relay function', () => {
       accepted: false,
       retryable: false,
       failure_reason: 'not_accepted',
+    });
+  });
+});
+
+// R16.1 (contributor proposal, not released): the relay reads its own SUAS_PUBLIC_DEMO, so an
+// API in demo mode cannot open the relay's allowlist alone (defence in depth).
+describe('relay function in public demo mode', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const relayFromEnv = (demo: string | undefined) => {
+    vi.stubEnv('SUAS_EMAIL_SECRET_ID', '');
+    vi.stubEnv('SUAS_STAGING_FIXTURE_MAILBOX', '');
+    vi.stubEnv('SUAS_PUBLIC_DEMO', demo);
+    return createEmailRelayHandler();
+  };
+
+  it('allows any address with SUAS_PUBLIC_DEMO=enabled and refuses it when unset', async () => {
+    // Past the allowlist, the unset secret is the next refusal; nothing reaches AWS or Resend.
+    expect(await relayFromEnv('enabled')({ ...request, to: FRIEND })).toEqual({
+      accepted: false,
+      failure_reason: 'relay_not_configured',
+    });
+    expect(await relayFromEnv(undefined)({ ...request, to: FRIEND })).toEqual({
+      accepted: false,
+      retryable: false,
+      failure_reason: 'recipient_not_allowed',
     });
   });
 });
