@@ -84,7 +84,7 @@ Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user c
 | `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                       |
 | `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                   |
 | `modelInference`         | `disabled`                             | `bedrock` builds the inference relay and its guardrail (R17 contributor proposal, not released). See "Model inference".    |
-| `bedrockModelId`         | none                                   | Required with `modelInference=bedrock`, refused without it. A `us.anthropic.` inference profile id.                        |
+| `bedrockModelId`         | none                                   | Required with `modelInference=bedrock`, refused without it. An on-demand base model id, like `qwen.qwen3-32b-v1:0`.        |
 | `allowPlaceholderModel`  | refused                                | Passing it fails synth. It does not select a model and it does not mark a deployable template.                             |
 | `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches the retired Worker staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
 | `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value the retired Worker used)                                |
@@ -185,7 +185,7 @@ only the normalized result and failure class (`src/identity/va-confirmation-lamb
 
 R17.1 to R17.7 are a contributor proposal, not released, and SAFETY.md §6 at the pin still refuses inference. Off
 by default: the API runs `SUAS_MODEL_INFERENCE_MODE=disabled` and the template has no Bedrock resource or grant.
-With `-c modelInference=bedrock -c bedrockModelId=us.anthropic.claude-haiku-4-5-20251001-v1:0` the stack adds:
+With `-c modelInference=bedrock -c bedrockModelId=qwen.qwen3-32b-v1:0` (Qwen3 32B) the stack adds:
 
 - **The inference relay** (`src/aws/inference-relay-lambda.ts`, construct `lib/inference-relay.ts`): outside the
   VPC, Node 22 arm64, 512 MB, no database setting, no secret. Its settings are `SUAS_ENV`, `SUAS_AWS_REGION`,
@@ -197,10 +197,11 @@ With `-c modelInference=bedrock -c bedrockModelId=us.anthropic.claude-haiku-4-5-
   VIOLENCE and MISCONDUCT at MEDIUM on input and output, PROMPT_ATTACK at HIGH on input only. There is no PII
   policy. A blocked message or answer reads "This message can't be processed. Please use the request form." The
   version's description carries a hash of the configuration, so a changed configuration makes a new version.
-- **IAM:** the relay role may `bedrock:InvokeModel` on the one inference profile in the stack's region, and on its
-  foundation model in any region only through that profile (`bedrock:InferenceProfileArn`), because a `us.` profile
-  routes to us-east-1, us-east-2 and us-west-2. It may also `bedrock:ApplyGuardrail` on the one guardrail. No other
-  role has a Bedrock action. The API role gets `lambda:InvokeFunction` on the relay only.
+- **IAM:** the relay role may `bedrock:InvokeModel` on the one foundation model in the stack's region only
+  (`arn:<partition>:bedrock:<region>::foundation-model/<bedrockModelId>`). The model is invoked on demand there:
+  no inference profile and no cross-region routing, so synth refuses an id with a geographic or global prefix
+  (`us.`, `eu.`, `apac.`, `global.` and the like). It may also `bedrock:ApplyGuardrail` on the one guardrail. No
+  other role has a Bedrock action. The API role gets `lambda:InvokeFunction` on the relay only.
 - **API settings:** `SUAS_MODEL_INFERENCE_MODE=bedrock`, `SUAS_BEDROCK_MODEL_ID`, `SUAS_BEDROCK_GUARDRAIL_ID`,
   `SUAS_BEDROCK_GUARDRAIL_VERSION` and `SUAS_MODEL_INFERENCE_RELAY_FUNCTION`. The API refuses to start in STAGING
   with `bedrock` and no relay. The job worker and migrate function never call a model.
@@ -208,9 +209,9 @@ With `-c modelInference=bedrock -c bedrockModelId=us.anthropic.claude-haiku-4-5-
 Cost: there is no `bedrock-runtime` VPC endpoint (an interface endpoint is about $7.30/mo per zone, see "Cost"). The
 API reaches the relay over the existing Lambda endpoint, and the relay, outside the VPC, calls Bedrock's public
 endpoint. The added fixed cost is nothing; Bedrock bills per token and the relay per invocation. Model invocation
-logging stays off. Two steps are the operator's, in the console or CLI, never this template's:
-submit the Anthropic first-use form for the model, and make the first invocation, which creates the AWS
-Marketplace subscription. The relay role has no Marketplace permission, so it cannot do the latter.
+logging stays off. No Anthropic first-use form applies. The operator makes the first invocation, in the console or
+CLI, never this template: some Bedrock models create an AWS Marketplace subscription on first call, so that step
+creates it if applicable. The relay role has no Marketplace permission, so it cannot do that itself.
 
 ### Network
 
@@ -498,8 +499,8 @@ the owner releases R17 and gives the written OK:
    4. To rotate, create a new key in Resend, `put-secret-value` again, then revoke the old one.
 3. **Bedrock, only once the owner releases R17 and gives the written OK.** Until then deploy without
    `modelInference`, and the API stays `SUAS_MODEL_INFERENCE_MODE=disabled`. When it is turned on, the operator
-   first submits the Anthropic first-use form for the model in the Bedrock console, then makes the first
-   invocation with an admin role, which creates the AWS Marketplace subscription. Neither is in the template.
+   makes the first invocation of the model in the stack's region with an admin role (see "Model inference"). That
+   step is not in the template.
 4. **Run the migrate function** after every deploy that adds migrations. From a shell with credentials:
    `aws lambda invoke --function-name <MigrateFunctionName output> --cli-binary-format raw-in-base64-out out.json`
    and read `out.json` (`schema_version`, `applied_now`). Until it has run, the API fails closed at startup

@@ -8,7 +8,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { tryLoadConfig } from '../../src/config/index.js';
 import { INFERENCE_RELAY_INVOKE_TIMEOUT_MS } from '../../src/inference/lambda-relay-inference.js';
 import { INFERENCE_PURPOSE_LIMITS } from '../../src/inference/model-inference.js';
-import { foundationModelIdOf } from '../lib/inference-relay.js';
 import { resolveForValidation, synthesize, type Synthesized } from './helpers.js';
 
 type Resource = { Type: string; Properties?: Record<string, any> };
@@ -47,7 +46,7 @@ const renderArns = (value: unknown): unknown => {
   return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, renderArns(v)]));
 };
 
-const MODEL_ID = 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
+const MODEL_ID = 'qwen.qwen3-32b-v1:0';
 const INFERENCE_KEYS = [
   'SUAS_BEDROCK_GUARDRAIL_ID',
   'SUAS_BEDROCK_GUARDRAIL_VERSION',
@@ -130,11 +129,10 @@ describe('inference relay', () => {
     });
   });
 
-  it('gives its role logs, InvokeModel on the profile and its model through it, and the guardrail only', () => {
+  it('gives its role logs, InvokeModel on the one model in its region, and the guardrail only', () => {
     const role = roleOf(on.backend, 'inference-relay.handler');
     const own = policies(on.backend).filter((p) => p.roles.includes(role));
     expect(own).toHaveLength(1);
-    const profileArn = `arn:\${AWS::Partition}:bedrock:us-west-2:\${AWS::AccountId}:inference-profile/${MODEL_ID}`;
     const [logGroupId] = ofType(on.backend, 'AWS::Logs::LogGroup')
       .map(([id]) => id)
       .filter((id) => id.startsWith('InferenceRelayLogs'));
@@ -144,13 +142,10 @@ describe('inference relay', () => {
         Effect: 'Allow',
         Resource: { 'Fn::GetAtt': [logGroupId, 'Arn'] },
       },
-      { Action: 'bedrock:InvokeModel', Effect: 'Allow', Resource: profileArn },
       {
         Action: 'bedrock:InvokeModel',
         Effect: 'Allow',
-        Resource:
-          'arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
-        Condition: { StringEquals: { 'bedrock:InferenceProfileArn': profileArn } },
+        Resource: `arn:\${AWS::Partition}:bedrock:us-west-2::foundation-model/${MODEL_ID}`,
       },
       {
         Action: 'bedrock:ApplyGuardrail',
@@ -243,10 +238,5 @@ describe('inference relay', () => {
     chain.slice(1).forEach((later, i) => {
       expect(chain[i], `step ${String(i + 1)} of ${chain.join(' < ')}`).toBeLessThan(later);
     });
-  });
-
-  it('derives the foundation model id by dropping the us. prefix only', () => {
-    expect(foundationModelIdOf(MODEL_ID)).toBe('anthropic.claude-haiku-4-5-20251001-v1:0');
-    expect(() => foundationModelIdOf('anthropic.claude-haiku-4-5-20251001-v1:0')).toThrow(/us\./);
   });
 });

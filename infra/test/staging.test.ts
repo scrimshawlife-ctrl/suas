@@ -16,7 +16,7 @@ import { createStagingApp } from '../lib/staging.js';
 /** Inference through the relay (R17 contributor proposal), with the planned model. */
 const BEDROCK_CONTEXT = {
   modelInference: 'bedrock',
-  bedrockModelId: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+  bedrockModelId: 'qwen.qwen3-32b-v1:0',
 };
 
 let s: Synthesized;
@@ -562,7 +562,6 @@ describe('IAM', () => {
     expect(bedrockStatements.flatMap((st) => [st.Action].flat()).sort()).toEqual([
       'bedrock:ApplyGuardrail',
       'bedrock:InvokeModel',
-      'bedrock:InvokeModel',
     ]);
     for (const st of bedrockStatements) expect([st.Resource].flat()).not.toContain('*');
   });
@@ -891,16 +890,18 @@ describe('configuration and hygiene', () => {
     );
     for (const bedrockModelId of [
       undefined,
-      'anthropic.claude-haiku-4-5-20251001-v1:0',
-      'global.anthropic.claude-haiku-4-5-20251001-v1:0',
-      'us.amazon.nova-lite-v1:0',
-      'us.anthropic.Claude',
+      '',
+      'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+      'global.x.y',
+      'Qwen.Qwen3',
     ]) {
       const context = {
         modelInference: 'bedrock',
         ...(bedrockModelId !== undefined ? { bedrockModelId } : {}),
       };
-      expect(() => synthesize(context), String(bedrockModelId)).toThrow(/us\.anthropic\./);
+      expect(() => synthesize(context), String(bedrockModelId)).toThrow(
+        /on-demand Bedrock base model id/,
+      );
     }
     expect(() => synthesize({ modelInference: 'fake' })).toThrow(/disabled or bedrock/);
     expect(() => synthesize({ allowPlaceholderModel: 'true' })).toThrow(/allowPlaceholderModel/);

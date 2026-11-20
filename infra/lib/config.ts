@@ -49,12 +49,16 @@ export interface EnvironmentConfig {
   readonly modelInference: ModelInferenceConfig;
 }
 
-/** `disabled` builds nothing; `bedrock` builds the relay and guardrail for one `us.` profile. */
+/** `disabled` builds nothing; `bedrock` builds the relay and guardrail for one base model. */
 export type ModelInferenceConfig =
   { readonly mode: 'disabled' } | { readonly mode: 'bedrock'; readonly modelId: string };
 
-/** A US geographic cross-region inference profile for an Anthropic model (R17.2, proposal). */
-const BEDROCK_MODEL_ID_PATTERN = /^us\.anthropic\.[a-z0-9.:-]+$/;
+/**
+ * An on-demand Bedrock base model id, `provider.model`, invoked in the stack's region (R17.2,
+ * proposal). Lower case only; a geographic or global inference profile prefix is refused.
+ */
+const BEDROCK_MODEL_ID_PATTERN = /^[a-z0-9-]+\.[a-z0-9][a-z0-9.:-]*$/;
+const INFERENCE_PROFILE_PREFIX = /^(us|us-gov|eu|apac|ca|jp|au|global)\./;
 
 function text(node: Node, key: string): string | undefined {
   const value: unknown = node.tryGetContext(key);
@@ -209,7 +213,7 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
 
 /**
  * R17.1/R17.2 (contributor proposal, not released): inference stays off unless
- * `modelInference=bedrock` names a `us.anthropic.` profile. A model id alone never turns it on.
+ * `modelInference=bedrock` names an on-demand base model id. A model id alone never turns it on.
  */
 function modelInferenceConfig(node: Node): ModelInferenceConfig {
   if (text(node, 'allowPlaceholderModel') !== undefined) {
@@ -230,9 +234,13 @@ function modelInferenceConfig(node: Node): ModelInferenceConfig {
   if (mode !== 'bedrock') {
     throw new Error('Context "modelInference" must be disabled or bedrock.');
   }
-  if (modelId === undefined || !BEDROCK_MODEL_ID_PATTERN.test(modelId)) {
+  if (
+    modelId === undefined ||
+    !BEDROCK_MODEL_ID_PATTERN.test(modelId) ||
+    INFERENCE_PROFILE_PREFIX.test(modelId)
+  ) {
     throw new Error(
-      `Context "bedrockModelId" must be a us.anthropic. inference profile id, like us.anthropic.claude-haiku-4-5-20251001-v1:0; got "${modelId ?? ''}".`,
+      `Context "bedrockModelId" must be an on-demand Bedrock base model id in the staging region, not an inference profile, like qwen.qwen3-32b-v1:0; got "${modelId ?? ''}".`,
     );
   }
   return { mode, modelId };
