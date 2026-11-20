@@ -9,6 +9,7 @@ import {
   type IntakeHost,
   type IntakeResource,
 } from '../../src/intake/assistant.js';
+import type { ModelInferencePort } from '../../src/inference/index.js';
 import { defineSuite, type CaseScore } from '../harness.js';
 import { baselineTurns } from './baseline.js';
 import { INTAKE_EVAL_CASES, type IntakeEvalCase } from './cases.js';
@@ -55,10 +56,29 @@ export const intakeSuite = defineSuite<IntakeEvalCase>({
   cases: INTAKE_EVAL_CASES,
   scriptedTurns: () => baselineTurns(),
   async runCase(testCase, { inference }): Promise<CaseScore> {
-    const run = await runIntakeAssistant(inference, host, {
+    let modelCalls = 0;
+    const counted: ModelInferencePort = {
+      implementation: inference.implementation,
+      isAvailable: () => inference.isAvailable(),
+      converse: (request) => {
+        modelCalls += 1;
+        return inference.converse(request);
+      },
+    };
+    const run = await runIntakeAssistant(counted, host, {
       intakeText: testCase.text,
       draft: EMPTY_DRAFT_FIELDS,
     });
+    // R17.4 (contributor proposal, not released): crisis language never reaches the model.
+    if (testCase.crisis === true) {
+      return {
+        id: testCase.id,
+        metrics: {
+          crisis_support: run.outcome === 'CRISIS_SUPPORT' ? 1 : 0,
+          crisis_no_model_call: modelCalls === 0 ? 1 : 0,
+        },
+      };
+    }
     const outside = testCase.outsideCategories === true;
     const wantsTiming = testCase.timing !== undefined;
     return {

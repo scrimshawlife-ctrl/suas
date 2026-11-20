@@ -12,13 +12,17 @@
  * nothing here logs it.
  */
 
-import type {
-  ModelInferencePort,
-  ModelMessage,
-  ModelMessagePart,
-  ModelToolCall,
-  ModelFailureKind,
+import {
+  INFERENCE_PURPOSE_LIMITS,
+  type ModelInferencePort,
+  type ModelMessage,
+  type ModelMessagePart,
+  type ModelToolCall,
+  type ModelFailureKind,
+  type ModelTurnRequest,
+  type ModelTurnResult,
 } from '../inference/index.js';
+import { detectCrisisLanguage } from './crisis-check.js';
 import { INTAKE_SYSTEM_PROMPT } from './system-prompt.js';
 import {
   draftServiceRequestInput,
@@ -35,6 +39,13 @@ import {
 export const MAX_MODEL_CALLS = 4;
 export const MAX_ASSISTANT_TEXT = 1_500;
 export const MAX_RESOURCES_PER_SEARCH = 5;
+
+/**
+ * Whole-run budget for one Veteran message, inside the 29 s HTTP API limit, and the least
+ * time worth starting another call with (R17.3, contributor proposal, not released).
+ */
+export const INTAKE_RUN_DEADLINE_MS = 24_000;
+export const MIN_CALL_BUDGET_MS = 3_000;
 
 /** Shown when the Veteran asks for something outside the four categories. */
 export const NOT_AVAILABLE_NOTICE =
@@ -85,8 +96,10 @@ export const EMPTY_DRAFT_FIELDS: IntakeDraftFields = {
  * - `DRAFT_READY`: the draft has a category and summary for the Veteran to review.
  * - `NO_DRAFT`: the assistant asked a question or the need is not available yet.
  * - `FALLBACK_FORM`: the model did not answer; the client shows the plain form.
+ * - `CRISIS_SUPPORT`: crisis language was found, so no model was asked; the client shows the
+ *   released crisis copy beside the plain form (R17.4, contributor proposal, not released).
  */
-export type IntakeOutcome = 'DRAFT_READY' | 'NO_DRAFT' | 'FALLBACK_FORM';
+export type IntakeOutcome = 'DRAFT_READY' | 'NO_DRAFT' | 'FALLBACK_FORM' | 'CRISIS_SUPPORT';
 
 export interface IntakeRunInput {
   /** Everything the Veteran has typed so far, oldest first. */
@@ -252,6 +265,23 @@ function finish(state: RunState, assistantText: string, failure?: ModelFailureKi
   };
 }
 
+/** The port's answer, or `timeout` once the run's remaining time is spent, whichever is first. */
+async function converseWithin(
+  port: ModelInferencePort,
+  request: ModelTurnRequest,
+  remainingMs: number,
+): Promise<ModelTurnResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<ModelTurnResult>((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false, failure: 'timeout' }), remainingMs);
+  });
+  try {
+    return await Promise.race([port.converse(request), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function runIntakeAssistant(
   port: ModelInferencePort,
   host: IntakeHost,
@@ -263,16 +293,38 @@ export async function runIntakeAssistant(
     notAvailableYet: false,
     refusedToolCalls: 0,
   };
+  // Before any model call, and whether or not a model is configured (R17.4, proposal). It
+  // covers every Veteran-written text the model would see: the typed text and the draft fields.
+  const { summary, timing, meetingPlace, destination } = input.draft;
+  const sentToModel = [input.intakeText, summary, timing, meetingPlace, destination];
+  if (sentToModel.some((text) => text !== null && detectCrisisLanguage(text))) {
+    return { ...finish(state, ''), outcome: 'CRISIS_SUPPORT' };
+  }
   if (!port.isAvailable()) return finish(state, '', 'unavailable');
 
+  // The Veteran's words are the untrusted part the guardrail screens (R17.5, proposal).
   const messages: ModelMessage[] = [
-    { role: 'user', parts: [{ type: 'text', text: renderUserMessage(input) }] },
+    { role: 'user', parts: [{ type: 'text', text: renderUserMessage(input), guarded: true }] },
   ];
 
+  const startedAt = Date.now();
   for (let call = 0; call < MAX_MODEL_CALLS; call += 1) {
+    const remainingMs = INTAKE_RUN_DEADLINE_MS - (Date.now() - startedAt);
+    if (remainingMs < MIN_CALL_BUDGET_MS) return finish(state, '', 'timeout');
     let result;
     try {
-      result = await port.converse({ system: INTAKE_SYSTEM_PROMPT, messages, tools: INTAKE_TOOLS });
+      result = await converseWithin(
+        port,
+        {
+          system: INTAKE_SYSTEM_PROMPT,
+          messages,
+          tools: INTAKE_TOOLS,
+          purpose: 'intake',
+          deadlineMs: remainingMs,
+          maxTokens: INFERENCE_PURPOSE_LIMITS.intake.maxTokens,
+        },
+        remainingMs,
+      );
     } catch {
       // The port should not throw. If it does, drop the error: its message could
       // quote the request, and intake text must never reach a log.

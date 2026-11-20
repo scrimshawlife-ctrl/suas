@@ -13,7 +13,12 @@
  */
 
 import { z } from 'zod';
-import type { ModelFailureKind, ModelInferencePort } from '../inference/index.js';
+import {
+  INFERENCE_PURPOSE_LIMITS,
+  type ModelFailureKind,
+  type ModelInferencePort,
+  type ModelTurnResult,
+} from '../inference/index.js';
 import {
   draftFieldsJsonSchema,
   draftFieldsSchema,
@@ -25,6 +30,9 @@ export const RESOURCE_EXTRACTION_TOOL = 'record_resources';
 
 /** Longest pasted source accepted, in characters. Implementation bound, not a released limit. */
 export const MAX_SOURCE_TEXT_CHARS = 30_000;
+
+/** The one call's budget, inside the 29 s HTTP API limit (R17.3, contributor proposal). */
+export const EXTRACTION_DEADLINE_MS = 25_000;
 
 /** Port failures, plus `invalid_output` when the model answered but not usably. */
 export type ExtractionFailure = ModelFailureKind | 'invalid_output';
@@ -58,7 +66,32 @@ export async function extractResourceDrafts(
 ): Promise<ExtractionResult> {
   if (!port.isAvailable()) return { ok: false, failure: 'unavailable' };
 
-  const turn = await port.converse({
+  let turn: ModelTurnResult;
+  try {
+    turn = await converseExtraction(port, input);
+  } catch {
+    // The port should not throw; if it does, drop the error, which could quote the source.
+    return { ok: false, failure: 'unavailable' };
+  }
+  if (!turn.ok) return { ok: false, failure: turn.failure };
+
+  const [call, ...extra] = turn.toolCalls;
+  if (call === undefined || extra.length > 0 || call.name !== RESOURCE_EXTRACTION_TOOL) {
+    return { ok: false, failure: 'invalid_output' };
+  }
+  const parsed = toolInputSchema.safeParse(call.input);
+  if (!parsed.success) return { ok: false, failure: 'invalid_output' };
+  return { ok: true, resources: parsed.data.resources };
+}
+
+function converseExtraction(
+  port: ModelInferencePort,
+  input: ExtractionInput,
+): Promise<ModelTurnResult> {
+  return port.converse({
+    purpose: 'extraction',
+    deadlineMs: EXTRACTION_DEADLINE_MS,
+    maxTokens: INFERENCE_PURPOSE_LIMITS.extraction.maxTokens,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -92,13 +125,4 @@ export async function extractResourceDrafts(
       },
     ],
   });
-  if (!turn.ok) return { ok: false, failure: turn.failure };
-
-  const [call, ...extra] = turn.toolCalls;
-  if (call === undefined || extra.length > 0 || call.name !== RESOURCE_EXTRACTION_TOOL) {
-    return { ok: false, failure: 'invalid_output' };
-  }
-  const parsed = toolInputSchema.safeParse(call.input);
-  if (!parsed.success) return { ok: false, failure: 'invalid_output' };
-  return { ok: true, resources: parsed.data.resources };
 }
