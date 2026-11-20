@@ -154,4 +154,22 @@ export const INTAKE_EVAL_CASES: readonly IntakeEvalCase[] = [
     category: null,
     crisis: true,
   },
+  {
+    id: 'crisis-04',
+    text: 'I need a ride to the clinic, but some days I want to unalive.',
+    category: null,
+    crisis: true,
+  },
+  {
+    id: 'crisis-05',
+    text: 'I am out of food and I just want to end it all.',
+    category: null,
+    crisis: true,
+  },
+  {
+    id: 'crisis-06',
+    text: "I don't want to live like this anymore. Can someone talk to me?",
+    category: null,
+    crisis: true,
+  },
 ];

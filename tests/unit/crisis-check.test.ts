@@ -1,6 +1,6 @@
 /**
  * Crisis-language check before the model (R17.4, contributor proposal, not released): every
- * proposed phrase matches after normalizing, and near-misses on word boundaries do not.
+ * approved phrase matches after normalizing, and near-misses on word boundaries do not.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -20,6 +20,20 @@ describe('detectCrisisLanguage', () => {
     ['a curly apostrophe', 'I can’t go on like this'],
     ['a line break', 'I might\nhurt myself tonight'],
     ['the end of the text', 'Thinking about suicide.'],
+    ['a trailing period', 'Some days I just want to unalive.'],
+    ['mixed case', 'I keep thinking about UnAliving myself'],
+    ['a past tense', 'My buddy unalived last year and I think about it'],
+    ['a slang spelling', 'sewerslide has been on my mind'],
+    ['a comma after the phrase', 'I want to end it all, honestly'],
+    ['an -ing form', 'Ending it all seems easier'],
+    ['"off myself"', 'I might off myself.'],
+    ['"offing myself"', 'Thinking about offing myself tonight'],
+    ['"not worth living"', 'Life is not worth living anymore!'],
+    ['an apostrophe', "I don't want to be here anymore"],
+    ['no apostrophe', 'I dont want to be here anymore'],
+    ['a curly apostrophe and caps', 'I DON’T WANT TO LIVE like this'],
+    ['no apostrophe, lower case', 'i dont want to live'],
+    ['"kill me"', 'Someone just kill me.'],
   ])('matches with %s', (_name, text) => {
     expect(detectCrisisLanguage(text)).toBe(true);
   });
@@ -31,6 +45,11 @@ describe('detectCrisisLanguage', () => {
     ['a phrase split across other words', 'I want to go to the store; die-cast models are fun.'],
     ['a similar but different word', 'My suicidality screening was fine; my car is a write-off.'],
     ['empty text', ''],
+    ['a distance in kms', 'It is 12 kms to the clinic.'],
+    ['an engine', 'Please kill the engine before you get out.'],
+    ['a figure of speech', 'The deadline is killing me.'],
+    ['a lease', 'I need to end my lease early.'],
+    ['a word containing "kms"', 'Skills matter when you look for work.'],
   ])('does not match %s', (_name, text) => {
     expect(detectCrisisLanguage(text)).toBe(false);
   });

@@ -1,11 +1,14 @@
 /**
  * Deterministic crisis-language check, run before any model call (R17.4, contributor proposal,
- * not released; the phrase list awaits the owner's approval). A match skips the model and the
- * caller shows the released D-012 crisis copy. It routes to resources; it does not diagnose,
- * score or predict anything (SAFETY.md §2), and the crisis panel stays reachable either way.
+ * not released). A match skips the model and the caller shows the released D-012 crisis copy.
+ * It routes to resources; it does not diagnose, score or predict anything (SAFETY.md §2), and
+ * the crisis panel stays reachable either way.
  */
 
-/** Proposed for owner approval (R17.4). Matched as whole words after normalizing. */
+/**
+ * R17.4 (contributor proposal, not released): the contributor's approved list (2026-11-20, under
+ * the owner's delegation on SUAS-specs #115). Matched as whole words after normalizing.
+ */
 export const CRISIS_PHRASES: readonly string[] = [
   'kill myself',
   'killing myself',
@@ -24,6 +27,18 @@ export const CRISIS_PHRASES: readonly string[] = [
   'no reason to live',
   "can't go on",
   'cant go on',
+  'unalive',
+  'unaliving',
+  'unalived',
+  'sewerslide',
+  'end it all',
+  'ending it all',
+  'off myself',
+  'offing myself',
+  'not worth living',
+  "don't want to be here",
+  "don't want to live",
+  'kill me',
 ];
 
 /**
