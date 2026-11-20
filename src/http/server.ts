@@ -38,6 +38,7 @@ import type { ObjectStoragePort } from '../storage/index.js';
 import { assertMfaElevated, assertSuasAdmin } from '../authz/index.js';
 import { stagingAccessFromConfig, type StagingAccess } from '../auth/staging-access.js';
 import { authenticate } from './authenticate.js';
+import { registerAuthRouteGuards } from './auth-route-guards.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminAdapterRoutes } from './routes/admin-adapters.js';
 import { registerAdminConsentTemplateRoutes } from './routes/admin-consent-templates.js';
@@ -166,6 +167,7 @@ export function createServer(deps: ServerDependencies): FastifyInstance {
 
   // Hooks first: the onRoute hook only sees routes registered after it.
   registerServerHooks(app, stagingAccess, apiRoutes);
+  registerAuthRouteGuards(app, { stagingAccess, pool: deps.pool });
   // Unsafe-request origin policy, preflight, and CORS response headers
   // (SUAS-specs D-038, released in 0.7.0). Registered before any route so it covers all of them.
   registerOriginPolicy(app, {
