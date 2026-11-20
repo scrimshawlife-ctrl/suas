@@ -64,8 +64,20 @@ export const inferenceRelayEventSchema = z
   })
   .strict();
 
+const tokenCount = z.number().int().nonnegative();
+
 export const inferenceRelayResultSchema = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true), text: z.string(), toolCalls: z.array(toolCallSchema) }).strict(),
+  z
+    .object({
+      ok: z.literal(true),
+      text: z.string(),
+      toolCalls: z.array(toolCallSchema),
+      usage: z
+        .object({ inputTokens: tokenCount, outputTokens: tokenCount })
+        .strict()
+        .exactOptional(),
+    })
+    .strict(),
   z.object({ ok: z.literal(false), failure: z.enum(MODEL_FAILURE_KINDS) }).strict(),
 ]);
 

@@ -182,3 +182,32 @@ describe('inference relay function', () => {
     expect(console).not.toHaveBeenCalled();
   });
 });
+
+describe('token usage through the relay', () => {
+  it('carries Bedrock usage from the relay function to the in-VPC port unchanged', async () => {
+    const withUsage = {
+      ...ENDED,
+      usage: { inputTokens: 321, outputTokens: 45, totalTokens: 366 },
+    } as unknown as ConverseCommandOutput;
+    const { handler } = relayHandler({}, [withUsage]);
+    const relayed = await handler(EVENT);
+    expect(relayed).toMatchObject({ ok: true, usage: { inputTokens: 321, outputTokens: 45 } });
+
+    const { port } = relayPort([invoked({ Payload: encode(relayed) })]);
+    expect(await port.converse(REQUEST)).toEqual(relayed);
+  });
+
+  it('leaves usage out when Bedrock reports none, and refuses a malformed usage', async () => {
+    const { handler } = relayHandler({});
+    expect(await handler(EVENT)).not.toHaveProperty('usage');
+
+    const bad = {
+      ok: true,
+      text: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: -1, outputTokens: 2 },
+    };
+    const { port } = relayPort([invoked({ Payload: encode(bad) })]);
+    expect(await port.converse(REQUEST)).toEqual({ ok: false, failure: 'invalid' });
+  });
+});

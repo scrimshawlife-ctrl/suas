@@ -176,7 +176,10 @@ export class BedrockModelInference implements ModelInferencePort {
     if (text.trim() === '' && toolCalls.length === 0) return this.fail('invalid');
 
     this.logger?.({ implementation: BEDROCK_IMPLEMENTATION, ok: true });
-    return { ok: true, text, toolCalls };
+    const { inputTokens, outputTokens } = output.usage ?? {};
+    return typeof inputTokens === 'number' && typeof outputTokens === 'number'
+      ? { ok: true, text, toolCalls, usage: { inputTokens, outputTokens } }
+      : { ok: true, text, toolCalls };
   }
 
   private fail(failure: ModelFailureKind): ModelTurnResult {

@@ -3,6 +3,8 @@
  * way to run one case against the configured inference adapter, and a score per
  * case. The runner aggregates and prints; it never gates (gates are undecided,
  * plan §8 item 13).
+ * Each report also carries run metrics (latency p50/p95, model calls, token sums,
+ * `<think` reasoning leaks) taken by wrapping the case's port; they hold no content.
  *
  * Adding a suite (for example Resource extraction):
  *   1. Put synthetic cases (no real people or real organizations' private data)
@@ -77,12 +79,61 @@ export interface SuiteReport {
   readonly metrics: Readonly<Record<string, { readonly mean: number; readonly applied: number }>>;
   /** Cases that threw instead of scoring. A thrown case counts as a harness defect. */
   readonly errors: readonly { readonly id: string; readonly message: string }[];
+  /** Nearest-rank percentiles of each case's wall-clock `runCase` time, in ms to 0.1. */
+  readonly latency_ms_p50: number;
+  readonly latency_ms_p95: number;
+  readonly model_calls: number;
+  /** Summed provider token counts; 0 for adapters that report none (the scripted fake). */
+  readonly input_tokens: number;
+  readonly output_tokens: number;
+  /** Answers whose text holds a `<think` block, which should never reach a Veteran. */
+  readonly reasoning_leak_count: number;
+}
+
+/** What one suite run measured besides its scores. */
+export interface RunStats {
+  readonly latenciesMs: readonly number[];
+  readonly modelCalls: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly reasoningLeaks: number;
+}
+
+/** Nearest-rank percentile: the smallest value with at least p% of values at or below it. */
+export function nearestRank(values: readonly number[], percent: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = Math.max(1, Math.ceil((percent / 100) * sorted.length));
+  return sorted[rank - 1] ?? 0;
+}
+
+const toTenthMs = (ms: number): number => Math.round(ms * 10) / 10;
+
+type MutableStats = { -readonly [K in Exclude<keyof RunStats, 'latenciesMs'>]: number };
+
+/** Wraps a port so every call, its token usage and any reasoning leak is counted in `stats`. */
+function countingPort(port: ModelInferencePort, stats: MutableStats): ModelInferencePort {
+  return {
+    implementation: port.implementation,
+    isAvailable: () => port.isAvailable(),
+    async converse(request) {
+      stats.modelCalls += 1;
+      const result = await port.converse(request);
+      if (result.ok) {
+        stats.inputTokens += result.usage?.inputTokens ?? 0;
+        stats.outputTokens += result.usage?.outputTokens ?? 0;
+        if (/<think/i.test(result.text)) stats.reasoningLeaks += 1;
+      }
+      return result;
+    },
+  };
 }
 
 export function aggregate(
   suite: { readonly name: string; readonly description: string },
   scores: readonly CaseScore[],
   errors: SuiteReport['errors'],
+  stats: RunStats,
 ): SuiteReport {
   const sums = new Map<string, { total: number; applied: number }>();
   for (const score of scores) {
@@ -107,28 +158,42 @@ export function aggregate(
     cases: scores.length + errors.length,
     metrics,
     errors,
+    latency_ms_p50: toTenthMs(nearestRank(stats.latenciesMs, 50)),
+    latency_ms_p95: toTenthMs(nearestRank(stats.latenciesMs, 95)),
+    model_calls: stats.modelCalls,
+    input_tokens: stats.inputTokens,
+    output_tokens: stats.outputTokens,
+    reasoning_leak_count: stats.reasoningLeaks,
   };
 }
 
+/** `now` is a test seam for the latency clock. */
 export async function runSuite<TCase extends { readonly id: string }>(
   suite: EvalSuite<TCase>,
   makeInference: InferenceFactory,
+  now: () => number = () => performance.now(),
 ): Promise<SuiteReport> {
   const scores: CaseScore[] = [];
   const errors: { id: string; message: string }[] = [];
+  const latenciesMs: number[] = [];
+  const stats: MutableStats = { modelCalls: 0, inputTokens: 0, outputTokens: 0, reasoningLeaks: 0 };
   for (const testCase of suite.cases) {
-    const inference = makeInference();
-    if (inference instanceof ScriptedModelInference && suite.scriptedTurns !== undefined) {
-      inference.enqueue(...suite.scriptedTurns(testCase));
+    const raw = makeInference();
+    if (raw instanceof ScriptedModelInference && suite.scriptedTurns !== undefined) {
+      raw.enqueue(...suite.scriptedTurns(testCase));
     }
+    const inference = countingPort(raw, stats);
+    const started = now();
     try {
       scores.push(await suite.runCase(testCase, { inference }));
     } catch (error) {
       // Only the case id and error class are kept: messages may quote case text.
       errors.push({ id: testCase.id, message: error instanceof Error ? error.name : 'error' });
+    } finally {
+      latenciesMs.push(now() - started);
     }
   }
-  return aggregate(suite, scores, errors);
+  return aggregate(suite, scores, errors, { ...stats, latenciesMs });
 }
 
 export function formatReport(reports: readonly SuiteReport[], implementation: string): string {
@@ -141,6 +206,13 @@ export function formatReport(reports: readonly SuiteReport[], implementation: st
     for (const [metric, { mean, applied }] of Object.entries(report.metrics)) {
       lines.push(`  ${metric.padEnd(34)} ${(mean * 100).toFixed(1).padStart(5)}%  (${applied})`);
     }
+    const row = (label: string, value: string) => `  ${label.padEnd(34)} ${value}`;
+    lines.push(
+      row('latency_ms p50 / p95', `${report.latency_ms_p50} / ${report.latency_ms_p95}`),
+      row('model_calls', String(report.model_calls)),
+      row('input_tokens / output_tokens', `${report.input_tokens} / ${report.output_tokens}`),
+      row('reasoning_leak_count (<think)', String(report.reasoning_leak_count)),
+    );
     for (const error of report.errors) lines.push(`  ERROR ${error.id}: ${error.message}`);
   }
   return lines.join('\n');
