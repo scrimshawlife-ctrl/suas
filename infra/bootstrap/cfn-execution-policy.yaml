@@ -10,6 +10,23 @@ Parameters:
     Type: String
     AllowedPattern: '[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}'
     Description: Exact web hostname in the reviewed staging assembly (no wildcard).
+  # R14.x region-restricted layout (suas #360) and R17 Bedrock: contributor proposals, not
+  # released. The defaults keep the four-stack us-west-2 policies unchanged.
+  StagingRegion:
+    Type: String
+    Default: us-west-2
+    AllowedValues: [us-west-2, us-east-2]
+    Description: Region of the Dns, Backend and Web stacks; us-east-1 stays allowed for edge services.
+  ModelInference:
+    Type: String
+    Default: disabled
+    AllowedValues: [disabled, bedrock]
+    Description: bedrock adds the Guardrail deploy grants and the relay's model and guardrail boundary.
+Conditions:
+  BedrockInference:
+    Fn::Equals:
+      - Ref: ModelInference
+      - bedrock
 Resources:
   SuasCdkExecutionPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -50,7 +67,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: RegionalDescribe
             Effect: Allow
@@ -62,7 +79,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: Database
             Effect: Allow
@@ -88,7 +105,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: Lambda
             Effect: Allow
@@ -114,7 +131,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: Layer
             Effect: Allow
@@ -125,7 +142,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: Logs
             Effect: Allow
@@ -146,7 +163,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: LogInventory
             Effect: Allow
@@ -156,7 +173,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: BoundedRoleWrites
             Effect: Allow
@@ -269,7 +286,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: Notifications
             Effect: Allow
@@ -288,7 +305,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: SubscriptionLifecycle
             Effect: Allow
@@ -301,7 +318,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: GeneratedSecrets
             Effect: Allow
@@ -320,7 +337,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: RandomPasswords
             Effect: Allow
@@ -330,7 +347,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: Parameters
             Effect: Allow
@@ -347,7 +364,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: Scheduler
             Effect: Allow
@@ -361,7 +378,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: Buckets
             Effect: Allow
@@ -387,18 +404,51 @@ Resources:
                 s3:ResourceAccount:
                   Ref: AWS::AccountId
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
+          # Handler actions from the AWS::Bedrock::Guardrail and GuardrailVersion registry schemas,
+          # without KMS (no customer key). CreateGuardrail has no guardrail resource type.
+          - Fn::If:
+              - BedrockInference
+              - Sid: GuardrailCreate
+                Effect: Allow
+                Action: bedrock:CreateGuardrail
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion:
+                      Ref: StagingRegion
+              - Ref: AWS::NoValue
+          - Fn::If:
+              - BedrockInference
+              - Sid: Guardrails
+                Effect: Allow
+                Action:
+                  - bedrock:CreateGuardrailVersion
+                  - bedrock:GetGuardrail
+                  - bedrock:UpdateGuardrail
+                  - bedrock:DeleteGuardrail
+                  - bedrock:TagResource
+                  - bedrock:UntagResource
+                  - bedrock:ListTagsForResource
+                Resource:
+                  Fn::Sub: arn:${AWS::Partition}:bedrock:${StagingRegion}:${AWS::AccountId}:guardrail/*
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion:
+                      Ref: StagingRegion
+              - Ref: AWS::NoValue
           - Sid: RdsEncryption
             Effect: Allow
             Action:
               - kms:DescribeKey
               - kms:CreateGrant
             Resource:
-              Fn::Sub: arn:${AWS::Partition}:kms:us-west-2:${AWS::AccountId}:key/*
+              Fn::Sub: arn:${AWS::Partition}:kms:${StagingRegion}:${AWS::AccountId}:key/*
             Condition:
               StringEquals:
-                kms:ViaService: rds.us-west-2.amazonaws.com
+                kms:ViaService:
+                  Fn::Sub: rds.${StagingRegion}.amazonaws.com
                 kms:CallerAccount:
                   Ref: AWS::AccountId
   SuasCdkEdgePolicy:
@@ -416,7 +466,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
                 acm:ValidationMethod: DNS
               ForAllValues:StringEquals:
@@ -439,7 +489,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: HttpApi
             Effect: Allow
@@ -455,7 +505,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: Dns
             Effect: Allow
@@ -533,7 +583,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: VpcEni
             Effect: Allow
@@ -548,7 +598,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: RuntimeSecrets
             Effect: Allow
@@ -563,7 +613,7 @@ Resources:
                 aws:ResourceAccount:
                   Ref: AWS::AccountId
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: RuntimeObjects
             Effect: Allow
@@ -592,7 +642,7 @@ Resources:
                 s3:ResourceAccount:
                   Ref: AWS::AccountId
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: PublishedAssets
             Effect: Allow
@@ -610,7 +660,7 @@ Resources:
                 s3:ResourceAccount:
                   Ref: AWS::AccountId
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: InvokeStaging
             Effect: Allow
@@ -621,7 +671,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: InvalidateWeb
             Effect: Allow
@@ -646,7 +696,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
           - Sid: RestrictDefaultSecurityGroup
             Effect: Allow
@@ -660,8 +710,50 @@ Resources:
             Condition:
               StringEquals:
                 aws:RequestedRegion:
-                  - us-west-2
+                  - Ref: StagingRegion
                   - us-east-1
+          # R17 Bedrock (contributor proposal, not released): the relay calls Haiku 4.5 through the
+          # us. profile only. Bedrock also authorizes the model in each destination Region.
+          - Fn::If:
+              - BedrockInference
+              - Sid: InvokeModelProfile
+                Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource:
+                  Fn::Sub: arn:${AWS::Partition}:bedrock:${StagingRegion}:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion:
+                      Ref: StagingRegion
+              - Ref: AWS::NoValue
+          - Fn::If:
+              - BedrockInference
+              - Sid: InvokeModelViaProfile
+                Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource:
+                  Fn::Sub: arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+                Condition:
+                  StringEquals:
+                    bedrock:InferenceProfileArn:
+                      Fn::Sub: arn:${AWS::Partition}:bedrock:${StagingRegion}:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0
+                    aws:RequestedRegion:
+                      - us-east-1
+                      - us-east-2
+                      - us-west-2
+              - Ref: AWS::NoValue
+          - Fn::If:
+              - BedrockInference
+              - Sid: ApplyGuardrail
+                Effect: Allow
+                Action: bedrock:ApplyGuardrail
+                Resource:
+                  Fn::Sub: arn:${AWS::Partition}:bedrock:${StagingRegion}:${AWS::AccountId}:guardrail/*
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion:
+                      Ref: StagingRegion
+              - Ref: AWS::NoValue
 Outputs:
   PolicyArn:
     Value:
