@@ -418,3 +418,58 @@ describe('STAGING public demo licence review', () => {
     expect((await postMalformed(FIXTURE_USER, LICENCE)).statusCode).toBe(400);
   });
 });
+
+// R16.1 (contributor proposal, not released): /app sign-in is off during the STAGING public demo.
+describe('STAGING public demo /app sign-in', () => {
+  const FORM = 'application/x-www-form-urlencoded';
+  const serverWith = (publicDemo: boolean) =>
+    createServer({
+      config: {
+        ...app.config,
+        publicDemo,
+        browserAuth: { mode: 'email_otp', tenantId: SIGN_UP_TENANT },
+      },
+      buildInfo: () => app.buildInfo,
+      pool: appPool(app),
+      challengeDelivery: app.challengeDelivery,
+      mfa: app.mfa,
+      logger: false,
+    });
+  const post = (server: ReturnType<typeof createServer>, url: string, fields: object) =>
+    server.inject({
+      method: 'POST',
+      url,
+      headers: { 'content-type': FORM },
+      payload: new URLSearchParams({ role: 'veteran', ...fields }).toString(),
+    });
+  const challengeRows = async (destination: string) =>
+    (
+      await appPool(app).query('SELECT 1 FROM auth_challenges WHERE destination = $1', [
+        destination,
+      ])
+    ).rowCount;
+
+  it('answers 503 HTML to challenge and verify and creates no challenge', async () => {
+    const server = serverWith(true);
+    const email = newAddress();
+    const challenge = await post(server, '/app/auth/challenges', { destination: email });
+    const verify = await post(server, '/app/auth/verify', { destination: email, code: '000000' });
+    for (const response of [challenge, verify]) {
+      expect(response.statusCode).toBe(503);
+      expect(response.headers['content-type']).toContain('text/html');
+      expect(response.body).toContain('Sign in on the web app during the demo.');
+    }
+    expect(await challengeRows(email)).toBe(0);
+    await server.close();
+  });
+
+  it('issues a code to a fixture user as before when the demo is off', async () => {
+    const server = serverWith(false);
+    await appPool(app).query(`DELETE FROM auth_rate_limits WHERE subject = $1`, [FIXTURE_EMAIL]);
+    const before = await challengeRows(FIXTURE_EMAIL);
+    const response = await post(server, '/app/auth/challenges', { destination: FIXTURE_EMAIL });
+    expect(response.statusCode).toBe(200);
+    expect(await challengeRows(FIXTURE_EMAIL)).toBe((before ?? 0) + 1);
+    await server.close();
+  });
+});
