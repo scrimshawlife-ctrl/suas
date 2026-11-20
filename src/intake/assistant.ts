@@ -54,6 +54,13 @@ export const NOT_AVAILABLE_NOTICE =
 const DEFAULT_DRAFT_TEXT =
   'I drafted a request from what you wrote. Please check it before you submit.';
 
+/**
+ * A text-only reply that turns the need away without searching (R18.5, contributor proposal,
+ * not released). The server then shows its notice and searches itself; a question does not match.
+ */
+const DECLINE_PATTERN =
+  /\b(can ?not|can['’]t|cannot|not able to|unable to) (take|help with|accept)\b/i;
+
 /** Veteran-facing projection of a published Resource (RESOURCES.md §6). */
 export interface IntakeResource {
   readonly resourceId: string;
@@ -156,6 +163,7 @@ interface RunState {
   resources: Map<string, IntakeResource>;
   notAvailableYet: boolean;
   refusedToolCalls: number;
+  searched: boolean;
 }
 
 interface ToolOutcome {
@@ -172,6 +180,7 @@ async function runSearch(
   host: IntakeHost,
   state: RunState,
 ): Promise<ToolOutcome> {
+  state.searched = true;
   const parsed = searchResourcesInput.safeParse(call.input);
   if (!parsed.success) {
     return error('Invalid input. Use only category, keywords and outside_categories.');
@@ -250,6 +259,21 @@ async function runTool(
   return call.name === 'search_resources' ? runSearch(call, host, state) : runDraft(call, state);
 }
 
+/**
+ * The model declined an outside need in words but skipped the search the prompt asks for:
+ * run that search server-side so the notice and Resources still come from SUAS, not the model.
+ */
+async function backstopDecline(text: string, host: IntakeHost, state: RunState): Promise<void> {
+  const draftReady = state.draft.category !== null && state.draft.summary !== null;
+  if (draftReady || state.notAvailableYet || state.searched || !DECLINE_PATTERN.test(text)) return;
+  const call = {
+    id: 'server-search',
+    name: 'search_resources',
+    input: { outside_categories: true },
+  };
+  await runSearch(call, host, state);
+}
+
 function finish(state: RunState, assistantText: string, failure?: ModelFailureKind): IntakeRun {
   const draftReady = state.draft.category !== null && state.draft.summary !== null;
   const outcome: IntakeOutcome =
@@ -292,6 +316,7 @@ export async function runIntakeAssistant(
     resources: new Map(),
     notAvailableYet: false,
     refusedToolCalls: 0,
+    searched: false,
   };
   // Before any model call, and whether or not a model is configured (R17.4, proposal). It
   // covers every Veteran-written text the model would see: the typed text and the draft fields.
@@ -332,7 +357,10 @@ export async function runIntakeAssistant(
     }
     if (!result.ok) return finish(state, '', result.failure);
 
-    if (result.toolCalls.length === 0) return finish(state, result.text);
+    if (result.toolCalls.length === 0) {
+      await backstopDecline(result.text, host, state);
+      return finish(state, result.text);
+    }
 
     const assistantParts: ModelMessagePart[] = [];
     if (result.text !== '') assistantParts.push({ type: 'text', text: result.text });

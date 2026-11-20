@@ -178,6 +178,43 @@ describe('needs outside the four categories', () => {
   });
 });
 
+// R18.5 (contributor proposal, not released): a decline in words without a search still
+// gets the server's notice and Resources; a draft or a question never does.
+describe('decline backstop', () => {
+  it('searches server-side when the model declines in text only', async () => {
+    const h = host();
+    const result = await run(
+      new ScriptedModelInference().enqueue(say("Sorry, SUAS can't take requests for job help.")),
+      h,
+    );
+    expect(result.notAvailableYet).toBe(true);
+    expect(h.searches).toEqual([{ outside_categories: true }]);
+    expect(result.resources).toEqual([RESOURCE]);
+  });
+
+  it('leaves an in-scope draft without a notice', async () => {
+    const h = host();
+    const result = await run(
+      new ScriptedModelInference().enqueue(
+        calls(draftCall({ category: 'FOOD', summary: 'Groceries' })),
+        say('I drafted a food request. I cannot help with anything else here.'),
+      ),
+      h,
+    );
+    expect(result.outcome).toBe('DRAFT_READY');
+    expect(result.notAvailableYet).toBe(false);
+    expect(h.searches).toHaveLength(0);
+  });
+
+  it('leaves a clarifying question without a notice', async () => {
+    const h = host();
+    const result = await run(new ScriptedModelInference().enqueue(say('When do you need it?')), h);
+    expect(result.outcome).toBe('NO_DRAFT');
+    expect(result.notAvailableYet).toBe(false);
+    expect(h.searches).toHaveLength(0);
+  });
+});
+
 describe('fallback to the plain form', () => {
   it.each(MODEL_FAILURE_KINDS)(
     'returns FALLBACK_FORM when the port fails with %s',
