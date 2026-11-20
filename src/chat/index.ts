@@ -7,6 +7,7 @@ export {
 export {
   assistChat,
   CHAT_ASSIST_KINDS,
+  CHAT_ASSIST_RATE_LIMIT,
   CHAT_ASSIST_TEXT_MAX,
   CHAT_ASSIST_WINDOW,
   type ChatAssistInput,

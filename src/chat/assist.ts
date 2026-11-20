@@ -18,6 +18,12 @@ export type ChatAssistKind = (typeof CHAT_ASSIST_KINDS)[number];
 /** How many of the newest messages the model sees. */
 export const CHAT_ASSIST_WINDOW = 30;
 export const CHAT_ASSIST_TEMPERATURE = 0.2;
+/** Per helper per hour; shared with the worker so it prunes the same window. */
+export const CHAT_ASSIST_RATE_LIMIT = {
+  bucket: 'chat.assist.hourly',
+  limit: 20,
+  windowSeconds: 3_600,
+};
 /** Character caps on the returned text, cut on a word boundary. */
 export const CHAT_ASSIST_TEXT_MAX: Readonly<Record<ChatAssistKind, number>> = {
   SUGGEST_REPLY: 400,
