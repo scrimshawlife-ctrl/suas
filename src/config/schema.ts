@@ -391,6 +391,10 @@ const rawConfigSchema = z.object({
   SUAS_PUBLIC_SIGN_UP: optionalRaw,
   // R16.1 (contributor proposal, not released): STAGING public demo; refused in PRODUCTION.
   SUAS_PUBLIC_DEMO: optionalRaw,
+  // R16.2 (proposal, not released) / owner review on #363: the demo's abuse bounds.
+  SUAS_PUBLIC_DEMO_DAILY_SIGNUP_CAP: optionalRaw,
+  SUAS_PUBLIC_DEMO_ADDRESS_DAILY_CAP: optionalRaw,
+  SUAS_PUBLIC_DEMO_ROUTE_LIMIT_PER_MINUTE: optionalRaw,
   // Addresses the STAGING provision command may create. Not an admission list.
   SUAS_STAGING_AUTH_EMAILS: optionalRaw,
   // Explicit tenant-id:user-id pairs STAGING auth admits. Empty admits nobody.
@@ -564,6 +568,8 @@ export interface SuasConfig {
    * the fixture gate and the recipient allowlist there; refused at startup in PRODUCTION.
    */
   readonly publicDemo: boolean;
+  /** R16.2 (proposal, not released) / owner review on #363: used only while the demo is on. */
+  readonly publicDemoLimits: PublicDemoLimits;
   /** Normalized emails the STAGING provision command may create. Not admission. */
   readonly stagingAuthEmails: readonly string[];
   /**
@@ -620,6 +626,39 @@ export interface SuasConfig {
    * SUAS_CORS_ALLOWED_ORIGINS.
    */
   readonly corsAllowedOrigins: readonly string[];
+}
+
+/**
+ * STAGING public demo abuse bounds (R16.2, contributor proposal, not released / owner review on
+ * #363). Positive integers; an invalid value fails startup rather than falling back.
+ */
+export interface PublicDemoLimits {
+  /** New addresses (no account yet) that may receive a sign-up code per day, all together. */
+  readonly dailySignUpCap: number;
+  /** Email challenges per day to one address with no account (`+tag` variants share it). */
+  readonly addressDailyCap: number;
+  /** Challenge requests per minute across both challenge-issuing routes. */
+  readonly routeLimitPerMinute: number;
+}
+
+const PUBLIC_DEMO_LIMIT_BOUNDS = { min: 1, max: 1_000_000 } as const;
+
+function shapePublicDemoLimits(
+  raw: z.infer<typeof rawConfigSchema>,
+  ctx: z.RefinementCtx,
+): PublicDemoLimits {
+  const limit = (
+    name:
+      | 'SUAS_PUBLIC_DEMO_DAILY_SIGNUP_CAP'
+      | 'SUAS_PUBLIC_DEMO_ADDRESS_DAILY_CAP'
+      | 'SUAS_PUBLIC_DEMO_ROUTE_LIMIT_PER_MINUTE',
+    fallback: number,
+  ) => parsePositiveInt(name, raw[name], fallback, PUBLIC_DEMO_LIMIT_BOUNDS, ctx);
+  return {
+    dailySignUpCap: limit('SUAS_PUBLIC_DEMO_DAILY_SIGNUP_CAP', 200),
+    addressDailyCap: limit('SUAS_PUBLIC_DEMO_ADDRESS_DAILY_CAP', 5),
+    routeLimitPerMinute: limit('SUAS_PUBLIC_DEMO_ROUTE_LIMIT_PER_MINUTE', 120),
+  };
 }
 
 function parsePositiveInt(
@@ -1581,6 +1620,7 @@ export function shapeConfig(
     },
     publicSignUp: raw.SUAS_PUBLIC_SIGN_UP === 'enabled',
     publicDemo: raw.SUAS_PUBLIC_DEMO === 'enabled',
+    publicDemoLimits: shapePublicDemoLimits(raw, ctx),
     stagingAuthEmails: splitCsv(raw.SUAS_STAGING_AUTH_EMAILS).map((email) => email.toLowerCase()),
     stagingFixturePrincipals: parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY)
       .principals,

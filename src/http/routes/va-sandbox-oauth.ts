@@ -12,7 +12,7 @@ import {
   recordVaSandboxVerification,
   VaSandboxVeteranVerificationAdapter,
 } from '../../identity/index.js';
-import { authenticate } from '../authenticate.js';
+import { authenticateForVaConfirmation } from '../authenticate.js';
 
 const COOKIE = '__Host-suas-va-pkce';
 
@@ -87,7 +87,7 @@ export function registerVaSandboxOAuthRoutes(
   // The configured redirect URI is passed verbatim through the whole flow. It
   // is never inferred from an inbound request or provider endpoint.
   app.get('/auth/va/onboarding', async (request, reply) => {
-    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const context = await authenticateForVaConfirmation(deps.pool, deps.sessionSecret, request);
     const transaction = createVaOAuthTransaction(va.redirectUri);
     await createVaOAuthTransactionRecord(deps.pool, {
       tenantId: context.tenantId,
@@ -116,7 +116,7 @@ export function registerVaSandboxOAuthRoutes(
   });
 
   app.get('/auth/va/callback', async (request, reply) => {
-    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const context = await authenticateForVaConfirmation(deps.pool, deps.sessionSecret, request);
     const query = request.query as { code?: string; state?: string; error?: string };
     const code = query.code;
     const state = query.state;

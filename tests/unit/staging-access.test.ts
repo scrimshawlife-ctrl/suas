@@ -9,6 +9,7 @@ import {
   publicSignUpPermitted,
   stagingAccessFromConfig,
   stagingFixturePrincipalRefused,
+  vaConfirmationFixtureRefused,
 } from '../../src/auth/staging-access.js';
 import { loadConfig, tryLoadConfig } from '../../src/config/index.js';
 import { createIdVerificationPort } from '../../src/identity/id-verification.js';
@@ -148,5 +149,18 @@ describe('R16.1 public demo on STAGING', () => {
     const production = { ...staging, environment: 'PRODUCTION', publicDemo: true } as const;
     expect(publicDemoActive(production)).toBe(false);
     expect(publicSignUpPermitted(production)).toBe(false);
+  });
+});
+
+// R16.5 (contributor's call, D-065): with no access the environment is unknown, so the gates refuse.
+describe('missing staging access fails closed', () => {
+  const principal = {
+    tenantId: '00000000-0000-4000-8000-000000000001',
+    userId: '00000000-0000-4000-8000-000000000002',
+  };
+
+  it('refuses VA confirmation and the account gate without access', () => {
+    expect(vaConfirmationFixtureRefused(undefined, principal)).toBe(true);
+    expect(stagingFixturePrincipalRefused(undefined, principal)).toBe(true);
   });
 });

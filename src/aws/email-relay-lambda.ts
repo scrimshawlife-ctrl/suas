@@ -32,7 +32,8 @@ export interface EmailRelayDeps {
   readonly fromAddress: string | undefined;
   /**
    * The STAGING last-hop allowlist, checked again here (r263 F2, #306). The relay reads its own
-   * SUAS_PUBLIC_DEMO (R16.1, proposal), so an API in demo mode cannot open it alone.
+   * SUAS_PUBLIC_DEMO and SUAS_ENV (R16.1, proposal / owner review on #363): only both, demo on
+   * and STAGING, open it, so an API in demo mode cannot open it alone.
    */
   readonly allowRecipient: RecipientAllowed;
   readonly transport?: FetchTransport;
@@ -45,7 +46,7 @@ function defaultDeps(): EmailRelayDeps {
   return {
     allowRecipient: stagingRecipientAllowed(
       mailbox === '' ? undefined : mailbox,
-      process.env.SUAS_PUBLIC_DEMO === 'enabled',
+      process.env.SUAS_PUBLIC_DEMO === 'enabled' && process.env.SUAS_ENV === 'STAGING',
     ),
     fromAddress: process.env.SUAS_EMAIL_FROM,
     readSecret: async () => {

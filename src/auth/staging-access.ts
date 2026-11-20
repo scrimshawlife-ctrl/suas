@@ -11,7 +11,11 @@
  */
 
 import type { SuasConfig } from '../config/index.js';
-import type { EnvironmentClass, StagingFixturePrincipal } from '../config/schema.js';
+import type {
+  EnvironmentClass,
+  PublicDemoLimits,
+  StagingFixturePrincipal,
+} from '../config/schema.js';
 import { isSyntheticEmail } from '../testing/fixture-boundary.js';
 
 const PLUS_TAG = /^[a-z0-9-]{1,32}$/;
@@ -33,6 +37,11 @@ export function isStagingFixtureAddress(email: string, mailbox: string | undefin
   return PLUS_TAG.test(tag) && base === mailbox.trim().toLowerCase();
 }
 
+export interface StagingPrincipal {
+  readonly tenantId: string;
+  readonly userId: string;
+}
+
 export interface StagingAccess {
   readonly environment: EnvironmentClass;
   /** True only when public sign-up was explicitly enabled. Startup refuses that outside LOCAL/TEST. */
@@ -44,6 +53,8 @@ export interface StagingAccess {
   readonly fixturePrincipals: readonly StagingFixturePrincipal[];
   /** R16.1 (proposal, not released): SUAS_PUBLIC_DEMO=enabled. Absent means off. */
   readonly publicDemo?: boolean;
+  /** R16.2 (proposal, not released): the demo caps; read only while the demo is active. */
+  readonly publicDemoLimits?: PublicDemoLimits;
 }
 
 export function stagingAccessFromConfig(config: SuasConfig): StagingAccess {
@@ -51,6 +62,7 @@ export function stagingAccessFromConfig(config: SuasConfig): StagingAccess {
     environment: config.environment,
     publicSignUp: config.publicSignUp,
     publicDemo: config.publicDemo,
+    publicDemoLimits: config.publicDemoLimits,
     fixturePrincipals: Object.freeze(
       config.stagingFixturePrincipals.map((principal) => Object.freeze({ ...principal })),
     ),
@@ -63,6 +75,20 @@ export function stagingAccessFromConfig(config: SuasConfig): StagingAccess {
  */
 export function publicDemoActive(access: StagingAccess | undefined): boolean {
   return access?.environment === 'STAGING' && access.publicDemo === true;
+}
+
+/**
+ * The demo caps while the STAGING public demo is active, else undefined. A server always has
+ * them (stagingAccessFromConfig); an active demo without them is a wiring fault and fails closed.
+ */
+export function activePublicDemoLimits(
+  access: StagingAccess | undefined,
+): PublicDemoLimits | undefined {
+  if (!publicDemoActive(access)) return undefined;
+  if (access?.publicDemoLimits === undefined) {
+    throw new Error('STAGING public demo is on without its limits.');
+  }
+  return access.publicDemoLimits;
 }
 
 /**
@@ -84,12 +110,29 @@ export function publicSignUpPermitted(access: StagingAccess | undefined): boolea
  * not gated here. Admission is the (tenant id, user id) pair. The same email
  * in another tenant, or the same tenant with a different user id, is refused.
  * An empty or missing registry admits nobody. Public demo mode (R16.1, proposal) admits all.
+ * Missing access fails closed (R16.5, contributor's call, D-065): the environment is unknown.
  */
 export function stagingFixturePrincipalRefused(
-  access: StagingAccess,
-  principal: { readonly tenantId: string; readonly userId: string } | undefined,
+  access: StagingAccess | undefined,
+  principal: StagingPrincipal | undefined,
 ): boolean {
-  if (access.environment !== 'STAGING' || access.publicDemo === true) return false;
+  if (access === undefined) return true;
+  if (access.publicDemo === true) return false;
+  return vaConfirmationFixtureRefused(access, principal);
+}
+
+/**
+ * The fixture gate for VA confirmation (the API confirm route and the VA sandbox OAuth routes).
+ * R16.1 (contributor proposal, not released) / owner review on #363: public demo mode does not
+ * lift it, so on STAGING only a registered fixture principal reaches the VA sandbox. Missing
+ * access refuses (R16.5, contributor's call, D-065), since STAGING cannot then be ruled out.
+ */
+export function vaConfirmationFixtureRefused(
+  access: StagingAccess | undefined,
+  principal: StagingPrincipal | undefined,
+): boolean {
+  if (access === undefined) return true;
+  if (access.environment !== 'STAGING') return false;
   if (principal === undefined) return true;
   const tenantId = principal.tenantId.toLowerCase();
   const userId = principal.userId.toLowerCase();
