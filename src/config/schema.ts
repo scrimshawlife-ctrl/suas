@@ -80,6 +80,9 @@ export const ID_VERIFICATION_MODES = ['disabled', 'fake'] as const;
  */
 export const CHAT_PUSH_MODES = ['disabled', 'local', 'apigw'] as const;
 export type ChatPushMode = (typeof CHAT_PUSH_MODES)[number];
+/** Helper-side chat assistance (R18.7, contributor proposal, not released); off by default. */
+export const CHAT_ASSIST_MODES = ['disabled', 'enabled'] as const;
+export type ChatAssistMode = (typeof CHAT_ASSIST_MODES)[number];
 export type IdVerificationMode = (typeof ID_VERIFICATION_MODES)[number];
 /**
  * VA Veteran Confirmation (suas-specs #72 R9.1, released in 0.10.0): `fixture` is LOCAL and TEST
@@ -402,6 +405,7 @@ const rawConfigSchema = z.object({
   SUAS_STAGING_FIXTURE_MAILBOX: optionalRaw,
 
   SUAS_CHAT_PUSH_MODE: optionalEnum('SUAS_CHAT_PUSH_MODE', CHAT_PUSH_MODES, 'disabled'),
+  SUAS_CHAT_ASSIST_MODE: optionalEnum('SUAS_CHAT_ASSIST_MODE', CHAT_ASSIST_MODES, 'disabled'),
   // `https://{api-id}.execute-api.{region}.amazonaws.com/{stage}` of the WebSocket API.
   SUAS_CHAT_WS_ENDPOINT: optionalRaw,
   // Optional `wss://` URL clients open instead of the execute-api host, such as a custom
@@ -582,6 +586,9 @@ export interface SuasConfig {
     /** URL handed to clients when it differs from the management endpoint; `apigw` only. */
     readonly publicUrl: string | undefined;
     readonly localPort: number;
+  };
+  readonly chatAssist: {
+    readonly mode: ChatAssistMode;
   };
   readonly adapters: {
     readonly transportation: AdapterMode;
@@ -814,6 +821,7 @@ function validateAwsCapabilities(
   }
 
   validateModelInference(raw, environment, issue);
+  validateChatAssist(raw, environment, issue);
   if (environment === 'PRODUCTION' && raw.SUAS_OBJECT_STORAGE_MODE === 'fake') {
     issue('SUAS_OBJECT_STORAGE_MODE=fake is forbidden in PRODUCTION (V1_PROJECT_PLAN.md §7).');
   }
@@ -884,6 +892,28 @@ function validateModelInference(
   }
   if (guardrailVersion !== undefined && !BEDROCK_GUARDRAIL_VERSION_PATTERN.test(guardrailVersion)) {
     issue('SUAS_BEDROCK_GUARDRAIL_VERSION must be a guardrail version number or DRAFT.');
+  }
+}
+
+/**
+ * Chat assistance (R18.7, contributor proposal, not released) runs on model inference: PRODUCTION
+ * refuses it, synthetic STAGING needs the guarded bedrock relay, LOCAL/TEST need fake or bedrock.
+ */
+function validateChatAssist(
+  raw: z.output<typeof rawConfigSchema>,
+  environment: EnvironmentClass,
+  issue: (message: string) => void,
+): void {
+  if (raw.SUAS_CHAT_ASSIST_MODE !== 'enabled') return;
+  const inference = raw.SUAS_MODEL_INFERENCE_MODE;
+  if (environment === 'PRODUCTION') {
+    issue('SUAS_CHAT_ASSIST_MODE=enabled is forbidden in PRODUCTION (R18.7 covers STAGING only).');
+  } else if (environment === 'STAGING' && inference !== 'bedrock') {
+    issue('SUAS_CHAT_ASSIST_MODE=enabled in STAGING requires SUAS_MODEL_INFERENCE_MODE=bedrock.');
+  } else if (inference === 'disabled') {
+    issue(
+      `SUAS_CHAT_ASSIST_MODE=enabled in ${environment} requires model inference (fake or bedrock).`,
+    );
   }
 }
 
@@ -1632,6 +1662,7 @@ export function shapeConfig(
     stagingFixturePrincipals: parseStagingFixtureRegistry(raw.SUAS_STAGING_FIXTURE_REGISTRY)
       .principals,
     stagingFixtureMailbox: raw.SUAS_STAGING_FIXTURE_MAILBOX?.toLowerCase(),
+    chatAssist: { mode: raw.SUAS_CHAT_ASSIST_MODE },
     chatPush: {
       mode: raw.SUAS_CHAT_PUSH_MODE,
       apiGatewayEndpoint: raw.SUAS_CHAT_WS_ENDPOINT,
