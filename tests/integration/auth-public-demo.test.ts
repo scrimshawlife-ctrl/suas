@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
 import { issueChallenge } from '../../src/auth/challenge.js';
+import { SIGN_UP_DAILY_CAP } from '../../src/auth/constants.js';
 import { RecordingChallengeDelivery } from '../../src/auth/delivery.js';
 import { stagingAccessFromConfig } from '../../src/auth/staging-access.js';
 import { createUser } from '../../src/identity/users.js';
@@ -150,5 +151,31 @@ describe('STAGING public demo sign-up', () => {
     const before = deliveries().delivered().length;
     expect((await issueCapped(FIXTURE_EMAIL)).issued).toBe(true);
     expect(deliveries().delivered().length).toBe(before + 1);
+  });
+});
+
+// R16.2 (contributor's call, D-065): at this head the router decodes `%63` to `c`, so an encoded
+// path misses the edge route throttle. The 404 guard lands in #366; the daily budget still binds.
+describe('known gap before the encoded-path guard', () => {
+  const encodedIssue = (destination: string) =>
+    app.server.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/%63hallenges`,
+      payload: { destination, method: 'EMAIL_OTP', demo_acknowledged: true },
+    });
+
+  it('routes /auth/%63hallenges to the handler, still bounded by the daily cap', async () => {
+    const first = newAddress();
+    expect((await encodedIssue(first)).statusCode).toBe(202);
+    expect(deliveries().lastFor(first)).toBeDefined();
+
+    // Spend the rest of the day's budget, then the encoded path sends a new address nothing.
+    await appPool(app).query(
+      `UPDATE auth_rate_limits SET count = $1 WHERE bucket = 'auth.signup.daily'`,
+      [SIGN_UP_DAILY_CAP.value],
+    );
+    const over = newAddress();
+    expect((await encodedIssue(over)).statusCode).toBe(202);
+    expect(deliveries().lastFor(over)).toBeUndefined();
   });
 });

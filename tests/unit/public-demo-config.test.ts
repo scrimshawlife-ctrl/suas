@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { startApp } from '../../src/app.js';
 import { loadConfig, tryLoadConfig } from '../../src/config/index.js';
 import { validEnv } from '../helpers/env.js';
 
@@ -23,6 +24,18 @@ describe('SUAS_PUBLIC_DEMO startup validation', () => {
 
   it('refuses enabled in PRODUCTION', () => {
     expect(issuesFor(validEnv({ SUAS_ENV: 'PRODUCTION', SUAS_PUBLIC_DEMO: 'enabled' }))).toContain(
+      'SUAS_PUBLIC_DEMO=enabled is refused in PRODUCTION.',
+    );
+  });
+
+  // R16.1 (contributor's call, D-065): the refusal holds at app startup, before any database work.
+  it('refuses to start the app in PRODUCTION with the flag on', async () => {
+    const env = validEnv({
+      SUAS_ENV: 'PRODUCTION',
+      SUAS_SESSION_SECRET: 'a'.repeat(48),
+      SUAS_PUBLIC_DEMO: 'enabled',
+    });
+    await expect(startApp({ env, listen: false })).rejects.toThrow(
       'SUAS_PUBLIC_DEMO=enabled is refused in PRODUCTION.',
     );
   });
