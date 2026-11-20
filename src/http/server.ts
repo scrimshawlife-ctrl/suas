@@ -22,7 +22,7 @@ import Fastify, {
 } from 'fastify';
 import type { Pool } from 'pg';
 import { ZodError } from 'zod';
-import type { SuasConfig } from '../config/index.js';
+import type { EnvironmentClass, SuasConfig } from '../config/index.js';
 import { API_PREFIX } from '../release/pins.js';
 import type { BuildInfo } from '../provenance/build-info.js';
 import type { ChallengeDeliveryPort, MfaPort } from '../auth/index.js';
@@ -423,8 +423,20 @@ function registerAdminArea(app: FastifyInstance, { deps, pool }: SignedInArea): 
   registerAdminResourceDraftRoutes(app, {
     pool,
     sessionSecret: deps.config.sessionSecret,
-    modelInference: deps.modelInference ?? new UnavailableModelInference(),
+    modelInference: catalogExtractionPort(deps.config.environment, deps.modelInference),
   });
+}
+
+/**
+ * R17.6 (contributor's call, 2026-11-20, not released): the catalog builder missed its eval gate
+ * on Qwen3 32B (invented Resources), so STAGING keeps it unavailable (503) while intake may run.
+ */
+export function catalogExtractionPort(
+  environment: EnvironmentClass,
+  port: ModelInferencePort | undefined,
+): ModelInferencePort {
+  if (environment === 'STAGING' || port === undefined) return new UnavailableModelInference();
+  return port;
 }
 
 /**
