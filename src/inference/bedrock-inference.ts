@@ -176,7 +176,17 @@ export class BedrockModelInference implements ModelInferencePort {
     if (text.trim() === '' && toolCalls.length === 0) return this.fail('invalid');
 
     this.logger?.({ implementation: BEDROCK_IMPLEMENTATION, ok: true });
-    return { ok: true, text, toolCalls };
+    // R17.x (contributor's call, D-064): one reported count is kept, with the missing one as 0.
+    const { inputTokens, outputTokens } = output.usage ?? {};
+    const count = (value: unknown): number => (typeof value === 'number' ? value : 0);
+    return typeof inputTokens === 'number' || typeof outputTokens === 'number'
+      ? {
+          ok: true,
+          text,
+          toolCalls,
+          usage: { inputTokens: count(inputTokens), outputTokens: count(outputTokens) },
+        }
+      : { ok: true, text, toolCalls };
   }
 
   private fail(failure: ModelFailureKind): ModelTurnResult {

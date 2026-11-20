@@ -64,8 +64,21 @@ export const inferenceRelayEventSchema = z
   })
   .strict();
 
+/** R17.x (contributor's call, D-064): a count no real turn reaches is refused, not summed. */
+const tokenCount = z.number().int().nonnegative().max(1_000_000);
+
 export const inferenceRelayResultSchema = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true), text: z.string(), toolCalls: z.array(toolCallSchema) }).strict(),
+  z
+    .object({
+      ok: z.literal(true),
+      text: z.string(),
+      toolCalls: z.array(toolCallSchema),
+      usage: z
+        .object({ inputTokens: tokenCount, outputTokens: tokenCount })
+        .strict()
+        .exactOptional(),
+    })
+    .strict(),
   z.object({ ok: z.literal(false), failure: z.enum(MODEL_FAILURE_KINDS) }).strict(),
 ]);
 
