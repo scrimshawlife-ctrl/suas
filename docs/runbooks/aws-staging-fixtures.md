@@ -106,8 +106,10 @@ releases it and lifts the staging maintenance hold.
   small enumeration side channel (known addresses still get codes over a cap), which the owner accepted. The
   per-address counter stores a keyed digest of the address (`SUAS_SESSION_SECRET`), not the address.
 
-- Any request under `/api/v0/auth/` or `/app/auth/` whose path percent-encodes an unreserved character (for example
-  `/api/v0/auth/%63hallenges`) answers `404`, so no path variant skips the API Gateway route throttle.
+- Any request whose path holds a `%` and, lower-cased and decoded until stable (at most 3 rounds), starts with
+  `/api/v0/auth` or `/app/auth` answers `404` before routing (for example `/api/v0/auth/%63hallenges`,
+  `/api/v0/auth%2Fchallenges` or `/api/v0/auth/%2563hallenges`), so no path variant skips the API Gateway route
+  throttle.
 - VA confirmation and the licence review stay fixture-only: a non-fixture account gets
   `503 ID_VERIFICATION_UNAVAILABLE` from `POST /api/v0/veterans/me/verification/va/confirm`, the VA sandbox OAuth
   routes, and `GET`/`POST /api/v0/veterans/me/verification/licence` and its `commands/dispute`. On the licence

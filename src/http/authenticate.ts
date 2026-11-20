@@ -96,10 +96,9 @@ export async function authenticate(
     throw new UnauthenticatedError('The session credential is not valid.');
   }
 
-  const stagingAccess = request.stagingAccess;
+  // The server sets stagingAccess on every request; a request without it fails closed (D-065).
   if (
-    stagingAccess !== undefined &&
-    stagingFixturePrincipalRefused(stagingAccess, {
+    stagingFixturePrincipalRefused(request.stagingAccess, {
       tenantId: resolution.context.tenantId,
       userId: resolution.context.userId,
     })

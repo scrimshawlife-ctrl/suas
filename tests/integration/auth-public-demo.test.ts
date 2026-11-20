@@ -253,6 +253,9 @@ describe('STAGING public demo auth route guards', () => {
       `${API_PREFIX}/auth/%63hallenges`,
       `${API_PREFIX}/%61uth/challenges`,
       '/app/auth/%63hallenges',
+      // R16.2 (contributor's call, D-065): reserved and double-encoded escapes too.
+      `${API_PREFIX}/auth%2Fchallenges`,
+      `${API_PREFIX}/auth/%2563hallenges`,
     ]) {
       const response = await app.server.inject({
         method: 'POST',
@@ -267,6 +270,17 @@ describe('STAGING public demo auth route guards', () => {
       email,
     ]);
     expect(rows.rowCount).toBe(0);
+  });
+
+  it('leaves an unencoded auth path, and a % only in its query, to the route', async () => {
+    for (const url of [`${API_PREFIX}/auth/challenges`, `${API_PREFIX}/auth/challenges?x=%63`]) {
+      const response = await app.server.inject({
+        method: 'POST',
+        url,
+        payload: { destination: newAddress(), method: 'EMAIL_OTP', demo_acknowledged: true },
+      });
+      expect(response.statusCode).toBe(202);
+    }
   });
 
   it('answers 429 RATE_LIMITED once the per-minute challenge route limit is spent', async () => {
@@ -298,7 +312,7 @@ describe('STAGING public demo auth route guards', () => {
 
 // Owner review on #363: the VA sandbox stays fixture-only in demo mode; self-attestation does not.
 describe('STAGING public demo VA confirmation', () => {
-  const confirm = async (userId: string) => {
+  const confirm = async (userId: string, dropAccess = false) => {
     const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
       tenantId: SIGN_UP_TENANT,
       userId,
@@ -312,6 +326,13 @@ describe('STAGING public demo VA confirmation', () => {
       veteranConfirmation: new FixtureVeteranConfirmation(),
       logger: false,
     });
+    // Runs after the server's own hook, so the route sees a request without staging access.
+    if (dropAccess) {
+      server.addHook('onRequest', (request, _reply, done) => {
+        delete request.stagingAccess;
+        done();
+      });
+    }
     // A name that does not match the account: past the gate this is 409, with no VA call.
     const response = await server.inject({
       method: 'POST',
@@ -344,6 +365,13 @@ describe('STAGING public demo VA confirmation', () => {
     const fixture = await confirm(FIXTURE_USER);
     expect(fixture.statusCode).toBe(409);
     expect(fixture.json().error.code).toBe('VA_NAME_MISMATCH');
+  });
+
+  // R16.5 (contributor's call, D-065): a request the server did not mark fails closed.
+  it('refuses even a fixture user when the request carries no staging access', async () => {
+    const refused = await confirm(FIXTURE_USER, true);
+    expect(refused.statusCode).toBe(401);
+    expect(refused.json().error.code).toBe('UNAUTHENTICATED');
   });
 });
 

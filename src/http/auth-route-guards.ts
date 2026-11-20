@@ -12,25 +12,34 @@ import { activePublicDemoLimits, type StagingAccess } from '../auth/staging-acce
 import { API_PREFIX } from '../release/pins.js';
 import { errorBody } from './error-envelope.js';
 
-const AUTH_PATH_PREFIXES = [`${API_PREFIX}/auth/`, '/app/auth/'] as const;
+// No trailing slash: `/api/v0/auth%2Fchallenges` must match once decoded.
+const AUTH_PATH_PREFIXES = [`${API_PREFIX}/auth`, '/app/auth'] as const;
 const CHALLENGE_ROUTES = new Set([`${API_PREFIX}/auth/challenges`, '/app/auth/challenges']);
-const PERCENT_ESCAPE = /%([0-9A-Fa-f]{2})/g;
-const UNRESERVED = /^[A-Za-z0-9\-._~]$/;
+const PERCENT_ESCAPE = /%([0-9a-f]{2})/gi;
+const MAX_DECODE_ROUNDS = 3;
+
+/** One round of byte-wise %XX decoding. A malformed escape stays as it is, so this never throws. */
+function decodeEscapes(path: string): string {
+  return path.replace(PERCENT_ESCAPE, (_escape, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16)),
+  );
+}
 
 /**
- * True when the raw URL path is under an auth prefix once its unreserved escapes are decoded (as
- * the router decodes them) and it holds at least one such escape, like `/api/v0/auth/%63hallenges`.
+ * True when the raw URL path holds any `%` and, lower-cased and decoded until stable (at most 3
+ * rounds), starts with an auth prefix: `%63`, `%2F`, `%23`, `%2563` and malformed escapes alike.
+ * R16.2 (contributor's call, D-065): such a path could miss the edge route throttle.
  */
 export function isPercentEncodedAuthPath(rawUrl: string): boolean {
   const path = rawUrl.split('?', 1)[0] ?? '';
-  let encoded = false;
-  const decoded = path.replace(PERCENT_ESCAPE, (escape, hex: string) => {
-    const char = String.fromCharCode(Number.parseInt(hex, 16));
-    if (!UNRESERVED.test(char)) return escape;
-    encoded = true;
-    return char;
-  });
-  return encoded && AUTH_PATH_PREFIXES.some((prefix) => decoded.startsWith(prefix));
+  if (!path.includes('%')) return false;
+  let decoded = path.toLowerCase();
+  for (let round = 0; round < MAX_DECODE_ROUNDS; round += 1) {
+    const next = decodeEscapes(decoded).toLowerCase();
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return AUTH_PATH_PREFIXES.some((prefix) => decoded.startsWith(prefix));
 }
 
 /** Registered right after the server hooks, so the 404 comes before any other hook or handler. */
