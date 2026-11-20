@@ -15,6 +15,7 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Added
 
+- Public demo mode on STAGING (Round 16 R16.1–R16.4, contributor proposal, not released; owner decision pending). `SUAS_PUBLIC_DEMO=enabled` (refused in PRODUCTION) lets anyone sign up on STAGING, skips the fixture registry gate and opens the recipient allowlist; the email relay checks its own copy of the flag. `POST /api/v0/auth/challenges` then requires `demo_acknowledged: true` for every address (400 otherwise), and a shared daily budget of 200 issuances stops new-address sends without changing the `202` (audit `SIGN_UP_CAP_REACHED`). The web app shows a demo banner on public pages and an acknowledgement at sign-in with `VITE_SUAS_PUBLIC_DEMO=enabled`; CDK `-c publicDemo=true` sets the flag and throttles both challenge routes (`/api/v0/auth/challenges`, `/app/auth/challenges`) at 2 rps, burst 5. Off by default, with an unchanged template.
 - Manual synthetic-STAGING deploy workflow (`.github/workflows/staging-deploy.yml`). It takes a verified `main` SHA through the full CI, a credential-free build and synth, an OIDC plan (`cdk diff`) and an environment-approved deploy. That deploy quiesces, migrates, then admits the API, the worker and the schedule, deploys the web app and runs the public STAGING suite. Nothing is deployed by this change (`docs/runbooks/aws-staging-bootstrap.md`).
 - CI runs the skill metadata checks and the migration rehearsal on every pull request. Every workflow action is pinned to a commit SHA.
 

@@ -513,24 +513,25 @@ export class BackendStack extends Stack {
 
     // HTTP API: every route goes to the API function. No request or response bodies, paths,
     // query strings or client addresses are logged; the access log is a fixed metadata record.
+    const apiIntegration = new apigwIntegrations.HttpLambdaIntegration(
+      'ApiIntegration',
+      apiFunction,
+      {
+        // HTTP API integrations cannot wait longer than 29 seconds.
+        timeout: Duration.seconds(29),
+      },
+    );
     const httpApi = new apigw.HttpApi(this, 'HttpApi', {
       apiName: `suas-${config.name}-api`,
       createDefaultStage: false,
       disableExecuteApiEndpoint: apiDomain !== undefined,
-      defaultIntegration: new apigwIntegrations.HttpLambdaIntegration(
-        'ApiIntegration',
-        apiFunction,
-        {
-          // HTTP API integrations cannot wait longer than 29 seconds.
-          timeout: Duration.seconds(29),
-        },
-      ),
+      defaultIntegration: apiIntegration,
     });
     const accessLogs = new logs.LogGroup(this, 'HttpApiAccessLogs', {
       retention: LOG_RETENTION,
       removalPolicy: RemovalPolicy.DESTROY,
     });
-    new apigw.HttpStage(this, 'HttpApiStage', {
+    const stage = new apigw.HttpStage(this, 'HttpApiStage', {
       httpApi,
       autoDeploy: true,
       throttle: { rateLimit: 50, burstLimit: 100 },
@@ -548,6 +549,13 @@ export class BackendStack extends Stack {
         ),
       },
     });
+    if (config.publicDemo)
+      publicDemo(httpApi, stage, apiIntegration, [
+        apiFunction,
+        jobWorkerFunction,
+        migrateFunction,
+        emailRelay.function,
+      ]);
     if (zone !== undefined && apiDomain !== undefined) {
       apiAlias(this, config.apiHostname, zone, apiDomain);
     }
@@ -709,4 +717,37 @@ function apiAlias(
       ),
     ),
   });
+}
+
+/**
+ * R16.2 (contributor proposal, not released): every route that issues a sign-in challenge, the
+ * JSON API and the `/app` HTML form (src/http/routes/auth.ts, src/http/routes/ui.ts).
+ */
+const PUBLIC_DEMO_CHALLENGE_PATHS = ['/api/v0/auth/challenges', '/app/auth/challenges'] as const;
+const PUBLIC_DEMO_CHALLENGE_THROTTLE = { ThrottlingRateLimit: 2, ThrottlingBurstLimit: 5 };
+
+/**
+ * `-c publicDemo=true` (R16.1, R16.2; contributor proposal, not released). Every given function
+ * gets SUAS_PUBLIC_DEMO=enabled, the relay included, since it re-checks recipients on its own.
+ * The API has only `$default`, so each challenge route is added explicitly to carry a throttle.
+ */
+function publicDemo(
+  httpApi: apigw.HttpApi,
+  stage: apigw.HttpStage,
+  integration: apigw.HttpRouteIntegration,
+  functions: readonly lambda.Function[],
+): void {
+  for (const fn of functions) fn.addEnvironment('SUAS_PUBLIC_DEMO', 'enabled');
+  // Best-effort defence in depth: a path variant the app router also accepts (for example a
+  // percent-encoded letter) can miss these edge routes. The bound that holds on every path is
+  // the daily cap enforced in issueChallenge (src/auth/challenge.ts).
+  const routeSettings: Record<string, typeof PUBLIC_DEMO_CHALLENGE_THROTTLE> = {};
+  for (const path of PUBLIC_DEMO_CHALLENGE_PATHS) {
+    const routes = httpApi.addRoutes({ path, methods: [apigw.HttpMethod.POST], integration });
+    routeSettings[`POST ${path}`] = PUBLIC_DEMO_CHALLENGE_THROTTLE;
+    // A stage's route settings name routes that must already exist.
+    for (const route of routes) stage.node.addDependency(route);
+  }
+  const cfnStage = stage.node.defaultChild as apigw.CfnStage;
+  cfnStage.addPropertyOverride('RouteSettings', routeSettings);
 }
