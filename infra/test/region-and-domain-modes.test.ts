@@ -47,6 +47,10 @@ function apiConfig(backend: Record<string, any>) {
 const distributionConfig = (web: Record<string, any>): Record<string, any> =>
   ofType(web, 'AWS::CloudFront::Distribution')[0]?.Properties?.DistributionConfig;
 
+const PIPELINE_REFUSAL =
+  'Deployment pipeline supports only us-west-2 with the four custom-domain stacks, ' +
+  'or us-east-2 with custom domains and an imported web certificate.';
+
 const DEFAULT_URLS = {
   region: 'us-east-2',
   customDomains: 'false',
@@ -119,9 +123,7 @@ describe('region-restricted account on default URLs', () => {
   });
 
   it('refuses this unsupported layout in the deployment workflow', () => {
-    expect(() => synth({ ...DEFAULT_URLS, deploymentPipeline: 'true' })).toThrow(
-      'Deployment pipeline supports only us-west-2 with the four custom-domain stacks.',
-    );
+    expect(() => synth({ ...DEFAULT_URLS, deploymentPipeline: 'true' })).toThrow(PIPELINE_REFUSAL);
   });
 });
 
@@ -178,13 +180,30 @@ describe('refused contexts', () => {
 });
 
 describe('deployment workflow layout', () => {
+  const webCertificateArn = 'arn:aws:acm:us-east-1:123456789012:certificate/0000-1111-2222';
+
+  // R14.x region-restricted layout (suas #360; contributor proposal, not released).
+  it('accepts us-east-2 with custom domains and an imported certificate as three stacks', () => {
+    const s = synth({
+      region: 'us-east-2',
+      rootDomain: 'staging.suasqrf.com',
+      webCertificateArn,
+      deploymentPipeline: 'true',
+    });
+    expect(s.stacks.webCert).toBeUndefined();
+    expect(s.stacks.dns?.region).toBe('us-east-2');
+    expect(s.stacks.backend.region).toBe('us-east-2');
+    expect(s.stacks.web.region).toBe('us-east-2');
+    expect(s.backend.Parameters).toHaveProperty('DeploymentMode');
+    expect(distributionConfig(s.web).ViewerCertificate.AcmCertificateArn).toBe(webCertificateArn);
+  });
+
   it.each<Record<string, string>>([
     { region: 'us-east-2' },
     { customDomains: 'false' },
-    { webCertificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/0000-1111-2222' },
+    { webCertificateArn },
+    { region: 'us-east-1', webCertificateArn },
   ])('rejects unsupported context %j before synthesizing stacks', (context) => {
-    expect(() => synth({ ...context, deploymentPipeline: 'true' })).toThrow(
-      'Deployment pipeline supports only us-west-2 with the four custom-domain stacks.',
-    );
+    expect(() => synth({ ...context, deploymentPipeline: 'true' })).toThrow(PIPELINE_REFUSAL);
   });
 });
