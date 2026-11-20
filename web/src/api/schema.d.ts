@@ -1701,6 +1701,8 @@ export interface components {
             destination: string;
             /** @enum {string} */
             method: "MAGIC_LINK" | "EMAIL_OTP" | "PHONE_OTP";
+            /** @description R16.3 (contributor proposal, not released). Required and true for every address when the deployment runs the public demo (SUAS_PUBLIC_DEMO=enabled), else 400 VALIDATION_FAILED before any lookup. Optional and ignored otherwise. */
+            demo_acknowledged?: boolean;
         };
         AuthChallengeAccepted: {
             /** @enum {string} */

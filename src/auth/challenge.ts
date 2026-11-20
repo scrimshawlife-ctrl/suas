@@ -27,6 +27,8 @@ import {
   CHALLENGE_TTL_SECONDS,
   CHALLENGE_VERIFY_LIMIT,
   CHALLENGE_VERIFY_WINDOW_SECONDS,
+  SIGN_UP_DAILY_CAP,
+  SIGN_UP_DAILY_WINDOW_SECONDS,
 } from './constants.js';
 import { DEMO_SHARED_ACCOUNT_LIMIT } from './demo-fixed-code.js';
 import {
@@ -35,7 +37,7 @@ import {
   type ChallengeDeliveryPort,
   type ChallengeMethod,
 } from './delivery.js';
-import { enforceRateLimit } from './rate-limit.js';
+import { consumeRateLimit, enforceRateLimit } from './rate-limit.js';
 import {
   credentialMatches,
   generateOpaqueToken,
@@ -45,6 +47,7 @@ import {
 } from './secrets.js';
 import type { FixedOtpCodeFor } from './demo-fixed-code.js';
 import {
+  publicDemoActive,
   publicSignUpPermitted,
   stagingFixturePrincipalRefused,
   type StagingAccess,
@@ -106,6 +109,8 @@ export interface ChallengeServiceDeps {
   readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
   /** Present on the server. STAGING uses it to refuse a non-fixture account. */
   readonly stagingAccess?: StagingAccess | undefined;
+  /** Test seam for the public demo daily sign-up cap; absent uses SIGN_UP_DAILY_CAP. */
+  readonly signUpDailyCap?: number | undefined;
 }
 
 /**
@@ -141,13 +146,23 @@ export async function issueChallenge(
     destination,
   );
 
+  // R16.2 (contributor proposal, not released): in the STAGING public demo every EMAIL_OTP
+  // issuance counts against one daily budget, known address or not, so the shared counter cannot
+  // reveal who is enrolled. Over the budget only a new address is sent nothing.
+  const overDailyCap =
+    publicDemoActive(deps.stagingAccess) &&
+    input.method === 'EMAIL_OTP' &&
+    !(await consumeRateLimit(deps.pool, signUpDailyPolicy(deps), 'global')).allowed;
+
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
-  const signUp =
+  const signUpEligible =
     user === undefined &&
     input.allowSignUp === true &&
     publicSignUpPermitted(deps.stagingAccess) &&
     input.method === 'EMAIL_OTP' &&
     SIGN_UP_EMAIL_PATTERN.test(destination);
+  const capReached = signUpEligible && overDailyCap;
+  const signUp = signUpEligible && !capReached;
   // A sign-up the environment policy refused (D-052) is answered like any unenrolled address,
   // but the audit marks it so operators can tell a refused sign-up from an unknown address.
   // The flag carries no destination.
@@ -225,9 +240,11 @@ export async function issueChallenge(
             method: input.method,
             outcome: fixtureRefused
               ? 'NOT_STAGING_FIXTURE'
-              : user === undefined
-                ? 'NO_ENROLLED_USER'
-                : `USER_${user.status}`,
+              : capReached
+                ? 'SIGN_UP_CAP_REACHED'
+                : user === undefined
+                  ? 'NO_ENROLLED_USER'
+                  : `USER_${user.status}`,
             ...(signUpRefused ? { sign_up_refused: true } : {}),
           },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
@@ -276,6 +293,14 @@ export async function issueChallenge(
   }
 
   return { issued: true, challengeId, expiresAt };
+}
+
+function signUpDailyPolicy(deps: ChallengeServiceDeps) {
+  return {
+    bucket: 'auth.signup.daily',
+    limit: deps.signUpDailyCap ?? SIGN_UP_DAILY_CAP.value,
+    windowSeconds: SIGN_UP_DAILY_WINDOW_SECONDS.value,
+  };
 }
 
 export interface VerifyChallengeInput {
@@ -430,7 +455,11 @@ export async function verifyChallenge(
       tenantId: input.tenantId,
       actorType: 'SYSTEM',
       actorId: 'auth',
-      payload: { method: 'EMAIL_OTP' },
+      // R16.3 (proposal, not released): with the demo flag on, issuance required the acknowledgement.
+      payload: {
+        method: 'EMAIL_OTP',
+        ...(deps.stagingAccess?.publicDemo === true ? { demo_acknowledged: true } : {}),
+      },
       ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
     });
     return created.userId;

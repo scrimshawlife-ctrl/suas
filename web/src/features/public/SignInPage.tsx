@@ -5,6 +5,8 @@ import { useSessionToken } from '../../api/token-store';
 import { getMode, setMode } from '../../app/mode-store';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { isPublicDemo } from '../../components/DemoBanner';
+import { AlertCircleIcon } from '../../components/icons';
 import { Page } from '../../components/Page';
 import { RadioCardGroup } from '../../components/RadioCardGroup';
 import { TextField } from '../../components/TextField';
@@ -34,6 +36,11 @@ const ROLE_OPTIONS = [
   },
 ] as const;
 
+/** R16.3 (contributor proposal, not released): the public demo acknowledgement. */
+const DEMO_ACKNOWLEDGEMENT =
+  "I understand this is a demo with synthetic data, nobody monitors it, and I won't enter real personal information.";
+const DEMO_ACKNOWLEDGEMENT_ERROR = 'Tick the box to continue.';
+
 /** Sign in (SignIn board): choose a role, ask for an emailed code, go on to /sign-in/code. */
 export default function SignInPage() {
   const [params] = useSearchParams();
@@ -48,11 +55,14 @@ export default function SignInPage() {
   );
   const [email, setEmail] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const demo = isPublicDemo();
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [ackError, setAckError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const formRef = useRef<HTMLFormElement>(null);
 
   const error = fieldError ?? (start.isError ? signInErrorMessage(start.error) : null);
-  useFocusFirstInvalid(formRef, `${attempt}|${error ?? ''}`);
+  useFocusFirstInvalid(formRef, `${attempt}|${error ?? ''}|${ackError ?? ''}`);
 
   // Already signed in: nothing to do here.
   if (token !== null) return <Navigate to={afterSignInPath(from, getMode())} replace />;
@@ -62,11 +72,13 @@ export default function SignInPage() {
     setAttempt((count) => count + 1);
     const invalid = validateEmail(email);
     setFieldError(invalid);
-    if (invalid) return;
+    const unacknowledged = demo && !acknowledged ? DEMO_ACKNOWLEDGEMENT_ERROR : null;
+    setAckError(unacknowledged);
+    if (invalid || unacknowledged) return;
     const destination = email.trim();
     flight(async () => {
       try {
-        await start.mutateAsync(destination);
+        await start.mutateAsync({ destination, ...(demo ? { demoAcknowledged: true } : {}) });
       } catch {
         return; // shown from `start.error`
       }
@@ -121,6 +133,31 @@ export default function SignInPage() {
                 required
               />
             </div>
+            {demo ? (
+              <div className="flex flex-col gap-2">
+                <label className="flex min-h-11 cursor-pointer items-start gap-3 text-18">
+                  <input
+                    type="checkbox"
+                    name="demo_acknowledged"
+                    className="mt-1 size-6 shrink-0 accent-service-blue aria-invalid:outline-[3px] aria-invalid:outline-ink"
+                    checked={acknowledged}
+                    aria-invalid={ackError ? true : undefined}
+                    aria-describedby={ackError ? 'demo-ack-error' : undefined}
+                    onChange={(event) => {
+                      setAcknowledged(event.target.checked);
+                      setAckError(null);
+                    }}
+                  />
+                  {DEMO_ACKNOWLEDGEMENT}
+                </label>
+                {ackError ? (
+                  <p id="demo-ack-error" className="flex items-center gap-2 text-16 font-bold">
+                    <AlertCircleIcon size={20} />
+                    {ackError}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <Button type="submit" size="form" disabled={start.isPending} className="w-full">
               {start.isPending ? 'Sending code' : 'Send sign-in code'}
             </Button>

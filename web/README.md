@@ -43,7 +43,7 @@ Safety copy: `SUAS_SAFETY_COPY_MODE=approved` makes the API serve the released c
 
 Fonts are self-hosted through `@fontsource/public-sans` (600, 700) and `@fontsource/atkinson-hyperlegible` (400, 400 italic, 700), so the app makes no third-party requests and works under a strict CSP.
 
-Optional env: `VITE_SUAS_ENV_LABEL` (shows the EnvChip, for example "Synthetic demo data"), `VITE_SUAS_API_BASE_URL` (API origin when not same-origin), `SUAS_API_PORT` (dev proxy target).
+Optional env: `VITE_SUAS_ENV_LABEL` (shows the EnvChip, for example "Synthetic demo data"), `VITE_SUAS_API_BASE_URL` (API origin when not same-origin), `VITE_SUAS_PUBLIC_DEMO=enabled` (public demo banner on public pages and the sign-in acknowledgement, matching the API's `SUAS_PUBLIC_DEMO`; R16 proposal, not released), `SUAS_API_PORT` (dev proxy target).
 
 `/dev/components` is the component gallery. It exists in dev builds only.
 

@@ -4,11 +4,20 @@ import { queryKeys } from './keys';
 import { requireData } from './require-data';
 import { tokenStore } from './token-store';
 
-/** Step 1: email a one-time code. The server answers 202 whether or not the email is enrolled. */
+/**
+ * Step 1: email a one-time code. The server answers 202 whether or not the email is enrolled.
+ * The public demo (R16.3, proposal) also sends the acknowledgement; otherwise the body omits it.
+ */
 export function useStartChallenge() {
   return useMutation({
-    mutationFn: async (destination: string) => {
-      await api.POST('/api/v0/auth/challenges', { body: { destination, method: 'EMAIL_OTP' } });
+    mutationFn: async (input: { destination: string; demoAcknowledged?: boolean }) => {
+      await api.POST('/api/v0/auth/challenges', {
+        body: {
+          destination: input.destination,
+          method: 'EMAIL_OTP',
+          ...(input.demoAcknowledged === true ? { demo_acknowledged: true } : {}),
+        },
+      });
     },
   });
 }

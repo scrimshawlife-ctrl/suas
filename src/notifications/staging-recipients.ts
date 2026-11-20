@@ -11,8 +11,13 @@ export type RecipientAllowed = (to: string) => boolean;
 /**
  * A synthetic address (RFC 2606/6761 reserved domains), or a `+tag` address of the configured
  * fixture mailbox (R11.7), never the bare mailbox. With no mailbox configured, only synthetic
- * addresses pass, so nothing real is sent.
+ * addresses pass, so nothing real is sent. The STAGING public demo (R16.1, contributor proposal,
+ * not released) allows any address.
  */
-export function stagingRecipientAllowed(mailbox: string | undefined): RecipientAllowed {
+export function stagingRecipientAllowed(
+  mailbox: string | undefined,
+  publicDemo = false,
+): RecipientAllowed {
+  if (publicDemo) return () => true;
   return (to) => isStagingFixtureAddress(to, mailbox);
 }

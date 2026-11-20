@@ -78,6 +78,23 @@ Synthetic addresses still work for fixtures that never need to sign in.
 
    A refusal fails the invocation (`FunctionError` in the CLI output, the message in `out.json`) and writes nothing.
 
+## Public demo mode (R16 proposal, not released)
+
+Round 16 (R16.1–R16.5) is a contributor proposal awaiting the owner's decision. Do not deploy it before the owner
+releases it and lifts the staging maintenance hold.
+
+- Turn it on with `cdk deploy Suas-Staging-Backend -c publicDemo=true`, and build the web app with
+  `VITE_SUAS_PUBLIC_DEMO=enabled`. Deploying without the context turns it off again.
+- Anyone can sign up with their own address and receive a code; the fixture registry and the plus-address rule no
+  longer limit who signs in or who receives mail. Registered fixture users and their sessions keep working.
+- Every `POST /api/v0/auth/challenges` must carry `demo_acknowledged: true`, or the API answers `400` for every
+  address alike. The `/app` HTML sign-in form does not ask for it (it never signs anyone up).
+- Abuse bounds: API Gateway throttles `POST /api/v0/auth/challenges` and `POST /app/auth/challenges` at 2 rps
+  (burst 5) each, as best-effort defence in depth. The hard bound is the app's daily budget: after 200 codes a day,
+  counted over every address, new addresses are sent nothing. The answer is still `202`, the audit records
+  `SIGN_UP_CAP_REACHED`, and known users still receive codes.
+- Real email addresses are then stored in the STAGING database (R16.5 owner questions on retention and VA sandbox).
+
 ## Note
 
 Plus-addressed codes need the STAGING email provider (Resend through the email relay, suas #305) to be

@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_SUAS_ENV_LABEL?: string;
   /** API origin when the SPA and API are on different origins. Unset means same origin. */
   readonly VITE_SUAS_API_BASE_URL?: string;
+  /** R16.4 (proposal, not released): "enabled" shows the demo banner and sign-in acknowledgement. */
+  readonly VITE_SUAS_PUBLIC_DEMO?: string;
 }
 
 interface ImportMeta {

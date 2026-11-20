@@ -6071,6 +6071,10 @@
           "method": {
             "type": "string",
             "enum": ["MAGIC_LINK", "EMAIL_OTP", "PHONE_OTP"]
+          },
+          "demo_acknowledged": {
+            "type": "boolean",
+            "description": "R16.3 (contributor proposal, not released). Required and true for every address when the deployment runs the public demo (SUAS_PUBLIC_DEMO=enabled), else 400 VALIDATION_FAILED before any lookup. Optional and ignored otherwise."
           }
         }
       },

@@ -66,6 +66,20 @@ export const CHALLENGE_VERIFY_WINDOW_SECONDS = inferred(
   'Matches the issue window for operational simplicity.',
 );
 
+/**
+ * R16.2 (contributor proposal, not released): STAGING public demo daily budget of EMAIL_OTP
+ * issuances, counted for every address. Over it a new address is sent nothing; accounts still are.
+ */
+export const SIGN_UP_DAILY_CAP = inferred(
+  200,
+  'Bounds outbound mail and new demo accounts per day without limiting existing accounts.',
+);
+
+export const SIGN_UP_DAILY_WINDOW_SECONDS = inferred(
+  60 * 60 * 24,
+  'One fixed daily window for the shared public demo sign-up budget.',
+);
+
 /** AUTH.md §5: absolute session lifetime. */
 export const SESSION_ABSOLUTE_TTL_SECONDS = inferred(
   60 * 60 * 12,
@@ -100,6 +114,8 @@ export const AUTH_CONSTANTS: Readonly<Record<string, AuthConstant>> = {
   CHALLENGE_ISSUE_WINDOW_SECONDS,
   CHALLENGE_VERIFY_LIMIT,
   CHALLENGE_VERIFY_WINDOW_SECONDS,
+  SIGN_UP_DAILY_CAP,
+  SIGN_UP_DAILY_WINDOW_SECONDS,
   SESSION_ABSOLUTE_TTL_SECONDS,
   SESSION_IDLE_TTL_SECONDS,
   MFA_ELEVATION_TTL_SECONDS,

@@ -6,6 +6,7 @@ import { AdminLayout, type AdminNavItem } from '../components/AdminLayout';
 import { AppHeader } from '../components/AppHeader';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { CrisisStrip } from '../components/CrisisStrip';
+import { DemoBanner } from '../components/DemoBanner';
 import { SkipLink } from '../components/SkipLink';
 import { Footer } from '../components/Footer';
 import { ModeSwitch, type Mode } from '../components/ModeSwitch';
@@ -80,6 +81,7 @@ export function PublicLayout() {
     <div className="flex min-h-screen flex-col">
       <SkipLink />
       <CrisisStrip />
+      <DemoBanner />
       <PublicHeader
         onSignOut={token ? signOut : undefined}
         hideSignIn={pathname.startsWith(paths.signIn)}

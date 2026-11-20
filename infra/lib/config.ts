@@ -45,6 +45,11 @@ export interface EnvironmentConfig {
    * Off by default: the API keeps SUAS_VA_CONFIRMATION_MODE=disabled and no verify function exists.
    */
   readonly vaSandbox: boolean;
+  /**
+   * R16.1 (contributor proposal, not released): `-c publicDemo=true` sets SUAS_PUBLIC_DEMO=enabled
+   * and throttles the sign-in route. Off by default, and the template is then unchanged.
+   */
+  readonly publicDemo: boolean;
 }
 
 function text(node: Node, key: string): string | undefined {
@@ -176,6 +181,7 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
   }
 
   const vaSandbox = trueOrFalse(node, 'vaSandbox', 'false');
+  const publicDemo = trueOrFalse(node, 'publicDemo', 'false');
 
   return {
     name: 'staging',
@@ -204,6 +210,7 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
       git(['show', '-s', '--format=%cI', 'HEAD']) ??
       'unknown',
     vaSandbox,
+    publicDemo,
   };
 }
 
