@@ -60,7 +60,7 @@ import {
 import type { ModelInferencePort } from '../../inference/index.js';
 import { commandScope, fingerprintRequest, runIdempotentCommand } from '../../idempotency/index.js';
 import { API_PREFIX } from '../../release/pins.js';
-import { CRISIS_BANNER_COMPACT, resolveImmediateResourceSlot } from '../../ui/safety.js';
+import { crisisNotice } from '../../ui/safety.js';
 
 export interface IntakeRouteDeps extends RouteContext {
   readonly modelInference: ModelInferencePort;
@@ -120,16 +120,6 @@ function resourceView(resource: IntakeResource) {
     freshness: resource.freshness,
     stale_warning: resource.staleWarning,
   };
-}
-
-/**
- * The crisis notice comes from the immediate-resource slot behind `GET /immediate-resources`:
- * the released SAFETY_COPY.md §2.1 banner in `approved` mode, else its labelled placeholder.
- * No new crisis wording (R17.4, contributor proposal, not released).
- */
-function crisisNotice(mode: SafetyCopyMode): string {
-  const slot = resolveImmediateResourceSlot(mode);
-  return slot.state === 'APPROVED' ? CRISIS_BANNER_COMPACT : (slot.placeholder ?? '');
 }
 
 /** A turn that stores nothing: the model did not answer, or was never asked (crisis). */

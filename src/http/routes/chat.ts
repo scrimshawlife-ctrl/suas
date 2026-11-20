@@ -10,11 +10,24 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { RouteContext } from '../route-context.js';
+import { enforceRateLimit } from '../../auth/index.js';
 import { ResourceNotVisibleError } from '../../authz/index.js';
+import type { SafetyCopyMode } from '../../config/index.js';
+import {
+  findServiceRequest,
+  readServiceRequestDetail,
+  TERMINAL_REQUEST_STATUSES,
+} from '../../coordination/index.js';
+import type { ModelInferencePort } from '../../inference/index.js';
+import { crisisNotice } from '../../ui/safety.js';
 import { authenticate } from '../authenticate.js';
 import { pageQuery } from '../../db/cursor.js';
 import { readIdempotencyKey } from '../idempotency-header.js';
 import {
+  assistChat,
+  CHAT_ASSIST_KINDS,
+  CHAT_ASSIST_RATE_LIMIT,
+  CHAT_ASSIST_WINDOW,
   issueConnectTicket,
   listChatMessages,
   listChatThreads,
@@ -30,6 +43,10 @@ import { API_PREFIX } from '../../release/pins.js';
 export interface ChatRouteDeps extends RouteContext {
   /** Absent when realtime push is not configured; messages still work over REST. */
   readonly push: ConnectionPushPort | undefined;
+  /** Set only when SUAS_CHAT_ASSIST_MODE=enabled (R18.7, contributor proposal, not released). */
+  readonly chatAssist: ModelInferencePort | undefined;
+  /** Picks the crisis notice, as for intake and `GET /immediate-resources` (D-012). */
+  readonly safetyCopyMode: SafetyCopyMode;
 }
 
 /** Realtime push is not configured, so there is nothing to connect to. */
@@ -43,7 +60,27 @@ class ChatRealtimeUnavailableError extends Error {
   }
 }
 
+/** R18.7 refusals: chat assistance is for the helper of a live, open request only. */
+class ChatAssistError extends Error {
+  constructor(
+    readonly code: string,
+    readonly httpStatus: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ChatAssistError';
+  }
+}
+
+const helperOnly = () =>
+  new ChatAssistError('CHAT_ASSIST_HELPER_ONLY', 409, 'Chat help is for the person helping.');
+const requestClosed = () =>
+  new ChatAssistError('CHAT_ASSIST_REQUEST_CLOSED', 409, 'This request is closed.');
+const assistUnavailable = () =>
+  new ChatAssistError('CHAT_ASSIST_UNAVAILABLE', 503, 'Chat help is not available right now.');
+
 const idParams = z.object({ id: z.string().uuid() });
+const assistBody = z.object({ kind: z.enum(CHAT_ASSIST_KINDS) }).strict();
 
 const listQuery = pageQuery.extend({
   /** A chat_thread_id of this request; absent means the live thread. */
@@ -77,6 +114,7 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
     const context = await authenticate(deps.pool, deps.sessionSecret, request);
     const query = pageQuery.parse(request.query);
     const page = await listChatThreads(deps.pool, context.tenantId, context.userId, query);
+    const assistOn = deps.chatAssist?.isAvailable() === true;
     return {
       threads: page.threads.map((thread) => ({
         chat_thread_id: thread.chatThreadId,
@@ -91,6 +129,7 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
         closed: thread.closed,
         role: thread.role,
         last_message_from_me: thread.lastMessageFromMe,
+        chat_assist_enabled: assistOn && thread.releasedAt === null && !thread.closed,
       })),
       next_cursor: page.nextCursor ?? null,
     };
@@ -145,6 +184,58 @@ export function registerChatRoutes(app: FastifyInstance, deps: ChatRouteDeps): v
       ...publicMessage(sent.message),
       replayed: sent.replayed,
     });
+  });
+
+  /**
+   * A suggested reply or catch-up for the helper (R18.7, contributor proposal, not released).
+   * Writes no message; logs the outcome only, never chat or model text.
+   */
+  app.post(`${API_PREFIX}/service-requests/:id/chat/assist`, async (request) => {
+    const context = await authenticate(deps.pool, deps.sessionSecret, request);
+    const { id } = idParams.parse(request.params);
+    const { kind } = assistBody.parse(request.body);
+    // Same refusals as reading the messages; the helper's access means a live thread.
+    const access = await resolveChatAccess(deps.pool, context, id);
+    if (access.counterpartRole !== 'REQUESTER') throw helperOnly();
+    const serviceRequest = await findServiceRequest(deps.pool, context.tenantId, id);
+    if (serviceRequest === undefined) throw new ResourceNotVisibleError();
+    if (TERMINAL_REQUEST_STATUSES.includes(serviceRequest.status)) throw requestClosed();
+    const port = deps.chatAssist;
+    if (port === undefined || !port.isAvailable()) throw assistUnavailable();
+    await enforceRateLimit(
+      deps.pool,
+      CHAT_ASSIST_RATE_LIMIT,
+      `${context.tenantId}:${context.userId}`,
+    );
+
+    const detail = await readServiceRequestDetail(deps.pool, context.tenantId, id);
+    if (detail === undefined) throw new ResourceNotVisibleError();
+    const page = await listChatMessages(deps.pool, {
+      tenantId: context.tenantId,
+      chatThreadId: access.chatThreadId,
+      serviceRequestId: id,
+      limit: CHAT_ASSIST_WINDOW,
+    });
+    const result = await assistChat(port, {
+      kind,
+      request: {
+        category: serviceRequest.category,
+        summary: detail.summary,
+        timing: detail.timing,
+        meetingPlace: detail.meetingPlace,
+        destination: detail.destination,
+      },
+      messages: [...page.messages].reverse().map((message) => ({
+        fromHelper: message.senderUserId === context.userId,
+        body: message.body,
+      })),
+    });
+    request.log.info({ chat_assist: result.outcome });
+    if (result.outcome === 'UNAVAILABLE') throw assistUnavailable();
+    if (result.outcome === 'CRISIS_SUPPORT') {
+      return { outcome: result.outcome, notice: crisisNotice(deps.safetyCopyMode) };
+    }
+    return { outcome: result.outcome, text: result.text };
   });
 
   app.post(`${API_PREFIX}/chat/connect-tickets`, async (request, reply) => {

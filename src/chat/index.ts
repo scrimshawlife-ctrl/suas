@@ -5,6 +5,18 @@ export {
   type ChatAccess,
 } from './access.js';
 export {
+  assistChat,
+  CHAT_ASSIST_KINDS,
+  CHAT_ASSIST_RATE_LIMIT,
+  CHAT_ASSIST_TEXT_MAX,
+  CHAT_ASSIST_WINDOW,
+  type ChatAssistInput,
+  type ChatAssistKind,
+  type ChatAssistMessage,
+  type ChatAssistResult,
+} from './assist.js';
+export { CHAT_ASSIST_PROMPT_VERSION } from './assist-prompt.js';
+export {
   CONNECT_TICKET_TTL_SECONDS,
   issueConnectTicket,
   redeemConnectTicket,

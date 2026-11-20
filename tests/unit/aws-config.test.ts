@@ -161,6 +161,39 @@ describe('real AWS modes', () => {
     expect(issues).toContain('SUAS_AWS_REGION must be an AWS region name');
     expect(issues).toContain('SUAS_S3_BUCKET must be a valid S3 bucket name');
   });
+
+  // R18.7 (contributor proposal, not released): chat assistance rides on model inference.
+  describe('chat assistance', () => {
+    it('defaults to disabled and is enabled with the fake in LOCAL and TEST', () => {
+      expect(loadConfig(validEnv()).chatAssist).toEqual({ mode: 'disabled' });
+      for (const environment of ['LOCAL', 'TEST']) {
+        const env = { SUAS_ENV: environment, SUAS_CHAT_ASSIST_MODE: 'enabled' };
+        expect(
+          loadConfig(validEnv({ ...env, SUAS_MODEL_INFERENCE_MODE: 'fake' })).chatAssist.mode,
+        ).toBe('enabled');
+        expect(issuesFor(validEnv(env))).toContain('requires model inference (fake or bedrock)');
+      }
+    });
+
+    it('needs the bedrock relay in STAGING', () => {
+      const enabled = { SUAS_CHAT_ASSIST_MODE: 'enabled' };
+      expect(loadConfig(staging({ ...stagingBedrock, ...enabled })).chatAssist.mode).toBe(
+        'enabled',
+      );
+      expect(issuesFor(staging(enabled))).toContain(
+        'SUAS_CHAT_ASSIST_MODE=enabled in STAGING requires SUAS_MODEL_INFERENCE_MODE=bedrock',
+      );
+    });
+
+    it('refuses enabled in PRODUCTION and an unknown value', () => {
+      expect(
+        issuesFor(validEnv({ SUAS_ENV: 'PRODUCTION', SUAS_CHAT_ASSIST_MODE: 'enabled' })),
+      ).toContain('SUAS_CHAT_ASSIST_MODE=enabled is forbidden in PRODUCTION');
+      expect(issuesFor(validEnv({ SUAS_CHAT_ASSIST_MODE: 'on' }))).toContain(
+        'SUAS_CHAT_ASSIST_MODE="on"',
+      );
+    });
+  });
 });
 
 describe('fake modes in PRODUCTION (plan §7)', () => {
