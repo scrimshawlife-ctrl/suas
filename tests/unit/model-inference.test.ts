@@ -10,6 +10,7 @@ import {
   BedrockModelInference,
   consoleInferenceLogger,
   createModelInferencePort,
+  LambdaRelayModelInference,
   ScriptedModelInference,
   UnavailableModelInference,
   type BedrockInferenceLogRecord,
@@ -266,12 +267,18 @@ describe('ScriptedModelInference', () => {
 });
 
 describe('createModelInferencePort', () => {
-  // Config validation refuses bedrock in every class today (SAFETY.md §6), so the factory
-  // is exercised on a config built past that guard.
+  // The direct adapter has no valid deployed config (STAGING requires the relay), so it is
+  // exercised on a config built past that guard, as the relay and the eval build it.
   const bedrock = (bedrockModelId: string | undefined) => ({
     ...loadConfig(validEnv()),
     aws: { region: 'us-west-2' },
-    modelInference: { mode: 'bedrock' as const, bedrockModelId },
+    modelInference: {
+      mode: 'bedrock' as const,
+      bedrockModelId,
+      relayFunction: undefined,
+      guardrailId: undefined,
+      guardrailVersion: undefined,
+    },
   });
 
   it('reports the capability unavailable when disabled', async () => {
@@ -298,6 +305,25 @@ describe('createModelInferencePort', () => {
     const byDefault = createModelInferencePort(bedrock('test-model-id'));
     expect((withLogger as unknown as { logger: unknown }).logger).toBe(logger);
     expect((byDefault as unknown as { logger: unknown }).logger).toBe(consoleInferenceLogger);
+  });
+
+  // R17.3 (contributor proposal, not released): STAGING reaches Bedrock only through the relay.
+  it('builds the relay port for STAGING bedrock with a relay function', () => {
+    const port = createModelInferencePort(
+      loadConfig(
+        validEnv({
+          SUAS_ENV: 'STAGING',
+          SUAS_MODEL_INFERENCE_MODE: 'bedrock',
+          SUAS_AWS_REGION: 'us-east-2',
+          SUAS_BEDROCK_MODEL_ID: 'us.anthropic.test-model',
+          SUAS_MODEL_INFERENCE_RELAY_FUNCTION: 'suas-inference-relay',
+          SUAS_BEDROCK_GUARDRAIL_ID: 'grtest',
+          SUAS_BEDROCK_GUARDRAIL_VERSION: '1',
+        }),
+      ),
+    );
+    expect(port).toBeInstanceOf(LambdaRelayModelInference);
+    expect(port.implementation).toBe('bedrock-relay');
   });
 
   it('builds the scripted fake for fake mode', () => {

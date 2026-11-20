@@ -19,7 +19,13 @@ const staging = (overrides: Record<string, string | undefined>) =>
 describe('AWS capability config defaults', () => {
   it('leaves every new capability disabled when nothing is set', () => {
     const config = loadConfig(validEnv());
-    expect(config.modelInference).toEqual({ mode: 'disabled', bedrockModelId: undefined });
+    expect(config.modelInference).toEqual({
+      mode: 'disabled',
+      bedrockModelId: undefined,
+      relayFunction: undefined,
+      guardrailId: undefined,
+      guardrailVersion: undefined,
+    });
     expect(config.objectStorage).toEqual({ mode: 'disabled', bucket: undefined });
     expect(config.idVerification.mode).toBe('disabled');
     expect(config.aws.region).toBeUndefined();
@@ -60,22 +66,75 @@ describe('real AWS modes', () => {
     expect(config.objectStorage.bucket).toBe('suas-staging-assets');
   });
 
-  // C-02, A6-06, C-13: SAFETY.md §6 and RESOURCES.md §5.1 do not authorize model use yet.
+  // R17.1, R17.3, R17.7 (contributor proposal, not released): STAGING may use bedrock only
+  // through the relay with a guardrail; fake stays out of STAGING; PRODUCTION allows disabled.
+  const stagingBedrock = {
+    SUAS_MODEL_INFERENCE_MODE: 'bedrock',
+    SUAS_AWS_REGION: 'us-east-2',
+    SUAS_BEDROCK_MODEL_ID: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+    SUAS_MODEL_INFERENCE_RELAY_FUNCTION: 'Suas-Staging-Backend-InferenceRelay',
+    SUAS_BEDROCK_GUARDRAIL_ID: 'abc123def456',
+    SUAS_BEDROCK_GUARDRAIL_VERSION: '1',
+  };
+
+  it('accepts bedrock in STAGING through the relay with model and guardrail', () => {
+    const config = loadConfig(staging(stagingBedrock));
+    expect(config.modelInference).toEqual({
+      mode: 'bedrock',
+      bedrockModelId: stagingBedrock.SUAS_BEDROCK_MODEL_ID,
+      relayFunction: stagingBedrock.SUAS_MODEL_INFERENCE_RELAY_FUNCTION,
+      guardrailId: 'abc123def456',
+      guardrailVersion: '1',
+    });
+  });
+
   it.each([
-    ['STAGING', 'bedrock'],
-    ['STAGING', 'fake'],
-    ['PRODUCTION', 'bedrock'],
-  ])('refuses model inference in %s (mode %s)', (environment, mode) => {
+    'SUAS_MODEL_INFERENCE_RELAY_FUNCTION',
+    'SUAS_BEDROCK_MODEL_ID',
+    'SUAS_BEDROCK_GUARDRAIL_ID',
+    'SUAS_BEDROCK_GUARDRAIL_VERSION',
+  ])('refuses STAGING bedrock without %s', (missing) => {
+    const issues = issuesFor(staging({ ...stagingBedrock, [missing]: undefined }));
+    expect(issues).toContain('SUAS_MODEL_INFERENCE_MODE=bedrock in STAGING requires');
+    expect(issues).toContain(missing);
+  });
+
+  it('refuses STAGING bedrock without its region', () => {
+    expect(issuesFor(staging({ ...stagingBedrock, SUAS_AWS_REGION: undefined }))).toContain(
+      'SUAS_AWS_REGION is required',
+    );
+  });
+
+  it('refuses the fake model in STAGING', () => {
+    expect(issuesFor(staging({ SUAS_MODEL_INFERENCE_MODE: 'fake' }))).toContain(
+      'SUAS_MODEL_INFERENCE_MODE=fake is forbidden in STAGING',
+    );
+  });
+
+  it.each(['bedrock', 'fake'])('refuses model inference in PRODUCTION (mode %s)', (mode) => {
     expect(
       issuesFor(
-        validEnv({
-          SUAS_ENV: environment,
-          SUAS_MODEL_INFERENCE_MODE: mode,
-          SUAS_AWS_REGION: 'us-west-2',
-          SUAS_BEDROCK_MODEL_ID: 'test-model-id',
-        }),
+        validEnv({ ...stagingBedrock, SUAS_ENV: 'PRODUCTION', SUAS_MODEL_INFERENCE_MODE: mode }),
       ),
-    ).toContain(`SUAS_MODEL_INFERENCE_MODE=${mode} is forbidden in ${environment}`);
+    ).toContain(`SUAS_MODEL_INFERENCE_MODE=${mode} is forbidden in PRODUCTION`);
+  });
+
+  it('refuses a relay function or guardrail without bedrock, and malformed values', () => {
+    const issues = issuesFor(
+      staging({
+        SUAS_AWS_REGION: 'us-east-2',
+        SUAS_MODEL_INFERENCE_RELAY_FUNCTION: 'not a function',
+        SUAS_BEDROCK_GUARDRAIL_ID: 'Bad Id',
+        SUAS_BEDROCK_GUARDRAIL_VERSION: '0',
+      }),
+    );
+    expect(issues).toContain('SUAS_MODEL_INFERENCE_RELAY_FUNCTION is allowed only with');
+    expect(issues).toContain('must be a Lambda function name or ARN');
+    expect(issues).toContain(
+      'SUAS_BEDROCK_GUARDRAIL_ID and _VERSION are allowed only with bedrock',
+    );
+    expect(issues).toContain('must be a Bedrock guardrail id or ARN');
+    expect(issues).toContain('must be a guardrail version number or DRAFT');
   });
 
   it.each([
