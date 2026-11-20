@@ -51,7 +51,8 @@ export const STAGING_FIXTURE_SOURCE_LINK =
  * Reviewer of record for the fixture publishes (resource_drafts.reviewed_by needs a user).
  * SUSPENDED and absent from the registry, so it can never sign in.
  */
-const PUBLISHER_EMAIL = syntheticEmail('staging-fixture-publisher');
+/** The seed's SUSPENDED publisher; demo retention leaves it alone. */
+export const PUBLISHER_EMAIL = syntheticEmail('staging-fixture-publisher');
 
 const FIXTURE_ELIGIBILITY = 'Synthetic STAGING fixture. Not a real service.';
 
