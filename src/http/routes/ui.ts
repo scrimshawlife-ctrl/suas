@@ -114,7 +114,7 @@ import {
   demoFixedCodeFor,
   type FixedOtpCodeFor,
 } from '../../auth/demo-fixed-code.js';
-import { stagingAccessFromConfig } from '../../auth/staging-access.js';
+import { publicDemoActive, stagingAccessFromConfig } from '../../auth/staging-access.js';
 import { normalizeDestination } from '../../auth/secrets.js';
 
 export interface UiRouteDependencies extends RouteContext {
@@ -327,6 +327,12 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     databaseUrl: config.database.url,
   });
   const demoSignIn = demoSignInFrom(fixedOtpCodeFor);
+  // R16.1 (contributor proposal, not released): /app sign-in is off during the STAGING public
+  // demo, so a demo sign-up only goes through the web app's acknowledgement and caps.
+  const demoActive = publicDemoActive(stagingAccess);
+  const signInUnavailableCopy = demoActive
+    ? 'Sign in on the web app during the demo.'
+    : 'Email sign-in is not available in this environment.';
   registerHtmlFormParser(app);
 
   const adminContext = async (request: Parameters<typeof authenticate>[2], reason: string) => {
@@ -373,6 +379,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     const body = browserChallengeBody.parse(request.body);
     const tenantId = config.browserAuth.tenantId;
     if (
+      demoActive ||
       config.browserAuth.mode !== 'email_otp' ||
       tenantId === undefined ||
       deps.challengeDelivery === undefined
@@ -385,7 +392,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
             shell: shell('Join the Mission', { showMobileNav: false }),
             authEnabled: false,
             selectedRole: body.role,
-            contactChannelRequirement: 'Email sign-in is not available in this environment.',
+            contactChannelRequirement: signInUnavailableCopy,
           }),
         );
     }
@@ -423,6 +430,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
     const body = browserVerifyBody.parse(request.body);
     const tenantId = config.browserAuth.tenantId;
     if (
+      demoActive ||
       config.browserAuth.mode !== 'email_otp' ||
       tenantId === undefined ||
       deps.challengeDelivery === undefined
@@ -435,7 +443,7 @@ export function registerUiRoutes(app: FastifyInstance, deps: UiRouteDependencies
             shell: shell('Check your email', { showMobileNav: false }),
             destination: body.destination,
             selectedRole: body.role,
-            error: 'Email sign-in is not available in this environment.',
+            error: signInUnavailableCopy,
           }),
         );
     }

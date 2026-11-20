@@ -1,7 +1,8 @@
 /**
  * R16.1–R16.3 (contributor proposal, not released; owner review on #363): STAGING public demo
  * sign-up. Anyone may sign up after the acknowledgement, daily caps bound sends without changing
- * the answer (D-056), registered fixture users keep working, and only they reach VA confirmation.
+ * the answer (D-056), registered fixture users keep working, and only they reach VA confirmation
+ * and the licence review.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -13,9 +14,11 @@ import { stagingAccessFromConfig } from '../../src/auth/staging-access.js';
 import type { PublicDemoLimits } from '../../src/config/index.js';
 import { createServer } from '../../src/http/server.js';
 import { FixtureVeteranConfirmation, VA_NOTICE_V1 } from '../../src/identity/index.js';
+import { FixtureLicenceReader } from '../../src/identity/licence-reader-fixture.js';
 import { createSession } from '../../src/auth/index.js';
 import { createUser } from '../../src/identity/users.js';
 import { API_PREFIX } from '../../src/release/pins.js';
+import { InMemoryObjectStorage } from '../../src/storage/memory-object-storage.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { appPool } from '../helpers/actors.js';
 import { TEST_SESSION_SECRET, validEnv } from '../helpers/env.js';
@@ -196,6 +199,54 @@ describe('STAGING public demo sign-up', () => {
     expect(deliveries().lastFor(tagged('2'))).toBeDefined();
   });
 
+  // R16.5 (contributor proposal, not released): the day-long counter holds a digest, not the address.
+  it('stores the per-address daily counter without the address', async () => {
+    const email = newAddress();
+    expect((await issue(email, { demo_acknowledged: true })).statusCode).toBe(202);
+    const daily = await appPool(app).query<{ subject: string }>(
+      `SELECT subject FROM auth_rate_limits WHERE bucket = 'auth.challenge.address.daily'`,
+    );
+    expect(daily.rows.map((row) => row.subject)).toEqual([
+      expect.stringMatching(new RegExp(`^${SIGN_UP_TENANT}:[0-9a-f]{64}$`)),
+    ]);
+    // The 15-minute issue limit still keys on the address; it is pruned after its window.
+    const plain = await appPool(app).query<{ bucket: string }>(
+      `SELECT bucket FROM auth_rate_limits WHERE position($1 IN subject) > 0`,
+      [email],
+    );
+    expect(plain.rows.map((row) => row.bucket)).toEqual(['auth.challenge.issue']);
+  });
+
+  // R16.2 (contributor's call, D-065): racing requests for one new address share one atomic
+  // counter, so no more than the per-address cap is sent at the boundary.
+  it('sends at most the per-address cap when requests for one new address race', async () => {
+    const server = createServer({
+      config: {
+        ...app.config,
+        publicDemoLimits: { ...app.config.publicDemoLimits, addressDailyCap: 1 },
+      },
+      buildInfo: () => app.buildInfo,
+      pool: appPool(app),
+      challengeDelivery: app.challengeDelivery,
+      mfa: app.mfa,
+      logger: false,
+    });
+    const email = newAddress();
+    const post = () =>
+      server.inject({
+        method: 'POST',
+        url: `${API_PREFIX}/auth/challenges`,
+        payload: { destination: email, method: 'EMAIL_OTP', demo_acknowledged: true },
+      });
+    const responses = await Promise.all([post(), post(), post()]);
+    await server.close();
+    expect(responses.map((response) => response.statusCode)).toEqual([202, 202, 202]);
+    const sent = deliveries()
+      .delivered()
+      .filter((delivery) => delivery.destination === email);
+    expect(sent).toHaveLength(1);
+  });
+
   it('over the daily cap answers a new address the same and sends nothing, but not a known one', async () => {
     expect((await issueCapped(newAddress())).issued).toBe(true);
 
@@ -351,5 +402,171 @@ describe('STAGING public demo VA confirmation', () => {
     const refused = await confirm(FIXTURE_USER, true);
     expect(refused.statusCode).toBe(401);
     expect(refused.json().error.code).toBe('UNAUTHENTICATED');
+  });
+
+  // R16.5(a) (contributor's call, D-065): the gate covers VA confirmation only, not D-016.
+  it('lets a demo account self-attest', async () => {
+    const demoUser = await createUser(appPool(app), {
+      tenantId: SIGN_UP_TENANT,
+      email: newAddress(),
+      status: 'ACTIVE',
+    });
+    const session = await createSession(appPool(app), TEST_SESSION_SECRET, {
+      tenantId: SIGN_UP_TENANT,
+      userId: demoUser.userId,
+    });
+    const response = await app.server.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/veterans/me/verification/commands/self-attest`,
+      headers: { authorization: `Bearer ${session.credential}`, 'idempotency-key': randomUUID() },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ method: 'SELF_ATTESTATION', status: 'VERIFIED' });
+  });
+});
+
+// R16.1 (contributor proposal, not released): the licence review is fixture-only like VA confirmation.
+describe('STAGING public demo licence review', () => {
+  const LICENCE = `${API_PREFIX}/veterans/me/verification/licence`;
+  let server: ReturnType<typeof createServer>;
+  const licenceServer = () =>
+    createServer({
+      config: app.config,
+      buildInfo: () => app.buildInfo,
+      pool: appPool(app),
+      challengeDelivery: app.challengeDelivery,
+      mfa: app.mfa,
+      jobQueue: app.jobQueue,
+      licenceReader: new FixtureLicenceReader(),
+      objectStorage: new InMemoryObjectStorage(),
+      logger: false,
+    });
+
+  beforeAll(async () => {
+    await appPool(app).query(
+      `UPDATE licence_reader_breaker SET consecutive_failures = 0, opened_at = NULL`,
+    );
+    server = licenceServer();
+  });
+
+  afterAll(() => server.close());
+
+  const bearer = async (userId: string) => ({
+    authorization: `Bearer ${
+      (await createSession(appPool(app), TEST_SESSION_SECRET, { tenantId: SIGN_UP_TENANT, userId }))
+        .credential
+    }`,
+  });
+  // Malformed JSON: a 503 for it shows the gate answered before the body was parsed.
+  const postMalformed = async (userId: string, url: string) =>
+    server.inject({
+      method: 'POST',
+      url,
+      headers: { ...(await bearer(userId)), 'content-type': 'application/json' },
+      payload: '{not json',
+    });
+
+  it('answers a demo account 503 on GET, submit and dispute, before the body is read', async () => {
+    const demoUser = await createUser(appPool(app), {
+      tenantId: SIGN_UP_TENANT,
+      email: newAddress(),
+      status: 'ACTIVE',
+    });
+    const get = await server.inject({
+      method: 'GET',
+      url: LICENCE,
+      headers: await bearer(demoUser.userId),
+    });
+    for (const response of [
+      get,
+      await postMalformed(demoUser.userId, LICENCE),
+      await postMalformed(demoUser.userId, `${LICENCE}/${randomUUID()}/commands/dispute`),
+    ]) {
+      expect(response.statusCode).toBe(503);
+      expect(response.json().error.code).toBe('ID_VERIFICATION_UNAVAILABLE');
+    }
+  });
+
+  it('lets a registered fixture user through to the usual answers', async () => {
+    const get = await server.inject({
+      method: 'GET',
+      url: LICENCE,
+      headers: await bearer(FIXTURE_USER),
+    });
+    expect(get.statusCode).toBe(200);
+    expect(get.json().offered).toBe(false);
+    expect((await postMalformed(FIXTURE_USER, LICENCE)).statusCode).toBe(400);
+  });
+
+  // R16.5 (contributor's call, D-065): a request the server did not mark fails closed here too.
+  it('refuses even a fixture user when the request carries no staging access', async () => {
+    const bare = licenceServer();
+    bare.addHook('onRequest', (request, _reply, done) => {
+      delete request.stagingAccess;
+      done();
+    });
+    const get = await bare.inject({
+      method: 'GET',
+      url: LICENCE,
+      headers: await bearer(FIXTURE_USER),
+    });
+    await bare.close();
+    expect(get.statusCode).toBe(401);
+    expect(get.json().error.code).toBe('UNAUTHENTICATED');
+  });
+});
+
+// R16.1 (contributor proposal, not released): /app sign-in is off during the STAGING public demo.
+describe('STAGING public demo /app sign-in', () => {
+  const FORM = 'application/x-www-form-urlencoded';
+  const serverWith = (publicDemo: boolean) =>
+    createServer({
+      config: {
+        ...app.config,
+        publicDemo,
+        browserAuth: { mode: 'email_otp', tenantId: SIGN_UP_TENANT },
+      },
+      buildInfo: () => app.buildInfo,
+      pool: appPool(app),
+      challengeDelivery: app.challengeDelivery,
+      mfa: app.mfa,
+      logger: false,
+    });
+  const post = (server: ReturnType<typeof createServer>, url: string, fields: object) =>
+    server.inject({
+      method: 'POST',
+      url,
+      headers: { 'content-type': FORM },
+      payload: new URLSearchParams({ role: 'veteran', ...fields }).toString(),
+    });
+  const challengeRows = async (destination: string) =>
+    (
+      await appPool(app).query('SELECT 1 FROM auth_challenges WHERE destination = $1', [
+        destination,
+      ])
+    ).rowCount;
+
+  it('answers 503 HTML to challenge and verify and creates no challenge', async () => {
+    const server = serverWith(true);
+    const email = newAddress();
+    const challenge = await post(server, '/app/auth/challenges', { destination: email });
+    const verify = await post(server, '/app/auth/verify', { destination: email, code: '000000' });
+    for (const response of [challenge, verify]) {
+      expect(response.statusCode).toBe(503);
+      expect(response.headers['content-type']).toContain('text/html');
+      expect(response.body).toContain('Sign in on the web app during the demo.');
+    }
+    expect(await challengeRows(email)).toBe(0);
+    await server.close();
+  });
+
+  it('issues a code to a fixture user as before when the demo is off', async () => {
+    const server = serverWith(false);
+    await appPool(app).query(`DELETE FROM auth_rate_limits WHERE subject = $1`, [FIXTURE_EMAIL]);
+    const before = await challengeRows(FIXTURE_EMAIL);
+    const response = await post(server, '/app/auth/challenges', { destination: FIXTURE_EMAIL });
+    expect(response.statusCode).toBe(200);
+    expect(await challengeRows(FIXTURE_EMAIL)).toBe((before ?? 0) + 1);
+    await server.close();
   });
 });

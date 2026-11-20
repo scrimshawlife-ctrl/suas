@@ -306,10 +306,12 @@ async function publicDemoCapReached(
   // can lock a known user out. That leaves a small enumeration side channel (known addresses
   // still get codes over a cap), which the owner accepted in the PR #363 review.
   const windowSeconds = SIGN_UP_DAILY_WINDOW_SECONDS.value;
+  // R16.5 (contributor proposal, not released): the day-long counter keeps a keyed digest of the
+  // address, never the address itself.
   const perAddress = await consumeRateLimit(
     deps.pool,
     { bucket: 'auth.challenge.address.daily', limit: limits.addressDailyCap, windowSeconds },
-    `${tenantId}:${canonicalAddressSubject(destination)}`,
+    `${tenantId}:${hashCredential(deps.sessionSecret, canonicalAddressSubject(destination))}`,
   );
   if (!perAddress.allowed) return 'ADDRESS_DAILY_CAP_REACHED';
   const signUps = await consumeRateLimit(
