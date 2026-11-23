@@ -10,7 +10,11 @@ import {
   type ModelInferencePort,
   type ModelMessagePart,
 } from '../inference/index.js';
-import { guardAssistText, type AssistGuardReport } from './assist-guard.js';
+import {
+  guardAssistText,
+  HELPER_MESSAGE_SEPARATOR,
+  type AssistGuardReport,
+} from './assist-guard.js';
 import { CHAT_ASSIST_SYSTEM_PROMPT } from './assist-prompt.js';
 
 export const CHAT_ASSIST_KINDS = ['SUGGEST_REPLY', 'CATCH_UP'] as const;
@@ -156,7 +160,7 @@ export async function assistChat(
     helperText: window
       .filter((message) => message.fromHelper)
       .map((message) => message.body)
-      .join('\n'),
+      .join(HELPER_MESSAGE_SEPARATOR),
   });
   const text = capOnWord(kept, CHAT_ASSIST_TEXT_MAX[input.kind]);
   if (text === '') return { ...UNAVAILABLE, guard };

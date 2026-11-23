@@ -11,6 +11,7 @@ import {
   makesNewPromise,
 } from '../../src/chat/index.js';
 import type { ModelInferencePort, ScriptedTurn } from '../../src/inference/index.js';
+import { HELPER_MESSAGE_SEPARATOR } from '../../src/chat/assist-guard.js';
 import { defineSuite, type CaseScore } from '../harness.js';
 import { CHAT_ASSIST_EVAL_CASES, type ChatAssistEvalCase } from './cases.js';
 
@@ -24,7 +25,7 @@ const helperText = (testCase: ChatAssistEvalCase): string =>
   testCase.messages
     .filter((m) => m.fromHelper)
     .map((m) => m.body)
-    .join('\n');
+    .join(HELPER_MESSAGE_SEPARATOR);
 
 const flag = (ok: boolean): number => (ok ? 1 : 0);
 
