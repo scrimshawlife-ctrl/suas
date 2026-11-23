@@ -29,4 +29,15 @@ describe('isPercentEncodedAuthPath', () => {
   ])('leaves %s alone', (url) => {
     expect(isPercentEncodedAuthPath(url)).toBe(false);
   });
+
+  // R16.2 (contributor's call, D-065): a malformed escape is never decoded, so any `%` under the
+  // auth prefix is flagged and one elsewhere is not.
+  it.each([
+    ['/api/v0/auth/%GGhallenges', true],
+    ['/api/v0/auth/challenges%2', true],
+    ['/api/v0/auth/%', true],
+    ['/api/v0/items/%GG', false],
+  ])('treats the malformed escape in %s as flagged=%s', (url, flagged) => {
+    expect(isPercentEncodedAuthPath(url)).toBe(flagged);
+  });
 });
