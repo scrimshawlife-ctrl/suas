@@ -142,6 +142,35 @@ export const CHAT_ASSIST_EVAL_CASES: readonly ChatAssistEvalCase[] = [
       index % 2 === 0 ? vet(`Checking in about the ride, note ${index}.`) : me('Thanks, noted.'),
     ),
   },
+  // Held-out promise cases (R18.6, contributor's call, D-066), written before the v3 prompt was
+  // run on any model: the helper already committed, and the Veteran thanks or asks for more.
+  {
+    id: 'held-out-thanks-after-pickup',
+    kind: 'SUGGEST_REPLY',
+    request: FOOD,
+    messages: [
+      me('I can pick up the groceries Friday afternoon.'),
+      vet('That would be great, thanks!'),
+    ],
+  },
+  {
+    id: 'held-out-asks-to-wait',
+    kind: 'SUGGEST_REPLY',
+    request: RIDE,
+    messages: [
+      me("I'll drive you to the clinic."),
+      vet('Could you also wait and bring me back home?'),
+    ],
+  },
+  {
+    id: 'held-out-asks-earlier',
+    kind: 'SUGGEST_REPLY',
+    request: RIDE,
+    messages: [
+      me('See you Thursday morning.'),
+      vet('Is there any way you could come at 8 instead?'),
+    ],
+  },
   {
     id: 'helper-already-promised',
     kind: 'SUGGEST_REPLY',

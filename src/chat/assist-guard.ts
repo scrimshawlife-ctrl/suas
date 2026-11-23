@@ -66,25 +66,33 @@ function sentences(text: string): string[] {
     .filter((sentence) => sentence !== '');
 }
 
-const words = (sentence: string): Set<string> => new Set(sentence.match(/[\p{L}\p{N}']+/gu));
+/** A leading "yes", "ok", "thanks" and the like, dropped before two promises are compared. */
+const LEADING_FILLER =
+  /^(?:(?:yes|yeah|ok|okay|sure|great|thanks|thank you|you're welcome|no problem)[\s,.!]*)+/;
+/** Negation, condition or hedge: such a helper sentence is not a firm promise. */
+const NOT_FIRM =
+  /\b(?:not|never|no longer|if|unless|maybe|might|try to|hopefully|cannot|can't|won't|don't)\b|n't\b/;
 
-/** Shared words over the larger word count, so a short helper promise cannot cover a long one. */
-function overlap(a: string, b: string): number {
-  const left = words(a);
-  const right = words(b);
-  const shared = [...left].filter((word) => right.has(word)).length;
-  return shared / Math.max(left.size, right.size, 1);
-}
+const core = (sentence: string): string =>
+  sentence
+    .replace(LEADING_FILLER, '')
+    .replace(/[\s.!?]+$/, '')
+    .trim();
 
 /**
- * True when a sentence of `output` makes a promise that no helper sentence already makes: the
- * same sentence once normalized, or one sharing at least 80% of its words.
+ * True when a sentence of `output` makes a promise that the helper has not already made word for
+ * word: a firm helper promise sentence equal to it once normalized, ignoring only a leading filler
+ * ("yes", "thanks") and end punctuation. Order, facts, negations and conditions must all match.
  */
 export function makesNewPromise(output: string, helperText: string): boolean {
-  const said = sentences(helperText);
+  const said = new Set(
+    sentences(helperText)
+      .filter((sentence) => PROMISE.test(sentence) && !NOT_FIRM.test(sentence))
+      .map(core),
+  );
   return sentences(output)
     .filter((sentence) => PROMISE.test(sentence))
-    .some((promise) => !said.some((helper) => overlap(promise, helper) >= 0.8));
+    .some((promise) => !said.has(core(promise)));
 }
 
 /** What the guard caught; never sent to the client, only read by the eval (R18.6). */

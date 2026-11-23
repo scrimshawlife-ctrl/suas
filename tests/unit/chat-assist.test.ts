@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { assistChat, CHAT_ASSIST_TEXT_MAX, type ChatAssistInput } from '../../src/chat/index.js';
+import { makesNewPromise } from '../../src/chat/assist-guard.js';
 import { ScriptedModelInference, type ModelMessagePart } from '../../src/inference/index.js';
 
 const REQUEST = {
@@ -275,4 +276,51 @@ describe('assistChat output guard', () => {
       guard: { blockedPromise: true, blockedFact: true, droppedSentences: 2 },
     });
   });
+});
+
+// R18.6 (contributor's call, D-066): only a sentence the helper already wrote (80% shared
+// words) counts as the helper's own promise; anything more is refused (security review 2026-11-23).
+describe('makesNewPromise', () => {
+  const helper = "I'll be there at 9:30 am.";
+  it.each(["Thanks. I'll be there at 9:30 am", "Yes! I'll be there at 9:30 am."])(
+    'accepts a sentence the helper already wrote: %s',
+    (output) => {
+      expect(makesNewPromise(output, helper)).toBe(false);
+    },
+  );
+
+  it.each([
+    "I'll be there at 9:30 am and bring groceries.",
+    "I'll be there at 9:30 am and I'll bring groceries.",
+    "I'll be there at 9:45 am.",
+    "I'll be there at 9:30 pm tomorrow with cash.",
+    "I'll be there at 10 am.",
+    'I will drive you there Friday.',
+  ])('refuses a promise the helper did not make: %s', (output) => {
+    expect(makesNewPromise(output, helper)).toBe(true);
+  });
+
+  it.each([
+    ['I will not be there at 9:30 am.', 'I will be there at 9:30 am.'],
+    ['If possible I will be there at 9:30 am.', 'I will be there at 9:30 am.'],
+    ['Be there at 9:30 am.', "I'll be there at 9:30 am."],
+    ["I'll be there with $20 at 9:30 am.", "I'll be there at 9:30 am with $20."],
+    [
+      "I'll drive you from 100 Oak Street to the clinic on Thursday morning.",
+      "I'll drive you from 100 Oak Street to the clinic on Friday morning.",
+    ],
+  ])('refuses when the helper wrote "%s" and the reply says "%s"', (helperSaid, output) => {
+    expect(makesNewPromise(output, helperSaid)).toBe(true);
+  });
+
+  it('accepts a leading thanks before an exact restatement', () => {
+    expect(makesNewPromise("Thanks, I'll be there at 9:30 am.", helper)).toBe(false);
+  });
+
+  it.each(["If I can, I'll be there at 9:30 am.", "I won't be there at 9:30 am."])(
+    'does not treat a conditional or negated helper sentence as a promise: %s',
+    (helperSaid) => {
+      expect(makesNewPromise("I'll be there at 9:30 am.", helperSaid)).toBe(true);
+    },
+  );
 });
