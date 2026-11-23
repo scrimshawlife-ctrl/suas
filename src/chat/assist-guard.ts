@@ -76,28 +76,23 @@ function overlap(a: string, b: string): number {
   return shared / Math.max(left.size, right.size, 1);
 }
 
-const PROMISE_ALL = new RegExp(PROMISE.source, 'g');
-
-/** Each promise clause: from a promise phrase to the next comma, semicolon, "and" or end. */
-function promiseClauses(sentence: string): string[] {
-  return [...sentence.matchAll(PROMISE_ALL)].map((match) =>
-    sentence
-      .slice(match.index)
-      .split(/[,;:]|\s+(?:and|but|so)\s+/)[0]!
-      .replace(/[.!?]+$/, '')
-      .trim(),
-  );
-}
-
 /**
- * True when `output` makes a promise that no helper message already makes. Each promise clause
- * must match a helper promise clause: the same once normalized, or sharing at least 80% of words.
+ * True when a sentence of `output` makes a promise that no helper sentence already makes: the
+ * same whole sentence once normalized, or one sharing at least 80% of its words. Whole sentences
+ * on both sides, so a trailing commitment, a changed time or a conditional is never waved through.
  */
 export function makesNewPromise(output: string, helperText: string): boolean {
-  const said = sentences(helperText).flatMap(promiseClauses);
+  const said = sentences(helperText);
   return sentences(output)
-    .flatMap(promiseClauses)
-    .some((promise) => !said.some((helper) => overlap(promise, helper) >= 0.8));
+    .filter((sentence) => PROMISE.test(sentence))
+    .some((promise) => !said.some((helper) => sameCommitment(promise, helper)));
+}
+
+/** At least 80% shared words, and every time, number or address in the promise is the helper's. */
+function sameCommitment(promise: string, helper: string): boolean {
+  if (overlap(promise, helper) < 0.8) return false;
+  const helperFacts = new Set(factTokens(helper));
+  return factTokens(promise).every((fact) => helperFacts.has(fact));
 }
 
 /** What the guard caught; never sent to the client, only read by the eval (R18.6). */
