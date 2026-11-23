@@ -45,26 +45,47 @@ export const CRISIS_PHRASES: readonly string[] = [
 const INVISIBLE = /[\u200B-\u200F\u2060\uFEFF\u00AD\u202A-\u202E\u2066-\u2069]/g;
 
 /**
- * Cyrillic, Greek and Latin letters drawn like plain Latin ones, so "suісіdе", "suıcide" and
- * "ꜱᴜɪᴄɪᴅᴇ" cannot slip past. R17.x (contributor's call, D-064): Cyrillic ѕјԁԛԝӏһԍ, dotless ı and
- * the Latin small capitals were added. Each glyph lines up with its letter in LATIN_FORMS.
+ * Cyrillic, Greek and Latin letters drawn like plain Latin ones, so "suісіdе", "ЅUICIDE", "suıcide"
+ * and "ꜱᴜɪᴄɪᴅᴇ" cannot slip past. R17.x (contributor's call, D-064). Pairs of glyph and letter, so
+ * the two never fall out of line; capitals map straight to the lower-case Latin letter.
  */
-const LOOK_ALIKES = 'аеорсухіАЕОРСУХІοΟѕјԁԛԝӏһԍıᴀʙᴄᴅᴇɢʜɪᴊᴋʟᴍɴᴏᴘʀꜱᴛᴜᴠᴡʏᴢ';
-const LATIN_FORMS = 'aeopcyxiaeopcyxioosjdqwlhgiabcdeghijklmnoprstuvwyz';
-const LOOK_ALIKE_PATTERN = new RegExp(`[${LOOK_ALIKES}]`, 'g');
+const LOOK_ALIKE_PAIRS: readonly (readonly [string, string])[] = [
+  // Cyrillic small
+  ...pairs('аеорсухіѕјԁԛԝӏһԍ', 'aeopcyxisjdqwlhg'),
+  // Cyrillic capital
+  ...pairs('АВЕЅІЈКМНОРСТУХҺԀԚԜӀԌ', 'abesijkmhopctyxhdqwlg'),
+  // Greek
+  ...pairs('οΑΒΕΖΗΙΚΜΝΟΡΤΥΧ', 'oabezhikmnoptyx'),
+  // Latin dotless i and small capitals
+  ...pairs('ıᴀʙᴄᴅᴇɢʜɪᴊᴋʟᴍɴᴏᴘʀꜱᴛᴜᴠᴡʏᴢ', 'iabcdeghijklmnoprstuvwyz'),
+];
+function pairs(glyphs: string, letters: string): (readonly [string, string])[] {
+  const from = [...glyphs];
+  if (from.length !== letters.length) throw new Error('look-alike table out of line');
+  return from.map((glyph, index) => [glyph, letters[index]!] as const);
+}
+const LOOK_ALIKE = new Map(LOOK_ALIKE_PAIRS);
+const LOOK_ALIKE_PATTERN = new RegExp(
+  `[${LOOK_ALIKE_PAIRS.map(([glyph]) => glyph).join('')}]`,
+  'g',
+);
 
 /**
- * Parenthesized letters ⒜–⒵ (U+249C–U+24B5) and 🄐–🄩 (U+1F110–U+1F129). NFKC would turn them
- * into "(s)", so they map to plain letters first; an ASCII "(d)" typed after a word is left alone.
+ * Enclosed letters NFKC does not turn into plain ones: parenthesized ⒜–⒵ (U+249C) and 🄐–🄩
+ * (U+1F110), which it would make "(s)", and negative circled 🅐–🅩 (U+1F150) and negative squared
+ * 🅰–🆉 (U+1F170), which it leaves alone. Each block of 26 maps to a–z by position.
  */
-const PARENTHESIZED_LETTER = /[\u{249C}-\u{24B5}\u{1F110}-\u{1F129}]/gu;
+const ENCLOSED_BLOCKS = [0x249c, 0x1f110, 0x1f150, 0x1f170] as const;
+const ENCLOSED_LETTER =
+  /[\u{249C}-\u{24B5}\u{1F110}-\u{1F129}\u{1F150}-\u{1F169}\u{1F170}-\u{1F189}]/gu;
+const unenclose = (glyph: string): string => {
+  const point = glyph.codePointAt(0) ?? 0;
+  const start = ENCLOSED_BLOCKS.find((block) => point >= block && point < block + 26) ?? point;
+  return String.fromCodePoint(0x61 + point - start);
+};
 
 /** A typed "(s)" (full-width too, after NFKC); unwrapped only in its own variant below. */
 const TYPED_PARENTHESIZED_LETTER = /\((\p{L})\)/gu;
-const unparenthesize = (glyph: string): string => {
-  const point = glyph.codePointAt(0) ?? 0;
-  return String.fromCodePoint(0x61 + point - (point < 0x1f110 ? 0x249c : 0x1f110));
-};
 
 /**
  * R17.x (contributor's call, D-064): NFKC (full-width, circled and compatibility forms), drop
@@ -82,13 +103,11 @@ function plainNormalize(text: string): string {
 }
 
 const mapLookAlikes = (text: string): string =>
-  text.replace(LOOK_ALIKE_PATTERN, (glyph) => LATIN_FORMS[LOOK_ALIKES.indexOf(glyph)] ?? glyph);
+  text.replace(LOOK_ALIKE_PATTERN, (glyph) => LOOK_ALIKE.get(glyph) ?? glyph);
 
-/** The plain normalization after parenthesized letters and homoglyphs become Latin letters. */
+/** The plain normalization after enclosed letters and homoglyphs become Latin letters. */
 function letterMappedNormalize(text: string): string {
-  return plainNormalize(
-    mapLookAlikes(text.replace(PARENTHESIZED_LETTER, unparenthesize).normalize('NFKC')),
-  );
+  return plainNormalize(mapLookAlikes(text.replace(ENCLOSED_LETTER, unenclose).normalize('NFKC')));
 }
 
 /** Like the letter-mapped variant, but a typed "(s)" reads "s": "(s)uicide", "sui(c)ide". */
