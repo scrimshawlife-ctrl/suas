@@ -150,6 +150,14 @@ describe('R16.1 public demo on STAGING', () => {
     expect(publicDemoActive(production)).toBe(false);
     expect(publicSignUpPermitted(production)).toBe(false);
   });
+
+  // R16.1 (contributor's call, D-065): demo mode never lifts the VA gate, so an empty
+  // registry still refuses every principal, known or not.
+  it('refuses VA confirmation for any principal when the registry is empty', () => {
+    const demo = { ...staging, publicDemo: true };
+    expect(vaConfirmationFixtureRefused(demo, stranger)).toBe(true);
+    expect(vaConfirmationFixtureRefused(demo, undefined)).toBe(true);
+  });
 });
 
 // R16.5 (contributor's call, D-065): with no access the environment is unknown, so the gates refuse.
