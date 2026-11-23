@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { assistChat, CHAT_ASSIST_TEXT_MAX, type ChatAssistInput } from '../../src/chat/index.js';
-import { makesNewPromise } from '../../src/chat/assist-guard.js';
+import { HELPER_MESSAGE_SEPARATOR, makesNewPromise } from '../../src/chat/assist-guard.js';
 import { ScriptedModelInference, type ModelMessagePart } from '../../src/inference/index.js';
 
 const REQUEST = {
@@ -311,6 +311,23 @@ describe('makesNewPromise', () => {
     ],
   ])('refuses when the helper wrote "%s" and the reply says "%s"', (helperSaid, output) => {
     expect(makesNewPromise(output, helperSaid)).toBe(true);
+  });
+
+  it.each([
+    "If you need it. I'll be there at 9:30 am.",
+    "Maybe. I'll be there at 9:30 am.",
+    "I'll be there at 9:30 am?",
+  ])('does not treat a hedged message or a question as the helper promising: %s', (helperSaid) => {
+    expect(makesNewPromise("I'll be there at 9:30 am.", helperSaid)).toBe(true);
+  });
+
+  it('keeps a firm promise from one message when another message hedges', () => {
+    expect(
+      makesNewPromise(
+        "I'll be there at 9:30 am.",
+        `I'll be there at 9:30 am.${HELPER_MESSAGE_SEPARATOR}If that works?`,
+      ),
+    ).toBe(false);
   });
 
   it('accepts a leading thanks before an exact restatement', () => {
