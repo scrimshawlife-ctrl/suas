@@ -130,7 +130,8 @@ releases it and lifts the staging maintenance hold.
   older than 2 days. Audit, Domain and consent events are kept. It logs counts only
   (`msg: staging_demo_retention`, `scrubbed`, `challenges_deleted`), never an address. A scrubbed account is never
   selected again, so repeated runs do nothing. The fixture seed's SUSPENDED publisher account is kept, although it is
-  not in the registry. An empty or wrong registry would scrub every other account, so check the registry first.
+  not in the registry. A wrong registry would scrub every other account, so check the registry first.
+  With an empty registry the sweep scrubs nothing and logs `msg: staging_demo_retention_skipped` each pass.
   Known gaps: consent grants owned by a scrubbed account stay `ACTIVE` (the account cannot sign in), and the
   15-minute issue and verify limits keep the address in plain text until the `rate_limit_prune` sweep removes them.
 

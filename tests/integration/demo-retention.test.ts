@@ -203,6 +203,22 @@ describe('STAGING demo retention', () => {
     expect(audits.rowCount).toBe(1);
   });
 
+  // R16.5(b) (contributor's call, D-065): an empty registry would make every account look
+  // non-fixture, so the sweep scrubs nothing, with the demo on or off.
+  it('scrubs nothing when the fixture registry is empty', async () => {
+    const older = await account(30);
+    const fresh = await account(0);
+    for (const publicDemo of [true, false]) {
+      const empty = { ...access(publicDemo), fixturePrincipals: [] };
+      expect(await scrubDemoAccounts(pool, { access: empty })).toEqual({
+        scrubbed: 0,
+        challengesDeleted: 0,
+      });
+    }
+    expect((await userRow(older.userId))?.deleted_at).toBeNull();
+    expect((await userRow(fresh.userId))?.deleted_at).toBeNull();
+  });
+
   it('refuses to run outside STAGING', async () => {
     for (const environment of ['PRODUCTION', 'LOCAL']) {
       await expect(scrubDemoAccounts(pool, { access: access(true, environment) })).rejects.toThrow(

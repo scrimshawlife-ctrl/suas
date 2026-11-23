@@ -37,6 +37,9 @@ export async function scrubDemoAccounts(
   if (access.environment !== 'STAGING') {
     throw new Error(`Refusing demo retention outside STAGING: environment "${access.environment}"`);
   }
+  // R16.5(b) (contributor's call, D-065): with no registry every account looks non-fixture,
+  // so an empty registry scrubs nothing rather than everything.
+  if (access.fixturePrincipals.length === 0) return { scrubbed: 0, challengesDeleted: 0 };
   const now = options.now ?? new Date();
   const retentionDays = options.retentionDays ?? DEMO_RETENTION_DAYS;
   const demoActive = publicDemoActive(access);

@@ -208,9 +208,14 @@ const SWEEPS: readonly Sweep[] = [
     name: 'staging_demo_retention',
     run: async (pool, config) => {
       if (config.environment !== 'STAGING') return;
-      const { scrubbed, challengesDeleted } = await scrubDemoAccounts(pool, {
-        access: stagingAccessFromConfig(config),
-      });
+      const access = stagingAccessFromConfig(config);
+      // R16.5(b) (contributor's call, D-065): the sweep scrubs nothing without a registry; say so
+      // once per pass so an unset registry is visible.
+      if (access.fixturePrincipals.length === 0) {
+        log({ msg: 'staging_demo_retention_skipped', reason: 'empty_fixture_registry' });
+        return;
+      }
+      const { scrubbed, challengesDeleted } = await scrubDemoAccounts(pool, { access });
       if (scrubbed > 0 || challengesDeleted > 0) {
         log({ msg: 'staging_demo_retention', scrubbed, challenges_deleted: challengesDeleted });
       }
