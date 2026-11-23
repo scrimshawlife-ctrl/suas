@@ -190,6 +190,22 @@ describe('inference relay function', () => {
     expect(client.commands).toHaveLength(1);
   });
 
+  // R18.5 (contributor's call, D-066): the range is inclusive at both ends.
+  it.each([
+    [0, true],
+    [1, true],
+    [-0.1, false],
+  ])('treats temperature %d as valid: %s', async (temperature, valid) => {
+    const { client, handler } = relayHandler({});
+    const result = await handler({ ...EVENT, request: { ...REQUEST, temperature } });
+    if (valid) {
+      expect(client.commands[0]?.input).toMatchObject({ inferenceConfig: { temperature } });
+    } else {
+      expect(result).toEqual({ ok: false, failure: 'invalid' });
+      expect(client.commands).toHaveLength(0);
+    }
+  });
+
   it('logs outcomes only, never the request or reply text', async () => {
     const console = vi.spyOn(globalThis.console, 'info');
     const { handler, logs } = relayHandler({}, [ENDED, awsError('ThrottlingException')]);
@@ -245,6 +261,17 @@ describe('token usage through the relay', () => {
     };
     const { port } = relayPort([invoked({ Payload: encode(huge) })]);
     expect(await port.converse(REQUEST)).toEqual({ ok: false, failure: 'invalid' });
+  });
+
+  it('accepts a token count of exactly 1,000,000', async () => {
+    const atLimit = {
+      ok: true,
+      text: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+    };
+    const { port } = relayPort([invoked({ Payload: encode(atLimit) })]);
+    expect(await port.converse(REQUEST)).toEqual(atLimit);
   });
 
   it.each([

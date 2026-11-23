@@ -8,6 +8,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { tryLoadConfig } from '../../src/config/index.js';
 import { INFERENCE_RELAY_INVOKE_TIMEOUT_MS } from '../../src/inference/lambda-relay-inference.js';
 import { INFERENCE_PURPOSE_LIMITS } from '../../src/inference/model-inference.js';
+import {
+  GUARDRAIL_BLOCKED_MESSAGE,
+  GUARDRAIL_CONTENT_FILTERS,
+  guardrailFingerprint,
+} from '../lib/backend-stack.js';
 import { resolveForValidation, synthesize, type Synthesized } from './helpers.js';
 
 type Resource = { Type: string; Properties?: Record<string, any> };
@@ -127,6 +132,31 @@ describe('inference relay', () => {
       GuardrailIdentifier: { 'Fn::GetAtt': ['InferenceGuardrail', 'GuardrailId'] },
       Description: expect.stringMatching(/^Config [0-9a-f]{16}$/),
     });
+  });
+
+  // R17.x (contributor's call, D-064): the same guardrail config written with its keys in another
+  // order must keep its version, so the fingerprint hashes canonical JSON.
+  const reversedKeys = <T extends object>(value: T): T =>
+    Object.fromEntries(Object.entries(value).reverse()) as T;
+  const inOrderProps = {
+    name: 'suas-staging-inference',
+    description: 'SUAS STAGING intake and catalog extraction (R17.5, contributor proposal).',
+    blockedInputMessaging: GUARDRAIL_BLOCKED_MESSAGE,
+    blockedOutputsMessaging: GUARDRAIL_BLOCKED_MESSAGE,
+    contentPolicyConfig: { filtersConfig: [...GUARDRAIL_CONTENT_FILTERS] },
+  };
+  const reorderedProps = {
+    ...reversedKeys(inOrderProps),
+    contentPolicyConfig: { filtersConfig: GUARDRAIL_CONTENT_FILTERS.map(reversedKeys) },
+  };
+
+  it('fingerprints a guardrail config the same whatever its key order', () => {
+    expect(guardrailFingerprint(reorderedProps)).toBe(guardrailFingerprint(inOrderProps));
+  });
+
+  it('names the version by the fingerprint of the guardrail config, not its key order', () => {
+    const [, version] = ofType(on.backend, 'AWS::Bedrock::GuardrailVersion')[0] ?? [];
+    expect(version?.Properties?.Description).toBe(`Config ${guardrailFingerprint(reorderedProps)}`);
   });
 
   it('gives its role logs, InvokeModel on the one model in its region, and the guardrail only', () => {

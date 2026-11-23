@@ -430,14 +430,27 @@ function registerAdminArea(app: FastifyInstance, { deps, pool }: SignedInArea): 
 /**
  * R17.6 (contributor's call, 2026-11-20, not released): the catalog builder missed its eval gate
  * on Qwen3 32B (invented Resources), so STAGING keeps it unavailable (503) while intake may run.
- * R17.x (contributor's call, D-064): allow-only, so any environment but LOCAL and TEST is refused.
+ * R17.x (contributor's call, D-064): allow-only, LOCAL and TEST. A new environment class fails
+ * to compile here until someone decides whether it may run the catalog builder.
  */
 export function catalogExtractionPort(
   environment: EnvironmentClass,
   port: ModelInferencePort | undefined,
 ): ModelInferencePort {
-  const allowed = environment === 'LOCAL' || environment === 'TEST';
-  return allowed && port !== undefined ? port : new UnavailableModelInference();
+  switch (environment) {
+    case 'LOCAL':
+    case 'TEST':
+      return port ?? new UnavailableModelInference();
+    case 'STAGING':
+    case 'PRODUCTION':
+      return new UnavailableModelInference();
+    default: {
+      // A value outside the type (a bad cast or raw input) still gets no catalog builder.
+      const _exhaustive: never = environment;
+      void _exhaustive;
+      return new UnavailableModelInference();
+    }
+  }
 }
 
 /**
