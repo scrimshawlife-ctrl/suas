@@ -721,6 +721,24 @@ export const GUARDRAIL_CONTENT_FILTERS: readonly bedrock.CfnGuardrail.ContentFil
     { type: 'PROMPT_ATTACK', inputStrength: 'HIGH', outputStrength: 'NONE' },
   ];
 
+/** JSON with object keys sorted at every depth, so key order never changes the text. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (typeof value !== 'object' || value === null) return JSON.stringify(value);
+  const entries = Object.entries(value)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`;
+}
+
+/**
+ * A short hash of the guardrail configuration, carried in its version's description. R17.x
+ * (contributor's call, D-064): canonical JSON, so reordering keys never replaces the version.
+ */
+export function guardrailFingerprint(props: bedrock.CfnGuardrailProps): string {
+  return createHash('sha256').update(canonicalJson(props)).digest('hex').slice(0, 16);
+}
+
 /**
  * The guardrail and a numbered version of it. A version is a fixed snapshot that CloudFormation
  * replaces only when its description changes, so the description carries a hash of the config.
@@ -729,6 +747,8 @@ function inferenceGuardrail(
   stack: Stack,
   environment: string,
 ): { guardrailId: string; guardrailVersion: string; guardrailArn: string } {
+  // No PII masking on synthetic STAGING: there is no real Veteran data to mask (R17.5, contributor's
+  // call, accepted under D-064). Revisit before any real data.
   const guardrailProps: bedrock.CfnGuardrailProps = {
     name: `suas-${environment}-inference`,
     description: 'SUAS STAGING intake and catalog extraction (R17.5, contributor proposal).',
@@ -737,13 +757,9 @@ function inferenceGuardrail(
     contentPolicyConfig: { filtersConfig: [...GUARDRAIL_CONTENT_FILTERS] },
   };
   const guardrail = new bedrock.CfnGuardrail(stack, 'InferenceGuardrail', guardrailProps);
-  const fingerprint = createHash('sha256')
-    .update(JSON.stringify(guardrailProps))
-    .digest('hex')
-    .slice(0, 16);
   const version = new bedrock.CfnGuardrailVersion(stack, 'InferenceGuardrailVersion', {
     guardrailIdentifier: guardrail.attrGuardrailId,
-    description: `Config ${fingerprint}`,
+    description: `Config ${guardrailFingerprint(guardrailProps)}`,
   });
   return {
     guardrailId: guardrail.attrGuardrailId,

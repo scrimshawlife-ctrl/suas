@@ -46,8 +46,33 @@ describe('detectCrisisLanguage', () => {
     ['Cyrillic look-alikes', 'I am su\u0456\u0441\u0456d\u0430l'],
     ['a Greek omicron', 'I want to end my life, n\u03BF reason to live'],
     ['an RTL override', 'I want to \u202Ekill myself\u202C tonight'],
+    ['a Cyrillic dze', '\u0455uicide'],
+    ['a Latin dotless i', 'su\u0131cide'],
+    ['Latin small capitals', '\uA731\u1D1C\u026A\u1D04\u026A\u1D05\u1D07'],
+    ['circled letters', '\u24E2\u24E4\u24D8\u24D2\u24D8\u24D3\u24D4'],
+    ['parenthesized letters', '\u24AE\u24B0\u24A4\u249E\u24A4\u249F\u24A0'],
+    [
+      'other Cyrillic look-alikes',
+      'en\u0501in\u050D it a\u04CF\u04CF, I \u051Dant to \u04BBurt myself',
+    ],
   ])('matches with %s', (_name, text) => {
     expect(detectCrisisLanguage(text)).toBe(true);
+  });
+
+  // Security review: an ASCII "(x)" after a phrase must not join onto its last word.
+  it.each([
+    ['"(d)" after "die"', 'I want to die(d)'],
+    ['"(s)" after "myself"', 'kill myself(s)'],
+  ])('matches with %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(true);
+  });
+
+  // Real words in Cyrillic and Turkish must not turn into crisis phrases once mapped.
+  it.each([
+    ['the Russian word "\u0441\u0430\u0439\u0442"', '\u0441\u0430\u0439\u0442'],
+    ['the Turkish word "k\u0131rm\u0131z\u0131"', 'k\u0131rm\u0131z\u0131'],
+  ])('does not match %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(false);
   });
 
   it.each([

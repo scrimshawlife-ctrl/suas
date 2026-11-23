@@ -251,6 +251,17 @@ describe('token usage through the relay', () => {
     expect(await port.converse(REQUEST)).toEqual({ ok: false, failure: 'invalid' });
   });
 
+  it('accepts a token count of exactly 1,000,000', async () => {
+    const atLimit = {
+      ok: true,
+      text: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+    };
+    const { port } = relayPort([invoked({ Payload: encode(atLimit) })]);
+    expect(await port.converse(REQUEST)).toEqual(atLimit);
+  });
+
   it.each([
     [{ inputTokens: 12 }, { inputTokens: 12, outputTokens: 0 }],
     [{ outputTokens: 5 }, { inputTokens: 0, outputTokens: 5 }],
