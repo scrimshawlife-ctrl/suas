@@ -28,7 +28,7 @@ From `infra/`, with credentials for the chosen account:
 4. `npx cdk deploy Suas-Staging-Backend` (and `Suas-Staging-Web` for a web change).
    Do not pass `modelInference=bedrock` until the owner releases R17 (contributor proposal) and
    gives the written OK. Chat assist adds `-c chatAssist=true` to those flags; do not pass it until
-   the owner releases R18 (contributor proposal) and gives the written OK.
+   the owner releases R18.7 (D-066, contributor's call) and gives the written OK.
 5. If the commit adds migrations, invoke the migrate function (`MigrateFunctionName` output) as
    in "Manual steps" of `infra/README.md`, and read `schema_version` and `applied_now`. Until it
    has run, the API fails closed at startup (`SUAS_MIGRATIONS_MODE=validate`).
