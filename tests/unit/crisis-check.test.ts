@@ -67,6 +67,15 @@ describe('detectCrisisLanguage', () => {
     expect(detectCrisisLanguage(text)).toBe(true);
   });
 
+  // Security review: a letter wrapped in "(x)" inside a phrase still reads as that letter.
+  it.each([
+    ['"(s)" at the start of a word', '(s)uicide'],
+    ['"(c)" inside a word', 'sui(c)ide'],
+    ['full-width parentheses', '（s）uicide'],
+  ])('matches with %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(true);
+  });
+
   // Real words in Cyrillic and Turkish must not turn into crisis phrases once mapped.
   it.each([
     ['the Russian word "\u0441\u0430\u0439\u0442"', '\u0441\u0430\u0439\u0442'],

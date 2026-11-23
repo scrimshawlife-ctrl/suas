@@ -58,6 +58,9 @@ const LOOK_ALIKE_PATTERN = new RegExp(`[${LOOK_ALIKES}]`, 'g');
  * into "(s)", so they map to plain letters first; an ASCII "(d)" typed after a word is left alone.
  */
 const PARENTHESIZED_LETTER = /[\u{249C}-\u{24B5}\u{1F110}-\u{1F129}]/gu;
+
+/** A typed "(s)" (full-width too, after NFKC); unwrapped only in its own variant below. */
+const TYPED_PARENTHESIZED_LETTER = /\((\p{L})\)/gu;
 const unparenthesize = (glyph: string): string => {
   const point = glyph.codePointAt(0) ?? 0;
   return String.fromCodePoint(0x61 + point - (point < 0x1f110 ? 0x249c : 0x1f110));
@@ -78,25 +81,33 @@ function plainNormalize(text: string): string {
     .trim();
 }
 
+const mapLookAlikes = (text: string): string =>
+  text.replace(LOOK_ALIKE_PATTERN, (glyph) => LATIN_FORMS[LOOK_ALIKES.indexOf(glyph)] ?? glyph);
+
 /** The plain normalization after parenthesized letters and homoglyphs become Latin letters. */
 function letterMappedNormalize(text: string): string {
   return plainNormalize(
-    text
-      .replace(PARENTHESIZED_LETTER, unparenthesize)
-      .normalize('NFKC')
-      .replace(LOOK_ALIKE_PATTERN, (glyph) => LATIN_FORMS[LOOK_ALIKES.indexOf(glyph)] ?? glyph),
+    mapLookAlikes(text.replace(PARENTHESIZED_LETTER, unparenthesize).normalize('NFKC')),
+  );
+}
+
+/** Like the letter-mapped variant, but a typed "(s)" reads "s": "(s)uicide", "sui(c)ide". */
+function parenUnwrappedNormalize(text: string): string {
+  return plainNormalize(
+    mapLookAlikes(text.normalize('NFKC').replace(TYPED_PARENTHESIZED_LETTER, '$1')),
   );
 }
 
 const NORMALIZED_PHRASES = [...new Set(CRISIS_PHRASES.map(plainNormalize))];
+const VARIANTS = [plainNormalize, letterMappedNormalize, parenUnwrappedNormalize] as const;
 
 /**
- * True when the text contains any crisis phrase on word boundaries, in either normalization: a
- * letter mapping can only add matches, never hide one the plain text already shows.
+ * True when the text contains any crisis phrase on word boundaries in any of the three
+ * normalizations. Each variant can only add matches, never hide one another variant shows.
  */
 export function detectCrisisLanguage(text: string): boolean {
-  return [plainNormalize(text), letterMappedNormalize(text)].some((normalized) => {
-    const padded = ` ${normalized} `;
+  return VARIANTS.some((normalize) => {
+    const padded = ` ${normalize(text)} `;
     return NORMALIZED_PHRASES.some((phrase) => padded.includes(` ${phrase} `));
   });
 }
