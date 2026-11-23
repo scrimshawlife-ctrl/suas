@@ -66,18 +66,33 @@ function sentences(text: string): string[] {
     .filter((sentence) => sentence !== '');
 }
 
+/** Separates helper messages in `helperText`, so a line break inside one message stays inside it. */
+export const HELPER_MESSAGE_SEPARATOR = '\u001e';
+
 /** A leading "yes", "ok", "thanks" and the like, dropped before two promises are compared. */
 const LEADING_FILLER =
-  /^(?:(?:yes|yeah|ok|okay|sure|great|thanks|thank you|you're welcome|no problem)[\s,.!]*)+/;
-/** Negation, condition or hedge: such a helper sentence is not a firm promise. */
+  /^(?:(?:yes|yeah|okay|ok|sure|great|thanks|thank you|you're welcome|no problem)\b[\s,.!]*)+/;
+/** Negation, condition or hedge anywhere in a helper message: none of its promises are firm. */
 const NOT_FIRM =
   /\b(?:not|never|no longer|if|unless|maybe|might|try to|hopefully|cannot|can't|won't|don't)\b|n't\b/;
 
 const core = (sentence: string): string =>
   sentence
     .replace(LEADING_FILLER, '')
-    .replace(/[\s.!?]+$/, '')
+    .replace(/[\s.!]+$/, '')
     .trim();
+
+/** Firm promise sentences the helper wrote: from unhedged messages only, never a question. */
+function firmHelperPromises(helperText: string): Set<string> {
+  const firm = new Set<string>();
+  for (const message of helperText.split(HELPER_MESSAGE_SEPARATOR)) {
+    if (NOT_FIRM.test(normalizeGuardText(message))) continue;
+    for (const sentence of sentences(message)) {
+      if (PROMISE.test(sentence) && !sentence.endsWith('?')) firm.add(core(sentence));
+    }
+  }
+  return firm;
+}
 
 /**
  * True when a sentence of `output` makes a promise that the helper has not already made word for
@@ -85,14 +100,10 @@ const core = (sentence: string): string =>
  * ("yes", "thanks") and end punctuation. Order, facts, negations and conditions must all match.
  */
 export function makesNewPromise(output: string, helperText: string): boolean {
-  const said = new Set(
-    sentences(helperText)
-      .filter((sentence) => PROMISE.test(sentence) && !NOT_FIRM.test(sentence))
-      .map(core),
-  );
+  const said = firmHelperPromises(helperText);
   return sentences(output)
     .filter((sentence) => PROMISE.test(sentence))
-    .some((promise) => !said.has(core(promise)));
+    .some((promise) => promise.endsWith('?') || !said.has(core(promise)));
 }
 
 /** What the guard caught; never sent to the client, only read by the eval (R18.6). */
