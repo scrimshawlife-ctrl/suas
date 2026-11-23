@@ -46,6 +46,8 @@ export class InferenceRelay extends Construct {
 
     // Converse is authorized as InvokeModel. The model is called on demand in this stack's region
     // with no inference profile, and a foundation-model ARN carries no account.
+    // R17.x (contributor's call, D-064): no bedrock:InferenceProfileArn condition. It applies only to
+    // profile-routed calls, would block this on-demand invocation, and the ARN is already one model.
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ['bedrock:InvokeModel'],

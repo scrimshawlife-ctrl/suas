@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { EnvironmentClass } from '../../src/config/index.js';
 import { catalogExtractionPort } from '../../src/http/server.js';
 import { ScriptedModelInference, UnavailableModelInference } from '../../src/inference/index.js';
 
@@ -13,6 +14,15 @@ describe('catalogExtractionPort', () => {
     const model = new ScriptedModelInference();
     expect(catalogExtractionPort('LOCAL', model)).toBe(model);
     expect(catalogExtractionPort('TEST', model)).toBe(model);
+  });
+
+  // R17.x (contributor's call, D-064): allow-only, so PRODUCTION and unknown values are refused.
+  it.each(['PRODUCTION', 'staging', 'DEMO'])('is unavailable for %s', (environment) => {
+    const port = catalogExtractionPort(
+      environment as EnvironmentClass,
+      new ScriptedModelInference(),
+    );
+    expect(port).toBeInstanceOf(UnavailableModelInference);
   });
 
   it('is unavailable when no model is configured', () => {

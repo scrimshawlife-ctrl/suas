@@ -46,3 +46,39 @@ describe('intake prompt delimiters', () => {
     expect(sent.match(/<\/assistant_reply>/g)).toHaveLength(1);
   });
 });
+
+// R18.4 (contributor's call, D-066): every Veteran- or model-written string in the intake
+// prompt is escaped, so the only angle brackets left are the four delimiters SUAS writes.
+describe('intake prompt escaping', () => {
+  it('escapes the intake text, the stored reply and every draft field', async () => {
+    const model = new ScriptedModelInference();
+    model.enqueue({ ok: true, text: 'Anything else?', toolCalls: [] });
+    await runIntakeAssistant(
+      model,
+      { searchResources: () => Promise.resolve([]) },
+      {
+        intakeText: '<text>',
+        draft: {
+          category: 'TRANSPORTATION',
+          summary: '<summary>',
+          timing: '<timing>',
+          meetingPlace: '<place>',
+          destination: '<destination>',
+        },
+        lastAssistantMessage: '<reply>',
+      },
+    );
+    const part = model.requests()[0]?.messages[0]?.parts[0];
+    const sent = part?.type === 'text' ? part.text : '';
+    for (const name of ['text', 'summary', 'timing', 'place', 'destination', 'reply']) {
+      expect(sent).toContain(`&lt;${name}&gt;`);
+    }
+    const rest = [
+      '<intake_text>',
+      '</intake_text>',
+      '<assistant_reply>',
+      '</assistant_reply>',
+    ].reduce((text, tag) => text.replace(tag, ''), sent);
+    expect(rest).not.toMatch(/[<>]/);
+  });
+});
