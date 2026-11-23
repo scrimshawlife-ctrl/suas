@@ -300,6 +300,23 @@ describe('makesNewPromise', () => {
     expect(makesNewPromise(output, helper)).toBe(true);
   });
 
+  it.each([
+    ['I will not be there at 9:30 am.', 'I will be there at 9:30 am.'],
+    ['If possible I will be there at 9:30 am.', 'I will be there at 9:30 am.'],
+    ['Be there at 9:30 am.', "I'll be there at 9:30 am."],
+    ["I'll be there with $20 at 9:30 am.", "I'll be there at 9:30 am with $20."],
+    [
+      "I'll drive you from 100 Oak Street to the clinic on Thursday morning.",
+      "I'll drive you from 100 Oak Street to the clinic on Friday morning.",
+    ],
+  ])('refuses when the helper wrote "%s" and the reply says "%s"', (helperSaid, output) => {
+    expect(makesNewPromise(output, helperSaid)).toBe(true);
+  });
+
+  it('accepts a leading thanks before an exact restatement', () => {
+    expect(makesNewPromise("Thanks, I'll be there at 9:30 am.", helper)).toBe(false);
+  });
+
   it.each(["If I can, I'll be there at 9:30 am.", "I won't be there at 9:30 am."])(
     'does not treat a conditional or negated helper sentence as a promise: %s',
     (helperSaid) => {
