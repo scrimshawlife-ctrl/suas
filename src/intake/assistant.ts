@@ -58,11 +58,11 @@ const DEFAULT_DRAFT_TEXT =
   'I drafted a request from what you wrote. Please check it before you submit.';
 
 /**
- * A text-only reply that turns the need away without searching (R18.5, contributor proposal,
- * not released). The server then shows its notice and searches itself; a question does not match.
+ * R18.5 (contributor's call, D-066): a text-only reply where SUAS or "we" turns away requests
+ * without searching. Subject and "request" are required, so "I can't take the bus" never matches.
  */
 const DECLINE_PATTERN =
-  /\b(can ?not|can['’]t|cannot|not able to|unable to) (take|help with|accept)\b/i;
+  /\b(?:SUAS|we)\b[^.]{0,40}?(?:\bcan ?not|\bcan['’]t|\bnot able to|n['’]t able to|\bunable to)\s+(?:take|accept|handle)\b[^.]{0,20}?\brequests?\b/i;
 
 /** Veteran-facing projection of a published Resource (RESOURCES.md §6). */
 export interface IntakeResource {

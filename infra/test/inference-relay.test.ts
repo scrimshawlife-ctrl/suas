@@ -8,6 +8,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { tryLoadConfig } from '../../src/config/index.js';
 import { INFERENCE_RELAY_INVOKE_TIMEOUT_MS } from '../../src/inference/lambda-relay-inference.js';
 import { INFERENCE_PURPOSE_LIMITS } from '../../src/inference/model-inference.js';
+import {
+  GUARDRAIL_BLOCKED_MESSAGE,
+  GUARDRAIL_CONTENT_FILTERS,
+  guardrailFingerprint,
+} from '../lib/backend-stack.js';
 import { resolveForValidation, synthesize, type Synthesized } from './helpers.js';
 
 type Resource = { Type: string; Properties?: Record<string, any> };
@@ -129,6 +134,31 @@ describe('inference relay', () => {
     });
   });
 
+  // R17.x (contributor's call, D-064): the same guardrail config written with its keys in another
+  // order must keep its version, so the fingerprint hashes canonical JSON.
+  const reversedKeys = <T extends object>(value: T): T =>
+    Object.fromEntries(Object.entries(value).reverse()) as T;
+  const inOrderProps = {
+    name: 'suas-staging-inference',
+    description: 'SUAS STAGING intake and catalog extraction (R17.5, contributor proposal).',
+    blockedInputMessaging: GUARDRAIL_BLOCKED_MESSAGE,
+    blockedOutputsMessaging: GUARDRAIL_BLOCKED_MESSAGE,
+    contentPolicyConfig: { filtersConfig: [...GUARDRAIL_CONTENT_FILTERS] },
+  };
+  const reorderedProps = {
+    ...reversedKeys(inOrderProps),
+    contentPolicyConfig: { filtersConfig: GUARDRAIL_CONTENT_FILTERS.map(reversedKeys) },
+  };
+
+  it('fingerprints a guardrail config the same whatever its key order', () => {
+    expect(guardrailFingerprint(reorderedProps)).toBe(guardrailFingerprint(inOrderProps));
+  });
+
+  it('names the version by the fingerprint of the guardrail config, not its key order', () => {
+    const [, version] = ofType(on.backend, 'AWS::Bedrock::GuardrailVersion')[0] ?? [];
+    expect(version?.Properties?.Description).toBe(`Config ${guardrailFingerprint(reorderedProps)}`);
+  });
+
   it('gives its role logs, InvokeModel on the one model in its region, and the guardrail only', () => {
     const role = roleOf(on.backend, 'inference-relay.handler');
     const own = policies(on.backend).filter((p) => p.roles.includes(role));
@@ -155,6 +185,22 @@ describe('inference relay', () => {
     ]);
     const [, roleResource] = ofType(on.backend, 'AWS::IAM::Role').find(([id]) => id === role) ?? [];
     expect(roleResource?.Properties?.ManagedPolicyArns).toBeUndefined();
+  });
+
+  // R17.x (contributor's call, D-064): on-demand invocation, so one regional model ARN and no
+  // inference-profile ARN or condition anywhere in the stack.
+  it('grants InvokeModel on exactly one foundation-model ARN in the stack region, unconditioned', () => {
+    const invokes = policies(on.backend)
+      .flatMap((p) => p.statements)
+      .filter((st) => [st.Action].flat().some((a: string) => /^bedrock:(\*|Invoke)/.test(a)));
+    expect(invokes).toHaveLength(1);
+    expect([renderArns(invokes[0]?.Resource)].flat()).toEqual([
+      `arn:\${AWS::Partition}:bedrock:us-west-2::foundation-model/${MODEL_ID}`,
+    ]);
+    expect(invokes[0]?.Condition).toBeUndefined();
+    expect(JSON.stringify(on.backend.toJSON())).not.toMatch(
+      /inference-profile|InferenceProfileArn/,
+    );
   });
 
   it('may be invoked by the API role only, through an identity policy scoped to its ARN', () => {

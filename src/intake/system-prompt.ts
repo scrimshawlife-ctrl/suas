@@ -13,8 +13,8 @@
  */
 
 /**
- * Names the wording below so an eval report says which prompt it scored. Change it with
- * the words (R18.5, contributor proposal, not released).
+ * Names the wording below so an eval report says which prompt it scored; change it with the
+ * words. R18.5 (contributor's call, D-066): a label only, no prompt cache exists to invalidate.
  */
 export const INTAKE_PROMPT_VERSION = 'intake-v2-2026-11-20';
 

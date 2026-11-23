@@ -107,6 +107,8 @@ describe('POST /service-requests/{id}/chat/assist', () => {
     const response = await assist(helper, id);
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ outcome: 'SUGGESTION', text: 'Great, see you Friday.' });
+    // R18.6 (contributor's call, D-066): the guard report is for the eval, never the client.
+    expect(response.json()).not.toHaveProperty('guard');
     const sent = model.requests().at(-1);
     expect(sent?.purpose).toBe('chat_assist');
     const parts = sent?.messages[0]?.parts.map((part) => (part.type === 'text' ? part.text : ''));
@@ -172,6 +174,17 @@ describe('POST /service-requests/{id}/chat/assist', () => {
     expect(limited.statusCode).toBe(429);
     expect(limited.json().error.code).toBe('RATE_LIMITED');
     expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
+  // R18.6 (contributor's call, D-066): the counter is one atomic upsert, so racing calls cannot
+  // slip past the cap.
+  it('lets at most 20 of 21 concurrent calls through and answers the rest 429', async () => {
+    const { helper, id } = await scenario();
+    const responses = await Promise.all(Array.from({ length: 21 }, () => assist(helper, id)));
+    const limited = responses.filter((response) => response.statusCode === 429);
+    expect(responses.length - limited.length).toBeLessThanOrEqual(20);
+    expect(limited.length).toBeGreaterThanOrEqual(1);
+    for (const response of limited) expect(response.json().error.code).toBe('RATE_LIMITED');
   });
 
   it('rejects an unknown kind', async () => {

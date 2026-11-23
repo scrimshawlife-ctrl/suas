@@ -41,22 +41,73 @@ export const CRISIS_PHRASES: readonly string[] = [
   'kill me',
 ];
 
+/** Zero-width and format characters (soft hyphen, LRM/RLM) and bidi embeddings and isolates. */
+const INVISIBLE = /[\u200B-\u200F\u2060\uFEFF\u00AD\u202A-\u202E\u2066-\u2069]/g;
+
 /**
- * Lower-case, drop apostrophes (so "can't" reads "cant"), turn other punctuation into spaces
- * (so "self-harm" reads "self harm"), then collapse whitespace.
+ * Cyrillic, Greek and Latin letters drawn like plain Latin ones, so "suісіdе", "suıcide" and
+ * "ꜱᴜɪᴄɪᴅᴇ" cannot slip past. R17.x (contributor's call, D-064): Cyrillic ѕјԁԛԝӏһԍ, dotless ı and
+ * the Latin small capitals were added. Each glyph lines up with its letter in LATIN_FORMS.
  */
-function normalize(text: string): string {
+const LOOK_ALIKES = 'аеорсухіАЕОРСУХІοΟѕјԁԛԝӏһԍıᴀʙᴄᴅᴇɢʜɪᴊᴋʟᴍɴᴏᴘʀꜱᴛᴜᴠᴡʏᴢ';
+const LATIN_FORMS = 'aeopcyxiaeopcyxioosjdqwlhgiabcdeghijklmnoprstuvwyz';
+const LOOK_ALIKE_PATTERN = new RegExp(`[${LOOK_ALIKES}]`, 'g');
+
+/**
+ * Parenthesized letters ⒜–⒵ (U+249C–U+24B5) and 🄐–🄩 (U+1F110–U+1F129). NFKC would turn them
+ * into "(s)", so they map to plain letters first; an ASCII "(d)" typed after a word is left alone.
+ */
+const PARENTHESIZED_LETTER = /[\u{249C}-\u{24B5}\u{1F110}-\u{1F129}]/gu;
+
+/** A typed "(s)" (full-width too, after NFKC); unwrapped only in its own variant below. */
+const TYPED_PARENTHESIZED_LETTER = /\((\p{L})\)/gu;
+const unparenthesize = (glyph: string): string => {
+  const point = glyph.codePointAt(0) ?? 0;
+  return String.fromCodePoint(0x61 + point - (point < 0x1f110 ? 0x249c : 0x1f110));
+};
+
+/**
+ * R17.x (contributor's call, D-064): NFKC (full-width, circled and compatibility forms), drop
+ * invisible characters, lower-case, drop apostrophes ("can't" reads "cant"), turn other
+ * punctuation into spaces ("self-harm" reads "self harm"), then collapse whitespace.
+ */
+function plainNormalize(text: string): string {
   return text
+    .normalize('NFKC')
+    .replace(INVISIBLE, '')
     .toLowerCase()
     .replace(/['‘’]/g, '')
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 }
 
-const NORMALIZED_PHRASES = [...new Set(CRISIS_PHRASES.map(normalize))];
+const mapLookAlikes = (text: string): string =>
+  text.replace(LOOK_ALIKE_PATTERN, (glyph) => LATIN_FORMS[LOOK_ALIKES.indexOf(glyph)] ?? glyph);
 
-/** True when the text contains any crisis phrase on word boundaries. */
+/** The plain normalization after parenthesized letters and homoglyphs become Latin letters. */
+function letterMappedNormalize(text: string): string {
+  return plainNormalize(
+    mapLookAlikes(text.replace(PARENTHESIZED_LETTER, unparenthesize).normalize('NFKC')),
+  );
+}
+
+/** Like the letter-mapped variant, but a typed "(s)" reads "s": "(s)uicide", "sui(c)ide". */
+function parenUnwrappedNormalize(text: string): string {
+  return plainNormalize(
+    mapLookAlikes(text.normalize('NFKC').replace(TYPED_PARENTHESIZED_LETTER, '$1')),
+  );
+}
+
+const NORMALIZED_PHRASES = [...new Set(CRISIS_PHRASES.map(plainNormalize))];
+const VARIANTS = [plainNormalize, letterMappedNormalize, parenUnwrappedNormalize] as const;
+
+/**
+ * True when the text contains any crisis phrase on word boundaries in any of the three
+ * normalizations. Each variant can only add matches, never hide one another variant shows.
+ */
 export function detectCrisisLanguage(text: string): boolean {
-  const padded = ` ${normalize(text)} `;
-  return NORMALIZED_PHRASES.some((phrase) => padded.includes(` ${phrase} `));
+  return VARIANTS.some((normalize) => {
+    const padded = ` ${normalize(text)} `;
+    return NORMALIZED_PHRASES.some((phrase) => padded.includes(` ${phrase} `));
+  });
 }

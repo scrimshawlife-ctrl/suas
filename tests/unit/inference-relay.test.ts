@@ -167,6 +167,18 @@ describe('inference relay function', () => {
     });
   });
 
+  // R18.7 (contributor's call, D-066): chat assistance gets its own output cap through the relay.
+  it('caps a chat_assist turn at its own output limit', async () => {
+    const { client, handler } = relayHandler({});
+    const result = await handler({
+      purpose: 'chat_assist',
+      request: { ...REQUEST, maxTokens: 99_999 },
+      deadlineMs: 8_000,
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(client.commands[0]?.input).toMatchObject({ inferenceConfig: { maxTokens: 300 } });
+  });
+
   // R18.5 (contributor proposal, not released): the intake turn's temperature reaches Bedrock.
   it('forwards a temperature from 0 to 1 and refuses one outside it', async () => {
     const { client, handler } = relayHandler({});
@@ -176,6 +188,22 @@ describe('inference relay function', () => {
     const bad = { ...EVENT, request: { ...REQUEST, temperature: 1.5 } };
     expect(await handler(bad)).toEqual({ ok: false, failure: 'invalid' });
     expect(client.commands).toHaveLength(1);
+  });
+
+  // R18.5 (contributor's call, D-066): the range is inclusive at both ends.
+  it.each([
+    [0, true],
+    [1, true],
+    [-0.1, false],
+  ])('treats temperature %d as valid: %s', async (temperature, valid) => {
+    const { client, handler } = relayHandler({});
+    const result = await handler({ ...EVENT, request: { ...REQUEST, temperature } });
+    if (valid) {
+      expect(client.commands[0]?.input).toMatchObject({ inferenceConfig: { temperature } });
+    } else {
+      expect(result).toEqual({ ok: false, failure: 'invalid' });
+      expect(client.commands).toHaveLength(0);
+    }
   });
 
   it('logs outcomes only, never the request or reply text', async () => {
@@ -220,5 +248,38 @@ describe('token usage through the relay', () => {
     };
     const { port } = relayPort([invoked({ Payload: encode(bad) })]);
     expect(await port.converse(REQUEST)).toEqual({ ok: false, failure: 'invalid' });
+  });
+
+  // R17.x (contributor's call, D-064): an implausible count is refused, and one reported count
+  // is kept with the other as 0.
+  it('refuses a token count above 1,000,000', async () => {
+    const huge = {
+      ok: true,
+      text: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: 1_000_001, outputTokens: 2 },
+    };
+    const { port } = relayPort([invoked({ Payload: encode(huge) })]);
+    expect(await port.converse(REQUEST)).toEqual({ ok: false, failure: 'invalid' });
+  });
+
+  it('accepts a token count of exactly 1,000,000', async () => {
+    const atLimit = {
+      ok: true,
+      text: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+    };
+    const { port } = relayPort([invoked({ Payload: encode(atLimit) })]);
+    expect(await port.converse(REQUEST)).toEqual(atLimit);
+  });
+
+  it.each([
+    [{ inputTokens: 12 }, { inputTokens: 12, outputTokens: 0 }],
+    [{ outputTokens: 5 }, { inputTokens: 0, outputTokens: 5 }],
+  ])('reports both counts when Bedrock gives only %o', async (usage, expected) => {
+    const partial = { ...ENDED, usage } as unknown as ConverseCommandOutput;
+    const { handler } = relayHandler({}, [partial]);
+    expect(await handler(EVENT)).toMatchObject({ ok: true, usage: expected });
   });
 });

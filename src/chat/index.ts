@@ -15,6 +15,12 @@ export {
   type ChatAssistMessage,
   type ChatAssistResult,
 } from './assist.js';
+export {
+  guardAssistText,
+  inventsFact,
+  makesNewPromise,
+  type AssistGuardReport,
+} from './assist-guard.js';
 export { CHAT_ASSIST_PROMPT_VERSION } from './assist-prompt.js';
 export {
   CONNECT_TICKET_TTL_SECONDS,
