@@ -607,6 +607,16 @@ describe('crisis language before the model', () => {
     expect(drafts.rows[0].n).toBe(0);
   });
 
+  // R17.x (contributor's call, D-064): crisis slang is caught before the model, so the scripted
+  // model gets no request at all.
+  it('answers CRISIS_SUPPORT to "I want to unalive myself" with no model request', async () => {
+    const { headers } = await veteran();
+    const before = model.requests().length;
+    const res = await post('/api/v0/intake/drafts', headers, { text: 'I want to unalive myself' });
+    expect(res.json().outcome).toBe('CRISIS_SUPPORT');
+    expect(model.requests().length - before).toBe(0);
+  });
+
   it('leaves an open draft unchanged when a follow-up has crisis language', async () => {
     const { headers } = await veteran();
     model.enqueue(toolTurn(draftTool({ category: 'FOOD', summary: 'Groceries' })), textTurn('Ok.'));

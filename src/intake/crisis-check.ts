@@ -44,20 +44,28 @@ export const CRISIS_PHRASES: readonly string[] = [
 /** Zero-width and format characters (soft hyphen, LRM/RLM) and bidi embeddings and isolates. */
 const INVISIBLE = /[\u200B-\u200F\u2060\uFEFF\u00AD\u202A-\u202E\u2066-\u2069]/g;
 
-/** Cyrillic and Greek letters drawn like Latin ones, so "suісіdе" cannot slip past. */
-const LOOK_ALIKES = 'аеорсухіАЕОРСУХІοΟ';
-const LATIN_FORMS = 'aeopcyxiaeopcyxioo';
+/**
+ * Cyrillic, Greek and Latin letters drawn like plain Latin ones, so "suісіdе", "suıcide" and
+ * "ꜱᴜɪᴄɪᴅᴇ" cannot slip past. R17.x (contributor's call, D-064): Cyrillic ѕјԁԛԝӏһԍ, dotless ı and
+ * the Latin small capitals were added. Each glyph lines up with its letter in LATIN_FORMS.
+ */
+const LOOK_ALIKES = 'аеорсухіАЕОРСУХІοΟѕјԁԛԝӏһԍıᴀʙᴄᴅᴇɢʜɪᴊᴋʟᴍɴᴏᴘʀꜱᴛᴜᴠᴡʏᴢ';
+const LATIN_FORMS = 'aeopcyxiaeopcyxioosjdqwlhgiabcdeghijklmnoprstuvwyz';
 const LOOK_ALIKE_PATTERN = new RegExp(`[${LOOK_ALIKES}]`, 'g');
 
+/** NFKC turns "⒮" into "(s)"; a single letter in parentheses keeps just the letter. */
+const PARENTHESIZED_LETTER = /\((\p{L})\)/gu;
+
 /**
- * R17.x (contributor's call, D-064): NFKC (full-width and compatibility forms), drop invisible
- * characters, map homoglyphs, lower-case, drop apostrophes ("can't" reads "cant"), turn other
+ * R17.x (contributor's call, D-064): NFKC (full-width, circled and compatibility forms), drop
+ * invisible characters, unwrap "(s)", map homoglyphs, lower-case, drop apostrophes ("can't" reads "cant"), turn other
  * punctuation into spaces ("self-harm" reads "self harm"), then collapse whitespace.
  */
 function normalize(text: string): string {
   return text
     .normalize('NFKC')
     .replace(INVISIBLE, '')
+    .replace(PARENTHESIZED_LETTER, '$1')
     .replace(LOOK_ALIKE_PATTERN, (glyph) => LATIN_FORMS[LOOK_ALIKES.indexOf(glyph)] ?? glyph)
     .toLowerCase()
     .replace(/['‘’]/g, '')
