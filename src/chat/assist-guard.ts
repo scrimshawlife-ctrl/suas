@@ -76,14 +76,27 @@ function overlap(a: string, b: string): number {
   return shared / Math.max(left.size, right.size, 1);
 }
 
+const PROMISE_ALL = new RegExp(PROMISE.source, 'g');
+
+/** Each promise clause: from a promise phrase to the next comma, semicolon, "and" or end. */
+function promiseClauses(sentence: string): string[] {
+  return [...sentence.matchAll(PROMISE_ALL)].map((match) =>
+    sentence
+      .slice(match.index)
+      .split(/[,;:]|\s+(?:and|but|so)\s+/)[0]!
+      .replace(/[.!?]+$/, '')
+      .trim(),
+  );
+}
+
 /**
- * True when a sentence of `output` makes a promise that no helper sentence already makes: the
- * same sentence once normalized, or one sharing at least 80% of its words.
+ * True when `output` makes a promise that no helper message already makes. Each promise clause
+ * must match a helper promise clause: the same once normalized, or sharing at least 80% of words.
  */
 export function makesNewPromise(output: string, helperText: string): boolean {
-  const said = sentences(helperText);
+  const said = sentences(helperText).flatMap(promiseClauses);
   return sentences(output)
-    .filter((sentence) => PROMISE.test(sentence))
+    .flatMap(promiseClauses)
     .some((promise) => !said.some((helper) => overlap(promise, helper) >= 0.8));
 }
 

@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { assistChat, CHAT_ASSIST_TEXT_MAX, type ChatAssistInput } from '../../src/chat/index.js';
+import { makesNewPromise } from '../../src/chat/assist-guard.js';
 import { ScriptedModelInference, type ModelMessagePart } from '../../src/inference/index.js';
 
 const REQUEST = {
@@ -274,5 +275,26 @@ describe('assistChat output guard', () => {
       outcome: 'UNAVAILABLE',
       guard: { blockedPromise: true, blockedFact: true, droppedSentences: 2 },
     });
+  });
+});
+
+// R18.6 (contributor's call, D-066): a promise counts as the helper's own when its clause, from
+// the promise phrase to the next break, matches a clause the helper already wrote.
+describe('makesNewPromise', () => {
+  const helper = "I'll be there at 9:30 am.";
+  it.each([
+    "Yes, I'll be there at 9:30 am, see you then!",
+    "Yes! I'll be there at 9:30 am.",
+    "Thanks. I'll be there at 9:30 am",
+  ])('accepts a restated helper promise: %s', (output) => {
+    expect(makesNewPromise(output, helper)).toBe(false);
+  });
+
+  it.each([
+    "I'll be there at 9:30 am and I'll bring groceries.",
+    "I'll be there at 10 am.",
+    'I will drive you there Friday.',
+  ])('refuses a promise the helper did not make: %s', (output) => {
+    expect(makesNewPromise(output, helper)).toBe(true);
   });
 });
