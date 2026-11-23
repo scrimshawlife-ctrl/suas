@@ -76,10 +76,31 @@ describe('detectCrisisLanguage', () => {
     expect(detectCrisisLanguage(text)).toBe(true);
   });
 
+  // R17.x (contributor's call, D-064): capital look-alikes and the enclosed-letter blocks that
+  // NFKC leaves alone (negative circled U+1F150-1F169, negative squared U+1F170-1F189).
+  it.each([
+    ['Cyrillic capital DZE for S', 'ЅUICIDE'],
+    ['Cyrillic capitals in "KILL MYSELF"', 'KILL MYЅЕLF'],
+    ['Cyrillic capitals throughout', 'КІLL МУЅЕLФ'.replace('Ф', 'F')],
+    ['Cyrillic capital SHHA for H', '\u04baARM MYSELF'],
+    ['Greek capitals', 'ΚΙLL ΜYЅΕLF'],
+    ['negative circled letters', '\u{1F162}\u{1F164}\u{1F158}\u{1F152}\u{1F158}\u{1F153}\u{1F154}'],
+    ['negative squared letters', '\u{1F182}\u{1F184}\u{1F178}\u{1F172}\u{1F178}\u{1F173}\u{1F174}'],
+    ['squared letters', '\u{1F142}\u{1F144}\u{1F138}\u{1F132}\u{1F138}\u{1F133}\u{1F134}'],
+  ])('matches with %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(true);
+  });
+
   // Real words in Cyrillic and Turkish must not turn into crisis phrases once mapped.
   it.each([
     ['the Russian word "\u0441\u0430\u0439\u0442"', '\u0441\u0430\u0439\u0442'],
     ['the Turkish word "k\u0131rm\u0131z\u0131"', 'k\u0131rm\u0131z\u0131'],
+    [
+      'the Russian capitals "\u041c\u041e\u0421\u041a\u0412\u0410"',
+      '\u041c\u041e\u0421\u041a\u0412\u0410',
+    ],
+    ['the Greek capitals "\u0391\u0398\u0397\u039d\u0391"', '\u0391\u0398\u0397\u039d\u0391'],
+    ['negative circled letters spelling "help"', '\u{1F157}\u{1F154}\u{1F15B}\u{1F15F}'],
   ])('does not match %s', (_name, text) => {
     expect(detectCrisisLanguage(text)).toBe(false);
   });
