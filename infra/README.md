@@ -78,23 +78,23 @@ Bootstrap, OIDC roles and parameters: [`docs/runbooks/aws-staging-bootstrap.md`]
 
 Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user confirmed on 2026-11-05.
 
-| Context                  | Default                                | Meaning                                                                                                                    |
-| ------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                  |
-| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                       |
-| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                   |
-| `modelInference`         | `disabled`                             | `bedrock` builds the inference relay and its guardrail (R17 contributor proposal, not released). See "Model inference".    |
-| `bedrockModelId`         | none                                   | Required with `modelInference=bedrock`, refused without it. An on-demand base model id, like `qwen.qwen3-32b-v1:0`.        |
-| `allowPlaceholderModel`  | refused                                | Passing it fails synth. It does not select a model and it does not mark a deployable template.                             |
-| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches the retired Worker staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
-| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value the retired Worker used)                                |
-| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of zones in `region`, if an endpoint service is missing in one                                                  |
-| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                      |
-| `vaSandbox`              | `false`                                | `true` builds the VA verify function and sets `SUAS_VA_CONFIRMATION_MODE=sandbox` on the API. See "VA confirmation".       |
-| `region`                 | `us-west-2`                            | Region of the Dns, Backend and Web stacks. The WebCert stack stays in `us-east-1`.                                         |
-| `customDomains`          | `true`                                 | `false`: no Dns or WebCert stack, no certificates, custom domains or DNS records. See "Region-restricted accounts".        |
-| `webOrigin`              | none                                   | Only with `customDomains=false`. The `WebUrl` origin (`https://<id>.cloudfront.net`), set as `SUAS_CORS_ALLOWED_ORIGINS`.  |
-| `webCertificateArn`      | none                                   | Only with `customDomains=true`. A `us-east-1` ACM certificate ARN for CloudFront; replaces the WebCert stack.              |
+| Context                  | Default                                | Meaning                                                                                                                         |
+| ------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                       |
+| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                            |
+| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                        |
+| `modelInference`         | `disabled`                             | `bedrock` builds the inference relay and its guardrail (R17 contributor proposal, not released). See "Model inference".         |
+| `bedrockModelId`         | none                                   | Required with `modelInference=bedrock`, refused without it. One of the allowed on-demand base model ids: `qwen.qwen3-32b-v1:0`. |
+| `allowPlaceholderModel`  | refused                                | Passing it fails synth. It does not select a model and it does not mark a deployable template.                                  |
+| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches the retired Worker staging; set `approved` to show the D-012 crisis copy. **Owner call.**      |
+| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value the retired Worker used)                                     |
+| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of zones in `region`, if an endpoint service is missing in one                                                       |
+| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                           |
+| `vaSandbox`              | `false`                                | `true` builds the VA verify function and sets `SUAS_VA_CONFIRMATION_MODE=sandbox` on the API. See "VA confirmation".            |
+| `region`                 | `us-west-2`                            | Region of the Dns, Backend and Web stacks. The WebCert stack stays in `us-east-1`.                                              |
+| `customDomains`          | `true`                                 | `false`: no Dns or WebCert stack, no certificates, custom domains or DNS records. See "Region-restricted accounts".             |
+| `webOrigin`              | none                                   | Only with `customDomains=false`. The `WebUrl` origin (`https://<id>.cloudfront.net`), set as `SUAS_CORS_ALLOWED_ORIGINS`.       |
+| `webCertificateArn`      | none                                   | Only with `customDomains=true`. A `us-east-1` ACM certificate ARN for CloudFront; replaces the WebCert stack.                   |
 
 Hostnames must be inside `rootDomain`, because certificates are validated in the zone this app owns.
 
@@ -199,8 +199,10 @@ With `-c modelInference=bedrock -c bedrockModelId=qwen.qwen3-32b-v1:0` (Qwen3 32
   version's description carries a hash of the configuration, so a changed configuration makes a new version.
 - **IAM:** the relay role may `bedrock:InvokeModel` on the one foundation model in the stack's region only
   (`arn:<partition>:bedrock:<region>::foundation-model/<bedrockModelId>`). The model is invoked on demand there:
-  no inference profile and no cross-region routing, so synth refuses an id with a geographic or global prefix
-  (`us.`, `eu.`, `apac.`, `global.` and the like). It may also `bedrock:ApplyGuardrail` on the one guardrail. No
+  no inference profile and no cross-region routing. Synth accepts only the exact ids in
+  `ALLOWED_BEDROCK_MODEL_IDS` (`infra/lib/config.ts`, today `qwen.qwen3-32b-v1:0`), so a profile id, another
+  model or a case variant is refused. There is no `bedrock:InferenceProfileArn` condition: it applies only to
+  profile-routed calls, and the grant already names the one foundation-model ARN. It may also `bedrock:ApplyGuardrail` on the one guardrail. No
   other role has a Bedrock action. The API role gets `lambda:InvokeFunction` on the relay only.
 - **API settings:** `SUAS_MODEL_INFERENCE_MODE=bedrock`, `SUAS_BEDROCK_MODEL_ID`, `SUAS_BEDROCK_GUARDRAIL_ID`,
   `SUAS_BEDROCK_GUARDRAIL_VERSION` and `SUAS_MODEL_INFERENCE_RELAY_FUNCTION`. The API refuses to start in STAGING

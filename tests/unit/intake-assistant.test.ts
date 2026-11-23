@@ -206,6 +206,27 @@ describe('decline backstop', () => {
     expect(h.searches).toHaveLength(0);
   });
 
+  // R18.5 (contributor's call, D-066): only a decline of requests by SUAS or "we" counts.
+  it.each([
+    "SUAS can't take requests for job help yet.",
+    'We cannot take requests for legal help.',
+  ])('treats "%s" as a decline', async (text) => {
+    const h = host();
+    const result = await run(new ScriptedModelInference().enqueue(say(text)), h);
+    expect(result.notAvailableYet).toBe(true);
+    expect(h.searches).toEqual([{ outside_categories: true }]);
+  });
+
+  it.each(['I cannot accept this gift.', "I can't take the bus.", 'When do you need it?'])(
+    'shows no notice for "%s"',
+    async (text) => {
+      const h = host();
+      const result = await run(new ScriptedModelInference().enqueue(say(text)), h);
+      expect(result.notAvailableYet).toBe(false);
+      expect(h.searches).toHaveLength(0);
+    },
+  );
+
   it('leaves a clarifying question without a notice', async () => {
     const h = host();
     const result = await run(new ScriptedModelInference().enqueue(say('When do you need it?')), h);

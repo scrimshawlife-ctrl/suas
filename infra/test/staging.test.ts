@@ -888,19 +888,27 @@ describe('configuration and hygiene', () => {
     expect(() => synthesize({ bedrockModelId: BEDROCK_CONTEXT.bedrockModelId })).toThrow(
       /needs modelInference=bedrock/,
     );
+    // R17.x (contributor's call, D-064): an exact allowlist, so other models and case variants fail.
     for (const bedrockModelId of [
       undefined,
       '',
       'us.anthropic.claude-haiku-4-5-20251001-v1:0',
       'global.x.y',
+      'anthropic.claude-3-haiku-20240307-v1:0',
+      'meta.llama3-70b-instruct-v1:0',
+      'qwen.qwen3-235b-a22b-2507-v1:0',
+      'us.qwen.qwen3-32b-v1:0',
       'Qwen.Qwen3',
+      'QWEN.QWEN3-32B-V1:0',
+      'qwen.Qwen3-32b-v1:0',
+      ' qwen.qwen3-32b-v1:0',
     ]) {
       const context = {
         modelInference: 'bedrock',
         ...(bedrockModelId !== undefined ? { bedrockModelId } : {}),
       };
       expect(() => synthesize(context), String(bedrockModelId)).toThrow(
-        /on-demand Bedrock base model id/,
+        /allowed on-demand Bedrock base model ids \(qwen\.qwen3-32b-v1:0\)/,
       );
     }
     expect(() => synthesize({ modelInference: 'fake' })).toThrow(/disabled or bedrock/);
