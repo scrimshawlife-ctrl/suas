@@ -59,6 +59,14 @@ describe('detectCrisisLanguage', () => {
     expect(detectCrisisLanguage(text)).toBe(true);
   });
 
+  // Security review: an ASCII "(x)" after a phrase must not join onto its last word.
+  it.each([
+    ['"(d)" after "die"', 'I want to die(d)'],
+    ['"(s)" after "myself"', 'kill myself(s)'],
+  ])('matches with %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(true);
+  });
+
   // Real words in Cyrillic and Turkish must not turn into crisis phrases once mapped.
   it.each([
     ['the Russian word "\u0441\u0430\u0439\u0442"', '\u0441\u0430\u0439\u0442'],
