@@ -131,7 +131,7 @@ releases it and lifts the staging maintenance hold.
   (`msg: staging_demo_retention`, `scrubbed`, `challenges_deleted`), never an address. A scrubbed account is never
   selected again, so repeated runs do nothing. The fixture seed's SUSPENDED publisher account is kept, although it is
   not in the registry. A wrong registry would scrub every other account, so check the registry first.
-  With an empty registry the sweep scrubs nothing and logs `msg: staging_demo_retention_skipped` each pass.
+  With an empty registry the sweep scrubs no account and logs `msg: staging_demo_retention_skipped` each pass; it still deletes old orphan sign-in codes and rate-limit windows. Startup refuses `SUAS_PUBLIC_DEMO=enabled` on STAGING while the registry is empty.
   Known gaps: consent grants owned by a scrubbed account stay `ACTIVE` (the account cannot sign in), and the
   15-minute issue and verify limits keep the address in plain text until the `rate_limit_prune` sweep removes them.
 

@@ -1185,6 +1185,20 @@ export const configSchema = rawConfigSchema.superRefine((raw, ctx) => {
       message: registry.issue,
     });
   }
+  // R16.5(b) (contributor's call, D-065): the retention sweep skips while the registry is empty,
+  // so open sign-up on STAGING is refused until fixture principals are configured.
+  if (
+    raw.SUAS_PUBLIC_DEMO === 'enabled' &&
+    environment === 'STAGING' &&
+    registry.issue === undefined &&
+    registry.principals.length === 0
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'SUAS_PUBLIC_DEMO=enabled on STAGING needs SUAS_STAGING_FIXTURE_REGISTRY: the retention sweep skips while it is empty.',
+    });
+  }
 
   if (
     raw.SUAS_DEMO_FIXED_CODE === 'enabled' &&

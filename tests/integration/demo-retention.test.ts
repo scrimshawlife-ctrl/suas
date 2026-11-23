@@ -219,6 +219,22 @@ describe('STAGING demo retention', () => {
     expect((await userRow(fresh.userId))?.deleted_at).toBeNull();
   });
 
+  // R16.5(b) (contributor's call, D-065): registry-independent cleanup still runs, so sign-in
+  // codes for addresses that never got an account do not pile up while the registry is empty.
+  it('still deletes orphan sign-in codes when the fixture registry is empty', async () => {
+    await pool.query(
+      `INSERT INTO auth_challenges (auth_challenge_id, tenant_id, user_id, method,
+          destination, secret_hash, max_attempts, issued_at, expires_at)
+        VALUES ($1, $2, NULL, 'EMAIL_OTP', $3, 'hash', 5, now() - interval '8 days', now())`,
+      [randomUUID(), TENANT, syntheticEmail('orphan-old')],
+    );
+    const empty = { ...access(true), fixturePrincipals: [] };
+    expect(await scrubDemoAccounts(pool, { access: empty })).toEqual({
+      scrubbed: 0,
+      challengesDeleted: 1,
+    });
+  });
+
   it('refuses to run outside STAGING', async () => {
     for (const environment of ['PRODUCTION', 'LOCAL']) {
       await expect(scrubDemoAccounts(pool, { access: access(true, environment) })).rejects.toThrow(

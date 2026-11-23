@@ -37,30 +37,32 @@ export async function scrubDemoAccounts(
   if (access.environment !== 'STAGING') {
     throw new Error(`Refusing demo retention outside STAGING: environment "${access.environment}"`);
   }
-  // R16.5(b) (contributor's call, D-065): with no registry every account looks non-fixture,
-  // so an empty registry scrubs nothing rather than everything.
-  if (access.fixturePrincipals.length === 0) return { scrubbed: 0, challengesDeleted: 0 };
   const now = options.now ?? new Date();
   const retentionDays = options.retentionDays ?? DEMO_RETENTION_DAYS;
   const demoActive = publicDemoActive(access);
 
-  const candidates = await db.query<Candidate>(
-    `SELECT tenant_id::text, user_id::text FROM users
+  // R16.5(b) (contributor's call, D-065): with no registry every account looks non-fixture, so
+  // the account scrub is skipped (startup refuses the demo then); the cleanup below still runs.
+  const candidates =
+    access.fixturePrincipals.length === 0
+      ? { rows: [] as Candidate[] }
+      : await db.query<Candidate>(
+          `SELECT tenant_id::text, user_id::text FROM users
       WHERE deleted_at IS NULL
         AND (lower(tenant_id::text), lower(user_id::text)) NOT IN (
               SELECT * FROM unnest($1::text[], $2::text[]))
         AND ($3::boolean = false OR created_at < $4::timestamptz - make_interval(days => $5))
         AND (email IS NULL OR lower(email) <> lower($6))
       ORDER BY created_at`,
-    [
-      access.fixturePrincipals.map((entry) => entry.tenantId.toLowerCase()),
-      access.fixturePrincipals.map((entry) => entry.userId.toLowerCase()),
-      demoActive,
-      now,
-      retentionDays,
-      PUBLISHER_EMAIL,
-    ],
-  );
+          [
+            access.fixturePrincipals.map((entry) => entry.tenantId.toLowerCase()),
+            access.fixturePrincipals.map((entry) => entry.userId.toLowerCase()),
+            demoActive,
+            now,
+            retentionDays,
+            PUBLISHER_EMAIL,
+          ],
+        );
 
   let scrubbed = 0;
   let challengesDeleted = 0;
