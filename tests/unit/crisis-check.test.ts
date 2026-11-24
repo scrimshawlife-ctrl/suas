@@ -81,7 +81,7 @@ describe('detectCrisisLanguage', () => {
   it.each([
     ['Cyrillic capital DZE for S', 'ЅUICIDE'],
     ['Cyrillic capitals in "KILL MYSELF"', 'KILL MYЅЕLF'],
-    ['Cyrillic capitals throughout', 'КІLL МУЅЕLФ'.replace('Ф', 'F')],
+    ['Cyrillic capitals throughout', '\u041a\u0406LL \u041c\u0423\u0405\u0415LF'],
     ['Cyrillic capital SHHA for H', '\u04baARM MYSELF'],
     ['Greek capitals', 'ΚΙLL ΜYЅΕLF'],
     ['negative circled letters', '\u{1F162}\u{1F164}\u{1F158}\u{1F152}\u{1F158}\u{1F153}\u{1F154}'],
@@ -89,6 +89,24 @@ describe('detectCrisisLanguage', () => {
     ['squared letters', '\u{1F142}\u{1F144}\u{1F138}\u{1F132}\u{1F138}\u{1F133}\u{1F134}'],
   ])('matches with %s', (_name, text) => {
     expect(detectCrisisLanguage(text)).toBe(true);
+  });
+
+  // Review 2026-11-24: a run of letters in parentheses inside a phrase still reads as those letters.
+  it.each([
+    ['"(su)" at the start of a word', '(su)icide'],
+    ['"(ici)" inside a word', 'su(ici)de'],
+    ['"(my)" inside a phrase', 'kill (my)self'],
+    ['one letter per parenthesis', 'I want to (d)(i)(e)'],
+  ])('matches with %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(true);
+  });
+
+  it.each([
+    ['a word in parentheses', 'I need a ride (asap) to the clinic'],
+    ['lettered list items', '(a) food (b) shelter'],
+    ['an emoji in parentheses', 'I need a ride (\u{1F4A3}) to the clinic'],
+  ])('does not match %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(false);
   });
 
   // Real words in Cyrillic and Turkish must not turn into crisis phrases once mapped.

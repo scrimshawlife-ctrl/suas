@@ -175,7 +175,8 @@ interface RunState {
   resources: Map<string, IntakeResource>;
   notAvailableYet: boolean;
   refusedToolCalls: number;
-  searched: boolean;
+  /** A search for needs outside the four categories ran (R18.5, D-066). */
+  searchedOutside: boolean;
 }
 
 interface ToolOutcome {
@@ -192,12 +193,14 @@ async function runSearch(
   host: IntakeHost,
   state: RunState,
 ): Promise<ToolOutcome> {
-  state.searched = true;
   const parsed = searchResourcesInput.safeParse(call.input);
   if (!parsed.success) {
     return error('Invalid input. Use only category, keywords and outside_categories.');
   }
-  if (parsed.data.outside_categories === true) state.notAvailableYet = true;
+  if (parsed.data.outside_categories === true) {
+    state.notAvailableYet = true;
+    state.searchedOutside = true;
+  }
   let found: readonly IntakeResource[];
   try {
     found = await host.searchResources(parsed.data);
@@ -206,17 +209,20 @@ async function runSearch(
   }
   const top = found.slice(0, MAX_RESOURCES_PER_SEARCH);
   for (const resource of top) state.resources.set(resource.resourceId, resource);
+  // Catalog text is data too: escaped so it cannot forge a prompt delimiter (review 2026-11-24).
   return {
-    content: JSON.stringify({
-      resources: top.map((resource) => ({
-        resource_id: resource.resourceId,
-        service_name: resource.serviceName,
-        category: resource.category,
-        counties: resource.counties,
-        hours: resource.hours,
-        cost: resource.cost,
-      })),
-    }),
+    content: escapePromptData(
+      JSON.stringify({
+        resources: top.map((resource) => ({
+          resource_id: resource.resourceId,
+          service_name: resource.serviceName,
+          category: resource.category,
+          counties: resource.counties,
+          hours: resource.hours,
+          cost: resource.cost,
+        })),
+      }),
+    ),
   };
 }
 
@@ -277,7 +283,9 @@ async function runTool(
  */
 async function backstopDecline(text: string, host: IntakeHost, state: RunState): Promise<void> {
   const draftReady = state.draft.category !== null && state.draft.summary !== null;
-  if (draftReady || state.notAvailableYet || state.searched || !DECLINE_PATTERN.test(text)) return;
+  if (draftReady || state.notAvailableYet || state.searchedOutside || !DECLINE_PATTERN.test(text)) {
+    return;
+  }
   const call = {
     id: 'server-search',
     name: 'search_resources',
@@ -328,7 +336,7 @@ export async function runIntakeAssistant(
     resources: new Map(),
     notAvailableYet: false,
     refusedToolCalls: 0,
-    searched: false,
+    searchedOutside: false,
   };
   // Before any model call, and whether or not a model is configured (R17.4, proposal). It
   // covers every Veteran-written text the model would see: the typed text and the draft fields.

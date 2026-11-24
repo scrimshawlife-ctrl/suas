@@ -84,8 +84,11 @@ const unenclose = (glyph: string): string => {
   return String.fromCodePoint(0x61 + point - start);
 };
 
-/** A typed "(s)" (full-width too, after NFKC); unwrapped only in its own variant below. */
-const TYPED_PARENTHESIZED_LETTER = /\((\p{L})\)/gu;
+/**
+ * Typed letters in parentheses, "(s)" or "(su)" (full-width too, after NFKC), up to 20 so the
+ * pattern stays linear; unwrapped only in its own variant below (review 2026-11-24).
+ */
+const TYPED_PARENTHESIZED_LETTERS = /\((\p{L}{1,20})\)/gu;
 
 /**
  * R17.x (contributor's call, D-064): NFKC (full-width, circled and compatibility forms), drop
@@ -110,10 +113,10 @@ function letterMappedNormalize(text: string): string {
   return plainNormalize(mapLookAlikes(text.replace(ENCLOSED_LETTER, unenclose).normalize('NFKC')));
 }
 
-/** Like the letter-mapped variant, but a typed "(s)" reads "s": "(s)uicide", "sui(c)ide". */
+/** Like the letter-mapped variant, but typed "(su)" reads "su": "(su)icide", "sui(c)ide". */
 function parenUnwrappedNormalize(text: string): string {
   return plainNormalize(
-    mapLookAlikes(text.normalize('NFKC').replace(TYPED_PARENTHESIZED_LETTER, '$1')),
+    mapLookAlikes(text.normalize('NFKC').replace(TYPED_PARENTHESIZED_LETTERS, '$1')),
   );
 }
 
