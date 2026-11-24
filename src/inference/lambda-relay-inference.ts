@@ -12,12 +12,13 @@
 import { InvokeCommand, LambdaClient, type InvokeCommandOutput } from '@aws-sdk/client-lambda';
 import { isAwsTimeout } from '../aws/errors.js';
 import { inferenceRelayResultSchema, type InferenceRelayEvent } from './inference-relay.js';
-import type {
-  ModelFailureKind,
-  ModelInferenceLogger,
-  ModelInferencePort,
-  ModelTurnRequest,
-  ModelTurnResult,
+import {
+  INFERENCE_PURPOSE_LIMITS,
+  type ModelFailureKind,
+  type ModelInferenceLogger,
+  type ModelInferencePort,
+  type ModelTurnRequest,
+  type ModelTurnResult,
 } from './model-inference.js';
 
 export const BEDROCK_RELAY_IMPLEMENTATION = 'bedrock-relay' as const;
@@ -27,6 +28,9 @@ export const DEFAULT_RELAY_DEADLINE_MS = 25_000;
 
 /** Above the relay function's own 27 s timeout, so the relay answers first. */
 export const INFERENCE_RELAY_INVOKE_TIMEOUT_MS = 28_000;
+
+/** Cold start plus the Lambda hop, added to a purpose's call cap (R17.3, contributor's call, D-064). */
+export const RELAY_OVERHEAD_MS = 5_000;
 
 /** The one Lambda client method this port uses; tests supply a fake. */
 export interface LambdaClientLike {
@@ -57,14 +61,17 @@ export class LambdaRelayModelInference implements ModelInferencePort {
   }
 
   async converse(request: ModelTurnRequest): Promise<ModelTurnResult> {
-    const deadlineMs = Math.floor(request.deadlineMs ?? DEFAULT_RELAY_DEADLINE_MS);
-    if (deadlineMs <= 0) return this.finish({ ok: false, failure: 'timeout' });
-    // An unnamed purpose gets the tighter intake bounds.
-    const event: InferenceRelayEvent = {
-      purpose: request.purpose ?? 'intake',
-      request,
-      deadlineMs,
-    };
+    const requested = Math.floor(request.deadlineMs ?? DEFAULT_RELAY_DEADLINE_MS);
+    if (requested <= 0) return this.finish({ ok: false, failure: 'timeout' });
+    // An unnamed purpose gets the tighter intake bounds, and the wait never exceeds the purpose's
+    // call cap plus the relay overhead, whatever deadline the caller sends (review 2026-11-24).
+    const purpose = request.purpose ?? 'intake';
+    const deadlineMs = Math.min(
+      requested,
+      INFERENCE_PURPOSE_LIMITS[purpose].callTimeoutCapMs + RELAY_OVERHEAD_MS,
+      INFERENCE_RELAY_INVOKE_TIMEOUT_MS,
+    );
+    const event: InferenceRelayEvent = { purpose, request, deadlineMs };
 
     let output: InvokeCommandOutput;
     try {
@@ -75,7 +82,7 @@ export class LambdaRelayModelInference implements ModelInferencePort {
           Payload: new TextEncoder().encode(JSON.stringify(event)),
         }),
         {
-          abortSignal: AbortSignal.timeout(Math.min(deadlineMs, INFERENCE_RELAY_INVOKE_TIMEOUT_MS)),
+          abortSignal: AbortSignal.timeout(deadlineMs),
         },
       );
     } catch (error: unknown) {
