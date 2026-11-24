@@ -47,6 +47,11 @@ export interface EnvironmentConfig {
   readonly vaSandbox: boolean;
   /** Model inference through the outside-VPC relay (R17.1/R17.3, contributor proposal, not released). */
   readonly modelInference: ModelInferenceConfig;
+  /**
+   * R18.7 (contributor proposal, not released): helper-side chat assistance on the API.
+   * Off by default; needs modelInference=bedrock, since it uses the same relay and model.
+   */
+  readonly chatAssist: boolean;
 }
 
 /** `disabled` builds nothing; `bedrock` builds the relay and guardrail for one base model. */
@@ -151,6 +156,12 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
   );
 
   const modelInference = modelInferenceConfig(node);
+  const chatAssist = trueOrFalse(node, 'chatAssist', 'false');
+  if (chatAssist && modelInference.mode !== 'bedrock') {
+    throw new Error(
+      'Context "chatAssist=true" needs modelInference=bedrock: the API refuses chat assist without the inference relay (R18.7, contributor proposal, not released).',
+    );
+  }
 
   const safety = text(node, 'safetyCopyMode') ?? 'placeholder_test_only';
   if (safety !== 'placeholder_test_only' && safety !== 'approved') {
@@ -207,6 +218,7 @@ export function loadEnvironmentConfig(node: Node): EnvironmentConfig {
       'unknown',
     vaSandbox,
     modelInference,
+    chatAssist,
   };
 }
 
