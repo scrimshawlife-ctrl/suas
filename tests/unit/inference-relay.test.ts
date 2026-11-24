@@ -62,7 +62,8 @@ describe('LambdaRelayModelInference', () => {
     expect(JSON.parse(new TextDecoder().decode(input.Payload))).toEqual({
       purpose: 'intake',
       request: REQUEST,
-      deadlineMs: 20_000,
+      // 20 s asked, capped at the intake call cap plus the relay overhead.
+      deadlineMs: 17_000,
     });
   });
 
@@ -99,6 +100,30 @@ describe('LambdaRelayModelInference', () => {
       failure: 'timeout',
     });
     expect(client.commands).toHaveLength(0);
+  });
+
+  // R17.3 (contributor's call, D-064, review 2026-11-24): the relay never waits longer than the
+  // purpose's call cap plus a margin, whatever deadline the caller sends or omits.
+  const { purpose: _purpose, deadlineMs: _deadline, ...UNNAMED } = REQUEST;
+  it.each([
+    ['no purpose and no deadline', UNNAMED, 'intake', 17_000],
+    ['an intake turn asking for 20 s', { ...REQUEST, deadlineMs: 20_000 }, 'intake', 17_000],
+    [
+      'extraction asking for 60 s',
+      { ...REQUEST, purpose: 'extraction', deadlineMs: 60_000 },
+      'extraction',
+      28_000,
+    ],
+    ['an intake turn with 9 s left', { ...REQUEST, deadlineMs: 9_000 }, 'intake', 9_000],
+  ] as const)('caps the relay deadline for %s', async (_name, request, purpose, deadlineMs) => {
+    const answer = { ok: true, text: 'ok', toolCalls: [] };
+    const { client, port } = relayPort([invoked({ Payload: encode(answer) })]);
+    await port.converse(request);
+    const input = client.commands[0]?.input as { Payload: Uint8Array };
+    expect(JSON.parse(new TextDecoder().decode(input.Payload))).toMatchObject({
+      purpose,
+      deadlineMs,
+    });
   });
 });
 
