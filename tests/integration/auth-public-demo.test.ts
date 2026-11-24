@@ -184,6 +184,22 @@ describe('STAGING public demo sign-up', () => {
     await clearIssueWindow(FIXTURE_EMAIL);
   });
 
+  // R16.2 (contributor's call, D-065, review 2026-11-24): Gmail ignores dots and treats
+  // googlemail.com as gmail.com, so those variants share one per-address budget; other domains
+  // keep their dots. Random local parts, and the delivery port is a fake: no mail is sent.
+  it('counts Gmail dot and googlemail variants as one address, but not dots elsewhere', async () => {
+    const local = `demo${randomUUID().slice(0, 8)}`;
+    const dotted = `${local.slice(0, 3)}.${local.slice(3, 6)}.${local.slice(6)}`;
+    expect((await issueWith(`${dotted}@gmail.com`, { addressDailyCap: 1 })).issued).toBe(true);
+    expect(
+      (await issueWith(`${local.toUpperCase()}@googlemail.com`, { addressDailyCap: 1 })).issued,
+    ).toBe(false);
+    expect((await issueWith(`${dotted}@example.invalid`, { addressDailyCap: 1 })).issued).toBe(
+      true,
+    );
+    expect((await issueWith(`${local}@example.invalid`, { addressDailyCap: 1 })).issued).toBe(true);
+  });
+
   it('counts MAGIC_LINK and +tag variants of one address against one per-address budget', async () => {
     const local = `demo-plus-${randomUUID().slice(0, 8)}`;
     const tagged = (tag: string) => `${local}+${tag}@example.invalid`;
