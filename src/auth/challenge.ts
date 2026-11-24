@@ -293,6 +293,8 @@ export async function issueChallenge(
 /**
  * STAGING public demo caps for an address with no account, on any email method (R16.2,
  * contributor proposal, not released / owner review on #363). Over a cap: 202 and no send.
+ * Each counter is its own atomic upsert; the per-address one is checked first, so a spent daily
+ * cap still uses one per-address unit. Both are accepted under D-065 (review 2026-11-24).
  */
 async function publicDemoCapReached(
   deps: ChallengeServiceDeps,
@@ -324,13 +326,20 @@ async function publicDemoCapReached(
  * The per-address counter subject only, never a delivery address: lower case with any `+tag`
  * dropped from the local part, so `a+1@x.test` and `a+2@x.test` share one budget.
  */
+/** Domains whose mailbox ignores dots in the local part and share one namespace. */
+const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com']);
+
 function canonicalAddressSubject(address: string): string {
   const normalized = address.trim().toLowerCase();
   const at = normalized.lastIndexOf('@');
   if (at < 0) return normalized;
-  const local = normalized.slice(0, at);
-  const plus = local.indexOf('+');
-  return (plus < 0 ? local : local.slice(0, plus)) + normalized.slice(at);
+  const plus = normalized.indexOf('+');
+  const local = normalized.slice(0, plus < 0 || plus > at ? at : plus);
+  const domain = normalized.slice(at + 1);
+  // R16.2 (contributor's call, D-065, review 2026-11-24): Gmail ignores dots and reads
+  // googlemail.com as gmail.com; every other domain keeps its local part as typed.
+  if (GMAIL_DOMAINS.has(domain)) return `${local.replaceAll('.', '')}@gmail.com`;
+  return `${local}@${domain}`;
 }
 
 export interface VerifyChallengeInput {
