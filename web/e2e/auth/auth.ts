@@ -128,6 +128,9 @@ export async function resetSignInLimits(destination?: string): Promise<void> {
   await withDb((db) =>
     destination === undefined
       ? db.query('DELETE FROM auth_rate_limits')
-      : db.query('DELETE FROM auth_rate_limits WHERE subject = $1', [destination]),
+      : db.query(`DELETE FROM auth_rate_limits WHERE subject = ${HASHED_SUBJECT}`, [destination]),
   );
 }
+
+/** SQL for the stored subject key of `$1`: the same digest as `rateLimitSubjectKey` in src. */
+export const HASHED_SUBJECT = `'sha256:' || encode(sha256(convert_to($1, 'UTF8')), 'hex')`;

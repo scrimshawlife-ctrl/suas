@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { APIRequestContext, Browser, Page } from '@playwright/test';
+import { resetSignInLimits } from '../auth/auth';
 import { expect, test } from '../fixtures';
 import { newPerson, shoot, signInWithCode, signUp, uniqueEmail, withDb } from '../helpers';
 
@@ -143,7 +144,7 @@ async function adminOnQueue(
   const admin = await newPerson(browser);
   // The shared seeded admins also sign in for other specs; clear their sign-in issue count
   // (AUTH.md §3, three per 15 minutes) so the full suite does not lock them out here.
-  await withDb((db) => db.query('DELETE FROM auth_rate_limits WHERE subject = $1', [email]));
+  await resetSignInLimits(email);
   await signInWithCode(admin, request, email);
   await expect(admin).not.toHaveURL(/\/sign-in/);
   await admin.goto('/admin/licence-reviews');
