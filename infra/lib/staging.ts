@@ -31,13 +31,15 @@ export function createStagingApp(app: App): StagingStacks {
     app.node.tryGetContext('deploymentPipeline') === true ||
     app.node.tryGetContext('deploymentPipeline') === 'true'
   ) {
-    if (
-      config.region !== 'us-west-2' ||
-      !config.customDomains ||
-      config.webCertificateArn !== undefined
-    ) {
+    // Four custom-domain stacks in us-west-2, or the R14.x region-restricted layout (suas #360;
+    // contributor proposal, not released): us-east-2 with an imported CloudFront certificate.
+    const fourStacks = config.region === 'us-west-2' && config.webCertificateArn === undefined;
+    const regionRestricted =
+      config.region === 'us-east-2' && config.webCertificateArn !== undefined;
+    if (!config.customDomains || !(fourStacks || regionRestricted)) {
       throw new Error(
-        'Deployment pipeline supports only us-west-2 with the four custom-domain stacks.',
+        'Deployment pipeline supports only us-west-2 with the four custom-domain stacks, ' +
+          'or us-east-2 with custom domains and an imported web certificate.',
       );
     }
   }

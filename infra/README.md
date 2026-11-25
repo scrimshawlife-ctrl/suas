@@ -548,3 +548,6 @@ Not needed for synthetic staging, required before any real Veteran data (plan §
 - A notification target for the alarms, and a CSP on the web distribution.
 - Restore RDS Proxy (or an equivalent connection pooler) for the API and job worker, and place the Lambda interface
   endpoint in every zone the functions run in. Lean synthetic STAGING removed both (R14.1 proposal).
+- A customer managed KMS key for the Bedrock guardrail, if the owner wants one. Today the guardrail uses an AWS
+  owned key, so the execution policy grants no `kms:CreateGrant` or `kms:DescribeKey` for it (R17 proposal, review
+  2026-11-24). A customer key needs those grants, scoped to the key and to `bedrock.<region>.amazonaws.com`.
