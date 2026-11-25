@@ -15,7 +15,17 @@
  * reset an attacker's budget.
  */
 
+import { createHash } from 'node:crypto';
 import type { Queryable } from '../db/transaction.js';
+
+/**
+ * The stored form of a subject: `sha256:` and the hex digest of its UTF-8 bytes, so an email or
+ * phone never sits in shared rate-limit state (review of suas #369, 2026-11-24). Unkeyed, so the
+ * LOCAL demo helper can compute it in SQL; the counter semantics are unchanged.
+ */
+export function rateLimitSubjectKey(subject: string): string {
+  return `sha256:${createHash('sha256').update(subject, 'utf8').digest('hex')}`;
+}
 
 export class RateLimitExceededError extends Error {
   readonly code = 'RATE_LIMITED';
@@ -70,7 +80,7 @@ export async function consumeRateLimit(
             ceil(extract(epoch FROM (window_start + make_interval(secs => $3)) - now()))::int
               AS retry_after
      FROM bumped`,
-    [policy.bucket, subject, policy.windowSeconds],
+    [policy.bucket, rateLimitSubjectKey(subject), policy.windowSeconds],
   );
 
   const row = result.rows[0];

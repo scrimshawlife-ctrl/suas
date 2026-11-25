@@ -1,7 +1,7 @@
 import { createUser } from '../../src/identity/index.js';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { consumeRateLimit } from '../../src/auth/rate-limit.js';
+import { consumeRateLimit, rateLimitSubjectKey } from '../../src/auth/rate-limit.js';
 import { INVITE_EMAIL_CAP_PER_RECIPIENT } from '../../src/consent/invite-limits.js';
 import {
   enqueueNotification,
@@ -57,7 +57,9 @@ describe('notification recipient admission commits with the intent', () => {
     }
     const blocker = await pool.connect();
     await blocker.query('BEGIN');
-    await blocker.query('SELECT 1 FROM auth_rate_limits WHERE subject = $1 FOR UPDATE', [subject]);
+    await blocker.query('SELECT 1 FROM auth_rate_limits WHERE subject = $1 FOR UPDATE', [
+      rateLimitSubjectKey(subject),
+    ]);
     const first = enqueueNotification(pool, request);
     void first.catch(() => undefined);
     let replay: ReturnType<typeof enqueueNotification> | undefined;
@@ -92,8 +94,11 @@ describe('notification recipient admission commits with the intent', () => {
     ]);
     expect(outcomes[1].deduplicated).toBe(true);
     expect(
-      (await pool.query('SELECT count FROM auth_rate_limits WHERE subject = $1', [subject])).rows[0]
-        ?.count,
+      (
+        await pool.query('SELECT count FROM auth_rate_limits WHERE subject = $1', [
+          rateLimitSubjectKey(subject),
+        ])
+      ).rows[0]?.count,
     ).toBe(6);
     expect(
       (
@@ -126,7 +131,7 @@ describe('notification recipient admission commits with the intent', () => {
     expect(
       (
         await pool.query('SELECT count FROM auth_rate_limits WHERE subject = $1', [
-          request.recipientLimit!.subject,
+          rateLimitSubjectKey(request.recipientLimit!.subject),
         ])
       ).rows[0]?.count,
     ).toBe(1);

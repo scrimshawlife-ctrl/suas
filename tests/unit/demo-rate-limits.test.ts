@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Queryable } from '../../src/db/transaction.js';
 import {
+  DEMO_RATE_LIMIT_DELETE,
   DEMO_SUBJECT_DOMAIN,
   assertLocalDemoDatabase,
   clearDemoSignInRateLimits,
@@ -37,7 +38,7 @@ describe('clearDemoSignInRateLimits', () => {
     expect(deleted).toBe(2);
     expect(calls).toEqual([
       {
-        text: 'DELETE FROM auth_rate_limits WHERE subject LIKE $1',
+        text: DEMO_RATE_LIMIT_DELETE,
         values: [`%${DEMO_SUBJECT_DOMAIN}`],
       },
     ]);

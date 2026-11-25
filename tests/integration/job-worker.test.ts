@@ -7,7 +7,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { consumeRateLimit } from '../../src/auth/rate-limit.js';
+import { consumeRateLimit, rateLimitSubjectKey } from '../../src/auth/rate-limit.js';
 import {
   INVITE_LIMIT_PER_VETERAN,
   INVITE_LIMIT_PER_ADDRESS,
@@ -304,12 +304,16 @@ describe('job-worker --once time-driven sweeps', () => {
         `INSERT INTO auth_rate_limits (bucket, subject, window_start, count)
          VALUES ($1, $2, date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', $3),
                 ($1, $2, now() - interval '25 hours', $3)`,
-        [policy.bucket, subject, policy.limit],
+        [policy.bucket, rateLimitSubjectKey(subject), policy.limit],
       );
       await drainOnce();
       expect((await consumeRateLimit(pool, policy, subject)).allowed).toBe(false);
       expect(
-        (await pool.query('SELECT 1 FROM auth_rate_limits WHERE subject = $1', [subject])).rowCount,
+        (
+          await pool.query('SELECT 1 FROM auth_rate_limits WHERE subject = $1', [
+            rateLimitSubjectKey(subject),
+          ])
+        ).rowCount,
       ).toBe(1);
     },
   );

@@ -8,6 +8,10 @@ import type { Queryable } from '../db/transaction.js';
  */
 export const DEMO_SUBJECT_DOMAIN = '@example.invalid';
 
+export const DEMO_RATE_LIMIT_DELETE = `DELETE FROM auth_rate_limits WHERE subject IN (
+  SELECT 'sha256:' || encode(sha256(convert_to(lower(email), 'UTF8')), 'hex')
+    FROM users WHERE lower(email) LIKE $1)`;
+
 const LOCAL_HOSTNAMES: readonly string[] = ['localhost', '127.0.0.1', '::1', '[::1]'];
 
 /**
@@ -61,9 +65,9 @@ export async function clearDemoSignInRateLimits(
 ): Promise<number> {
   assertLocalDemoDatabase(opts.environment, opts.databaseUrl);
 
-  const result = await db.query('DELETE FROM auth_rate_limits WHERE subject LIKE $1', [
-    `%${DEMO_SUBJECT_DOMAIN}`,
-  ]);
+  // Subjects are stored hashed (rateLimitSubjectKey), so the demo accounts' addresses are hashed
+  // here the same way; only users on the demo domain are matched, never a real destination.
+  const result = await db.query(DEMO_RATE_LIMIT_DELETE, [`%${DEMO_SUBJECT_DOMAIN}`]);
 
   return result.rowCount ?? 0;
 }
