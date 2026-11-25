@@ -339,7 +339,8 @@ function canonicalAddressSubject(address: string): string {
   const local = normalized.slice(0, plus < 0 || plus > at ? at : plus);
   const domain = normalized.slice(at + 1);
   // R16.2 (contributor's call, D-065, review 2026-11-24): Gmail ignores dots and reads
-  // googlemail.com as gmail.com; every other domain keeps its local part as typed.
+  // googlemail.com as gmail.com; every other domain keeps its local part as typed. Outlook, Yahoo
+  // and iCloud treat dots as significant, so merging them would join different people's budgets.
   if (GMAIL_DOMAINS.has(domain)) return `${local.replaceAll('.', '')}@gmail.com`;
   return `${local}@${domain}`;
 }

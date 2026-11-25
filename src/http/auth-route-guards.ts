@@ -55,6 +55,8 @@ export function registerAuthRouteGuards(
 
   // One shared per-minute budget over both challenge routes, as a bound that holds whatever path
   // variant reached the app. Over it the answer is the usual 429 RATE_LIMITED with Retry-After.
+  // Global on purpose: D-036 Option C allows no network-signal (per-IP) budget, and the address
+  // and account limits still bound each address. A per-caller key needs the owner to change D-036.
   const { pool } = deps;
   const limits = activePublicDemoLimits(deps.stagingAccess);
   if (limits === undefined || pool === undefined) return;
