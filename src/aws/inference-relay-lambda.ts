@@ -55,8 +55,17 @@ function defaultDeps(): InferenceRelayDeps {
   };
 }
 
-const present = (value: string | undefined): value is string =>
-  value !== undefined && value.trim() !== '';
+// Review 2026-11-24 (#365): each setting must have its AWS form, not only be present, so a
+// malformed value fails closed before a client is built. Model id matches CFN BedrockModelId.
+const SETTING_PATTERNS = {
+  region: /^[a-z]{2}(-[a-z]+)+-\d$/,
+  modelId: /^[a-z0-9-]+\.[a-z0-9][a-z0-9.:-]*$/,
+  guardrailId: /^(arn:aws[a-z-]*:bedrock:[a-z0-9-]+:\d{12}:guardrail\/)?[a-z0-9]{12}$/,
+  guardrailVersion: /^([1-9]\d{0,7}|DRAFT)$/,
+} as const;
+
+const wellFormed = (key: keyof typeof SETTING_PATTERNS, value: string | undefined): boolean =>
+  value !== undefined && SETTING_PATTERNS[key].test(value);
 
 /** Builds a handler with its own per-container Bedrock adapter. */
 export function createInferenceRelayHandler(
@@ -75,8 +84,18 @@ export function createInferenceRelayHandler(
   const loadAdapter = (): BedrockModelInference | undefined => {
     if (adapter !== undefined) return adapter;
     const { region, modelId, guardrailId, guardrailVersion } = deps;
-    if (!present(region) || !present(modelId) || !present(guardrailId)) return undefined;
-    if (!present(guardrailVersion)) return undefined;
+    if (
+      region === undefined ||
+      modelId === undefined ||
+      guardrailId === undefined ||
+      guardrailVersion === undefined ||
+      !wellFormed('region', region) ||
+      !wellFormed('modelId', modelId) ||
+      !wellFormed('guardrailId', guardrailId) ||
+      !wellFormed('guardrailVersion', guardrailVersion)
+    ) {
+      return undefined;
+    }
     adapter = new BedrockModelInference({
       modelId,
       region,

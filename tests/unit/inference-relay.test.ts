@@ -143,7 +143,7 @@ function relayHandler(
     environment: 'STAGING',
     region: 'us-east-2',
     modelId: 'us.anthropic.test-model',
-    guardrailId: 'gr-test',
+    guardrailId: 'abc123def456',
     guardrailVersion: '1',
     log: (record) => logs.push(record),
     client,
@@ -174,6 +174,32 @@ describe('inference relay function', () => {
     },
   );
 
+  // Review 2026-11-24 (#365): the relay's settings come from CDK, but a malformed one still
+  // fails closed before any Bedrock client is built.
+  it.each([
+    ['region', 'us-east-2;x'],
+    ['region', 'US-EAST-2'],
+    ['modelId', 'qwen.qwen3-32b-v1:0 x'],
+    ['modelId', 'arn:aws:bedrock:us-east-2::foundation-model/qwen'],
+    ['guardrailId', 'ABC'],
+    ['guardrailId', 'abc123def456/x'],
+    ['guardrailVersion', 'v1'],
+    ['guardrailVersion', '0'],
+  ] as const)('fails closed when %s is malformed (%s)', async (key, value) => {
+    const { client, handler, logs } = relayHandler({ [key]: value });
+    expect(await handler(EVENT)).toEqual({ ok: false, failure: 'unavailable' });
+    expect(client.commands).toHaveLength(0);
+    expect(logs).toEqual([{ msg: 'inference_relay_refused', reason: 'not_configured' }]);
+  });
+
+  it('accepts a guardrail ARN and the DRAFT version', async () => {
+    const { handler } = relayHandler({
+      guardrailId: 'arn:aws:bedrock:us-east-2:123456789012:guardrail/abc123def456',
+      guardrailVersion: 'DRAFT',
+    });
+    expect(await handler(EVENT)).toMatchObject({ ok: true });
+  });
+
   it('refuses a malformed event as invalid', async () => {
     const { client, handler } = relayHandler({});
     expect(await handler({ ...EVENT, purpose: 'chat' })).toEqual({ ok: false, failure: 'invalid' });
@@ -187,7 +213,11 @@ describe('inference relay function', () => {
     expect(client.commands[0]?.input).toMatchObject({
       modelId: 'us.anthropic.test-model',
       inferenceConfig: { maxTokens: 2048 },
-      guardrailConfig: { guardrailIdentifier: 'gr-test', guardrailVersion: '1', trace: 'disabled' },
+      guardrailConfig: {
+        guardrailIdentifier: 'abc123def456',
+        guardrailVersion: '1',
+        trace: 'disabled',
+      },
       messages: [{ role: 'user', content: [{ guardContent: { text: { text: SENSITIVE } } }] }],
     });
   });
