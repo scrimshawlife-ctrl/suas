@@ -203,6 +203,85 @@ describe('STAGING demo retention', () => {
     expect(audits.rowCount).toBe(1);
   });
 
+  // Review 2026-11-24 (#369): an address is unique per tenant only, so the scrub must not reach
+  // another tenant's challenges, notifications or invites for the same address.
+  it("leaves another tenant's rows for the same address untouched", async () => {
+    const otherTenant = randomUUID();
+    const otherUser = randomUUID();
+    await account(30, FIXTURE);
+    const demo = await account(8);
+    await createUser(pool, {
+      userId: otherUser,
+      tenantId: otherTenant,
+      email: demo.email,
+      status: 'ACTIVE',
+    });
+    await pool.query(
+      `INSERT INTO auth_challenges (auth_challenge_id, tenant_id, user_id, method,
+          destination, secret_hash, max_attempts, issued_at, expires_at)
+        VALUES ($1, $2, $3, 'EMAIL_OTP', $4, 'hash', 5, now() - interval '1 day', now())`,
+      [randomUUID(), otherTenant, otherUser, demo.email],
+    );
+    await pool.query(
+      `INSERT INTO notifications (notification_id, tenant_id, recipient_user_id, destination,
+         reason, channel, consent_basis, template_version)
+       VALUES ($1, $2, $3, $4, 'TEST', 'EMAIL', 'TEST', 'v1')`,
+      [randomUUID(), otherTenant, otherUser, demo.email],
+    );
+    await pool.query(
+      `INSERT INTO trusted_contacts (trusted_contact_id, tenant_id, veteran_user_id,
+         relationship_label, invite_email)
+       VALUES ($1, $2, $3, 'friend', $4)`,
+      [randomUUID(), otherTenant, otherUser, demo.email],
+    );
+    const both = {
+      ...access(true),
+      fixturePrincipals: [
+        { tenantId: TENANT, userId: FIXTURE },
+        { tenantId: otherTenant, userId: otherUser },
+      ],
+    };
+
+    expect((await scrubDemoAccounts(pool, { access: both })).scrubbed).toBe(1);
+    const count = async (table: string, column: string) =>
+      (
+        await pool.query(
+          `SELECT 1 FROM ${table} WHERE tenant_id = $1 AND lower(${column}) = lower($2)`,
+          [otherTenant, demo.email],
+        )
+      ).rowCount;
+    expect(await count('auth_challenges', 'destination')).toBe(1);
+    expect(await count('notifications', 'destination')).toBe(1);
+    expect(await count('trusted_contacts', 'invite_email')).toBe(1);
+    expect((await userRow(otherUser))?.email).toBe(demo.email);
+  });
+
+  // Review 2026-11-24 (#369): the candidate scan holds no lock, so the per-account lock re-checks
+  // every candidate condition; an account that stopped qualifying in between is left alone.
+  it('skips a candidate that no longer qualifies once it is locked', async () => {
+    await account(30, FIXTURE);
+    const demo = await account(8);
+    let scanned = false;
+    const racing = {
+      query: async (...args: unknown[]) => {
+        const result = await (pool.query as (...a: unknown[]) => Promise<unknown>)(...args);
+        if (!scanned && String(args[0]).includes('SELECT tenant_id::text, user_id::text')) {
+          scanned = true;
+          await pool.query('UPDATE users SET created_at = now() WHERE user_id = $1', [demo.userId]);
+        }
+        return result;
+      },
+      connect: () => pool.connect(),
+    } as unknown as Pool;
+
+    expect(await scrubDemoAccounts(racing, { access: access(true) })).toEqual({
+      scrubbed: 0,
+      challengesDeleted: 0,
+    });
+    expect(scanned).toBe(true);
+    expect((await userRow(demo.userId))?.deleted_at).toBeNull();
+  });
+
   // R16.5(b) (contributor's call, D-065): an empty registry would make every account look
   // non-fixture, so the sweep scrubs nothing, with the demo on or off.
   it('scrubs nothing when the fixture registry is empty', async () => {

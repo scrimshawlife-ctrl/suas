@@ -29,6 +29,16 @@ interface Candidate {
   readonly user_id: string;
 }
 
+/**
+ * A scrub candidate: live, not a fixture principal ($1, $2), past the window while the demo runs
+ * ($3–$5) and not the publisher ($6). The scan holds no lock, so the per-account lock re-checks it.
+ */
+const CANDIDATE_CONDITION = `deleted_at IS NULL
+  AND (lower(tenant_id::text), lower(user_id::text)) NOT IN (
+        SELECT * FROM unnest($1::text[], $2::text[]))
+  AND ($3::boolean = false OR created_at < $4::timestamptz - make_interval(days => $5))
+  AND (email IS NULL OR lower(email) <> lower($6))`;
+
 export async function scrubDemoAccounts(
   db: Pool,
   options: { access: StagingAccess; now?: Date; retentionDays?: number },
@@ -43,32 +53,28 @@ export async function scrubDemoAccounts(
 
   // R16.5(b) (contributor's call, D-065): with no registry every account looks non-fixture, so
   // the account scrub is skipped (startup refuses the demo then); the cleanup below still runs.
+  const params = [
+    access.fixturePrincipals.map((entry) => entry.tenantId.toLowerCase()),
+    access.fixturePrincipals.map((entry) => entry.userId.toLowerCase()),
+    demoActive,
+    now,
+    retentionDays,
+    PUBLISHER_EMAIL,
+  ];
   const candidates =
     access.fixturePrincipals.length === 0
       ? { rows: [] as Candidate[] }
       : await db.query<Candidate>(
           `SELECT tenant_id::text, user_id::text FROM users
-      WHERE deleted_at IS NULL
-        AND (lower(tenant_id::text), lower(user_id::text)) NOT IN (
-              SELECT * FROM unnest($1::text[], $2::text[]))
-        AND ($3::boolean = false OR created_at < $4::timestamptz - make_interval(days => $5))
-        AND (email IS NULL OR lower(email) <> lower($6))
-      ORDER BY created_at`,
-          [
-            access.fixturePrincipals.map((entry) => entry.tenantId.toLowerCase()),
-            access.fixturePrincipals.map((entry) => entry.userId.toLowerCase()),
-            demoActive,
-            now,
-            retentionDays,
-            PUBLISHER_EMAIL,
-          ],
+            WHERE ${CANDIDATE_CONDITION} ORDER BY created_at`,
+          params,
         );
 
   let scrubbed = 0;
   let challengesDeleted = 0;
   for (const candidate of candidates.rows) {
     const deleted = await withTransaction(db, (tx) =>
-      scrubAccount(tx, candidate, { demoActive, retentionDays }),
+      scrubAccount(tx, candidate, { demoActive, retentionDays, params }),
     );
     if (deleted === undefined) continue;
     scrubbed += 1;
@@ -93,12 +99,14 @@ export async function scrubDemoAccounts(
 async function scrubAccount(
   tx: PoolClient,
   { tenant_id: tenantId, user_id: userId }: Candidate,
-  policy: { demoActive: boolean; retentionDays: number },
+  policy: { demoActive: boolean; retentionDays: number; params: readonly unknown[] },
 ): Promise<number | undefined> {
+  // Review 2026-11-24 (#369): an account that stopped qualifying since the scan, or that another
+  // run already scrubbed, is left alone.
   const locked = await tx.query<{ email: string | null; phone: string | null }>(
     `SELECT email, phone FROM users
-      WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL FOR UPDATE`,
-    [tenantId, userId],
+      WHERE ${CANDIDATE_CONDITION} AND tenant_id = $7 AND user_id = $8 FOR UPDATE`,
+    [...policy.params, tenantId, userId],
   );
   const contact = locked.rows[0];
   if (contact === undefined) return undefined;
@@ -128,17 +136,19 @@ async function scrubAccount(
     [tenantId, userId],
   );
 
+  // Review 2026-11-24 (#369): an address is unique per tenant only, so every branch below is
+  // scoped to this account's tenant; another tenant's rows for the same address are kept.
   const { email, phone } = contact;
   const challenges = await tx.query(
     `DELETE FROM auth_challenges
-      WHERE user_id = $1 OR lower(destination) = lower($2) OR destination = $3`,
-    [userId, email, phone],
+      WHERE tenant_id = $1
+        AND (user_id = $2 OR lower(destination) = lower($3) OR destination = $4)`,
+    [tenantId, userId, email, phone],
   );
   await tx.query(
     `UPDATE notifications SET destination = NULL, updated_at = now()
-      WHERE destination IS NOT NULL
-        AND ((tenant_id = $1 AND recipient_user_id = $2)
-             OR lower(destination) = lower($3) OR destination = $4)`,
+      WHERE tenant_id = $1 AND destination IS NOT NULL
+        AND (recipient_user_id = $2 OR lower(destination) = lower($3) OR destination = $4)`,
     [tenantId, userId, email, phone],
   );
   // The CHECK needs an invite channel, so the address becomes a per-row placeholder.
@@ -147,9 +157,10 @@ async function scrubAccount(
         SET invite_email = 'removed-' || trusted_contact_id || '@scrubbed.invalid',
             invite_phone = NULL, status = 'REMOVED',
             ended_at = COALESCE(ended_at, now()), updated_at = now()
-      WHERE veteran_user_id = $1 OR contact_user_id = $1
-         OR lower(invite_email) = lower($2) OR invite_phone = $3`,
-    [userId, email, phone],
+      WHERE tenant_id = $1
+        AND (veteran_user_id = $2 OR contact_user_id = $2
+             OR lower(invite_email) = lower($3) OR invite_phone = $4)`,
+    [tenantId, userId, email, phone],
   );
   return challenges.rowCount ?? 0;
 }
