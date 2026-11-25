@@ -290,6 +290,36 @@ describe('region-restricted bootstrap and Bedrock grants', () => {
     ]);
   });
 
+  // Review 2026-11-24 (#364): the parameter is an allowlist, not a pattern, so the policy can
+  // only ever name the one reviewed model; another id fails at CloudFormation parameter checks.
+  it('allows exactly one Bedrock model id', () => {
+    expect(readFileSync(file, 'utf8')).toMatch(
+      /BedrockModelId:\n {4}Type: String\n {4}Default: qwen\.qwen3-32b-v1:0\n {4}AllowedValues:\n {6}- qwen\.qwen3-32b-v1:0\n {4}Description:/,
+    );
+    expect(readFileSync(file, 'utf8')).not.toMatch(
+      /BedrockModelId:[^]*?AllowedPattern[^]*?Conditions:/,
+    );
+  });
+
+  // Review 2026-11-24 (#364): no Bedrock grant, in any policy, reaches us-east-1 or any Region
+  // but the staging one; the edge-service us-east-1 entries stay on non-Bedrock statements.
+  it('conditions every Bedrock statement on the staging Region alone', () => {
+    const { statements: all } = loadPolicies(EAST2_BEDROCK);
+    const bedrock = all.filter((s: any) => actions(s).some((a) => a.startsWith('bedrock:')));
+    expect(bedrock.map((s: any) => s.Sid).sort()).toEqual([
+      'ApplyGuardrail',
+      'GuardrailCreate',
+      'Guardrails',
+      'InvokeFoundationModel',
+    ]);
+    for (const statement of bedrock) {
+      expect([statement.Condition.StringEquals['aws:RequestedRegion']].flat()).toEqual([
+        'us-east-2',
+      ]);
+      expect(JSON.stringify(statement)).not.toContain('us-east-1');
+    }
+  });
+
   it('lets CloudFormation manage only staging-Region guardrails', () => {
     const { byName } = loadPolicies(EAST2_BEDROCK);
     const services = byName.SuasCdkServices!;
