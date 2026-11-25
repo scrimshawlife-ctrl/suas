@@ -1,0 +1,70 @@
+/**
+ * Crisis-language check before the model (R17.4, contributor proposal, not released): every
+ * proposed phrase matches after normalizing, and near-misses on word boundaries do not.
+ */
+
+import { describe, expect, it } from 'vitest';
+import { ScriptedModelInference } from '../../src/inference/index.js';
+import { EMPTY_DRAFT_FIELDS, runIntakeAssistant } from '../../src/intake/assistant.js';
+import { CRISIS_PHRASES, detectCrisisLanguage } from '../../src/intake/crisis-check.js';
+
+describe('detectCrisisLanguage', () => {
+  it.each(CRISIS_PHRASES)('matches the phrase "%s" inside a sentence', (phrase) => {
+    expect(detectCrisisLanguage(`Honestly, ${phrase} is how I feel today.`)).toBe(true);
+  });
+
+  it.each([
+    ['upper case and extra spaces', 'I  WANT   TO DIE'],
+    ['punctuation between words', 'I want to... end. my. life'],
+    ['a hyphen', 'I have been thinking about self-harm'],
+    ['a curly apostrophe', 'I can’t go on like this'],
+    ['a line break', 'I might\nhurt myself tonight'],
+    ['the end of the text', 'Thinking about suicide.'],
+  ])('matches with %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(true);
+  });
+
+  it.each([
+    ['an ordinary food request', 'I need groceries by Friday.'],
+    ['a ride request', 'Can someone drive me to the pharmacy?'],
+    ['a word that only contains a phrase', 'The batteries died, I want to diesel up the truck.'],
+    ['a phrase split across other words', 'I want to go to the store; die-cast models are fun.'],
+    ['a similar but different word', 'My suicidality screening was fine; my car is a write-off.'],
+    ['empty text', ''],
+  ])('does not match %s', (_name, text) => {
+    expect(detectCrisisLanguage(text)).toBe(false);
+  });
+});
+
+describe('runIntakeAssistant crisis check', () => {
+  const host = { searchResources: () => Promise.resolve([]) };
+
+  // The draft fields go to the model too, and a Veteran can edit them directly.
+  it.each(['summary', 'timing', 'meetingPlace', 'destination'] as const)(
+    'answers CRISIS_SUPPORT with no model call when only the draft %s has crisis words',
+    async (field) => {
+      const port = new ScriptedModelInference().enqueue({ ok: true, text: 'Hi', toolCalls: [] });
+      const run = await runIntakeAssistant(port, host, {
+        intakeText: 'I need a ride on Friday.',
+        draft: {
+          ...EMPTY_DRAFT_FIELDS,
+          category: 'TRANSPORTATION',
+          summary: 'Ride to the clinic',
+          [field]: 'I want to end my life',
+        },
+      });
+      expect(run.outcome).toBe('CRISIS_SUPPORT');
+      expect(port.requests()).toHaveLength(0);
+    },
+  );
+
+  it('asks the model when neither the text nor the draft has crisis words', async () => {
+    const port = new ScriptedModelInference().enqueue({ ok: true, text: 'Hi', toolCalls: [] });
+    const run = await runIntakeAssistant(port, host, {
+      intakeText: 'I need a ride on Friday.',
+      draft: { ...EMPTY_DRAFT_FIELDS, category: 'TRANSPORTATION', summary: 'Ride to the clinic' },
+    });
+    expect(run.outcome).toBe('DRAFT_READY');
+    expect(port.requests()).toHaveLength(1);
+  });
+});

@@ -4,17 +4,56 @@
  * code is 0 unless the harness itself fails (gates are undecided, plan §8 #13).
  *
  * Adapter: `SUAS_MODEL_INFERENCE_MODE`. CI sets `fake` (scripted baseline, scores
- * check the harness only). A real run needs a non-LOCAL/TEST environment with
- * `SUAS_MODEL_INFERENCE_MODE=bedrock`, `SUAS_AWS_REGION` and the model id set, and
- * sends only the synthetic cases to Bedrock. With no env at all it defaults to the
- * synthetic TEST environment and the fake.
+ * check the harness only). With no env at all it defaults to the synthetic TEST
+ * environment and the fake.
+ *
+ * A real run (R17.6, contributor proposal, not released) sets `SUAS_ENV=STAGING`,
+ * `SUAS_MODEL_INFERENCE_MODE=bedrock`, `SUAS_AWS_REGION`, `SUAS_BEDROCK_MODEL_ID` and,
+ * to match STAGING, `SUAS_BEDROCK_GUARDRAIL_ID` + `_VERSION`. It builds the direct
+ * Bedrock adapter here from those variables, as the relay function does, instead of
+ * `loadConfig`: the API's STAGING config requires the in-VPC relay, which a laptop has
+ * no use for. It sends only the synthetic cases to Bedrock and refuses any other class.
  */
 
 import { loadConfig, type ConfigSource } from '../src/config/index.js';
-import { createModelInferencePort, ScriptedModelInference } from '../src/inference/index.js';
+import {
+  BedrockModelInference,
+  consoleInferenceLogger,
+  createModelInferencePort,
+  ScriptedModelInference,
+  type ModelInferencePort,
+} from '../src/inference/index.js';
 import { validEnv } from '../tests/helpers/env.js';
 import { formatReport, type SuiteReport } from './harness.js';
 import { SUITES } from './suites.js';
+
+/** The direct Bedrock adapter for a STAGING eval run, or why it cannot be built. */
+function directBedrock(): ModelInferencePort | string {
+  const env = process.env;
+  if (env.SUAS_ENV !== 'STAGING') return 'A Bedrock eval runs only with SUAS_ENV=STAGING.';
+  const region = env.SUAS_AWS_REGION;
+  const modelId = env.SUAS_BEDROCK_MODEL_ID;
+  if (!region || !modelId) return 'A Bedrock eval needs SUAS_AWS_REGION and SUAS_BEDROCK_MODEL_ID.';
+  const guardrailId = env.SUAS_BEDROCK_GUARDRAIL_ID;
+  const guardrailVersion = env.SUAS_BEDROCK_GUARDRAIL_VERSION;
+  return new BedrockModelInference({
+    modelId,
+    region,
+    logger: consoleInferenceLogger,
+    ...(guardrailId && guardrailVersion
+      ? { guardrail: { identifier: guardrailId, version: guardrailVersion } }
+      : {}),
+  });
+}
+
+function configuredPort(): ModelInferencePort | string {
+  if (process.env.SUAS_MODEL_INFERENCE_MODE === 'bedrock') return directBedrock();
+  const env: ConfigSource =
+    process.env.SUAS_ENV === undefined
+      ? validEnv({ SUAS_MODEL_INFERENCE_MODE: 'fake' })
+      : process.env;
+  return createModelInferencePort(loadConfig(env));
+}
 
 function argValue(flag: string): string | undefined {
   const index = process.argv.indexOf(flag);
@@ -22,12 +61,12 @@ function argValue(flag: string): string | undefined {
 }
 
 async function main(): Promise<void> {
-  const env: ConfigSource =
-    process.env.SUAS_ENV === undefined
-      ? validEnv({ SUAS_MODEL_INFERENCE_MODE: 'fake' })
-      : process.env;
-  const config = loadConfig(env);
-  const probe = createModelInferencePort(config);
+  const probe = configuredPort();
+  if (typeof probe === 'string') {
+    console.error(probe);
+    process.exitCode = 1;
+    return;
+  }
   if (!probe.isAvailable()) {
     console.error(
       'Model inference is not available (SUAS_MODEL_INFERENCE_MODE=disabled, or bedrock with no model).',

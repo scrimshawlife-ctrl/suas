@@ -1,4 +1,5 @@
 import { Link } from 'react-router';
+import { CrisisPanel } from '../../components/CrisisPanel';
 import { AlertCircleIcon } from '../../components/icons';
 import type { IntakeTurn } from './api';
 
@@ -17,6 +18,9 @@ export function turnNeedsForm(turn: IntakeTurn): boolean {
  */
 export function IntakeTurnView({ turn }: { turn: IntakeTurn }) {
   if (turnNeedsForm(turn)) return <p>{FALLBACK_NOTICE}</p>;
+  // Crisis language was found before any model call (R17.4, contributor proposal, not
+  // released): the released D-012 panel, while the plain form below stays in place.
+  if (turn.outcome === 'CRISIS_SUPPORT') return <CrisisPanel />;
   return (
     <div className="flex flex-col gap-3">
       {turn.assistant_message ? (

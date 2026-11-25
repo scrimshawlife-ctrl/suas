@@ -30,7 +30,15 @@ export interface ModelToolCall {
 }
 
 export type ModelMessagePart =
-  | { readonly type: 'text'; readonly text: string }
+  | {
+      readonly type: 'text';
+      readonly text: string;
+      /**
+       * Untrusted Veteran text the provider's safety filter must screen (R17.5, contributor
+       * proposal, not released). Adapters without such a filter send it as plain text.
+       */
+      readonly guarded?: true;
+    }
   | { readonly type: 'tool_call'; readonly call: ModelToolCall }
   | {
       readonly type: 'tool_result';
@@ -44,11 +52,32 @@ export interface ModelMessage {
   readonly parts: readonly ModelMessagePart[];
 }
 
+/** What a turn is for; it picks the per-call bounds below. */
+export const INFERENCE_PURPOSES = ['intake', 'extraction'] as const;
+export type InferencePurpose = (typeof INFERENCE_PURPOSES)[number];
+
+/**
+ * Per-purpose output cap and per-call timeout cap (R17.3, contributor proposal, not released).
+ * Implementation bounds that keep a turn inside the 29 s HTTP API limit; not released SLOs.
+ */
+export const INFERENCE_PURPOSE_LIMITS: Readonly<
+  Record<InferencePurpose, { readonly maxTokens: number; readonly callTimeoutCapMs: number }>
+> = {
+  intake: { maxTokens: 800, callTimeoutCapMs: 12_000 },
+  extraction: { maxTokens: 2_048, callTimeoutCapMs: 24_000 },
+};
+
 export interface ModelTurnRequest {
   readonly system: string;
   /** Prior turns in order. Must end with a `user` message. */
   readonly messages: readonly ModelMessage[];
   readonly tools: readonly ModelToolDefinition[];
+  /** Selects the per-purpose bounds; a relay forwards it. */
+  readonly purpose?: InferencePurpose;
+  /** Milliseconds the caller still allows for this call; the adapter stops before it. */
+  readonly deadlineMs?: number;
+  /** Output token cap for this call. */
+  readonly maxTokens?: number;
 }
 
 /**
@@ -69,6 +98,15 @@ export type ModelTurnResult =
       readonly toolCalls: readonly ModelToolCall[];
     }
   | { readonly ok: false; readonly failure: ModelFailureKind };
+
+/** Content-free log record of one model call (C-14): the outcome only, never text. */
+export interface ModelInferenceLogRecord {
+  readonly implementation: string;
+  readonly ok: boolean;
+  readonly failure?: ModelFailureKind;
+}
+
+export type ModelInferenceLogger = (record: ModelInferenceLogRecord) => void;
 
 export interface ModelInferencePort {
   readonly implementation: string;

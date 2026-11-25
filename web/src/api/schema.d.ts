@@ -993,7 +993,7 @@ export interface paths {
         put?: never;
         /**
          * Send the first intake message
-         * @description Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. The text is never logged. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
+         * @description Runs the Intake Assistant (two tools: search_resources, draft_service_request). A new Service Request Draft is stored only when the assistant answers (201). When it does not, nothing is stored and the response is 200 with outcome FALLBACK_FORM. Text with crisis language is never sent to the model: nothing is stored and the response is 200 with outcome CRISIS_SUPPORT (R17.4, contributor proposal, not released). The text is never logged. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
          */
         post: operations["createIntakeDraft"];
         delete?: never;
@@ -1037,7 +1037,7 @@ export interface paths {
         put?: never;
         /**
          * Send a follow-up intake message
-         * @description Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
+         * @description Appends the text to the draft and runs the assistant again with the current draft. If the assistant fails the draft is unchanged and outcome is FALLBACK_FORM; if the text has crisis language the model is not asked, the draft is unchanged and outcome is CRISIS_SUPPORT. Requires a Veteran with a VERIFIED VA Veteran Confirmation (403 VERIFICATION_REQUIRED otherwise).
          */
         post: operations["addIntakeMessage"];
         delete?: never;
@@ -2319,12 +2319,13 @@ export interface components {
         };
         IntakeTurn: {
             /**
-             * @description FALLBACK_FORM: the assistant did not answer; nothing new was stored, show the plain request form (request_form).
+             * @description FALLBACK_FORM: the assistant did not answer; nothing new was stored, show the plain request form (request_form). CRISIS_SUPPORT (R17.4, contributor proposal, not released): the text has crisis language, so no model was asked and nothing new was stored; show the immediate-resource crisis copy (notice) beside the plain request form (request_form).
              * @enum {string}
              */
-            outcome: "DRAFT_READY" | "NO_DRAFT" | "FALLBACK_FORM";
+            outcome: "DRAFT_READY" | "NO_DRAFT" | "FALLBACK_FORM" | "CRISIS_SUPPORT";
             assistant_message: string | null;
             not_available_yet: boolean;
+            /** @description The not-available-yet notice, or with CRISIS_SUPPORT the immediate-resource copy from the same source as GET /api/v0/immediate-resources (D-012): the released compact banner when SUAS_SAFETY_COPY_MODE=approved, else the slot's labelled placeholder. */
             notice: string | null;
             draft: components["schemas"]["IntakeDraft"] | null;
             resources: components["schemas"]["IntakeResource"][];

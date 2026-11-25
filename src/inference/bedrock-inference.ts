@@ -19,21 +19,28 @@ import {
   type Tool,
 } from '@aws-sdk/client-bedrock-runtime';
 import { awsErrorName, isAwsTimeout } from '../aws/errors.js';
-import type {
-  ModelFailureKind,
-  ModelInferencePort,
-  ModelMessage,
-  ModelMessagePart,
-  ModelToolCall,
-  ModelToolDefinition,
-  ModelTurnRequest,
-  ModelTurnResult,
+import {
+  INFERENCE_PURPOSE_LIMITS,
+  type ModelFailureKind,
+  type ModelInferencePort,
+  type ModelMessage,
+  type ModelMessagePart,
+  type ModelToolCall,
+  type ModelToolDefinition,
+  type ModelTurnRequest,
+  type ModelTurnResult,
 } from './model-inference.js';
 
 export const BEDROCK_IMPLEMENTATION = 'bedrock' as const;
 
 /** Implementation-owned bound, not a released SLO. */
 export const BEDROCK_TIMEOUT_MS = 30_000;
+
+/** Output cap when the request names none; Converse otherwise reserves the model maximum. */
+export const DEFAULT_MAX_TOKENS = 800;
+
+/** Left of the caller's deadline so the abort lands before the caller gives up (R17.3, proposal). */
+export const DEADLINE_MARGIN_MS = 1_000;
 
 /** Content-free log record. */
 export interface BedrockInferenceLogRecord {
@@ -52,11 +59,19 @@ export interface BedrockClientLike {
   ): Promise<ConverseCommandOutput>;
 }
 
+/** A published Bedrock Guardrail version (R17.5, contributor proposal, not released). */
+export interface BedrockGuardrail {
+  readonly identifier: string;
+  readonly version: string;
+}
+
 export interface BedrockInferenceOptions {
   readonly modelId: string;
   readonly region: string;
   readonly client?: BedrockClientLike;
+  /** Upper bound per call; a purpose cap or the request deadline can only lower it. */
   readonly timeoutMs?: number;
+  readonly guardrail?: BedrockGuardrail;
   readonly logger?: BedrockInferenceLogger;
 }
 
@@ -71,12 +86,17 @@ export class BedrockModelInference implements ModelInferencePort {
   private readonly modelId: string;
   private readonly client: BedrockClientLike;
   private readonly timeoutMs: number;
+  private readonly guardrail: BedrockGuardrail | undefined;
   private readonly logger: BedrockInferenceLogger | undefined;
 
   constructor(options: BedrockInferenceOptions) {
     this.modelId = options.modelId;
-    this.client = options.client ?? new BedrockRuntimeClient({ region: options.region });
+    // One SDK retry, adaptive, for throttling, 5xx and model timeouts (R17.3, proposal).
+    this.client =
+      options.client ??
+      new BedrockRuntimeClient({ region: options.region, maxAttempts: 2, retryMode: 'adaptive' });
     this.timeoutMs = options.timeoutMs ?? BEDROCK_TIMEOUT_MS;
+    this.guardrail = options.guardrail;
     this.logger = options.logger;
   }
 
@@ -85,23 +105,48 @@ export class BedrockModelInference implements ModelInferencePort {
   }
 
   async converse(request: ModelTurnRequest): Promise<ModelTurnResult> {
+    const timeoutMs = this.callTimeoutMs(request);
+    if (timeoutMs <= 0) return this.fail('timeout');
+    const guarded = this.guardrail !== undefined;
     let output: ConverseCommandOutput;
     try {
       output = await this.client.send(
         new ConverseCommand({
           modelId: this.modelId,
           system: [{ text: request.system }],
-          messages: request.messages.map(toBedrockMessage),
+          messages: request.messages.map((message) => toBedrockMessage(message, guarded)),
+          inferenceConfig: { maxTokens: request.maxTokens ?? DEFAULT_MAX_TOKENS },
+          ...(this.guardrail !== undefined
+            ? {
+                guardrailConfig: {
+                  guardrailIdentifier: this.guardrail.identifier,
+                  guardrailVersion: this.guardrail.version,
+                  // A trace would echo the filtered text back in the response.
+                  trace: 'disabled' as const,
+                },
+              }
+            : {}),
           ...(request.tools.length > 0
             ? { toolConfig: { tools: request.tools.map(toBedrockTool) } }
             : {}),
         }),
-        { abortSignal: AbortSignal.timeout(this.timeoutMs) },
+        { abortSignal: AbortSignal.timeout(timeoutMs) },
       );
     } catch (error: unknown) {
       return this.fail(classifyError(error));
     }
     return this.fromOutput(output);
+  }
+
+  /** min(deadline - margin, purpose cap, adapter bound); never above the adapter bound. */
+  private callTimeoutMs(request: ModelTurnRequest): number {
+    const cap =
+      request.purpose === undefined
+        ? this.timeoutMs
+        : Math.min(this.timeoutMs, INFERENCE_PURPOSE_LIMITS[request.purpose].callTimeoutCapMs);
+    return request.deadlineMs === undefined
+      ? cap
+      : Math.min(request.deadlineMs - DEADLINE_MARGIN_MS, cap);
   }
 
   private fromOutput(output: ConverseCommandOutput): ModelTurnResult {
@@ -150,14 +195,20 @@ function classifyError(error: unknown): ModelFailureKind {
   return awsErrorName(error) === 'ValidationException' ? 'invalid' : 'unavailable';
 }
 
-function toBedrockMessage(message: ModelMessage): Message {
-  return { role: message.role, content: message.parts.map(toBedrockBlock) };
+function toBedrockMessage(message: ModelMessage, guardrailOn: boolean): Message {
+  return {
+    role: message.role,
+    content: message.parts.map((part) => toBedrockBlock(part, guardrailOn)),
+  };
 }
 
-function toBedrockBlock(part: ModelMessagePart): ContentBlock {
+/** With a guardrail, guarded text goes in a guardContent block so the guardrail screens it. */
+function toBedrockBlock(part: ModelMessagePart, guardrailOn: boolean): ContentBlock {
   switch (part.type) {
     case 'text':
-      return { text: part.text };
+      return part.guarded === true && guardrailOn
+        ? { guardContent: { text: { text: part.text } } }
+        : { text: part.text };
     case 'tool_call':
       return {
         toolUse: {

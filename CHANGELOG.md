@@ -15,6 +15,9 @@ SPEC-018 is still blocked. Release steps: [RELEASING.md](RELEASING.md).
 
 ### Added
 
+- Bedrock on synthetic STAGING through an outside-VPC inference relay (R17.1 to R17.7, a contributor proposal, not released; HOLD for the owner's decision). `SUAS_MODEL_INFERENCE_MODE=bedrock` is allowed in STAGING only with `SUAS_MODEL_INFERENCE_RELAY_FUNCTION`, `SUAS_BEDROCK_MODEL_ID`, `SUAS_BEDROCK_GUARDRAIL_ID`, `SUAS_BEDROCK_GUARDRAIL_VERSION` and `SUAS_AWS_REGION`; `fake` is refused in STAGING and PRODUCTION still allows `disabled` only. The relay function (`src/aws/inference-relay-lambda.ts`) is the only code that calls Bedrock; it runs the Converse adapter with the guardrail (trace off) and logs outcomes only. Every call sends `maxTokens` (800 intake, 2048 extraction) and stops before the caller's deadline; an intake turn ends within 24 s or falls back to the plain form, and extraction within 25 s.
+- Crisis language in an intake message is answered before any model call with the new outcome `CRISIS_SUPPORT` (`POST /intake/drafts`, `POST /intake/drafts/{id}/messages`): nothing is stored, `notice` carries the immediate-resource copy from the `GET /immediate-resources` source (D-012), and the web app shows the crisis panel with the plain form still below (R17.4, contributor proposal, not released; the phrase list awaits the owner's approval).
+
 - Manual synthetic-STAGING deploy workflow (`.github/workflows/staging-deploy.yml`). It takes a verified `main` SHA through the full CI, a credential-free build and synth, an OIDC plan (`cdk diff`) and an environment-approved deploy. That deploy quiesces, migrates, then admits the API, the worker and the schedule, deploys the web app and runs the public STAGING suite. Nothing is deployed by this change (`docs/runbooks/aws-staging-bootstrap.md`).
 - CI runs the skill metadata checks and the migration rehearsal on every pull request. Every workflow action is pinned to a commit SHA.
 

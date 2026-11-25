@@ -70,6 +70,7 @@ export default tseslint.config(
       'src/aws/migrate-lambda.ts',
       'src/aws/email-relay-lambda.ts',
       'src/aws/va-verify-lambda.ts',
+      'src/aws/inference-relay-lambda.ts',
       'tests/**/*.ts',
       '*.config.ts',
     ],
