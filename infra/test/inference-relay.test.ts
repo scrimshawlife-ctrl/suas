@@ -257,6 +257,47 @@ describe('inference relay', () => {
     }
   });
 
+  // Review 2026-11-24 (#367): relay failures and guardrail or content-filter refusals show up as
+  // alarms. Terms, not a JSON selector: the Node runtime prefixes the relay's log lines.
+  it('alarms on relay failures and on refused turns, on the relay log group only', () => {
+    const relayAlarms = (t: Template) =>
+      ofType(t, 'AWS::Logs::MetricFilter').filter(([, r]) =>
+        String(r.Properties?.MetricTransformations?.[0]?.MetricName).startsWith('InferenceRelay'),
+      );
+    expect(relayAlarms(off.backend)).toEqual([]);
+
+    const filters: Record<string, Record<string, any> | undefined> = Object.fromEntries(
+      relayAlarms(on.backend).map(([, r]) => [
+        r.Properties?.MetricTransformations[0].MetricName,
+        r.Properties,
+      ]),
+    );
+    expect(Object.keys(filters).sort()).toEqual([
+      'InferenceRelayFailures',
+      'InferenceRelayRefusals',
+    ]);
+    expect(filters.InferenceRelayFailures?.FilterPattern).toBe(
+      '?"inference_relay_refused" ?"unavailable" ?"timeout" ?"invalid"',
+    );
+    expect(filters.InferenceRelayRefusals?.FilterPattern).toBe('"model_inference" "refused"');
+    const relayLogGroup = ofType(on.backend, 'AWS::Logs::LogGroup').find(([id]) =>
+      id.startsWith('InferenceRelayLogs'),
+    )?.[0];
+    for (const filter of Object.values(filters)) {
+      expect(filter?.LogGroupName).toEqual({ Ref: relayLogGroup });
+    }
+    const alarms = ofType(on.backend, 'AWS::CloudWatch::Alarm').filter(([, r]) =>
+      String(r.Properties?.MetricName).startsWith('InferenceRelay'),
+    );
+    expect(alarms).toHaveLength(2);
+    for (const [, alarm] of alarms) {
+      expect(alarm.Properties).toMatchObject({
+        Threshold: 1,
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      });
+    }
+  });
+
   it('adds no Bedrock VPC endpoint: the VPC still reaches only S3 and Lambda', () => {
     const services = ofType(on.backend, 'AWS::EC2::VPCEndpoint').map(([, r]) =>
       JSON.stringify(r.Properties?.ServiceName),

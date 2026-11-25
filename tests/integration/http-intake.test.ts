@@ -97,7 +97,7 @@ function relayToBedrock(answer: ConverseCommandOutput): LambdaRelayModelInferenc
     environment: 'STAGING',
     region: 'us-east-2',
     modelId: 'us.anthropic.test-model',
-    guardrailId: 'grtest',
+    guardrailId: 'abc123def456',
     guardrailVersion: '1',
     log: (record) => console.info(JSON.stringify(record)),
     client: fixedBedrock(answer),
@@ -671,7 +671,7 @@ describe('guardrail block', () => {
     new BedrockModelInference({
       modelId: 'us.anthropic.test-model',
       region: 'us-east-2',
-      guardrail: { identifier: 'grtest', version: '1' },
+      guardrail: { identifier: 'abc123def456', version: '1' },
       client: fixedBedrock(GUARDRAIL_BLOCKED),
     });
 

@@ -76,6 +76,9 @@ export function createModelInferencePort(
     if (relayFunction !== undefined) {
       return new LambdaRelayModelInference({ functionName: relayFunction, region, logger });
     }
+    // Review 2026-11-24 (#365): config refuses this already; the factory fails closed as well,
+    // so STAGING never calls Bedrock directly from the VPC.
+    if (config.environment === 'STAGING') return new UnavailableModelInference();
     return new BedrockModelInference({
       modelId: bedrockModelId,
       region,

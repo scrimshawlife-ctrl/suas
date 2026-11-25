@@ -293,6 +293,13 @@ describe('createModelInferencePort', () => {
     expect(port.isAvailable()).toBe(false);
   });
 
+  // Review 2026-11-24 (#365): config already refuses this, so the factory is a second fail-closed
+  // layer; a STAGING config without the relay never reaches Bedrock from the VPC.
+  it('never builds the direct adapter in STAGING without the relay', () => {
+    const port = createModelInferencePort({ ...bedrock('test-model-id'), environment: 'STAGING' });
+    expect(port).toBeInstanceOf(UnavailableModelInference);
+  });
+
   it('builds the Bedrock adapter once a model id is set', () => {
     const port = createModelInferencePort(bedrock('test-model-id'));
     expect(port).toBeInstanceOf(BedrockModelInference);
@@ -317,7 +324,7 @@ describe('createModelInferencePort', () => {
           SUAS_AWS_REGION: 'us-east-2',
           SUAS_BEDROCK_MODEL_ID: 'us.anthropic.test-model',
           SUAS_MODEL_INFERENCE_RELAY_FUNCTION: 'suas-inference-relay',
-          SUAS_BEDROCK_GUARDRAIL_ID: 'grtest',
+          SUAS_BEDROCK_GUARDRAIL_ID: 'abc123def456',
           SUAS_BEDROCK_GUARDRAIL_VERSION: '1',
         }),
       ),
