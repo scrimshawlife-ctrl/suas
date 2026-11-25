@@ -484,9 +484,10 @@ export class BackendStack extends Stack {
     // R17.3/R17.5 (contributor proposal, not released): built only with modelInference=bedrock.
     // The API hands each model turn to the outside-VPC relay over the Lambda endpoint; only the
     // relay's role may call Bedrock, and only the API may invoke the relay.
+    let inferenceRelay: InferenceRelay | undefined;
     if (config.modelInference.mode === 'bedrock') {
       const guardrail = inferenceGuardrail(this, config.name);
-      const inferenceRelay = new InferenceRelay(this, 'InferenceRelay', {
+      inferenceRelay = new InferenceRelay(this, 'InferenceRelay', {
         code,
         logRetention: LOG_RETENTION,
         suasEnv: config.suasEnv,
@@ -672,6 +673,25 @@ export class BackendStack extends Stack {
         'VaVerifyNotConfigured',
         logs.FilterPattern.allTerms('va_verify_refused', 'not_configured'),
         'VaVerify: a call was refused because the secret holds no valid VA sandbox key or could not be read (va_verify_refused, not_configured).',
+      );
+    }
+
+    // Review 2026-11-24 (#367): a relay refusal or a failed model call (unavailable, timeout,
+    // invalid), and a guardrail or content-filter refusal, from the relay's own log lines.
+    if (inferenceRelay !== undefined) {
+      alarmOnLogMatches(
+        inferenceRelay.logGroup,
+        'InferenceRelayFailure',
+        'InferenceRelayFailures',
+        logs.FilterPattern.anyTerm('inference_relay_refused', 'unavailable', 'timeout', 'invalid'),
+        'InferenceRelay: the relay refused a turn or a model call failed (unavailable, timeout, invalid).',
+      );
+      alarmOnLogMatches(
+        inferenceRelay.logGroup,
+        'InferenceRelayRefusal',
+        'InferenceRelayRefusals',
+        logs.FilterPattern.allTerms('model_inference', 'refused'),
+        'InferenceRelay: the guardrail or a content filter refused a model turn.',
       );
     }
 

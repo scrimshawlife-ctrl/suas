@@ -198,6 +198,11 @@ With `-c modelInference=bedrock -c bedrockModelId=qwen.qwen3-32b-v1:0` (Qwen3 32
   VIOLENCE and MISCONDUCT at MEDIUM on input and output, PROMPT_ATTACK at HIGH on input only. There is no PII
   policy. A blocked message or answer reads "This message can't be processed. Please use the request form." The
   version's description carries a hash of the configuration, so a changed configuration makes a new version.
+  The version has one logical id and the default `Delete` policy, so a new version replaces the old one, and
+  CloudFormation deletes the old one in the update's cleanup: versions do not pile up.
+- **Alarms** (no notification target yet, like the others): `InferenceRelayFailures` when the relay refuses a turn
+  or a model call is unavailable, times out or is invalid, and `InferenceRelayRefusals` when the guardrail or a
+  content filter refuses one. Both count the relay's own log lines.
 - **IAM:** the relay role may `bedrock:InvokeModel` on the one foundation model in the stack's region only
   (`arn:<partition>:bedrock:<region>::foundation-model/<bedrockModelId>`). The model is invoked on demand there:
   no inference profile and no cross-region routing. Synth accepts only the exact ids in
