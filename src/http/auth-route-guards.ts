@@ -16,7 +16,8 @@ import { errorBody } from './error-envelope.js';
 const AUTH_PATH_PREFIXES = [`${API_PREFIX}/auth`, '/app/auth'] as const;
 const CHALLENGE_ROUTES = new Set([`${API_PREFIX}/auth/challenges`, '/app/auth/challenges']);
 const PERCENT_ESCAPE = /%([0-9a-f]{2})/gi;
-const MAX_DECODE_ROUNDS = 3;
+// Bounds the work per request; a deeper path is flagged rather than decoded (security review).
+const MAX_DECODE_ROUNDS = 10;
 
 /** One round of byte-wise %XX decoding. A malformed escape stays as it is, so this never throws. */
 function decodeEscapes(path: string): string {
@@ -26,9 +27,9 @@ function decodeEscapes(path: string): string {
 }
 
 /**
- * True when the raw URL path holds any `%` and, lower-cased and decoded until stable (at most 3
- * rounds), starts with an auth prefix: `%63`, `%2F`, `%23`, `%2563` and malformed escapes alike.
- * R16.2 (contributor's call, D-065): such a path could miss the edge route throttle.
+ * True when the raw URL path holds any `%` and, lower-cased and decoded until stable, starts with
+ * an auth prefix (R16.2, contributor's call, D-065; review of #366, 2026-11-25). A path still
+ * changing after MAX_DECODE_ROUNDS is flagged too, so the work per request stays bounded.
  */
 export function isPercentEncodedAuthPath(rawUrl: string): boolean {
   const path = rawUrl.split('?', 1)[0] ?? '';
@@ -36,10 +37,11 @@ export function isPercentEncodedAuthPath(rawUrl: string): boolean {
   let decoded = path.toLowerCase();
   for (let round = 0; round < MAX_DECODE_ROUNDS; round += 1) {
     const next = decodeEscapes(decoded).toLowerCase();
-    if (next === decoded) break;
+    if (next === decoded) return AUTH_PATH_PREFIXES.some((prefix) => decoded.startsWith(prefix));
     decoded = next;
   }
-  return AUTH_PATH_PREFIXES.some((prefix) => decoded.startsWith(prefix));
+  // Still changing after the cap: no client encodes this deep, so fail closed (404).
+  return true;
 }
 
 /** Registered right after the server hooks, so the 404 comes before any other hook or handler. */
