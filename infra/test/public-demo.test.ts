@@ -46,6 +46,11 @@ describe('public demo deploy switch', () => {
       'migrate.handler',
       'run.sh',
     ]);
+    // Owner review on #363: the relay opens its allowlist only with SUAS_ENV=STAGING too.
+    const relay = ofType(on.backend, 'AWS::Lambda::Function').find(
+      (fn) => fn.Properties?.Handler === 'email-relay.handler',
+    );
+    expect(relay?.Properties?.Environment?.Variables?.SUAS_ENV).toBe('STAGING');
   });
 
   // Every route that issues a sign-in challenge (src/http/routes/auth.ts and ui.ts).
@@ -61,5 +66,21 @@ describe('public demo deploy switch', () => {
       ThrottlingBurstLimit: 100,
       ThrottlingRateLimit: 50,
     });
+  });
+
+  // Owner review on #363: the route throttle is CDK context, with today's values as defaults.
+  it('takes the challenge-route throttle from publicDemoThrottleRate and publicDemoThrottleBurst', () => {
+    const tuned = synthesize({
+      publicDemo: 'true',
+      publicDemoThrottleRate: '7',
+      publicDemoThrottleBurst: '11',
+    });
+    const settings = stage(tuned.backend)?.RouteSettings as Record<string, unknown>;
+    for (const key of ['POST /api/v0/auth/challenges', 'POST /app/auth/challenges']) {
+      expect(settings[key]).toEqual({ ThrottlingRateLimit: 7, ThrottlingBurstLimit: 11 });
+    }
+    expect(() => synthesize({ publicDemo: 'true', publicDemoThrottleRate: '0' })).toThrow(
+      /publicDemoThrottleRate/,
+    );
   });
 });

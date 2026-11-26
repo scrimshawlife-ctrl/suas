@@ -27,7 +27,6 @@ import {
   CHALLENGE_TTL_SECONDS,
   CHALLENGE_VERIFY_LIMIT,
   CHALLENGE_VERIFY_WINDOW_SECONDS,
-  SIGN_UP_DAILY_CAP,
   SIGN_UP_DAILY_WINDOW_SECONDS,
 } from './constants.js';
 import { DEMO_SHARED_ACCOUNT_LIMIT } from './demo-fixed-code.js';
@@ -35,6 +34,7 @@ import {
   channelForMethod,
   ChannelUnavailableError,
   type ChallengeDeliveryPort,
+  type ChallengeChannel,
   type ChallengeMethod,
 } from './delivery.js';
 import { consumeRateLimit, enforceRateLimit } from './rate-limit.js';
@@ -47,7 +47,7 @@ import {
 } from './secrets.js';
 import type { FixedOtpCodeFor } from './demo-fixed-code.js';
 import {
-  publicDemoActive,
+  activePublicDemoLimits,
   publicSignUpPermitted,
   stagingFixturePrincipalRefused,
   type StagingAccess,
@@ -109,8 +109,6 @@ export interface ChallengeServiceDeps {
   readonly fixedOtpCodeFor?: FixedOtpCodeFor | undefined;
   /** Present on the server. STAGING uses it to refuse a non-fixture account. */
   readonly stagingAccess?: StagingAccess | undefined;
-  /** Test seam for the public demo daily sign-up cap; absent uses SIGN_UP_DAILY_CAP. */
-  readonly signUpDailyCap?: number | undefined;
 }
 
 /**
@@ -146,14 +144,6 @@ export async function issueChallenge(
     destination,
   );
 
-  // R16.2 (contributor proposal, not released): in the STAGING public demo every EMAIL_OTP
-  // issuance counts against one daily budget, known address or not, so the shared counter cannot
-  // reveal who is enrolled. Over the budget only a new address is sent nothing.
-  const overDailyCap =
-    publicDemoActive(deps.stagingAccess) &&
-    input.method === 'EMAIL_OTP' &&
-    !(await consumeRateLimit(deps.pool, signUpDailyPolicy(deps), 'global')).allowed;
-
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
   const signUpEligible =
     user === undefined &&
@@ -161,8 +151,11 @@ export async function issueChallenge(
     publicSignUpPermitted(deps.stagingAccess) &&
     input.method === 'EMAIL_OTP' &&
     SIGN_UP_EMAIL_PATTERN.test(destination);
-  const capReached = signUpEligible && overDailyCap;
-  const signUp = signUpEligible && !capReached;
+  const demoCap =
+    user === undefined
+      ? await publicDemoCapReached(deps, input.tenantId, channel, destination)
+      : undefined;
+  const signUp = signUpEligible && demoCap === undefined;
   // A sign-up the environment policy refused (D-052) is answered like any unenrolled address,
   // but the audit marks it so operators can tell a refused sign-up from an unknown address.
   // The flag carries no destination.
@@ -196,7 +189,9 @@ export async function issueChallenge(
   // A STAGING account that is not an admitted fixture pair is not deliverable. AUTH.md §6:
   // only an ACTIVE user may act, so INVITED is answered the same way as SUSPENDED.
   const deliverable =
-    !fixtureRefused && (signUp || (user !== undefined && user.status === 'ACTIVE'));
+    !fixtureRefused &&
+    demoCap === undefined &&
+    (signUp || (user !== undefined && user.status === 'ACTIVE'));
   const secret =
     input.method === 'MAGIC_LINK' ? generateOpaqueToken() : (fixedCode ?? generateOtpCode());
   const challengeId = randomUUID();
@@ -240,8 +235,8 @@ export async function issueChallenge(
             method: input.method,
             outcome: fixtureRefused
               ? 'NOT_STAGING_FIXTURE'
-              : capReached
-                ? 'SIGN_UP_CAP_REACHED'
+              : demoCap !== undefined
+                ? demoCap
                 : user === undefined
                   ? 'NO_ENROLLED_USER'
                   : `USER_${user.status}`,
@@ -295,12 +290,57 @@ export async function issueChallenge(
   return { issued: true, challengeId, expiresAt };
 }
 
-function signUpDailyPolicy(deps: ChallengeServiceDeps) {
-  return {
-    bucket: 'auth.signup.daily',
-    limit: deps.signUpDailyCap ?? SIGN_UP_DAILY_CAP.value,
-    windowSeconds: SIGN_UP_DAILY_WINDOW_SECONDS.value,
-  };
+/**
+ * STAGING public demo caps for an address with no account, on any email method (R16.2,
+ * contributor proposal, not released / owner review on #363). Over a cap: 202 and no send.
+ * Each counter is its own atomic upsert; the per-address one is checked first, so a spent daily
+ * cap still uses one per-address unit. Both are accepted under D-065 (review 2026-11-24).
+ */
+async function publicDemoCapReached(
+  deps: ChallengeServiceDeps,
+  tenantId: string,
+  channel: ChallengeChannel,
+  destination: string,
+): Promise<'ADDRESS_DAILY_CAP_REACHED' | 'SIGN_UP_CAP_REACHED' | undefined> {
+  const limits = activePublicDemoLimits(deps.stagingAccess);
+  if (limits === undefined || channel !== 'EMAIL') return undefined;
+  // Existing accounts never reach these caps (only the 15-minute destination limit), so nobody
+  // can lock a known user out. That leaves a small enumeration side channel (known addresses
+  // still get codes over a cap), which the owner accepted in the PR #363 review.
+  const windowSeconds = SIGN_UP_DAILY_WINDOW_SECONDS.value;
+  const perAddress = await consumeRateLimit(
+    deps.pool,
+    { bucket: 'auth.challenge.address.daily', limit: limits.addressDailyCap, windowSeconds },
+    `${tenantId}:${canonicalAddressSubject(destination)}`,
+  );
+  if (!perAddress.allowed) return 'ADDRESS_DAILY_CAP_REACHED';
+  const signUps = await consumeRateLimit(
+    deps.pool,
+    { bucket: 'auth.signup.daily', limit: limits.dailySignUpCap, windowSeconds },
+    'global',
+  );
+  return signUps.allowed ? undefined : 'SIGN_UP_CAP_REACHED';
+}
+
+/**
+ * The per-address counter subject only, never a delivery address: lower case with any `+tag`
+ * dropped from the local part, so `a+1@x.test` and `a+2@x.test` share one budget.
+ */
+/** Domains whose mailbox ignores dots in the local part and share one namespace. */
+const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com']);
+
+function canonicalAddressSubject(address: string): string {
+  const normalized = address.trim().toLowerCase();
+  const at = normalized.lastIndexOf('@');
+  if (at < 0) return normalized;
+  const plus = normalized.indexOf('+');
+  const local = normalized.slice(0, plus < 0 || plus > at ? at : plus);
+  const domain = normalized.slice(at + 1);
+  // R16.2 (contributor's call, D-065, review 2026-11-24): Gmail ignores dots and reads
+  // googlemail.com as gmail.com; every other domain keeps its local part as typed. Outlook, Yahoo
+  // and iCloud treat dots as significant, so merging them would join different people's budgets.
+  if (GMAIL_DOMAINS.has(domain)) return `${local.replaceAll('.', '')}@gmail.com`;
+  return `${local}@${domain}`;
 }
 
 export interface VerifyChallengeInput {

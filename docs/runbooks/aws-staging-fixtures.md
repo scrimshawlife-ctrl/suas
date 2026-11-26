@@ -89,11 +89,30 @@ releases it and lifts the staging maintenance hold.
   longer limit who signs in or who receives mail. Registered fixture users and their sessions keep working.
 - Every `POST /api/v0/auth/challenges` must carry `demo_acknowledged: true`, or the API answers `400` for every
   address alike. The `/app` HTML sign-in form does not ask for it (it never signs anyone up).
-- Abuse bounds: API Gateway throttles `POST /api/v0/auth/challenges` and `POST /app/auth/challenges` at 2 rps
-  (burst 5) each, as best-effort defence in depth. The hard bound is the app's daily budget: after 200 codes a day,
-  counted over every address, new addresses are sent nothing. The answer is still `202`, the audit records
-  `SIGN_UP_CAP_REACHED`, and known users still receive codes.
-- Real email addresses are then stored in the STAGING database (R16.5 owner questions on retention and VA sandbox).
+- Abuse bounds (owner review on #363). API Gateway throttles `POST /api/v0/auth/challenges` and
+  `POST /app/auth/challenges` at `-c publicDemoThrottleRate` rps (default 2) and `-c publicDemoThrottleBurst`
+  (default 5) each, as best-effort defence in depth. The app then enforces its own settings, each a positive integer
+  (an invalid value stops startup):
+
+  | Setting                                   | Default | Bound                                                                                                                                                                                                    |
+  | ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `SUAS_PUBLIC_DEMO_DAILY_SIGNUP_CAP`       | `200`   | New addresses (no account yet) sent a sign-up code per day, all together. Existing users are never blocked by it. Audit `SIGN_UP_CAP_REACHED`.                                                           |
+  | `SUAS_PUBLIC_DEMO_ADDRESS_DAILY_CAP`      | `5`     | Email challenges (EMAIL_OTP or MAGIC_LINK) per day to one address with no account; `+tag` variants share one budget. Existing accounts keep only the 15-minute limit. Audit `ADDRESS_DAILY_CAP_REACHED`. |
+  | `SUAS_PUBLIC_DEMO_ROUTE_LIMIT_PER_MINUTE` | `120`   | Challenge requests per minute over both challenge routes. Over it: `429 RATE_LIMITED` with `Retry-After`.                                                                                                |
+
+  Over either daily cap the answer is still `202` and nothing is sent. Capping only addresses with no account leaves a
+  small enumeration side channel (known addresses still get codes over a cap), which the owner accepted.
+
+- Any request whose path holds a `%` and, lower-cased and decoded until stable (at most 3 rounds), starts with
+  `/api/v0/auth` or `/app/auth` answers `404` before routing (for example `/api/v0/auth/%63hallenges`,
+  `/api/v0/auth%2Fchallenges` or `/api/v0/auth/%2563hallenges`), so no path variant skips the API Gateway route
+  throttle.
+- VA confirmation stays fixture-only: a non-fixture account gets `503 ID_VERIFICATION_UNAVAILABLE` from
+  `POST /api/v0/veterans/me/verification/va/confirm` and the VA sandbox OAuth routes. Self-attestation still works.
+- The email relay opens its allowlist only with both `SUAS_PUBLIC_DEMO=enabled` and `SUAS_ENV=STAGING`; the
+  `publicDemo` context sets both on it.
+- Real email addresses are then stored in the STAGING database. Retention (purging non-fixture accounts) is not
+  implemented: it waits on the owner's decision (R16.5).
 
 ## Note
 

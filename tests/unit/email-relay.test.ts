@@ -233,30 +233,34 @@ describe('relay function', () => {
   });
 });
 
-// R16.1 (contributor proposal, not released): the relay reads its own SUAS_PUBLIC_DEMO, so an
-// API in demo mode cannot open the relay's allowlist alone (defence in depth).
+// R16.1 (contributor proposal, not released; owner review on #363): the relay reads its own
+// SUAS_PUBLIC_DEMO and SUAS_ENV, so an API in demo mode cannot open the relay's allowlist alone.
 describe('relay function in public demo mode', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  const relayFromEnv = (demo: string | undefined) => {
+  const relayFromEnv = (demo: string | undefined, suasEnv: string | null = 'STAGING') => {
     vi.stubEnv('SUAS_EMAIL_SECRET_ID', '');
     vi.stubEnv('SUAS_STAGING_FIXTURE_MAILBOX', '');
     vi.stubEnv('SUAS_PUBLIC_DEMO', demo);
+    vi.stubEnv('SUAS_ENV', suasEnv ?? undefined);
     return createEmailRelayHandler();
   };
+  const refused = { accepted: false, retryable: false, failure_reason: 'recipient_not_allowed' };
 
-  it('allows any address with SUAS_PUBLIC_DEMO=enabled and refuses it when unset', async () => {
+  it('allows any address with SUAS_PUBLIC_DEMO=enabled on STAGING and refuses it when unset', async () => {
     // Past the allowlist, the unset secret is the next refusal; nothing reaches AWS or Resend.
     expect(await relayFromEnv('enabled')({ ...request, to: FRIEND })).toEqual({
       accepted: false,
       failure_reason: 'relay_not_configured',
     });
-    expect(await relayFromEnv(undefined)({ ...request, to: FRIEND })).toEqual({
-      accepted: false,
-      retryable: false,
-      failure_reason: 'recipient_not_allowed',
-    });
+    expect(await relayFromEnv(undefined)({ ...request, to: FRIEND })).toEqual(refused);
+  });
+
+  it('refuses a non-fixture address with the demo on when SUAS_ENV is not STAGING', async () => {
+    for (const suasEnv of [null, 'PRODUCTION', 'LOCAL']) {
+      expect(await relayFromEnv('enabled', suasEnv)({ ...request, to: FRIEND })).toEqual(refused);
+    }
   });
 });

@@ -40,6 +40,7 @@ export {
   type MigrationsMode,
   type ModelInferenceMode,
   type ObjectStorageMode,
+  type PublicDemoLimits,
   type SafetyCopyMode,
   type SensitiveAggregateReporting,
   type StagingFixturePrincipal,
