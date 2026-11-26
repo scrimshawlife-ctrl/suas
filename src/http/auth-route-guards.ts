@@ -16,7 +16,6 @@ import { errorBody } from './error-envelope.js';
 const AUTH_PATH_PREFIXES = [`${API_PREFIX}/auth`, '/app/auth'] as const;
 const CHALLENGE_ROUTES = new Set([`${API_PREFIX}/auth/challenges`, '/app/auth/challenges']);
 const PERCENT_ESCAPE = /%([0-9a-f]{2})/gi;
-const MAX_DECODE_ROUNDS = 3;
 
 /** One round of byte-wise %XX decoding. A malformed escape stays as it is, so this never throws. */
 function decodeEscapes(path: string): string {
@@ -26,18 +25,18 @@ function decodeEscapes(path: string): string {
 }
 
 /**
- * True when the raw URL path holds any `%` and, lower-cased and decoded until stable (at most 3
- * rounds), starts with an auth prefix: `%63`, `%2F`, `%23`, `%2563` and malformed escapes alike.
- * R16.2 (contributor's call, D-065): such a path could miss the edge route throttle.
+ * True when the raw URL path holds any `%` and, lower-cased and decoded until stable, starts with
+ * an auth prefix (R16.2, contributor's call, D-065). No round cap (review of #366, 2026-11-25):
+ * each round that changes the path shortens it, so decoding always stops.
  */
 export function isPercentEncodedAuthPath(rawUrl: string): boolean {
   const path = rawUrl.split('?', 1)[0] ?? '';
   if (!path.includes('%')) return false;
   let decoded = path.toLowerCase();
-  for (let round = 0; round < MAX_DECODE_ROUNDS; round += 1) {
-    const next = decodeEscapes(decoded).toLowerCase();
-    if (next === decoded) break;
+  let next = decodeEscapes(decoded).toLowerCase();
+  while (next !== decoded) {
     decoded = next;
+    next = decodeEscapes(decoded).toLowerCase();
   }
   return AUTH_PATH_PREFIXES.some((prefix) => decoded.startsWith(prefix));
 }
