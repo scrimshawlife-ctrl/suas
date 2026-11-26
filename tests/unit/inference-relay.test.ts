@@ -237,3 +237,65 @@ describe('inference relay function', () => {
     expect(console).not.toHaveBeenCalled();
   });
 });
+
+describe('token usage through the relay', () => {
+  it('carries Bedrock usage from the relay function to the in-VPC port unchanged', async () => {
+    const withUsage = {
+      ...ENDED,
+      usage: { inputTokens: 321, outputTokens: 45, totalTokens: 366 },
+    } as unknown as ConverseCommandOutput;
+    const { handler } = relayHandler({}, [withUsage]);
+    const relayed = await handler(EVENT);
+    expect(relayed).toMatchObject({ ok: true, usage: { inputTokens: 321, outputTokens: 45 } });
+
+    const { port } = relayPort([invoked({ Payload: encode(relayed) })]);
+    expect(await port.converse(REQUEST)).toEqual(relayed);
+  });
+
+  it('leaves usage out when Bedrock reports none, and refuses a malformed usage', async () => {
+    const { handler } = relayHandler({});
+    expect(await handler(EVENT)).not.toHaveProperty('usage');
+
+    const bad = {
+      ok: true,
+      text: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: -1, outputTokens: 2 },
+    };
+    const { port } = relayPort([invoked({ Payload: encode(bad) })]);
+    expect(await port.converse(REQUEST)).toEqual({ ok: false, failure: 'invalid' });
+  });
+
+  // R17.x (contributor's call, D-064): an implausible count is refused, and one reported count
+  // is kept with the other as 0.
+  it('refuses a token count above 1,000,000', async () => {
+    const huge = {
+      ok: true,
+      text: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: 1_000_001, outputTokens: 2 },
+    };
+    const { port } = relayPort([invoked({ Payload: encode(huge) })]);
+    expect(await port.converse(REQUEST)).toEqual({ ok: false, failure: 'invalid' });
+  });
+
+  it('accepts a token count of exactly 1,000,000', async () => {
+    const atLimit = {
+      ok: true,
+      text: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+    };
+    const { port } = relayPort([invoked({ Payload: encode(atLimit) })]);
+    expect(await port.converse(REQUEST)).toEqual(atLimit);
+  });
+
+  it.each([
+    [{ inputTokens: 12 }, { inputTokens: 12, outputTokens: 0 }],
+    [{ outputTokens: 5 }, { inputTokens: 0, outputTokens: 5 }],
+  ])('reports both counts when Bedrock gives only %o', async (usage, expected) => {
+    const partial = { ...ENDED, usage } as unknown as ConverseCommandOutput;
+    const { handler } = relayHandler({}, [partial]);
+    expect(await handler(EVENT)).toMatchObject({ ok: true, usage: expected });
+  });
+});

@@ -96,6 +96,8 @@ export type ModelTurnResult =
       readonly text: string;
       /** Empty when the turn is text only. At least one of text and toolCalls is non-empty. */
       readonly toolCalls: readonly ModelToolCall[];
+      /** Provider token counts, when the adapter reports them; the eval harness sums them. */
+      readonly usage?: { readonly inputTokens: number; readonly outputTokens: number };
     }
   | { readonly ok: false; readonly failure: ModelFailureKind };
 
