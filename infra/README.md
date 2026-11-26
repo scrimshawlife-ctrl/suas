@@ -199,9 +199,12 @@ With `-c modelInference=bedrock -c bedrockModelId=qwen.qwen3-32b-v1:0` (Qwen3 32
   version's description carries a hash of the configuration, so a changed configuration makes a new version.
   The version has one logical id and the default `Delete` policy, so a new version replaces the old one, and
   CloudFormation deletes the old one in the update's cleanup: versions do not pile up.
-- **Alarms** (no notification target yet, like the others): `InferenceRelayFailures` when the relay refuses a turn
-  or a model call is unavailable, times out or is invalid, and `InferenceRelayRefusals` when the guardrail or a
-  content filter refuses one. Both count the relay's own log lines.
+- **Alarms** (no notification target yet, like the others): on the relay's own log lines, `InferenceRelayFailures`
+  when the relay's settings are malformed (`not_configured`) or a model call is unavailable or times out, and
+  `InferenceRelayRefusals` when the guardrail or a content filter refuses a turn. A malformed event or an invalid
+  model answer is refused by design and does not count. On the API's log lines, `InferenceRelayInvokeFailures`
+  when a turn through the relay is unavailable or times out: a throttle, missing grant, relay crash or timeout, or
+  API abort, which only the API logs. A refused or invalid turn is left to the relay's alarms.
 - **IAM:** the relay role may `bedrock:InvokeModel` on the one foundation model in the stack's region only
   (`arn:<partition>:bedrock:<region>::foundation-model/<bedrockModelId>`). The model is invoked on demand there:
   no inference profile and no cross-region routing. Synth accepts only the exact ids in

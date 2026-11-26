@@ -257,39 +257,47 @@ describe('inference relay', () => {
     }
   });
 
-  // Review 2026-11-24 (#367): relay failures and guardrail or content-filter refusals show up as
-  // alarms. Terms, not a JSON selector: the Node runtime prefixes the relay's log lines.
-  it('alarms on relay failures and on refused turns, on the relay log group only', () => {
+  // Review 2026-11-24/25 (#367): relay failures and refused turns on the relay's log group, and
+  // failed relay turns on the API's. Terms, not a JSON selector: the Node runtime prefixes the
+  // relay's log lines. A malformed event or an invalid model answer is not a relay failure.
+  it('alarms on relay failures and refused turns, and on failed relay turns from the API', () => {
     const relayAlarms = (t: Template) =>
       ofType(t, 'AWS::Logs::MetricFilter').filter(([, r]) =>
         String(r.Properties?.MetricTransformations?.[0]?.MetricName).startsWith('InferenceRelay'),
       );
+    const logGroupOf = (t: Template, prefix: string) =>
+      ofType(t, 'AWS::Logs::LogGroup').find(([id]) => id.startsWith(prefix))?.[0];
     expect(relayAlarms(off.backend)).toEqual([]);
+    expect(
+      ofType(off.backend, 'AWS::CloudWatch::Alarm').filter(([, r]) =>
+        String(r.Properties?.MetricName).startsWith('InferenceRelay'),
+      ),
+    ).toEqual([]);
 
-    const filters: Record<string, Record<string, any> | undefined> = Object.fromEntries(
-      relayAlarms(on.backend).map(([, r]) => [
-        r.Properties?.MetricTransformations[0].MetricName,
-        r.Properties,
-      ]),
-    );
-    expect(Object.keys(filters).sort()).toEqual([
-      'InferenceRelayFailures',
-      'InferenceRelayRefusals',
-    ]);
-    expect(filters.InferenceRelayFailures?.FilterPattern).toBe(
-      '?"inference_relay_refused" ?"unavailable" ?"timeout" ?"invalid"',
-    );
-    expect(filters.InferenceRelayRefusals?.FilterPattern).toBe('"model_inference" "refused"');
-    const relayLogGroup = ofType(on.backend, 'AWS::Logs::LogGroup').find(([id]) =>
-      id.startsWith('InferenceRelayLogs'),
-    )?.[0];
-    for (const filter of Object.values(filters)) {
-      expect(filter?.LogGroupName).toEqual({ Ref: relayLogGroup });
+    // Metric -> [pattern, log group] of every filter feeding it; one metric may have several.
+    const filters: Record<string, Array<[string, unknown]>> = {};
+    for (const [, r] of relayAlarms(on.backend)) {
+      const metric = String(r.Properties?.MetricTransformations[0].MetricName);
+      (filters[metric] ??= []).push([r.Properties?.FilterPattern, r.Properties?.LogGroupName]);
     }
+    const relayLogGroup = { Ref: logGroupOf(on.backend, 'InferenceRelayLogs') };
+    const apiLogGroup = { Ref: logGroupOf(on.backend, 'ApiFunctionLogs') };
+    expect(filters).toEqual({
+      InferenceRelayFailures: [['?"not_configured" ?"unavailable" ?"timeout"', relayLogGroup]],
+      InferenceRelayRefusals: [['"model_inference" "refused"', relayLogGroup]],
+      // Review 2026-11-26: only an unavailable or timed-out turn, not a guardrail refusal or an
+      // invalid answer, which the relay alarms cover; two filters, one metric.
+      InferenceRelayInvokeFailures: [
+        ['"model_inference" "bedrock-relay" "unavailable"', apiLogGroup],
+        ['"model_inference" "bedrock-relay" "timeout"', apiLogGroup],
+      ],
+    });
     const alarms = ofType(on.backend, 'AWS::CloudWatch::Alarm').filter(([, r]) =>
       String(r.Properties?.MetricName).startsWith('InferenceRelay'),
     );
-    expect(alarms).toHaveLength(2);
+    expect(alarms.map(([, r]) => r.Properties?.MetricName).sort()).toEqual(
+      Object.keys(filters).sort(),
+    );
     for (const [, alarm] of alarms) {
       expect(alarm.Properties).toMatchObject({
         Threshold: 1,

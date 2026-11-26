@@ -1,0 +1,12 @@
+{"level":"info","msg":"model_inference","implementation":"bedrock-relay","ok":false,"failure":"unavailable"}
+{"level":"info","msg":"model_inference","implementation":"bedrock-relay","ok":false,"failure":"timeout"}
+{"level":"info","msg":"model_inference","implementation":"bedrock-relay","ok":true}
+{"level":"info","msg":"model_inference","implementation":"bedrock-relay","ok":false,"failure":"refused"}
+{"level":"info","msg":"model_inference","implementation":"bedrock","ok":false,"failure":"unavailable"}
+2026-11-25T14:03:07.412Z	8d2f6a1e-3b7c-4e95-a0d4-6c1b9e27f538	INFO	{"msg":"inference_relay_refused","reason":"not_configured"}
+2026-11-25T14:03:09.087Z	c41e07b9-92a5-4f3d-b8e6-1d7a5c90e2f4	INFO	{"msg":"inference_relay_refused","reason":"environment"}
+2026-11-25T14:03:11.530Z	5a9b3c2d-e8f1-4a06-9c7e-2b4d6f81a3c5	INFO	{"msg":"inference_relay_refused","reason":"request"}
+2026-11-25T14:03:14.221Z	e7c6d5b4-a3f2-41e0-8d9c-7b6a5f4e3d21	INFO	{"msg":"model_inference","implementation":"bedrock","ok":false,"failure":"refused"}
+2026-11-25T14:03:16.904Z	1f2e3d4c-5b6a-4798-8a9b-0c1d2e3f4a5b	INFO	{"msg":"model_inference","implementation":"bedrock","ok":false,"failure":"invalid"}
+2026-11-25T14:03:19.318Z	9e8d7c6b-5a4f-43e2-b1d0-c9b8a7f6e5d4	INFO	{"msg":"model_inference","implementation":"bedrock","ok":false,"failure":"unavailable"}
+2026-11-25T14:03:21.776Z	3c4d5e6f-7a8b-49c0-9d1e-2f3a4b5c6d7e	INFO	{"msg":"model_inference","implementation":"bedrock","ok":true}
