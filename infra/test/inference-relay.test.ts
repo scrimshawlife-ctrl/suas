@@ -257,14 +257,22 @@ describe('inference relay', () => {
     }
   });
 
-  // Review 2026-11-24 (#367): relay failures and guardrail or content-filter refusals show up as
-  // alarms. Terms, not a JSON selector: the Node runtime prefixes the relay's log lines.
-  it('alarms on relay failures and on refused turns, on the relay log group only', () => {
+  // Review 2026-11-24/25 (#367): relay failures and refused turns on the relay's log group, and
+  // failed relay turns on the API's. Terms, not a JSON selector: the Node runtime prefixes the
+  // relay's log lines. A malformed event or an invalid model answer is not a relay failure.
+  it('alarms on relay failures and refused turns, and on failed relay turns from the API', () => {
     const relayAlarms = (t: Template) =>
       ofType(t, 'AWS::Logs::MetricFilter').filter(([, r]) =>
         String(r.Properties?.MetricTransformations?.[0]?.MetricName).startsWith('InferenceRelay'),
       );
+    const logGroupOf = (t: Template, prefix: string) =>
+      ofType(t, 'AWS::Logs::LogGroup').find(([id]) => id.startsWith(prefix))?.[0];
     expect(relayAlarms(off.backend)).toEqual([]);
+    expect(
+      ofType(off.backend, 'AWS::CloudWatch::Alarm').filter(([, r]) =>
+        String(r.Properties?.MetricName).startsWith('InferenceRelay'),
+      ),
+    ).toEqual([]);
 
     const filters: Record<string, Record<string, any> | undefined> = Object.fromEntries(
       relayAlarms(on.backend).map(([, r]) => [
@@ -274,22 +282,29 @@ describe('inference relay', () => {
     );
     expect(Object.keys(filters).sort()).toEqual([
       'InferenceRelayFailures',
+      'InferenceRelayInvokeFailures',
       'InferenceRelayRefusals',
     ]);
-    expect(filters.InferenceRelayFailures?.FilterPattern).toBe(
-      '?"inference_relay_refused" ?"unavailable" ?"timeout" ?"invalid"',
-    );
-    expect(filters.InferenceRelayRefusals?.FilterPattern).toBe('"model_inference" "refused"');
-    const relayLogGroup = ofType(on.backend, 'AWS::Logs::LogGroup').find(([id]) =>
-      id.startsWith('InferenceRelayLogs'),
-    )?.[0];
-    for (const filter of Object.values(filters)) {
-      expect(filter?.LogGroupName).toEqual({ Ref: relayLogGroup });
-    }
+    const relayLogGroup = { Ref: logGroupOf(on.backend, 'InferenceRelayLogs') };
+    const apiLogGroup = { Ref: logGroupOf(on.backend, 'ApiFunctionLogs') };
+    expect(filters.InferenceRelayFailures).toMatchObject({
+      FilterPattern: '?"not_configured" ?"unavailable" ?"timeout"',
+      LogGroupName: relayLogGroup,
+    });
+    expect(filters.InferenceRelayRefusals).toMatchObject({
+      FilterPattern: '"model_inference" "refused"',
+      LogGroupName: relayLogGroup,
+    });
+    expect(filters.InferenceRelayInvokeFailures).toMatchObject({
+      FilterPattern: '"model_inference" "bedrock-relay" "failure"',
+      LogGroupName: apiLogGroup,
+    });
     const alarms = ofType(on.backend, 'AWS::CloudWatch::Alarm').filter(([, r]) =>
       String(r.Properties?.MetricName).startsWith('InferenceRelay'),
     );
-    expect(alarms).toHaveLength(2);
+    expect(alarms.map(([, r]) => r.Properties?.MetricName).sort()).toEqual(
+      Object.keys(filters).sort(),
+    );
     for (const [, alarm] of alarms) {
       expect(alarm.Properties).toMatchObject({
         Threshold: 1,

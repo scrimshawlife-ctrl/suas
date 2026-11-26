@@ -673,15 +673,16 @@ export class BackendStack extends Stack {
       );
     }
 
-    // Review 2026-11-24 (#367): a relay refusal or a failed model call (unavailable, timeout,
-    // invalid), and a guardrail or content-filter refusal, from the relay's own log lines.
+    // Review 2026-11-24/25 (#367): relay failures and refused turns from the relay's own lines.
+    // A malformed event (reason request) and an invalid model answer are refused by design, so
+    // they do not count; not_configured catches a broken deploy.
     if (inferenceRelay !== undefined) {
       alarmOnLogMatches(
         inferenceRelay.logGroup,
         'InferenceRelayFailure',
         'InferenceRelayFailures',
-        logs.FilterPattern.anyTerm('inference_relay_refused', 'unavailable', 'timeout', 'invalid'),
-        'InferenceRelay: the relay refused a turn or a model call failed (unavailable, timeout, invalid).',
+        logs.FilterPattern.anyTerm('not_configured', 'unavailable', 'timeout'),
+        'InferenceRelay: the relay has malformed settings (not_configured) or a model call was unavailable or timed out.',
       );
       alarmOnLogMatches(
         inferenceRelay.logGroup,
@@ -689,6 +690,17 @@ export class BackendStack extends Stack {
         'InferenceRelayRefusals',
         logs.FilterPattern.allTerms('model_inference', 'refused'),
         'InferenceRelay: the guardrail or a content filter refused a model turn.',
+      );
+      // A throttle, missing grant, relay crash or API abort is logged only by the API's relay
+      // port (src/inference/lambda-relay-inference.ts); only its ok:false lines carry `failure`.
+      const apiLogGroup = functionLogGroups.get('ApiFunction');
+      if (apiLogGroup === undefined) throw new Error('No log group recorded for ApiFunction.');
+      alarmOnLogMatches(
+        apiLogGroup,
+        'InferenceRelayInvokeFailure',
+        'InferenceRelayInvokeFailures',
+        logs.FilterPattern.allTerms('model_inference', 'bedrock-relay', 'failure'),
+        'Api: a model turn through the inference relay failed (the invoke failed, or the relay answered with a failure).',
       );
     }
 
