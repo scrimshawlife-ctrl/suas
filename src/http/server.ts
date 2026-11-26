@@ -515,6 +515,8 @@ function registerRequestArea(app: FastifyInstance, { deps, pool }: SignedInArea)
     pool,
     sessionSecret: deps.config.sessionSecret,
     push: deps.chatPush,
+    chatAssist: deps.config.chatAssist.mode === 'enabled' ? deps.modelInference : undefined,
+    safetyCopyMode: deps.config.safetyCopyMode,
   });
 
   registerTrustedContactRoutes(app, {

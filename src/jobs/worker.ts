@@ -17,6 +17,7 @@ import {
   INVITE_LIMIT_PER_ADDRESS,
   INVITE_EMAIL_CAP_PER_RECIPIENT,
 } from '../consent/invite-limits.js';
+import { CHAT_ASSIST_RATE_LIMIT } from '../chat/assist.js';
 import type { SuasConfig } from '../config/index.js';
 import { expireDueGrants } from '../consent/index.js';
 import { expireDueRequests } from '../coordination/expiry.js';
@@ -75,6 +76,7 @@ const RATE_LIMIT_WINDOWS = [
   INVITE_LIMIT_PER_VETERAN,
   INVITE_LIMIT_PER_ADDRESS,
   INVITE_EMAIL_CAP_PER_RECIPIENT,
+  CHAT_ASSIST_RATE_LIMIT,
 ];
 
 function log(record: Record<string, unknown>): void {

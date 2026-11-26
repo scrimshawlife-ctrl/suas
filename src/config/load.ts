@@ -84,6 +84,7 @@ export function describeConfig(config: SuasConfig): Record<string, string | numb
     bedrock_guardrail_configured: config.modelInference.guardrailId !== undefined,
     object_storage_mode: config.objectStorage.mode,
     chat_push_mode: config.chatPush.mode,
+    chat_assist_mode: config.chatAssist.mode,
     id_verification_mode: config.idVerification.mode,
     va_confirmation_mode: config.vaConfirmation.mode,
     va_confirmation_api_key_configured: config.vaConfirmation.apiKey !== undefined,

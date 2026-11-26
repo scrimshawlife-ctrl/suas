@@ -503,6 +503,9 @@ export class BackendStack extends Stack {
         inferenceRelay.function.functionName,
       );
       inferenceRelay.function.grantInvoke(apiFunction);
+      // R18.7 (contributor proposal, not released): the API alone reads this; it reuses the relay
+      // with purpose chat_assist, so no IAM changes. Unset, the API defaults to disabled.
+      if (config.chatAssist) apiFunction.addEnvironment('SUAS_CHAT_ASSIST_MODE', 'enabled');
     }
     apiFunction.addToRolePolicy(
       new iam.PolicyStatement({

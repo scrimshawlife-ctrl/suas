@@ -1204,6 +1204,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/service-requests/{id}/chat/assist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest a reply or catch up on the chat, for the person who accepted the request (R18.7, contributor proposal, not released)
+         * @description Helper-side chat assistance on synthetic STAGING (SUAS_CHAT_ASSIST_MODE=enabled; refused in PRODUCTION). The model sees the request details and the newest 30 messages of the live thread and returns text the helper may copy into a message; nothing is stored and no message is sent. Crisis language in any of those messages (the helper's too) or the request is never sent to the model: the outcome is CRISIS_SUPPORT with the immediate-resource notice. A suggested reply with a promise the helper has not already made, or a number, time, phone number, address, dollar amount, email or link not in the request or chat, is refused (503 CHAT_ASSIST_UNAVAILABLE); a catch-up drops only such sentences. Chat and model text are never logged. Access is resolved as for GET .../chat/messages (404 for anyone who is not a participant, 409 CHAT_UNAVAILABLE before accept). At most 20 calls per helper per hour (429 RATE_LIMITED with Retry-After).
+         */
+        post: operations["assistChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/chat/connect-tickets": {
         parameters: {
             query?: never;
@@ -2410,11 +2430,31 @@ export interface components {
             role: "REQUESTER" | "ACCEPTER";
             /** @description True when the latest message was sent by the caller; null when there are no messages. */
             last_message_from_me: boolean | null;
+            /** @description R18.7 (contributor proposal, not released). True when chat assistance is on and this thread is live (not released, request not closed). The requester's client uses it to say the helper may use suggested replies; only the helper can call it. Always present in responses; optional in the contract so clients written before it still type-check. */
+            chat_assist_enabled?: boolean;
         };
         ChatThreadList: {
             threads: components["schemas"]["ChatThread"][];
             /** @description Pass back as cursor for older threads; null on the last page. */
             next_cursor: string | null;
+        };
+        ChatAssistRequest: {
+            /**
+             * @description SUGGEST_REPLY: the helper's next message, at most 400 characters. CATCH_UP: a short neutral summary for the helper, at most 600 characters.
+             * @enum {string}
+             */
+            kind: "SUGGEST_REPLY" | "CATCH_UP";
+        };
+        ChatAssistResult: {
+            /**
+             * @description SUGGESTION or CATCH_UP: text holds the answer. CRISIS_SUPPORT: the Veteran's words have crisis language, so no model was asked; show the immediate-resource crisis copy (notice).
+             * @enum {string}
+             */
+            outcome: "SUGGESTION" | "CATCH_UP" | "CRISIS_SUPPORT";
+            /** @description Model-written text for the helper to review; absent with CRISIS_SUPPORT. Never sent or stored by this call. */
+            text?: string;
+            /** @description With CRISIS_SUPPORT only: the immediate-resource copy from the same source as GET /api/v0/immediate-resources (D-012), as in the intake turn. */
+            notice?: string;
         };
         ChatConnectTicket: {
             ticket: string;
@@ -5356,6 +5396,54 @@ export interface operations {
                 };
             };
             413: components["responses"]["Error"];
+        };
+    };
+    assistChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatAssistRequest"];
+            };
+        };
+        responses: {
+            /** @description A suggestion, a catch-up, or the crisis notice */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAssistResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description CHAT_UNAVAILABLE (not accepted yet), CHAT_ASSIST_HELPER_ONLY (the caller is the requester), or CHAT_ASSIST_REQUEST_CLOSED (the request is in a terminal status) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            429: components["responses"]["Error"];
+            /** @description CHAT_ASSIST_UNAVAILABLE: chat assistance is off, no model is configured, or the model gave no usable answer */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     issueChatConnectTicket: {

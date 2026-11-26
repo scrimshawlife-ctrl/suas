@@ -53,7 +53,7 @@ export interface ModelMessage {
 }
 
 /** What a turn is for; it picks the per-call bounds below. */
-export const INFERENCE_PURPOSES = ['intake', 'extraction'] as const;
+export const INFERENCE_PURPOSES = ['intake', 'extraction', 'chat_assist'] as const;
 export type InferencePurpose = (typeof INFERENCE_PURPOSES)[number];
 
 /**
@@ -65,6 +65,8 @@ export const INFERENCE_PURPOSE_LIMITS: Readonly<
 > = {
   intake: { maxTokens: 800, callTimeoutCapMs: 12_000 },
   extraction: { maxTokens: 2_048, callTimeoutCapMs: 24_000 },
+  // R18.7 (contributor proposal, not released): a short helper reply or catch-up summary.
+  chat_assist: { maxTokens: 300, callTimeoutCapMs: 8_000 },
 };
 
 export interface ModelTurnRequest {

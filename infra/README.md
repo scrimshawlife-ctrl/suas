@@ -86,6 +86,7 @@ Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user c
 | `modelInference`         | `disabled`                             | `bedrock` builds the inference relay and its guardrail (R17 contributor proposal, not released). See "Model inference".         |
 | `bedrockModelId`         | none                                   | Required with `modelInference=bedrock`, refused without it. One of the allowed on-demand base model ids: `qwen.qwen3-32b-v1:0`. |
 | `allowPlaceholderModel`  | refused                                | Passing it fails synth. It does not select a model and it does not mark a deployable template.                                  |
+| `chatAssist`             | `false`                                | `true` sets `SUAS_CHAT_ASSIST_MODE=enabled` on the API (R18.7 proposal, not released). Needs `modelInference=bedrock`.          |
 | `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches the retired Worker staging; set `approved` to show the D-012 crisis copy. **Owner call.**      |
 | `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value the retired Worker used)                                     |
 | `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of zones in `region`, if an endpoint service is missing in one                                                       |
@@ -215,6 +216,11 @@ With `-c modelInference=bedrock -c bedrockModelId=qwen.qwen3-32b-v1:0` (Qwen3 32
 - **API settings:** `SUAS_MODEL_INFERENCE_MODE=bedrock`, `SUAS_BEDROCK_MODEL_ID`, `SUAS_BEDROCK_GUARDRAIL_ID`,
   `SUAS_BEDROCK_GUARDRAIL_VERSION` and `SUAS_MODEL_INFERENCE_RELAY_FUNCTION`. The API refuses to start in STAGING
   with `bedrock` and no relay. The job worker and migrate function never call a model.
+- **Chat assist** (R18.7, contributor proposal, not released): `-c chatAssist=true`, refused without
+  `modelInference=bedrock`, adds `SUAS_CHAT_ASSIST_MODE=enabled` to the API only. It reuses the relay, model and
+  guardrail with purpose `chat_assist`, which the relay checks itself, so there is no IAM change. The relay shares
+  the API's code asset, so one deploy of the commit updates both. Off, the variable is unset and the API reads
+  `disabled`.
 
 Cost: there is no `bedrock-runtime` VPC endpoint (an interface endpoint is about $7.30/mo per zone, see "Cost"). The
 API reaches the relay over the existing Lambda endpoint, and the relay, outside the VPC, calls Bedrock's public
@@ -359,6 +365,7 @@ each function's environment is checked against the application's own config vali
 | `SUAS_MODEL_INFERENCE_MODE`                                                                     | the `modelInference` context (default `disabled`). See "Model inference".                                                            |
 | `SUAS_BEDROCK_MODEL_ID`, `SUAS_BEDROCK_GUARDRAIL_ID`, `SUAS_BEDROCK_GUARDRAIL_VERSION`          | unset; with `modelInference=bedrock`, the `bedrockModelId` context and the guardrail's id and version (API and relay).               |
 | `SUAS_MODEL_INFERENCE_RELAY_FUNCTION`                                                           | unset; with `modelInference=bedrock`, the inference relay function name (API only).                                                  |
+| `SUAS_CHAT_ASSIST_MODE`                                                                         | unset (`disabled`); with `chatAssist=true`, `enabled` (API only). See "Model inference".                                             |
 | `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket (API and job worker)                                                                                         |
 | `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052).                                                               |
 | `SUAS_LICENCE_READER_MODE`                                                                      | `disabled` on every function (R10.1 proposal; reader egress undecided, R9.2). `SUAS_SCRY_BASE_URL` is not set.                       |
