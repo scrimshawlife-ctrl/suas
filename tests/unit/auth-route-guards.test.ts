@@ -53,4 +53,11 @@ describe('isPercentEncodedAuthPath', () => {
   ])('decodes %s until stable, flagged=%s', (url, flagged) => {
     expect(isPercentEncodedAuthPath(url)).toBe(flagged);
   });
+
+  // The work is bounded: a path still changing after the round cap is flagged (fail closed), so a
+  // long nested escape cannot cost more than a few linear passes (security review of 1f674acb).
+  it('flags a path still changing after the round cap, whatever it decodes to', () => {
+    expect(isPercentEncodedAuthPath(`/api/v0/requests/%${'25'.repeat(7000)}61`)).toBe(true);
+    expect(isPercentEncodedAuthPath(`/api/v0/requests/%${'25'.repeat(8)}61`)).toBe(false);
+  });
 });
