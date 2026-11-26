@@ -618,15 +618,20 @@ export class BackendStack extends Stack {
       logGroup: logs.LogGroup,
       id: string,
       metricName: string,
-      filterPattern: logs.IFilterPattern,
+      filterPattern: logs.IFilterPattern | readonly logs.IFilterPattern[],
       description: string,
     ): void => {
-      logGroup.addMetricFilter(`${id}Filter`, {
-        filterPattern,
-        metricNamespace: `Suas/${config.name}`,
-        metricName,
-        metricValue: '1',
-        defaultValue: 0,
+      // Several patterns may feed one metric (an OR a term filter cannot say); a single pattern
+      // keeps its `${id}Filter` logical id, so existing filters are not replaced.
+      const patterns = Array.isArray(filterPattern) ? filterPattern : [filterPattern];
+      patterns.forEach((pattern, index) => {
+        logGroup.addMetricFilter(patterns.length === 1 ? `${id}Filter` : `${id}Filter${index}`, {
+          filterPattern: pattern,
+          metricNamespace: `Suas/${config.name}`,
+          metricName,
+          metricValue: '1',
+          defaultValue: 0,
+        });
       });
       new cloudwatch.Alarm(this, `${id}Alarm`, {
         alarmDescription: `${description} No notification target yet.`,
@@ -676,15 +681,16 @@ export class BackendStack extends Stack {
       );
     }
 
-    // Review 2026-11-24 (#367): a relay refusal or a failed model call (unavailable, timeout,
-    // invalid), and a guardrail or content-filter refusal, from the relay's own log lines.
+    // Review 2026-11-24/25 (#367): relay failures and refused turns from the relay's own lines.
+    // A malformed event (reason request) and an invalid model answer are refused by design, so
+    // they do not count; not_configured catches a broken deploy.
     if (inferenceRelay !== undefined) {
       alarmOnLogMatches(
         inferenceRelay.logGroup,
         'InferenceRelayFailure',
         'InferenceRelayFailures',
-        logs.FilterPattern.anyTerm('inference_relay_refused', 'unavailable', 'timeout', 'invalid'),
-        'InferenceRelay: the relay refused a turn or a model call failed (unavailable, timeout, invalid).',
+        logs.FilterPattern.anyTerm('not_configured', 'unavailable', 'timeout'),
+        'InferenceRelay: the relay has malformed settings (not_configured) or a model call was unavailable or timed out.',
       );
       alarmOnLogMatches(
         inferenceRelay.logGroup,
@@ -692,6 +698,21 @@ export class BackendStack extends Stack {
         'InferenceRelayRefusals',
         logs.FilterPattern.allTerms('model_inference', 'refused'),
         'InferenceRelay: the guardrail or a content filter refused a model turn.',
+      );
+      // A throttle, missing grant, relay crash or API abort is logged only by the API's relay
+      // port (src/inference/lambda-relay-inference.ts). Only unavailable and timeout count: a
+      // guardrail refusal or an invalid answer is the relay working, and its alarms cover it.
+      const apiLogGroup = functionLogGroups.get('ApiFunction');
+      if (apiLogGroup === undefined) throw new Error('No log group recorded for ApiFunction.');
+      alarmOnLogMatches(
+        apiLogGroup,
+        'InferenceRelayInvokeFailure',
+        'InferenceRelayInvokeFailures',
+        [
+          logs.FilterPattern.allTerms('model_inference', 'bedrock-relay', 'unavailable'),
+          logs.FilterPattern.allTerms('model_inference', 'bedrock-relay', 'timeout'),
+        ],
+        'Api: a model turn through the inference relay was unavailable or timed out (a throttle, missing grant, relay crash or timeout, or API abort).',
       );
     }
 
