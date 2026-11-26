@@ -52,7 +52,10 @@ export function createStagingApp(app: App): StagingStacks {
     env,
     config,
     zone: dns?.zone,
-    description: `SUAS ${config.name} backend: VPC, RDS, API, jobs. Inference and chat push stay off.`,
+    description:
+      config.modelInference.mode === 'bedrock'
+        ? `SUAS ${config.name} backend: VPC, RDS, API, jobs, inference relay (R17 proposal). Chat push stays off.`
+        : `SUAS ${config.name} backend: VPC, RDS, API, jobs. Inference and chat push stay off.`,
   });
 
   const web = new WebStack(app, `${prefix}-Web`, {

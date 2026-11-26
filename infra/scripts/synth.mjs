@@ -8,7 +8,7 @@
  * are off. If anything tried to read from AWS, the synth would fail instead of calling it.
  *
  * Usage: npm run synth [-- extra cdk args]
- * Staging leaves inference disabled and chat push off. Do not pass bedrockModelId.
+ * Staging leaves inference disabled unless -c modelInference=bedrock (R17 proposal); chat push stays off.
  */
 
 import { spawnSync } from 'node:child_process';

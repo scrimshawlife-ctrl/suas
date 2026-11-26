@@ -1,5 +1,5 @@
 /**
- * The Lambda deployment package: one directory shared by the six functions.
+ * The Lambda deployment package: one directory shared by the seven functions.
  *
  * esbuild bundles each entry point from the repository's `src/` into `<name>.mjs` at
  * synth time, using the esbuild binary from this package's node_modules. It never starts
@@ -30,6 +30,7 @@ export const ENTRY_POINTS = {
   migrate: 'src/aws/migrate-lambda.ts',
   'email-relay': 'src/aws/email-relay-lambda.ts',
   'va-verify': 'src/aws/va-verify-lambda.ts',
+  'inference-relay': 'src/aws/inference-relay-lambda.ts',
 } as const;
 
 export const RDS_CA_BUNDLE_FILE = 'rds-global-bundle.crt';
@@ -68,7 +69,7 @@ function bundleInto(outputDir: string): void {
   );
 }
 
-/** Code for all six functions. Create it once per stack so there is one asset. */
+/** Code for all seven functions. Create it once per stack so there is one asset. */
 export function suasLambdaCode(): lambda.Code {
   return lambda.Code.fromAsset(path.join(infraDir, 'lambda'), {
     // Hash what was produced, not the (huge) repository the bundle was built from.

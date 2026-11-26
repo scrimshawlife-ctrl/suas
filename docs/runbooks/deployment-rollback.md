@@ -26,7 +26,8 @@ From `infra/`, with credentials for the chosen account:
 2. If the web app changed, build it for staging (see "Web" in `infra/README.md`).
 3. `npx cdk diff` for the stacks you will deploy, and read it.
 4. `npx cdk deploy Suas-Staging-Backend` (and `Suas-Staging-Web` for a web change).
-   Do not pass `bedrockModelId`.
+   Do not pass `modelInference=bedrock` until the owner releases R17 (contributor proposal) and
+   gives the written OK.
 5. If the commit adds migrations, invoke the migrate function (`MigrateFunctionName` output) as
    in "Manual steps" of `infra/README.md`, and read `schema_version` and `applied_now`. Until it
    has run, the API fails closed at startup (`SUAS_MIGRATIONS_MODE=validate`).

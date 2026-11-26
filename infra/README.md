@@ -78,22 +78,23 @@ Bootstrap, OIDC roles and parameters: [`docs/runbooks/aws-staging-bootstrap.md`]
 
 Pass with `-c name=value` (or in `cdk.json`). Defaults are the values the user confirmed on 2026-11-05.
 
-| Context                  | Default                                | Meaning                                                                                                                    |
-| ------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                  |
-| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                       |
-| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                   |
-| `bedrockModelId`         | refused                                | R2.15 is not approved. Passing this context fails synth. Inference stays `disabled`.                                       |
-| `allowPlaceholderModel`  | refused                                | Same refusal. It does not select a model and it does not mark a deployable template.                                       |
-| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches the retired Worker staging; set `approved` to show the D-012 crisis copy. **Owner call.** |
-| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value the retired Worker used)                                |
-| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of zones in `region`, if an endpoint service is missing in one                                                  |
-| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                      |
-| `vaSandbox`              | `false`                                | `true` builds the VA verify function and sets `SUAS_VA_CONFIRMATION_MODE=sandbox` on the API. See "VA confirmation".       |
-| `region`                 | `us-west-2`                            | Region of the Dns, Backend and Web stacks. The WebCert stack stays in `us-east-1`.                                         |
-| `customDomains`          | `true`                                 | `false`: no Dns or WebCert stack, no certificates, custom domains or DNS records. See "Region-restricted accounts".        |
-| `webOrigin`              | none                                   | Only with `customDomains=false`. The `WebUrl` origin (`https://<id>.cloudfront.net`), set as `SUAS_CORS_ALLOWED_ORIGINS`.  |
-| `webCertificateArn`      | none                                   | Only with `customDomains=true`. A `us-east-1` ACM certificate ARN for CloudFront; replaces the WebCert stack.              |
+| Context                  | Default                                | Meaning                                                                                                                         |
+| ------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `rootDomain`             | `suasqrf.com`                          | Domain of the hosted zone                                                                                                       |
+| `webHostname`            | `staging.suasqrf.com`                  | Web app (CloudFront)                                                                                                            |
+| `apiHostname`            | `api.staging.suasqrf.com`              | HTTP API                                                                                                                        |
+| `modelInference`         | `disabled`                             | `bedrock` builds the inference relay and its guardrail (R17 contributor proposal, not released). See "Model inference".         |
+| `bedrockModelId`         | none                                   | Required with `modelInference=bedrock`, refused without it. One of the allowed on-demand base model ids: `qwen.qwen3-32b-v1:0`. |
+| `allowPlaceholderModel`  | refused                                | Passing it fails synth. It does not select a model and it does not mark a deployable template.                                  |
+| `safetyCopyMode`         | `placeholder_test_only`                | `SUAS_SAFETY_COPY_MODE`. Matches the retired Worker staging; set `approved` to show the D-012 crisis copy. **Owner call.**      |
+| `browserTenantId`        | `00000000-0000-4000-8000-000000000001` | `SUAS_BROWSER_TENANT_ID`, the tenant new sign-ups join (same value the retired Worker used)                                     |
+| `availabilityZones`      | first two from `Fn::GetAZs`            | Comma list of zones in `region`, if an endpoint service is missing in one                                                       |
+| `webAdapterLayerVersion` | `30`                                   | Version of the AWS-published Lambda Web Adapter layer                                                                           |
+| `vaSandbox`              | `false`                                | `true` builds the VA verify function and sets `SUAS_VA_CONFIRMATION_MODE=sandbox` on the API. See "VA confirmation".            |
+| `region`                 | `us-west-2`                            | Region of the Dns, Backend and Web stacks. The WebCert stack stays in `us-east-1`.                                              |
+| `customDomains`          | `true`                                 | `false`: no Dns or WebCert stack, no certificates, custom domains or DNS records. See "Region-restricted accounts".             |
+| `webOrigin`              | none                                   | Only with `customDomains=false`. The `WebUrl` origin (`https://<id>.cloudfront.net`), set as `SUAS_CORS_ALLOWED_ORIGINS`.       |
+| `webCertificateArn`      | none                                   | Only with `customDomains=true`. A `us-east-1` ACM certificate ARN for CloudFront; replaces the WebCert stack.                   |
 
 Hostnames must be inside `rootDomain`, because certificates are validated in the zone this app owns.
 
@@ -120,12 +121,12 @@ does not pass these contexts. That is a CD follow-up; until then use `npm run sy
 
 ## Stacks
 
-| Stack                  | Region    | Contents                                                                                                                                                                                                                                                                                                                         |
-| ---------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), the Resend mail records carried over from Cloudflare, `NameServers` output. No apex or `www` record. No SES identity (suas #305).                                                                                                                                     |
-| `Suas-Staging-WebCert` | us-east-1 | DNS-validated ACM certificate for the web hostname (CloudFront needs us-east-1). Passed to the web stack with `crossRegionReferences`.                                                                                                                                                                                           |
-| `Suas-Staging-Backend` | us-west-2 | VPC (isolated subnets), VPC endpoints, RDS PostgreSQL 17 (no RDS Proxy, R14.1 proposal), secrets, assets bucket, API / job worker / migrate Lambdas, the email relay Lambda (outside the VPC), the VA verify Lambda (outside the VPC, `vaSandbox` only), HTTP API with a custom domain, EventBridge Scheduler. No WebSocket API. |
-| `Suas-Staging-Web`     | us-west-2 | Private S3 bucket, CloudFront distribution with OAC, `staging.suasqrf.com` A and AAAA alias, `web/dist` upload (only if `web/dist` exists at synth time).                                                                                                                                                                        |
+| Stack                  | Region    | Contents                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Suas-Dns`             | us-west-2 | Public hosted zone for `suasqrf.com` (retained on delete), the Resend mail records carried over from Cloudflare, `NameServers` output. No apex or `www` record. No SES identity (suas #305).                                                                                                                                                                                                                                        |
+| `Suas-Staging-WebCert` | us-east-1 | DNS-validated ACM certificate for the web hostname (CloudFront needs us-east-1). Passed to the web stack with `crossRegionReferences`.                                                                                                                                                                                                                                                                                              |
+| `Suas-Staging-Backend` | us-west-2 | VPC (isolated subnets), VPC endpoints, RDS PostgreSQL 17 (no RDS Proxy, R14.1 proposal), secrets, assets bucket, API / job worker / migrate Lambdas, the email relay Lambda (outside the VPC), the VA verify Lambda (outside the VPC, `vaSandbox` only), the inference relay Lambda and Bedrock guardrail (outside the VPC, `modelInference=bedrock` only), HTTP API with a custom domain, EventBridge Scheduler. No WebSocket API. |
+| `Suas-Staging-Web`     | us-west-2 | Private S3 bucket, CloudFront distribution with OAC, `staging.suasqrf.com` A and AAAA alias, `web/dist` upload (only if `web/dist` exists at synth time).                                                                                                                                                                                                                                                                           |
 
 ### Email: Resend through a relay (suas #305)
 
@@ -180,6 +181,48 @@ only the normalized result and failure class (`src/identity/va-confirmation-lamb
   "Alarms"). Nothing fires before someone tries to confirm, so the deploy step below still checks the key.
 - Synthetic VA test identities only.
 
+### Model inference (R17 proposal)
+
+R17.1 to R17.7 are a contributor proposal, not released, and SAFETY.md §6 at the pin still refuses inference. Off
+by default: the API runs `SUAS_MODEL_INFERENCE_MODE=disabled` and the template has no Bedrock resource or grant.
+With `-c modelInference=bedrock -c bedrockModelId=qwen.qwen3-32b-v1:0` (Qwen3 32B) the stack adds:
+
+- **The inference relay** (`src/aws/inference-relay-lambda.ts`, construct `lib/inference-relay.ts`): outside the
+  VPC, Node 22 arm64, 512 MB, no database setting, no secret. Its settings are `SUAS_ENV`, `SUAS_AWS_REGION`,
+  `SUAS_BEDROCK_MODEL_ID` and the guardrail id and version. Its timeout is 27 s: above the longest Bedrock call it
+  makes (extraction, at most 24 s with retries), below the API's 28 s invoke abort
+  (`src/inference/lambda-relay-inference.ts`), the 29 s HTTP API limit and the API's 30 s. No reserved
+  concurrency, like the other relays: it holds no database connection, and the API's 15 caps its callers.
+- **A Bedrock guardrail** (`suas-staging-inference`) and one numbered version of it: HATE, INSULTS, SEXUAL,
+  VIOLENCE and MISCONDUCT at MEDIUM on input and output, PROMPT_ATTACK at HIGH on input only. There is no PII
+  policy. A blocked message or answer reads "This message can't be processed. Please use the request form." The
+  version's description carries a hash of the configuration, so a changed configuration makes a new version.
+  The version has one logical id and the default `Delete` policy, so a new version replaces the old one, and
+  CloudFormation deletes the old one in the update's cleanup: versions do not pile up.
+- **Alarms** (no notification target yet, like the others): on the relay's own log lines, `InferenceRelayFailures`
+  when the relay's settings are malformed (`not_configured`) or a model call is unavailable or times out, and
+  `InferenceRelayRefusals` when the guardrail or a content filter refuses a turn. A malformed event or an invalid
+  model answer is refused by design and does not count. On the API's log lines, `InferenceRelayInvokeFailures`
+  when a turn through the relay is unavailable or times out: a throttle, missing grant, relay crash or timeout, or
+  API abort, which only the API logs. A refused or invalid turn is left to the relay's alarms.
+- **IAM:** the relay role may `bedrock:InvokeModel` on the one foundation model in the stack's region only
+  (`arn:<partition>:bedrock:<region>::foundation-model/<bedrockModelId>`). The model is invoked on demand there:
+  no inference profile and no cross-region routing. Synth accepts only the exact ids in
+  `ALLOWED_BEDROCK_MODEL_IDS` (`infra/lib/config.ts`, today `qwen.qwen3-32b-v1:0`), so a profile id, another
+  model or a case variant is refused. There is no `bedrock:InferenceProfileArn` condition: it applies only to
+  profile-routed calls, and the grant already names the one foundation-model ARN. It may also `bedrock:ApplyGuardrail` on the one guardrail. No
+  other role has a Bedrock action. The API role gets `lambda:InvokeFunction` on the relay only.
+- **API settings:** `SUAS_MODEL_INFERENCE_MODE=bedrock`, `SUAS_BEDROCK_MODEL_ID`, `SUAS_BEDROCK_GUARDRAIL_ID`,
+  `SUAS_BEDROCK_GUARDRAIL_VERSION` and `SUAS_MODEL_INFERENCE_RELAY_FUNCTION`. The API refuses to start in STAGING
+  with `bedrock` and no relay. The job worker and migrate function never call a model.
+
+Cost: there is no `bedrock-runtime` VPC endpoint (an interface endpoint is about $7.30/mo per zone, see "Cost"). The
+API reaches the relay over the existing Lambda endpoint, and the relay, outside the VPC, calls Bedrock's public
+endpoint. The added fixed cost is nothing; Bedrock bills per token and the relay per invocation. Model invocation
+logging stays off. No Anthropic first-use form applies. The operator makes the first invocation, in the console or
+CLI, never this template: some Bedrock models create an AWS Marketplace subscription on first call, so that step
+creates it if applicable. The relay role has no Marketplace permission, so it cannot do that itself.
+
 ### Network
 
 - 2 AZs, isolated subnets only. **No NAT gateway, no internet gateway, no route off the VPC.**
@@ -201,15 +244,16 @@ only the normalized result and failure class (`src/identity/va-confirmation-lamb
 
 ### AWS services the staging template calls, and the endpoints they need
 
-The Bedrock adapter (`src/inference/bedrock-inference.ts`) and the API Gateway push adapter
-(`src/realtime/apigw-connection-push.ts`) stay in the repository. This template does not select
-them and does not create `bedrock-runtime` or `execute-api` endpoints. R2.15 is not approved.
-R6.12 is not accepted.
+The API Gateway push adapter (`src/realtime/apigw-connection-push.ts`) stays in the repository; this template
+does not select it and creates no `execute-api` endpoint (R6.12 is not accepted). The Bedrock adapter
+(`src/inference/bedrock-inference.ts`) runs only in the inference relay, outside the VPC, so there is no
+`bedrock-runtime` endpoint either (R17.3 proposal).
 
 | Service             | SDK client               | Code that uses it                                                                       | Endpoint           |
 | ------------------- | ------------------------ | --------------------------------------------------------------------------------------- | ------------------ |
 | AWS Lambda (Invoke) | `@aws-sdk/client-lambda` | `src/notifications/lambda-relay-sender.ts` (`InvokeCommand`, the email relay)           | interface `lambda` |
 | AWS Lambda (Invoke) | `@aws-sdk/client-lambda` | `src/identity/va-confirmation-lambda-relay.ts` (the VA verify function, vaSandbox only) | interface `lambda` |
+| AWS Lambda (Invoke) | `@aws-sdk/client-lambda` | `src/inference/lambda-relay-inference.ts` (the inference relay, modelInference=bedrock) | interface `lambda` |
 | Amazon S3           | `@aws-sdk/client-s3`     | `src/storage/s3-object-storage.ts` (put, get, delete)                                   | gateway `s3`       |
 
 Not needed: **Secrets Manager** inside the VPC (the in-VPC code reads configuration from environment variables;
@@ -312,7 +356,9 @@ each function's environment is checked against the application's own config vali
 | `SUAS_VA_CONFIRMATION_MODE`, `SUAS_VA_CONFIRMATION_RELAY_FUNCTION`                              | unset (`disabled`); with `vaSandbox=true`, `sandbox` and the verify function name (API only). No VA key or base URL on the API.      |
 | `SUAS_SMS_MODE`                                                                                 | `sink` (as today's staging)                                                                                                          |
 | `SUAS_AWS_REGION`                                                                               | the `region` context (default `us-west-2`)                                                                                           |
-| `SUAS_MODEL_INFERENCE_MODE`                                                                     | `disabled`. R2.15 is not approved, so no model id is set.                                                                            |
+| `SUAS_MODEL_INFERENCE_MODE`                                                                     | the `modelInference` context (default `disabled`). See "Model inference".                                                            |
+| `SUAS_BEDROCK_MODEL_ID`, `SUAS_BEDROCK_GUARDRAIL_ID`, `SUAS_BEDROCK_GUARDRAIL_VERSION`          | unset; with `modelInference=bedrock`, the `bedrockModelId` context and the guardrail's id and version (API and relay).               |
+| `SUAS_MODEL_INFERENCE_RELAY_FUNCTION`                                                           | unset; with `modelInference=bedrock`, the inference relay function name (API only).                                                  |
 | `SUAS_OBJECT_STORAGE_MODE`, `SUAS_S3_BUCKET`                                                    | `s3`, the assets bucket (API and job worker)                                                                                         |
 | `SUAS_ID_VERIFICATION_MODE`                                                                     | `disabled` (no provider chosen). `fake` is refused on STAGING (D-052).                                                               |
 | `SUAS_LICENCE_READER_MODE`                                                                      | `disabled` on every function (R10.1 proposal; reader egress undecided, R9.2). `SUAS_SCRY_BASE_URL` is not set.                       |
@@ -363,8 +409,9 @@ S3 get/put/delete on the assets bucket objects plus `s3:ListBucket` on the bucke
 missing key returns AccessDenied instead of NoSuchKey). This covers the licence images too: submit, the admin image
 route and deletion. The job worker gets S3 get/delete on `licence-reviews/*` only, plus `s3:ListBucket` on the
 bucket with no condition, so a missing image reads as 404 (`PHOTOS_GONE`), not 403 (SCRY_LICENCE_FALLBACK.md
-L4.7). AWS documents the 404 only for an unconditioned grant; listing shows key names, which are opaque ids. There is no `bedrock:InvokeModel` grant and no
-`execute-api:ManageConnections` grant. The ENI actions are the six in `AWSLambdaVPCAccessExecutionRole`,
+L4.7). AWS documents the 404 only for an unconditioned grant; listing shows key names, which are opaque ids. There is no
+`execute-api:ManageConnections` grant, and no Bedrock grant unless `modelInference=bedrock` (then on the inference
+relay role only; see "Model inference"). The ENI actions are the six in `AWSLambdaVPCAccessExecutionRole`,
 including `ec2:DescribeSubnets`. The email relay is not in the VPC: its role has no ENI actions, only its log
 group and `secretsmanager:GetSecretValue`/`DescribeSecret` on its own secret. With `vaSandbox=true` the API also
 gets `lambda:InvokeFunction` on the VA verify function only, and that function's role has the same shape as the
@@ -413,7 +460,8 @@ not set yet. **Build the SPA for staging before deploying the web stack:**
 ## Deploy order (not done yet)
 
 Do not deploy until the AWS account layout is decided. When it is, from `infra/` with credentials for the chosen
-account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pass `bedrockModelId`:
+account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pass `modelInference=bedrock` until
+the owner releases R17 and gives the written OK:
 
 1. `cdk bootstrap` the account for `us-west-2` **and** `us-east-1` (cross-region references and the certificate need both).
 2. Export the Cloudflare zone (manual step 1), then `cdk deploy Suas-Dns`. Note the `NameServers` output. That note is prep only.
@@ -459,8 +507,10 @@ account (`export CDK_DEFAULT_ACCOUNT=<account id>`; never commit it). Do not pas
       ` aws secretsmanager put-secret-value --secret-id <EmailRelaySecretName> --secret-string '{"RESEND_API_KEY":"<key>"}'`
    3. No redeploy is needed: the relay reads the secret on its next cold start, and again after a refused send.
    4. To rotate, create a new key in Resend, `put-secret-value` again, then revoke the old one.
-3. **Do not enable Bedrock for this template.** R2.15 is not approved, and the API sets
-   `SUAS_MODEL_INFERENCE_MODE=disabled`. Model access in the Bedrock console is not a step for this synth.
+3. **Bedrock, only once the owner releases R17 and gives the written OK.** Until then deploy without
+   `modelInference`, and the API stays `SUAS_MODEL_INFERENCE_MODE=disabled`. When it is turned on, the operator
+   makes the first invocation of the model in the stack's region with an admin role (see "Model inference"). That
+   step is not in the template.
 4. **Run the migrate function** after every deploy that adds migrations. From a shell with credentials:
    `aws lambda invoke --function-name <MigrateFunctionName output> --cli-binary-format raw-in-base64-out out.json`
    and read `out.json` (`schema_version`, `applied_now`). Until it has run, the API fails closed at startup
@@ -528,8 +578,9 @@ owner decision.
   worker 2, migrate 1) holds the total to 52 (see "Database"); `max_connections` is pinned at 80 and an alarm fires
   at 70. Nothing in the database limits connections per role. The cap also limits staging throughput: past 15 concurrent API requests, Lambda throttles. Every cold
   container opens TLS straight to the instance.
-- **Cold starts and the API Gateway limit.** The HTTP API integration times out after 29 seconds. Inference is
-  disabled, so this template does not make a Bedrock call.
+- **Cold starts and the API Gateway limit.** The HTTP API integration times out after 29 seconds. With
+  `modelInference=bedrock` an intake turn ends within 24 s or falls back to the form, and each relay invoke is
+  aborted at 28 s; a relay cold start counts against those bounds.
 - `npm audit` reports a moderate `minimatch` issue bundled inside `aws-cdk-lib` itself; it affects build-time code
   only, and the fix is a CDK upgrade.
 
