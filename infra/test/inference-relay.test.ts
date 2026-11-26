@@ -274,30 +274,23 @@ describe('inference relay', () => {
       ),
     ).toEqual([]);
 
-    const filters: Record<string, Record<string, any> | undefined> = Object.fromEntries(
-      relayAlarms(on.backend).map(([, r]) => [
-        r.Properties?.MetricTransformations[0].MetricName,
-        r.Properties,
-      ]),
-    );
-    expect(Object.keys(filters).sort()).toEqual([
-      'InferenceRelayFailures',
-      'InferenceRelayInvokeFailures',
-      'InferenceRelayRefusals',
-    ]);
+    // Metric -> [pattern, log group] of every filter feeding it; one metric may have several.
+    const filters: Record<string, Array<[string, unknown]>> = {};
+    for (const [, r] of relayAlarms(on.backend)) {
+      const metric = String(r.Properties?.MetricTransformations[0].MetricName);
+      (filters[metric] ??= []).push([r.Properties?.FilterPattern, r.Properties?.LogGroupName]);
+    }
     const relayLogGroup = { Ref: logGroupOf(on.backend, 'InferenceRelayLogs') };
     const apiLogGroup = { Ref: logGroupOf(on.backend, 'ApiFunctionLogs') };
-    expect(filters.InferenceRelayFailures).toMatchObject({
-      FilterPattern: '?"not_configured" ?"unavailable" ?"timeout"',
-      LogGroupName: relayLogGroup,
-    });
-    expect(filters.InferenceRelayRefusals).toMatchObject({
-      FilterPattern: '"model_inference" "refused"',
-      LogGroupName: relayLogGroup,
-    });
-    expect(filters.InferenceRelayInvokeFailures).toMatchObject({
-      FilterPattern: '"model_inference" "bedrock-relay" "failure"',
-      LogGroupName: apiLogGroup,
+    expect(filters).toEqual({
+      InferenceRelayFailures: [['?"not_configured" ?"unavailable" ?"timeout"', relayLogGroup]],
+      InferenceRelayRefusals: [['"model_inference" "refused"', relayLogGroup]],
+      // Review 2026-11-26: only an unavailable or timed-out turn, not a guardrail refusal or an
+      // invalid answer, which the relay alarms cover; two filters, one metric.
+      InferenceRelayInvokeFailures: [
+        ['"model_inference" "bedrock-relay" "unavailable"', apiLogGroup],
+        ['"model_inference" "bedrock-relay" "timeout"', apiLogGroup],
+      ],
     });
     const alarms = ofType(on.backend, 'AWS::CloudWatch::Alarm').filter(([, r]) =>
       String(r.Properties?.MetricName).startsWith('InferenceRelay'),

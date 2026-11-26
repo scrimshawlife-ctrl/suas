@@ -12,7 +12,7 @@ Filters (`infra/lib/backend-stack.ts`):
 
 - **Failures** `InferenceRelayFailures`, relay log group: `?"not_configured" ?"unavailable" ?"timeout"`
 - **Refusals** `InferenceRelayRefusals`, relay log group: `"model_inference" "refused"`
-- **Invoke** `InferenceRelayInvokeFailures`, API log group: `"model_inference" "bedrock-relay" "failure"`
+- **Invoke** `InferenceRelayInvokeFailures`, API log group: two filters, `"model_inference" "bedrock-relay" "unavailable"` and `"model_inference" "bedrock-relay" "timeout"`
 
 "Pattern" columns say whether the pattern alone matches the line, which is what `test-metric-filter` reports.
 A filter counts only lines in its own log group. Those are the lines in **bold** under "Counted by".
@@ -22,7 +22,7 @@ A filter counts only lines in its own log group. Those are the lines in **bold**
 | 1    | API       | Relay turn failed: `unavailable` (throttle, grant, crash)   | yes      | no       | yes    | **Invoke**   |
 | 2    | API       | Relay turn failed: `timeout` (API abort)                    | yes      | no       | yes    | **Invoke**   |
 | 3    | API       | Relay turn succeeded (`ok: true`)                           | no       | no       | no     | none         |
-| 4    | API       | Relay answered `refused` (guardrail), passed through by API | no       | yes      | yes    | **Invoke**   |
+| 4    | API       | Relay answered `refused` (guardrail), passed through by API | no       | yes      | no     | none         |
 | 5    | API       | Direct Bedrock (`bedrock`); never on STAGING, which refuses | yes      | no       | no     | none         |
 | 6    | Relay     | `inference_relay_refused`, reason `not_configured`          | yes      | no       | no     | **Failures** |
 | 7    | Relay     | `inference_relay_refused`, reason `environment`             | no       | no       | no     | none         |
