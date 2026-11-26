@@ -17,6 +17,8 @@ export interface IntakeEvalCase {
   readonly timing?: string;
   /** Crisis language: the answer is CRISIS_SUPPORT with no model call (R17.4, proposal). */
   readonly crisis?: true;
+  /** Later messages on the same draft, each sent with the assistant's last reply (R18.4). */
+  readonly followUps?: readonly string[];
 }
 
 export const INTAKE_EVAL_CASES: readonly IntakeEvalCase[] = [
@@ -133,6 +135,27 @@ export const INTAKE_EVAL_CASES: readonly IntakeEvalCase[] = [
     text: 'I need groceries and also help finding a job.',
     category: 'FOOD',
     outsideCategories: true,
+  },
+  {
+    id: 'multi-01',
+    text: 'I need a ride.',
+    followUps: ['Tomorrow morning, to the clinic.'],
+    category: 'TRANSPORTATION',
+    timing: 'tomorrow',
+  },
+  {
+    id: 'multi-02',
+    text: 'Things are tight right now.',
+    followUps: ['I need groceries by Friday.'],
+    category: 'FOOD',
+    timing: 'friday',
+  },
+  {
+    id: 'multi-03',
+    text: 'I could use some company.',
+    followUps: ['Someone who served, to talk to this weekend.'],
+    category: 'PEER_SUPPORT',
+    timing: 'weekend',
   },
   { id: 'unclear-01', text: 'I need help.', category: null },
   { id: 'unclear-02', text: 'Things are hard right now.', category: null },

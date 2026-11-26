@@ -78,6 +78,8 @@ export interface ModelTurnRequest {
   readonly deadlineMs?: number;
   /** Output token cap for this call. */
   readonly maxTokens?: number;
+  /** Sampling temperature, 0 to 1; the provider default when unset (R18.5, proposal). */
+  readonly temperature?: number;
 }
 
 /**

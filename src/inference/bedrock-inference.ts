@@ -115,7 +115,10 @@ export class BedrockModelInference implements ModelInferencePort {
           modelId: this.modelId,
           system: [{ text: request.system }],
           messages: request.messages.map((message) => toBedrockMessage(message, guarded)),
-          inferenceConfig: { maxTokens: request.maxTokens ?? DEFAULT_MAX_TOKENS },
+          inferenceConfig: {
+            maxTokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+            ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+          },
           ...(this.guardrail !== undefined
             ? {
                 guardrailConfig: {

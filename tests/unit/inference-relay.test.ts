@@ -222,6 +222,33 @@ describe('inference relay function', () => {
     });
   });
 
+  // R18.5 (contributor proposal, not released): the intake turn's temperature reaches Bedrock.
+  it('forwards a temperature from 0 to 1 and refuses one outside it', async () => {
+    const { client, handler } = relayHandler({});
+    await handler({ ...EVENT, request: { ...REQUEST, temperature: 0.2 } });
+    expect(client.commands[0]?.input).toMatchObject({ inferenceConfig: { temperature: 0.2 } });
+
+    const bad = { ...EVENT, request: { ...REQUEST, temperature: 1.5 } };
+    expect(await handler(bad)).toEqual({ ok: false, failure: 'invalid' });
+    expect(client.commands).toHaveLength(1);
+  });
+
+  // R18.5 (contributor's call, D-066): the range is inclusive at both ends.
+  it.each([
+    [0, true],
+    [1, true],
+    [-0.1, false],
+  ])('treats temperature %d as valid: %s', async (temperature, valid) => {
+    const { client, handler } = relayHandler({});
+    const result = await handler({ ...EVENT, request: { ...REQUEST, temperature } });
+    if (valid) {
+      expect(client.commands[0]?.input).toMatchObject({ inferenceConfig: { temperature } });
+    } else {
+      expect(result).toEqual({ ok: false, failure: 'invalid' });
+      expect(client.commands).toHaveLength(0);
+    }
+  });
+
   it('logs outcomes only, never the request or reply text', async () => {
     const console = vi.spyOn(globalThis.console, 'info');
     const { handler, logs } = relayHandler({}, [ENDED, awsError('ThrottlingException')]);
