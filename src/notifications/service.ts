@@ -15,7 +15,11 @@
  *   jobs re-check before any not-yet-sent disclosure)
  */
 
-import { consumeRateLimit, type RateLimitPolicy } from '../auth/rate-limit.js';
+import {
+  consumeRateLimit,
+  type RateLimitPolicy,
+  type RateLimitSubject,
+} from '../auth/rate-limit.js';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { withTransaction, type Queryable } from '../db/transaction.js';
@@ -173,10 +177,13 @@ export interface EnqueueNotificationInput {
    */
   readonly disclosure: DisclosureRequest;
   readonly maxAttempts?: number;
-  /** Admission commits with the send intent, including suppression on denial. */
+  /**
+   * Admission commits with the send intent, including suppression on denial. The caller keys
+   * the subject (rateLimitSubject), so no secret reaches this module.
+   */
   readonly recipientLimit?: {
     readonly policy: RateLimitPolicy;
-    readonly subject: string;
+    readonly subject: RateLimitSubject;
     readonly failureReason: string;
   };
   readonly correlationId?: string;

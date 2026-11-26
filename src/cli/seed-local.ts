@@ -94,6 +94,17 @@ interface ResourceRow {
   resource_id: string;
 }
 
+/**
+ * Local parts of the base seed's sign-in accounts (`<part>@example.invalid`). Exported so the
+ * LOCAL demo rate-limit reset (demo-rate-limits.ts) clears exactly these accounts.
+ */
+export const SEED_ACCOUNT_LOCAL_PARTS = {
+  admin: 'admin',
+  accepter: 'accepter',
+  veteran: 'veteran',
+  veteranTwo: 'veteran2',
+} as const;
+
 /** Creates the synthetic user if missing; a given display name is set once, never overwritten. */
 export async function getOrCreateUser(
   pool: Pool,
@@ -642,10 +653,14 @@ export async function runLocalSeed(
   pool: Pool,
   options: LocalSeedOptions = {},
 ): Promise<LocalSeedResult> {
-  const admin = await getOrCreateUser(pool, 'admin', 'Admin A.');
-  const accepter = await getOrCreateUser(pool, 'accepter', 'Dee R.');
-  const veteran = await getOrCreateUser(pool, options.veteranLocalPart ?? 'veteran', 'Marcus T.');
-  const veteranTwo = await getOrCreateUser(pool, 'veteran2', 'Ray K.');
+  const admin = await getOrCreateUser(pool, SEED_ACCOUNT_LOCAL_PARTS.admin, 'Admin A.');
+  const accepter = await getOrCreateUser(pool, SEED_ACCOUNT_LOCAL_PARTS.accepter, 'Dee R.');
+  const veteran = await getOrCreateUser(
+    pool,
+    options.veteranLocalPart ?? SEED_ACCOUNT_LOCAL_PARTS.veteran,
+    'Marcus T.',
+  );
+  const veteranTwo = await getOrCreateUser(pool, SEED_ACCOUNT_LOCAL_PARTS.veteranTwo, 'Ray K.');
 
   if (!(await isSuasAdmin(pool, admin.userId))) {
     await grantSuasAdmin(pool, admin.userId, admin.userId);
@@ -736,10 +751,19 @@ async function main(): Promise<void> {
       environment: config.environment,
       tenantId: TENANT_ID,
       users: {
-        admin: { userId: admin.userId, email: syntheticEmail('admin') },
-        accepter: { userId: accepter.userId, email: syntheticEmail('accepter') },
-        veteran: { userId: veteran.userId, email: syntheticEmail('veteran') },
-        veteran2: { userId: veteranTwo.userId, email: syntheticEmail('veteran2') },
+        admin: { userId: admin.userId, email: syntheticEmail(SEED_ACCOUNT_LOCAL_PARTS.admin) },
+        accepter: {
+          userId: accepter.userId,
+          email: syntheticEmail(SEED_ACCOUNT_LOCAL_PARTS.accepter),
+        },
+        veteran: {
+          userId: veteran.userId,
+          email: syntheticEmail(SEED_ACCOUNT_LOCAL_PARTS.veteran),
+        },
+        veteran2: {
+          userId: veteranTwo.userId,
+          email: syntheticEmail(SEED_ACCOUNT_LOCAL_PARTS.veteranTwo),
+        },
       },
       activeQrf: {
         caseId: qrf.supportCase.caseId,

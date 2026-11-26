@@ -16,7 +16,7 @@ export const ADMIN_EMAIL = 'admin@example.invalid';
  * three codes per 15 minutes and every test signs in afresh, so the window is moved on first.
  */
 export async function signInAdmin(browser: Browser, request: APIRequestContext): Promise<Page> {
-  await resetSignInLimits(ADMIN_EMAIL);
+  await resetSignInLimits();
   const page = await newPerson(browser);
   await signInWithCode(page, request, ADMIN_EMAIL);
   await expect(page).toHaveURL(/\/home$/);

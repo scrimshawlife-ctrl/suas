@@ -121,16 +121,15 @@ export async function expectNoDeadControls(page: Page): Promise<void> {
 }
 
 /**
- * Drops the sign-in rate-limit counters, as if their 15-minute window had passed. With an
- * address, only that address's counters go.
+ * Drops every sign-in rate-limit counter, as if the 15-minute window had passed. Subjects are
+ * keyed with SUAS_SESSION_SECRET (src/auth/rate-limit.ts), which e2e/stack.ts generates inside
+ * the API's process tree and never shares with test workers, so one address cannot be targeted;
+ * the suite runs on one worker, so clearing both sign-in buckets touches no other test.
  */
-export async function resetSignInLimits(destination?: string): Promise<void> {
+export async function resetSignInLimits(): Promise<void> {
   await withDb((db) =>
-    destination === undefined
-      ? db.query('DELETE FROM auth_rate_limits')
-      : db.query(`DELETE FROM auth_rate_limits WHERE subject = ${HASHED_SUBJECT}`, [destination]),
+    db.query(
+      "DELETE FROM auth_rate_limits WHERE bucket IN ('auth.challenge.issue', 'auth.challenge.verify')",
+    ),
   );
 }
-
-/** SQL for the stored subject key of `$1`: the same digest as `rateLimitSubjectKey` in src. */
-export const HASHED_SUBJECT = `'sha256:' || encode(sha256(convert_to($1, 'UTF8')), 'hex')`;

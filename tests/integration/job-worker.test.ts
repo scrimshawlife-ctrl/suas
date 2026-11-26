@@ -7,7 +7,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { consumeRateLimit, rateLimitSubjectKey } from '../../src/auth/rate-limit.js';
+import { consumeRateLimit, rateLimitSubject } from '../../src/auth/rate-limit.js';
 import {
   INVITE_LIMIT_PER_VETERAN,
   INVITE_LIMIT_PER_ADDRESS,
@@ -35,7 +35,7 @@ import { ensurePublishedQv001, startCheckIn } from '../../src/signals/index.js';
 import { enqueueNotification } from '../../src/notifications/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { createTestPool, resetKernelTables, syntheticTenantId } from '../helpers/db.js';
-import { testDatabaseUrl } from '../helpers/env.js';
+import { TEST_SESSION_SECRET, testDatabaseUrl } from '../helpers/env.js';
 
 const run = promisify(execFile);
 const pool: Pool = createTestPool();
@@ -299,21 +299,18 @@ describe('job-worker --once time-driven sweeps', () => {
   it.each([INVITE_LIMIT_PER_VETERAN, INVITE_LIMIT_PER_ADDRESS, INVITE_EMAIL_CAP_PER_RECIPIENT])(
     'keeps the daily $bucket cap through a worker sweep',
     async (policy) => {
-      const subject = `daily-${randomUUID()}`;
+      const subject = rateLimitSubject(TEST_SESSION_SECRET, policy.bucket, `daily-${randomUUID()}`);
       await pool.query(
         `INSERT INTO auth_rate_limits (bucket, subject, window_start, count)
          VALUES ($1, $2, date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC', $3),
                 ($1, $2, now() - interval '25 hours', $3)`,
-        [policy.bucket, rateLimitSubjectKey(subject), policy.limit],
+        [policy.bucket, subject.key, policy.limit],
       );
       await drainOnce();
       expect((await consumeRateLimit(pool, policy, subject)).allowed).toBe(false);
       expect(
-        (
-          await pool.query('SELECT 1 FROM auth_rate_limits WHERE subject = $1', [
-            rateLimitSubjectKey(subject),
-          ])
-        ).rowCount,
+        (await pool.query('SELECT 1 FROM auth_rate_limits WHERE subject = $1', [subject.key]))
+          .rowCount,
       ).toBe(1);
     },
   );

@@ -276,7 +276,7 @@ test('after the verify budget the right code is refused 429; once the window pas
 
   // Fifteen minutes pass (the window is reset in the database). Five wrong tries also spent
   // that code's attempts, so the person asks for a new one, and it signs them in.
-  await resetSignInLimits(email);
+  await resetSignInLimits();
   await page.getByRole('link', { name: 'Use a different email' }).click();
   await page.getByLabel('Email address').fill(email);
   await page.getByRole('button', { name: 'Send sign-in code' }).click();

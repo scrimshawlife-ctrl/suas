@@ -11,7 +11,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { RouteContext } from '../route-context.js';
 import { authenticate } from '../authenticate.js';
-import { enforceRateLimit } from '../../auth/index.js';
+import { enforceRateLimit, rateLimitSubject } from '../../auth/index.js';
 import {
   INVITE_LIMIT_PER_VETERAN,
   INVITE_LIMIT_PER_ADDRESS,
@@ -90,7 +90,11 @@ async function deliverInvite(
     correlationId: input.correlationId,
     recipientLimit: {
       policy: INVITE_EMAIL_CAP_PER_RECIPIENT,
-      subject: `${input.tenantId}:${destination}`,
+      subject: rateLimitSubject(
+        deps.sessionSecret,
+        INVITE_EMAIL_CAP_PER_RECIPIENT.bucket,
+        `${input.tenantId}:${destination}`,
+      ),
       failureReason: INVITE_EMAIL_SUPPRESSED,
     },
   });
@@ -209,14 +213,22 @@ export function registerTrustedContactRoutes(
         await enforceRateLimit(
           tx,
           INVITE_LIMIT_PER_VETERAN,
-          `${context.tenantId}:${context.userId}`,
+          rateLimitSubject(
+            deps.sessionSecret,
+            INVITE_LIMIT_PER_VETERAN.bucket,
+            `${context.tenantId}:${context.userId}`,
+          ),
         );
         for (const destination of [body.invite_email, body.invite_phone]) {
           if (destination !== undefined) {
             await enforceRateLimit(
               tx,
               INVITE_LIMIT_PER_ADDRESS,
-              `${context.tenantId}:${context.userId}:${normalizeDestination(destination)}`,
+              rateLimitSubject(
+                deps.sessionSecret,
+                INVITE_LIMIT_PER_ADDRESS.bucket,
+                `${context.tenantId}:${context.userId}:${normalizeDestination(destination)}`,
+              ),
             );
           }
         }

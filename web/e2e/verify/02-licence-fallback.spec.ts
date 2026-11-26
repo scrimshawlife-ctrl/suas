@@ -144,7 +144,7 @@ async function adminOnQueue(
   const admin = await newPerson(browser);
   // The shared seeded admins also sign in for other specs; clear their sign-in issue count
   // (AUTH.md §3, three per 15 minutes) so the full suite does not lock them out here.
-  await resetSignInLimits(email);
+  await resetSignInLimits();
   await signInWithCode(admin, request, email);
   await expect(admin).not.toHaveURL(/\/sign-in/);
   await admin.goto('/admin/licence-reviews');
