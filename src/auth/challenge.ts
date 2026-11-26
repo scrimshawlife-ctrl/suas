@@ -35,7 +35,7 @@ import {
   type ChallengeDeliveryPort,
   type ChallengeMethod,
 } from './delivery.js';
-import { enforceRateLimit } from './rate-limit.js';
+import { enforceRateLimit, rateLimitSubject } from './rate-limit.js';
 import {
   credentialMatches,
   generateOpaqueToken,
@@ -131,14 +131,15 @@ export async function issueChallenge(
   // AUTH.md §3: rate limited by destination, in shared persistent state.
   // The shared synthetic demo account uses a higher budget so the public
   // sign-in page is not locked after three visitors.
+  const issuePolicy = {
+    bucket: 'auth.challenge.issue',
+    limit: fixedCode === undefined ? CHALLENGE_ISSUE_LIMIT.value : DEMO_SHARED_ACCOUNT_LIMIT,
+    windowSeconds: CHALLENGE_ISSUE_WINDOW_SECONDS.value,
+  };
   await enforceRateLimit(
     deps.pool,
-    {
-      bucket: 'auth.challenge.issue',
-      limit: fixedCode === undefined ? CHALLENGE_ISSUE_LIMIT.value : DEMO_SHARED_ACCOUNT_LIMIT,
-      windowSeconds: CHALLENGE_ISSUE_WINDOW_SECONDS.value,
-    },
-    destination,
+    issuePolicy,
+    rateLimitSubject(deps.sessionSecret, issuePolicy.bucket, destination),
   );
 
   const user = await findUserByDestination(deps.pool, input.tenantId, destination);
@@ -311,14 +312,15 @@ export async function verifyChallenge(
 
   // A shared verify budget per destination, so rotating challenges or app
   // instances does not reset an attacker's attempts (AUTH.md §11).
+  const verifyPolicy = {
+    bucket: 'auth.challenge.verify',
+    limit: fixedCode === undefined ? CHALLENGE_VERIFY_LIMIT.value : DEMO_SHARED_ACCOUNT_LIMIT,
+    windowSeconds: CHALLENGE_VERIFY_WINDOW_SECONDS.value,
+  };
   await enforceRateLimit(
     deps.pool,
-    {
-      bucket: 'auth.challenge.verify',
-      limit: fixedCode === undefined ? CHALLENGE_VERIFY_LIMIT.value : DEMO_SHARED_ACCOUNT_LIMIT,
-      windowSeconds: CHALLENGE_VERIFY_WINDOW_SECONDS.value,
-    },
-    destination,
+    verifyPolicy,
+    rateLimitSubject(deps.sessionSecret, verifyPolicy.bucket, destination),
   );
 
   // STAGING refuses a non-fixture account only after the budget is spent, so fixture and

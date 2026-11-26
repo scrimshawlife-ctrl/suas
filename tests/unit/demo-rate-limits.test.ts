@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Queryable } from '../../src/db/transaction.js';
 import {
-  DEMO_SUBJECT_DOMAIN,
   assertLocalDemoDatabase,
   clearDemoSignInRateLimits,
 } from '../../src/cli/demo-rate-limits.js';
 
 const LOCAL_URL = 'postgresql://suas:suas@localhost:5432/suas_demo';
+const SESSION_SECRET = 'unit-test-session-secret';
 
 interface RecordedCall {
   text: string;
@@ -26,21 +26,18 @@ function createFakeDb(rowCount: number | null = 2): { db: Queryable; calls: Reco
 }
 
 describe('clearDemoSignInRateLimits', () => {
-  it('deletes demo subjects on LOCAL with a loopback postgres URL', async () => {
+  // The delete itself runs against a real database in tests/integration/demo-rate-limits.test.ts.
+  it('issues one delete on LOCAL with a loopback postgres URL', async () => {
     const { db, calls } = createFakeDb();
 
     const deleted = await clearDemoSignInRateLimits(db, {
       environment: 'LOCAL',
       databaseUrl: LOCAL_URL,
+      sessionSecret: SESSION_SECRET,
     });
 
     expect(deleted).toBe(2);
-    expect(calls).toEqual([
-      {
-        text: 'DELETE FROM auth_rate_limits WHERE subject LIKE $1',
-        values: [`%${DEMO_SUBJECT_DOMAIN}`],
-      },
-    ]);
+    expect(calls).toHaveLength(1);
   });
 
   it('allows the other loopback hosts on LOCAL', async () => {
@@ -49,6 +46,7 @@ describe('clearDemoSignInRateLimits', () => {
       const deleted = await clearDemoSignInRateLimits(db, {
         environment: 'LOCAL',
         databaseUrl: `postgresql://suas:suas@${host}:5432/suas_demo`,
+        sessionSecret: SESSION_SECRET,
       });
       expect(deleted).toBe(2);
       expect(calls).toHaveLength(1);
@@ -59,7 +57,11 @@ describe('clearDemoSignInRateLimits', () => {
     for (const environment of ['STAGING', 'TEST', 'PRODUCTION']) {
       const { db, calls } = createFakeDb();
       await expect(
-        clearDemoSignInRateLimits(db, { environment, databaseUrl: LOCAL_URL }),
+        clearDemoSignInRateLimits(db, {
+          environment,
+          databaseUrl: LOCAL_URL,
+          sessionSecret: SESSION_SECRET,
+        }),
       ).rejects.toThrow(/LOCAL/);
       expect(calls).toHaveLength(0);
     }
@@ -77,7 +79,11 @@ describe('clearDemoSignInRateLimits', () => {
     for (const databaseUrl of urls) {
       const { db, calls } = createFakeDb();
       await expect(
-        clearDemoSignInRateLimits(db, { environment: 'LOCAL', databaseUrl }),
+        clearDemoSignInRateLimits(db, {
+          environment: 'LOCAL',
+          databaseUrl,
+          sessionSecret: SESSION_SECRET,
+        }),
       ).rejects.toThrow(Error);
       expect(calls).toHaveLength(0);
     }

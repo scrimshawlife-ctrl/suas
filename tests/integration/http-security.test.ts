@@ -7,7 +7,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startApp, type StartedApp } from '../../src/app.js';
-import { CHALLENGE_ISSUE_LIMIT, createSession } from '../../src/auth/index.js';
+import {
+  CHALLENGE_ISSUE_LIMIT,
+  CHALLENGE_ISSUE_WINDOW_SECONDS,
+  createSession,
+} from '../../src/auth/index.js';
 import { createUser } from '../../src/identity/index.js';
 import { syntheticEmail } from '../../src/testing/fixture-boundary.js';
 import { appPool } from '../helpers/actors.js';
@@ -53,6 +57,31 @@ describe('SECURITY.md §2 — auth challenge abuse controls', () => {
     expect(limitedStatus).toBe(429);
     expect(limitedCode).toBe('RATE_LIMITED');
     expect(Number(retryAfter)).toBeGreaterThan(0);
+  });
+
+  it('keeps an exhausted pre-keying counter exhausted and leaves no address behind', async () => {
+    // Review of #374, 2026-11-25: a legacy plaintext row at the limit still refuses the next ask.
+    const pool = appPool(app);
+    const email = syntheticEmail(`legacy-${randomUUID().slice(0, 8)}`);
+    await pool.query(
+      `INSERT INTO auth_rate_limits (bucket, subject, window_start, count)
+       VALUES ('auth.challenge.issue', $1, to_timestamp(floor(extract(epoch FROM now()) / $2) * $2), $3)`,
+      [email, CHALLENGE_ISSUE_WINDOW_SECONDS.value, CHALLENGE_ISSUE_LIMIT.value],
+    );
+
+    const response = await app.server.inject({
+      method: 'POST',
+      url: '/api/v0/auth/challenges',
+      payload: { tenant_id: randomUUID(), destination: email, method: 'EMAIL_OTP' },
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json().error?.code).toBe('RATE_LIMITED');
+    expect(Number(response.headers['retry-after'])).toBeGreaterThan(0);
+    const leaked = await pool.query('SELECT 1 FROM auth_rate_limits WHERE subject LIKE $1', [
+      `%${email}%`,
+    ]);
+    expect(leaked.rowCount).toBe(0);
   });
 });
 

@@ -17,7 +17,7 @@ const DRAFTS = /\/api\/v0\/admin\/resource-drafts$/;
 
 /** Signs the seeded admin in again from /sign-in (the page an expired session lands on). */
 async function signInAgain(page: Page, request: APIRequestContext): Promise<void> {
-  await resetSignInLimits(ADMIN_EMAIL);
+  await resetSignInLimits();
   await page.getByRole('radio', { name: /I need support/ }).check();
   await page.getByLabel('Email address').fill(ADMIN_EMAIL);
   await page.getByRole('button', { name: 'Send sign-in code' }).click();

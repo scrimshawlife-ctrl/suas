@@ -52,13 +52,12 @@ import {
   completeCheckIn,
 } from '../signals/index.js';
 import { createFollowUp } from '../settlement/index.js';
-import { clearDemoSignInRateLimits } from './demo-rate-limits.js';
+import {
+  clearDemoSignInRateLimits,
+  DEMO_VETERAN_LOCAL_PART,
+  FRESH_VETERAN_LOCAL_PART,
+} from './demo-rate-limits.js';
 import { DEMO_FIXED_CODE, DEMO_FIXED_CODE_DESTINATION } from '../auth/demo-fixed-code.js';
-
-/** demo@example.invalid: the primary demo Veteran (open case, four requests, fixed code). */
-const DEMO_VETERAN_LOCAL_PART = 'demo';
-/** newvet@example.invalid: enrolled, no case yet. */
-const FRESH_VETERAN_LOCAL_PART = 'newvet';
 
 type SeedUser = Awaited<ReturnType<typeof getOrCreateUser>>;
 
@@ -452,6 +451,7 @@ async function main(): Promise<void> {
     await clearDemoSignInRateLimits(pool, {
       environment: config.environment,
       databaseUrl: process.env.DATABASE_URL,
+      sessionSecret: config.sessionSecret,
     });
 
     const demoResourceIds: string[] = [];

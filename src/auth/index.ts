@@ -29,8 +29,10 @@ export {
   enforceRateLimit,
   pruneRateLimits,
   RateLimitExceededError,
+  rateLimitSubject,
   type RateLimitOutcome,
   type RateLimitPolicy,
+  type RateLimitSubject,
 } from './rate-limit.js';
 export {
   availableChannels,
