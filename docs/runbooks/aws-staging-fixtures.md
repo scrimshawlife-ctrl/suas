@@ -88,7 +88,9 @@ releases it and lifts the staging maintenance hold.
 - Anyone can sign up with their own address and receive a code; the fixture registry and the plus-address rule no
   longer limit who signs in or who receives mail. Registered fixture users and their sessions keep working.
 - Every `POST /api/v0/auth/challenges` must carry `demo_acknowledged: true`, or the API answers `400` for every
-  address alike. The `/app` HTML sign-in form does not ask for it (it never signs anyone up).
+  address alike.
+- The `/app` HTML sign-in is off: `POST /app/auth/challenges` and `POST /app/auth/verify` answer `503` with a page
+  that points to the web app, and create no challenge. Sign-in and sign-up go through the web app only.
 - Abuse bounds (owner review on #363). API Gateway throttles `POST /api/v0/auth/challenges` and
   `POST /app/auth/challenges` at `-c publicDemoThrottleRate` rps (default 2) and `-c publicDemoThrottleBurst`
   (default 5) each, as best-effort defence in depth. The app then enforces its own settings, each a positive integer
@@ -101,18 +103,37 @@ releases it and lifts the staging maintenance hold.
   | `SUAS_PUBLIC_DEMO_ROUTE_LIMIT_PER_MINUTE` | `120`   | Challenge requests per minute over both challenge routes. Over it: `429 RATE_LIMITED` with `Retry-After`.                                                                                                |
 
   Over either daily cap the answer is still `202` and nothing is sent. Capping only addresses with no account leaves a
-  small enumeration side channel (known addresses still get codes over a cap), which the owner accepted.
+  small enumeration side channel (known addresses still get codes over a cap), which the owner accepted. The
+  per-address counter stores a keyed digest of the address (`SUAS_SESSION_SECRET`), not the address.
 
 - Any request whose path holds a `%` and, lower-cased and decoded until stable (at most 3 rounds), starts with
   `/api/v0/auth` or `/app/auth` answers `404` before routing (for example `/api/v0/auth/%63hallenges`,
   `/api/v0/auth%2Fchallenges` or `/api/v0/auth/%2563hallenges`), so no path variant skips the API Gateway route
   throttle.
-- VA confirmation stays fixture-only: a non-fixture account gets `503 ID_VERIFICATION_UNAVAILABLE` from
-  `POST /api/v0/veterans/me/verification/va/confirm` and the VA sandbox OAuth routes. Self-attestation still works.
+- VA confirmation and the licence review stay fixture-only: a non-fixture account gets
+  `503 ID_VERIFICATION_UNAVAILABLE` from `POST /api/v0/veterans/me/verification/va/confirm`, the VA sandbox OAuth
+  routes, and `GET`/`POST /api/v0/veterans/me/verification/licence` and its `commands/dispute`. On the licence
+  uploads the refusal comes before the body is read. Self-attestation still works.
 - The email relay opens its allowlist only with both `SUAS_PUBLIC_DEMO=enabled` and `SUAS_ENV=STAGING`; the
   `publicDemo` context sets both on it.
-- Real email addresses are then stored in the STAGING database. Retention (purging non-fixture accounts) is not
-  implemented: it waits on the owner's decision (R16.5).
+- Real email addresses are then stored in the STAGING database. Retention (R16.5(b), contributor proposal, not
+  released): the job worker's `staging_demo_retention` sweep runs on every STAGING pass (each minute) and scrubs every
+  account that is not a registered fixture principal and was created more than 7 days ago. With the demo off it
+  scrubs every such account at once, whatever its age. For each account, in one transaction, it:
+  - records a `DELETION_REQUEST` Audit Event (`fulfillment: STAGING_DEMO_RETENTION`, no address);
+  - soft-deletes the user (status `REVOKED`), which releases its VA and licence identifiers, and revokes its sessions;
+  - clears `users.email`, `phone` and `display_name`, deletes its sign-in challenges, clears the destination of its
+    notifications, and marks trusted contacts it owns, joined or was invited to as `REMOVED` with a placeholder
+    invite address.
+
+  It also deletes challenges with no account (refused or over-cap sign-ups) older than 7 days and rate-limit windows
+  older than 2 days. Audit, Domain and consent events are kept. It logs counts only
+  (`msg: staging_demo_retention`, `scrubbed`, `challenges_deleted`), never an address. A scrubbed account is never
+  selected again, so repeated runs do nothing. The fixture seed's SUSPENDED publisher account is kept, although it is
+  not in the registry. A wrong registry would scrub every other account, so check the registry first.
+  With an empty registry the sweep scrubs no account and logs `msg: staging_demo_retention_skipped` each pass; it still deletes old orphan sign-in codes and rate-limit windows. Startup refuses `SUAS_PUBLIC_DEMO=enabled` on STAGING while the registry is empty.
+  Known gaps: consent grants owned by a scrubbed account stay `ACTIVE` (the account cannot sign in), and the
+  15-minute issue and verify limits keep the address in plain text until the `rate_limit_prune` sweep removes them.
 
 ## Note
 

@@ -4411,6 +4411,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "description": "ID_VERIFICATION_UNAVAILABLE: on STAGING the account is not a registered fixture principal, public demo included (R16.1, contributor proposal, not released).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         }
       },
@@ -4479,7 +4489,7 @@
             }
           },
           "503": {
-            "description": "ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open.",
+            "description": "ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open, or on STAGING the account is not a registered fixture principal, public demo included (R16.1, contributor proposal, not released). That last check runs before the body is read.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4588,7 +4598,7 @@
             }
           },
           "503": {
-            "description": "ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open.",
+            "description": "ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open, or on STAGING the account is not a registered fixture principal, public demo included (R16.1, contributor proposal, not released). That last check runs before the body is read.",
             "content": {
               "application/json": {
                 "schema": {

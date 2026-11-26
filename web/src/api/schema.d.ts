@@ -5462,6 +5462,15 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+            /** @description ID_VERIFICATION_UNAVAILABLE: on STAGING the account is not a registered fixture principal, public demo included (R16.1, contributor proposal, not released). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     postVeteransMeVerificationLicence: {
@@ -5532,7 +5541,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open. */
+            /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open, or on STAGING the account is not a registered fixture principal, public demo included (R16.1, contributor proposal, not released). That last check runs before the body is read. */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -5622,7 +5631,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open. */
+            /** @description ID_VERIFICATION_UNAVAILABLE: the licence reader is disabled here or its circuit breaker is open, or on STAGING the account is not a registered fixture principal, public demo included (R16.1, contributor proposal, not released). That last check runs before the body is read. */
             503: {
                 headers: {
                     [name: string]: unknown;

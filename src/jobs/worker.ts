@@ -12,6 +12,7 @@ import {
   CHALLENGE_VERIFY_WINDOW_SECONDS,
   pruneRateLimits,
 } from '../auth/index.js';
+import { stagingAccessFromConfig } from '../auth/staging-access.js';
 import {
   INVITE_LIMIT_PER_VETERAN,
   INVITE_LIMIT_PER_ADDRESS,
@@ -32,6 +33,7 @@ import {
 import { createChannelRegistry, deliverQueuedInApp } from '../notifications/index.js';
 import { claimDueWork, markFollowUpDue } from '../settlement/index.js';
 import { abandonStaleCheckIns, requeueUnsettledCheckIns } from '../signals/index.js';
+import { scrubDemoAccounts } from '../staging/demo-retention.js';
 import { createObjectStoragePort } from '../storage/index.js';
 import {
   claimDueJobs,
@@ -198,6 +200,24 @@ const SWEEPS: readonly Sweep[] = [
     run: async (pool, config) => {
       const expired = await expireOldReviews({ pool, storage: createObjectStoragePort(config) });
       if (expired > 0) log({ msg: 'licence_reviews_expired', count: expired });
+    },
+  },
+  // R16.5(b) (contributor proposal, not released): STAGING demo accounts are scrubbed and
+  // soft-deleted. Counts only: an address never reaches the log.
+  {
+    name: 'staging_demo_retention',
+    run: async (pool, config) => {
+      if (config.environment !== 'STAGING') return;
+      const access = stagingAccessFromConfig(config);
+      // R16.5(b) (contributor's call, D-065): without a registry no account is scrubbed; say so
+      // once per pass so an unset registry is visible. The orphan cleanup still runs.
+      if (access.fixturePrincipals.length === 0) {
+        log({ msg: 'staging_demo_retention_skipped', reason: 'empty_fixture_registry' });
+      }
+      const { scrubbed, challengesDeleted } = await scrubDemoAccounts(pool, { access });
+      if (scrubbed > 0 || challengesDeleted > 0) {
+        log({ msg: 'staging_demo_retention', scrubbed, challenges_deleted: challengesDeleted });
+      }
     },
   },
 ];

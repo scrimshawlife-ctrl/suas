@@ -3,6 +3,7 @@
  * refused in PRODUCTION, and accepts only "enabled" or "disabled".
  */
 
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { startApp } from '../../src/app.js';
 import { loadConfig, tryLoadConfig } from '../../src/config/index.js';
@@ -17,7 +18,13 @@ function issuesFor(env: Record<string, string | undefined>): string {
 describe('SUAS_PUBLIC_DEMO startup validation', () => {
   it('accepts enabled on STAGING and defaults to off', () => {
     expect(
-      loadConfig(validEnv({ SUAS_ENV: 'STAGING', SUAS_PUBLIC_DEMO: 'enabled' })).publicDemo,
+      loadConfig(
+        validEnv({
+          SUAS_ENV: 'STAGING',
+          SUAS_PUBLIC_DEMO: 'enabled',
+          SUAS_STAGING_FIXTURE_REGISTRY: `${randomUUID()}:${randomUUID()}`,
+        }),
+      ).publicDemo,
     ).toBe(true);
     expect(loadConfig(validEnv({ SUAS_ENV: 'STAGING' })).publicDemo).toBe(false);
   });
@@ -53,6 +60,14 @@ describe('SUAS_PUBLIC_DEMO startup validation', () => {
         issuesFor(validEnv({ SUAS_ENV: 'STAGING', SUAS_PUBLIC_DEMO_ADDRESS_DAILY_CAP: value })),
       ).toContain('SUAS_PUBLIC_DEMO_ADDRESS_DAILY_CAP');
     }
+  });
+
+  // R16.5(b) (contributor's call, D-065): open sign-up must not run without the retention sweep,
+  // which skips while the fixture registry is empty.
+  it('refuses enabled on STAGING with an empty fixture registry', () => {
+    expect(issuesFor(validEnv({ SUAS_ENV: 'STAGING', SUAS_PUBLIC_DEMO: 'enabled' }))).toContain(
+      'SUAS_PUBLIC_DEMO=enabled on STAGING needs SUAS_STAGING_FIXTURE_REGISTRY: the retention sweep skips while it is empty.',
+    );
   });
 
   // R16.1 (contributor's call, D-065): the refusal holds at app startup, before any database work.
